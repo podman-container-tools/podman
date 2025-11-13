@@ -11,6 +11,10 @@ podman\-container\-checkpoint - Checkpoint one or more running containers
 
 *IMPORTANT: If the container is using __systemd__ as __entrypoint__ checkpointing the container might not be possible.*
 
+gVisor (**runsc**) checkpoints containers without CRIU and does not support
+**--file-locks**, **--pre-checkpoint**, **--tcp-established**, or
+**--with-previous**.
+
 ## OPTIONS
 #### **--all**, **-a**
 
@@ -56,10 +60,11 @@ to do the checkpoint:
   create the checkpoint.
 
 - **io.podman.annotations.checkpoint.criu.version**: Version of CRIU used to
-  create the checkpoint.
+  create the checkpoint. This annotation is not set for gVisor (runsc)
+  checkpoints.
 
 - **io.podman.annotations.checkpoint.runtime.name**: Container runtime (e.g.,
-  runc, crun) used to create the checkpoint.
+  runc, crun, runsc) used to create the checkpoint.
 
 - **io.podman.annotations.checkpoint.runtime.version**: Version of the container
   runtime used to create the checkpoint.
@@ -153,8 +158,9 @@ functionality and return an error if the current system does not support it.
 Print out statistics about checkpointing the container(s). The output is
 rendered in a JSON array and contains information about how much time different
 checkpoint operations required. Many of the checkpoint statistics are created
-by CRIU and just passed through to Podman. The following information is provided
-in the JSON array:
+by CRIU and just passed through to Podman. gVisor (runsc) does not provide CRIU
+statistics, so only the Podman and runtime durations are provided for containers
+that use gVisor. The following information is provided in the JSON array:
 
 - **podman_checkpoint_duration**: Overall time (in microseconds) needed to create
   all checkpoints.

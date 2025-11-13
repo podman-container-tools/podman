@@ -217,6 +217,11 @@ func CRCreateFileWithLabel(directory, fileName, fileLabel string) error {
 // but crun implements all commands just as runc does. What runc does is the
 // official definition of the checkpoint/restore interface.
 func CRRuntimeSupportsCheckpointRestore(runtimePath string) bool {
+	// runsc exits with 128 on any failure, including "checkpoint --help",
+	// so the probe below cannot detect its checkpoint/restore support.
+	if CRRuntimeIsGVisor(runtimePath) {
+		return true
+	}
 	// Check if the runtime implements checkpointing. Currently only
 	// runc's and crun's checkpoint/restore implementation is supported.
 	cmd := exec.Command(runtimePath, "checkpoint", "--help")
@@ -227,6 +232,13 @@ func CRRuntimeSupportsCheckpointRestore(runtimePath string) bool {
 		return true
 	}
 	return false
+}
+
+// CRRuntimeIsGVisor returns true if the runtime at 'runtimePath' is gVisor's
+// runsc. runsc implements checkpoint/restore without CRIU and does not
+// support CRIU specific options or statistics.
+func CRRuntimeIsGVisor(runtimePath string) bool {
+	return filepath.Base(runtimePath) == "runsc"
 }
 
 // CRRuntimeSupportsPodCheckpointRestore tests if the runtime at 'runtimePath'
