@@ -1062,6 +1062,13 @@ func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) e
 		return fmt.Errorf("getting host info: %w", err)
 	}
 
+	// Record the container's runtime, which can differ from the default
+	// runtime in hostInfo. A restore must use the same runtime.
+	_, ociRuntimeInfo, err := c.ociRuntime.RuntimeInfo()
+	if err != nil {
+		return fmt.Errorf("getting OCI runtime info: %w", err)
+	}
+
 	criuVersion, err := criu.GetCriuVersion()
 	if err != nil {
 		return fmt.Errorf("getting criu version: %w", err)
@@ -1079,8 +1086,8 @@ func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) e
 		define.CheckpointAnnotationRootfsImageName:     rootfsImageName,
 		define.CheckpointAnnotationPodmanVersion:       version.Version.String(),
 		define.CheckpointAnnotationCriuVersion:         strconv.Itoa(criuVersion),
-		define.CheckpointAnnotationRuntimeName:         hostInfo.OCIRuntime.Name,
-		define.CheckpointAnnotationRuntimeVersion:      hostInfo.OCIRuntime.Version,
+		define.CheckpointAnnotationRuntimeName:         ociRuntimeInfo.Name,
+		define.CheckpointAnnotationRuntimeVersion:      ociRuntimeInfo.Version,
 		define.CheckpointAnnotationConmonVersion:       hostInfo.Conmon.Version,
 		define.CheckpointAnnotationHostArch:            hostInfo.Arch,
 		define.CheckpointAnnotationHostKernel:          hostInfo.Kernel,

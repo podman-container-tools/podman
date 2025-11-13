@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,57 @@ var _ = Describe("Podman checkpoint", func() {
 		session := podmanTest.Podman([]string{"container", "checkpoint", "--create-image", checkpointImage, "foobar"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithError(125, `no container with name or ID "foobar" found: no such container`))
+	})
+
+	It("podman checkpoint image records the non-default container runtime", func() {
+		SkipIfRemote("podman-remote does not support --runtime flag")
+		for _, runtime := range []string{"runc", "crun"} {
+			if _, err := exec.LookPath(runtime); err != nil {
+				Skip(fmt.Sprintf("%s not found in PATH; this test requires both runc and crun", runtime))
+			}
+		}
+
+		// Let commands without an explicit --runtime use the host default.
+		preservedMakeOptions := podmanTest.PodmanMakeOptions
+		podmanTest.PodmanMakeOptions = func(args []string, options PodmanExecOptions) []string {
+			defaultArgs := preservedMakeOptions(args, options)
+			if i := slices.Index(defaultArgs, "--runtime"); i >= 0 {
+				defaultArgs = slices.Delete(defaultArgs, i, i+2)
+			}
+			return defaultArgs
+		}
+
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.OCIRuntime.Name}}")
+		var containerRuntime string
+		switch defaultRuntime := session.OutputToString(); defaultRuntime {
+		case "runc":
+			containerRuntime = "crun"
+		case "crun":
+			containerRuntime = "runc"
+		default:
+			Skip(fmt.Sprintf("default runtime is %q; this test requires runc or crun", defaultRuntime))
+		}
+
+		session = podmanTest.PodmanExitCleanly("--runtime", containerRuntime, "info", "--format", "{{.Host.OCIRuntime.Version}}")
+		runtimeVersion := strings.TrimSuffix(string(session.Out.Contents()), "\n")
+		Expect(runtimeVersion).ToNot(BeEmpty())
+
+		session = podmanTest.PodmanExitCleanly("--runtime", containerRuntime, "run", "-d", "--network", "none", ALPINE, "top")
+		cid := session.OutputToString()
+		checkpointImage := "alpine-checkpoint-" + strings.ToLower(RandomString(6))
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "--create-image", checkpointImage, cid)
+
+		session = podmanTest.PodmanExitCleanly("inspect", checkpointImage)
+		annotations := session.InspectImageJSON()[0].Annotations
+		Expect(annotations["io.podman.annotations.checkpoint.runtime.name"]).To(Equal(containerRuntime))
+		Expect(annotations["io.podman.annotations.checkpoint.runtime.version"]).To(Equal(runtimeVersion))
+
+		podmanTest.PodmanExitCleanly("rm", cid)
+		podmanTest.PodmanExitCleanly("--runtime", containerRuntime, "container", "restore", checkpointImage)
+		session = podmanTest.PodmanExitCleanly("inspect", "--format", "{{.OCIRuntime}}", cid)
+		Expect(session.OutputToString()).To(Equal(containerRuntime))
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", cid)
+		podmanTest.PodmanExitCleanly("rmi", checkpointImage)
 	})
 
 	It("podman checkpoint --create-image with running container", func() {
