@@ -217,7 +217,7 @@ func sshClient(_url *url.URL, uri string, identity string, machine bool) (Connec
 		}
 
 		if val := cfg.Get(alias, "Hostname"); val != "" {
-			uri = val
+			uri = "ssh://" + val
 			found = true
 		}
 
