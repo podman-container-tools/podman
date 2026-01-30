@@ -683,7 +683,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		}
 	}
 
-	// Add shared namespaces from other containers
+	// Add shared namespaces from other containers. Also handles userns=auto
 	if err := c.addSharedNamespaces(&g); err != nil {
 		return nil, nil, err
 	}
