@@ -5,8 +5,10 @@ import io
 import os
 import unittest
 import json
+from typing import Iterator
 
 from docker import errors
+from docker.errors import APIError
 
 # pylint: disable=no-name-in-module,import-error,wrong-import-order
 from test.python.docker.compat import common, constant
@@ -134,6 +136,33 @@ class TestImages(common.DockerTestCase):
             except json.JSONDecodeError as e:
                 raise IOError(f"Line '{line}' was not JSON parsable")
             assert "errorDetail" not in parsed
+
+    def test_push_error(self):
+        """Validates that push error is correctly propagated"""
+        alpine = self.docker.images.get(constant.ALPINE)
+        if not alpine.tag("non-existent.lan:5000/alpine", "latest"):
+            self.fail("not tagged")
+        try:
+            resp: str = self.docker.images.push("non-existent.lan:5000/alpine", "latest")
+            for obj in json_stream(resp):
+                if 'no such host' in obj.get('errorDetail', {}).get('message', ''):
+                    return
+            self.fail('expected error not found in the response')
+        except APIError as e:
+            if 'no such host' not in e.explanation:
+                self.fail('expected error not found in the response')
+
+def json_stream(data: str) -> Iterator[dict]:
+    decoder = json.JSONDecoder()
+    pos = 0
+    length = len(data)
+    while pos < length:
+        if data[pos].isspace():
+            pos += 1
+            continue
+        obj, pos_end = decoder.raw_decode(data, pos)
+        yield obj
+        pos = pos_end
 
 if __name__ == "__main__":
     # Setup temporary space

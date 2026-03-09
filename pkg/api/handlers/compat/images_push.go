@@ -189,15 +189,18 @@ loop: // break out of for/select infinite loop
 			flush()
 		case err := <-pushErrChan:
 			if err != nil {
-				var msg string
+				code := http.StatusInternalServerError
 				if errors.Is(err, storage.ErrImageUnknown) {
 					// Image may have been removed in the meantime.
-					writeStatusCode(http.StatusNotFound)
-					msg = "An image does not exist locally with the tag: " + imageName
-				} else {
-					writeStatusCode(http.StatusInternalServerError)
-					msg = err.Error()
+					code = http.StatusNotFound
+					err = errors.New("An image does not exist locally with the tag: " + imageName)
 				}
+				if !statusWritten {
+					utils.Error(w, code, err)
+					flush()
+					break loop
+				}
+				var msg = err.Error()
 				report.Error = &jsonstream.Error{
 					Message: msg,
 				}
