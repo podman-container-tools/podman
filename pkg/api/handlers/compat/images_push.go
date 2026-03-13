@@ -200,7 +200,7 @@ loop: // break out of for/select infinite loop
 					flush()
 					break loop
 				}
-				var msg = err.Error()
+				msg := err.Error()
 				report.Error = &jsonstream.Error{
 					Message: msg,
 				}
