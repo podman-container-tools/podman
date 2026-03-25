@@ -39,6 +39,13 @@ type imageInspect struct {
 	Body handlers.ImageInspect
 }
 
+// Distribution Inspect
+// swagger:response
+type distributionInspectResponse struct {
+	// in:body
+	Body registry.DistributionInspect
+}
+
 // Image Load
 // swagger:response
 type imagesLoadResponseLibpod struct {
