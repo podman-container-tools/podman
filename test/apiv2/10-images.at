@@ -58,6 +58,32 @@ t GET images/$iid/json 200 \
   .Id=sha256:$iid \
   .RepoTags[0]=$IMAGE
 
+# This depends on whether we're using local cache registry or real quay
+expect_code=401
+if [[ -n "$CI_USE_REGISTRY_CACHE" ]]; then
+    # local registry has no auth, so it can return 404
+    expect_code=404
+fi
+
+# Test versioned path (relative URL gets /vN.N/ prefix)
+t GET "distribution/$IMAGE/json" 200 \
+  .Descriptor.digest~"sha256:[0-9a-f]\\{64\\}" \
+  .Descriptor.mediaType~".*"
+# Test non-versioned path (absolute URL bypasses version prefix)
+t GET "/distribution/$IMAGE/json" 200 \
+  .Descriptor.digest~"sha256:[0-9a-f]\\{64\\}" \
+  .Descriptor.mediaType~".*"
+t GET "/distribution/NoCAPITALcharAllowed/json" 400
+t GET "/distribution/quay.io/idonotexist/idonotexist:dummy/json" $expect_code
+
+# Exercise the single-manifest path using a digest from the multi-arch test image.
+single_manifest_digest=$(skopeo inspect --raw docker://$IMAGE | jq -r '.manifests[0].digest')
+t GET "distribution/$PODMAN_TEST_IMAGE_REGISTRY/$PODMAN_TEST_IMAGE_USER/$PODMAN_TEST_IMAGE_NAME@$single_manifest_digest/json" 200 \
+  .Descriptor.digest="$single_manifest_digest" \
+  .Descriptor.mediaType="application/vnd.oci.image.manifest.v1+json" \
+  .Platforms[0].architecture~".*" \
+  .Platforms[0].os~".*"
+
 # Test VirtualSize field is present in API v1.43 for single image inspect (backward compatibility)
 t GET /v1.43/images/$iid/json 200 \
   .VirtualSize~[0-9]\\+
@@ -151,12 +177,8 @@ for i in $iid ${iid:0:12} $PODMAN_TEST_IMAGE_NAME:$PODMAN_TEST_IMAGE_TAG; do
 done
 
 # compat api pull image unauthorized message error
-# This depends on whether we're using local cache registry or real quay
-expect_code=401
 expect_msg="unauthorized: access to the requested resource is not authorized"
 if [[ -n "$CI_USE_REGISTRY_CACHE" ]]; then
-    # local registry has no auth, so it can return 404
-    expect_code=404
     expect_msg="manifest unknown: manifest unknown"
 fi
 t POST "/images/create?fromImage=quay.io/idonotexist/idonotexist:dummy" $expect_code \
