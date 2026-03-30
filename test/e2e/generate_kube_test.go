@@ -892,15 +892,16 @@ var _ = Describe("Podman kube generate", func() {
 		pod := new(v1.Pod)
 		err = yaml.Unmarshal(kube.Out.Contents(), pod)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(pod.Spec.Containers[0].VolumeMounts).To(ContainElements(v1.VolumeMount{
-			Name:      pvcName,
-			MountPath: etcTargetPath,
-			SubPath:   etcSubPath,
-		}, v1.VolumeMount{
-			Name:      pvcName,
-			MountPath: varTargetPath,
-			SubPath:   varSubPath,
-		}),
+		Expect(pod.Spec.Containers[0].VolumeMounts).To(
+			ContainElements(v1.VolumeMount{
+				Name:      pvcName,
+				MountPath: etcTargetPath,
+				SubPath:   etcSubPath,
+			}, v1.VolumeMount{
+				Name:      pvcName,
+				MountPath: varTargetPath,
+				SubPath:   varSubPath,
+			}),
 		)
 	})
 
@@ -2000,5 +2001,48 @@ EXPOSE 2004-2005/tcp`, CITEST_IMAGE)
 		kube := podmanTest.Podman([]string{"kube", "generate", "--type", "daemonset", podName})
 		kube.WaitWithDefaultTimeout()
 		Expect(kube).Should(ExitWithError(125, "k8s DaemonSets can only have restartPolicy set to Always"))
+	})
+
+	It("on container with healthcheck exports LivenessProbe", func() {
+		testCases := []struct {
+			name            string
+			healthCmd       string
+			healthCmdExpect []string
+		}{
+			{"test-hc-ctr-1", "CMD /bin/true", []string{"/bin/true"}},
+			{"test-hc-ctr-2", "CMD-SHELL /bin/true", []string{"/bin/sh", "-c", "/bin/true"}},
+		}
+
+		for _, ctr := range testCases {
+			session := podmanTest.Podman([]string{
+				"create", "--name", ctr.name,
+				"--health-cmd", ctr.healthCmd,
+				"--health-interval", "10s",
+				"--health-timeout", "5s",
+				"--health-retries", "3",
+				"--health-start-period", "2s",
+				CITEST_IMAGE, "top",
+			})
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+
+			kube := podmanTest.Podman([]string{"kube", "generate", ctr.name})
+			kube.WaitWithDefaultTimeout()
+			Expect(kube).Should(ExitCleanly())
+
+			pod := new(v1.Pod)
+			err := yaml.Unmarshal(kube.Out.Contents(), pod)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pod.Spec.Containers).To(HaveLen(1))
+
+			probe := pod.Spec.Containers[0].LivenessProbe
+			Expect(probe).ToNot(BeNil(), "LivenessProbe should be set when container has a healthcheck")
+			Expect(probe.Exec).ToNot(BeNil())
+			Expect(probe.Exec.Command).To(Equal([]string{"/bin/sh", "-c", "/bin/true"}))
+			Expect(probe.PeriodSeconds).To(Equal(int32(10)))
+			Expect(probe.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(probe.FailureThreshold).To(Equal(int32(3)))
+			Expect(probe.InitialDelaySeconds).To(Equal(int32(2)))
+		}
 	})
 })
