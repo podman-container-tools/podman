@@ -3,6 +3,7 @@
 package compat
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -22,6 +23,57 @@ import (
 	dockerNetwork "github.com/moby/moby/api/types/network"
 	"github.com/sirupsen/logrus"
 )
+
+// leaseRangeToDockerIPRange maps Libpod LeaseRange back to Docker IPAM IPRange when it is exactly
+// the usable span of some CIDR (same semantics as FirstIPInSubnet/LastIPInSubnet used when creating from Docker API).
+func leaseRangeToDockerIPRange(lr *nettypes.LeaseRange) netip.Prefix {
+	if lr == nil || lr.StartIP == nil || lr.EndIP == nil {
+		return netip.Prefix{}
+	}
+	start := append(net.IP(nil), lr.StartIP...)
+	end := append(net.IP(nil), lr.EndIP...)
+	netutil.NormalizeIP(&start)
+	netutil.NormalizeIP(&end)
+
+	switch {
+	case start.To4() != nil && end.To4() != nil:
+		return leaseSpanToPrefix(start.To4(), end.To4(), 32)
+	case len(start) == net.IPv6len && len(end) == net.IPv6len:
+		s := start.To16()
+		e := end.To16()
+		return leaseSpanToPrefix(s, e, 128)
+	default:
+		return netip.Prefix{}
+	}
+}
+
+func leaseSpanToPrefix(start, end net.IP, ipLen int) netip.Prefix {
+	if bytes.Compare(start, end) > 0 {
+		return netip.Prefix{}
+	}
+	for ones := ipLen; ones >= 0; ones-- {
+		mask := net.CIDRMask(ones, ipLen)
+		ipNet := &net.IPNet{
+			IP:   start.Mask(mask),
+			Mask: mask,
+		}
+		first, err1 := netutil.FirstIPInSubnet(ipNet)
+		last, err2 := netutil.LastIPInSubnet(ipNet)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		netutil.NormalizeIP(&first)
+		netutil.NormalizeIP(&last)
+		if first.Equal(start) && last.Equal(end) {
+			pfx, err := netip.ParsePrefix(ipNet.String())
+			if err != nil {
+				continue
+			}
+			return pfx
+		}
+	}
+	return netip.Prefix{}
+}
 
 func normalizeNetworkName(rt *libpod.Runtime, name string) (string, bool) {
 	if name == nettypes.BridgeNetworkDriver {
@@ -119,9 +171,9 @@ func convertLibpodNetworktoDockerNetwork(runtime *libpod.Runtime, statuses []abi
 			return nil, fmt.Errorf("invalid gateway IP %v", sub.Gateway)
 		}
 		ipamConfig := dockerNetwork.IPAMConfig{
-			Subnet:  subnet,
-			Gateway: gateway,
-			// TODO add range
+			Subnet:   subnet,
+			Gateway:  gateway,
+			IPRange:  leaseRangeToDockerIPRange(sub.LeaseRange),
 		}
 		ipamConfigs = append(ipamConfigs, ipamConfig)
 	}
