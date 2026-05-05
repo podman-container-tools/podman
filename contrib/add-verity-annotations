@@ -1,0 +1,170 @@
+#!/bin/bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: $0 [--root STORAGE_ROOT] [--key KEY_PREFIX] SOURCE_IMAGE DEST_IMAGE"
+    echo ""
+    echo "Reads composefs blob fs-verity digests from container storage for each"
+    echo "layer of SOURCE_IMAGE, creates a new OCI image with"
+    echo "io.containers.composefs.digest annotations on each layer descriptor,"
+    echo "signs it with cosign, and pushes the signed image to DEST_IMAGE using"
+    echo "skopeo copy."
+    echo ""
+    echo "SOURCE_IMAGE is a local podman image name/id."
+    echo "DEST_IMAGE is a remote image reference (e.g. docker://registry/repo:tag)."
+    echo ""
+    echo "Options:"
+    echo "  --root STORAGE_ROOT   Use a custom storage root"
+    echo "  --key KEY_PREFIX      Path prefix for cosign key pair (default: cosign)"
+    echo "                        Uses KEY_PREFIX.key and KEY_PREFIX.pub."
+    echo "                        If they don't exist, generates a new key pair."
+    exit 1
+}
+
+STORAGE_ROOT=""
+PODMAN_ARGS=()
+KEY_PREFIX="cosign"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --root)
+            STORAGE_ROOT="$2"
+            shift 2
+            ;;
+        --key)
+            KEY_PREFIX="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ $# -ne 2 ]]; then
+    usage
+fi
+
+SOURCE_IMAGE="$1"
+DEST_IMAGE="$2"
+
+if [[ -n "$STORAGE_ROOT" ]]; then
+    PODMAN_ARGS+=(--root "$STORAGE_ROOT")
+fi
+
+if [[ -z "$STORAGE_ROOT" ]]; then
+    STORAGE_ROOT=$(podman info --format '{{.Store.GraphRoot}}')
+fi
+
+# Generate cosign key pair if it doesn't exist
+if [[ ! -f "${KEY_PREFIX}.key" ]]; then
+    echo "Generating cosign key pair at ${KEY_PREFIX}.key / ${KEY_PREFIX}.pub"
+    COSIGN_PASSWORD="" cosign generate-key-pair --output-key-prefix "$KEY_PREFIX"
+fi
+
+LAYERS_JSON="$STORAGE_ROOT/overlay-layers/layers.json"
+if [[ ! -f "$LAYERS_JSON" ]]; then
+    echo "ERROR: layers.json not found at $LAYERS_JSON" >&2
+    exit 1
+fi
+
+# Get image ID
+IMAGE_ID=$(podman "${PODMAN_ARGS[@]}" image inspect "$SOURCE_IMAGE" --format '{{.Id}}')
+if [[ -z "$IMAGE_ID" ]]; then
+    echo "ERROR: could not find image $SOURCE_IMAGE" >&2
+    exit 1
+fi
+
+# Get diff IDs for the image layers (bottom-to-top order)
+mapfile -t DIFF_IDS < <(podman "${PODMAN_ARGS[@]}" image inspect "$SOURCE_IMAGE" \
+    --format '{{range .RootFS.Layers}}{{.}}{{"\n"}}{{end}}' | grep -v '^$')
+
+echo "Image has ${#DIFF_IDS[@]} layers"
+
+# For each diff ID, find the storage layer ID and measure its composefs blob
+VERITY_DIGESTS=()
+for diff_id in "${DIFF_IDS[@]}"; do
+    layer_id=$(jq -r --arg did "$diff_id" '.[] | select(."diff-digest" == $did) | .id' "$LAYERS_JSON")
+    if [[ -z "$layer_id" ]]; then
+        echo "ERROR: no storage layer for diff-digest $diff_id" >&2
+        exit 1
+    fi
+
+    blob_path="$STORAGE_ROOT/overlay/$layer_id/composefs-data/composefs.blob"
+    if [[ ! -f "$blob_path" ]]; then
+        echo "ERROR: no composefs blob at $blob_path" >&2
+        exit 1
+    fi
+
+    verity=$(fsverity measure "$blob_path" | awk '{print $1}')
+    echo "  layer $layer_id -> $verity"
+    VERITY_DIGESTS+=("$verity")
+done
+
+# Create temporary OCI layout directories
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+OCI_DIR="$TMPDIR/oci"
+ZST_DIR="$TMPDIR/zst"
+
+echo "Exporting image to OCI layout..."
+podman "${PODMAN_ARGS[@]}" save --format oci-dir -o "$OCI_DIR" "$SOURCE_IMAGE"
+
+# Convert to zstd:chunked first, before adding annotations.
+# Recompression changes layer digests and rewrites the manifest,
+# which would discard any annotations we added.
+echo "Converting to zstd:chunked..."
+skopeo copy \
+    --dest-compress-format zstd:chunked \
+    --dest-force-compress-format \
+    "oci:${OCI_DIR}" \
+    "oci:${ZST_DIR}"
+
+# Find the manifest in the zstd:chunked OCI layout
+MANIFEST_DIGEST=$(jq -r '.manifests[0].digest' "$ZST_DIR/index.json")
+MANIFEST_PATH="$ZST_DIR/blobs/${MANIFEST_DIGEST/://}"
+
+echo "Adding verity annotations to manifest..."
+
+# Build jq filter to add annotation to each layer
+JQ_FILTER='.'
+for i in "${!VERITY_DIGESTS[@]}"; do
+    digest="${VERITY_DIGESTS[$i]}"
+    JQ_FILTER="$JQ_FILTER | .layers[$i].annotations.\"io.containers.composefs.digest\" = \"$digest\""
+done
+
+jq "$JQ_FILTER" "$MANIFEST_PATH" > "$TMPDIR/manifest.json"
+
+echo "Layer annotations:"
+jq '.layers[].annotations' "$TMPDIR/manifest.json"
+
+# Replace the manifest blob and update the index with the new digest
+NEW_MANIFEST_DIGEST="sha256:$(sha256sum "$TMPDIR/manifest.json" | awk '{print $1}')"
+NEW_MANIFEST_SIZE=$(stat -c%s "$TMPDIR/manifest.json")
+NEW_BLOB_PATH="$ZST_DIR/blobs/${NEW_MANIFEST_DIGEST/://}"
+
+cp "$TMPDIR/manifest.json" "$NEW_BLOB_PATH"
+
+# Remove old manifest blob if digest changed
+if [[ "$MANIFEST_DIGEST" != "$NEW_MANIFEST_DIGEST" ]]; then
+    rm -f "$MANIFEST_PATH"
+fi
+
+# Update index.json with new digest and size
+jq --arg digest "$NEW_MANIFEST_DIGEST" --argjson size "$NEW_MANIFEST_SIZE" \
+    '.manifests[0].digest = $digest | .manifests[0].size = $size' \
+    "$ZST_DIR/index.json" > "$TMPDIR/index.json"
+cp "$TMPDIR/index.json" "$ZST_DIR/index.json"
+
+echo "Copying and signing image to $DEST_IMAGE..."
+skopeo copy \
+    --sign-by-sigstore-private-key "${KEY_PREFIX}.key" \
+    "oci:${ZST_DIR}" \
+    "$DEST_IMAGE"
+
+echo "Done: signed image with verity annotations pushed to $DEST_IMAGE"
+echo "Verify with: cosign verify --key ${KEY_PREFIX}.pub --insecure-ignore-tlog $DEST_IMAGE"
