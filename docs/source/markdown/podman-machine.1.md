@@ -49,6 +49,7 @@ supported by platform.  The asterisk denotes the default provider for the platfo
 | ssh     | [podman-machine-ssh(1)](podman-machine-ssh.1.md)         | SSH into a virtual machine                                      |
 | start   | [podman-machine-start(1)](podman-machine-start.1.md)     | Start a virtual machine                                         |
 | stop    | [podman-machine-stop(1)](podman-machine-stop.1.md)       | Stop a virtual machine                                          |
+| restart | [podman-machine-restart(1)](podman-machine-restart.1.md) | Restart a virtual machine                                       |
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine-cp(1)](podman-machine-cp.1.md)**, **[podman-machine-info(1)](podman-machine-info.1.md)**, **[podman-machine-init(1)](podman-machine-init.1.md)**, **[podman-machine-list(1)](podman-machine-list.1.md)**, **[podman-machine-os(1)](podman-machine-os.1.md)**, **[podman-machine-rm(1)](podman-machine-rm.1.md)**, **[podman-machine-ssh(1)](podman-machine-ssh.1.md)**, **[podman-machine-start(1)](podman-machine-start.1.md)**, **[podman-machine-stop(1)](podman-machine-stop.1.md)**, **[podman-machine-inspect(1)](podman-machine-inspect.1.md)**, **[podman-machine-reset(1)](podman-machine-reset.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**
