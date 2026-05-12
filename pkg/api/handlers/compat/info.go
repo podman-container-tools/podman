@@ -62,6 +62,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			CPUSet:              sysInfo.Cpuset,
 			CPUShares:           sysInfo.CPUShares,
 			CgroupDriver:        configInfo.Engine.CgroupManager,
+			CDISpecDirs:         infoData.Host.CDISpecDirs,
 			ContainerdCommit:    dockerSystem.Commit{},
 			Containers:          infoData.Store.ContainerStore.Number,
 			ContainersPaused:    stateInfo[define.ContainerStatePaused],
@@ -70,6 +71,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			Debug:               log.IsLevelEnabled(log.DebugLevel),
 			DefaultAddressPools: getDefaultAddressPools(configInfo),
 			DefaultRuntime:      configInfo.Engine.OCIRuntime,
+			DiscoveredDevices:   getDiscoveredDevices(infoData.Host.DiscoveredDevices),
 			DockerRootDir:       infoData.Store.GraphRoot,
 			Driver:              infoData.Store.GraphDriverName,
 			DriverStatus:        getGraphStatus(infoData.Store.GraphStatus),
@@ -130,6 +132,17 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 		Uptime:             infoData.Host.Uptime,
 	}
 	utils.WriteResponse(w, http.StatusOK, info)
+}
+
+func getDiscoveredDevices(discoveredDevices []define.DeviceInfo) []dockerSystem.DeviceInfo {
+	devices := make([]dockerSystem.DeviceInfo, 0, len(discoveredDevices))
+	for _, device := range discoveredDevices {
+		devices = append(devices, dockerSystem.DeviceInfo{
+			Source: device.Source,
+			ID:     device.ID,
+		})
+	}
+	return devices
 }
 
 func getServiceConfig(runtime *libpod.Runtime) *registry.ServiceConfig {

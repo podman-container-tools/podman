@@ -11,6 +11,7 @@ podman\-info - Display Podman related system information
 ## DESCRIPTION
 
 Displays information pertinent to the host, current storage stats, configured container registries, and build of podman.
+Host information includes configured CDI spec directories and resolved CDI devices when present.
 
 
 ## OPTIONS

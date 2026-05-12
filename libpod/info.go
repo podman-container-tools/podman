@@ -23,6 +23,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/linkmode"
 	"go.podman.io/storage/pkg/system"
+	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
 
 // Info returns the store and host information
@@ -130,6 +131,7 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 		SwapFree:              mi.SwapFree,
 		SwapTotal:             mi.SwapTotal,
 	}
+	info.CDISpecDirs, info.DiscoveredDevices = r.cdiInfo()
 	platform := parse.DefaultPlatform()
 	pArr := strings.Split(platform, "/")
 	if len(pArr) == 3 {
@@ -175,6 +177,33 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 	info.Uptime = buffer.String()
 
 	return &info, nil
+}
+
+func (r *Runtime) cdiInfo() ([]string, []define.DeviceInfo) {
+	registry, err := cdi.NewCache(
+		cdi.WithSpecDirs(r.config.Engine.CdiSpecDirs.Get()...),
+		cdi.WithAutoRefresh(false),
+	)
+	if err != nil {
+		logrus.Debugf("Creating CDI registry for info: %v", err)
+		return r.config.Engine.CdiSpecDirs.Get(), nil
+	}
+	if err := registry.Refresh(); err != nil {
+		logrus.Debugf("The following error was triggered when refreshing the CDI registry for info: %v", err)
+	}
+
+	return registry.GetSpecDirectories(), cdiDeviceInfo(registry.ListDevices())
+}
+
+func cdiDeviceInfo(deviceNames []string) []define.DeviceInfo {
+	devices := make([]define.DeviceInfo, 0, len(deviceNames))
+	for _, device := range deviceNames {
+		devices = append(devices, define.DeviceInfo{
+			Source: "cdi",
+			ID:     device,
+		})
+	}
+	return devices
 }
 
 func (r *Runtime) getContainerStoreInfo() (define.ContainerStore, error) {

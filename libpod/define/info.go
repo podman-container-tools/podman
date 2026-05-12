@@ -33,6 +33,8 @@ type HostInfo struct {
 	CgroupManager      string            `json:"cgroupManager"`
 	CgroupsVersion     string            `json:"cgroupVersion"`
 	CgroupControllers  []string          `json:"cgroupControllers"`
+	CDISpecDirs        []string          `json:"cdiSpecDirs"`
+	DiscoveredDevices  []DeviceInfo      `json:"discoveredDevices,omitempty"`
 	Conmon             *ConmonInfo       `json:"conmon"`
 	CPUs               int               `json:"cpus"`
 	CPUUtilization     *CPUUsage         `json:"cpuUtilization"`
@@ -70,6 +72,12 @@ type HostInfo struct {
 	Linkmode  string `json:"linkmode"`
 
 	EmulatedArchitectures []string `json:"emulatedArchitectures,omitempty"`
+}
+
+// DeviceInfo describes a device discovered by a device source.
+type DeviceInfo struct {
+	Source string `json:"source"`
+	ID     string `json:"id"`
 }
 
 // RemoteSocket describes information about the API socket
