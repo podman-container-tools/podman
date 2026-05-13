@@ -21,6 +21,10 @@ Remove dangling images and images that have no associated containers.
 
 Remove persistent build cache created for `--mount=type=cache`.
 
+#### **--dry-run**
+
+Display images that would have been removed by the prune command.
+
 #### **--external**
 
 Remove images even when they are used by external containers (e.g., build containers).
@@ -98,6 +102,20 @@ f3e20dc537fb04cb51672a5cb6fdf2292e61d411315549391a0d1f64e4e3097e
 Remove all unused images from local storage with label version 1.0:
 ```
 $ sudo podman image prune -a -f --filter label=version=1.0
+e813d2135f17fadeffeea8159a34cfdd4c30b98d8111364b913a91fd930643e9
+5e6572320437022e2746467ddf5b3561bf06e099e8e6361df27e0b2a7ed0b17b
+58fda2abf5042b35dfe04e5f8ee458a3cc26375bf309efb42c078b551a2055c7
+6d2bd30fe924d3414b64bd3920760617e6ced872364bc3bc6959a623252da002
+33d1c829be64a1e1d379caf4feec1f05a892c3ef7aa82c0be53d3c08a96c59c5
+f9f0a8a58c9e02a2b3250b88cc5c95b1e10245ca2c4161d19376580aaa90f55c
+1ef14d5ede80db78978b25ad677fd3e897a578c3af614e1fda608d40c8809707
+45e1482040e441a521953a6da2eca9bafc769e15667a07c23720d6e0cafc3ab2
+```
+
+Display unused images that would have been removed:
+```
+$ sudo podman image prune --dry-run -a  
+Are you sure you want to continue? [y/N] y
 e813d2135f17fadeffeea8159a34cfdd4c30b98d8111364b913a91fd930643e9
 5e6572320437022e2746467ddf5b3561bf06e099e8e6361df27e0b2a7ed0b17b
 58fda2abf5042b35dfe04e5f8ee458a3cc26375bf309efb42c078b551a2055c7
