@@ -45,13 +45,13 @@ func restart(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Machine %q stopped successfully\n", vmName)
 	newMachineEvent(events.Stop, events.Event{Name: vmName})
 
-	if err := shim.Start(mc, vmProvider, machine.StartOptions{}, nil); err != nil {
+	updateConnection := false
+	if err := shim.Start(mc, vmProvider, machine.StartOptions{}, &updateConnection); err != nil {
 		return err
 	}
-	fmt.Printf("Machine %q started successfully\n", vmName)
+	fmt.Printf("Machine %q restarted successfully\n", vmName)
 	newMachineEvent(events.Start, events.Event{Name: vmName})
 	return nil
 }
