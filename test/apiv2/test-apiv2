@@ -482,7 +482,8 @@ function start_service() {
         $PODMAN_BIN unshare true
     fi
 
-    CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+    env CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+        ${CONTAINERS_STORAGE_CONF:+CONTAINERS_STORAGE_CONF=$CONTAINERS_STORAGE_CONF} \
         $PODMAN_BIN \
         --root $WORKDIR/server_root --syslog=true \
         system service \
@@ -655,6 +656,7 @@ function wait_for_port() {
 function podman() {
     echo "\$ $PODMAN_BIN $*"                           >>$WORKDIR/output.log
     env CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+        ${CONTAINERS_STORAGE_CONF:+CONTAINERS_STORAGE_CONF=$CONTAINERS_STORAGE_CONF} \
         $PODMAN_BIN --root $WORKDIR/server_root "$@"   >>$WORKDIR/output.log 2>&1
 }
 

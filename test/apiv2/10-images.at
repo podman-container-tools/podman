@@ -550,4 +550,52 @@ done
 # Clean up
 podman rmi -f quay.io/libpod/alpine:latest >/dev/null 2>&1 || true
 
+# Test pullProgress=true with zstd:chunked image from local registry
+# Restart service with a custom storage.conf (enable_partial_images = "true")
+stop_service
+CONTAINERS_STORAGE_CONF=$TESTS_DIR/storage.partial-pull.conf start_service
+start_registry
+
+# Build the image
+CHUNKED_TMPD=$(mktemp -d podman-apiv2-test.chunked.XXXXXXXX)
+echo "content-$(random_string 256)" > $CHUNKED_TMPD/content
+cat > $CHUNKED_TMPD/Containerfile << EOF
+FROM scratch
+ADD content /content
+EOF
+podman image build -t chunked-test:latest $CHUNKED_TMPD
+
+# Push it to the local registry
+podman push --tls-verify=false --force-compression \
+    --compression-format=zstd:chunked \
+    chunked-test:latest docker://localhost:$REGISTRY_PORT/chunked-test:latest
+
+# Remove the local image to force a fresh pull
+podman rmi -f chunked-test:latest >/dev/null 2>&1 || true
+
+# Pull via API with pullProgress=true
+t POST "libpod/images/pull?reference=localhost:$REGISTRY_PORT/chunked-test:latest&pullProgress=true&tlsVerify=false" 200 \
+  .status~".*success.*" \
+  .stream~".*Starting to pull artifact.*" \
+  .stream~".*Artifact pulled successfully.*"
+
+# Get layer digests (output has the 'sha256:' prefix) for verification
+layer_digests=$(skopeo inspect --tls-verify=false \
+    docker://localhost:$REGISTRY_PORT/chunked-test:latest | jq -r '.Layers[]')
+
+# Verify each layer digest appears as a progressComponentID in the pullProgress stream
+for layer_id in $layer_digests; do
+    like "$output" ".*progressComponentID.*${layer_id}.*" \
+         "pullProgress reports $layer_id as progressComponentID"
+done
+
+# Clean up
+podman rmi -f localhost:$REGISTRY_PORT/chunked-test:latest >/dev/null 2>&1 || true
+rm -rf $CHUNKED_TMPD
+stop_registry
+
+# Restart service without modified storage.conf
+stop_service
+start_service
+
 # vim: filetype=sh
