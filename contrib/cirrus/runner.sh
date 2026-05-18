@@ -31,9 +31,6 @@ function _run_validate-source() {
     # make sure PRs have tests
     showrun make tests-included
 
-    # make sure PRs have jira links (if needed for branch)
-    showrun make test-jira-links-included
-
     # shellcheck disable=SC2154
     head=$CIRRUS_CHANGE_IN_REPO
     # shellcheck disable=SC2154

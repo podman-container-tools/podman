@@ -65,9 +65,6 @@ if [[ "${DISTRO_NV}" == "$FEDORA_NAME" ]]; then
     # Tests for lib.sh
     showrun ${SCRIPT_BASE}/lib.sh.t
 
-    # Tests for pr-should-link-jira
-    showrun ${SCRIPT_BASE}/pr-should-link-jira.t
-
     # Run this during daily cron job to prevent a GraphQL API change/breakage
     # from impacting every PR.  Down-side being if it does fail, a maintainer
     # will need to do some archaeology to find it.
