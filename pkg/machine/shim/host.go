@@ -419,6 +419,24 @@ func Stop(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool) e
 	return stopLocked(mc, mp, dirs, hardStop)
 }
 
+// StopThenStart stops and starts the machine while holding its lock.
+func StopThenStart(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool, opts machine.StartOptions, updateSystemConn *bool) error {
+	dirs, err := env.GetMachineDirs(mp.VMType())
+	if err != nil {
+		return err
+	}
+	mc.Lock()
+	defer mc.Unlock()
+	if err := mc.Refresh(); err != nil {
+		return fmt.Errorf("reload config: %w", err)
+	}
+
+	if err := stopLocked(mc, mp, dirs, hardStop); err != nil {
+		return err
+	}
+	return startLocked(mc, mp, dirs, opts, updateSystemConn)
+}
+
 // stopLocked stops the machine and expects the caller to hold the machine's lock.
 func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, hardStop bool) error {
 	state, err := mp.State(mc, false)
@@ -464,12 +482,6 @@ func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mach
 }
 
 func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.StartOptions, updateSystemConn *bool) error {
-	var updateDefaultConnection bool
-
-	defaultBackoff := 500 * time.Millisecond
-	maxBackoffs := 6
-	signalChanClosed := false
-
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
 		return err
@@ -481,6 +493,17 @@ func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.St
 	if err := mc.Refresh(); err != nil {
 		return fmt.Errorf("reload config: %w", err)
 	}
+
+	return startLocked(mc, mp, dirs, opts, updateSystemConn)
+}
+
+// startLocked starts the machine and expects the caller to hold the machine's lock.
+func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, opts machine.StartOptions, updateSystemConn *bool) error {
+	var updateDefaultConnection bool
+
+	defaultBackoff := 500 * time.Millisecond
+	maxBackoffs := 6
+	signalChanClosed := false
 
 	connName := mc.Name
 	if mc.HostUser.Rootful {

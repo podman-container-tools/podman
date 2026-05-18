@@ -14,15 +14,15 @@ import (
 
 var (
 	restartCmd = &cobra.Command{
-	Use:               "restart [MACHINE]",
-	Short:             "Restart an existing machine",
-	Long:              "Restart a managed virtual machine",
-	PersistentPreRunE: machinePreRunE,
-	RunE:              restart,
-	Args:              cobra.MaximumNArgs(1),
-	Example:           `podman machine restart podman-machine-default`,
-	ValidArgsFunction: AutocompleteMachine,
-}
+		Use:               "restart [MACHINE]",
+		Short:             "Restart an existing machine",
+		Long:              "Restart a managed virtual machine",
+		PersistentPreRunE: machinePreRunE,
+		RunE:              restart,
+		Args:              cobra.MaximumNArgs(1),
+		Example:           `podman machine restart podman-machine-default`,
+		ValidArgsFunction: AutocompleteMachine,
+	}
 	restartOpts = machine.StartOptions{}
 )
 
@@ -56,13 +56,12 @@ func restart(_ *cobra.Command, args []string) error {
 		fmt.Printf("Restarting machine %q\n", vmName)
 	}
 
-	newMachineEvent(events.Stop, events.Event{Name: vmName})
-
 	updateConnection := false
-	if err := shim.Start(mc, vmProvider, machine.StartOptions{}, &updateConnection); err != nil {
+	if err := shim.StopThenStart(mc, vmProvider, false, restartOpts, &updateConnection); err != nil {
 		return err
 	}
 	fmt.Printf("Machine %q restarted successfully\n", vmName)
+	newMachineEvent(events.Stop, events.Event{Name: vmName})
 	newMachineEvent(events.Start, events.Event{Name: vmName})
 	return nil
 }
