@@ -24,6 +24,14 @@ virtual machine just starts it from a stopped state.
 
 Print usage statement.
 
+#### **--no-info**
+
+Suppress informational tips.
+
+#### **--quiet**, **-q**
+
+Suppress machine restarting status output.
+
 ## EXAMPLES
 
 Restart a podman machine named myvm.

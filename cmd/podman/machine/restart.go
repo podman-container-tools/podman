@@ -12,7 +12,8 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/shim"
 )
 
-var restartCmd = &cobra.Command{
+var (
+	restartCmd = &cobra.Command{
 	Use:               "restart [MACHINE]",
 	Short:             "Restart an existing machine",
 	Long:              "Restart a managed virtual machine",
@@ -22,15 +23,25 @@ var restartCmd = &cobra.Command{
 	Example:           `podman machine restart podman-machine-default`,
 	ValidArgsFunction: AutocompleteMachine,
 }
+	restartOpts = machine.StartOptions{}
+)
 
 func init() {
 	registry.Commands = append(registry.Commands, registry.CliCommand{
 		Command: restartCmd,
 		Parent:  machineCmd,
 	})
+
+	flags := restartCmd.Flags()
+	noInfoFlagName := "no-info"
+	flags.BoolVar(&restartOpts.NoInfo, noInfoFlagName, false, "Suppress informational tips")
+
+	quietFlagName := "quiet"
+	flags.BoolVarP(&restartOpts.Quiet, quietFlagName, "q", false, "Suppress machine restarting status output")
 }
 
 func restart(_ *cobra.Command, args []string) error {
+	restartOpts.NoInfo = restartOpts.Quiet || restartOpts.NoInfo
 	vmName := defaultMachineName
 	if len(args) > 0 && len(args[0]) > 0 {
 		vmName = args[0]
@@ -41,8 +52,8 @@ func restart(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := shim.Stop(mc, vmProvider, false); err != nil {
-		return err
+	if !restartOpts.Quiet {
+		fmt.Printf("Restarting machine %q\n", vmName)
 	}
 
 	newMachineEvent(events.Stop, events.Event{Name: vmName})
