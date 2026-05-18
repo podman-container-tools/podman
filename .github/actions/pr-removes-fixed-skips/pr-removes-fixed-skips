@@ -7,7 +7,6 @@ package Podman::CI::PrRemovesFixedSkips;
 use v5.14;
 use utf8;
 
-# Grumble. CI system doesn't have 'open'
 binmode STDIN,  ':utf8';
 binmode STDOUT, ':utf8';
 
@@ -15,7 +14,7 @@ use strict;
 use warnings;
 
 (our $ME = $0) =~ s|.*/||;
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 ###############################################################################
 # BEGIN boilerplate args checking, usage messages
@@ -30,7 +29,13 @@ containing 'Skip' instructions or FIXME comments referencing
 those IDs. If we find any, we abort with a loud and hopefully
 useful message.
 
-$ME is intended to run from Cirrus CI.
+$ME is intended to run from GitHub Actions. The caller (typically
+the composite action under .github/actions/pr-removes-fixed-skips/)
+must set the following environment variables:
+
+  PR_BODY    body of the pull request
+  BASE_SHA   SHA of the PR base commit
+  HEAD_SHA   SHA of the PR head commit
 
 OPTIONS:
 
@@ -63,15 +68,12 @@ __PACKAGE__->main()                                     unless caller();
 
 # Main code.
 sub main {
-    # Note that we operate directly on @ARGV, not on function parameters.
-    # This is deliberate: it's because Getopt::Long only operates on @ARGV
-    # and there's no clean way to make it use @_.
     handle_opts();                      # will set package globals
 
     die "$ME: This script takes no arguments; try $ME --help\n"  if @ARGV;
 
-    # Check commit messages from both github and git; they often differ
-    my @issues = fixed_issues(cirrus_change_message(), git_commit_messages())
+    # Check commit messages from both the PR body and from git.
+    my @issues = fixed_issues(pr_body(), git_commit_messages())
         or exit 0;
 
     my @found = unremoved_skips(@issues)
@@ -152,7 +154,7 @@ sub fixed_issues {
         #
         #                 1               1              2   2
         while ($msg =~ /\b(Fix|Clos|Resolv)[esd]*[:\s]+\#(\d+)/gis) {
-            # Skip dups: we're probably checking both github and git messages
+            # Skip dups: we're probably checking both PR body and git messages
             push @issues, $2
                 unless grep { $_ eq $2 } @issues;
         }
@@ -161,33 +163,24 @@ sub fixed_issues {
     return @issues;
 }
 
-###########################
-#  cirrus_change_message  #  this is the one from *GitHub*, not *git*
-###########################
-sub cirrus_change_message {
-    my $change_message = $ENV{CIRRUS_CHANGE_MESSAGE}
-        or do {
-            # OK for it to be unset if we're not running CI on a PR
-            return if ! $ENV{CIRRUS_PR};
-            # But if we _are_ running on a PR, something went badly wrong.
-            die "$ME: \$CIRRUS_CHANGE_MESSAGE is undefined\n";
-        };
-
-    return $change_message;
+############
+#  pr_body #  Body of the pull request, from the GHA composite action
+############
+sub pr_body {
+    return $ENV{PR_BODY} // '';
 }
 
 #########################
 #  git_commit_messages  #  the ones from the *git history*
 #########################
 sub git_commit_messages {
-    # Probably the same as HEAD, but use Cirrus-defined value if available
-    my $head = $ENV{CIRRUS_CHANGE_IN_REPO} || 'HEAD';
+    my $base = $ENV{BASE_SHA} or return;
+    my $head = $ENV{HEAD_SHA} || 'HEAD';
 
-    # Base of this PR. Here we absolutely rely on cirrus.
-    return if ! $ENV{DEST_BRANCH};
-    chomp(my $base = qx{git merge-base $ENV{DEST_BRANCH} $head});
+    chomp(my $merge_base = qx{git merge-base $base $head});
+    return if $? != 0 || !$merge_base;
 
-    qx{git log --format=%B $base..$head};
+    return qx{git log --format=%B $merge_base..$head};
 }
 
 1;

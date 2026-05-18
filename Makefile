@@ -316,7 +316,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint .gitvalidation swagger-check tests-expect-exit pr-removes-fixed-skips
+validate-source: lint .gitvalidation swagger-check tests-expect-exit
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -771,10 +771,6 @@ tests-expect-exit:
 		echo "        Expect(...).To(..., \"Friendly explanation of this check\")"; \
 		exit 1; \
 	fi
-
-.PHONY: pr-removes-fixed-skips
-pr-removes-fixed-skips:
-	contrib/cirrus/pr-removes-fixed-skips
 
 ###
 ### Release/Packaging targets
