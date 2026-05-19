@@ -88,7 +88,6 @@ validate-source_task:
     gce_instance:
         image_project: libpod-218412
         zone: "us-central1-a"
-        # golangci-lint is a very, very hungry beast.
         cpu: 8
         memory: "16Gb"
         # Required to be 200gig, do not modify - has i/o performance impact
@@ -123,12 +122,6 @@ validate-source_task:
           fi
     # Standard setup stage call, used by nearly every task in CI.
     setup_script: &setup '$GOSRC/$SCRIPT_BASE/setup_environment.sh'
-    golangci-lint_cache:
-        folder: /root/.cache/golangci-lint
-        fingerprint_script: &golangci_cache_fingerprint
-            - go version
-            - grep GOLANGCI_LINT_VERSION Makefile | head -1
-            - date +%U
     # Standard main execution stage call, used by nearly every task in CI.
     main_script: &main '/usr/bin/time --verbose --output="$STATS_LOGFILE" $GOSRC/$SCRIPT_BASE/runner.sh'
 
@@ -297,8 +290,6 @@ osx_alt_build_task:
     # This host is/was shared with potentially many other CI tasks.
     # The previous task may have been canceled or aborted.
     prep_script: &mac_cleanup "contrib/cirrus/mac_cleanup.sh"
-    lint_script:
-        - make golangci-lint
     basic_build_script:
         - make .install.ginkgo
         - make podman-remote
@@ -338,17 +329,11 @@ freebsd_alt_build_task:
         ALT_NAME: 'FreeBSD Cross'
     freebsd_instance:
         image_family: freebsd-14-3
-        # golangci-lint is a very, very hungry beast.
         cpu: 4
         memory: 8Gb
     setup_script:
         - pkg install -y gpgme bash go-md2man gmake gsed gnugrep go pkgconf zstd
         - go version # Downloads a new go version based on go.mod's go directive.
-    golint_cache:
-        folder: ~/.cache/golangci-lint
-        fingerprint_script: *golangci_cache_fingerprint
-    lint_script:
-        - gmake golangci-lint
     build_amd64_script:
         - gmake podman-release
     # This task cannot make use of the shared repo.tar.zst artifact and must

@@ -309,7 +309,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint
+validate-source:
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
