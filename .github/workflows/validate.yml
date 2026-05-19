@@ -32,6 +32,22 @@ jobs:
           head-sha: ${{ github.event.pull_request.head.sha }}
           override: ${{ contains(github.event.pull_request.labels.*.name, 'No New Tests') }}
 
+      - name: Check commit subject length (< 90 chars)
+        if: always()
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fail=0
+          while read -r sha; do
+              subject=$(git log -1 --format='%s' "$sha")
+              if (( ${#subject} >= 90 )); then
+                  echo "::error::commit $sha: subject is ${#subject} chars (>= 90): $subject"
+                  fail=1
+              fi
+          done < <(git rev-list --no-merges "$BASE_SHA".."$HEAD_SHA")
+          exit $fail
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

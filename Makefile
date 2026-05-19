@@ -36,8 +36,6 @@ NATIVE_GOARCH := $(shell env -u GOARCH $(GO) env GOARCH)
 GOARCH ?= $(NATIVE_GOARCH)
 COVERAGE_PATH ?= .coverage
 DESTDIR ?=
-EPOCH_TEST_COMMIT ?= $(shell git merge-base $${DEST_BRANCH:-main} HEAD)
-HEAD ?= HEAD
 PROJECT := go.podman.io/podman
 GIT_BASE_BRANCH ?= origin/main
 LIBPOD_INSTANCE := libpod_dev
@@ -271,11 +269,6 @@ help: ## (Default) Print listing of key targets with their descriptions
 ### Linting/Formatting/Code Validation targets
 ###
 
-.PHONY: .gitvalidation
-.gitvalidation: .install.gitvalidation
-	@echo "Validating vs commit '$(call err_if_empty,EPOCH_TEST_COMMIT)'"
-	GIT_CHECK_EXCLUDE="./vendor:./test/tools/vendor:docs/make.bat:test/buildah-bud/buildah-tests.diff:test/e2e/quadlet/remap-keep-id2.container" ./test/tools/build/git-validation -run short-subject -range $(EPOCH_TEST_COMMIT)..$(HEAD)
-
 .PHONY: lint
 lint: golangci-lint
 ifeq ($(PRE_COMMIT),)
@@ -316,7 +309,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint .gitvalidation
+validate-source: lint
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -979,10 +972,6 @@ install.tools: .install.golangci-lint ## Install needed tools
 .PHONY: .install.ginkgo
 .install.ginkgo:
 	$(GO) build -o $(GINKGO) ./vendor/github.com/onsi/ginkgo/v2/ginkgo
-
-.PHONY: .install.gitvalidation
-.install.gitvalidation:
-	$(MAKE) -C test/tools build/git-validation
 
 .PHONY: .install.golangci-lint
 .install.golangci-lint:
