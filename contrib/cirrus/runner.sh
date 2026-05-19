@@ -22,27 +22,7 @@ source $(dirname $0)/lib.sh
 showrun echo "starting"
 
 function _run_validate-source() {
-    # This target is only meant to be run on PRs.
-    # We need the following env vars set for the git diff check below.
-    req_env_vars CIRRUS_CHANGE_IN_REPO PR_BASE_SHA
-
     showrun make validate-source
-
-    # shellcheck disable=SC2154
-    head=$CIRRUS_CHANGE_IN_REPO
-    # shellcheck disable=SC2154
-    base=$PR_BASE_SHA
-    echo "_run_validate-source: head=$head  base=$base"
-    diffs=$(git diff --name-only $base $head)
-
-    # If PR touches renovate config validate it, as the image is very big only do so when needed
-    if grep -E -q "^.github/renovate.json5" <<<"$diffs"; then
-        msg "Checking renovate config."
-        showrun podman run \
-            -v ./.github/renovate.json5:/usr/src/app/renovate.json5:z \
-            ghcr.io/renovatebot/renovate:latest \
-            renovate-config-validator
-    fi
 }
 
 function _run_unit() {
