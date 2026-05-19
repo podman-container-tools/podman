@@ -10,6 +10,10 @@ die() { echo "${1:-No error message given} (from $(basename "$0"))"; exit 1; }
 # Strip the leading v, if found.
 VERSION=${VERSION#v}
 
+# Local installation path.
+BINDIR="./bin"
+LBIN="$BINDIR/golangci-lint"
+
 function install() {
     local retry=$1
 
@@ -22,10 +26,20 @@ function install() {
     curl -sSfL --retry 5 https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $BINDIR "v$VERSION"
 }
 
-BINDIR="./bin"
-BIN="$BINDIR/golangci-lint"
-if [ -x "$BIN" ] && $BIN --version | grep "$VERSION"; then
-    echo "Using existing $BIN"
+# Check if it's already installed globally.
+BIN=$(command -v golangci-lint)
+if [ -n "$BIN" ] && $BIN --version | grep "$VERSION"; then
+	echo "Using existing $BIN"
+	# Remove the locally installed one, as it is:
+	#  - no longer needed;
+	#  - might be old/wrong version.
+	rm -f $LBIN
+	exit 0
+fi
+
+# Check the locally installed one.
+if [ -x "$LBIN" ] && $LBIN --version | grep "$VERSION"; then
+    echo "Using existing local $LBIN"
     exit 0
 fi
 
