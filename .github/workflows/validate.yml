@@ -78,6 +78,16 @@ jobs:
             exit 1
           fi
 
+  swagger-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run swagger-check
+        run: hack/swagger-check
+
   no-leading-tabs-in-system-tests:
     runs-on: ubuntu-latest
     steps:

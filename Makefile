@@ -316,7 +316,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint .gitvalidation swagger-check
+validate-source: lint .gitvalidation
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -624,10 +624,6 @@ man-page-table-check: docs
 
 xref-quadlet-docs: docs
 	hack/xref-quadlet-docs
-
-.PHONY: swagger-check
-swagger-check:
-	hack/swagger-check
 
 .PHONY: swagger
 swagger: pkg/api/swagger.yaml
