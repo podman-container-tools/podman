@@ -21,10 +21,6 @@ source $(dirname $0)/lib.sh
 
 showrun echo "starting"
 
-function _run_validate-source() {
-    showrun make validate-source
-}
-
 function _run_unit() {
     # shellcheck disable=SC2154
     if [[ "$PODBIN_NAME" != "podman" ]]; then

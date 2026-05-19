@@ -307,16 +307,12 @@ codespell:
 	# Configuration for codespell is in .codespellrc
 	codespell -w
 
-# Code validation target that **DOES NOT** require building podman binaries
-.PHONY: validate-source
-validate-source:
-
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
 validate-binaries: man-page-check validate.completions
 
 .PHONY: validate
-validate: validate-source validate-binaries
+validate: validate-binaries
 
 # The image used below is generated manually from contrib/validatepr/Containerfile in this podman repo.  The builds are
 # not automated right now.  The hope is that eventually the quay.io/libpod/fedora_podman is multiarch and can replace this

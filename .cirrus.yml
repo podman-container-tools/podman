@@ -49,7 +49,7 @@ env:
     #### Control variables that determine what to run and how to run it.
     #### N/B: Required ALL of these are set for every single task.
     ####
-    TEST_FLAVOR:             # int, sys, ext_svc, validate, automation, etc.
+    TEST_FLAVOR:             # int, sys, ext_svc, automation, etc.
     TEST_ENVIRON: host       # 'host', or 'container'.
     PODBIN_NAME: podman      # 'podman' or 'remote'
     PRIV_NAME: root          # 'root' or 'rootless'
@@ -77,53 +77,6 @@ aws_credentials:
   role_arn: arn:aws:iam::449134212816:role/podman-ci-role
   role_session_name: cirrus
   region: us-east-1
-
-
-validate-source_task:
-    name: "Validate source code changes"
-    alias: validate-source
-    # This task is primarily intended to catch human-errors early on, in a
-    # PR context.  Skip running it everywhere else.
-    only_if: &is_pr "$CIRRUS_PR != ''"
-    gce_instance:
-        image_project: libpod-218412
-        zone: "us-central1-a"
-        cpu: 8
-        memory: "16Gb"
-        # Required to be 200gig, do not modify - has i/o performance impact
-        # according to gcloud CLI tool warning messages.
-        disk: 200
-        image_name: "${FEDORA_CACHE_IMAGE_NAME}"  # from stdenvars
-    env:
-        TEST_FLAVOR: validate-source
-        TEST_BUILD_TAGS: ""
-    # NOTE: The default way Cirrus-CI clones is *NOT* compatible with
-    #       environment expectations in contrib/cirrus/lib.sh.  Specifically
-    #       the 'origin' remote must be defined, and all remote branches/tags
-    #       must be available for reference from CI scripts.
-    clone_script: &full_clone |
-          set -exo pipefail
-          cd /
-          rm -rf $CIRRUS_WORKING_DIR
-          mkdir -p $CIRRUS_WORKING_DIR
-          if [[ -z "$CIRRUS_PR" ]]; then
-            DEST_BRANCH="$CIRRUS_BRANCH"
-          else
-            DEST_BRANCH="$CIRRUS_BASE_BRANCH"
-          fi
-          git clone --recursive --branch=$DEST_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
-          cd $CIRRUS_WORKING_DIR
-          git remote update origin
-          if [[ -n "$CIRRUS_PR" ]]; then # running for a PR
-              git fetch origin pull/$CIRRUS_PR/head:pull/$CIRRUS_PR
-              git checkout pull/$CIRRUS_PR
-          else
-              git reset --hard $CIRRUS_CHANGE_IN_REPO
-          fi
-    # Standard setup stage call, used by nearly every task in CI.
-    setup_script: &setup '$GOSRC/$SCRIPT_BASE/setup_environment.sh'
-    # Standard main execution stage call, used by nearly every task in CI.
-    main_script: &main '/usr/bin/time --verbose --output="$STATS_LOGFILE" $GOSRC/$SCRIPT_BASE/runner.sh'
 
 
 # N/B: This matrix of build tasks are critical to CI, along with the following
@@ -170,15 +123,39 @@ build_task:
               VM_IMAGE_NAME: ${DEBIAN_CACHE_IMAGE_NAME}
     env:
         TEST_FLAVOR: build
-    clone_script: *full_clone
+    # NOTE: The default way Cirrus-CI clones is *NOT* compatible with
+    #       environment expectations in contrib/cirrus/lib.sh.  Specifically
+    #       the 'origin' remote must be defined, and all remote branches/tags
+    #       must be available for reference from CI scripts.
+    clone_script: &full_clone |
+          set -exo pipefail
+          cd /
+          rm -rf $CIRRUS_WORKING_DIR
+          mkdir -p $CIRRUS_WORKING_DIR
+          if [[ -z "$CIRRUS_PR" ]]; then
+            DEST_BRANCH="$CIRRUS_BRANCH"
+          else
+            DEST_BRANCH="$CIRRUS_BASE_BRANCH"
+          fi
+          git clone --recursive --branch=$DEST_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
+          cd $CIRRUS_WORKING_DIR
+          git remote update origin
+          if [[ -n "$CIRRUS_PR" ]]; then # running for a PR
+              git fetch origin pull/$CIRRUS_PR/head:pull/$CIRRUS_PR
+              git checkout pull/$CIRRUS_PR
+          else
+              git reset --hard $CIRRUS_CHANGE_IN_REPO
+          fi
     # Attempt to prevent flakes by confirming basic environment expectations,
     # network service connectivity and essential container image availability.
     # TODO: Rename to "ci-sanity" and move into task that runs in parallel to build
     prebuild_script: &prebuild $SCRIPT_BASE/prebuild.sh
-    setup_script: *setup
+    # Standard setup stage call, used by nearly every task in CI.
+    setup_script: &setup '$GOSRC/$SCRIPT_BASE/setup_environment.sh'
     # Attempt to prevent flakes by confirming automation environment and
     # all required external/3rd-party services are available and functional.
-    main_script: *main
+    # Standard main execution stage call, used by nearly every task in CI.
+    main_script: &main '/usr/bin/time --verbose --output="$STATS_LOGFILE" $GOSRC/$SCRIPT_BASE/runner.sh'
     # Attempt to catch code-quality and vendoring problems early.
     postbuild_script: &postbuild $SCRIPT_BASE/postbuild.sh
     # Cirrus-CI is very slow uploading one file at time, and the repo contains
@@ -349,7 +326,6 @@ build_success_task:
     name: "Total Build Success"
     alias: build_success
     depends_on:
-        - validate-source
         - build
         - build_aarch64
         - alt_build

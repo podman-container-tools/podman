@@ -336,9 +336,6 @@ fi
 # shellcheck disable=SC2154
 showrun echo "about to set up for TEST_FLAVOR [=$TEST_FLAVOR]"
 case "$TEST_FLAVOR" in
-    validate-source)
-        # NOOP
-        ;;
     altbuild)
         # Defined in .cirrus.yml
         # shellcheck disable=SC2154
