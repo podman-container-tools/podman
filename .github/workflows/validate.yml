@@ -119,3 +119,14 @@ jobs:
             echo "Found leading tabs in system tests. Use spaces to indent, not tabs." >&2
             exit 1
           fi
+
+  all-done:
+    needs:
+      - pr-checks
+      - shellcheck
+      - tests-expect-exit
+      - swagger-check
+      - no-leading-tabs-in-system-tests
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All jobs completed"
