@@ -47,16 +47,6 @@ get_env_key() {
 # Envars all defined by CI config.
 # shellcheck disable=SC2154
 if [[ "${DISTRO_NV}" == "$FEDORA_NAME" ]]; then
-    msg "Checking shell scripts"
-    showrun shellcheck --format=tty \
-        --shell=bash --external-sources \
-        --enable add-default-case,avoid-nullary-conditions,check-unassigned-uppercase \
-        --exclude SC2046,SC2034,SC2090,SC2064 \
-        --wiki-link-count=0 --severity=warning \
-        $SCRIPT_BASE/*.sh \
-        ./.github/actions/check_cirrus_cron/* \
-        hack/get_ci_vm.sh
-
     # Tests for lib.sh
     showrun ${SCRIPT_BASE}/lib.sh.t
 

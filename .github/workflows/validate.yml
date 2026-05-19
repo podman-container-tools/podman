@@ -32,6 +32,35 @@ jobs:
           head-sha: ${{ github.event.pull_request.head.sha }}
           override: ${{ contains(github.event.pull_request.labels.*.name, 'No New Tests') }}
 
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: install shellcheck
+        env:
+          VERSION: v0.11.0
+          BASEURL: https://github.com/koalaman/shellcheck/releases/download
+          SHA256: 4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b
+        run: |
+          mkdir ~/bin
+          curl -sSfL --retry 5 $BASEURL/$VERSION/shellcheck-$VERSION.linux.x86_64.tar.xz |
+            tar xfJ - -C ~/bin --strip 1 shellcheck-$VERSION/shellcheck
+          sha256sum --strict --check - <<<"$SHA256 *$HOME/bin/shellcheck"
+          # make sure to remove the old version
+          sudo rm -f /usr/bin/shellcheck
+          # Add ~/bin to $PATH.
+          echo ~/bin >> $GITHUB_PATH
+
+      - name: Run shellcheck
+        run: |
+          shellcheck --format=tty --wiki-link-count=0 --severity=warning \
+              contrib/cirrus/*.sh \
+              .github/actions/check_cirrus_cron/* \
+              hack/get_ci_vm.sh
+
   no-leading-tabs-in-system-tests:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,9 @@
+shell=bash
+external-sources=true
+enable=add-default-case
+enable=avoid-nullary-conditions
+enable=check-unassigned-uppercase
+disable=SC2046
+disable=SC2034
+disable=SC2090
+disable=SC2064
