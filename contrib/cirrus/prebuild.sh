@@ -30,11 +30,6 @@ msg "Checking Cirrus YAML"
 # shellcheck disable=SC2154
 showrun $SCRIPT_BASE/cirrus_yaml_test.py
 
-msg "Checking for leading tabs in system tests"
-if grep -n ^$'\t' test/system/*; then
-    die "Found leading tabs in system tests. Use spaces to indent, not tabs."
-fi
-
 # Lookup 'env' dict. string value from key specified as argument from YAML file.
 get_env_key() {
     local yaml

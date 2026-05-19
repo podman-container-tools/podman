@@ -31,3 +31,19 @@ jobs:
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
           override: ${{ contains(github.event.pull_request.labels.*.name, 'No New Tests') }}
+
+  no-leading-tabs-in-system-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # TODO: replace this narrow grep with `shfmt -ln bats -d test/system/`
+      # once the existing files are reformatted to satisfy shfmt.
+      - name: Check for leading tabs in system tests
+        run: |
+          if grep -n $'^\t' test/system/*; then
+            echo "Found leading tabs in system tests. Use spaces to indent, not tabs." >&2
+            exit 1
+          fi
