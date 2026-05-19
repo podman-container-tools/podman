@@ -316,7 +316,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint .gitvalidation swagger-check tests-expect-exit
+validate-source: lint .gitvalidation swagger-check
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -757,16 +757,6 @@ system.test-binary: .install.ginkgo
 .PHONY: test-binaries
 test-binaries: test/checkseccomp/checkseccomp test/goecho/goecho test/version/version
 	@echo "Canonical source version: $(call err_if_empty,RELEASE_VERSION)"
-
-.PHONY: tests-expect-exit
-tests-expect-exit:
-	@if grep -E --line-number 'Expect.*ExitCode' test/e2e/*.go | grep -E -v ', ".*"\)'; then \
-		echo "^^^ Unhelpful use of Expect(ExitCode())"; \
-		echo "   Please use '.Should(Exit(...))' pattern instead."; \
-		echo "   If that's not possible, please add an annotation (description) to your assertion:"; \
-		echo "        Expect(...).To(..., \"Friendly explanation of this check\")"; \
-		exit 1; \
-	fi
 
 ###
 ### Release/Packaging targets

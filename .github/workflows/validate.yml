@@ -61,6 +61,23 @@ jobs:
               .github/actions/check_cirrus_cron/* \
               hack/get_ci_vm.sh
 
+  tests-expect-exit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check for unannotated Expect(ExitCode())
+        run: |
+          if grep -E --line-number 'Expect.*ExitCode' test/e2e/*.go | grep -E -v ', ".*"\)'; then
+            echo "^^^ Unhelpful use of Expect(ExitCode())"
+            echo "   Please use '.Should(Exit(...))' pattern instead."
+            echo "   If that's not possible, please add an annotation (description) to your assertion:"
+            echo '        Expect(...).To(..., "Friendly explanation of this check")'
+            exit 1
+          fi
+
   no-leading-tabs-in-system-tests:
     runs-on: ubuntu-latest
     steps:
