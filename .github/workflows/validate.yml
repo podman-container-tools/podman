@@ -23,3 +23,11 @@ jobs:
           pr-body: ${{ github.event.pull_request.body }}
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
+
+      - name: PR should include tests
+        if: always()
+        uses: ./.github/actions/pr-should-include-tests
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          override: ${{ contains(github.event.pull_request.labels.*.name, 'No New Tests') }}

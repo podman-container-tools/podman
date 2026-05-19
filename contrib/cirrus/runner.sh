@@ -28,9 +28,6 @@ function _run_validate-source() {
 
     showrun make validate-source
 
-    # make sure PRs have tests
-    showrun make tests-included
-
     # shellcheck disable=SC2154
     head=$CIRRUS_CHANGE_IN_REPO
     # shellcheck disable=SC2154

@@ -758,10 +758,6 @@ system.test-binary: .install.ginkgo
 test-binaries: test/checkseccomp/checkseccomp test/goecho/goecho test/version/version
 	@echo "Canonical source version: $(call err_if_empty,RELEASE_VERSION)"
 
-.PHONY: tests-included
-tests-included:
-	contrib/cirrus/pr-should-include-tests
-
 .PHONY: tests-expect-exit
 tests-expect-exit:
 	@if grep -E --line-number 'Expect.*ExitCode' test/e2e/*.go | grep -E -v ', ".*"\)'; then \

@@ -1,0 +1,28 @@
+---
+
+name: pr-should-include-tests
+description: >
+    Require PRs that touch source code to also touch tests (unless
+    the 'No New Tests' label is set, or only "safe" files like docs
+    and vendor/ are modified).
+
+inputs:
+    base-sha:
+        description: SHA of the PR base commit
+        required: true
+    head-sha:
+        description: SHA of the PR head commit
+        required: true
+    override:
+        description: '"true" if the override label is set, else "false"'
+        required: true
+
+runs:
+    using: composite
+    steps:
+        - shell: bash
+          env:
+              BASE_SHA: ${{ inputs.base-sha }}
+              HEAD_SHA: ${{ inputs.head-sha }}
+              OVERRIDE: ${{ inputs.override }}
+          run: ${{ github.action_path }}/pr-should-include-tests

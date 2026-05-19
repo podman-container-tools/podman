@@ -1,30 +1,40 @@
 #!/bin/bash
 #
-# Intended for use in CI: check git commits, barf if no tests added.
+# pr-should-include-tests - check that a PR touches tests, or only "safe" files
 #
-ME=$(basename $0)
+# Reads:
+#   BASE_SHA   SHA of the PR base commit
+#   HEAD_SHA   SHA of the PR head commit
+#   OVERRIDE   "true" if the override label is set, else anything else
+#
 
-# Github label which allows overriding this check
+set -e
+
+ME=$(basename "$0")
+
+# GitHub label which allows overriding this check
 OVERRIDE_LABEL="No New Tests"
 
-# HEAD should be good enough, but the CIRRUS envariable allows us to test
-head=${CIRRUS_CHANGE_IN_REPO:-HEAD}
-# Base of this PR. Here we absolutely rely on cirrus.
-base=$(git merge-base ${DEST_BRANCH:-main} $head)
+head=${HEAD_SHA:-HEAD}
+if [[ -n "${BASE_SHA:-}" ]]; then
+    base=$BASE_SHA
+else
+    base=$(git merge-base "${DEST_BRANCH:-main}" "$head")
+fi
 
 # This gives us a list of files touched in all commits, e.g.
 #    A    foo.c
 #    M    bar.c
 # We look for Added or Modified (not Deleted!) files under 'test'.
 # --no-renames ensures that renamed tests (#9420) show up as 'A'dded.
-if git diff --name-status --no-renames $base $head | grep -E -q '^[AM]\s+(test/|.*_test\.go)'; then
+if git diff --name-status --no-renames "$base" "$head" | grep -E -q '^[AM]\s+(test/|.*_test\.go)'; then
     exit 0
 fi
 
 # Nothing changed under test subdirectory.
 #
 # This is OK if the only files being touched are "safe" ones.
-filtered_changes=$(git diff --name-only $base $head        |
+filtered_changes=$(git diff --name-only "$base" "$head"     |
                        grep -F -vx .cirrus.yml             |
                        grep -F -vx .pre-commit-config.yaml |
                        grep -F -vx .gitignore              |
@@ -41,41 +51,13 @@ filtered_changes=$(git diff --name-only $base $head        |
                        grep -E -v  '^hack/'                |
                        grep -E -v  '^nix/'                 |
                        grep -E -v  '^vendor/'              |
-                       grep -E -v  '^version/')
+                       grep -E -v  '^version/' || true)
 if [[ -z "$filtered_changes" ]]; then
     exit 0
 fi
 
-# Nope. Only allow if the github 'no-tests-needed' label is set
-if [[ -z "$CIRRUS_PR" ]]; then
-    echo "$ME: cannot query github: \$CIRRUS_PR is undefined" >&2
-    exit 1
-fi
-if [[ -z "$CIRRUS_REPO_CLONE_TOKEN" ]]; then
-    echo "$ME: cannot query github: \$CIRRUS_REPO_CLONE_TOKEN is undefined" >&2
-    exit 1
-fi
-
-query="{
-  \"query\": \"query {
-  repository(owner: \\\"containers\\\", name: \\\"podman\\\") {
-    pullRequest(number: $CIRRUS_PR) {
-      labels(first: 100) {
-        nodes {
-          name
-        }
-      }
-    }
-  }
-}\"
-}"
-
-result=$(curl --fail -s -H "Authorization: bearer $CIRRUS_REPO_CLONE_TOKEN" -H "Accept: application/vnd.github.antiope-preview+json" -H "Content-Type: application/json" -X POST --data @- https://api.github.com/graphql <<<"$query")
-
-labels=$(jq -r '.data.repository.pullRequest.labels.nodes[].name' <<<"$result")
-
-if grep -F -x -q "$OVERRIDE_LABEL" <<<"$labels"; then
-    # PR has the label set
+# Real code changed without tests. Allow only if the override label is set.
+if [[ "${OVERRIDE:-false}" == "true" ]]; then
     exit 0
 fi
 

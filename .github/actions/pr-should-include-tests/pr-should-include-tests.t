@@ -1,41 +1,32 @@
 #!/bin/bash
 #
-# tests for pr-should-include-tests.t
+# tests for pr-should-include-tests
 #
-# FIXME: I don't think this will work in CI, because IIRC the git-checkout
-# is a shallow one. But it works fine in a developer tree.
+# Runs against real historical commits in the podman repo, so it
+# only works in a developer tree with full git history (not in a
+# shallow clone).
 #
-ME=$(basename $0)
 
-# As of 2024-02 our test script queries github, for which we need token
-if [[ -z "$GITHUB_TOKEN" ]]; then
-    echo "$ME: Please set \$GITHUB_TOKEN" >&2
-    exit 1
-fi
-export CIRRUS_REPO_CLONE_TOKEN="$GITHUB_TOKEN"
+ME=$(basename "$0")
 
 ###############################################################################
 # BEGIN test cases
 #
-# Feel free to add as needed. Syntax is:
-#    <exit status>  <sha of commit>  <branch>=<sha of merge base>  # comments
+# Syntax is:
+#    <exit status>  <merge-base sha>  <commit sha>  <pr>  # comments
 #
 # Where:
 #    exit status       is the expected exit status of the script
-#    sha of merge base is the SHA of the branch point of the commit
-#    sha of commit     is the SHA of a real commit in the podman repo
+#    merge-base sha    is the SHA of the branch point of the commit
+#    commit sha        is the SHA of a real commit in the podman repo
 #
 # We need the actual sha of the merge base because once a branch is
-# merged 'git merge-base' (used in our test script) becomes useless.
-#
-#
-# FIXME: as of 2021-01-07 we don't have "no tests needed" in our git
-#        commit history, but once we do, please add a new '0' test here.
+# merged 'git merge-base' becomes useless.
 #
 tests="
 0  68c9e02df  db71759b1   8821  multiple commits, includes tests
 0  bb82c37b7  eeb4c129b   8832  single commit, w/tests, merge-base test
-1  1f5927699  864592c74   8685  multiple commits, no tests
+1  96eadb51a  2f17614d0  28488  source change with no tests
 0  7592f8fbb  6bbe54f2b   8766  no tests, but CI:DOCS in commit message
 0  355e38769  bfbd915d6   8884  a vendor bump
 0  ffe2b1e95  e467400eb   8899  only .cirrus.yml
@@ -45,11 +36,10 @@ tests="
 0  c342583da  12f835d12   8523  version.go + podman.spec.in
 0  8f75ed958  7b3ad6d89   8835  only a README.md change
 0  b6db60e58  f06dd45e0   9420  a test rename
-0  c6a896b0c  4ea5d6971  11833  includes magic string
 "
 
 # The script we're testing
-test_script=$(dirname $0)/$(basename $0 .t)
+test_script=$(dirname "$0")/$(basename "$0" .t)
 
 # END   test cases
 ###############################################################################
@@ -96,12 +86,12 @@ function run_test_script() {
         if [[ -z "$tested_override" ]]; then
             testnum=$(( testnum + 1 ))
 
-            CIRRUS_CHANGE_TITLE="[CI:DOCS] hi there" $test_script &>/dev/null
-            if [[ $? -ne 1 ]]; then
-                echo "not ok $testnum $rest (override with CI:DOCS)"
+            OVERRIDE=true $test_script &>/dev/null
+            if [[ $? -ne 0 ]]; then
+                echo "not ok $testnum $rest (override with OVERRIDE=true)"
                 rc=1
             else
-                echo "ok $testnum $rest (override with CI:DOCS)"
+                echo "ok $testnum $rest (override with OVERRIDE=true)"
             fi
 
             tested_override=1
@@ -117,15 +107,12 @@ rc=0
 testnum=0
 tested_override=
 
-while read expected_rc parent_sha  commit_sha pr rest; do
+while read expected_rc parent_sha commit_sha pr rest; do
     # Skip blank lines
     test -z "$expected_rc" && continue
 
-    export DEST_BRANCH=$parent_sha
-    export CIRRUS_CHANGE_IN_REPO=$commit_sha
-    export CIRRUS_CHANGE_TITLE=$(git log -1 --format=%s $commit_sha)
-    export CIRRUS_CHANGE_MESSAGE=
-    export CIRRUS_PR=$pr
+    export BASE_SHA=$parent_sha
+    export HEAD_SHA=$commit_sha
 
     run_test_script $expected_rc "PR $pr - $rest"
 done <<<"$tests"
