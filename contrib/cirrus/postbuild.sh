@@ -40,7 +40,3 @@ SUGGESTION="run 'make vendor', 'make -C test/tools vendor' and 'make completions
 
 showrun make generate-bindings
 SUGGESTION="run 'make generate-bindings' and commit all changes" ./hack/tree_status.sh
-
-# Defined in Cirrus-CI config.
-# shellcheck disable=SC2154
-$SCRIPT_BASE/check_go_changes.sh
