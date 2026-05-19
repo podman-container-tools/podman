@@ -21,14 +21,10 @@ clean:
 .PHONY: $(BUILDDIR)
 $(BUILDDIR): \
 	$(BUILDDIR)/go-md2man \
-	$(BUILDDIR)/git-validation \
 	$(BUILDDIR)/swagger
 
 $(BUILDDIR)/go-md2man: $(SOURCES)
 	$(GO_BUILD) -o $@ ./vendor/github.com/cpuguy83/go-md2man/v2
-
-$(BUILDDIR)/git-validation: $(SOURCES)
-	$(GO_BUILD) -o $@ ./vendor/github.com/vbatts/git-validation
 
 $(BUILDDIR)/swagger: $(SOURCES)
 	$(GO_BUILD) -o $@ ./vendor/github.com/go-swagger/go-swagger/cmd/swagger

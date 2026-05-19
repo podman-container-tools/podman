@@ -8,5 +8,4 @@ package tools
 import (
 	_ "github.com/cpuguy83/go-md2man/v2"
 	_ "github.com/go-swagger/go-swagger/cmd/swagger"
-	_ "github.com/vbatts/git-validation"
 )
