@@ -47,6 +47,11 @@ jobs:
               libapparmor-dev libbtrfs-dev libdevmapper-dev libgpgme-dev \
               libseccomp-dev libsubid-dev libsystemd-dev pkg-config
 
+      - name: Install test registries.conf
+        # Ubuntu ships a v1 /etc/containers/registries.conf via docker;
+        # podman needs v2.
+        run: sudo install -D -m 644 test/registries.conf /etc/containers/registries.conf
+
       - name: Run unit tests as root
         run: sudo -E env "PATH=$PATH" make localunit
 
@@ -67,6 +72,11 @@ jobs:
           sudo apt-get install -y \
               libapparmor-dev libbtrfs-dev libdevmapper-dev libgpgme-dev \
               libseccomp-dev libsubid-dev libsystemd-dev pkg-config
+
+      - name: Install test registries.conf
+        # Ubuntu ships a v1 /etc/containers/registries.conf via docker;
+        # podman needs v2.
+        run: sudo install -D -m 644 test/registries.conf /etc/containers/registries.conf
 
       - name: Run unit tests
         run: make localunit
