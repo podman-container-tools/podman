@@ -1198,6 +1198,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 			if err != nil {
 				return fmt.Errorf("creating %q: %w", volumeTarFileFullPath, err)
 			}
+			defer volumeTarFile.Close()
 
 			volume, err := c.runtime.GetVolume(v.Name)
 			if err != nil {
@@ -1223,7 +1224,6 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 			if err != nil {
 				return err
 			}
-			volumeTarFile.Close()
 
 			includeFiles = append(includeFiles, volumeTarFilePath)
 		}
