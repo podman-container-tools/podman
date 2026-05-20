@@ -52,6 +52,14 @@ jobs:
         # podman needs v2.
         run: sudo install -D -m 644 test/registries.conf /etc/containers/registries.conf
 
+      - name: Remove runner's docker credentials
+        # The runner user has ~/.docker/config.json with the
+        # 'githubactions' registry token. pkg/auth tests that exercise
+        # the default auth-file fallback (sys=nil path) pick that up
+        # unexpectedly. sudo -E on this runner preserves $HOME, so the
+        # rootful job sees the same creds.
+        run: rm -f ~/.docker/config.json
+
       - name: Run unit tests as root
         run: sudo -E env "PATH=$PATH" make localunit
 
@@ -77,6 +85,14 @@ jobs:
         # Ubuntu ships a v1 /etc/containers/registries.conf via docker;
         # podman needs v2.
         run: sudo install -D -m 644 test/registries.conf /etc/containers/registries.conf
+
+      - name: Remove runner's docker credentials
+        # The runner user has ~/.docker/config.json with the
+        # 'githubactions' registry token. pkg/auth tests that exercise
+        # the default auth-file fallback (sys=nil path) pick that up
+        # unexpectedly. sudo -E on this runner preserves $HOME, so the
+        # rootful job sees the same creds.
+        run: rm -f ~/.docker/config.json
 
       - name: Run unit tests
         run: make localunit
