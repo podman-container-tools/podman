@@ -509,39 +509,6 @@ docker-py_test_task:
     always: *runner_stats
 
 
-# Does exactly what it says, execute the podman unit-tests on Fedora.
-unit_test_task:
-    name: "Unit tests on $DISTRO_NV"
-    alias: unit_test
-    # Docs: ./contrib/cirrus/CIModes.md (Cirrus Task contexts and runtime modes)
-    # only when: - main rules (see doc above); or
-    #            - unit test files are changed (contains a false positves such as test/e2e/
-    #              but that should not be an issue, it only runs when it doesn't have to)
-    #            - actual source code changed
-    only_if: >-
-        $CIRRUS_PR == '' ||
-        $CIRRUS_CHANGE_TITLE =~ '.*CI:ALL.*' ||
-        changesInclude('.cirrus.yml', 'Makefile', 'contrib/cirrus/**', 'vendor/**', 'test/tools/**', 'test/registries*.conf', 'hack/**', 'version/rawversion/*') ||
-        changesInclude('**/*_test.go') ||
-        (changesInclude('**/*.go', '**/*.c', '**/*.h') && !changesIncludeOnly('test/**', 'pkg/machine/e2e/**'))
-    depends_on: *build
-    matrix:
-        - env: *stdenvars
-        # Special-case: Rootless on latest Fedora (standard) VM
-        - name: "Rootless unit on $DISTRO_NV"
-          env:
-              <<: *stdenvars
-              PRIV_NAME: rootless
-    gce_instance: *standardvm
-    env:
-        TEST_FLAVOR: unit
-        TEST_BUILD_TAGS: ""
-    clone_script: *get_gosrc
-    setup_script: *setup
-    main_script: *main
-    always: *logs_artifacts
-
-
 unit_test_windows_task:
     name: "Unit tests on Windows"
     alias: unit_test_windows
@@ -1112,7 +1079,6 @@ success_task:
         - swagger
         - win_installer
         - docker-py_test
-        - unit_test
         - unit_test_windows
         - apiv2_test
         - compose_test

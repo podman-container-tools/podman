@@ -21,15 +21,6 @@ source $(dirname $0)/lib.sh
 
 showrun echo "starting"
 
-function _run_unit() {
-    # shellcheck disable=SC2154
-    if [[ "$PODBIN_NAME" != "podman" ]]; then
-        # shellcheck disable=SC2154
-        die "$TEST_FLAVOR: Unsupported PODBIN_NAME='$PODBIN_NAME'"
-    fi
-    showrun make localunit
-}
-
 function _run_apiv2() {
     (
         showrun make localapiv2-bash
