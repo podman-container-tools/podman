@@ -45,7 +45,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
               libapparmor-dev libbtrfs-dev libdevmapper-dev libgpgme-dev \
-              libseccomp-dev libsubid-dev libsystemd-dev pkg-config
+              libseccomp-dev libsubid-dev libsystemd-dev pkg-config \
+              qemu-system-x86
 
       - name: Install test registries.conf
         # Ubuntu ships a v1 /etc/containers/registries.conf via docker;
@@ -79,7 +80,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
               libapparmor-dev libbtrfs-dev libdevmapper-dev libgpgme-dev \
-              libseccomp-dev libsubid-dev libsystemd-dev pkg-config
+              libseccomp-dev libsubid-dev libsystemd-dev pkg-config \
+              qemu-system-x86
 
       - name: Install test registries.conf
         # Ubuntu ships a v1 /etc/containers/registries.conf via docker;
