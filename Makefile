@@ -643,7 +643,7 @@ run-docker-py-tests:
 	rm -f test/__init__.py
 
 .PHONY: localunit
-localunit: test/goecho/goecho test/version/version
+localunit: test/goecho/goecho test/version/version .install.ginkgo
 	rm -rf ${COVERAGE_PATH} && mkdir -p ${COVERAGE_PATH}
 	UNIT=1 $(GINKGO) \
 		-r \
