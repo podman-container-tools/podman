@@ -18,6 +18,10 @@ import (
 )
 
 func TestUnitDirs(t *testing.T) {
+	if os.Getenv("SKIP_TEST_UNIT_DIRS") != "" {
+		t.Skip("skipping per SKIP_TEST_UNIT_DIRS env var")
+	}
+
 	u, err := user.Current()
 	assert.NoError(t, err)
 	uidInt, err := strconv.Atoi(u.Uid)
