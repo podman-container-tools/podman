@@ -70,3 +70,69 @@ jobs:
 
       - name: Run unit tests
         run: make localunit
+
+  fedora-rootful:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
+        id: lima
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/lima
+          key: lima-${{ steps.lima.outputs.version }}-fedora
+
+      - name: Start Fedora VM
+        run: limactl start --plain --name=default template:fedora
+
+      - name: Copy source into VM
+        run: limactl cp -r . default:/tmp/podman
+
+      - name: Install build deps in VM
+        run: |
+          lima sudo dnf install -y \
+              btrfs-progs-devel device-mapper-devel gpgme-devel \
+              libassuan-devel libseccomp-devel \
+              shadow-utils-subid-devel systemd-devel \
+              gcc golang make pkg-config
+
+      - name: Run unit tests as root
+        run: lima sudo make -C /tmp/podman localunit
+
+  fedora-rootless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
+        id: lima
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/lima
+          key: lima-${{ steps.lima.outputs.version }}-fedora
+
+      - name: Start Fedora VM
+        run: limactl start --plain --name=default template:fedora
+
+      - name: Copy source into VM
+        run: limactl cp -r . default:/tmp/podman
+
+      - name: Install build deps in VM
+        run: |
+          lima sudo dnf install -y \
+              btrfs-progs-devel device-mapper-devel gpgme-devel \
+              libassuan-devel libseccomp-devel \
+              shadow-utils-subid-devel systemd-devel \
+              gcc golang make pkg-config
+
+      - name: Run unit tests
+        run: lima make -C /tmp/podman localunit
