@@ -109,7 +109,8 @@ jobs:
               btrfs-progs-devel device-mapper-devel gpgme-devel \
               libassuan-devel libseccomp-devel \
               shadow-utils-subid-devel systemd-devel \
-              gcc golang make pkg-config
+              gcc golang make pkg-config \
+              qemu-system-x86-core
 
       - name: Run unit tests as root
         run: lima sudo make -C /tmp/podman localunit
@@ -142,7 +143,8 @@ jobs:
               btrfs-progs-devel device-mapper-devel gpgme-devel \
               libassuan-devel libseccomp-devel \
               shadow-utils-subid-devel systemd-devel \
-              gcc golang make pkg-config
+              gcc golang make pkg-config \
+              qemu-system-x86-core
 
       - name: Run unit tests
         run: lima make -C /tmp/podman localunit
