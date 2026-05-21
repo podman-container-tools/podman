@@ -4,7 +4,7 @@
 podman\-machine\-restart - Restart a virtual machine
 
 ## SYNOPSIS
-**podman machine restart** [*name*]
+**podman machine restart** [*options*] [*name*]
 
 ## DESCRIPTION
 

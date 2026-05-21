@@ -14,7 +14,7 @@ import (
 
 var (
 	restartCmd = &cobra.Command{
-		Use:               "restart [MACHINE]",
+		Use:               "restart [options] [MACHINE]",
 		Short:             "Restart an existing machine",
 		Long:              "Restart a managed virtual machine",
 		PersistentPreRunE: machinePreRunE,
