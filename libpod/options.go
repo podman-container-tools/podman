@@ -2203,6 +2203,34 @@ func WithVolatile() CtrCreateOption {
 	}
 }
 
+// WithVerityEnforce enables fs-verity digest enforcement for composefs
+// blob layers. Digests are extracted from the image at container start time.
+func WithVerityEnforce() CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		ctr.config.VerityEnforce = true
+
+		return nil
+	}
+}
+
+// WithSignaturePolicy sets the manifest signature verification policy.
+// Validation is performed at container start time.
+func WithSignaturePolicy(policy string) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		ctr.config.SignaturePolicy = policy
+
+		return nil
+	}
+}
+
 // WithChrootDirs is an additional set of directories that need to be
 // treated as root directories. Standard bind mounts will be mounted
 // into paths relative to these directories.

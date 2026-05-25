@@ -13,6 +13,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/storage"
+	drivers "go.podman.io/storage/drivers"
 	"go.podman.io/storage/pkg/idtools"
 )
 
@@ -223,6 +224,19 @@ func (r *storageService) MountContainerImage(idOrName string) (string, error) {
 		return "", err
 	}
 	logrus.Debugf("Mounted container %q at %q", container.ID, mountPoint)
+	return mountPoint, nil
+}
+
+func (r *storageService) MountContainerImageWithOptions(idOrName string, options drivers.MountOpts) (string, error) {
+	mountPoint, err := r.store.MountWithOptions(idOrName, options)
+	if err != nil {
+		if errors.Is(err, storage.ErrContainerUnknown) {
+			return "", define.ErrNoSuchCtr
+		}
+		logrus.Debugf("Failed to mount container %q: %v", idOrName, err)
+		return "", err
+	}
+	logrus.Debugf("Mounted container %q at %q", idOrName, mountPoint)
 	return mountPoint, nil
 }
 

@@ -124,6 +124,11 @@ type Container struct {
 	// This is true if a container is restored from a checkpoint.
 	restoreFromCheckpoint bool
 
+	// validatedVerityDigests holds verity digests extracted from a
+	// signature-validated image manifest. Set by validateImageSecurity()
+	// at start time and consumed by mount(). Transient, never persisted.
+	validatedVerityDigests [][]string
+
 	pastaResult *pasta.SetupResult
 }
 

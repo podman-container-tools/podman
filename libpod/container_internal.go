@@ -29,6 +29,7 @@ import (
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/pkg/overlay"
 	butil "go.podman.io/buildah/util"
+	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/etchosts"
 	"go.podman.io/common/pkg/chown"
 	"go.podman.io/common/pkg/config"
@@ -36,6 +37,11 @@ import (
 	"go.podman.io/common/pkg/hooks/exec"
 	"go.podman.io/common/pkg/timezone"
 	cutil "go.podman.io/common/pkg/util"
+	dockerTransport "go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/docker/reference"
+	imgImage "go.podman.io/image/v5/image"
+	"go.podman.io/image/v5/signature"
+	imgTypes "go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/libpod/shutdown"
@@ -48,6 +54,7 @@ import (
 	"go.podman.io/podman/v6/pkg/systemd/notifyproxy"
 	"go.podman.io/podman/v6/pkg/util"
 	"go.podman.io/storage"
+	drivers "go.podman.io/storage/drivers"
 	"go.podman.io/storage/pkg/chrootarchive"
 	"go.podman.io/storage/pkg/directory"
 	"go.podman.io/storage/pkg/fileutils"
@@ -812,6 +819,122 @@ func (c *Container) save() error {
 	return nil
 }
 
+const verityDigestAnnotation = "io.containers.composefs.digest"
+
+func (c *Container) validateImageSecurity(ctx context.Context) error {
+	if c.config.SignaturePolicy == "" && !c.config.VerityEnforce {
+		return nil
+	}
+
+	if c.config.RootfsImageID == "" {
+		return fmt.Errorf("image security validation requires an image, but container has no image ID")
+	}
+
+	img, _, err := c.runtime.LibimageRuntime().LookupImage(c.config.RootfsImageID, nil)
+	if err != nil {
+		return fmt.Errorf("looking up image for security validation: %w", err)
+	}
+
+	// If required, validate the signature. Do this first before relying on information from the manifest.
+	if c.config.SignaturePolicy != "" {
+		requireSigned := c.config.SignaturePolicy == "require"
+		logrus.Debugf("Validating manifest signature of %s, requireSigned=%v", c.config.RootfsImageID, requireSigned)
+		if err := validateManifestSignature(ctx, c.runtime.SystemContext(), img, requireSigned); err != nil {
+			return err
+		}
+	}
+
+	// If enforcing verity, pass down the expected verity digests.
+	if c.config.VerityEnforce {
+		// Note: This img.Inspect() uses the cached manifest in img, so is guaranteed
+		// to match the one we validated above.
+		imageData, err := img.Inspect(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("inspecting image for verity validation: %w", err)
+		}
+		digests, err := extractVerityDigests(imageData)
+		if err != nil {
+			return err
+		}
+		logrus.Debugf("Expected verity digests: %v", digests)
+
+		c.validatedVerityDigests = digests
+	}
+
+	return nil
+}
+
+func validateManifestSignature(ctx context.Context, sc *imgTypes.SystemContext, img *libimage.Image, requireSigned bool) error {
+	names := img.Names()
+	if len(names) == 0 {
+		return fmt.Errorf("manifest signature verification failed: image has no names")
+	}
+
+	named, err := reference.ParseNormalizedNamed(names[0])
+	if err != nil {
+		return fmt.Errorf("parsing image name %q: %w", names[0], err)
+	}
+	dockerRef, err := dockerTransport.NewReference(named)
+	if err != nil {
+		return fmt.Errorf("creating docker reference for %q: %w", names[0], err)
+	}
+
+	policy, err := signature.DefaultPolicy(sc)
+	if err != nil {
+		return fmt.Errorf("loading signature policy: %w", err)
+	}
+	pc, err := signature.NewPolicyContext(policy)
+	if err != nil {
+		return fmt.Errorf("creating policy context: %w", err)
+	}
+	defer pc.Destroy()
+
+	if requireSigned {
+		pc.RequireSignatureVerification(true)
+	}
+
+	src, err := img.ImageSource(ctx)
+	if err != nil {
+		return fmt.Errorf("getting image source: %w", err)
+	}
+
+	unparsed := imgImage.UnparsedInstanceWithReference(
+		imgImage.UnparsedInstance(src, nil),
+		dockerRef,
+	)
+	allowed, err := pc.IsRunningImageAllowed(ctx, unparsed)
+	if !allowed {
+		return fmt.Errorf("manifest signature verification failed: %w", err)
+	}
+	return nil
+}
+
+func extractVerityDigests(imageData *libimage.ImageData) ([][]string, error) {
+	if len(imageData.LayersData) == 0 {
+		return nil, fmt.Errorf("verity enforcement: image has no layer data")
+	}
+	digests := make([][]string, len(imageData.LayersData))
+	for i, layer := range imageData.LayersData {
+		val, ok := layer.Annotations[verityDigestAnnotation]
+		if !ok || val == "" {
+			return nil, fmt.Errorf("verity enforcement: layer %d missing %s annotation", i, verityDigestAnnotation)
+		}
+		parts := strings.Split(val, ",")
+		allowed := make([]string, 0, len(parts))
+		for _, p := range parts {
+			d := strings.TrimSpace(p)
+			if d != "" {
+				allowed = append(allowed, d)
+			}
+		}
+		if len(allowed) == 0 {
+			return nil, fmt.Errorf("verity enforcement: layer %d has empty %s annotation", i, verityDigestAnnotation)
+		}
+		digests[i] = allowed
+	}
+	return digests, nil
+}
+
 // Checks the container is in the right state, then initializes the container in preparation to start the container.
 // If recursive is true, each of the container's dependencies will be started.
 // Otherwise, this function will return with error if there are dependencies of this container that aren't running.
@@ -843,6 +966,10 @@ func (c *Container) prepareToStart(ctx context.Context, recursive bool) (retErr 
 			}
 		}
 	}()
+
+	if err := c.validateImageSecurity(ctx); err != nil {
+		return err
+	}
 
 	if err := c.prepare(); err != nil {
 		return err
@@ -2577,7 +2704,21 @@ func (c *Container) mount() (string, error) {
 		return "", fmt.Errorf("cannot mount container %s as it is being removed: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
 
-	mountPoint, err := c.runtime.storageService.MountContainerImage(c.ID())
+	var opts drivers.MountOpts
+	if c.validatedVerityDigests != nil {
+		if c.runtime.store.GraphDriverName() != "overlay" {
+			return "", fmt.Errorf("verity enforcement requires the overlay storage driver, but current driver is %q", c.runtime.store.GraphDriverName())
+		}
+		n := len(c.validatedVerityDigests)
+		// +1 for the container's own rw layer at index 0
+		layerOpts := make([]drivers.LayerMountOpts, n+1)
+		for i, allowed := range c.validatedVerityDigests {
+			layerOpts[n-i].AllowedFsVerity = allowed
+		}
+		opts.Options = []string{"verity=require"}
+		opts.LayerOpts = layerOpts
+	}
+	mountPoint, err := c.runtime.storageService.MountContainerImageWithOptions(c.ID(), opts)
 	if err != nil {
 		return "", fmt.Errorf("mounting storage for container %s: %w", c.ID(), err)
 	}
