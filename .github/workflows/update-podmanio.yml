@@ -22,6 +22,7 @@ permissions: {}
 
 jobs:
   bump:
+    if: github.repository == 'containers/podman'
     name: Bump
     runs-on: ubuntu-24.04
     permissions:

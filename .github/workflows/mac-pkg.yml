@@ -19,6 +19,7 @@ permissions: {}
 
 jobs:
   build:
+    if: github.repository == 'containers/podman'
     runs-on: macos-latest
     permissions:
       contents: write

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   stale:
-
+    if: github.repository == 'containers/podman'
     permissions:
       issues: write  # for actions/stale to close stale issues
       pull-requests: write  # for actions/stale to close stale PRs

@@ -7,6 +7,7 @@ permissions: {}
 
 jobs:
   triage:
+    if: github.repository == 'containers/podman'
     permissions:
       contents: read
       pull-requests: write

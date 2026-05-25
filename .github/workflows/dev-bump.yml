@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   bump:
+    if: github.repository == 'containers/podman'
     name: Bump to -dev
     runs-on: ubuntu-latest
     permissions:

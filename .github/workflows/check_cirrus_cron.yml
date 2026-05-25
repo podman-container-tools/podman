@@ -41,6 +41,7 @@ permissions:
 
 jobs:
     cron_failures:
+        if: github.repository == 'containers/podman'
         runs-on: ubuntu-latest
         steps:
             # This is where the scripts live

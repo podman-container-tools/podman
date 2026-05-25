@@ -8,7 +8,9 @@ permissions: {}
 
 jobs:
   add-comment:
-    if: github.event.label.name == 'needs-info'
+    if: |
+      github.event.label.name == 'needs-info' && 
+      github.repository == 'containers/podman'
     runs-on: ubuntu-latest
     permissions:
       issues: write
