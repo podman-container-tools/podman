@@ -419,7 +419,7 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 	}
 
 	if _, err := apiutil.SupportedVersion(r, "<1.45.0"); err == nil {
-		imageInspect.ContainerConfig = cc
+		imageInspect.ContainerConfig = cc //nolint:staticcheck // Deprecated field
 	}
 
 	return &imageInspect, nil
