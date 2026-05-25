@@ -22,7 +22,12 @@ jobs:
   screenshot_and_comment:
     # This job runs if the PR was merged or if it's a manual trigger.
     # The logic for first-time contributors is handled in a dedicated step below.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    if: |
+     (
+       github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.merged == true
+     ) &&
+     github.repository == 'podman-container-tools/podman'
     runs-on: ubuntu-latest
     permissions:
       contents: read  # Write access for certificate storage

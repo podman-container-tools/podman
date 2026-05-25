@@ -17,7 +17,9 @@ jobs:
   get-latest-release:
     name: Get branch for latest release
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    if: |
+      github.event_name == 'schedule' &&
+      github.repository == 'podman-container-tools/podman'
     outputs:
       release_ref: ${{ steps.set.outputs.release_ref }}
     steps:
@@ -44,7 +46,9 @@ jobs:
   build-artifacts-main:
     name: Build Artifacts (main)
     uses: ./.github/workflows/build-artifacts.yml
-    if: github.event_name == 'schedule'
+    if: |
+      github.event_name == 'schedule' &&
+      github.repository == 'podman-container-tools/podman'
     with:
       version: 'main'
     secrets:
@@ -89,7 +93,9 @@ jobs:
   build-artifacts-single:
     name: Build Artifacts
     uses: ./.github/workflows/build-artifacts.yml
-    if: github.event_name == 'workflow_dispatch'
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'podman-container-tools/podman'
     with:
       version: ${{ inputs.ref }}
     secrets:
@@ -110,6 +116,7 @@ jobs:
 
   validate-tokens:
     name: Validate GitHub tokens
+    if: github.repository == 'podman-container-tools/podman'
     runs-on: ubuntu-latest
     steps:
       - name: Validate PODMANBOT_TOKEN
