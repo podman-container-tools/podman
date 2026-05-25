@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/moby/moby/api/types/registry"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
@@ -77,7 +78,26 @@ func SearchImages(w http.ResponseWriter, r *http.Request) {
 			utils.ImageNotFound(w, query.Term, storage.ErrImageUnknown)
 			return
 		}
+		compatResults := make([]registry.SearchResult, len(reports))
+		for i, r := range reports {
+			compatResults[i] = registry.SearchResult{
+				Name:        r.Name,
+				Description: r.Description,
+				StarCount:   r.Stars,
+				IsOfficial:  isOK(r.Official),
+				IsAutomated: isOK(r.Automated),
+			}
+		}
+		utils.WriteResponse(w, http.StatusOK, compatResults)
+		return
 	}
 
 	utils.WriteResponse(w, http.StatusOK, reports)
+}
+
+// isOK converts the libimage format of
+// string flags to bool to be compatible with
+// the Docker API.
+func isOK(s string) bool {
+	return s == "[OK]"
 }

@@ -1,7 +1,5 @@
 import json
 import unittest
-import multiprocessing as mp
-
 import requests
 from dateutil.parser import parse
 from .fixtures import APITestCase
@@ -164,18 +162,33 @@ class ImageTestCase(APITestCase):
         self.assertEqual(r.status_code, 200, r.text)
 
     def test_search_compat(self):
-        url = self.podman_url + "/v1.40/images/search"
+        url = self.podman_url + "/v1.44/images/search"
 
         # Had issues with this test hanging when repositories not happy
         def do_search1():
+            required_keys = (
+                "description",
+                "is_automated",  # Deprecated: always false.
+                "is_official",
+                "name",
+                "star_count",
+            )
             payload = {"term": "alpine"}
-            r = requests.get(url, params=payload, timeout=5)
+            r = requests.get(url, params=payload, timeout=30)
             self.assertEqual(r.status_code, 200, f"#1: {r.text}")
-            self.assertIsInstance(r.json(), list)
+
+            results = r.json()
+            self.assertIsInstance(results, list)
+            for item in results:
+                for k in required_keys:
+                    self.assertIn(k, item)
 
         def do_search2():
-            payload = {"term": "alpine", "limit": 1}
-            r = requests.get(url, params=payload, timeout=5)
+            # The containers.conf uses:
+            #   compat_api_enforce_docker_hub=false
+            # and full name needs to be used here.
+            payload = {"term": "docker.io/library/alpine", "limit": 1}
+            r = requests.get(url, params=payload, timeout=30)
             self.assertEqual(r.status_code, 200, f"#2: {r.text}")
 
             results = r.json()
@@ -186,7 +199,7 @@ class ImageTestCase(APITestCase):
             # FIXME: Research if quay.io supports is-official and which image is "official"
             return
             payload = {"term": "thanos", "filters": '{"is-official":["true"]}'}
-            r = requests.get(url, params=payload, timeout=5)
+            r = requests.get(url, params=payload, timeout=30)
             self.assertEqual(r.status_code, 200, f"#3: {r.text}")
 
             results = r.json()
@@ -198,32 +211,18 @@ class ImageTestCase(APITestCase):
         def do_search4():
             headers = {"X-Registry-Auth": "null"}
             payload = {"term": "alpine"}
-            r = requests.get(url, params=payload, headers=headers, timeout=5)
+            r = requests.get(url, params=payload, headers=headers, timeout=30)
             self.assertEqual(r.status_code, 200, f"#4: {r.text}")
 
         def do_search5():
             headers = {"X-Registry-Auth": "invalid value"}
             payload = {"term": "alpine"}
-            r = requests.get(url, params=payload, headers=headers, timeout=5)
+            r = requests.get(url, params=payload, headers=headers, timeout=30)
             self.assertEqual(r.status_code, 400, f"#5: {r.text}")
 
-        i = 1
-        # Need to explicitly set start method
-        # # https://docs.python.org/dev/library/multiprocessing.html#contexts-and-start-methods
-        mp.set_start_method('fork')
-        for fn in [do_search1, do_search2, do_search3, do_search4, do_search5]:
+        for i, t in enumerate([do_search1, do_search2, do_search3, do_search4, do_search5], start=1):
             with self.subTest(i=i):
-                search = mp.Process(target=fn)
-                search.start()
-                search.join(timeout=10)
-                self.assertFalse(search.is_alive(), f"#{i} /images/search took too long")
-
-        # search_methods = [do_search1, do_search2, do_search3, do_search4, do_search5]
-        # for search_method in search_methods:
-        #     search = Process(target=search_method)
-        #     search.start()
-        #     search.join(timeout=10)
-        #     self.assertFalse(search.is_alive(), "/images/search took too long")
+                t()
 
     def test_history(self):
         r = requests.get(self.podman_url + "/v1.40/images/alpine/history")
