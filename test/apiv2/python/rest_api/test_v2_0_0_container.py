@@ -535,13 +535,22 @@ class ContainerCompatibleAPITestCase(APITestCase):
             r = requests.post(self.uri(self.resolve_container("/containers/{}/start")))
             self.assertIn(r.status_code, (204, 304), r.text)
 
-            r = requests.get(self.compat_uri(self.resolve_container("/containers/{}/json")))
+            container_uri = self.resolve_container("/containers/{}/json")
+
+            # SecondaryIPAddresses present for API < v1.52
+            r = requests.get(self.podman_url + "/v1.44/" + container_uri)
             self.assertEqual(r.status_code, 200, r.text)
             self.assertId(r.content)
             out = r.json()
-
             self.assertEqual("10.0.2.0", out["NetworkSettings"]["SecondaryIPAddresses"][0]["Addr"])
             self.assertEqual(24, out["NetworkSettings"]["SecondaryIPAddresses"][0]["PrefixLen"])
+
+            # SecondaryIPAddresses removed for API >= v1.52
+            r = requests.get(self.podman_url + "/v1.52/" + container_uri)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertId(r.content)
+            out = r.json()
+            self.assertIsNone(out["NetworkSettings"].get("SecondaryIPAddresses"))
         finally:
             delete_named_network_ns(network_ns_name)
 
