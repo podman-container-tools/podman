@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/filters"
 	"go.podman.io/common/pkg/util"
 	"go.podman.io/podman/v6/libpod"
@@ -180,6 +181,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 		return func(c *libpod.Container) bool {
 			hcStatus, err := c.HealthCheckStatus()
 			if err != nil {
+				logrus.Warnf("Healthcheck status for %v can't be determined, status won't be matched: %v", c.ID(), err)
 				return false
 			}
 			return slices.Contains(filterValues, hcStatus)
