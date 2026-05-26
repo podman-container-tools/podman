@@ -188,6 +188,14 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		}
 
 		options = append(options, libpod.WithRootFSFromImage(newImage.ID(), resolvedImageName, s.RawImageName))
+
+		if s.SignaturePolicy != "" {
+			options = append(options, libpod.WithSignaturePolicy(s.SignaturePolicy))
+		}
+
+		if s.VerityEnforce != nil && *s.VerityEnforce {
+			options = append(options, libpod.WithVerityEnforce())
+		}
 	}
 
 	_, err = rt.LookupPod(s.Hostname)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -114,43 +115,36 @@ struct lcfs_erofs_header_s {
 */
 
 // hasACL returns true if the erofs blob has ACLs enabled
-func hasACL(path string) (bool, error) {
+func hasACL(f *os.File) (bool, error) {
 	const (
 		LCFS_EROFS_FLAGS_HAS_ACL = (1 << 0)
 		versionNumberSize        = 4
 		magicNumberSize          = 4
 		flagsSize                = 4
 	)
-
-	file, err := os.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-
 	// do not worry about checking the magic number, if the file is invalid
 	// we will fail to mount it anyway
 	buffer := make([]byte, versionNumberSize+magicNumberSize+flagsSize)
-	nread, err := file.Read(buffer)
+	nread, err := f.ReadAt(buffer, 0)
 	if err != nil {
 		return false, err
 	}
 	if nread != len(buffer) {
-		return false, fmt.Errorf("failed to read flags from %q", path)
+		return false, fmt.Errorf("failed to read flags from %q", f.Name())
 	}
 	flags := buffer[versionNumberSize+magicNumberSize:]
 	return binary.LittleEndian.Uint32(flags)&LCFS_EROFS_FLAGS_HAS_ACL != 0, nil
 }
 
-func openBlobFile(blobFile string, hasACL, useLoopDevice bool) (int, error) {
+func mountBlobFile(blobFile *os.File, hasACL, useLoopDevice bool) (int, error) {
 	if useLoopDevice {
-		loop, err := loopback.AttachLoopDeviceRO(blobFile)
+		loop, err := loopback.AttachLoopDeviceFile(blobFile)
 		if err != nil {
 			return -1, err
 		}
 		defer loop.Close()
 
-		blobFile = loop.Name()
+		blobFile = loop
 	}
 
 	fsfd, err := unix.Fsopen("erofs", 0)
@@ -159,7 +153,8 @@ func openBlobFile(blobFile string, hasACL, useLoopDevice bool) (int, error) {
 	}
 	defer unix.Close(fsfd)
 
-	if err := unix.FsconfigSetString(fsfd, "source", blobFile); err != nil {
+	source := fmt.Sprintf("/proc/self/fd/%d", blobFile.Fd())
+	if err := unix.FsconfigSetString(fsfd, "source", source); err != nil {
 		return -1, fmt.Errorf("failed to set source for erofs filesystem: %w", err)
 	}
 
@@ -192,8 +187,22 @@ func openBlobFile(blobFile string, hasACL, useLoopDevice bool) (int, error) {
 	return mfd, nil
 }
 
-func openComposefsMount(dataDir string) (int, error) {
-	blobFile := getComposefsBlob(dataDir)
+func openComposefsMount(blobPath string, allowedFsVerity []string) (int, error) {
+	blobFile, err := os.Open(blobPath)
+	if err != nil {
+		return -1, err
+	}
+	defer blobFile.Close()
+
+	if len(allowedFsVerity) > 0 {
+		digest, err := fsverity.MeasureVerityPrefixed("composefs blob", int(blobFile.Fd()))
+		if err != nil {
+			return -1, fmt.Errorf("measure fs-verity on composefs blob: %w", err)
+		}
+		if !slices.Contains(allowedFsVerity, digest) {
+			return -1, fmt.Errorf("composefs blob %s has fs-verity digest %q, not in allowed list", blobPath, digest)
+		}
+	}
 
 	hasACL, err := hasACL(blobFile)
 	if err != nil {
@@ -201,7 +210,7 @@ func openComposefsMount(dataDir string) (int, error) {
 	}
 
 	if !skipMountViaFile.Load() {
-		fd, err := openBlobFile(blobFile, hasACL, false)
+		fd, err := mountBlobFile(blobFile, hasACL, false)
 		if err == nil || !errors.Is(err, unix.ENOTBLK) {
 			return fd, err
 		}
@@ -209,11 +218,11 @@ func openComposefsMount(dataDir string) (int, error) {
 		skipMountViaFile.Store(true)
 	}
 
-	return openBlobFile(blobFile, hasACL, true)
+	return mountBlobFile(blobFile, hasACL, true)
 }
 
-func mountComposefsBlob(dataDir, mountPoint string) error {
-	mfd, err := openComposefsMount(dataDir)
+func mountComposefsBlob(dataDir, mountPoint string, allowedFsVerity []string) error {
+	mfd, err := openComposefsMount(getComposefsBlob(dataDir), allowedFsVerity)
 	if err != nil {
 		return err
 	}

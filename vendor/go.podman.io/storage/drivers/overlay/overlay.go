@@ -1548,6 +1548,14 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 		})
 	}
 
+	if slices.Contains(optsList, "verity=require") {
+		if len(options.LayerOpts) == 0 {
+			// verity=require doesn't require specifying the erofs verity digests, but if it isn't
+			// this is likely some kind of configuration issue.
+			logrus.Debugf("Warning: verity=require specified but no erofs verity digests specified")
+		}
+	}
+
 	if slices.Contains(optsList, "ro") {
 		readWrite = false
 	}
@@ -1604,10 +1612,13 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 	}()
 
 	composeFsLayers := []string{}
-	maybeAddComposefsMount := func(lowerID string, i int, readWrite bool) (string, error) {
+	maybeAddComposefsMount := func(lowerID string, i int, readWrite bool, allowedFsVerity []string) (string, error) {
 		composefsBlob := d.getComposefsData(lowerID)
 		if err := fileutils.Exists(composefsBlob); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
+				if len(allowedFsVerity) > 0 {
+					return "", fmt.Errorf("composefs blob required for layer %s but not found", lowerID)
+				}
 				return "", nil
 			}
 			return "", err
@@ -1623,7 +1634,7 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 			return "", err
 		}
 
-		if err := mountComposefsBlob(composefsBlob, dest); err != nil {
+		if err := mountComposefsBlob(composefsBlob, dest, allowedFsVerity); err != nil {
 			return "", err
 		}
 		composefsMounts = append(composefsMounts, dest)
@@ -1636,9 +1647,16 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 		return dest, nil
 	}
 
+	getLayerFsVerity := func(i int) []string {
+		if i < len(options.LayerOpts) {
+			return options.LayerOpts[i].AllowedFsVerity
+		}
+		return nil
+	}
+
 	diffDir := path.Join(dir, "diff")
 
-	if dest, err := maybeAddComposefsMount(id, 0, readWrite); err != nil {
+	if dest, err := maybeAddComposefsMount(id, 0, readWrite, getLayerFsVerity(0)); err != nil {
 		return "", err
 	} else if dest != "" {
 		diffDir = dest
@@ -1657,7 +1675,7 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 			permsKnown = true
 		}
 
-		composefsMount, err := maybeAddComposefsMount(lowerID, i+1, readWrite)
+		composefsMount, err := maybeAddComposefsMount(lowerID, i+1, readWrite, getLayerFsVerity(i+1))
 		if err != nil {
 			return "", err
 		}
@@ -2147,7 +2165,7 @@ func (d *Driver) DiffGetter(id string) (_ graphdriver.FileGetCloser, Err error) 
 			// not a composefs layer, ignore it
 			continue
 		}
-		fd, err := openComposefsMount(composefsData)
+		fd, err := openComposefsMount(getComposefsBlob(composefsData), nil)
 		if err != nil {
 			return nil, err
 		}

@@ -966,8 +966,8 @@ func (i *Image) StorageReference() (types.ImageReference, error) {
 	return ref, nil
 }
 
-// source returns the possibly cached image reference.
-func (i *Image) source(ctx context.Context) (types.ImageSource, error) {
+// ImageSource returns the possibly cached image source.
+func (i *Image) ImageSource(ctx context.Context) (types.ImageSource, error) {
 	if i.cached.imageSource != nil {
 		return i.cached.imageSource, nil
 	}
@@ -1002,7 +1002,7 @@ func (i *Image) rawConfigBlob(ctx context.Context) ([]byte, error) {
 
 // Manifest returns the raw data and the MIME type of the image's manifest.
 func (i *Image) Manifest(ctx context.Context) (rawManifest []byte, mimeType string, err error) {
-	src, err := i.source(ctx)
+	src, err := i.ImageSource(ctx)
 	if err != nil {
 		return nil, "", err
 	}

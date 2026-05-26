@@ -445,6 +445,12 @@ type ContainerSecurityConfig struct {
 	// Optional.
 	LabelNested *bool `json:"label_nested,omitempty"`
 
+	// VerityEnforce requires composefs blob layers to have fs-verity
+	// digests matching those declared in the OCI image manifest.
+	VerityEnforce *bool `json:"verity_enforce,omitempty"`
+	// SignaturePolicy controls manifest signature verification.
+	// "check" validates if signatures exist, "require" fails without a valid signature.
+	SignaturePolicy string `json:"signature_policy,omitempty"`
 	// Umask is the umask the init process of the container will be run with.
 	Umask string `json:"umask,omitempty"`
 	// ProcOpts are the options used for the proc mount.

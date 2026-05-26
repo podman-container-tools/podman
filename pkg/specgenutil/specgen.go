@@ -766,6 +766,19 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 				}
 			}
 			s.ContainerSecurityConfig.NoNewPrivileges = &noNewPrivileges
+		case "signature":
+			switch val {
+			case "check", "require":
+				s.ContainerSecurityConfig.SignaturePolicy = val
+			default:
+				return fmt.Errorf("invalid --security-opt signature value %q, must be \"check\" or \"require\"", val)
+			}
+		case "verity":
+			if val != "enforce" {
+				return fmt.Errorf("invalid --security-opt verity value %q, must be \"enforce\"", val)
+			}
+			localTrue := true
+			s.ContainerSecurityConfig.VerityEnforce = &localTrue
 		default:
 			return fmt.Errorf("invalid --security-opt 2: %q", opt)
 		}

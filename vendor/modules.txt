@@ -511,7 +511,7 @@ github.com/opencontainers/runtime-spec/specs-go
 github.com/opencontainers/runtime-tools/generate
 github.com/opencontainers/runtime-tools/generate/seccomp
 github.com/opencontainers/runtime-tools/validate/capabilities
-# github.com/opencontainers/selinux v1.14.1
+# github.com/opencontainers/selinux v1.15.0
 ## explicit; go 1.22
 github.com/opencontainers/selinux/go-selinux
 github.com/opencontainers/selinux/go-selinux/label
@@ -735,7 +735,7 @@ go.podman.io/buildah/pkg/sshagent
 go.podman.io/buildah/pkg/util
 go.podman.io/buildah/pkg/volumes
 go.podman.io/buildah/util
-# go.podman.io/common v0.67.2-0.20260519201413-7e9ee2072844
+# go.podman.io/common v0.67.2-0.20260519201413-7e9ee2072844 => github.com/alexlarsson/container-libs/common v0.0.0-20260526075033-92c01183b143
 ## explicit; go 1.25.6
 go.podman.io/common/internal
 go.podman.io/common/libimage
@@ -801,7 +801,7 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.39.3-0.20260519201413-7e9ee2072844
+# go.podman.io/image/v5 v5.40.0 => github.com/alexlarsson/container-libs/image/v5 v5.0.0-20260526075033-92c01183b143
 ## explicit; go 1.25.6
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
@@ -878,7 +878,7 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.63.1-0.20260519201413-7e9ee2072844
+# go.podman.io/storage v1.63.1-0.20260519201413-7e9ee2072844 => github.com/alexlarsson/container-libs/storage v0.0.0-20260526075033-92c01183b143
 ## explicit; go 1.25.0
 go.podman.io/storage
 go.podman.io/storage/drivers
@@ -935,7 +935,7 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.4
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.org/x/crypto v0.51.0
+# golang.org/x/crypto v0.52.0
 ## explicit; go 1.25.0
 golang.org/x/crypto/argon2
 golang.org/x/crypto/blake2b
@@ -991,7 +991,7 @@ golang.org/x/oauth2/internal
 ## explicit; go 1.25.0
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.44.0
+# golang.org/x/sys v0.45.0
 ## explicit; go 1.25.0
 golang.org/x/sys/cpu
 golang.org/x/sys/plan9
@@ -1182,3 +1182,6 @@ tags.cncf.io/container-device-interface/pkg/parser
 # tags.cncf.io/container-device-interface/specs-go v1.1.0
 ## explicit; go 1.19
 tags.cncf.io/container-device-interface/specs-go
+# go.podman.io/storage => github.com/alexlarsson/container-libs/storage v0.0.0-20260526075033-92c01183b143
+# go.podman.io/common => github.com/alexlarsson/container-libs/common v0.0.0-20260526075033-92c01183b143
+# go.podman.io/image/v5 => github.com/alexlarsson/container-libs/image/v5 v5.0.0-20260526075033-92c01183b143

@@ -319,6 +319,12 @@ type Store interface {
 	//   }
 	Mount(id, mountLabel string) (string, error)
 
+	// MountWithOptions is like Mount but allows the caller to supply
+	// additional mount options (e.g. LayerOpts for verity digests).
+	// Options provided here are used instead of looking up persisted
+	// container flags.
+	MountWithOptions(id string, options drivers.MountOpts) (string, error)
+
 	// Unmount attempts to unmount a layer, image, or container, given an ID, a
 	// name, or a mount path. Returns whether or not the layer is still mounted.
 	// WARNING: The return value may already be obsolete by the time it is available
@@ -3044,17 +3050,27 @@ func (s *store) MountImage(id string, mountOpts []string, mountLabel string) (st
 }
 
 func (s *store) Mount(id, mountLabel string) (string, error) {
-	options := drivers.MountOpts{
+	return s.MountWithOptions(id, drivers.MountOpts{
 		MountLabel: mountLabel,
-	}
+	})
+}
+
+func (s *store) MountWithOptions(id string, options drivers.MountOpts) (string, error) {
 	// check if `id` is a container, then grab the LayerID, uidmap and gidmap, along with
 	// otherwise we assume the id is a LayerID and attempt to mount it.
 	if container, err := s.Container(id); err == nil {
 		id = container.LayerID
-		options.UidMaps = container.UIDMap
-		options.GidMaps = container.GIDMap
-		options.Options = container.MountOpts()
-		if !s.disableVolatile {
+		if options.UidMaps == nil {
+			options.UidMaps = container.UIDMap
+		}
+		if options.GidMaps == nil {
+			options.GidMaps = container.GIDMap
+		}
+		options.Options = append(container.MountOpts(), options.Options...)
+		if options.MountLabel == "" {
+			options.MountLabel = container.MountLabel()
+		}
+		if !s.disableVolatile && !options.Volatile {
 			if v, found := container.Flags[volatileFlag]; found {
 				if b, ok := v.(bool); ok {
 					options.Volatile = b

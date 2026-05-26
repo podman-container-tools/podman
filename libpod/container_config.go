@@ -177,6 +177,12 @@ type ContainerRootFSConfig struct {
 	// Volatile specifies whether the container storage can be optimized
 	// at the cost of not syncing all the dirty files in memory.
 	Volatile bool `json:"volatile,omitempty"`
+	// VerityEnforce requires composefs blob layers to have fs-verity
+	// digests matching those from the OCI manifest.
+	VerityEnforce bool `json:"verityEnforce,omitempty"`
+	// SignaturePolicy controls manifest signature verification at start time.
+	// "check" validates if signatures exist, "require" fails without a valid signature.
+	SignaturePolicy string `json:"signaturePolicy,omitempty"`
 	// Passwd allows to user to override podman's passwd/group file setup
 	Passwd *bool `json:"passwd,omitempty"`
 	// ChrootDirs is an additional set of directories that need to be

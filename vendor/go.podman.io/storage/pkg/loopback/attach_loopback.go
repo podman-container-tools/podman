@@ -123,31 +123,30 @@ func openNextAvailableLoopback(sparseName string, sparseFile *os.File) (*os.File
 // AttachLoopDevice attaches the given sparse file to the next
 // available loopback device. It returns an opened *os.File.
 func AttachLoopDevice(sparseName string) (loop *os.File, err error) {
-	return attachLoopDevice(sparseName, false)
+	return attachLoopDevice(sparseName, os.O_RDWR)
 }
 
 // AttachLoopDeviceRO attaches the given sparse file opened read-only to
 // the next available loopback device. It returns an opened *os.File.
 func AttachLoopDeviceRO(sparseName string) (loop *os.File, err error) {
-	return attachLoopDevice(sparseName, true)
+	return attachLoopDevice(sparseName, os.O_RDONLY)
 }
 
-func attachLoopDevice(sparseName string, readonly bool) (loop *os.File, err error) {
-	var sparseFile *os.File
-
+func attachLoopDevice(sparseName string, flag int) (loop *os.File, err error) {
 	// OpenFile adds O_CLOEXEC
-	if readonly {
-		sparseFile, err = os.OpenFile(sparseName, os.O_RDONLY, 0o644)
-	} else {
-		sparseFile, err = os.OpenFile(sparseName, os.O_RDWR, 0o644)
-	}
+	sparseFile, err := os.OpenFile(sparseName, flag, 0o644)
 	if err != nil {
 		logrus.Errorf("Opening sparse file: %v", err)
 		return nil, ErrAttachLoopbackDevice
 	}
 	defer sparseFile.Close()
+	return AttachLoopDeviceFile(sparseFile)
+}
 
-	loopFile, err := openNextAvailableLoopback(sparseName, sparseFile)
+// AttachLoopDeviceFile attaches an already-opened file to the next
+// available loopback device. It returns an opened *os.File.
+func AttachLoopDeviceFile(sparseFile *os.File) (loop *os.File, err error) {
+	loopFile, err := openNextAvailableLoopback(sparseFile.Name(), sparseFile)
 	if err != nil {
 		return nil, err
 	}

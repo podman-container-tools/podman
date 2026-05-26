@@ -39,6 +39,7 @@ type ImageData struct {
 	History      []ociv1.History               `json:"History"`
 	NamesHistory []string                      `json:"NamesHistory"`
 	HealthCheck  *manifest.Schema2HealthConfig `json:"Healthcheck,omitempty"`
+	LayersData   []types.ImageInspectLayer     `json:"LayersData,omitempty"`
 }
 
 // DriverData includes data on the storage driver of the image.
@@ -142,6 +143,7 @@ func (i *Image) Inspect(ctx context.Context, options *InspectOptions) (*ImageDat
 		User:         ociImage.Config.User,
 		History:      ociImage.History,
 		NamesHistory: i.NamesHistory(),
+		LayersData:   info.LayersData,
 	}
 
 	if options.WithParent {
@@ -156,7 +158,7 @@ func (i *Image) Inspect(ctx context.Context, options *InspectOptions) (*ImageDat
 
 	// Determine the format of the image.  How we determine certain data
 	// depends on the format (e.g., Docker v2s2, OCI v1).
-	src, err := i.source(ctx)
+	src, err := i.ImageSource(ctx)
 	if err != nil {
 		return nil, err
 	}
