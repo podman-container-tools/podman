@@ -72,6 +72,7 @@ BUILDTAGS += ${EXTRA_BUILDTAGS}
 # possible, as long as they don't disturb the formatting
 # (i.e. DO NOT ADD A 'v' prefix!)
 GOLANGCI_LINT_VERSION := 2.12.2
+SHFMT_VERSION := 3.13.1
 PYTHON ?= $(shell command -v python3 python|head -n1)
 PKG_MANAGER ?= $(shell command -v dnf yum|head -n1)
 # ~/.local/bin is not in PATH on all systems
@@ -295,6 +296,11 @@ golangci-lint: .install.golangci-lint
 	CGO_ENABLED=0 GOOS=freebsd hack/golangci-lint.sh
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 hack/golangci-lint.sh
 
+.PHONY: shfmt
+shfmt: .install.shfmt
+	./bin/shfmt --version
+	./bin/shfmt -d -w ./hack/
+
 .PHONY: test/checkseccomp/checkseccomp
 test/checkseccomp/checkseccomp: $(wildcard test/checkseccomp/*.go)
 	$(GOCMD) build $(BUILDFLAGS) $(GO_LDFLAGS) '$(LDFLAGS_PODMAN)' -tags "$(BUILDTAGS)" -o $@ ./test/checkseccomp
@@ -323,7 +329,7 @@ codespell:
 
 # Code validation target that **DOES NOT** require building podman binaries
 .PHONY: validate-source
-validate-source: lint .commit-subject-check .check-ci-yaml swagger-check tests-expect-exit pr-removes-fixed-skips
+validate-source: lint shfmt .commit-subject-check .check-ci-yaml swagger-check tests-expect-exit pr-removes-fixed-skips
 
 # Code validation target that **DOES** require building podman binaries
 .PHONY: validate-binaries
@@ -1012,6 +1018,10 @@ install.tools: .install.golangci-lint ## Install needed tools
 .PHONY: .install.golangci-lint
 .install.golangci-lint:
 	VERSION=$(GOLANGCI_LINT_VERSION) ./hack/install_golangci.sh
+
+.PHONY: .install.shfmt
+.install.shfmt:
+	GOBIN=$(CURDIR)/bin $(GO) install mvdan.cc/sh/v3/cmd/shfmt@v$(SHFMT_VERSION)
 
 .PHONY: .install.swagger
 .install.swagger:
