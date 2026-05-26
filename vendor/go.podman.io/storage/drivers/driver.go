@@ -83,6 +83,11 @@ type CreateOpts struct {
 	*idtools.IDMappings
 }
 
+// LayerMountOpts contains optional arguments for Driver.Get() methods specific to a layer.
+type LayerMountOpts struct {
+	AllowedFsVerity []string // Require one of these fs-verity for this layer (used for composefs)
+}
+
 // MountOpts contains optional arguments for Driver.Get() methods.
 type MountOpts struct {
 	// Mount label is the MAC Labels to assign to mount point (SELINUX)
@@ -98,6 +103,9 @@ type MountOpts struct {
 
 	// DisableShifting forces the driver to not do any ID shifting at runtime.
 	DisableShifting bool
+
+	// Options specific to each layer being mounted, first is topmost layer
+	LayerOpts []LayerMountOpts
 }
 
 // ApplyDiffOpts contains optional arguments for ApplyDiff methods.

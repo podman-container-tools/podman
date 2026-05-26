@@ -18,3 +18,10 @@ func EnableVerity(description string, fd int) error {
 func MeasureVerity(description string, fd int) (string, error) {
 	return "", fmt.Errorf("fs-verity is not supported on this platform")
 }
+
+// MeasureVerityPrefixed measures and returns the verity digest for the file represented by 'fd',
+// prefixed with the hash algorithm name, e.g. "sha256:...".
+// The 'description' parameter is a human-readable description of the file.
+func MeasureVerityPrefixed(description string, fd int) (string, error) {
+	return "", fmt.Errorf("fs-verity is not supported on this platform")
+}
