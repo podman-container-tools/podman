@@ -270,6 +270,9 @@ func parseEd25519Key(req []byte) (*AddedKey, error) {
 	if err := ssh.Unmarshal(req, &k); err != nil {
 		return nil, err
 	}
+	if len(k.Priv) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("agent: bad ED25519 key size: %d", len(k.Priv))
+	}
 	priv := ed25519.PrivateKey(k.Priv)
 
 	addedKey := &AddedKey{PrivateKey: &priv, Comment: k.Comments}
@@ -335,6 +338,9 @@ func parseEd25519Cert(req []byte) (*AddedKey, error) {
 	pubKey, err := ssh.ParsePublicKey(k.CertBytes)
 	if err != nil {
 		return nil, err
+	}
+	if len(k.Priv) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("agent: bad ED25519 key size: %d", len(k.Priv))
 	}
 	priv := ed25519.PrivateKey(k.Priv)
 	cert, ok := pubKey.(*ssh.Certificate)

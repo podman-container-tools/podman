@@ -70,7 +70,7 @@ func newAgentServerSocket(socketPath string) (*AgentServer, error) {
 func (a *AgentServer) Serve(processLabel string) (string, error) {
 	// Calls to `selinux.SetSocketLabel` should be wrapped in
 	// runtime.LockOSThread()/runtime.UnlockOSThread() until
-	// the the socket is created to guarantee another goroutine
+	// the socket is created to guarantee another goroutine
 	// does not migrate to the current thread before execution
 	// is complete.
 	// Ref: https://github.com/opencontainers/selinux/blob/main/go-selinux/selinux.go#L158

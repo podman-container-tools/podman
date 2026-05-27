@@ -23,14 +23,14 @@ import (
 // cacheLookupReferenceFunc wraps a BlobCache into a
 // libimage.LookupReferenceFunc to allow for using a BlobCache during
 // image-copy operations.
-func cacheLookupReferenceFunc(directory string, compress types.LayerCompression) libimage.LookupReferenceFunc {
+func cacheLookupReferenceFunc(directory string, compress types.LayerCompression, opts ...blobcache.Option) libimage.LookupReferenceFunc {
 	// Using a closure here allows us to reference a BlobCache without
 	// having to explicitly maintain it in the libimage API.
 	return func(ref types.ImageReference) (types.ImageReference, error) {
 		if directory == "" {
 			return ref, nil
 		}
-		ref, err := blobcache.NewBlobCache(ref, directory, compress)
+		ref, err := blobcache.NewBlobCache(ref, directory, compress, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("using blobcache %q: %w", directory, err)
 		}
@@ -130,13 +130,17 @@ func Push(ctx context.Context, image string, dest types.ImageReference, options 
 	}
 
 	compress := types.PreserveOriginal
-	if options.Compression == archive.Gzip {
+	if options.Compression != archive.Uncompressed {
 		compress = types.Compress
 	}
 	if options.SourceLookupReferenceFunc != nil {
 		libimageOptions.SourceLookupReferenceFunc = options.SourceLookupReferenceFunc
 	} else {
-		libimageOptions.SourceLookupReferenceFunc = cacheLookupReferenceFunc(options.BlobDirectory, compress)
+		var cacheOpts []blobcache.Option
+		if options.CompressionFormat != nil {
+			cacheOpts = append(cacheOpts, blobcache.WithCompressAlgorithm(options.CompressionFormat))
+		}
+		libimageOptions.SourceLookupReferenceFunc = cacheLookupReferenceFunc(options.BlobDirectory, compress, cacheOpts...)
 	}
 	libimageOptions.DestinationLookupReferenceFunc = options.DestinationLookupReferenceFunc
 

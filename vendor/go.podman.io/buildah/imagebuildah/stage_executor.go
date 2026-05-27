@@ -32,6 +32,7 @@ import (
 	"go.podman.io/buildah/internal/output"
 	"go.podman.io/buildah/internal/sanitize"
 	"go.podman.io/buildah/internal/tmpdir"
+	"go.podman.io/buildah/internal/urlsource"
 	internalUtil "go.podman.io/buildah/internal/util"
 	"go.podman.io/buildah/pkg/parse"
 	"go.podman.io/buildah/pkg/rusage"
@@ -406,12 +407,12 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 		if err := s.volumeCacheInvalidate(copy.Dest); err != nil {
 			return err
 		}
-		var sources []string
 		// The From field says to read the content from another
 		// container.  Update the ID mappings and
 		// all-content-comes-from-below-this-directory value.
 		var idMappingOptions *define.IDMappingOptions
 		var copyExcludes []string
+		var copyExcludesWithoutContainerIgnore []string
 		stripSetuid := false
 		stripSetgid := false
 		preserveOwnership := false
@@ -511,6 +512,7 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 							// additional context contains a tar file
 							// so download and explode tar to buildah
 							// temp and point context to that.
+							// TODO: the returned path is never cleaned up, leaking disk space.
 							path, subdir, err := define.TempDirForURL(tmpdir.GetTempDir(), internal.BuildahExternalArtifactsDir, additionalBuildContext.Value)
 							if err != nil {
 								return fmt.Errorf("unable to download context from external source %q: %w", additionalBuildContext.Value, err)
@@ -567,16 +569,24 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 			stripSetuid = true // did this change between 18.06 and 19.03?
 			stripSetgid = true // did this change between 18.06 and 19.03?
 		}
+		copyExcludesWithoutContainerIgnore = excludes
 		if copy.Download {
 			logrus.Debugf("ADD %#v, %#v", excludes, copy)
 		} else {
 			logrus.Debugf("COPY %#v, %#v", excludes, copy)
 		}
+
+		var gitSources []string
+		var nonGitSources []string
 		for _, src := range copy.Src {
-			if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+			if urlsource.IsHTTPOrHTTPS(src) {
 				// Source is a URL, allowed for ADD but not COPY.
 				if copy.Download {
-					sources = append(sources, src)
+					if urlsource.IsGit(src) {
+						gitSources = append(gitSources, src)
+					} else {
+						nonGitSources = append(nonGitSources, src)
+					}
 				} else {
 					// returns an error to be compatible with docker
 					return fmt.Errorf("source can't be a URL for COPY")
@@ -592,7 +602,7 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 				} else {
 					src = filepath.Join(contextDir, src)
 				}
-				sources = append(sources, src)
+				nonGitSources = append(nonGitSources, src)
 			}
 		}
 		labelsAndAnnotations := s.buildMetadata(s.isLastStep, true)
@@ -627,8 +637,21 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 			options.Excludes = nil
 			options.IgnoreFile = ""
 		}
-		if err := s.builder.Add(copy.Dest, copy.Download, options, sources...); err != nil {
-			return err
+
+		if len(nonGitSources) > 0 {
+			if err := s.builder.Add(copy.Dest, copy.Download, options, nonGitSources...); err != nil {
+				return err
+			}
+		}
+
+		// Special handling for Git sources, local .containerignore is not applied.
+		if len(gitSources) > 0 {
+			gitOptions := options
+			gitOptions.Excludes = copyExcludesWithoutContainerIgnore
+			gitOptions.IgnoreFile = ""
+			if err := s.builder.Add(copy.Dest, copy.Download, gitOptions, gitSources...); err != nil {
+				return err
+			}
 		}
 	}
 	if len(copiesExtend) > 0 {
@@ -710,6 +733,7 @@ func (s *stageExecutor) runStageMountPoints(mountList []string) (map[string]inte
 								// additional context contains a tar file
 								// so download and explode tar to buildah
 								// temp and point context to that.
+								// TODO: the returned path is never cleaned up, leaking disk space.
 								path, subdir, err := define.TempDirForURL(tmpdir.GetTempDir(), internal.BuildahExternalArtifactsDir, additionalBuildContext.Value)
 								if err != nil {
 									return nil, fmt.Errorf("unable to download context from external source %q: %w", additionalBuildContext.Value, err)
@@ -2053,8 +2077,13 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 			}
 			// Source specified is part of stage, image or additional-build-context.
 			if mountOptionFrom != "" {
-				// If this is not a stage then get digest of image or additional build context
-				if _, ok := s.executor.stages[mountOptionFrom]; !ok {
+				if stage, ok := s.executor.stages[mountOptionFrom]; ok {
+					// If source is a previous stage then checksum is image digest for that stage
+					if image, isPreviousStage := s.executor.imageDigestMap[stage.name]; isPreviousStage {
+						mountCheckSum = image
+					}
+				} else {
+					// If this is not a stage then get digest of image or additional build context
 					if builder, ok := s.executor.containerMap[mountOptionFrom]; ok {
 						// Found valid image, get image digest.
 						mountCheckSum = builder.FromImageDigest
@@ -2363,14 +2392,17 @@ func (s *stageExecutor) pushCache(ctx context.Context, src, cacheKey string) err
 	for _, dest := range destList {
 		logrus.Debugf("trying to push cache to dest: %+v from src:%+v", dest, src)
 		options := buildah.PushOptions{
-			Compression:         s.executor.compression,
-			SignaturePolicyPath: s.executor.signaturePolicyPath,
-			Store:               s.executor.store,
-			SystemContext:       s.systemContext,
-			BlobDirectory:       s.executor.blobDirectory,
-			SignBy:              s.executor.signBy,
-			MaxRetries:          s.executor.maxPullPushRetries,
-			RetryDelay:          s.executor.retryPullPushDelay,
+			Compression:            s.executor.compression,
+			CompressionFormat:      s.executor.compressionFormat,
+			CompressionLevel:       s.executor.compressionLevel,
+			ForceCompressionFormat: s.executor.forceCompressionFormat,
+			SignaturePolicyPath:    s.executor.signaturePolicyPath,
+			Store:                  s.executor.store,
+			SystemContext:          s.systemContext,
+			BlobDirectory:          s.executor.blobDirectory,
+			SignBy:                 s.executor.signBy,
+			MaxRetries:             s.executor.maxPullPushRetries,
+			RetryDelay:             s.executor.retryPullPushDelay,
 		}
 		if s.executor.cachePushSourceLookupReferenceFunc != nil {
 			options.SourceLookupReferenceFunc = s.executor.cachePushSourceLookupReferenceFunc(dest)
@@ -2702,6 +2734,15 @@ func (s *stageExecutor) commit(ctx context.Context, createdBy string, emptyLayer
 	if finalInstruction {
 		options.ConfidentialWorkloadOptions = s.executor.confidentialWorkload
 		options.SBOMScanOptions = s.executor.sbomScanOptions
+		// Apply compression settings only when committing to a non-local
+		// transport (registry, dir:, oci-archive:, etc.). Local storage
+		// decompresses layers on write, so specifying compression there
+		// would have no effect.
+		if imageRef != nil && imageRef.Transport().Name() != is.Transport.Name() {
+			options.CompressionFormat = s.executor.compressionFormat
+			options.CompressionLevel = s.executor.compressionLevel
+			options.ForceCompressionFormat = s.executor.forceCompressionFormat
+		}
 	}
 	results, err := s.builder.CommitResults(ctx, imageRef, options)
 	if err != nil {

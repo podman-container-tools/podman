@@ -29,13 +29,13 @@ import (
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/define"
 	"go.podman.io/buildah/internal/tmpdir"
+	"go.podman.io/buildah/internal/urlsource"
 	"go.podman.io/buildah/pkg/chrootuser"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/pkg/tlsclientconfig"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
-	"go.podman.io/storage/pkg/regexp"
 )
 
 // AddAndCopyOptions holds options for add and copy commands.
@@ -60,7 +60,8 @@ type AddAndCopyOptions struct {
 	// If the sources include directory trees, Hasher will be passed
 	// tar-format archives of the directory trees.
 	Hasher io.Writer
-	// Excludes is the contents of the .containerignore file.
+	// Excludes is a list of patterns to be excluded, which has the
+	// format of lines of .containerignore file.
 	Excludes []string
 	// IgnoreFile is the path to the .containerignore file.
 	IgnoreFile string
@@ -112,29 +113,15 @@ type AddAndCopyOptions struct {
 	// inheritAnnotations, newAnnotations). This field is internally managed and should
 	// not be set by external API users.
 	BuildMetadata string
-}
-
-// gitURLFragmentSuffix matches fragments to use as Git reference and build
-// context from the Git repository e.g.
-//
-//	github.com/containers/buildah.git
-//	github.com/containers/buildah.git#main
-//	github.com/containers/buildah.git#v1.35.0
-var gitURLFragmentSuffix = regexp.Delayed(`\.git(?:#.+)?$`)
-
-// sourceIsGit returns true if "source" is a git location.
-func sourceIsGit(source string) bool {
-	return isURL(source) && gitURLFragmentSuffix.MatchString(source)
-}
-
-func isURL(url string) bool {
-	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")
-}
-
-// sourceIsRemote returns true if "source" is a remote location
-// and *not* a git repo. Certain github urls such as raw.github.* are allowed.
-func sourceIsRemote(source string) bool {
-	return isURL(source) && !gitURLFragmentSuffix.MatchString(source)
+	// DirCopyContents copies the directory's contents instead of the
+	// directory with its contents below it, default true.
+	DirCopyContents types.OptionalBool
+	// AllowWildcard controls whether glob patterns are allowed in source
+	// paths. When false, they are rejected. Defaults to true.
+	AllowWildcard types.OptionalBool
+	// AllowEmptyWildcard controls whether the operation succeeds when all
+	// glob patterns match nothing. Defaults to false.
+	AllowEmptyWildcard types.OptionalBool
 }
 
 // getURL writes a tar archive containing the named content
@@ -349,11 +336,11 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 		if src == "" {
 			return errors.New("empty source location")
 		}
-		if sourceIsRemote(src) {
+		if urlsource.IsRemote(src) {
 			remoteSources = append(remoteSources, src)
 			continue
 		}
-		if sourceIsGit(src) {
+		if urlsource.IsGit(src) {
 			gitSources = append(gitSources, src)
 			continue
 		}
@@ -375,7 +362,9 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	var localSourceStats []*copier.StatsForGlob
 	if len(localSources) > 0 {
 		statOptions := copier.StatOptions{
-			CheckForArchives: extract,
+			CheckForArchives:   extract,
+			DisallowWildcard:   options.AllowWildcard == types.OptionalBoolFalse,
+			AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 		}
 		localSourceStats, err = copier.Stat(contextDir, contextDir, statOptions, localSources)
 		if err != nil {
@@ -396,11 +385,17 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			return fmt.Errorf("checking on sources under %q: %v", contextDir, errorText)
 		}
 		if len(localSourceStat.Globbed) == 0 {
+			if options.AllowEmptyWildcard == types.OptionalBoolTrue {
+				continue
+			}
 			return fmt.Errorf("checking source under %q: no glob matches: %w", contextDir, syscall.ENOENT)
 		}
 		numLocalSourceItems += len(localSourceStat.Globbed)
 	}
 	if numLocalSourceItems+len(remoteSources)+len(gitSources) == 0 {
+		if options.AllowEmptyWildcard == types.OptionalBoolTrue {
+			return nil
+		}
 		return fmt.Errorf("no sources %v found: %w", sources, syscall.ENOENT)
 	}
 
@@ -448,7 +443,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	destCanBeFile := false
 	if len(sources) == 1 {
 		if len(remoteSources) == 1 {
-			destCanBeFile = sourceIsRemote(sources[0])
+			destCanBeFile = urlsource.IsRemote(sources[0])
 		}
 		if len(localSources) == 1 {
 			item := localSourceStats[0].Results[localSourceStats[0].Globbed[0]]
@@ -589,7 +584,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 		var multiErr *multierror.Error
 		var getErr, closeErr, renameErr, putErr error
 		var wg sync.WaitGroup
-		if sourceIsRemote(src) || sourceIsGit(src) {
+		if urlsource.IsRemote(src) || urlsource.IsGit(src) {
 			pipeReader, pipeWriter := io.Pipe()
 			var srcDigest digest.Digest
 			if options.Checksum != "" {
@@ -600,28 +595,30 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			}
 
 			wg.Add(1)
-			if sourceIsGit(src) {
+			if urlsource.IsGit(src) {
 				go func() {
 					defer wg.Done()
 					defer pipeWriter.Close()
+					// TODO: the returned cloneDir is never cleaned up, leaking disk space.
 					var cloneDir, subdir string
 					cloneDir, subdir, getErr = define.TempDirForURL(tmpdir.GetTempDir(), "", src)
 					if getErr != nil {
 						return
 					}
 					getOptions := copier.GetOptions{
-						UIDMap:         srcUIDMap,
-						GIDMap:         srcGIDMap,
-						Excludes:       options.Excludes,
-						ExpandArchives: extract,
-						ChownDirs:      chownDirs,
-						ChmodDirs:      chmodDirsFiles,
-						ChownFiles:     chownFiles,
-						ChmodFiles:     chmodDirsFiles,
-						StripSetuidBit: options.StripSetuidBit,
-						StripSetgidBit: options.StripSetgidBit,
-						StripStickyBit: options.StripStickyBit,
-						Timestamp:      options.Timestamp,
+						UIDMap:             srcUIDMap,
+						GIDMap:             srcGIDMap,
+						Excludes:           options.Excludes,
+						ExpandArchives:     extract,
+						ChownDirs:          chownDirs,
+						ChmodDirs:          chmodDirsFiles,
+						ChownFiles:         chownFiles,
+						ChmodFiles:         chmodDirsFiles,
+						KeepDirectoryNames: options.DirCopyContents == types.OptionalBoolFalse,
+						StripSetuidBit:     options.StripSetuidBit,
+						StripSetgidBit:     options.StripSetgidBit,
+						StripStickyBit:     options.StripStickyBit,
+						Timestamp:          options.Timestamp,
 					}
 					writer := io.WriteCloser(pipeWriter)
 					repositoryDir := filepath.Join(cloneDir, subdir)
@@ -777,19 +774,22 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					return false, false, nil
 				})
 				getOptions := copier.GetOptions{
-					UIDMap:         srcUIDMap,
-					GIDMap:         srcGIDMap,
-					Excludes:       options.Excludes,
-					ExpandArchives: extract,
-					ChownDirs:      chownDirs,
-					ChmodDirs:      chmodDirsFiles,
-					ChownFiles:     chownFiles,
-					ChmodFiles:     chmodDirsFiles,
-					StripSetuidBit: options.StripSetuidBit,
-					StripSetgidBit: options.StripSetgidBit,
-					StripStickyBit: options.StripStickyBit,
-					Parents:        options.Parents,
-					Timestamp:      options.Timestamp,
+					UIDMap:             srcUIDMap,
+					GIDMap:             srcGIDMap,
+					Excludes:           options.Excludes,
+					ExpandArchives:     extract,
+					ChownDirs:          chownDirs,
+					ChmodDirs:          chmodDirsFiles,
+					ChownFiles:         chownFiles,
+					ChmodFiles:         chmodDirsFiles,
+					KeepDirectoryNames: options.DirCopyContents == types.OptionalBoolFalse,
+					StripSetuidBit:     options.StripSetuidBit,
+					StripSetgidBit:     options.StripSetgidBit,
+					StripStickyBit:     options.StripStickyBit,
+					Parents:            options.Parents,
+					Timestamp:          options.Timestamp,
+					DisallowWildcard:   options.AllowWildcard == types.OptionalBoolFalse,
+					AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 				}
 				getErr = copier.Get(contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
 				closeErr = writer.Close()

@@ -10,7 +10,6 @@ import (
 
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah/copier"
 	"go.podman.io/image/v5/docker/reference"
@@ -129,35 +128,6 @@ func isReferenceBlocked(ref types.ImageReference, sc *types.SystemContext) (bool
 		}
 	}
 	return false, nil
-}
-
-// ReserveSELinuxLabels reads containers storage and reserves SELinux contexts
-// which are already being used by buildah containers.
-func ReserveSELinuxLabels(store storage.Store, id string) error {
-	if selinuxGetEnabled() {
-		containers, err := store.Containers()
-		if err != nil {
-			return fmt.Errorf("getting list of containers: %w", err)
-		}
-
-		for _, c := range containers {
-			if id == c.ID {
-				continue
-			}
-			b, err := OpenBuilder(store, c.ID)
-			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					// Ignore not exist errors since containers probably created by other tool
-					// TODO, we need to read other containers json data to reserve their SELinux labels
-					continue
-				}
-				return err
-			}
-			// Prevent different containers from using same MCS label
-			selinux.ReserveLabel(b.ProcessLabel)
-		}
-	}
-	return nil
 }
 
 // IsContainer identifies if the specified container id is a buildah container

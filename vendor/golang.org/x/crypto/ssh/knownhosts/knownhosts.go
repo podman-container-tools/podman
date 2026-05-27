@@ -160,8 +160,13 @@ func (db *hostKeyDB) IsHostAuthority(remote ssh.PublicKey, address string) bool 
 
 // IsRevoked can be used as a callback in ssh.CertChecker
 func (db *hostKeyDB) IsRevoked(key *ssh.Certificate) bool {
-	_, ok := db.revoked[string(key.Marshal())]
-	return ok
+	if _, ok := db.revoked[string(key.Marshal())]; ok {
+		return true
+	}
+	if _, ok := db.revoked[string(key.SignatureKey.Marshal())]; ok {
+		return true
+	}
+	return false
 }
 
 const markerCert = "@cert-authority"

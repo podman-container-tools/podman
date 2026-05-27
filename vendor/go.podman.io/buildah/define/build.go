@@ -8,6 +8,7 @@ import (
 	"go.podman.io/common/libimage/manifests"
 	nettypes "go.podman.io/common/libnetwork/types"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/archive"
 	"golang.org/x/sync/semaphore"
@@ -165,6 +166,14 @@ type BuildOptions struct {
 	// layer blobs.  The default is to not use compression, but
 	// archive.Gzip is recommended.
 	Compression archive.Compression
+	// CompressionFormat is the format to use for the compression of the blobs.
+	CompressionFormat *compression.Algorithm
+	// CompressionLevel specifies what compression level is used.
+	CompressionLevel *int
+	// ForceCompressionFormat ensures that the compression algorithm set in
+	// CompressionFormat is used exclusively, and blobs of other compression
+	// algorithms are not reused.
+	ForceCompressionFormat bool
 	// Arguments which can be interpolated into Dockerfiles
 	Args map[string]string
 	// Map of external additional build contexts

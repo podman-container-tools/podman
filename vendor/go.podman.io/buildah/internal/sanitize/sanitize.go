@@ -211,7 +211,8 @@ func ImageName(transportName, restOfImageName, contextDir, tmpdir string) (newFr
 	case dockerArchiveTransport.Transport.Name(), ociArchiveTransport.Transport.Name(): // these are, basically, tarballs
 		// these take the form path[:stuff]
 		transportRef := restOfImageName
-		archiveSource, refLeftover, ok := strings.Cut(transportRef, ":")
+		as, refLeftover, ok := strings.Cut(transportRef, ":")
+		archiveSource = as
 		if ok {
 			refLeftover = ":" + refLeftover
 		}
@@ -241,7 +242,8 @@ func ImageName(transportName, restOfImageName, contextDir, tmpdir string) (newFr
 	case ociLayoutTransport.Transport.Name(): // this is a directory tree
 		// this takes the form path[:stuff]
 		transportRef := restOfImageName
-		archiveSource, refLeftover, ok := strings.Cut(transportRef, ":")
+		as, refLeftover, ok := strings.Cut(transportRef, ":")
+		archiveSource = as
 		if ok {
 			refLeftover = ":" + refLeftover
 		}
