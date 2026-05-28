@@ -8,15 +8,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/spf13/viper"
 
 	"github.com/go-openapi/analysis"
-	"github.com/go-openapi/swag"
 
 	"github.com/go-swagger/go-swagger/generator"
+)
+
+const (
+	verboseFlag   = "verbose"
+	noverboseFlag = "noverbose"
+	minimalFlag   = "minimal"
+	fullFlag      = "full"
 )
 
 // FlattenCmdOptions determines options to the flatten spec preprocessing.
@@ -44,10 +51,10 @@ func (f *FlattenCmdOptions) SetFlattenOptions(dflt *analysis.FlattenOpts) (res *
 	}
 	for _, opt := range f.WithFlatten {
 		switch opt {
-		case "verbose":
+		case verboseFlag:
 			res.Verbose = true
 			verboseIsSet = true
-		case "noverbose":
+		case noverboseFlag:
 			if !verboseIsSet {
 				// verbose flag takes precedence
 				res.Verbose = false
@@ -58,13 +65,13 @@ func (f *FlattenCmdOptions) SetFlattenOptions(dflt *analysis.FlattenOpts) (res *
 		case "expand":
 			res.Expand = true
 			expandIsSet = true
-		case "full":
+		case fullFlag:
 			if !minimalIsSet && !expandIsSet {
 				// minimal flag takes precedence
 				res.Minimal = false
 				minimalIsSet = true
 			}
-		case "minimal":
+		case minimalFlag:
 			if !expandIsSet {
 				// expand flag takes precedence
 				res.Minimal = true
@@ -149,8 +156,7 @@ func (s sharedOptionsCommon) apply(opts *generator.GenOpts) {
 	opts.StrictResponders = s.StrictResponders
 	opts.ReturnErrors = s.ReturnErrors
 	opts.WithCustomFormatter = s.WithCustomFormatter
-
-	swag.AddInitialisms(s.AdditionalInitialisms...)
+	opts.WithExtraInitialisms = s.AdditionalInitialisms
 }
 
 func setCopyright(copyrightFile string) (string, error) {
@@ -257,4 +263,46 @@ func setDebug(cfg *viper.Viper) {
 
 	// viper config debug
 	cfg.Debug()
+}
+
+func printImports(extras ...string) string {
+	const allImports = 11
+	imports := make([]string, 0, allImports+len(extras))
+	imports = append(imports,
+		"github.com/go-openapi/errors",
+		"github.com/go-openapi/loads",
+		"github.com/go-openapi/runtime",
+		"github.com/go-openapi/spec",
+		"github.com/go-openapi/strfmt",
+		"github.com/go-openapi/swag/cmdutils",
+		"github.com/go-openapi/swag/conv",
+		"github.com/go-openapi/swag/jsonutils",
+		"github.com/go-openapi/swag/netutils",
+		"github.com/go-openapi/swag/stringutils",
+		"github.com/go-openapi/swag/typeutils",
+	)
+	imports = append(imports, extras...)
+	sort.Strings(imports)
+
+	var w strings.Builder
+	for _, pkg := range imports {
+		if pkg == "" {
+			continue
+		}
+		fmt.Fprintf(&w, "\t* %s\n", pkg)
+	}
+
+	return w.String()
+}
+
+func noticeImports(extras ...string) {
+	log.Println(
+		"Generation completed!",
+		"\n",
+		"For this generation to compile you need to have some packages in your go.mod.",
+		"\n",
+		printImports(extras...),
+		"\n",
+		"You can get these now with: go mod tidy",
+	)
 }

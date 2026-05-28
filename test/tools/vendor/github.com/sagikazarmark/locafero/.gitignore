@@ -1,8 +1,5 @@
-/.devenv/
+# Devenv
+/.devenv*
 /.direnv/
-/.task/
-/bin/
-/build/
-/tmp/
-/var/
-/vendor/
+devenv.local.nix
+.pre-commit-config.yaml

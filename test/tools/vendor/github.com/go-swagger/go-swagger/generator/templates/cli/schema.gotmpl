@@ -45,7 +45,7 @@
 	}
     {{- if and  .IsComplexObject (not .IsArray) (not .IsMap) (not .IsStream) }}
     {{ flagValueVar .Name }} := m.{{pascalize .Name}}
-    if swag.IsZero({{ flagValueVar .Name }}){
+    if typeutils.IsZero({{ flagValueVar .Name }}){
         {{ flagValueVar .Name }} = {{if .IsNullable }}&{{end}}{{if containsPkgStr .GoType}}{{ .GoType }}{{else}}{{ .Pkg }}.{{.GoType}}{{ end }}{}
     }
     {{/* always lift the payload to pointer and pass to model retrieve function. If .GoType has pkg str, use it, else use .Pkg+.GoType */}}

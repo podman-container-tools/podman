@@ -7,22 +7,23 @@
 package {{ .Name }}
 
 import (
+  "context"
   "fmt"
+  "io"
   "net/http"
+  "time"
+
   "github.com/go-openapi/errors"
-  "github.com/go-openapi/swag"
   "github.com/go-openapi/runtime"
+  "github.com/go-openapi/strfmt"
   "github.com/go-openapi/validate"
-
-  strfmt "github.com/go-openapi/strfmt"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
 
 //go:generate mockery --name API --keeptree --with-expecter --case underscore
 
-// API is the interface of the {{ humanize .Name }} client
+// API is the interface of the {{ humanize .Name }} client.
 type API interface {
 {{ range .Operations -}}
 /*
@@ -35,7 +36,7 @@ type API interface {
 }
 
 // New creates a new {{ humanize .Name }} API client.
-func New(transport runtime.ClientTransport, formats strfmt.Registry, authInfo runtime.ClientAuthInfoWriter) *Client {
+func New(transport runtime.ContextualTransport, formats strfmt.Registry, authInfo runtime.ClientAuthInfoWriter) *Client {
   return &Client{
     transport: transport,
     formats: formats,
@@ -49,21 +50,21 @@ Client {{ if .Summary }}{{ .Summary }}{{ if .Description }}
 {{ blockcomment .Description }}{{ end }}{{ else if .Description}}{{ blockcomment .Description }}{{ else }}for {{ humanize .Name }} API{{ end }}
 */
 type Client struct {
-  transport runtime.ClientTransport
+  transport runtime.ContextualTransport
   formats strfmt.Registry
   authInfo runtime.ClientAuthInfoWriter
 }
 
 {{ range .Operations -}}
 /*
-{{ pascalize .Name }} {{ if .Summary }}{{ pluralizeFirstWord (humanize .Summary) }}{{ if .Description }}
+{{ pascalize .Name }} {{ if .Summary }}{{ pluralizeFirstWord (humanize .Summary) }}.{{ if .Description }}
 
-{{ blockcomment .Description }}{{ end }}{{ else if .Description}}{{ blockcomment .Description }}{{ else }}{{ humanize .Name }} API{{ end }}
+{{ blockcomment .Description }}.{{ end }}{{ else if .Description}}{{ blockcomment .Description }}.{{ else }}{{ humanize .Name }} API.{{ end }}
 */
 func (a *Client) {{ pascalize .Name }}(ctx context.Context, params *{{ pascalize .Name }}Params{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }} {
   {{- $length := len .SuccessResponses }}
   {{- $success := .SuccessResponses }}
-  {{ if .Responses }}result{{else}}_{{end}}, err := a.transport.Submit(&runtime.ClientOperation{
+  {{ if .Responses }}result{{else}}_{{end}}, err := a.transport.SubmitContext(ctx, &runtime.ClientOperation{
     ID: {{ printf "%q" .Name }},
     Method: {{ printf "%q" .Method }},
     PathPattern: {{ printf "%q" .Path }},
@@ -75,7 +76,6 @@ func (a *Client) {{ pascalize .Name }}(ctx context.Context, params *{{ pascalize
     {{ if .Authorized -}}
     AuthInfo: a.authInfo,
     {{ end -}}
-    Context: ctx,
     Client:  params.HTTPClient,
   })
   if err != nil {
@@ -108,7 +108,7 @@ func (a *Client) {{ pascalize .Name }}(ctx context.Context, params *{{ pascalize
   // unexpected response.
     {{- if .DefaultResponse }}
   //
-  // a default response is provided: fill this and return an error
+  // a default response is provided: fill this and return an error.
   unexpectedSuccess := result.(*{{ pascalize .DefaultResponse.Name }})
 
   return {{ if $success }}{{ padSurround "nil" "nil" 0 $length }}, {{ end }}runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
@@ -116,7 +116,7 @@ func (a *Client) {{ pascalize .Name }}(ctx context.Context, params *{{ pascalize
 
   // no default response is defined.
   //
-  // safeguard: normally, in the absence of a default response, unknown responses return an error above: so this is a codegen issue
+  // safeguard: normally, in the absence of a default response, unknown responses return an error above: so this is a codegen issue.
   msg := fmt.Sprintf("unexpected success response for {{ .Name }}: API contract not enforced by server. Client expected to get an error, but got: %T", result)
   panic(msg)
     {{- end }}
@@ -125,3 +125,11 @@ func (a *Client) {{ pascalize .Name }}(ctx context.Context, params *{{ pascalize
   {{- end }}
 }
 {{ end }}
+
+// innerParams captures internal fields so they don't conflict with user-supplied parameters.
+type innerParams struct {
+  timeout time.Duration
+
+  // Deprecated: use the operation call with context to pass the context instead of [{{ pascalize .Name }}Params].
+  ctx context.Context
+}

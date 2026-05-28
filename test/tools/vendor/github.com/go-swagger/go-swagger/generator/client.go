@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/go-openapi/swag"
+	"github.com/go-openapi/swag/jsonutils"
 )
 
 // GenerateClient generates a client library for a swagger spec document.
@@ -31,13 +31,20 @@ func GenerateClient(name string, modelNames, operationIDs []string, opts *GenOpt
 		return err
 	}
 
-	operations := gatherOperations(analyzed, operationIDs)
+	operations := gatherOperations(opts, analyzed, operationIDs)
 	if len(operations) == 0 {
 		return errors.New("no operations were selected")
 	}
 
+	mangler := opts.LanguageOpts.Mangler
+	funcMap := opts.funcMap
+	mediaMime, ok := funcMap["mediaTypeName"].(func(string) string)
+	if !ok {
+		return errors.New("internal error: mediaTypeName function expected to be func(string) string")
+	}
+
 	generator := appGenerator{
-		Name:              appNameOrDefault(specDoc, name, defaultClientName),
+		Name:              opts.appNameOrDefault(specDoc, name, defaultClientName),
 		SpecDoc:           specDoc,
 		Analyzed:          analyzed,
 		Models:            models,
@@ -55,6 +62,8 @@ func GenerateClient(name string, modelNames, operationIDs []string, opts *GenOpt
 		DefaultProduces:   opts.DefaultProduces,
 		DefaultConsumes:   opts.DefaultConsumes,
 		GenOpts:           opts,
+		mangler:           mangler,
+		mediaMime:         mediaMime,
 	}
 	generator.Receiver = "o"
 	return (&clientGenerator{generator}).Generate()
@@ -70,15 +79,15 @@ func (c *clientGenerator) Generate() error {
 		return err
 	}
 	app.DefaultImports["cli"] = path.Join(
-		c.GenOpts.LanguageOpts.baseImport(c.Target),
+		c.GenOpts.LanguageOpts.BaseImport(c.Target),
 		"cli",
 	)
 	app.DefaultImports["client"] = path.Join(
-		c.GenOpts.LanguageOpts.baseImport(c.Target),
+		c.GenOpts.LanguageOpts.BaseImport(c.Target),
 		"client",
 	)
 	app.DefaultImports["operations"] = path.Join(
-		c.GenOpts.LanguageOpts.baseImport(c.Target),
+		c.GenOpts.LanguageOpts.BaseImport(c.Target),
 		"client",
 		"operations",
 	)
@@ -86,17 +95,22 @@ func (c *clientGenerator) Generate() error {
 	for i := range app.Models {
 		di := app.Models[i].DefaultImports
 		di["models"] = path.Join(
-			c.GenOpts.LanguageOpts.baseImport(c.Target),
+			c.GenOpts.LanguageOpts.BaseImport(c.Target),
 			"models",
 		)
 		di["client"] = path.Join(
-			c.GenOpts.LanguageOpts.baseImport(c.Target),
+			c.GenOpts.LanguageOpts.BaseImport(c.Target),
 			"client",
 		)
 	}
 
 	if c.DumpData {
-		return dumpData(os.Stdout, swag.ToDynamicJSON(app))
+		var dynamicApp any
+		if err := jsonutils.FromDynamicJSON(app, &dynamicApp); err != nil {
+			return err
+		}
+
+		return dumpData(os.Stdout, dynamicApp)
 	}
 
 	if c.GenOpts.IncludeModel {

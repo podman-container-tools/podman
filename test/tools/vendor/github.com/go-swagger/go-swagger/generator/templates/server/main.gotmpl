@@ -93,7 +93,6 @@ import (
   "net/http"
   "os"
 
-  "github.com/go-openapi/loads"
   {{- if .UseGoStructFlags }}
   flags "github.com/jessevdk/go-flags"
   {{- else if .UsePFlags }}
@@ -104,6 +103,10 @@ import (
   // missing a CLI flag library setting
   {{- end }}
 
+  "github.com/go-openapi/loads"
+  {{- if .ExcludeSpec }}
+  "github.com/go-openapi/loads/fmts"
+  {{- end }}
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )

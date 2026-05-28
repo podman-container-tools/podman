@@ -219,7 +219,10 @@ func (v *Viper) watchKeyValueConfigOnChannel() error {
 			for {
 				b := <-rc
 				reader := bytes.NewReader(b.Value)
-				v.unmarshalReader(reader, v.kvstore)
+				err := v.unmarshalReader(reader, v.kvstore)
+				if err != nil {
+					v.logger.Error(fmt.Errorf("failed to unmarshal remote config: %w", err).Error())
+				}
 			}
 		}(respc)
 		return nil

@@ -7,27 +7,28 @@
 package {{ .Name }}
 
 import (
+  "context"
   "fmt"
   "io"
   "net/http"
+  "time"
 
   "github.com/go-openapi/errors"
   "github.com/go-openapi/runtime"
   httptransport "github.com/go-openapi/runtime/client"
   "github.com/go-openapi/strfmt"
-  "github.com/go-openapi/swag"
   "github.com/go-openapi/validate"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
 
 // New creates a new {{ humanize .Name }} API client.
-func New(transport runtime.ClientTransport, formats strfmt.Registry) ClientService {
+func New(transport runtime.ContextualTransport, formats strfmt.Registry) ClientService {
   return &Client{transport: transport, formats: formats}
 }
 
 // New creates a new {{ humanize .Name }} API client with basic auth credentials.
+//
 // It takes the following parameters:
 // - host: http host (github.com).
 // - basePath: any base path for the API client ("/v1", "/v3").
@@ -41,6 +42,7 @@ func NewClientWithBasicAuth(host, basePath, scheme, user, password string) Clien
 }
 
 // New creates a new {{ humanize .Name }} API client with a bearer token for authentication.
+//
 // It takes the following parameters:
 // - host: http host (github.com).
 // - basePath: any base path for the API client ("/v1", "/v3").
@@ -53,12 +55,12 @@ func NewClientWithBearerToken(host, basePath, scheme, bearerToken string) Client
 }
 
 /*
-Client {{ if .Summary }}{{ .Summary }}{{ if .Description }}
+Client {{ if .Summary }}{{ .Summary }}.{{ if .Description }}
 
-{{ blockcomment .Description }}{{ end }}{{ else if .Description}}{{ blockcomment .Description }}{{ else }}for {{ humanize .Name }} API{{ end }}
+{{ blockcomment .Description }}{{ end }}{{ else if .Description}}{{ blockcomment .Description }}{{ else }}for {{ humanize .Name }} API{{ end }}.
 */
 type Client struct {
-  transport runtime.ClientTransport
+  transport runtime.ContextualTransport
   formats strfmt.Registry
 }
 
@@ -114,26 +116,69 @@ func WithAccept{{ mediaGoName . }}(r *runtime.ClientOperation) {
   {{- end }}
 {{- end }}
 
-// ClientService is the interface for Client methods
+// ClientService is the interface for Client methods.
 type ClientService interface {
 	{{ range .Operations }}
+  {{ if or .Summary .Description }}// {{ pascalize .Name }}{{ if .Summary }} {{ humanize .Summary }}{{ else }} {{ fold .Description }}{{ end }}.{{ end }}
 	{{ pascalize .Name }}(params *{{ pascalize .Name }}Params{{ if .Authorized }}, authInfo runtime.ClientAuthInfoWriter{{end}}{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}, opts ...ClientOption) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }}
+
+  {{ if or .Summary .Description }}// {{ pascalize .Name }}Context{{ if .Summary }} {{ humanize .Summary }}{{ else }} {{ fold .Description }}{{ end }}.{{ end }}
+	{{ pascalize .Name }}Context(ctx context.Context, params *{{ pascalize .Name }}Params{{ if .Authorized }}, authInfo runtime.ClientAuthInfoWriter{{end}}{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}, opts ...ClientOption) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }}
 	{{ end }}
 
-	SetTransport(transport runtime.ClientTransport)
+	SetTransport(transport runtime.ContextualTransport)
 }
 
 {{ range .Operations }}
 /*
-  {{ pascalize .Name }} {{ if .Summary }}{{ pluralizeFirstWord (humanize .Summary) }}{{ if .Description }}
+  {{ pascalize .Name -}}
+  {{- if .Summary }}{{ pluralizeFirstWord (humanize .Summary) }}.
+    {{- if .Description }}
 
-  {{ blockcomment .Description }}{{ end }}{{ else if .Description}}{{ blockcomment .Description }}{{ else }}{{ humanize .Name }} API{{ end }}
+  {{ blockcomment .Description }}.
+    {{- end }}
+  {{- else if .Description }}
+  {{- blockcomment .Description }}.
+  {{- else }}
+  {{- humanize .Name }} API.
+  {{- end }}
+
+  This method does not support injected context.
+  However, timeout and opentracing contexts are honored whenever enabled.
+
+  If you need to pass a specific context, use [Client.{{ pascalize .Name }}Context] instead.
 */
 func (a *Client) {{ pascalize .Name }}(params *{{ pascalize .Name }}Params{{ if .Authorized }}, authInfo runtime.ClientAuthInfoWriter{{end}}{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}, opts ...ClientOption) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }} {
+  var ctx context.Context
+  if params.inner.ctx != nil {
+    ctx = params.inner.ctx
+  } else {
+    ctx = context.Background()
+  }
+
+  return a.{{ pascalize .Name }}Context(ctx, params{{ if .Authorized }}, authInfo{{end}}{{ if .HasStreamingResponse }}, writer{{ end }}, opts...)
+}
+
+/*
+  {{ pascalize .Name }}Context{{ if .Summary }}{{ pluralizeFirstWord (humanize .Summary) }}.
+    {{- if .Description }}
+
+  {{ blockcomment .Description }}.
+    {{- end }}
+  {{- else if .Description }}
+  {{- blockcomment .Description }}.
+  {{- else }}
+  {{- humanize .Name }} API.
+  {{- end }}
+
+  Do not use the deprecated [{{ pascalize .Name }}Params.Context] with this method: it would be ignored.
+*/
+func (a *Client) {{ pascalize .Name }}Context(ctx context.Context, params *{{ pascalize .Name }}Params{{ if .Authorized }}, authInfo runtime.ClientAuthInfoWriter{{end}}{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}, opts ...ClientOption) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }} {
   // NOTE: parameters are not validated before sending
   if params == nil {
     params = New{{ pascalize .Name }}Params()
   }
+
   op := &runtime.ClientOperation{
     ID: {{ printf "%q" .Name }},
     Method: {{ printf "%q" .Method }},
@@ -144,14 +189,15 @@ func (a *Client) {{ pascalize .Name }}(params *{{ pascalize .Name }}Params{{ if 
     Params: params,
     Reader: &{{ pascalize .Name }}Reader{formats: a.formats{{ if .HasStreamingResponse }}, writer: writer{{ end }}},{{ if .Authorized }}
     AuthInfo: authInfo,{{ end}}
-    Context: params.Context,
     Client: params.HTTPClient,
   }
+
 	for _, opt := range opts {
 		opt(op)
 	}
   {{- $length := len .SuccessResponses }}
-  {{ if .SuccessResponse }}result{{else}}_{{ end }}, err := a.transport.Submit(op)
+
+  {{ if .SuccessResponse }}result{{else}}_{{ end }}, err := a.transport.SubmitContext(ctx,op)
   if err != nil {
     return {{ if .SuccessResponse }}{{ padSurround "nil" "nil" 0 $length }}, {{ end }}err
   }
@@ -213,6 +259,14 @@ func (a *Client) {{ pascalize .Name }}(params *{{ pascalize .Name }}Params{{ if 
 {{- end }}
 
 // SetTransport changes the transport on the client
-func (a *Client) SetTransport(transport runtime.ClientTransport) {
+func (a *Client) SetTransport(transport runtime.ContextualTransport) {
   a.transport = transport
+}
+
+// innerParams captures internal fields so they don't conflict with user-supplied parameters.
+type innerParams struct {
+  timeout time.Duration
+
+  // Deprecated: use the operation call with context to pass the context instead of [{{ pascalize .Name }}Params].
+  ctx context.Context
 }

@@ -16,6 +16,7 @@ import (
   "github.com/go-openapi/runtime"
   "github.com/go-openapi/runtime/middleware"
   "github.com/go-openapi/runtime/security"
+  "github.com/go-openapi/swag/cmdutils"
 
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
@@ -43,7 +44,7 @@ import (
 {{- if .ReturnErrors }} --return-errors{{ end }}
 {{ end }}
 func configureFlags(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) {
-  // api.CommandLineOptionsGroups = []swag.CommandLineOptionsGroup{ ... }
+  // api.CommandLineOptionsGroups = []cmdutils.CommandLineOptionsGroup{ ... }
   _ = api
 }
 

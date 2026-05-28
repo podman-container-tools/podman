@@ -20,10 +20,8 @@ type LanguageDefinition struct {
 // ConfigureOpts for generation.
 func (d *LanguageDefinition) ConfigureOpts(opts *GenOpts) error {
 	opts.Sections = d.Layout
-	if opts.LanguageOpts == nil {
-		opts.LanguageOpts = GolangOpts()
-	}
-	return nil
+
+	return opts.EnsureDefaults()
 }
 
 // LanguageConfig structure that is obtained from parsing a config file.

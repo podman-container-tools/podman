@@ -235,9 +235,11 @@ import (
   "github.com/go-openapi/errors"
   "github.com/go-openapi/runtime"
   "github.com/go-openapi/strfmt"
-  "github.com/go-openapi/swag"
+  "github.com/go-openapi/swag/conv"
+  "github.com/go-openapi/swag/jsonutils"
+  "github.com/go-openapi/swag/stringutils"
+  "github.com/go-openapi/swag/typeutils"
   "github.com/go-openapi/validate"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
@@ -308,7 +310,7 @@ swagger:model {{ .Name }}
    {{ varname .Child.ValueExpression }}C {{ .GoType }}
  )
  // {{ .Child.ItemsDepth }}CollectionFormat: {{ printf "%q" .CollectionFormat }}
- {{ varname .Child.ValueExpression }}R := swag.SplitByFormat({{ varname .Child.ValueExpression }}V, {{ printf "%q" .CollectionFormat }})
+ {{ varname .Child.ValueExpression }}R := stringutils.SplitByFormat({{ varname .Child.ValueExpression }}V, {{ printf "%q" .CollectionFormat }})
 
  for {{ if or .Child.IsCustomFormatter .Child.Converter }}{{ .IndexVar }}{{ else }}_{{ end }}, {{ varname .Child.ValueExpression }}IV := range {{ varname .Child.ValueExpression }}R {
    {{ template "sliceclientheaderbinder" .Child }}

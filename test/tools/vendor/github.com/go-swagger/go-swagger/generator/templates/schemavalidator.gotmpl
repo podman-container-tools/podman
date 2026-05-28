@@ -134,7 +134,7 @@
           {{- if .IsInterface }}
           if {{ .ValueExpression }} == nil { // not required
           {{- else }}
-          if swag.IsZero({{ .ValueExpression }}) { // not required
+          if typeutils.IsZero({{ .ValueExpression }}) { // not required
           {{- end }}
             continue
           }
@@ -311,7 +311,7 @@
           {{- if .IsInterface }}
       if {{ $validatedValues }}[{{ $keyVar }}] == nil { // not required
           {{- else }}
-      if swag.IsZero({{ .ValueExpression }}) { // not required
+      if typeutils.IsZero({{ .ValueExpression }}) { // not required
           {{- end }}
         continue
       }
@@ -485,7 +485,7 @@
               {{- if .IsInterface }}
       if {{ .ValueExpression }} == nil { // not required
               {{- else }}
-      if swag.IsZero({{ .ValueExpression }}) { // not required
+      if typeutils.IsZero({{ .ValueExpression }}) { // not required
               {{- end }}
         return nil
       }
@@ -537,12 +537,12 @@
       {{- end }}
 
     props := make(map[string]json.RawMessage, {{ len .Properties }}{{ if .HasAdditionalProperties }}+ 10{{ end }})
-    j, err := swag.WriteJSON({{ .ReceiverName }})
+    j, err := jsonutils.WriteJSON({{ .ReceiverName }})
     if err != nil {
       return err
     }
 
-    if err = swag.ReadJSON(j, &props) ; err != nil {
+    if err = jsonutils.ReadJSON(j, &props) ; err != nil {
       return err
     }
 
@@ -1064,7 +1064,7 @@ func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else i
           {{- if .IsInterface }}
   if .ValueExpression == nil { // not required
           {{- else }}
-  if swag.IsZero({{ .ValueExpression }}) { // not required
+  if typeutils.IsZero({{ .ValueExpression }}) { // not required
           {{- end }}
     return nil
   }
@@ -1186,7 +1186,7 @@ func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else i
           {{- if .IsInterface }}
   if {{ .ValueExpression }} == nil { // not required
           {{- else }}
-  if swag.IsZero({{ .ValueExpression }}) { // not required
+  if typeutils.IsZero({{ .ValueExpression }}) { // not required
           {{- end }}
     return nil
   }

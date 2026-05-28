@@ -1,18 +1,48 @@
-linters-settings:
-    gci:
-        sections:
-            - standard
-            - default
-            - prefix(github.com/spf13/afero)
+version: "2"
+
+run:
+  timeout: 10m
 
 linters:
-    disable-all: true
-    enable:
-        - gci
-        - gofmt
-        - gofumpt
-        - staticcheck
+  enable:
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    # - revive
+    - staticcheck
+    - unused
 
-issues:
-    exclude-dirs:
-        - gcsfs/internal/stiface
+  disable:
+    - errcheck
+    # - staticcheck
+
+  settings:
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false # report any unused nolint directives
+      require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+
+  exclusions:
+    paths:
+      - gcsfs/internal/stiface
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+
+  exclusions:
+    paths:
+      - gcsfs/internal/stiface

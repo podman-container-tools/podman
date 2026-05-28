@@ -10,10 +10,13 @@ import (
 	"strings"
 
 	"github.com/go-openapi/runtime"
-	"github.com/go-openapi/swag"
 )
 
-const jsonSerializer = "json"
+const (
+	jsonSerializer = "json"
+	formData       = "formData"
+	multipartForm  = "multipartform"
+)
 
 var mediaTypeNames = map[*regexp.Regexp]string{
 	regexp.MustCompile("application/.*json"):                jsonSerializer,
@@ -36,32 +39,32 @@ var mediaTypeNames = map[*regexp.Regexp]string{
 	regexp.MustCompile("application/.*raw-stream"):          "bin",
 	regexp.MustCompile("application/x-www-form-urlencoded"): "urlform",
 	regexp.MustCompile("application/javascript"):            "txt",
-	regexp.MustCompile("multipart/form-data"):               "multipartform",
+	regexp.MustCompile("multipart/form-data"):               multipartForm,
 	regexp.MustCompile("image/.*"):                          "bin",
 	regexp.MustCompile("audio/.*"):                          "bin",
 	regexp.MustCompile("application/pdf"):                   "bin",
 }
 
 var knownProducers = map[string]string{
-	jsonSerializer:  "runtime.JSONProducer()",
-	"yaml":          "yamlpc.YAMLProducer()",
-	"xml":           "runtime.XMLProducer()",
-	"txt":           "runtime.TextProducer()",
-	"bin":           "runtime.ByteStreamProducer()",
-	"csv":           "runtime.CSVProducer()",
-	"urlform":       "runtime.DiscardProducer",
-	"multipartform": "runtime.DiscardProducer",
+	jsonSerializer: "runtime.JSONProducer()",
+	"yaml":         "yamlpc.YAMLProducer()",
+	"xml":          "runtime.XMLProducer()",
+	"txt":          "runtime.TextProducer()",
+	"bin":          "runtime.ByteStreamProducer()",
+	"csv":          "runtime.CSVProducer()",
+	"urlform":      "runtime.DiscardProducer",
+	multipartForm:  "runtime.DiscardProducer",
 }
 
 var knownConsumers = map[string]string{
-	jsonSerializer:  "runtime.JSONConsumer()",
-	"yaml":          "yamlpc.YAMLConsumer()",
-	"xml":           "runtime.XMLConsumer()",
-	"txt":           "runtime.TextConsumer()",
-	"bin":           "runtime.ByteStreamConsumer()",
-	"csv":           "runtime.CSVConsumer()",
-	"urlform":       "runtime.DiscardConsumer",
-	"multipartform": "runtime.DiscardConsumer",
+	jsonSerializer: "runtime.JSONConsumer()",
+	"yaml":         "yamlpc.YAMLConsumer()",
+	"xml":          "runtime.XMLConsumer()",
+	"txt":          "runtime.TextConsumer()",
+	"bin":          "runtime.ByteStreamConsumer()",
+	"csv":          "runtime.CSVConsumer()",
+	"urlform":      "runtime.ByteStreamConsumer()",
+	multipartForm:  "runtime.ByteStreamConsumer()",
 }
 
 func wellKnownMime(tn string) (string, bool) {
@@ -74,14 +77,6 @@ func wellKnownMime(tn string) (string, bool) {
 }
 
 const mimeParamParts = 2
-
-func mediaMime(orig string) string {
-	return strings.SplitN(orig, ";", mimeParamParts)[0]
-}
-
-func mediaGoName(media string) string {
-	return pascalize(strings.ReplaceAll(media, "*", "Star"))
-}
 
 func mediaParameters(orig string) string {
 	parts := strings.SplitN(orig, ";", mimeParamParts)
@@ -98,13 +93,13 @@ func (a *appGenerator) makeSerializers(mediaTypes []string, known func(string) (
 
 	// build all required serializers
 	for _, media := range mediaTypes {
-		key := mediaMime(media)
+		key := a.mediaMime(media)
 		nm, ok := wellKnownMime(key)
 		if !ok {
 			// keep this serializer named, even though its implementation is empty (cf. #1557)
 			nm = key
 		}
-		name := swag.ToJSONName(nm)
+		name := a.mangler.ToJSONName(nm)
 		impl, _ := known(name)
 
 		ser, ok := uniqueSerializers[key]

@@ -20,7 +20,7 @@ func (cs serverOptions) apply(opts *generator.GenOpts) {
 	opts.ServerPackage = cs.ServerPackage
 }
 
-// Server the command to generate an entire server application.
+// Server is the command to generate an entire server application.
 type Server struct {
 	WithShared
 	WithModels
@@ -94,17 +94,10 @@ func (s Server) log(_ string) {
 	case strings.HasPrefix(s.FlagStrategy, "pflag"):
 		flagsPackage = "github.com/spf13/pflag"
 	case strings.HasPrefix(s.FlagStrategy, "flag"):
-		flagsPackage = "flag"
+		flagsPackage = "" // standard library
 	default:
 		flagsPackage = "github.com/jessevdk/go-flags"
 	}
 
-	log.Println(`Generation completed!
-
-For this generation to compile you need to have some packages in your go.mod:
-
-	* github.com/go-openapi/runtime
-	* ` + flagsPackage + `
-
-You can get these now with: go mod tidy`)
+	noticeImports(flagsPackage)
 }

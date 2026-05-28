@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -24,7 +25,9 @@ import (
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/spec"
-	"github.com/go-openapi/swag"
+
+	"github.com/go-swagger/go-swagger/generator/internal/language"
+	templatesrepo "github.com/go-swagger/go-swagger/generator/internal/templates-repo"
 )
 
 const (
@@ -50,9 +53,8 @@ const (
 func init() {
 	// all initializations for the generator package
 	debugOptions()
-	initLanguage()
-	initTemplateRepo()
-	initTypes()
+	// initTemplateRepo() // ICI
+	// initTypes() // removed
 }
 
 // DefaultSectionOpts for a given opts, this is used when no config file is passed
@@ -71,6 +73,16 @@ func DefaultSectionOpts(gen *GenOpts) {
 		sec.Models = opts
 	}
 
+	const (
+		cliTarget       = "{{ joinFilePath .Target (toPackagePath .CliPackage) }}"
+		serverTarget    = "{{ joinFilePath .Target (toPackagePath .ServerPackage) }}"
+		operationTarget = "{{ if .UseTags }}" +
+			"{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .APIPackage) (toPackagePath .Package) }}" +
+			"{{ else }}" +
+			"{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .Package) }}" +
+			"{{ end }}"
+	)
+
 	if len(sec.PostModels) == 0 && gen.IncludeCLi {
 		// For CLI with default formatter (goimports), we needed to postpone the generation of model-supporting source,
 		// in order for go imports to run properly in all cases.
@@ -79,7 +91,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 			{
 				Name:     "clidefinitionhook",
 				Source:   "asset:cliModelcli",
-				Target:   "{{ joinFilePath .Target (toPackagePath .CliPackage) }}",
+				Target:   cliTarget,
 				FileName: "{{ (snakize (pascalize .Name)) }}_model.go",
 			},
 		}
@@ -106,7 +118,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				opts = append(opts, TemplateOpts{
 					Name:     "clioperation",
 					Source:   "asset:cliOperation",
-					Target:   "{{ joinFilePath .Target (toPackagePath .CliPackage) }}",
+					Target:   cliTarget,
 					FileName: "{{ (snakize (pascalize .Name)) }}_operation.go",
 				})
 			}
@@ -117,7 +129,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				ops = append(ops, TemplateOpts{
 					Name:     "parameters",
 					Source:   "asset:serverParameter",
-					Target:   "{{ if .UseTags }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .APIPackage) (toPackagePath .Package)  }}{{ else }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .Package) }}{{ end }}",
+					Target:   operationTarget,
 					FileName: "{{ (snakize (pascalize .Name)) }}_parameters.go",
 				})
 			}
@@ -125,7 +137,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				ops = append(ops, TemplateOpts{
 					Name:     "urlbuilder",
 					Source:   "asset:serverUrlbuilder",
-					Target:   "{{ if .UseTags }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .APIPackage) (toPackagePath .Package) }}{{ else }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .Package) }}{{ end }}",
+					Target:   operationTarget,
 					FileName: "{{ (snakize (pascalize .Name)) }}_urlbuilder.go",
 				})
 			}
@@ -133,7 +145,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				ops = append(ops, TemplateOpts{
 					Name:     "responses",
 					Source:   "asset:serverResponses",
-					Target:   "{{ if .UseTags }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .APIPackage) (toPackagePath .Package) }}{{ else }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .Package) }}{{ end }}",
+					Target:   operationTarget,
 					FileName: "{{ (snakize (pascalize .Name)) }}_responses.go",
 				})
 			}
@@ -141,7 +153,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				ops = append(ops, TemplateOpts{
 					Name:     "handler",
 					Source:   "asset:serverOperation",
-					Target:   "{{ if .UseTags }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .APIPackage) (toPackagePath .Package) }}{{ else }}{{ joinFilePath .Target (toPackagePath .ServerPackage) (toPackagePath .Package) }}{{ end }}",
+					Target:   operationTarget,
 					FileName: "{{ (snakize (pascalize .Name)) }}.go",
 				})
 			}
@@ -179,7 +191,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				opts = append(opts, []TemplateOpts{{
 					Name:     "commandline",
 					Source:   "asset:cliCli",
-					Target:   "{{ joinFilePath .Target (toPackagePath .CliPackage) }}",
+					Target:   cliTarget,
 					FileName: "cli.go",
 				}, {
 					Name:     "climain",
@@ -189,12 +201,12 @@ func DefaultSectionOpts(gen *GenOpts) {
 				}, {
 					Name:     "cliAutoComplete",
 					Source:   "asset:cliCompletion",
-					Target:   "{{ joinFilePath .Target (toPackagePath .CliPackage) }}",
+					Target:   cliTarget,
 					FileName: "autocomplete.go",
 				}, {
 					Name:     "cliAutoDocument",
 					Source:   "asset:cliDocumentation",
-					Target:   "{{ joinFilePath .Target (toPackagePath .CliPackage) }}",
+					Target:   cliTarget,
 					FileName: "autodocument.go",
 				}}...)
 			}
@@ -210,13 +222,13 @@ func DefaultSectionOpts(gen *GenOpts) {
 				{
 					Name:     "embedded_spec",
 					Source:   "asset:swaggerJsonEmbed",
-					Target:   "{{ joinFilePath .Target (toPackagePath .ServerPackage) }}",
+					Target:   serverTarget,
 					FileName: "embedded_spec.go",
 				},
 				{
 					Name:     "server",
 					Source:   "asset:serverServer",
-					Target:   "{{ joinFilePath .Target (toPackagePath .ServerPackage) }}",
+					Target:   serverTarget,
 					FileName: "server.go",
 				},
 				{
@@ -228,7 +240,7 @@ func DefaultSectionOpts(gen *GenOpts) {
 				{
 					Name:     "doc",
 					Source:   "asset:serverDoc",
-					Target:   "{{ joinFilePath .Target (toPackagePath .ServerPackage) }}",
+					Target:   serverTarget,
 					FileName: "doc.go",
 				},
 			}
@@ -256,9 +268,10 @@ func DefaultSectionOpts(gen *GenOpts) {
 }
 
 // MarkdownOpts for rendering a spec as markdown.
-func MarkdownOpts() *LanguageOpts {
-	opts := &LanguageOpts{}
+func MarkdownOpts() *language.Options {
+	opts := &language.Options{}
 	opts.Init()
+
 	return opts
 }
 
@@ -331,7 +344,7 @@ type GenOptsCommon struct {
 	PrincipalCustomIface   bool   // user-provided interface for Principal (non-nullable)
 	Target                 string // dir location where generated code is written to
 	Sections               SectionOpts
-	LanguageOpts           *LanguageOpts
+	LanguageOpts           *language.Options
 	TypeMapping            map[string]string
 	Imports                map[string]string
 	DefaultScheme          string
@@ -359,8 +372,10 @@ type GenOptsCommon struct {
 	WantsRootedErrorPath   bool
 	ReturnErrors           bool
 	WithCustomFormatter    bool
+	WithExtraInitialisms   []string
 
-	templates *Repository // a shallow clone of the global template repository
+	templates *templatesrepo.Repository
+	funcMap   template.FuncMap
 }
 
 // CheckOpts carries out some global consistency checks on options.
@@ -398,7 +413,11 @@ func (g *GenOpts) CheckOpts() error {
 		// whenever opting for the custom formatter, we leave the basic formatting to the standard
 		// imports.Process and focus on a custom handling of imports.
 		g.LanguageOpts.FormatOnly = true
-		g.LanguageOpts.formatFunc = formatGo
+		g.LanguageOpts.SetFormatFunc(language.FormatLite)
+	}
+
+	if len(g.WithExtraInitialisms) > 0 {
+		g.LanguageOpts.ExtraInitialisms = g.WithExtraInitialisms
 	}
 
 	return nil
@@ -474,15 +493,21 @@ func (g *GenOpts) EnsureDefaults() error {
 		return nil
 	}
 
-	g.templates = templates.ShallowClone()
-
-	g.templates.LoadDefaults()
-
 	if g.LanguageOpts == nil {
-		g.LanguageOpts = DefaultLanguageFunc()
+		g.LanguageOpts = language.GolangOpts()
 	}
 
 	DefaultSectionOpts(g)
+
+	assets := defaultAssets()
+	protectedTemplates := defaultProtectedTemplates()
+
+	g.funcMap = DefaultFuncMap(g.LanguageOpts)
+	g.templates = templatesrepo.NewRepository(g.funcMap)
+	if err := g.templates.LoadDefaults(assets); err != nil {
+		fatal(err)
+	}
+	g.templates.SetProtectedTemplates(protectedTemplates)
 
 	// set defaults for flattening options
 	if g.FlattenOpts == nil {
@@ -552,23 +577,23 @@ func (g *GenOpts) location(t *TemplateOpts, data any) (string, string, error) {
 		}
 	}
 
-	funcMap := FuncMapFunc(g.LanguageOpts)
-
-	pthTpl, err := template.New(t.Name + "-target").Funcs(funcMap).Parse(t.Target)
+	pthTpl, err := template.New(t.Name + "-target").Funcs(g.funcMap).Parse(t.Target)
 	if err != nil {
 		return "", "", err
 	}
 
-	fNameTpl, err := template.New(t.Name + "-filename").Funcs(funcMap).Parse(t.FileName)
+	fNameTpl, err := template.New(t.Name + "-filename").Funcs(g.funcMap).Parse(t.FileName)
 	if err != nil {
 		return "", "", err
 	}
 
 	d := struct {
-		Name, CliAppName, Package, APIPackage, ServerPackage, ClientPackage, CliPackage, ModelPackage, MainPackage, Target string
-		Tags                                                                                                               []string
-		UseTags                                                                                                            bool
-		Context                                                                                                            any
+		Name, CliAppName,
+		Package, APIPackage, ServerPackage, ClientPackage, CliPackage, ModelPackage, MainPackage,
+		Target string
+		Tags    []string
+		UseTags bool
+		Context any
 	}{
 		Name:          name,
 		CliAppName:    g.CliAppName,
@@ -594,7 +619,7 @@ func (g *GenOpts) location(t *TemplateOpts, data any) (string, string, error) {
 	if e := fNameTpl.Execute(&fNameBuf, d); e != nil {
 		return "", "", e
 	}
-	return pthBuf.String(), fileName(fNameBuf.String()), nil
+	return pthBuf.String(), g.fileName(fNameBuf.String()), nil
 }
 
 func (g *GenOpts) render(t *TemplateOpts, data any) ([]byte, error) {
@@ -610,7 +635,7 @@ func (g *GenOpts) render(t *TemplateOpts, data any) ([]byte, error) {
 
 	if templ == nil {
 		// try to load from repository (and enable dependencies)
-		name := swag.ToJSONName(strings.TrimSuffix(t.Source, ".gotmpl"))
+		name := g.LanguageOpts.Mangler.ToJSONName(strings.TrimSuffix(t.Source, ".gotmpl"))
 		tt, err := g.templates.Get(name)
 		if err == nil {
 			templ = tt
@@ -630,7 +655,7 @@ func (g *GenOpts) render(t *TemplateOpts, data any) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error while opening %s template file: %w", templateFile, err)
 		}
-		tt, err := template.New(t.Source).Funcs(FuncMapFunc(g.LanguageOpts)).Parse(string(content))
+		tt, err := template.New(t.Source).Funcs(g.funcMap).Parse(string(content))
 		if err != nil {
 			return nil, fmt.Errorf("template parsing failed on template %s: %w", t.Name, err)
 		}
@@ -689,12 +714,12 @@ func (g *GenOpts) write(t *TemplateOpts, data any) error {
 	var writeerr error
 
 	if !t.SkipFormat {
-		baseImport := g.LanguageOpts.baseImport(g.Target)
+		baseImport := g.LanguageOpts.BaseImport(g.Target)
 
 		formatted, err = g.LanguageOpts.FormatContent(
 			filepath.Join(dir, fname), content,
-			WithFormatOnly(g.LanguageOpts.FormatOnly),
-			WithFormatLocalPrefixes(baseImport),
+			language.WithFormatOnly(g.LanguageOpts.FormatOnly),
+			language.WithFormatLocalPrefixes(baseImport),
 		)
 		if err != nil {
 			log.Printf("source formatting failed on template-generated source (%q for %s). Check that your template produces valid code", filepath.Join(dir, fname), t.Name)
@@ -714,13 +739,13 @@ func (g *GenOpts) write(t *TemplateOpts, data any) error {
 	return err
 }
 
-func fileName(in string) string {
+func (g *GenOpts) fileName(in string) string {
 	ext := filepath.Ext(in)
-	return swag.ToFileName(strings.TrimSuffix(in, ext)) + ext
+	return g.LanguageOpts.Mangler.ToFileName(strings.TrimSuffix(in, ext)) + ext
 }
 
 func (g *GenOpts) shouldRenderApp(t *TemplateOpts, _ *GenApp) bool {
-	switch swag.ToFileName(swag.ToGoName(t.Name)) {
+	switch g.LanguageOpts.Mangler.ToFileName(g.LanguageOpts.Mangler.ToGoName(t.Name)) {
 	case "main":
 		return g.IncludeMain
 	case "embedded_spec":
@@ -810,7 +835,7 @@ func (g *GenOpts) renderDefinition(gg *GenDefinition) error {
 func (g *GenOptsCommon) setTemplates() error {
 	if g.Template != "" {
 		// set contrib templates
-		if err := g.templates.LoadContrib(g.Template); err != nil {
+		if err := g.templates.LoadContrib(g.Template, embeddedAssets{}); err != nil {
 			return err
 		}
 	}
@@ -828,7 +853,7 @@ func (g *GenOptsCommon) setTemplates() error {
 
 // defaultImports produces a default map for imports with models.
 func (g *GenOpts) defaultImports() map[string]string {
-	baseImport := g.LanguageOpts.baseImport(g.Target)
+	baseImport := g.LanguageOpts.BaseImport(g.Target)
 	defaultImports := make(map[string]string, sensibleDefaultMapAlloc)
 
 	var modelsAlias, importPath string
@@ -864,7 +889,7 @@ func (g *GenOpts) defaultImports() map[string]string {
 
 // initImports produces a default map for import with the specified root for operations.
 func (g *GenOpts) initImports(operationsPackage string) map[string]string {
-	baseImport := g.LanguageOpts.baseImport(g.Target)
+	baseImport := g.LanguageOpts.BaseImport(g.Target)
 
 	imports := make(map[string]string, sensibleDefaultMapAlloc)
 	imports[g.LanguageOpts.ManglePackageName(operationsPackage, defaultOperationsTarget)] = path.Join(
@@ -895,6 +920,33 @@ func (g *GenOpts) resolvePrincipal() (string, string, string) {
 	// NOTE(fred): we do not check here for conflicts with packages created from operation tags, only standard imports
 	alias := deconflictPrincipal(importAlias(g.Principal[:dotLocation]))
 	return alias, alias + g.Principal[dotLocation:], g.Principal[:dotLocation]
+}
+
+// titleOrDefault infers a name for the app from the title of the spec.
+func (g *GenOpts) titleOrDefault(specDoc *loads.Document, name, defaultName string) string {
+	if strings.TrimSpace(name) == "" {
+		if specDoc.Spec().Info != nil && strings.TrimSpace(specDoc.Spec().Info.Title) != "" {
+			name = specDoc.Spec().Info.Title
+		} else {
+			name = defaultName
+		}
+	}
+	return g.LanguageOpts.Mangler.ToGoName(name)
+}
+
+func (g *GenOpts) mainNameOrDefault(specDoc *loads.Document, name, defaultName string) string {
+	// *_test won't do as main server name
+	return strings.TrimSuffix(g.titleOrDefault(specDoc, name, defaultName), "Test")
+}
+
+func (g *GenOpts) appNameOrDefault(specDoc *loads.Document, name, defaultName string) string {
+	// *_test won't do as app names
+	name = strings.TrimSuffix(g.titleOrDefault(specDoc, name, defaultName), "Test")
+	if name == "" {
+		name = g.LanguageOpts.Mangler.ToGoName(defaultName)
+	}
+
+	return name
 }
 
 func fileExists(target, name string) bool {
@@ -932,32 +984,6 @@ func gatherModels(specDoc *loads.Document, modelNames []string) (map[string]spec
 	return models, nil
 }
 
-// titleOrDefault infers a name for the app from the title of the spec.
-func titleOrDefault(specDoc *loads.Document, name, defaultName string) string {
-	if strings.TrimSpace(name) == "" {
-		if specDoc.Spec().Info != nil && strings.TrimSpace(specDoc.Spec().Info.Title) != "" {
-			name = specDoc.Spec().Info.Title
-		} else {
-			name = defaultName
-		}
-	}
-	return swag.ToGoName(name)
-}
-
-func mainNameOrDefault(specDoc *loads.Document, name, defaultName string) string {
-	// *_test won't do as main server name
-	return strings.TrimSuffix(titleOrDefault(specDoc, name, defaultName), "Test")
-}
-
-func appNameOrDefault(specDoc *loads.Document, name, defaultName string) string {
-	// *_test won't do as app names
-	name = strings.TrimSuffix(titleOrDefault(specDoc, name, defaultName), "Test")
-	if name == "" {
-		name = swag.ToGoName(defaultName)
-	}
-	return name
-}
-
 type opRef struct {
 	Method string
 	Path   string
@@ -972,15 +998,16 @@ func (o opRefs) Len() int           { return len(o) }
 func (o opRefs) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 func (o opRefs) Less(i, j int) bool { return o[i].Key < o[j].Key }
 
-func gatherOperations(specDoc *analysis.Spec, operationIDs []string) map[string]opRef {
+func gatherOperations(opts *GenOpts, specDoc *analysis.Spec, operationIDs []string) map[string]opRef {
 	operationIDs = pruneEmpty(operationIDs)
 	var oprefs opRefs
+	mangler := opts.LanguageOpts.Mangler
 
 	for method, pathItem := range specDoc.Operations() {
 		for path, operation := range pathItem {
 			vv := *operation
 			oprefs = append(oprefs, opRef{
-				Key:    swag.ToGoName(strings.ToLower(method) + " " + swag.ToHumanNameTitle(path)),
+				Key:    mangler.ToGoName(strings.ToLower(method) + " " + mangler.ToHumanNameTitle(path)),
 				Method: method,
 				Path:   path,
 				ID:     vv.ID,
@@ -1002,7 +1029,7 @@ func gatherOperations(specDoc *analysis.Spec, operationIDs []string) map[string]
 		if found && oo.Method != opr.Method && oo.Path != opr.Path {
 			nm = opr.Key
 		}
-		if len(operationIDs) == 0 || swag.ContainsStrings(operationIDs, opr.ID) || swag.ContainsStrings(operationIDs, nm) {
+		if len(operationIDs) == 0 || slices.Contains(operationIDs, opr.ID) || slices.Contains(operationIDs, nm) {
 			opr.ID = nm
 			opr.Op.ID = nm
 			operations[nm] = opr

@@ -17,7 +17,7 @@ import (
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
-	"github.com/go-openapi/swag"
+	"github.com/go-openapi/swag/loading"
 	"github.com/go-openapi/validate"
 
 	yamlv2 "gopkg.in/yaml.v2"
@@ -226,7 +226,7 @@ func WithAutoXOrder(specPath string) string {
 		}
 	}
 
-	data, err := swag.LoadFromFileOrHTTP(specPath)
+	data, err := loading.LoadFromFileOrHTTP(specPath)
 	if err != nil {
 		panic(err)
 	}

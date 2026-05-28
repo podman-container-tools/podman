@@ -137,7 +137,7 @@ type readDirFile struct {
 var _ fs.ReadDirFile = readDirFile{}
 
 func (r readDirFile) ReadDir(n int) ([]fs.DirEntry, error) {
-	items, err := r.File.Readdir(n)
+	items, err := r.Readdir(n)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,12 @@ var _ Fs = FromIOFS{}
 
 func (f FromIOFS) Create(name string) (File, error) { return nil, notImplemented("create", name) }
 
-func (f FromIOFS) Mkdir(name string, perm os.FileMode) error { return notImplemented("mkdir", name) }
+func (f FromIOFS) Mkdir(
+	name string,
+	perm os.FileMode,
+) error {
+	return notImplemented("mkdir", name)
+}
 
 func (f FromIOFS) MkdirAll(path string, perm os.FileMode) error {
 	return notImplemented("mkdirall", path)

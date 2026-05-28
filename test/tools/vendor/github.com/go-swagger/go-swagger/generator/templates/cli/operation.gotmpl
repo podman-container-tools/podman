@@ -7,13 +7,12 @@ package cli {{/* TODO: do not hardcode cli pkg */}}
 import (
   "fmt"
 
+  httptransport "github.com/go-openapi/runtime/client"
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 
   "github.com/spf13/cobra"
   "github.com/go-openapi/runtime"
-  "github.com/go-openapi/swag"
-  httptransport "github.com/go-openapi/runtime/client"
 )
 
 // make{{ cmdName . }} returns a command to handle operation {{ camelize .Name }}
@@ -129,7 +128,7 @@ func retrieveOperation{{pascalize $operationGroup }}{{ pascalize $operation }}{{
 			then reuse the struct, otherwise construct an empty value struct to fill. Here body field flags overwrites
 			unmarshalled body string values. */}}
 	{{ flagModelVar .Name }} := m.{{ .ID }}
-	if swag.IsZero({{ flagModelVar .Name }}){
+	if typeutils.IsZero({{ flagModelVar .Name }}){
 		{{ flagModelVar .Name }} = {{- if .IsNullable }}&{{- end }}{{if containsPkgStr .GoType}}{{ .GoType }}{{else}}{{ .Pkg }}.{{.GoType}}{{ end }}{}
 	}
 		{{- /*Only attach the body struct in params if user passed some flag filling some body fields.*/}}
@@ -170,7 +169,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 		var iRespD any = respErr
 		respD, ok := iRespD.(*{{ .Package }}.{{ pascalize .Name }})
 		if ok {
-			if !swag.IsZero(respD) && !swag.IsZero(respD.Payload) {
+			if !typeutils.IsZero(respD) && !typeutils.IsZero(respD.Payload) {
 				msgStr,err := json.Marshal(respD.Payload)
 				if err != nil{
 					return "", err
@@ -191,7 +190,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 		eresp{{$i}}, ok := iResp{{$i}}.(*{{ .Package }}.{{ pascalize .Name }})
 		if ok {
       // the error response has a payload
-			if !swag.IsZero(eresp{{$i}}) && !swag.IsZero(eresp{{$i}}.Payload) {
+			if !typeutils.IsZero(eresp{{$i}}) && !typeutils.IsZero(eresp{{$i}}.Payload) {
 				msgStr,err := json.Marshal(eresp{{$i}}.Payload)
 				if err != nil{
 					return "", err
@@ -212,7 +211,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 {{- range $i, $v := .SuccessResponses }}
 	{{- if .Schema }}
 		{{- with .Schema}}
-	if !swag.IsZero(resp{{$i}}) && !swag.IsZero(resp{{$i}}.Payload) {
+	if !typeutils.IsZero(resp{{$i}}) && !typeutils.IsZero(resp{{$i}}.Payload) {
 			{{- if or .IsComplexObject .IsArray .IsMap }}
 		msgStr,err := json.Marshal(resp{{$i}}.Payload)
 		if err != nil{

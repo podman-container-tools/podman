@@ -70,7 +70,7 @@ func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
   }
 
   // concatenate the 2 objects
-  return swag.ConcatJSON(props, additional), nil
+  return jsonutils.ConcatJSON(props, additional), nil
 }
 {{- end }}
 

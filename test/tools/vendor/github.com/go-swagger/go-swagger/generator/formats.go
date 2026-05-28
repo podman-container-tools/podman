@@ -3,26 +3,24 @@
 
 package generator
 
-// TODO: we should probably find a way to register most of this dynamically from strfmt.
-
-const float64String = "float64"
+// Proposal for enhancement(fredbi): we should probably find a way to register most of this dynamically from strfmt.
 
 // map of function calls to be generated to get the zero value of a given type.
-var zeroes = map[string]string{
-	"bool":        "false",
-	"float32":     "0",
-	float64String: "0",
-	"int":         "0",
-	"int8":        "0",
-	"int16":       "0",
-	"int32":       "0",
-	"int64":       "0",
-	"string":      "\"\"",
-	"uint":        "0",
-	"uint8":       "0",
-	"uint16":      "0",
-	"uint32":      "0",
-	"uint64":      "0",
+var zeroes = map[string]string{ //nolint:gosec // G101 false positive: not credentials, these are zero-value literals for code generation
+	"bool":    "false",
+	"float32": "0",
+	"float64": "0",
+	"int":     "0",
+	"int8":    "0",
+	"int16":   "0",
+	"int32":   "0",
+	"int64":   "0",
+	"string":  "\"\"",
+	"uint":    "0",
+	"uint8":   "0",
+	"uint16":  "0",
+	"uint32":  "0",
+	"uint64":  "0",
 	// Extended formats (23 formats corresponding to the Default registry
 	// provided by go-openapi/strfmt)
 	"strfmt.Base64":     "strfmt.Base64([]byte(nil))",
@@ -55,33 +53,40 @@ var zeroes = map[string]string{
 // conversion functions from string representation to a numerical or boolean
 // primitive type.
 var stringConverters = map[string]string{
-	"bool":        "swag.ConvertBool",
-	"float32":     "swag.ConvertFloat32",
-	float64String: "swag.ConvertFloat64",
-	"int8":        "swag.ConvertInt8",
-	"int16":       "swag.ConvertInt16",
-	"int32":       "swag.ConvertInt32",
-	"int64":       "swag.ConvertInt64",
-	"uint8":       "swag.ConvertUint8",
-	"uint16":      "swag.ConvertUint16",
-	"uint32":      "swag.ConvertUint32",
-	"uint64":      "swag.ConvertUint64",
+	"bool":    "conv.ConvertBool",
+	"float32": "conv.ConvertFloat32",
+	"float64": "conv.ConvertFloat64",
+	"int8":    "conv.ConvertInt8",
+	"int16":   "conv.ConvertInt16",
+	"int32":   "conv.ConvertInt32",
+	"int64":   "conv.ConvertInt64",
+	"uint8":   "conv.ConvertUint8",
+	"uint16":  "conv.ConvertUint16",
+	"uint32":  "conv.ConvertUint32",
+	"uint64":  "conv.ConvertUint64",
 }
+
+const (
+	// generic converters.
+	formatFloat = "conv.FormatFloat"
+	formatInt   = "conv.FormatInteger"
+	formatUint  = "conv.FormatUinteger"
+)
 
 // formatting (string representation) functions from a native representation
 // of a numerical or boolean primitive type.
 var stringFormatters = map[string]string{
-	"bool":        "swag.FormatBool",
-	"float32":     "swag.FormatFloat32",
-	float64String: "swag.FormatFloat64",
-	"int8":        "swag.FormatInt8",
-	"int16":       "swag.FormatInt16",
-	"int32":       "swag.FormatInt32",
-	"int64":       "swag.FormatInt64",
-	"uint8":       "swag.FormatUint8",
-	"uint16":      "swag.FormatUint16",
-	"uint32":      "swag.FormatUint32",
-	"uint64":      "swag.FormatUint64",
+	"bool":    "conv.FormatBool",
+	"float32": formatFloat,
+	"float64": formatFloat,
+	"int8":    formatInt,
+	"int16":   formatInt,
+	"int32":   formatInt,
+	"int64":   formatInt,
+	"uint8":   formatUint,
+	"uint16":  formatUint,
+	"uint32":  formatUint,
+	"uint64":  formatUint,
 }
 
 // typeMapping contains a mapping of type name to go type.
@@ -90,15 +95,26 @@ var typeMapping = map[string]string{
 	"string":  "string",
 	"boolean": "bool",
 	"integer": "int64",
-	"number":  float64String,
+	"number":  "float64",
 	// For file producers
 	"file": "runtime.File",
+}
+
+// swaggerTypeName contains a mapping from go type to swagger type or format.
+var swaggerTypeName map[string]string
+
+func init() {
+	// build the reverse-lookup index of typeMapping
+	swaggerTypeName = make(map[string]string)
+	for k, v := range typeMapping {
+		swaggerTypeName[v] = k
+	}
 }
 
 // formatMapping contains a type-specific version of mapping of format to go type.
 var formatMapping = map[string]map[string]string{
 	"number": {
-		"double": float64String,
+		"double": "float64",
 		"float":  "float32",
 		"int":    "int64",
 		"int8":   "int8",
@@ -123,7 +139,7 @@ var formatMapping = map[string]map[string]string{
 		"uint32": "uint32",
 		"uint64": "uint64",
 	},
-	"string": {
+	"string": { //nolint:gosec // G101 false positive: not credentials, this maps OpenAPI string formats to Go types
 		"char": "rune",
 		// Extended format registry from go-openapi/strfmt.
 		// Currently, 23 such formats are supported (default strftm registry),
@@ -165,25 +181,25 @@ var formatMapping = map[string]map[string]string{
 
 // go primitive types.
 var primitives = map[string]struct{}{
-	"bool":        {},
-	"byte":        {},
-	"[]byte":      {},
-	"complex64":   {},
-	"complex128":  {},
-	"float32":     {},
-	float64String: {},
-	"int":         {},
-	"int8":        {},
-	"int16":       {},
-	"int32":       {},
-	"int64":       {},
-	"rune":        {},
-	"string":      {},
-	"uint":        {},
-	"uint8":       {},
-	"uint16":      {},
-	"uint32":      {},
-	"uint64":      {},
+	"bool":       {},
+	"byte":       {},
+	"[]byte":     {},
+	"complex64":  {},
+	"complex128": {},
+	"float32":    {},
+	"float64":    {},
+	"int":        {},
+	"int8":       {},
+	"int16":      {},
+	"int32":      {},
+	"int64":      {},
+	"rune":       {},
+	"string":     {},
+	"uint":       {},
+	"uint8":      {},
+	"uint16":     {},
+	"uint32":     {},
+	"uint64":     {},
 }
 
 // Formats with a custom formatter.
