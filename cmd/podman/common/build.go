@@ -26,6 +26,7 @@ import (
 	"go.podman.io/common/pkg/completion"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/utils"
@@ -425,9 +426,9 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		return nil, err
 	}
 
-	compression := buildahDefine.Gzip
+	compressionIntent := buildahDefine.Gzip
 	if flags.DisableCompression {
-		compression = buildahDefine.Uncompressed
+		compressionIntent = buildahDefine.Uncompressed
 	}
 
 	isolation := buildahDefine.IsolationDefault
@@ -562,6 +563,44 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		sbomScanOptions = append(sbomScanOptions, *sbomScanOption)
 	}
 
+	if c.Flag("disable-compression").Changed && flags.DisableCompression {
+		if c.Flag("compression-format").Changed {
+			return nil, errors.New("--disable-compression and --compression-format cannot be used together")
+		}
+		if c.Flag("force-compression").Changed {
+			return nil, errors.New("--disable-compression and --force-compression cannot be used together")
+		}
+	}
+	var compressionLevel *int
+	if c.Flag("compression-level").Changed {
+		compressionLevel = &flags.CompressionLevel
+	} else {
+		compressionLevel = podmanConfig.ContainersConfDefaultsRO.Engine.CompressionLevel
+	}
+	var compressionFormat *compression.Algorithm
+	forceCompressionFormat := flags.ForceCompressionFormat
+	if c.Flag("compression-format").Changed {
+		algo, err := compression.AlgorithmByName(flags.CompressionFormat)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse value provided %q as --compression-format: %w", flags.CompressionFormat, err)
+		}
+		compressionFormat = &algo
+		if !c.Flag("disable-compression").Changed {
+			compressionIntent = buildahDefine.Gzip
+		}
+	} else {
+		algo, err := compression.AlgorithmByName(podmanConfig.ContainersConfDefaultsRO.Engine.CompressionFormat)
+		if err != nil {
+			return nil, fmt.Errorf("parsing compression_format from containers.conf: %w", err)
+		}
+		compressionFormat = &algo
+		if !c.Flag("force-compression").Changed {
+			forceCompressionFormat = true
+		}
+		if !c.Flag("disable-compression").Changed {
+			compressionIntent = buildahDefine.Gzip
+		}
+	}
 	opts := buildahDefine.BuildOptions{
 		AddCapabilities:         flags.CapAdd,
 		AdditionalTags:          tags,
@@ -576,7 +615,9 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		CacheTTL:                cacheTTL,
 		ConfidentialWorkload:    confidentialWorkloadOptions,
 		CommonBuildOpts:         commonOpts,
-		Compression:             compression,
+		Compression:             compressionIntent,
+		CompressionFormat:       compressionFormat,
+		CompressionLevel:        compressionLevel,
 		ConfigureNetwork:        networkPolicy,
 		ContextDirectory:        contextDir,
 		CPPFlags:                flags.CPPFlags,
@@ -585,6 +626,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		DropCapabilities:        flags.CapDrop,
 		Envs:                    buildahCLI.LookupEnvVarReferences(flags.Envs, os.Environ()),
 		Err:                     stderr,
+		ForceCompressionFormat:  forceCompressionFormat,
 		ForceRmIntermediateCtrs: flags.ForceRm,
 		From:                    flags.From,
 		GroupAdd:                flags.GroupAdd,

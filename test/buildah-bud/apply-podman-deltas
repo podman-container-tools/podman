@@ -349,6 +349,9 @@ skip "Requires bit-identical tar outputs when using process substitution" \
      "use-secret-to-env-variable" \
      "use-secret-to-env-variable-and-file-path"
 
+skip_if_remote "remote builds only commit to local storage, and this test isn't worth working around that" \
+               "build --compression-format zstd to dir and oci-archive"
+
 # END   temporary workarounds that must be reevaluated periodically
 ###############################################################################
 
