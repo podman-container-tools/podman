@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/docker/go-units"
@@ -81,7 +82,7 @@ func (c *Container) getContainerInspectData(size bool, driverData *define.Driver
 		args = args[1:]
 	}
 
-	execIDs := []string{}
+	execIDs := make([]string, 0, len(c.state.ExecSessions))
 	for id := range c.state.ExecSessions {
 		execIDs = append(execIDs, id)
 	}
@@ -251,6 +252,8 @@ func (c *Container) GetMounts(namedVolumes []*ContainerNamedVolume, imageVolumes
 	if len(c.config.UserVolumes) == 0 {
 		return inspectMounts, nil
 	}
+
+	inspectMounts = make([]define.InspectMount, 0, len(namedVolumes)+len(imageVolumes)+len(mounts))
 
 	for _, volume := range namedVolumes {
 		mountStruct := define.InspectMount{}
@@ -513,17 +516,10 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 		hostConfig.Dns = append(hostConfig.Dns, dns.String())
 	}
 
-	hostConfig.DnsOptions = make([]string, 0, len(c.config.DNSOption))
-	hostConfig.DnsOptions = append(hostConfig.DnsOptions, c.config.DNSOption...)
-
-	hostConfig.DnsSearch = make([]string, 0, len(c.config.DNSSearch))
-	hostConfig.DnsSearch = append(hostConfig.DnsSearch, c.config.DNSSearch...)
-
-	hostConfig.ExtraHosts = make([]string, 0, len(c.config.HostAdd))
-	hostConfig.ExtraHosts = append(hostConfig.ExtraHosts, c.config.HostAdd...)
-
-	hostConfig.GroupAdd = make([]string, 0, len(c.config.Groups))
-	hostConfig.GroupAdd = append(hostConfig.GroupAdd, c.config.Groups...)
+	hostConfig.DnsOptions = slices.Clone(c.config.DNSOption)
+	hostConfig.DnsSearch = slices.Clone(c.config.DNSSearch)
+	hostConfig.ExtraHosts = slices.Clone(c.config.HostAdd)
+	hostConfig.GroupAdd = slices.Clone(c.config.Groups)
 
 	hostConfig.HostsFile = c.config.BaseHostsFile
 
