@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -260,17 +259,17 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	if len(ctr.config.Networks) > 0 {
 		normalizeNetworks := make([]types.NamedPerNetworkOptions, 0, len(ctr.config.Networks))
 		// first get the already used interface names so we do not conflict
-		usedIfNames := make([]string, 0, len(ctr.config.Networks))
+		usedIfNames := make(map[string]struct{}, len(ctr.config.Networks))
 		for _, opts := range ctr.config.Networks {
 			if opts.InterfaceName != "" {
 				// check that no name is assigned to more than network
-				if slices.Contains(usedIfNames, opts.InterfaceName) {
+				if _, exists := usedIfNames[opts.InterfaceName]; exists {
 					return nil, fmt.Errorf("network interface name %q is already assigned to another network", opts.InterfaceName)
 				}
-				usedIfNames = append(usedIfNames, opts.InterfaceName)
+				usedIfNames[opts.InterfaceName] = struct{}{}
 			}
 		}
-		i := 0
+		nextEthIdx := 0
 		for _, network := range ctr.config.Networks {
 			netName, nicName, err := r.normalizeNetworkName(network.Name)
 			if err != nil {
@@ -285,14 +284,14 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 
 			// assign default interface name if empty
 			if network.InterfaceName == "" {
-				for i < 100000 {
-					ifName := fmt.Sprintf("eth%d", i)
-					if !slices.Contains(usedIfNames, ifName) {
+				for nextEthIdx < 100000 {
+					ifName := fmt.Sprintf("eth%d", nextEthIdx)
+					if _, exists := usedIfNames[ifName]; !exists {
 						network.InterfaceName = ifName
-						usedIfNames = append(usedIfNames, ifName)
+						usedIfNames[ifName] = struct{}{}
 						break
 					}
-					i++
+					nextEthIdx++
 				}
 				// if still empty we did not find a free name
 				if network.InterfaceName == "" {
