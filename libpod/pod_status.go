@@ -20,42 +20,42 @@ func createPodStatusResults(ctrStatuses map[string]define.ContainerStatus) (stri
 	if ctrNum == 0 {
 		return define.PodStateCreated, nil
 	}
-	statuses := map[string]int{
-		define.PodStateStopped: 0,
-		define.PodStateRunning: 0,
-		define.PodStatePaused:  0,
-		define.PodStateCreated: 0,
-		define.PodStateErrored: 0,
-	}
+
+	statusPodStateStopped := 0
+	statusPodStateRunning := 0
+	statusPodStatePaused := 0
+	statusPodStateCreated := 0
+	statusPodStateErrored := 0
+
 	for _, ctrStatus := range ctrStatuses {
 		switch ctrStatus {
 		case define.ContainerStateExited:
 			fallthrough
 		case define.ContainerStateStopped:
-			statuses[define.PodStateStopped]++
+			statusPodStateStopped++
 		case define.ContainerStateRunning:
-			statuses[define.PodStateRunning]++
+			statusPodStateRunning++
 		case define.ContainerStatePaused:
-			statuses[define.PodStatePaused]++
+			statusPodStatePaused++
 		case define.ContainerStateCreated, define.ContainerStateConfigured:
-			statuses[define.PodStateCreated]++
+			statusPodStateCreated++
 		default:
-			statuses[define.PodStateErrored]++
+			statusPodStateErrored++
 		}
 	}
 
 	switch {
-	case statuses[define.PodStateRunning] == ctrNum:
+	case statusPodStateRunning == ctrNum:
 		return define.PodStateRunning, nil
-	case statuses[define.PodStateRunning] > 0:
+	case statusPodStateRunning > 0:
 		return define.PodStateDegraded, nil
-	case statuses[define.PodStatePaused] == ctrNum:
+	case statusPodStatePaused == ctrNum:
 		return define.PodStatePaused, nil
-	case statuses[define.PodStateStopped] == ctrNum:
+	case statusPodStateStopped == ctrNum:
 		return define.PodStateExited, nil
-	case statuses[define.PodStateStopped] > 0:
+	case statusPodStateStopped > 0:
 		return define.PodStateStopped, nil
-	case statuses[define.PodStateErrored] > 0:
+	case statusPodStateErrored > 0:
 		return define.PodStateErrored, nil
 	default:
 		return define.PodStateCreated, nil
