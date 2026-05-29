@@ -344,9 +344,11 @@ func Eval(root string, directory string, _ EvalOptions) (string, error) {
 
 // StatOptions controls parts of Stat()'s behavior.
 type StatOptions struct {
-	UIDMap, GIDMap   []idtools.IDMap // map from hostIDs to containerIDs when returning results
-	CheckForArchives bool            // check for and populate the IsArchive bit in returned values
-	Excludes         []string        // contents to pretend don't exist, using the OS-specific path separator
+	UIDMap, GIDMap     []idtools.IDMap // map from hostIDs to containerIDs when returning results
+	CheckForArchives   bool            // check for and populate the IsArchive bit in returned values
+	Excludes           []string        // contents to pretend don't exist, using the OS-specific path separator
+	DisallowWildcard   bool            // reject glob patterns in source paths
+	AllowEmptyWildcard bool            // don't error when glob patterns match nothing
 }
 
 // Stat globs the specified pattern in the specified directory and returns its
@@ -399,6 +401,8 @@ type GetOptions struct {
 	IgnoreUnreadable   bool              // ignore errors reading items, instead of returning an error
 	NoCrossDevice      bool              // if a subdirectory is a mountpoint with a different device number, include it but skip its contents
 	Timestamp          *time.Time        // timestamp to force on all contents
+	DisallowWildcard   bool              // reject glob patterns in source paths
+	AllowEmptyWildcard bool              // don't error when glob patterns match nothing
 }
 
 // Get produces an archive containing items that match the specified glob
@@ -420,7 +424,9 @@ func Get(root string, directory string, options GetOptions, globs []string, bulk
 		Directory: directory,
 		Globs:     slices.Clone(globs),
 		StatOptions: StatOptions{
-			CheckForArchives: options.ExpandArchives,
+			CheckForArchives:   options.ExpandArchives,
+			DisallowWildcard:   options.DisallowWildcard,
+			AllowEmptyWildcard: options.AllowEmptyWildcard,
 		},
 		GetOptions: options,
 	}
@@ -516,10 +522,64 @@ func Mkdir(root string, directory string, options MkdirOptions) error {
 	return nil
 }
 
+// MkfileOptions controls parts of Mkfile()'s behavior.
+type MkfileOptions struct {
+	UIDMap, GIDMap []idtools.IDMap // map from containerIDs to hostIDs when creating the file
+	ModTimeNew     *time.Time      // set mtime and atime of the newly-created file
+	ChownNew       *idtools.IDPair // set ownership of the newly-created file
+	ChmodNew       *os.FileMode    // set permissions on the newly-created file
+}
+
+// Mkfile creates a file at the specified path under root with the given
+// content, permissions, and ownership.  It builds a tar archive containing
+// a single entry and passes it to Put().
+func Mkfile(root string, path string, options MkfileOptions, content []byte) error {
+	uid, gid := 0, 0
+	if options.ChownNew != nil {
+		uid, gid = options.ChownNew.UID, options.ChownNew.GID
+	}
+	mode := os.FileMode(0o644)
+	if options.ChmodNew != nil {
+		mode = *options.ChmodNew
+	}
+	modTime := time.Now()
+	if options.ModTimeNew != nil {
+		modTime = *options.ModTimeNew
+	}
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	hdr := &tar.Header{
+		Name:     cleanerReldirectory(path),
+		Size:     int64(len(content)),
+		Mode:     int64(mode),
+		Uid:      uid,
+		Gid:      gid,
+		ModTime:  modTime,
+		Typeflag: tar.TypeReg,
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return fmt.Errorf("copier: mkfile: error writing tar header: %w", err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		return fmt.Errorf("copier: mkfile: error writing tar content: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("copier: mkfile: error closing tar writer: %w", err)
+	}
+
+	putOptions := PutOptions{
+		UIDMap: options.UIDMap,
+		GIDMap: options.GIDMap,
+	}
+	return Put(root, root, putOptions, &buf)
+}
+
 // RemoveOptions controls parts of Remove()'s behavior.
 type RemoveOptions struct {
 	All           bool // if Directory is a directory, remove its contents as well
 	AllowNotFound bool // don't return an error if the item is already not present
+	AllowWildcard bool // expand the path as a glob pattern, removing each match. All must be set to remove matched non-empty directories
 }
 
 // Remove removes the specified directory or item, traversing any intermediate
@@ -1108,6 +1168,10 @@ func copierHandlerEval(req request) *response {
 	return &response{Eval: evalResponse{Evaluated: filepath.Join(req.rootPrefix, resolvedTarget)}}
 }
 
+func containsWildcards(path string) bool {
+	return strings.ContainsAny(path, "*?[")
+}
+
 func copierHandlerStat(req request, pm *fileutils.PatternMatcher, idMappings *idtools.IDMappings) *response {
 	errorResponse := func(fmtspec string, args ...any) *response {
 		return &response{Error: fmt.Sprintf(fmtspec, args...), Stat: statResponse{}}
@@ -1120,13 +1184,17 @@ func copierHandlerStat(req request, pm *fileutils.PatternMatcher, idMappings *id
 		s := StatsForGlob{
 			Glob: req.preservedGlobs[i],
 		}
-		// glob this pattern
+		hasWildcards := containsWildcards(glob)
+		if req.StatOptions.DisallowWildcard && hasWildcards {
+			s.Error = fmt.Sprintf("copier: stat: %q: wildcards are not allowed", glob)
+			stats = append(stats, &s)
+			continue
+		}
 		globMatched, err := extendedGlob(glob)
 		if err != nil {
 			s.Error = fmt.Sprintf("copier: stat: %q while matching glob pattern %q", err.Error(), glob)
 		}
-
-		if len(globMatched) == 0 && strings.ContainsAny(glob, "*?[") {
+		if len(globMatched) == 0 && hasWildcards {
 			continue
 		}
 		// collect the matches
@@ -1218,18 +1286,18 @@ func copierHandlerStat(req request, pm *fileutils.PatternMatcher, idMappings *id
 				result.IsArchive = isArchivePath(globbed)
 			}
 		}
-		// no unskipped matches -> error
 		if len(s.Globbed) == 0 {
 			s.Globbed = nil
 			s.Results = nil
-			s.Error = fmt.Sprintf("copier: stat: %q: %v", glob, syscall.ENOENT)
+			if !hasWildcards || !req.StatOptions.AllowEmptyWildcard {
+				s.Error = fmt.Sprintf("copier: stat: %q: %v", glob, syscall.ENOENT)
+			}
 		}
 		stats = append(stats, &s)
 	}
-	// no matches -> error
-	if len(stats) == 0 {
+	if len(stats) == 0 && !req.StatOptions.AllowEmptyWildcard {
 		s := StatsForGlob{
-			Error: fmt.Sprintf("copier: stat: %q: %v", req.Globs, syscall.ENOENT),
+			Error: fmt.Sprintf("copier: stat: globs %v matched nothing", req.Globs),
 		}
 		stats = append(stats, &s)
 	}
@@ -1307,9 +1375,19 @@ func copierHandlerGet(bulkWriter io.Writer, req request, pm *fileutils.PatternMa
 	var queue []queueItem
 	globMatchedCount := 0
 	for _, glob := range req.Globs {
+		hasWildcards := containsWildcards(glob)
+		if req.GetOptions.DisallowWildcard && hasWildcards {
+			return errorResponse("copier: get: %q: wildcards are not allowed", glob)
+		}
 		globMatched, err := extendedGlob(glob)
 		if err != nil {
 			return errorResponse("copier: get: glob %q: %v", glob, err)
+		}
+		if len(globMatched) == 0 {
+			if hasWildcards {
+				continue
+			}
+			return errorResponse("copier: get: %q: %v", glob, syscall.ENOENT)
 		}
 		for _, path := range globMatched {
 			var parents []string
@@ -1320,9 +1398,11 @@ func copierHandlerGet(bulkWriter io.Writer, req request, pm *fileutils.PatternMa
 			queue = append(queue, queueItem{glob: path, parents: parents})
 		}
 	}
-	// no matches -> error
 	if len(queue) == 0 {
-		return errorResponse("copier: get: globs %v matched nothing (%d filtered out): %v", req.Globs, globMatchedCount, syscall.ENOENT)
+		if req.GetOptions.AllowEmptyWildcard {
+			return &response{Stat: statResponse.Stat, Get: getResponse{}}, nil, nil
+		}
+		return errorResponse("copier: get: globs %v matched nothing (%d filtered out)", req.Globs, globMatchedCount)
 	}
 	topInfo, err := os.Stat(req.Directory)
 	if err != nil {
@@ -1555,7 +1635,7 @@ func copierHandlerGet(bulkWriter io.Writer, req request, pm *fileutils.PatternMa
 				itemsCopied++
 			}
 		}
-		if itemsCopied == 0 {
+		if itemsCopied == 0 && !req.GetOptions.AllowEmptyWildcard {
 			return fmt.Errorf("copier: get: copied no items: %w", syscall.ENOENT)
 		}
 		return nil
@@ -2297,20 +2377,30 @@ func copierHandlerRemove(req request) *response {
 	errorResponse := func(fmtspec string, args ...any) *response {
 		return &response{Error: fmt.Sprintf(fmtspec, args...), Remove: removeResponse{}}
 	}
-	resolvedTarget, err := resolvePath(req.Root, req.Directory, false, nil)
-	if err != nil {
-		return errorResponse("copier: remove: %v", err)
-	}
-	if req.RemoveOptions.All {
-		err = os.RemoveAll(resolvedTarget)
-	} else {
-		err = os.Remove(resolvedTarget)
-		if req.RemoveOptions.AllowNotFound && errors.Is(err, os.ErrNotExist) {
-			err = nil
+	targets := []string{req.Directory}
+	if req.RemoveOptions.AllowWildcard {
+		var err error
+		targets, err = extendedGlob(req.Directory)
+		if err != nil {
+			return errorResponse("copier: remove: glob %q: %v", req.Directory, err)
 		}
 	}
-	if err != nil {
-		return errorResponse("copier: remove %q: %v", req.Directory, err)
+	for _, target := range targets {
+		resolvedTarget, err := resolvePath(req.Root, target, false, nil)
+		if err != nil {
+			return errorResponse("copier: remove: %v", err)
+		}
+		if req.RemoveOptions.All {
+			err = os.RemoveAll(resolvedTarget)
+		} else {
+			err = os.Remove(resolvedTarget)
+			if req.RemoveOptions.AllowNotFound && errors.Is(err, os.ErrNotExist) {
+				err = nil
+			}
+		}
+		if err != nil {
+			return errorResponse("copier: remove %q: %v", target, err)
+		}
 	}
 	return &response{Error: "", Remove: removeResponse{}}
 }

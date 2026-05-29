@@ -168,12 +168,16 @@ func prepareParams(options types.BuildOptions) (url.Values, error) {
 		params.Add("t", tag)
 	}
 
-	if options.IDMappingOptions != nil {
-		idmappingsOptions, err := jsoniter.Marshal(options.IDMappingOptions)
-		if err != nil {
-			return nil, err
-		}
-		params.Set("idmappingoptions", string(idmappingsOptions))
+	if options.CompressionFormat != nil {
+		params.Set("compressionFormat", options.CompressionFormat.Name())
+	}
+	if options.CompressionLevel != nil {
+		params.Set("compressionLevel", strconv.Itoa(*options.CompressionLevel))
+	}
+	if options.ForceCompressionFormat {
+		params.Set("forceCompressionFormat", "1")
+	} else {
+		params.Set("forceCompressionFormat", "0")
 	}
 	if buildArgs := options.Args; len(buildArgs) > 0 {
 		bArgs, err := jsoniter.MarshalToString(buildArgs)

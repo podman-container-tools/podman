@@ -1,5 +1,5 @@
 ####> This option file is used in:
-####>   podman manifest push, push
+####>   podman build, farm build, manifest push, push
 ####> If file is edited, make sure the changes
 ####> are applicable to all of those.
 #### **--force-compression**

@@ -289,6 +289,18 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    type: boolean
 	//    description: Use compression on image.
 	//  - in: query
+	//    name: compressionFormat
+	//    type: string
+	//    description: The type of compression to apply to layer blobs pushed to build caches in registries.
+	//  - in: query
+	//    name: compressionLevel
+	//    type: integer
+	//    description: The level of compression to apply to layer blobs pushed to build caches in registries. The range of acceptable values varies based on the compression format.
+	//  - in: query
+	//    name: forceCompressionFormat
+	//    type: boolean
+	//    description: Use the specified compression format for layer blobs, even when pushing to a location where an equivalent blob which differs only in how it's compressed could be reused.
+	//  - in: query
 	//    name: destination
 	//    type: string
 	//    description: Allows for pushing the image to a different destination than the image refers to.

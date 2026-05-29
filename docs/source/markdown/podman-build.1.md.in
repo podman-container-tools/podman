@@ -99,6 +99,10 @@ This option is added to be aligned with other containers CLIs.
 Podman doesn't communicate with a daemon or a remote server.
 Thus, compressing the data before sending it is irrelevant to Podman. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
 
+@@option compression-format
+
+@@option compression-level
+
 @@option cpp-flag
 
 @@option cpu-period
@@ -201,6 +205,8 @@ It does not affect _/etc/resolv.conf_ in the final image.
 @@option env.image
 
 @@option file
+
+@@option force-compression
 
 @@option force-rm
 

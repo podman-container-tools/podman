@@ -7,20 +7,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	urlpkg "net/url"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/buildah/internal/urlsource"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chrootarchive"
-	"go.podman.io/storage/pkg/ioutils"
 	"go.podman.io/storage/types"
 )
 
@@ -29,7 +30,7 @@ const (
 	// identify working containers.
 	Package = "buildah"
 	// Version for the Package. Also used by .packit.sh for Packit builds.
-	Version = "1.43.0-dev"
+	Version = "1.44.0"
 
 	// DefaultRuntime if containers.conf fails.
 	DefaultRuntime = "runc"
@@ -124,7 +125,7 @@ func (s Secret) ResolveValue() ([]byte, error) {
 	}
 }
 
-// BuildOutputOptions contains the the outcome of parsing the value of a build --output flag
+// BuildOutputOptions contains the outcome of parsing the value of a build --output flag
 // Deprecated: This structure is now internal
 type BuildOutputOption struct {
 	Path     string // Only valid if !IsStdout
@@ -187,75 +188,79 @@ type SBOMScanOptions struct {
 
 // TempDirForURL checks if the passed-in string looks like a URL or "-".  If it
 // is, TempDirForURL creates a temporary directory, arranges for its contents
-// to be the contents of that URL, and returns the temporary directory's path,
-// along with the relative name of a subdirectory which should be used as the
-// build context (which may be empty or ".").  Removal of the temporary
-// directory is the responsibility of the caller.  If the string doesn't look
-// like a URL or "-", TempDirForURL returns empty strings and a nil error code.
-func TempDirForURL(dir, prefix, url string) (name string, subdir string, err error) {
-	if !strings.HasPrefix(url, "http://") &&
-		!strings.HasPrefix(url, "https://") &&
+// to be the contents of that URL, and returns the temporary directory's path
+// (for cleanup) and a relative subdirectory to the build context within it.
+// Removal of the temporary directory is the responsibility of the caller.
+// If the string doesn't look like a URL or "-", TempDirForURL returns empty
+// strings and a nil error code.
+func TempDirForURL(dir, prefix, url string) (tempDir string, relativeContextDir string, err error) {
+	if !urlsource.IsHTTPOrHTTPS(url) &&
 		!strings.HasPrefix(url, "git://") &&
 		!strings.HasPrefix(url, "github.com/") &&
 		url != "-" {
 		return "", "", nil
 	}
-	name, err = os.MkdirTemp(dir, prefix)
+	tempDir, err = os.MkdirTemp(dir, prefix)
 	if err != nil {
 		return "", "", fmt.Errorf("creating temporary directory for %q: %w", url, err)
 	}
-	downloadDir := filepath.Join(name, "download")
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			if err2 := os.RemoveAll(tempDir); err2 != nil {
+				logrus.Errorf("error removing temporary directory %q: %v", tempDir, err2)
+			}
+		}
+	}()
+
+	downloadDir := filepath.Join(tempDir, "download")
 	if err = os.MkdirAll(downloadDir, 0o700); err != nil {
 		return "", "", fmt.Errorf("creating directory %q for %q: %w", downloadDir, url, err)
 	}
-	urlParsed, err := urlpkg.Parse(url)
+
+	var contentSubdir string
+	urlParsed, parseErr := neturl.Parse(url)
+	if parseErr != nil {
+		return "", "", fmt.Errorf("parsing url %q: %w", url, parseErr)
+	}
+
+	isGitURL := urlParsed.Scheme == "git" || strings.HasSuffix(urlParsed.Path, ".git")
+	switch {
+	case isGitURL:
+		combinedOutput, gitSubDir, cloneErr := cloneToDirectory(url, downloadDir)
+		if cloneErr != nil {
+			return "", "", fmt.Errorf("cloning %q to %q:\n%s: %w", url, tempDir, string(combinedOutput), cloneErr)
+		}
+		contentSubdir = gitSubDir
+	case urlsource.IsHTTPOrHTTPS(url):
+		if err = downloadToDirectory(url, downloadDir); err != nil {
+			return "", "", err
+		}
+	case strings.HasPrefix(url, "github.com/"):
+		ghURL := url
+		contentSubdir = path.Base(ghURL) + "-master"
+		downloadURL := fmt.Sprintf("https://%s/archive/master.tar.gz", ghURL)
+		logrus.Debugf("resolving url %q to %q", ghURL, downloadURL)
+		if err = downloadToDirectory(downloadURL, downloadDir); err != nil {
+			return "", "", err
+		}
+	case url == "-":
+		if err = stdinToDirectory(downloadDir); err != nil {
+			return "", "", err
+		}
+	}
+
+	contextDir, err := securejoin.SecureJoin(downloadDir, contentSubdir)
 	if err != nil {
-		return "", "", fmt.Errorf("parsing url %q: %w", url, err)
+		return "", "", fmt.Errorf("resolving subdirectory %q in %q: %w", contentSubdir, downloadDir, err)
 	}
-	if strings.HasPrefix(url, "git://") || strings.HasSuffix(urlParsed.Path, ".git") {
-		combinedOutput, gitSubDir, err := cloneToDirectory(url, downloadDir)
-		if err != nil {
-			if err2 := os.RemoveAll(name); err2 != nil {
-				logrus.Debugf("error removing temporary directory %q: %v", name, err2)
-			}
-			return "", "", fmt.Errorf("cloning %q to %q:\n%s: %w", url, name, string(combinedOutput), err)
-		}
-		logrus.Debugf("Build context is at %q", filepath.Join(downloadDir, gitSubDir))
-		return name, filepath.Join(filepath.Base(downloadDir), gitSubDir), nil
+	relativeContextDir, err = filepath.Rel(tempDir, contextDir)
+	if err != nil {
+		return "", "", err
 	}
-	if strings.HasPrefix(url, "github.com/") {
-		ghurl := url
-		url = fmt.Sprintf("https://%s/archive/master.tar.gz", ghurl)
-		logrus.Debugf("resolving url %q to %q", ghurl, url)
-		subdir = path.Base(ghurl) + "-master"
-	}
-	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		err = downloadToDirectory(url, downloadDir)
-		if err != nil {
-			if err2 := os.RemoveAll(name); err2 != nil {
-				logrus.Debugf("error removing temporary directory %q: %v", name, err2)
-			}
-			return "", "", err
-		}
-		logrus.Debugf("Build context is at %q", filepath.Join(downloadDir, subdir))
-		return name, filepath.Join(filepath.Base(downloadDir), subdir), nil
-	}
-	if url == "-" {
-		err = stdinToDirectory(downloadDir)
-		if err != nil {
-			if err2 := os.RemoveAll(name); err2 != nil {
-				logrus.Debugf("error removing temporary directory %q: %v", name, err2)
-			}
-			return "", "", err
-		}
-		logrus.Debugf("Build context is at %q", filepath.Join(downloadDir, subdir))
-		return name, filepath.Join(filepath.Base(downloadDir), subdir), nil
-	}
-	logrus.Debugf("don't know how to retrieve %q", url)
-	if err2 := os.RemoveAll(name); err2 != nil {
-		logrus.Debugf("error removing temporary directory %q: %v", name, err2)
-	}
-	return "", "", errors.New("unreachable code reached")
+	logrus.Debugf("Build context is at %q", contextDir)
+	succeeded = true
+	return tempDir, relativeContextDir, nil
 }
 
 // parseGitBuildContext parses git build context to `repo`, `sub-dir`
@@ -332,6 +337,8 @@ func downloadToDirectory(url, dir string) error {
 	if resp.ContentLength == 0 {
 		return fmt.Errorf("no contents in %q", url)
 	}
+	// Try to extract the response as a tar archive; if that fails,
+	// assume it is a raw Dockerfile and write it as such.
 	if err := chrootarchive.Untar(resp.Body, dir, nil); err != nil {
 		resp1, err := http.Get(url)
 		if err != nil {
@@ -342,10 +349,8 @@ func downloadToDirectory(url, dir string) error {
 		if err != nil {
 			return err
 		}
-		dockerfile := filepath.Join(dir, "Dockerfile")
-		// Assume this is a Dockerfile
-		if err := ioutils.AtomicWriteFile(dockerfile, body, 0o600); err != nil {
-			return fmt.Errorf("failed to write %q to %q: %w", url, dockerfile, err)
+		if err := writeFileInRoot(dir, "Dockerfile", body, 0o600); err != nil {
+			return fmt.Errorf("failed to write %q to %q: %w", url, filepath.Join(dir, "Dockerfile"), err)
 		}
 	}
 	return nil
@@ -358,13 +363,43 @@ func stdinToDirectory(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read from stdin: %w", err)
 	}
+	// Try to extract the buffered input as a tar archive; if that fails,
+	// assume it is a raw Dockerfile and write it as such.
 	reader := bytes.NewReader(b)
 	if err := chrootarchive.Untar(reader, dir, nil); err != nil {
-		dockerfile := filepath.Join(dir, "Dockerfile")
-		// Assume this is a Dockerfile
-		if err := ioutils.AtomicWriteFile(dockerfile, b, 0o600); err != nil {
-			return fmt.Errorf("failed to write bytes to %q: %w", dockerfile, err)
+		if err := writeFileInRoot(dir, "Dockerfile", b, 0o600); err != nil {
+			return fmt.Errorf("failed to write bytes to %q: %w", filepath.Join(dir, "Dockerfile"), err)
 		}
 	}
 	return nil
+}
+
+// writeFileInRoot safely writes data to a file inside root, without following
+// symlinks that escape the root directory.
+func writeFileInRoot(root, name string, data []byte, perm os.FileMode) error { //nolint:unparam,nolintlint
+	// Above:
+	// unparam: 'name' currently only receives "Dockerfile" but will potentially support other files later
+	// nolintlint: the unparam linter only triggers if there are ≥ 4 instances; we do have that
+	// with --tests defaulting to true, but not with --tests=false.
+
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer rootHandle.Close()
+
+	if err := rootHandle.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	fileHandle, err := rootHandle.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+
+	_, err = fileHandle.Write(data)
+	if closeErr := fileHandle.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	return err
 }

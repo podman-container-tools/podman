@@ -22,6 +22,7 @@ import (
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/signature"
 	is "go.podman.io/image/v5/storage"
 	"go.podman.io/image/v5/transports"
@@ -47,6 +48,14 @@ type CommitOptions struct {
 	// layer blobs.  The default is to not use compression, but
 	// archive.Gzip is recommended.
 	Compression archive.Compression
+	// CompressionFormat is the format to use for the compression of the blobs.
+	CompressionFormat *compression.Algorithm
+	// CompressionLevel specifies what compression level is used.
+	CompressionLevel *int
+	// ForceCompressionFormat ensures that the compression algorithm set in
+	// CompressionFormat is used exclusively, and blobs of other compression
+	// algorithms are not reused.
+	ForceCompressionFormat bool
 	// SignaturePolicyPath specifies an override location for the signature
 	// policy which should be used for verifying the new image as it is
 	// being written.  Except in specific circumstances, no value should be
@@ -456,12 +465,16 @@ func (b *Builder) CommitResults(ctx context.Context, dest types.ImageReference, 
 		if options.Compression != archive.Uncompressed {
 			compress = types.Compress
 		}
-		cache, err := blobcache.NewBlobCache(src, options.BlobDirectory, compress)
+		var cacheOpts []blobcache.Option
+		if options.CompressionFormat != nil {
+			cacheOpts = append(cacheOpts, blobcache.WithCompressAlgorithm(options.CompressionFormat))
+		}
+		cache, err := blobcache.NewBlobCache(src, options.BlobDirectory, compress, cacheOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("wrapping image reference %q in blob cache at %q: %w", transports.ImageName(src), options.BlobDirectory, err)
 		}
 		maybeCachedSrc = cache
-		cache, err = blobcache.NewBlobCache(dest, options.BlobDirectory, compress)
+		cache, err = blobcache.NewBlobCache(dest, options.BlobDirectory, compress, cacheOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("wrapping image reference %q in blob cache at %q: %w", transports.ImageName(dest), options.BlobDirectory, err)
 		}
@@ -471,8 +484,9 @@ func (b *Builder) CommitResults(ctx context.Context, dest types.ImageReference, 
 	switch options.Compression {
 	case archive.Uncompressed:
 		systemContext.OCIAcceptUncompressedLayers = true
-	case archive.Gzip:
+	default:
 		systemContext.DirForceCompress = true
+		systemContext.OCIAcceptUncompressedLayers = false
 	}
 
 	if systemContext.ArchitectureChoice != b.Architecture() {
@@ -482,8 +496,16 @@ func (b *Builder) CommitResults(ctx context.Context, dest types.ImageReference, 
 		systemContext.OSChoice = b.OS()
 	}
 
+	copyOptions := getCopyOptions(b.store, options.ReportWriter, nil, systemContext, "", false, options.SignBy, options.OciEncryptLayers, options.OciEncryptConfig, nil, destinationTimestamp)
+	if options.CompressionFormat != nil {
+		copyOptions.DestinationCtx.CompressionFormat = options.CompressionFormat
+		copyOptions.DestinationCtx.CompressionLevel = options.CompressionLevel
+	}
+	if options.ForceCompressionFormat {
+		copyOptions.ForceCompressionFormat = true
+	}
 	var manifestBytes []byte
-	if manifestBytes, err = retryCopyImage(ctx, policyContext, maybeCachedDest, maybeCachedSrc, dest, getCopyOptions(b.store, options.ReportWriter, nil, systemContext, "", false, options.SignBy, options.OciEncryptLayers, options.OciEncryptConfig, nil, destinationTimestamp), options.MaxRetries, options.RetryDelay); err != nil {
+	if manifestBytes, err = retryCopyImage(ctx, policyContext, maybeCachedDest, maybeCachedSrc, dest, copyOptions, options.MaxRetries, options.RetryDelay); err != nil {
 		return nil, fmt.Errorf("copying layers and metadata for container %q: %w", b.ContainerID, err)
 	}
 	// If we've got more names to attach, and we know how to do that for

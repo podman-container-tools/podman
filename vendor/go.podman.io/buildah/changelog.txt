@@ -1,3 +1,259 @@
+- Changelog for v1.44.0 (2026-05-27)
+  * TEMPORARY: Skip a newly-added test
+  * Restore the previous TempDirForURL API
+  * TempDirForURL: return absolute context path instead of relative subdir
+  * TempDirForURL: refactor if-chain into switch statement
+  * Prevent symlink-based path traversal in build contexts
+  * Bump c/common to v0.68.0, c/image v5.40.0, c/storage v1.63.0
+  * fix(deps): update module golang.org/x/crypto to v0.52.0
+  * fix(deps): update module golang.org/x/sys to v0.45.0
+  * Don't report an error in a possible RPC server start/stop ordering
+  * Fix a race in TestCannotChangeMultipleRequestsWithDifferentChroot
+  * Correctly report archiveSource if we can't find it
+  * copier: add Mkfile() for creating files with inline content
+  * docs: document compression flags for commit, push and build
+  * build: add --compression-format flags for build
+  * commit: add --compression-format flag with containers.conf fallback
+  * build: pass compression_format to --cache-to push
+  * push: respect compression_format from containers.conf
+  * add/copy: support AllowWildcard and AllowEmptyWildcard
+  * copier.TestTarPut(): test both with and without chroot
+  * imagebuildah.executor.getCreatedBy(): use digests for previous stages
+  * Ignore .containerignore for git repositories in ADD
+  * Fix stale cache when using bind mount with build stage
+  * fix(deps): update module google.golang.org/grpc to v1.81.1
+  * fix: duplicated "the" in define/types.go and pkg/sshagent comments
+  * tmt: archive audit and journal logs after test execution
+  * We don't have a 'nix' directory, but we do have one for 'rpm'
+  * rpm/buildah.spec tests: require xz and /usr/bin/selinuxenabled
+  * fix(deps): update module github.com/moby/buildkit to v0.30.0
+  * deps: bump selinux to v1.14.1
+  * Remove unused ReserveSELinuxLabels
+  * fix(deps): update module golang.org/x/crypto to v0.51.0
+  * fix(deps): update module golang.org/x/term to v0.43.0
+  * copier: add AddAndCopyOptions.DirCopyContents
+  * fix(deps): update module golang.org/x/sys to v0.44.0
+  * fix(deps): update module google.golang.org/grpc to v1.81.0
+  * fix(deps): update module github.com/openshift/imagebuilder to v1.2.21
+  * Add RunOptions.ValidExitCodes and --valid-exit-codes flag
+  * copier: add RemoveOptions.AllowWildcard
+  * Packit: Only create dist-git PRs for rawhide
+  * docs: Remove slirp for podman6
+  * tests: Remove slirp for podman6
+  * Remove slirp for podman6
+  * Remove OWNERS file
+  * vendor: update latest common, image, storage
+  * Makefile: preserve entrypoint_amd64 and .gz in clean target
+  * docs: Add note about the ssh mount options for non-root users
+  * docs: update registries.conf references
+  * tests: move registries.conf files to v2 format
+  * remove old v1 registries.conf config from CI
+  * Remove runc/libcontainer/devices dependency
+  * define: switch away from runc/libct/devices
+  * copier: Fix the bookkeeping of the requested root
+  * copier: Fix some log messages
+  * Update to use shared configfile implementation
+  * RUN-4547: Move buildah import paths
+  * fix(deps): update module github.com/moby/moby/client to v0.4.1
+  * tests: remove dependencies on online apt repositories
+  * fix(deps): update module github.com/containers/ocicrypt to v1.3.0
+  * Update to use ordered network dependencies
+  * fix(deps): update module github.com/docker/go-connections to v0.7.0
+  * Fix the copier:get operation to properly gather symlink information
+  * tests/helpers.bash: wait to determine the OCI runtime
+  * Makefile: migrate the lint-entrypoint check to Go
+  * Makefile: add some missing dependencies
+  * fix(deps): update module github.com/mattn/go-shellwords to v1.0.13
+  * Group global commands in global help output
+  * copier: add MkdirOptions.MakeParents
+  * copier: add RemoveOptions.AllowNotFound
+  * fix(deps): update module golang.org/x/crypto to v0.50.0
+  * fix(deps): update module golang.org/x/term to v0.42.0
+  * fix(deps): update module golang.org/x/sys to v0.43.0
+  * Enable failOnExtraFSContent on dockerignore and --exclude tests
+  * COPY --exclude: make patterns context relative
+  * docs: fix build tool tutorial with correct modules
+  * fix(deps): update module github.com/moby/moby/client to v0.4.0
+  * chore(deps): update module github.com/go-jose/go-jose/v4 to v4.1.4 [security]
+  * fix(deps): update module github.com/opencontainers/runc to v1.4.2
+  * Add additional caching diagnostics to stage executor
+  * fix(deps): update module google.golang.org/grpc to v1.80.0
+  * fix(deps): update module github.com/containerd/platforms to v1.0.0-rc.4
+  * fix(deps): update github.com/opencontainers/runtime-tools digest to 8a4db57
+  * fix(deps): update module github.com/moby/buildkit to v0.29.0
+  * fix(deps): update module github.com/fsouza/go-dockerclient to v1.13.1
+  * chore(deps): update module github.com/moby/moby/v2 to v2.0.0-beta.8 [security]
+  * Fix panic in --secret flag parsing when key has no value
+  * fix(deps): update common, image, and storage deps to 8af7873
+  * fix(deps): update module github.com/moby/buildkit to v0.28.1 [security]
+  * Makefile: run lint-entrypoint as part of validate
+  * Makefile: add lint-entrypoint target
+  * internal/mkcw/embed/entrypoint_amd64.gz: rebuild with native assembler
+  * fix(deps): update common, image, and storage deps to 7e1f14c
+  * New images 2026-03-19
+  * fix(deps): update module github.com/containerd/platforms to v1.0.0-rc.3
+  * Add /assign command GitHub Action
+  * Support multiple ARGs in a single instruction
+  * Fix ARG scope order so build-arg and stage override header
+  * Fix COPY/ADD --from= with ARG in stage scope
+  * go.mod: remove containernetworking/cni dependency
+  * docs, tests: remove CNI references
+  * deprecate CNI configuration fields and remove CLI flags
+  * version: remove CNI spec and libcni version reporting
+  * vendor container-libs w/o CNI
+  * fix(deps): update module google.golang.org/grpc to v1.79.3
+  * feat: add support for saving and labeling intermediate stages
+  * fix(deps): update module github.com/opencontainers/runc to v1.4.1
+  * fix(deps): update module golang.org/x/crypto to v0.49.0
+  * fix(deps): update module github.com/moby/buildkit to v0.28.0
+  * fix(deps): update module github.com/fsouza/go-dockerclient to v1.13.0
+  * chore(deps): update module github.com/sigstore/fulcio to v1.8.5 [security]
+  * fix(deps): update module golang.org/x/sync to v0.20.0
+  * chore(deps): update dependency containers/automation_images to v20260310
+  * Update tests/bud.bats
+  * CI: use 1.25 for the vendor_task
+  * tests: use jq to validate images --json structure
+  * fix(deps): update module golang.org/x/term to v0.41.0
+  * tests: remove cgroupsv1 checks and simplify cgroupsv2 conditionals
+  * tests: Replace cat with bash input redirection
+  * Update testing VM images
+  * tests/conformance: do not set RootlessStoragePath
+  * tests: fix storage.conf chroot read error
+  * chroot: do not leak the CONTAINERS_CONF env var
+  * resolve runtime outside of child reexec process
+  * cmd/buildah: do not use init() for cobra commands
+  * CI: collect logs for unit and conformance tests
+  * chore(deps): update dependency golangci/golangci-lint to v2.11.1
+  * fix(deps): update module google.golang.org/grpc to v1.79.2
+  * Add packaging for newer test helpers
+  * fix(deps): update module github.com/moby/moby/client to v0.3.0
+  * fix(deps): update module google.golang.org/grpc to v1.79.1
+  * tests: Introduce skip_unless_arch helper function
+  * tests: Fix tests to run on other architectures
+  * tests: Adapt test to work on systems with 64k page size
+  * Builder.getSecretMount(): don't leak an fd
+  * Add a more generic "prepend or append instructions" method
+  * imagebuildah: avoid empty layer in single-layer build path
+  * feat: support --mount=type=secret,id=foo,env=bar
+  * chroot: error out on --network != host when $BUILDAH_ISOLATION
+  * Rename package and variables to match upstream changes
+  * Stop using the old github.com/docker/docker package paths
+  * fix: support SHELL during RUN commands in image build
+  * Add basic functionality to build Windows images
+  * tests/from.bats "from cpu-shares test": update cgroupv2 weights
+  * Address warnings from the new linter
+  * imagebuildah.stageExecutor.Run(): pull images for transient mounts
+  * chore(deps): update dependency golangci/golangci-lint to v2.10.1
+  * ignore ErrLayerUnknown in cache lookup
+  * tree: replace various nested append calls with slices.Concat
+  * Fix the typo in bud test
+  * Handle new `FROM --after` flag for explicit stage dependencies
+  * Update docs/buildah-manifest-create.1.md
+  * Add an undocumented general "run with RPC service"
+  * Break up the internal/parse package
+  * copier: drain tar stream to prevent broken pipe errors
+  * chore(deps): update dependency golangci/golangci-lint to v2.9.0
+  * fix setting of gid
+  * fix call to chown
+  * fix(deps): update module golang.org/x/crypto to v0.48.0
+  * internal/mkcw: make errors easier to compare, update tests
+  * Add a test where a default ARG value is a quoted string
+  * manifest create: add --amend and --replace for non-list images
+  * fix(deps): update module github.com/openshift/imagebuilder to v1.2.20
+  * feat(build): add --mount option
+  * fix(deps): update common, image, and storage deps to 28c83ab
+  * return error in switch
+  * fix stdout error message
+  * use BuildOutputInvalid
+  * update doc
+  * fix doc
+  * only process path for types that need it
+  * simplify switch
+  * use switch/case
+  * feat(build): print error on build flag --output=type=something
+  * docs: mention Containerfiles also
+  * fix: use reference.ParseNormalizedNamed for image normalization
+  * fix: document source policy processing order in man page
+  * fix: default matchType to WILDCARD per BuildKit spec
+  * fix(deps): update common, image, and storage deps to b5801a6
+  * Update a source.bats test
+  * Bump go.podman.io/{storage,image/v5,common} to main
+  * Run: don't try to encode SystemContext with json
+  * Add --source-policy-file flag for BuildKit-compatible source policies
+  * chroot.bats(chroot with overlay root): ensure we can overlay
+  * fix(deps): update module github.com/sirupsen/logrus to v1.9.4
+  * tests: use cached images instead of fedoraproject.org
+  * test: do not untar archive into fs when checking file names
+  * integration: point places where we ADD http: locations to localhost
+  * bud cache add-copy-chown: go local
+  * bud --link ADD with remote URL consistent diffID: go local
+  * Repack repository archives under `podman unshare`
+  * bud with ADD with git repository source integration test: go local
+  * fix(deps): update module golang.org/x/crypto to v0.47.0
+  * integration tests: remove all "RUN apk ..." instructions
+  * fix(deps): update module golang.org/x/sys to v0.40.0
+  * chore(deps): update dependency golangci/golangci-lint to v2.8.0
+  * conformance test cases: add a fsSkipCompatVolumesTrue field
+  * TestCommit: expect EXPOSEd ports to have the implicit "/tcp" added
+  * tests/conformance: identify ourselves as "current" clients to dockerd
+  * chore(deps): update dependency containers/automation_images to v20251211
+  * fix(deps): update module tags.cncf.io/container-device-interface to v1.1.0
+  * fix(deps): update github.com/opencontainers/runtime-tools digest to 5e63903
+  * fix(deps): update github.com/containers/luksy digest to ca09631
+  * fix(deps): update module github.com/moby/buildkit to v0.26.3
+  * fix(deps): update module golang.org/x/crypto to v0.46.0
+  * fix(deps): update module golang.org/x/term to v0.38.0
+  * fix(deps): update module golang.org/x/sys to v0.39.0
+  * fix(deps): update module golang.org/x/sync to v0.19.0
+  * chore(deps): update dependency golangci/golangci-lint to v2.7.2
+  * chore(deps): update dependency golangci/golangci-lint to v2.7.1
+  * fix(deps): update module github.com/spf13/cobra to v1.10.2
+  * chore(deps): update dependency golangci/golangci-lint to v2.7.0
+  * build: add --iidfile-raw CLI option
+  * vendor: Update container-libs with cgv1 removed
+  * commit-pull-push-signatures test: don't try to push to a failed dir:
+  * fix(deps): update github.com/containers/luksy digest to e33b6d6
+  * fix(deps): update common, image, and storage deps to 94e31d2
+  * cirrus: bump go version as per go.mod
+  * vendor: update latest common, image, storage
+  * vendor: update container-libs, and runtime-spec
+  * fix(deps): update module github.com/moby/buildkit to v0.26.2
+  * fix(deps): update module golang.org/x/crypto to v0.45.0 [security]
+  * fix(deps): update module github.com/moby/buildkit to v0.26.1
+  * fix(deps): update module github.com/fsouza/go-dockerclient to v1.12.3
+  * chore(deps): update dependency golangci/golangci-lint to v2.6.2
+  * CI: block on runc jobs again
+  * Update testing VM images
+  * Suppress "meaningless package name" warnings for public APIs
+  * Rename "types" packages to avoid "meaningless name" warnings
+  * copier: fix linter warnings
+  * Update golangci-lint to 2.6.1, add "fmt" target
+  * Drop unused hack/Dockerfile
+  * Drop 'toolchain go1.24.10' ...
+  * fix(deps): update module github.com/moby/buildkit to v0.26.0
+  * fix(deps): update module golang.org/x/crypto to v0.44.0
+  * internal/mkcw/embed: cross-compile using Go
+  * info.go: Remove Cgroups v1 logic
+  * tests: Remove skips for Cgroups v1
+  * fix(deps): update module github.com/docker/docker to v28.5.2+incompatible
+  * fix(deps): update module github.com/moby/buildkit to v0.25.2
+  * vendor: update to github.com/opencontainers/runc@v1.3.3
+  * fix(deps): update module github.com/containerd/platforms to v1.0.0-rc.2
+  * imagebuildah.stageExecutor.runStageMountPoints(): correct an error
+  * imagebuildah: try to rein in use of transport names in image specs
+  * imagebuildah: use a longer-lived overlay over the build context
+  * overlay: chown()ing the upper dir: ignore EINVAL on overflow IDs
+  * overlay: sync the upper directory's timestamp to the lower's, too
+  * overlay: only chown the upper directory if we created it
+  * fix(deps): update github.com/containers/luksy digest to adfea1d
+  * fix(deps): update module github.com/opencontainers/cgroups to v0.0.6
+  * Add --metadata-file
+  * Introduce CommitResults(), which returns a results struct
+  * imagebuildah: unexport the Executor and StageExecutor types
+  * fix(build): make --tag oci-archive:xxx.tar work with simple images
+  * Bump to v1.43.0-dev
+  * RPM: build with sequoia on F43+
+
 - Changelog for v1.42.0 (2025-10-17)
   * Bump to storage v1.61.0, image v5.38.0, common v0.66.0
   * fix(deps): update module github.com/openshift/imagebuilder to v1.2.19

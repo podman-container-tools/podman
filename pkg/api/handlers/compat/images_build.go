@@ -25,6 +25,7 @@ import (
 	"go.podman.io/buildah/pkg/parse"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/internal/localapi"
 	"go.podman.io/podman/v6/libpod"
@@ -57,6 +58,8 @@ type BuildQuery struct {
 	CgroupParent            string             `schema:"cgroupparent"`
 	CompatVolumes           bool               `schema:"compatvolumes"`
 	Compression             uint64             `schema:"compression"`
+	CompressionFormat       string             `schema:"compressionFormat"`
+	CompressionLevel        *int               `schema:"compressionLevel"`
 	ConfigureNetwork        string             `schema:"networkmode"`
 	CPPFlags                string             `schema:"cppflags"`
 	CpuPeriod               uint64             `schema:"cpuperiod"`
@@ -74,6 +77,7 @@ type BuildQuery struct {
 	Envs                    []string           `schema:"setenv"`
 	Excludes                string             `schema:"excludes"`
 	ForceRm                 bool               `schema:"forcerm"`
+	ForceCompressionFormat  bool               `schema:"forceCompressionFormat"`
 	From                    string             `schema:"from"`
 	GroupAdd                []string           `schema:"groupadd"`
 	HTTPProxy               bool               `schema:"httpproxy"`
@@ -385,7 +389,7 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 
 	compatVolumes, _ := utils.ParseOptionalBool(query.CompatVolumes, "compatvolumes", queryValues)
 
-	compression := archive.Compression(query.Compression)
+	compressionIntent := archive.Compression(query.Compression)
 
 	if query.StageLabels && !query.SaveStages {
 		return nil, nil, utils.GetGenericBadRequestError(errors.New("stage-labels requires save-stages be set as well"))
@@ -694,6 +698,15 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		sbomScanOptions = append(sbomScanOptions, *sbomScanOption)
 	}
 
+	var compressionFormat *compression.Algorithm
+	if query.CompressionFormat != "" {
+		algo, err := compression.AlgorithmByName(query.CompressionFormat)
+		if err != nil {
+			return nil, cleanup, utils.GetBadRequestError("compressionFormat", query.CompressionFormat, err)
+		}
+		compressionFormat = &algo
+	}
+
 	// Create build options
 	buildOptions := &buildahDefine.BuildOptions{
 		AddCapabilities:         addCaps,
@@ -732,8 +745,10 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 			Volumes:            query.Volumes,
 		},
 		CompatVolumes:                  compatVolumes,
+		CompressionFormat:              compressionFormat,
+		CompressionLevel:               query.CompressionLevel,
 		CreatedAnnotation:              query.CreatedAnnotation,
-		Compression:                    compression,
+		Compression:                    compressionIntent,
 		ConfigureNetwork:               parseNetworkConfigurationPolicy(query.ConfigureNetwork),
 		ContextDirectory:               buildCtx.ContextDirectory,
 		Devices:                        devices,

@@ -59,6 +59,10 @@ Remove built images from farm nodes on success (Default: false).
 
 @@option compat-volumes
 
+@@option compression-format
+
+@@option compression-level
+
 @@option cpp-flag
 
 @@option cpu-period
@@ -104,6 +108,8 @@ It does not affect _/etc/resolv.conf_ in the final image.
 This option specifies the name of the farm to be used in the build process.
 
 @@option file
+
+@@option force-compression
 
 @@option force-rm
 
