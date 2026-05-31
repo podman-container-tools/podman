@@ -427,8 +427,8 @@ dotest() {
     # FIXME: https://github.com/containers/podman/issues/22642
     # Cannot delete this due cleanup errors, as the VM is basically
     # done after this anyway let's not block on this for now.
-    # rm -rf $TMPDIR
-    # unset TMPDIR
+    rm -rf $TMPDIR
+    unset TMPDIR
 }
 
 _run_machine-linux() {

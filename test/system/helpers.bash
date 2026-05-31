@@ -250,6 +250,8 @@ function defer-assertion-failures() {
 # Basic teardown: remove all pods and containers
 function basic_teardown() {
     echo "# [teardown]" >&2
+    # Debug for https://github.com/containers/podman/issues/22642
+    ls -l $TMPDIR >&3
 
     PODMAN_CMD=("${PODMAN}")
     add_podman_args PODMAN_CMD
