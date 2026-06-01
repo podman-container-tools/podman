@@ -47,22 +47,16 @@ var _ = Describe("Podman Info", func() {
 	})
 
 	It("podman info --format GO template", func() {
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Store.GraphRoot}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(ExitCleanly())
+		podmanTest.PodmanExitCleanly("info", "--format", "{{.Store.GraphRoot}}")
 	})
 
 	It("podman info --format GO template", func() {
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Registries}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Registries}}")
 		Expect(session.OutputToString()).To(ContainSubstring("registry"))
 	})
 
 	It("podman info --format GO template plugins", func() {
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Plugins}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Plugins}}")
 		Expect(session.OutputToString()).To(ContainSubstring("local"))
 		Expect(session.OutputToString()).To(ContainSubstring("journald"))
 		Expect(session.OutputToString()).To(ContainSubstring("bridge"))
@@ -104,9 +98,7 @@ var _ = Describe("Podman Info", func() {
 	})
 
 	It("check RemoteSocket ", func() {
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Host.RemoteSocket.Path}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.RemoteSocket.Path}}")
 		switch podmanTest.RemoteSocketScheme {
 		case "unix":
 			Expect(session.OutputToString()).To(MatchRegexp("/run/.*podman.*sock"))
@@ -114,9 +106,7 @@ var _ = Describe("Podman Info", func() {
 			Expect(session.OutputToString()).To(MatchRegexp("tcp://127.0.0.1:.*"))
 		}
 
-		session = podmanTest.Podman([]string{"info", "--format", "{{.Host.ServiceIsRemote}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(ExitCleanly())
+		session = podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.ServiceIsRemote}}")
 		if podmanTest.RemoteTest {
 			Expect(session.OutputToString()).To(Equal("true"))
 		} else {
@@ -124,18 +114,14 @@ var _ = Describe("Podman Info", func() {
 		}
 
 		if IsRemote() {
-			session = podmanTest.Podman([]string{"info", "--format", "{{.Host.RemoteSocket.Exists}}"})
-			session.WaitWithDefaultTimeout()
-			Expect(session).Should(ExitCleanly())
+			session = podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.RemoteSocket.Exists}}")
 			Expect(session.OutputToString()).To(Equal("true"))
 		}
 	})
 
 	It("Podman info must contain cgroupControllers with RelevantControllers", func() {
 		SkipIfRootless("Hard to tell which controllers are going to be enabled for rootless")
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Host.CgroupControllers}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.CgroupControllers}}")
 		Expect(session.OutputToString()).To(ContainSubstring("memory"))
 		Expect(session.OutputToString()).To(ContainSubstring("pids"))
 	})
@@ -149,21 +135,15 @@ var _ = Describe("Podman Info", func() {
 			}
 			Fail("CIRRUS_CI is set, but CI_DESIRED_RUNTIME is not! See #14912")
 		}
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Host.OCIRuntime.Name}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.OCIRuntime.Name}}")
 		Expect(session.OutputToString()).To(Equal(want))
 	})
 
 	It("Podman info: check desired network backend", func() {
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Host.NetworkBackend}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.NetworkBackend}}")
 		Expect(session.OutputToString()).To(Equal("netavark"))
 
-		session = podmanTest.Podman([]string{"info", "--format", "{{.Host.NetworkBackendInfo.Backend}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session = podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.NetworkBackendInfo.Backend}}")
 		Expect(session.OutputToString()).To(Equal("netavark"))
 	})
 
@@ -179,9 +159,7 @@ var _ = Describe("Podman Info", func() {
 		Expect(err).ToNot(HaveOccurred())
 		podmanTest.RestartRemoteService()
 
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Host.NetworkBackendInfo.DefaultNetwork}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.NetworkBackendInfo.DefaultNetwork}}")
 		Expect(session.OutputToString()).To(Equal(customNetName))
 	})
 
@@ -228,9 +206,7 @@ var _ = Describe("Podman Info", func() {
 			}
 			Fail("CIRRUS_CI is set, but CI_DESIRED_STORAGE is not! See #20161")
 		}
-		session := podmanTest.Podman([]string{"info", "--format", "{{.Store.GraphDriverName}}"})
-		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitCleanly())
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Store.GraphDriverName}}")
 		Expect(session.OutputToString()).To(Equal(want), ".Store.GraphDriverName from podman info")
 
 		// Confirm desired setting of composefs
@@ -239,9 +215,7 @@ var _ = Describe("Podman Info", func() {
 			if os.Getenv("CI_DESIRED_COMPOSEFS") != "" {
 				expect = "true"
 			}
-			session = podmanTest.Podman([]string{"info", "--format", `{{index .Store.GraphOptions "overlay.use_composefs"}}`})
-			session.WaitWithDefaultTimeout()
-			Expect(session).To(ExitCleanly())
+			session = podmanTest.PodmanExitCleanly("info", "--format", `{{index .Store.GraphOptions "overlay.use_composefs"}}`)
 			Expect(session.OutputToString()).To(Equal(expect), ".Store.GraphOptions -> overlay.use_composefs")
 		}
 	})
@@ -250,19 +224,13 @@ var _ = Describe("Podman Info", func() {
 		// This should not run on architectures and OSes that use the file locks backend.
 		// Which, for now, is Linux + RISCV and FreeBSD, neither of which are in CI - so
 		// no skips.
-		info1 := podmanTest.Podman([]string{"info", "--format", "{{ .Host.FreeLocks }}"})
-		info1.WaitWithDefaultTimeout()
-		Expect(info1).To(ExitCleanly())
+		info1 := podmanTest.PodmanExitCleanly("info", "--format", "{{ .Host.FreeLocks }}")
 		free1, err := strconv.Atoi(info1.OutputToString())
 		Expect(err).To(Not(HaveOccurred()))
 
-		ctr := podmanTest.Podman([]string{"create", ALPINE, "top"})
-		ctr.WaitWithDefaultTimeout()
-		Expect(ctr).To(ExitCleanly())
+		podmanTest.PodmanExitCleanly("create", ALPINE, "top")
 
-		info2 := podmanTest.Podman([]string{"info", "--format", "{{ .Host.FreeLocks }}"})
-		info2.WaitWithDefaultTimeout()
-		Expect(info2).To(ExitCleanly())
+		info2 := podmanTest.PodmanExitCleanly("info", "--format", "{{ .Host.FreeLocks }}")
 		free2, err := strconv.Atoi(info2.OutputToString())
 		Expect(err).To(Not(HaveOccurred()))
 
@@ -285,9 +253,7 @@ var _ = Describe("Podman Info", func() {
 	})
 
 	It("Podman info: check client information", func() {
-		info := podmanTest.Podman([]string{"info", "--format", "{{ .Client }}"})
-		info.WaitWithDefaultTimeout()
-		Expect(info).To(ExitCleanly())
+		info := podmanTest.PodmanExitCleanly("info", "--format", "{{ .Client }}")
 		// client info should only appear when using the remote client
 		if IsRemote() {
 			Expect(info.OutputToString()).ToNot(Equal("<nil>"))
