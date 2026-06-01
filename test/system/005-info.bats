@@ -62,37 +62,6 @@ store.imageStore.number   | 1
     done < <(parse_table "$tests")
 }
 
-@test "podman info - CDI spec dirs and devices" {
-    skip_if_remote "--cdi-spec-dir flag is not supported for remote"
-
-    cdi_dir=$PODMAN_TMPDIR/cdi
-    mkdir -p "$cdi_dir"
-    cat >"$cdi_dir/device.json" <<EOF
-{
-  "cdiVersion": "0.3.0",
-  "kind": "vendor.com/device",
-  "devices": [
-    {
-      "name": "myKmsg",
-      "containerEdits": {
-        "env": ["PODMAN_CDI_INFO_TEST=1"]
-      }
-    }
-  ]
-}
-EOF
-
-    run_podman --cdi-spec-dir "$cdi_dir" info --format=json
-    cdi_spec_dirs=$(echo "$output" | jq -r '.host.cdiSpecDirs[]')
-    cdi_devices=$(echo "$output" | jq -r '.host.discoveredDevices[] | select(.source == "cdi") | .id')
-    assert "$cdi_spec_dirs" =~ "$cdi_dir" "info includes configured CDI spec dir"
-    assert "$cdi_devices" =~ "vendor.com/device=myKmsg" "info includes resolved CDI device"
-
-    run_podman --cdi-spec-dir "$cdi_dir" system info --format '{{.Host.CDISpecDirs}} {{.Host.DiscoveredDevices}}'
-    assert "$output" =~ "$cdi_dir" "system info includes configured CDI spec dir"
-    assert "$output" =~ "vendor.com/device=myKmsg" "system info includes resolved CDI device"
-}
-
 @test "podman info - confirm desired runtime" {
     if [[ -z "$CI_DESIRED_RUNTIME" ]]; then
         # When running in Cirrus, CI_DESIRED_RUNTIME *must* be defined

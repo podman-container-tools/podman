@@ -66,10 +66,7 @@ var _ = Describe("Podman Info", func() {
 		SkipIfNotRootless("test of rootless_storage_path is only meaningful as rootless")
 		SkipIfRemote("Only tests storage on local client")
 		configPath := filepath.Join(podmanTest.TempDir, ".config", "containers", "storage.conf")
-		os.Setenv("CONTAINERS_STORAGE_CONF", configPath)
-		defer func() {
-			os.Unsetenv("CONTAINERS_STORAGE_CONF")
-		}()
+		GinkgoT().Setenv("CONTAINERS_STORAGE_CONF", configPath)
 		err := os.RemoveAll(filepath.Dir(configPath))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -150,7 +147,7 @@ var _ = Describe("Podman Info", func() {
 	It("Podman info: check default network from configuration", func() {
 		configPath := filepath.Join(podmanTest.TempDir, "containers.conf")
 
-		os.Setenv("CONTAINERS_CONF_OVERRIDE", configPath)
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", configPath)
 
 		customNetName := "my-custom-test-network"
 		configContent := fmt.Sprintf("[network]\ndefault_network=%q\n", customNetName)
@@ -165,8 +162,7 @@ var _ = Describe("Podman Info", func() {
 
 	It("Podman info: check CDI spec dirs and devices from configuration", func() {
 		cdiDir := filepath.Join(podmanTest.TempDir, "cdi")
-		err := os.MkdirAll(cdiDir, os.ModePerm)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(os.MkdirAll(cdiDir, os.ModePerm)).To(Succeed())
 
 		cdiSpec := []byte(`{
   "cdiVersion": "0.3.0",
@@ -180,12 +176,11 @@ var _ = Describe("Podman Info", func() {
     }
   ]
 }`)
-		err = os.WriteFile(filepath.Join(cdiDir, "device.json"), cdiSpec, os.ModePerm)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(os.WriteFile(filepath.Join(cdiDir, "device.json"), cdiSpec, os.ModePerm)).To(Succeed())
 
 		configPath := filepath.Join(podmanTest.TempDir, "containers.conf")
 		configContent := fmt.Sprintf("[engine]\ncdi_spec_dirs = [%q]\n", cdiDir)
-		err = os.WriteFile(configPath, []byte(configContent), os.ModePerm)
+		err := os.WriteFile(configPath, []byte(configContent), os.ModePerm)
 		Expect(err).ToNot(HaveOccurred())
 
 		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", configPath)
@@ -193,6 +188,35 @@ var _ = Describe("Podman Info", func() {
 
 		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.CDISpecDirs}} {{.Host.DiscoveredDevices}}")
 
+		Expect(session.OutputToString()).To(ContainSubstring(cdiDir))
+		Expect(session.OutputToString()).To(ContainSubstring("vendor.com/device=myKmsg"))
+	})
+
+	It("Podman info: check CDI spec dirs and devices with --cdi-spec-dir", func() {
+		SkipIfRemote("The --cdi-spec-dir flag is not supported for remote")
+
+		cdiDir := filepath.Join(podmanTest.TempDir, "cdi")
+		Expect(os.MkdirAll(cdiDir, os.ModePerm)).To(Succeed())
+
+		cdiSpec := []byte(`{
+  "cdiVersion": "0.3.0",
+  "kind": "vendor.com/device",
+  "devices": [
+    {
+      "name": "myKmsg",
+      "containerEdits": {
+        "env": ["PODMAN_CDI_INFO_TEST=1"]
+      }
+    }
+  ]
+}`)
+		Expect(os.WriteFile(filepath.Join(cdiDir, "device.json"), cdiSpec, os.ModePerm)).To(Succeed())
+
+		session := podmanTest.PodmanExitCleanly("--cdi-spec-dir", cdiDir, "info", "--format", "{{.Host.CDISpecDirs}} {{.Host.DiscoveredDevices}}")
+		Expect(session.OutputToString()).To(ContainSubstring(cdiDir))
+		Expect(session.OutputToString()).To(ContainSubstring("vendor.com/device=myKmsg"))
+
+		session = podmanTest.PodmanExitCleanly("--cdi-spec-dir", cdiDir, "system", "info", "--format", "{{.Host.CDISpecDirs}} {{.Host.DiscoveredDevices}}")
 		Expect(session.OutputToString()).To(ContainSubstring(cdiDir))
 		Expect(session.OutputToString()).To(ContainSubstring("vendor.com/device=myKmsg"))
 	})
