@@ -147,6 +147,7 @@ func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.Ser
 		server.registerAuthHandlers,
 		server.registerArtifactHandlers,
 		server.registerArchiveHandlers,
+		server.registerAutoUpdateHandlers,
 		server.registerContainersHandlers,
 		server.registerDistributionHandlers,
 		server.registerEventsHandlers,

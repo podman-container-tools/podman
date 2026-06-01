@@ -541,3 +541,10 @@ type quadletRemoveResponse struct {
 	// in:body
 	Body entities.QuadletRemoveReport
 }
+
+// Auto Update
+// swagger:response
+type autoupdateResponse struct {
+	// in:body
+	Body handlers.LibpodAutoUpdateReports
+}

@@ -1,0 +1,6 @@
+# -*- sh -*-
+#
+# test 'autoupdate' endpoint
+#
+
+t POST libpod/autoupdate 200
