@@ -15,3 +15,7 @@ This option can only be used with a private UTS namespace `--uts=private`
 (default), the pod's hostname is used. The given hostname is also added to the
 `/etc/hosts` file using the container's primary IP address (also see the
 << '**AddHost=**' if is_quadlet else '**--add-host**' >> option).
+
+When << '**HostName=** is unset' if is_quadlet else '**--hostname** is not used' >> and the container uses a private UTS namespace (default), Podman sets the hostname to the first 12 characters of the container ID. The container name assigned with << '**ContainerName=**' if is_quadlet else '**--name**' >> is not used unless *container_name_as_hostname=true* is set in `containers.conf`.
+
+Podman network DNS registers the container name, the short container ID (first 12 characters), and any explicitly set **--hostname** as DNS names. The default hostname matches the short ID alias. See **[podman-network(1)](podman-network.1.md)**.

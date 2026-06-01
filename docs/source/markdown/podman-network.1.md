@@ -11,6 +11,24 @@ The network command manages networks for Podman.
 
 Podman uses [Netavark](https://github.com/containers/netavark) as the network backend.
 
+## DNS NOTES
+
+On networks with DNS enabled (the default, unless **--disable-dns** is used),
+[aardvark-dns](https://github.com/containers/aardvark-dns) registers each
+container under its name and aliases. Containers that share a pod network
+namespace are registered under the pod name.
+
+The container name is always registered. The short container ID (first 12
+characters) is always registered as an alias. When **--hostname** is explicitly
+set, that hostname is also registered as an alias. By default the hostname
+inside the container is the short ID, so it already matches the alias. Setting
+*container_name_as_hostname=true* in the `[containers]` section of
+**[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**
+changes the hostname only; DNS entries remain unchanged. Additional names can be set with the **alias=** option
+in **--network** (e.g., **podman run --network mynet:alias=foo**),
+with **--network-alias**, or with **--alias** on **podman network connect**.
+Auto-generated names use an underscore between words, for example `exciting_chebyshev`.
+
 ## COMMANDS
 
 | Command    | Man Page                                                       | Description                                                     |

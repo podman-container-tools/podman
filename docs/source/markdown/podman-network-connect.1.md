@@ -13,7 +13,7 @@ Once connected, the container can communicate with other containers in the same 
 ## OPTIONS
 #### **--alias**=*name*
 Add network-scoped alias for the container. If the network has DNS enabled (`podman network inspect -f {{.DNSEnabled}} <NAME>`),
-these aliases can be used for name resolution on the given network.  Multiple *--alias* options may be specified as input.
+these aliases can be used for name resolution on the given network in addition to the container name.  Multiple *--alias* options may be specified as input. See **DNS NOTES** in **[podman-network(1)](podman-network.1.md)**.
 
 #### **--ip**=*address*
 Set a static ipv4 address for this container on this network.

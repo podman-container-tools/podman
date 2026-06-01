@@ -18,8 +18,17 @@ The operator can identify a container in three ways:
 
 Podman generates a UUID for each container, and if no name is assigned to the
 container using << '**ContainerName=**' if is_quadlet else '**--name**' >>,
-Podman generates a random string name. The name can
-be useful as a more human-friendly way to identify containers. This works for
-both background and foreground containers. The container's name is also added
-to the `/etc/hosts` file using the container's primary IP address (also see the
+Podman generates a random string name such as `exciting_chebyshev` (`adjective_noun`,
+compatible with Docker). Container names are not required to be valid hostnames or
+domain names. Underscores and other characters allowed by naming rules are
+permitted. On Podman networks with DNS enabled, container-to-container name
+resolution still uses the name as given, for example `exciting_chebyshev`. The
+name can be useful as a more human-friendly way to identify containers.
+This works for both background and foreground containers.
+The container's name is also added to the `/etc/hosts` file using the
+container's primary IP address (also see the
 << '**AddHost=**' if is_quadlet else '**--add-host**' >> option).
+
+The name is not the hostname inside the container; see
+<< '**HostName=**' if is_quadlet else '**--hostname**' >>. See
+**[podman-network(1)](podman-network.1.md)** for more on network DNS.
