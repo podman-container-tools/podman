@@ -53,9 +53,21 @@ function bloat_approved() {
     #        requiring a MAX_BIN_GROWTH=nnn statement in github comments.
     local actual_growth="$1"
 
-    # The validate-source GitHub Actions workflow sets BLOAT_APPROVED=true when
-    # the PR carries the '$OVERRIDE_LABEL' label.
-    [[ "$BLOAT_APPROVED" == "true" ]]
+    local var
+    for var in PR_NUMBER GITHUB_TOKEN GITHUB_REPOSITORY; do
+        if [[ -z "${!var}" ]]; then
+            echo "$ME: cannot query github: \$$var is undefined" >&2
+            return 1
+        fi
+    done
+
+    labels=$(curl --fail -s \
+        -H "Authorization: bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/$PR_NUMBER" |
+        jq -r '.labels[].name')
+
+    grep -F -x -q "$OVERRIDE_LABEL" <<< "$labels"
 }
 
 # ACTUAL CODE BEGINS HERE

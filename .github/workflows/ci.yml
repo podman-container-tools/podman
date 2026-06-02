@@ -46,6 +46,8 @@ jobs:
   validate-source:
     name: Validate source code changes
     runs-on: cncf-ubuntu-8-32-x86
+    permissions:
+      pull-requests: read # For hack/ci/pr-should-include-tests to query PR labels.
     env:
       # Base commit of this PR; used by the Makefile and the helper scripts to
       # compute the commit range (git merge-base $DEST_BRANCH HEAD).
@@ -126,8 +128,9 @@ jobs:
         run: make swagger
 
       - name: Check that the PR includes tests
-        # The 'No New Tests' label lets maintainers override this check.
-        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'No New Tests') }}
+        env:
+          # For hack/ci/pr-should-include-tests to query PR labels.
+          GITHUB_TOKEN: ${{ github.token }}
         run: make tests-included
 
       - name: Validate renovate config
@@ -154,9 +157,8 @@ jobs:
         # limit enforced by hack/ci/make-and-check-size.sh.
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          # The 'bloat_approved' label lets a repo admin override the binary
-          # size growth check in hack/ci/make-and-check-size.sh.
-          BLOAT_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'bloat_approved') }}
+          # For hack/ci/make-and-check-size.sh to query PR labels.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           # git rebase rewrites commits, so it needs a committer identity.
           git config user.name "CI"

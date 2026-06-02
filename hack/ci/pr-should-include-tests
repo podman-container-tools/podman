@@ -46,9 +46,30 @@ if [[ -z "$filtered_changes" ]]; then
     exit 0
 fi
 
-# This PR touches non-test files but adds no tests. Fail loudly.
-# The '$OVERRIDE_LABEL' label can be used to override this check; that is
-# handled by the CI workflow, not here.
+# This PR touches non-test files but adds no tests. Only allow it if the
+# '$OVERRIDE_LABEL' github label is set.
+if [[ -n "$PR_NUMBER" ]]; then
+    for var in GITHUB_TOKEN GITHUB_REPOSITORY; do
+        if [[ -z "${!var}" ]]; then
+            echo "$ME: cannot query github: \$$var is undefined" >&2
+            return 1
+        fi
+    done
+
+    labels=$(curl --fail -s \
+        -H "Authorization: bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/$PR_NUMBER" |
+        jq -r '.labels[].name')
+
+    if grep -F -x -q "$OVERRIDE_LABEL" <<< "$labels"; then
+        echo "$ME: \"$OVERRIDE_LABEL\" label found, ignoring test requirements"
+        exit 0
+    fi
+fi
+
+# This PR touches non-test files but adds no tests, and
+# the '$OVERRIDE_LABEL' is not set. Fail loudly.
 cat <<EOF
 $ME: PR does not include changes in the 'tests' directory
 
