@@ -510,6 +510,19 @@ unit_test_task:
         TEST_FLAVOR: unit
         TEST_BUILD_TAGS: ""
     clone_script: *get_gosrc
+    go_unit_build_cache:
+        fingerprint_script: &go_fingerprint_script # FIXME: Almost certainly insufficient
+            - echo "$DISTRO_NV"
+            - echo "$VM_IMAGE_NAME"
+            - echo "$CTR_FQIN"
+            - echo "$CI_DESIRED_DATABASE"
+            - echo "$CI_DESIRED_STORAGE"
+            - echo "$PRIV_NAME"
+            - cat go.sum
+        folder: $GOCACHE
+    go_unit_mod_cache:
+        fingerprint_script: *go_fingerprint_script
+        folder: $GOPATH/pkg/mod # FIXME: This doesn’t contain any files
     setup_script: *setup
     main_script: *main
     always: *logs_artifacts
