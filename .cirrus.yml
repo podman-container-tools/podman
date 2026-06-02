@@ -885,6 +885,24 @@ local_system_test_task: &local_system_test_task
     always: *logs_artifacts
 
 
+local_integration_test_aarch64_task:
+    name: *std_name_fmt
+    alias: local_integration_test_aarch64
+    only_if: *only_if_int_test
+    depends_on: *build
+    ec2_instance: *standard_build_ec2_aarch64
+    timeout_in: 35m
+    env:
+        <<: *stdenvars_aarch64
+        TEST_FLAVOR: int
+        TEST_BUILD_TAGS: ""
+        DISTRO_NV: ${FEDORA_AARCH64_NAME}
+    clone_script: *get_gosrc_aarch64
+    setup_script: *setup
+    main_script: *main
+    always: *int_logs_artifacts
+
+
 local_system_test_aarch64_task: &local_system_test_task_aarch64
     name: *std_name_fmt
     alias: local_system_test_aarch64
@@ -1089,6 +1107,7 @@ success_task:
         - apiv2_test
         - compose_test
         - local_integration_test
+        - local_integration_test_aarch64
         - remote_integration_test
         - container_integration_test
         - rootless_integration_test
