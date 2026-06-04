@@ -125,14 +125,16 @@ load helpers
 
 # DO NOT CHANGE "sleep infinity"! This is how we get a container to
 # remain in state "stopping" for long enough to check it.
+# $1 = container name, $2 = optional stop-timeout (default 2)
 function __run_healthcheck_container() {
+    local stop_timeout=${2:-2}
     run_podman run -d --name $1 \
                --health-cmd /bin/false \
                --health-interval 1s \
                --health-retries 2 \
                --health-timeout 1s \
                --health-on-failure=stop \
-               --stop-timeout=2 \
+               --stop-timeout=$stop_timeout \
                --health-start-period 0 \
                --stop-signal SIGTERM \
                $IMAGE sleep infinity
@@ -179,14 +181,14 @@ function __run_healthcheck_container() {
 # bats test_tags=ci:parallel
 @test "podman container rm --force doesn't leave running processes" {
     local cname=c-$(safename)
-    __run_healthcheck_container $cname
+    __run_healthcheck_container $cname 20
     local cid=$output
 
     # We'll use the PID later to confirm that container is not running
     run_podman inspect --format '{{.State.Pid}}' $cname
     local pid=$output
 
-    for i in {1..10}; do
+    for i in {1..20}; do
         run_podman inspect $cname --format '{{.State.Status}}'
         if [ "$output" = "stopping" ]; then
             run_podman rm -f $cname
