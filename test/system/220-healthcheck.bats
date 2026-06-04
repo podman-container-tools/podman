@@ -96,6 +96,10 @@ Log[-1].ExitCode | 1
 Log[-1].Output   | \"Uh-oh on stdout!\\\nUh-oh on stderr!\\\n\"
 " "$current_time" "healthy"
 
+    # Capture time before systemctl checks so we don't miss the "unhealthy"
+    # event that may fire during those checks (health-interval is only 1s).
+    current_time=$(date --iso-8601=ns)
+
     # Check that we now we do have valid podman units with this
     # name so that the leak check below does not turn into a NOP without noticing.
     run -0 systemctl list-units
@@ -110,7 +114,6 @@ Log[-1].Output   | \"Uh-oh on stdout!\\\nUh-oh on stderr!\\\n\"
     run -0 systemctl show --all "$cid-*.service"
     assert "$output" =~ "StartLimitIntervalUSec=0" "The hc service has the right interval set"
 
-    current_time=$(date --iso-8601=ns)
     # After three successive failures, container should no longer be healthy
     _check_health $ctrname "Four or more failures" "
 Status           | \"unhealthy\"
