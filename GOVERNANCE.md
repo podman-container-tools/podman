@@ -128,7 +128,9 @@ A Maintainer must meet the responsibilities and requirements of a Reviewer, plus
     * Represent the project in interactions with the CNCF
     * Have a voice, but not a vote, in Core Maintainer decision-making meetings
 	* For repositories hosted on GitHub, Maintainers receive Maintain privileges by default by being added to the `<repo-name>-maintainers` team and removed from the `<repo-name>-reviewers` teams.
-      If they have a legitimate reason to require Admin privileges (e.g. working on project CI systems), a Maintainer can petition a Core Maintainer to be granted these additional privileges in GitHub.
+      If a Maintainer needs or wants to work on the CI/CD pipelines and requires elevated access to manage things like secrets or the github runners they
+      can petition a Core Maintainer to be granted these additional privileges in GitHub. Depending on what kind of access is required they can be given
+      the "CI/CD Admin" *Organization* role which enables them access to organization wide runners or secret configuration or they can get the "CI/CD Admin" *Repository* role (must be granted per repository) to access the repository level runners or secrets.
 
 #### Process of becoming a maintainer:
 1. A current reviewer must be sponsored by a Maintainer of the repository in question or a Core Maintainer. The Maintainer or Core Maintainer will open a PR against the repository and add the nominee as a Maintainer in the [MAINTAINERS.md](./MAINTAINERS.md) file. The need for a sponsor is removed for Emeritus Maintainers, who may open this pull request themselves.
