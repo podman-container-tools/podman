@@ -258,6 +258,9 @@ func execWait(ctr string, seconds int32) error {
 		since := time.Since(startTime)
 		if since+interval > maxDuration {
 			interval = maxDuration - since
+			if interval <= 0 {
+				break
+			}
 		}
 		time.Sleep(interval)
 	}

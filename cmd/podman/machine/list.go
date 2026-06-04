@@ -5,7 +5,7 @@ package machine
 import (
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -73,14 +73,7 @@ func list(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Sort by last run
-	sort.Slice(listResponse, func(i, j int) bool {
-		return listResponse[i].LastUp.After(listResponse[j].LastUp)
-	})
-	// Bring currently running machines to top
-	sort.Slice(listResponse, func(i, _ int) bool {
-		return listResponse[i].Running
-	})
+	slices.SortFunc(listResponse, compareResponseByRunningAndLastUp)
 
 	// ignore the error here we only want to know if we have a default connection to show it in list
 	defaultCon, _ := registry.PodmanConfig().ContainersConfDefaultsRO.GetConnection("", true)
@@ -97,6 +90,18 @@ func list(cmd *cobra.Command, _ []string) error {
 
 	machineReporter := toHumanFormat(listResponse, defaultCon)
 	return outputTemplate(cmd, machineReporter)
+}
+
+func compareResponseByRunningAndLastUp(a, b *machine.ListResponse) int {
+	// Sort running machines to the front
+	if a.Running != b.Running {
+		if a.Running {
+			return -1
+		}
+		return 1
+	}
+	// And then sort by time descending
+	return b.LastUp.Compare(a.LastUp)
 }
 
 func outputTemplate(cmd *cobra.Command, responses []*entities.ListReporter) error {
