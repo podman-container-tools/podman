@@ -281,27 +281,27 @@ EOF
 echo "$quadlet_6_content" > "$TMPD/$quadlet_6"
 echo "$containerfile_2_content" > "$TMPD/$containerfile_2"
 
-t POST "libpod/quadlets" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 200
+t POST "libpod/quadlets?application=foo" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 200
 
 t GET "libpod/quadlets/$quadlet_6/file" 200
 is "$output" "$quadlet_6_content" "quadlet-6 should be installed"
-is "$(cat "$quadlet_install_dir/$containerfile_2")" "$containerfile_2_content" "containerfile_2 should be installed"
+is "$(cat "$quadlet_install_dir/foo/$containerfile_2")" "$containerfile_2_content" "containerfile_2 should be installed"
 
 # update with no replace and check nothing changed
 echo "$quadlet_6_updated_content" > "$TMPD/$quadlet_6"
 echo "$containerfile_2_updated_content" > "$TMPD/$containerfile_2"
-t POST "libpod/quadlets" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 400
+t POST "libpod/quadlets?application=foo" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 400
 
 t GET "libpod/quadlets/$quadlet_6/file" 200
 is "$output" "$quadlet_6_content" "quadlet-6 should not be updated"
-is "$(cat "$quadlet_install_dir/$containerfile_2")" "$containerfile_2_content" "containerfile_2 should not be updated"
+is "$(cat "$quadlet_install_dir/foo/$containerfile_2")" "$containerfile_2_content" "containerfile_2 should not be updated"
 
 # replace
-t POST "libpod/quadlets?replace=true" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 200
+t POST "libpod/quadlets?application=foo&replace=true" --form="quadlet_6=@$TMPD/$quadlet_6" --form="containerfile_2=@$TMPD/$containerfile_2" 200
 
 t GET "libpod/quadlets/$quadlet_6/file" 200
 is "$output" "$quadlet_6_updated_content" "quadlet-6 should be updated"
-is "$(cat "$quadlet_install_dir/$containerfile_2")" "$containerfile_2_updated_content" "containerfile_2 should be updated"
+is "$(cat "$quadlet_install_dir/foo/$containerfile_2")" "$containerfile_2_updated_content" "containerfile_2 should be updated"
 
 
 # Scenario: install and remove quadlets as application

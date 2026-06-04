@@ -262,24 +262,35 @@ Environment=FOO1=foo1
 Exec=sh -c "echo STARTED NGINX; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
 EOF
 
+    mkdir $quadlet_dir/sub
+    cat > $quadlet_dir/sub/nginxsub.container <<EOF
+[Container]
+Image=$IMAGE
+Environment=FOO2=foo2
+Exec=sh -c "echo STARTED NGINX SUB; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+
     # Without --application should fail
     run_podman 125 quadlet install $quadlet_dir
     assert "$output" =~ "application name cannot be empty when installing from directory" "install from directory without --application must fail with application cannot be empty error message"
 
     # Test quadlet install with directory
     run_podman quadlet install --application=foo $quadlet_dir
+    assert "$output" =~ "nginxsub.container" "install should list nginxsub that is in a subfolder"
 
     # Test quadlet list to verify all containers were installed
     run_podman quadlet list
     assert "$output" =~ "alpine1.container" "list should contain alpine1.container"
     assert "$output" =~ "alpine2.container" "list should contain alpine2.container"
     assert "$output" =~ "nginx.container" "list should contain nginx.container"
+    assert "$output" =~ "nginxsub.container" "list should contain nginxsub.container"
 
     # Test quadlet list with filter for alpine containers
     run_podman quadlet list --filter name=alpine*
     assert "$output" =~ "alpine1.container" "filtered list should contain alpine1.container"
     assert "$output" =~ "alpine2.container" "filtered list should contain alpine2.container"
     assert "$output" !~ "nginx.container" "filtered list should not contain nginx.container"
+    assert "$output" !~ "nginxsub.container" "filtered list should not contain nginxsub.container"
 
     # Test quadlet print for each container
     run_podman quadlet print alpine1.container
@@ -290,6 +301,9 @@ EOF
 
     run_podman quadlet print nginx.container
     assert "$output" =~ "Environment=FOO1=foo1" "print should contain environment for nginx container"
+
+    run_podman quadlet print nginxsub.container
+    assert "$output" =~ "Environment=FOO2=foo2" "print should contain environment for nginxsub container"
 
     # Test quadlet rm using one quadlet file name without recursive (should fail)
     run_podman 125 quadlet rm "alpine1.container"
@@ -401,7 +415,7 @@ EOF
     run_podman quadlet rm --recursive mount-test.container
 
     # Verify the test.txt file should not exists in $install_dir
-    if [[ -f "$install_dir/test.txt" ]]; then
+    if [[ -f "$install_dir/bar/test.txt" ]]; then
             die "test.txt file should not exist in install directory $install_dir after removal"
     fi
 
