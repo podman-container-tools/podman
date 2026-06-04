@@ -22,7 +22,7 @@ import (
 	"time"
 
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
-	"github.com/checkpoint-restore/go-criu/v7/stats"
+	"github.com/checkpoint-restore/go-criu/v8/stats"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	runcuser "github.com/moby/sys/user"
 	spec "github.com/opencontainers/runtime-spec/specs-go"

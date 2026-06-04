@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
-	"github.com/checkpoint-restore/go-criu/v7/stats"
+	"github.com/checkpoint-restore/go-criu/v8/stats"
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"go.podman.io/storage/pkg/archive"

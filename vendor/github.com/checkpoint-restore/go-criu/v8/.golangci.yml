@@ -1,0 +1,46 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - dupl
+    - durationcheck
+    - errcheck
+    - errorlint
+    - exhaustive
+    - gosec
+    - govet
+    - misspell
+    - nilerr
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  disable:
+    - musttag
+    - noctx
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        # https://github.com/securego/gosec/issues/1185
+        - G115
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
