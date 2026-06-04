@@ -265,7 +265,7 @@ jobs:
         shell: pwsh
         env:
           # pass in ro token just so we can use it for API calls to not get rate limited
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: 'fake'
         run: .\winmake.ps1 installertest $env:PROVIDER
 
       - name: Upload artifacts
