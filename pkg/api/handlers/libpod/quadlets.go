@@ -236,6 +236,16 @@ func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// QuadletInstall expects the quadlet file to be first in the list.
+	// filepath.Walk returns files in lexicographic order, so a non-quadlet
+	// file (e.g. "Containerfile") may sort before the ".container" file.
+	for i, filePath := range filePaths {
+		if quadlet.IsExtSupported(filePath) {
+			filePaths[0], filePaths[i] = filePaths[i], filePaths[0]
+			break
+		}
+	}
+
 	containerEngine := abi.ContainerEngine{Libpod: runtime}
 	installOptions := entities.QuadletInstallOptions{
 		Replace:       query.Replace,
