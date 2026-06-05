@@ -29,11 +29,7 @@ Remove running quadlets.
 
 Do not error for Quadlets that do not exist.
 
-#### **--reload-systemd**
-
-Reload systemd after removing Quadlets (default true).
-In order to disable it users need to manually set the value
-of this flag to `false`.
+@@option reload-systemd
 
 ## EXAMPLES
 

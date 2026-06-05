@@ -24,11 +24,7 @@ Note: In case user wants to install Quadlet application then first path should b
 
 ## OPTIONS
 
-#### **--reload-systemd**
-
-Reload systemd after installing Quadlets (default true).
-In order to disable it users need to manually set the value
-of this flag to `false`.
+@@option reload-systemd
 
 #### **--replace**, **-r**
 
