@@ -43,7 +43,7 @@ jobs:
 
   build-artifacts-main:
     name: Build Artifacts (main)
-    uses: ./.github/workflows/build-artifacts.yml
+    uses: ./.github/workflows/release-build-artifacts.yml
     if: github.event_name == 'schedule'
     with:
       version: 'main'
@@ -65,7 +65,7 @@ jobs:
 
   build-artifacts-latest-branch:
     name: Build Artifacts (latest release branch)
-    uses: ./.github/workflows/build-artifacts.yml
+    uses: ./.github/workflows/release-build-artifacts.yml
     if: github.event_name == 'schedule'
     needs:  [get-latest-release]
     with:
@@ -88,7 +88,7 @@ jobs:
 
   build-artifacts-single:
     name: Build Artifacts
-    uses: ./.github/workflows/build-artifacts.yml
+    uses: ./.github/workflows/release-build-artifacts.yml
     if: github.event_name == 'workflow_dispatch'
     with:
       version: ${{ inputs.ref }}

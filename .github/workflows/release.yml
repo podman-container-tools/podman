@@ -69,178 +69,31 @@ jobs:
 
   build-artifacts:
     name: Build Artifacts
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/release-build-artifacts.yml
     needs: check
-    steps:
-    - name: Checkout Version
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      with:
-        ref: ${{needs.check.outputs.version}}
-        persist-credentials: false
-    - name: Set up Go
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-      with:
-        go-version: stable
-        cache: false
-    - name: Set up pandoc
-      run: |
-          sudo apt-get install -y pandoc
-    - name: Build Artifacts
-      run: |
-          make release-artifacts
-    - name: Upload to Actions as artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: release-artifacts
-        path: release/*
-
-  mac-pkg:
-    name: Build MacOS pkginstaller
-    needs: check
-    runs-on: macos-latest
-    env:
-      APPLICATION_CERTIFICATE: ${{ secrets.MACOS_APPLICATION_CERT }}
-      CODESIGN_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
-      INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERT }}
-      PRODUCTSIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
-      CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-
-      NOTARIZE_TEAM: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
-      NOTARIZE_USERNAME: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
-      NOTARIZE_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
-
-      KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
-    steps:
-    - name: Checkout Version
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      with:
-        ref: ${{needs.check.outputs.version}}
-        persist-credentials: false
-    - name: Set up Go
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-      with:
-        go-version: stable
-        cache: false
-    - name: Create Keychain
-      run: |
-        echo $APPLICATION_CERTIFICATE | base64 --decode -o appcert.p12
-        echo $INSTALLER_CERTIFICATE | base64 --decode -o instcert.p12
-
-        security create-keychain -p "$KEYCHAIN_PWD" build.keychain
-        security default-keychain -s build.keychain
-        security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
-        security import appcert.p12 -k build.keychain -P "$CERTIFICATE_PWD" -T /usr/bin/codesign
-        security import instcert.p12 -k build.keychain -P "$CERTIFICATE_PWD" -T /usr/bin/productsign
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain &> /dev/null
-
-        xcrun notarytool store-credentials "notarytool-profile" --apple-id "$NOTARIZE_USERNAME" --team-id "$NOTARIZE_TEAM" --password "$NOTARIZE_PASSWORD" &> /dev/null
-    - name: Build and Sign ARM
-      working-directory: contrib/pkginstaller
-      run: |
-        make ARCH=aarch64 notarize &> /dev/null
-    - name: Artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: mac-installers
-        path: |
-          contrib/pkginstaller/out/podman-installer-macos-*.pkg
-
-  windows-installer:
-    name: Build Windows Installer
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
-    runs-on: windows-latest
-    needs: [check, build-artifacts]
-    env:
-      FETCH_BASE_URL: ${{ github.server_url }}/${{ github.repository }}
-    steps:
-    - name: Determine version
-      id: getversion
-      env:
-        VERSION: ${{needs.check.outputs.version}}
-      run: |
-        $version = "${env:VERSION}"
-        if ($version[0] -eq "v") {
-              $version = $version.Substring(1)
-          }
-        Write-Output "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-    - name: Checkout Podman
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      with:
-        persist-credentials: false
-    - name: Download Windows zip artifact
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-      with:
-        name: release-artifacts
-        path: ${{ github.workspace }}\release-artifacts
-    - name: Set up Go
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-      with:
-        go-version: stable
-        cache: false
-    - name: Set up WiX
-      run: dotnet tool install --global wix --version 5.0.2
-    - name: Setup Signature Tooling
-      env:
-        AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
-        AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
-        AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
-        AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-        AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
-      run: |
-        dotnet tool install --global AzureSignTool --version 3.0.0
-        echo "CERT_NAME=${env:AZ_CERT_NAME}" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "VAULT_ID=${env:AZ_VAULT_ID}" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "APP_ID=${env:AZ_APP_ID}" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "TENANT_ID=${env:AZ_TENANT_ID}" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "CLIENT_SECRET=${env:AZ_CLIENT_SECRET}" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - name: Pandoc Setup
-      uses: r-lib/actions/setup-pandoc@a51a8012b0aab7c32ef9d19bf54da93f3254335e # v2.12.0
-      with:
-        pandoc-version: '3.1.11'
-    # Note: Windows assigns a UUID to the installer at build time, it's assumed
-    # by windows that one release version == one UUID (always).  Breaking this assumption
-    # has some rather nasty side-effects in windows, such as possibly breaking 'uninstall'
-    # functionality. We should avoid clobbering or re-building windows installers in most cases,
-    # For build-only, the .exe is saved in the workflow artifacts for a human
-    # to judge.
-    - name: Build the MSI
-      id: build
-      env:
-        PODMAN_ARCH: ${{ matrix.arch }}
-        VERSION: ${{ steps.getversion.outputs.version }}
-      run: |
-        contrib\win-installer\build.ps1 `
-            -Version "${env:VERSION}" `
-            -LocalReleaseDirPath "${env:GITHUB_WORKSPACE}\release-artifacts" `
-            -Architecture "${env:PODMAN_ARCH}"
-        Exit $LASTEXITCODE
-    - name: Display structure of built files
-      run: |
-        Push-Location contrib\win-installer
-        Get-ChildItem
-        Pop-Location
-    - name: Rename the MSI
-      env:
-        PODMAN_ARCH: ${{ matrix.arch }}
-        VERSION: ${{ steps.getversion.outputs.version }}
-      run: |
-        Push-Location contrib\win-installer
-        Copy-Item -Path "podman-${env:VERSION}.msi" -Destination "podman-installer-windows-${env:PODMAN_ARCH}.msi"
-        Pop-Location
-    - name: Upload the MSI
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: win-msi-${{ matrix.arch }}
-        path: |
-          .\contrib\win-installer\podman-installer-windows-${{ matrix.arch }}.msi
+    with:
+      version: ${{ needs.check.outputs.version }}
+    secrets:
+      MACOS_APPLICATION_CERT: ${{ secrets.MACOS_APPLICATION_CERT }}
+      MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+      MACOS_INSTALLER_CERT: ${{ secrets.MACOS_INSTALLER_CERT }}
+      MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+      MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+      AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
+      AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
+      AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
 
   release:
     name: Create Release
     runs-on: ubuntu-latest
     if: needs.check.outputs.buildonly == 'false'
-    needs: [check, build-artifacts, mac-pkg, windows-installer]
+    needs: [check, build-artifacts]
     permissions:
       contents: write
     env:
