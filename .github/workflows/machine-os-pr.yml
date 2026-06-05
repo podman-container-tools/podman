@@ -20,8 +20,8 @@ jobs:
       pull-requests: write
     env:
       SHA: ${{github.event.pull_request.head.sha}}
-      UPSTREAM_MACHINE_OS: "containers/podman-machine-os"
-      PODMAN_REPO: "containers/podman"
+      UPSTREAM_MACHINE_OS: "podman-container-tools/podman-machine-os"
+      PODMAN_REPO: "podman-container-tools/podman"
     steps:
 
       - name: Get version
@@ -70,7 +70,7 @@ jobs:
         if: steps.getversion.outputs.update == 'true'
         id: checkout
         with:
-          repository: containers/podman-machine-os
+          repository: podman-container-tools/podman-machine-os
           ref: ${{github.base_ref}}
           token: ${{secrets.PODMANBOT_TOKEN}}
 
@@ -93,7 +93,7 @@ jobs:
         run: |
           wait-for-copr \
           --owner packit \
-          --project "containers-podman-${EVENT_NUMBER}" \
+          --project "podman-container-tools-podman-${EVENT_NUMBER}" \
           podman \
           ${SHA::9}
 
