@@ -138,7 +138,7 @@ func (c *Container) newExecDiedEvent(sessionID string, exitCode int) {
 	}
 }
 
-// newNetworkEvent creates a new event based on a network create/remove
+// NewNetworkEvent creates a new event based on a network create/remove
 func (r *Runtime) NewNetworkEvent(status events.Status, netName, netID, netDriver string) {
 	e := events.NewEvent(status)
 	e.Network = netName

@@ -165,7 +165,7 @@ func findBindMount(c *Container, containerPath string) *specs.Mount {
 	return nil
 }
 
-// / isPathOnMount returns true if the specified containerPath is a subdir of any
+// isPathOnMount returns true if the specified containerPath is a subdir of any
 // Mount's destination.
 func isPathOnMount(c *Container, containerPath string) bool {
 	cleanedContainerPath := filepath.Clean(containerPath)

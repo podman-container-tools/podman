@@ -137,7 +137,7 @@ func applyFilters(event *Event, filterMap map[string][]EventFilter) bool {
 	return true
 }
 
-// generateEventFilter parses the specified filters into a filter map that can
+// generateEventFilters parses the specified filters into a filter map that can
 // later on be used to filter events.  Keys are conjunctive, values are
 // disjunctive.
 func generateEventFilters(filters []string, since, until string) (map[string][]EventFilter, error) {

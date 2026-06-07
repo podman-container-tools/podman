@@ -50,7 +50,7 @@ func init() {
 	pushFlags(pushCmd)
 }
 
-// pullFlags set the flags for the pull command.
+// pushFlags sets the flags for the push command.
 func pushFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
