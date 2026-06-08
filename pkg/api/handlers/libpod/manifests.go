@@ -297,6 +297,8 @@ func ManifestPushV3(w http.ResponseWriter, r *http.Request) {
 		All              bool   `schema:"all"`
 		Destination      string `schema:"destination"`
 		RemoveSignatures bool   `schema:"removeSignatures"`
+		Retry            uint   `schema:"retry"`
+		RetryDelay       string `schema:"retryDelay"`
 		TLSVerify        bool   `schema:"tlsVerify"`
 	}{
 		// Add defaults here once needed.
@@ -328,7 +330,11 @@ func ManifestPushV3(w http.ResponseWriter, r *http.Request) {
 		Authfile:         authfile,
 		Password:         password,
 		RemoveSignatures: query.RemoveSignatures,
+		RetryDelay:       query.RetryDelay,
 		Username:         username,
+	}
+	if _, found := r.URL.Query()["retry"]; found {
+		options.Retry = &query.Retry
 	}
 	if sys := runtime.SystemContext(); sys != nil {
 		options.CertDir = sys.DockerCertPath
@@ -359,6 +365,8 @@ func ManifestPush(w http.ResponseWriter, r *http.Request) {
 		ForceCompressionFormat bool     `schema:"forceCompressionFormat"`
 		Format                 string   `schema:"format"`
 		RemoveSignatures       bool     `schema:"removeSignatures"`
+		Retry                  uint     `schema:"retry"`
+		RetryDelay             string   `schema:"retryDelay"`
 		TLSVerify              bool     `schema:"tlsVerify"`
 		Quiet                  bool     `schema:"quiet"`
 		AddCompression         []string `schema:"addCompression"`
@@ -403,7 +411,11 @@ func ManifestPush(w http.ResponseWriter, r *http.Request) {
 		Password:               password,
 		Quiet:                  true,
 		RemoveSignatures:       query.RemoveSignatures,
+		RetryDelay:             query.RetryDelay,
 		Username:               username,
+	}
+	if _, found := r.URL.Query()["retry"]; found {
+		options.Retry = &query.Retry
 	}
 	if _, found := r.URL.Query()["compressionFormat"]; found {
 		if _, foundForceCompression := r.URL.Query()["forceCompressionFormat"]; !foundForceCompression {

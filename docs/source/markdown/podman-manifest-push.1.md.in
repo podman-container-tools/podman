@@ -38,6 +38,10 @@ the list or index itself. (Default true)
 
 @@option compression-level
 
+@@option retry
+
+@@option retry-delay
+
 @@option creds
 
 @@option digestfile

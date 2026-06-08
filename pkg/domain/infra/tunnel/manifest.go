@@ -190,6 +190,12 @@ func (ir *ImageEngine) ManifestPush(ctx context.Context, name, destination strin
 
 	options := new(images.PushOptions)
 	options.WithUsername(opts.Username).WithPassword(opts.Password).WithAuthfile(opts.Authfile).WithRemoveSignatures(opts.RemoveSignatures).WithAll(opts.All).WithFormat(opts.Format).WithCompressionFormat(opts.CompressionFormat).WithQuiet(opts.Quiet).WithProgressWriter(opts.Writer).WithAddCompression(opts.AddCompression).WithForceCompressionFormat(opts.ForceCompressionFormat)
+	if opts.Retry != nil {
+		options.WithRetry(*opts.Retry)
+	}
+	if opts.RetryDelay != "" {
+		options.WithRetryDelay(opts.RetryDelay)
+	}
 
 	if s := opts.SkipTLSVerify; s != types.OptionalBoolUndefined {
 		if s == types.OptionalBoolTrue {

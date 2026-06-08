@@ -96,6 +96,14 @@ func init() {
 	flags.Int(compressionLevel, 0, "compression level to use")
 	_ = pushCmd.RegisterFlagCompletionFunc(compressionLevel, completion.AutocompleteNone)
 
+	retryFlagName := "retry"
+	flags.Uint(retryFlagName, registry.RetryDefault(), "number of times to retry in case of failure when performing push")
+	_ = pushCmd.RegisterFlagCompletionFunc(retryFlagName, completion.AutocompleteNone)
+
+	retryDelayFlagName := "retry-delay"
+	flags.String(retryDelayFlagName, registry.RetryDelayDefault(), "delay between retries in case of push failures")
+	_ = pushCmd.RegisterFlagCompletionFunc(retryDelayFlagName, completion.AutocompleteNone)
+
 	if registry.IsRemote() {
 		_ = flags.MarkHidden("cert-dir")
 	}
@@ -163,6 +171,22 @@ func push(cmd *cobra.Command, args []string) error {
 			// is selected then defaults to `true`.
 			manifestPushOpts.ForceCompressionFormat = true
 		}
+	}
+
+	if cmd.Flags().Changed("retry") {
+		retry, err := cmd.Flags().GetUint("retry")
+		if err != nil {
+			return err
+		}
+		manifestPushOpts.Retry = &retry
+	}
+
+	if cmd.Flags().Changed("retry-delay") {
+		val, err := cmd.Flags().GetString("retry-delay")
+		if err != nil {
+			return err
+		}
+		manifestPushOpts.RetryDelay = val
 	}
 
 	digest, err := registry.ImageEngine().ManifestPush(registry.Context(), listImageSpec, destSpec, manifestPushOpts.ImagePushOptions)

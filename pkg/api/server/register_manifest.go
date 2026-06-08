@@ -36,6 +36,14 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//    name: all
 	//    description: push all images
 	//    type: boolean
+	//  - in: query
+	//    name: retry
+	//    type: integer
+	//    description: number of times to retry in case of failure when performing push
+	//  - in: query
+	//    name: retryDelay
+	//    type: string
+	//    description: delay between retries in case of push failures
 	// responses:
 	//   200:
 	//     schema:
@@ -94,6 +102,14 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//    description: "silences extra stream data on push"
 	//    type: boolean
 	//    default: true
+	//  - in: query
+	//    name: retry
+	//    type: integer
+	//    description: number of times to retry in case of failure when performing push
+	//  - in: query
+	//    name: retryDelay
+	//    type: string
+	//    description: delay between retries in case of push failures
 	// responses:
 	//   200:
 	//     schema:

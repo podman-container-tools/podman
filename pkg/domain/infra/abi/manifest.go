@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -502,6 +503,14 @@ func (ir *ImageEngine) ManifestPush(ctx context.Context, name, destination strin
 	pushOptions.CompressionLevel = opts.CompressionLevel
 	pushOptions.AddCompression = opts.AddCompression
 	pushOptions.ForceCompressionFormat = opts.ForceCompressionFormat
+	pushOptions.MaxRetries = opts.Retry
+	if opts.RetryDelay != "" {
+		duration, err := time.ParseDuration(opts.RetryDelay)
+		if err != nil {
+			return "", err
+		}
+		pushOptions.RetryDelay = &duration
+	}
 
 	compressionFormat := opts.CompressionFormat
 	if compressionFormat == "" {
