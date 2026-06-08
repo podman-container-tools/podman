@@ -2,161 +2,80 @@
 
 ## **Short Summary**
 
-Speed up `podman machine init` by keeping a decompressed base image in the cache directory (created at pull time), so subsequent inits copy/clone the base instead of re-decompressing. Introduce `podman machine rm --cache` to handle cleanups and cache rotation.
+Speed up `podman machine init` by caching the uncompressed base image so subsequent inits copy instead of re-decompressing. Introduce `podman machine cache` for cache inspection and cleanup.
 
 ## **Objective**
 
-`podman machine init` is slow because reasons, one of which is that the VM disk image is decompressed on every invocation, even when the compressed image is already cached locally. When a user does `podman machine rm` + `podman machine init`, the decompressed disk is destroyed and recreated from scratch.
-
-This proposal eliminates redundant decompression by caching the decompressed base image alongside the compressed blob, drastically reducing warm init times. Also introduces future improvements like a `podman machine pull` command that could further improve the init times, or at least move the logic to a phase of initialization where the user might expect longer times, so during pull.
+`podman machine init` decompresses the VM disk image on every invocation, even when the image is already cached locally. A `podman machine rm` + `podman machine init` cycle destroys and recreates the disk from scratch. This proposal eliminates redundant decompression by caching the uncompressed image at pull time.
 
 ## **Detailed Description:**
 
 ### High-level approach
 
-- Decompress the image at pull time and save it next to the compressed blob in the cache directory.
-- Add a new `podman machine rm --cache` flag to allow explicit cache pair removal.
-- Add an `ImageDigest` field to `MachineConfig` to track provenance and enable refcounting.
+- Download and decompress the image at pull time; store only the uncompressed result in the cache directory (discard the compressed blob).
+- On `podman machine init`, copy the cached base image to the per-machine path.
+- Add a new `podman machine cache` subcommand for cache inspection and cleanup.
 
 ```
 Registry (quay.io/podman/machine-os:5.4)
     |
-    | pull (identified by artifact digest)
+    | pull + decompress
     v
-Compressed blob: cache/{digest}.{format}.zst
+cache/{digest}.{format}        (uncompressed base, ready to copy)
     |
-    | decompress (at init time)
+    | copy
     v
-Decompressed base: cache/{digest}.{format}
-    |
-    | copy/clone (at init time)
-    v
-Per-machine image: {datadir}/{name}-{arch}.{format}
+{datadir}/{name}.{format}      (per-machine disk)
 ```
 
-Cache is now a pair of compressed and decompressed files.
+### `podman machine init` behavior
 
-- `cache/{digest}.{format}.zst`: Compressed blob pulled from registry
-- `cache/{digest}.{format}`: Decompressed base, ready to copy
+On cache hit (uncompressed base exists for the requested image): copy the cached file to the per-machine path. On cache miss: pull from registry, decompress, store in cache, then copy to per-machine path.
 
-### Behavior: Old vs New
+### `podman machine rm` behavior
 
-#### `podman machine init`
+No change. `podman machine rm` deletes the per-machine disk and config but does not touch the cache. Since each machine holds an independent copy, removing a machine has no effect on the cached base image or other machines.
 
-Here the logic is simple. During init decompress cache and save it as a separate file in `cache` dir. If no compressed file found, pull and decompress. If no decompressed file found, decompress only.
+### `podman machine cache` (new subcommand)
 
+Output follows the same tabular style as `podman machine list` (uppercase headers, `--format` for Go templates).
 
-#### `podman machine rm`
+| Command | Effect |
+| --- | --- |
+| `podman machine cache` | List cached base images (digest, format, size) |
+| `podman machine cache --remove` | Delete all cached base images after confirmation |
+| `podman machine cache --format` | Format output using a Go template |
 
-Deletes machine and init, preserves cache. Use `--cache` to wipe cache pair.
-
-| Command                           | Image   | Ignition | Cache pair                                                |
-| --------------------------------- | ------- | -------- | --------------------------------------------------------- |
-| `machine rm` (current)            | Deleted | Deleted  | Kept                                                      |
-| `machine rm` (proposed)           | Deleted | Deleted  | Kept                                                      |
-| `machine rm --cache` (new)        | Deleted | Deleted  | Deleted (unless refcount > 0; use `--force` to override)  |
-| `machine rm --cache` (VM gone)    | N/A     | N/A      | All orphan cache files listed and deleted on confirmation |
-| `machine rm --save-image`         | Kept    | Deleted  | Kept                                                      |
-| `machine rm --save-ignition`      | Deleted | Kept     | Kept                                                      |
-| `machine rm --cache --save-image` | Kept    | Deleted  | Deleted (unless refcount > 0; use `--force` to override)  |
-| `machine reset`                   | Deleted | Deleted  | Deleted                                                   |
-
-When `--cache` is used, a new confirmation prompt shows cache files in a dedicated section:
+Example output:
 
 ```
-$ podman machine rm --cache
-The following files will be deleted:
+$ podman machine cache
+DIGEST          FORMAT  SIZE
+91d1e51d...     raw     4.2 GiB
+```
 
-podman-machine-default.json
-podman-machine-default.sock
-...
-
+```
+$ podman machine cache --remove
 The following cache files will be deleted:
 
-91d1e51d...qcow2.zst
-91d1e51d...qcow2
+DIGEST          FORMAT  SIZE
+91d1e51d...     raw     4.2 GiB
+
 Are you sure you want to continue? [y/N] y
 ```
 
-When the machine does not exist but `--cache` is specified, cache files are still listed and removed:
+### Cache rotation (during `podman machine init`)
 
-```
-$ podman machine rm --cache
-podman-machine-default: VM does not exist
+When a cache miss occurs (new version pulled), old cached files are removed after the new image is downloaded and decompressed. This keeps at most one base image in the cache.
 
-The following cache files will be deleted:
+### Copy strategy
 
-91d1e51d...qcow2.zst
-91d1e51d...qcow2
-Are you sure you want to continue? [y/N] y
-```
-
-If no cache files exist, the output is:
-
-```
-$ podman machine rm --cache
-podman-machine-default: VM does not exist
-No cache files to remove.
-```
-
-#### Cache rotation (during `podman machine init`)
-
-| Step                  | Current                            | Proposed                                                               |
-| --------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
-| Trigger               | Cache miss (new version available) | Same                                                                   |
-| Snapshot              | `os.ReadDir(cache/)` before pull   | Same                                                                   |
-| Pull new              | Download new `.zst`                | Same                                                                   |
-| Clean old             | Wipe all snapshotted files         | Same (now also wipes old decompressed base since it lives in same dir) |
-| New decompressed base | N/A                                | Created after new `.zst` is pulled (before old files are cleaned)      |
-
-#### `podman machine reset`
-
-|        | Current                                  | Proposed         |
-| ------ | ---------------------------------------- | ---------------- |
-| Effect | Wipes entire data dir, config dir, cache | Same (no change) |
-
-### Config change
-
-Add `ImageDigest` field to `MachineConfig`:
-
-```go
-type MachineConfig struct {
-    // ... existing fields ...
-    ImageDigest string `json:"ImageDigest,omitempty"`
-}
-```
-
-Set during init from the resolved OCI artifact digest. Used by:
-
-- `rm`: to locate cache files (`cache/{digest}.*`) and do refcount check
-- `init`: to verify cached base is current
-
-### Provider considerations
-
-| Provider | Format | Reflink support                | Benefit                                                                      |
-| -------- | ------ | ------------------------------ | ---------------------------------------------------------------------------- |
-| AppleHV  | .raw   | APFS clonefile (near-instant)  | High                                                                         |
-| LibKrun  | .raw   | APFS clonefile                 | High                                                                         |
-| HyperV   | .vhdx  | NTFS: no reflink, regular copy | High (copy still faster than decompress)                                     |
-| QEMU     | .qcow2 | btrfs/xfs reflink              | Medium (qcow2 is smaller)                                                    |
-| WSL      | .tar   | N/A (used for wsl --import)    | Medium (caches decompressed tarball, skips download+decompress on re-import) |
-
-### Key implementation files
-
-| File                                    | Change                                                                                                      |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pkg/machine/ocipull/ociartifact.go`    | After pull+unpack, decompress to cache (not per-machine path). On cache hit, return decompressed base path. |
-| `pkg/machine/shim/host.go`              | Init: copy/clone decompressed base to `mc.ImagePath`. Rm: add cache deletion with refcount check.           |
-| `pkg/machine/shim/diskpull/diskpull.go` | Route to copy-from-cache when decompressed base exists                                                      |
-| `pkg/machine/vmconfigs/config.go`       | Add `ImageDigest` field                                                                                     |
-| `pkg/machine/vmconfigs/machine.go`      | `Remove()`: add cache pair deletion logic with refcount                                                     |
-| `cmd/podman/machine/rm.go`              | Add `--cache` flag                                                                                          |
-| `pkg/machine/config.go`                 | Add `Cache` (or `RemoveCache`) to `RemoveOptions`                                                           |
+Init performs a full copy of the cached base image to the per-machine path. This ensures predictable `podman machine start` performance with no CoW overhead on first boot.
 
 ## **Use cases**
 
-- **Repeated init/rm cycle**: A developer that would destroy and recreate machines during testing would benefit for short `init` times. With the decompressed base cached, `podman machine init` completes in few seconds.
-- **Better cache management**: A user has a better control to reclaim disk space and manage machine files with a dedicated `--cache` flag
+- **Repeated init/rm cycle**: A developer destroying and recreating machines during testing gets fast `init` times (seconds instead of minutes) since decompression is skipped.
+- **Disk space management**: `podman machine cache --remove` gives users explicit control to reclaim cache space.
 
 ## **Target Podman Release**
 
@@ -189,24 +108,9 @@ After Podman 6
 
 ### **CLI**
 
-- New `--cache` flag on `podman machine rm` to force deletion of the cache pair (compressed + decompressed).
-- Confirmation prompt updated to show cache files in a dedicated section when `--cache` is used.
-- No changes to `podman machine init` CLI interface; the optimization is transparent.
+- New `podman machine cache` subcommand for viewing and removing cached base images.
+- No changes to `podman machine init` or `podman machine rm` CLI interfaces; the optimization is transparent to users.
 
 ### **Libpod**
 
-- New `ImageDigest` field in `MachineConfig` to track image provenance.
-- Add `Cache` field to `RemoveOptions` to support `--cache`.
-
-## **Further Description (Optional):**
-
-### Future improvements
-
-- Add `podman machine pull` command that will pull and decompress the cache. Options could be:
-  - `podman machine pull` — new command
-  - `podman machine pull --no-decompress-cache` — pull only (if default is to pull and decompress)
-  - `podman machine pull --decompress-cache` — pull and decompress (if default is pull only)
-
-## **Test Descriptions (Optional):**
-
-<!-- How will this feature be tested? -->
+- No config schema changes required. The cache is a filesystem-level optimization with no new fields in `MachineConfig`.
