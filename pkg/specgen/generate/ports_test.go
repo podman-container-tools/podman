@@ -977,6 +977,40 @@ func TestParsePortMappingError(t *testing.T) {
 			},
 			err: "failed to find an open port to expose container port 1000 with range 64535 on the host",
 		},
+		{
+			name: "host port conflict",
+			arg: []types.PortMapping{
+				{
+					HostPort:      80,
+					ContainerPort: 80,
+					Range:         1,
+				},
+				{
+					HostPort:      80,
+					ContainerPort: 8080,
+					Range:         1,
+				},
+			},
+			err: `host port ":80/tcp" was already assigned in another port mapping`,
+		},
+		{
+			name: "host port conflict with host ip",
+			arg: []types.PortMapping{
+				{
+					HostIP:        "127.0.0.1",
+					HostPort:      1234,
+					ContainerPort: 80,
+					Range:         1,
+				},
+				{
+					HostIP:        "127.0.0.1",
+					HostPort:      1234,
+					ContainerPort: 81,
+					Range:         1,
+				},
+			},
+			err: `host port "127.0.0.1:1234/tcp" was already assigned in another port mapping`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

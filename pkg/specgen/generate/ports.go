@@ -7,6 +7,7 @@ import (
 	"net"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -52,7 +53,9 @@ func joinTwoPortsToRangePortIfPossible(ports *[]types.PortMapping, allHostPorts,
 	}
 	// we could not join the ports so we append the old one to the list
 	// and return the current port as previous port
-	addPortToUsedPorts(ports, allHostPorts, allContainerPorts, currentHostPorts, previousPort)
+	if err := addPortToUsedPorts(ports, allHostPorts, allContainerPorts, currentHostPorts, previousPort); err != nil {
+		return nil, err
+	}
 	return &port, nil
 }
 
@@ -82,19 +85,25 @@ func joinTwoContainerPortsToRangePortIfPossible(ports *[]types.PortMapping, allH
 	if err != nil {
 		return nil, err
 	}
-	addPortToUsedPorts(ports, allHostPorts, allContainerPorts, currentHostPorts, &newPort)
+	if err := addPortToUsedPorts(ports, allHostPorts, allContainerPorts, currentHostPorts, &newPort); err != nil {
+		return nil, err
+	}
 	return &port, nil
 }
 
-func addPortToUsedPorts(ports *[]types.PortMapping, allHostPorts, allContainerPorts, currentHostPorts *[65536]bool, port *types.PortMapping) {
+func addPortToUsedPorts(ports *[]types.PortMapping, allHostPorts, allContainerPorts, currentHostPorts *[65536]bool, port *types.PortMapping) error {
 	for i := uint16(0); i < port.Range; i++ {
 		h := port.HostPort + i
 		allHostPorts[h] = true
+		if currentHostPorts[h] {
+			return fmt.Errorf("host port %q was already assigned in another port mapping", net.JoinHostPort(port.HostIP, strconv.Itoa(int(h)))+"/"+port.Protocol)
+		}
 		currentHostPorts[h] = true
 		c := port.ContainerPort + i
 		allContainerPorts[c] = true
 	}
 	*ports = append(*ports, *port)
+	return nil
 }
 
 // getRandomHostPort get a random host port mapping for the given port
@@ -154,8 +163,8 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 
 	// allUsedContainerPorts stores all used ports for each protocol
 	// the key is the protocol and the array is 65536 elements long for each port.
-	allUsedContainerPortsMap := make(map[string][65536]bool)
-	allUsedHostPortsMap := make(map[string][65536]bool)
+	allUsedContainerPortsMap := make(map[string]*[65536]bool)
+	allUsedHostPortsMap := make(map[string]*[65536]bool)
 
 	// First, we need to validate the ports passed in the specgen
 	for _, port := range portMappings {
@@ -233,7 +242,15 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 			})
 
 			allUsedContainerPorts := allUsedContainerPortsMap[protocol]
+			if allUsedContainerPorts == nil {
+				var temp [65536]bool
+				allUsedContainerPorts = &temp
+			}
 			allUsedHostPorts := allUsedHostPortsMap[protocol]
+			if allUsedHostPorts == nil {
+				var temp [65536]bool
+				allUsedHostPorts = &temp
+			}
 			var usedHostPorts [65536]bool
 
 			var previousPort *types.PortMapping
@@ -253,15 +270,17 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 					Range:         ports[i].rangePort,
 				}
 				var err error
-				previousPort, err = joinTwoPortsToRangePortIfPossible(&portMappings, &allUsedHostPorts,
-					&allUsedContainerPorts, &usedHostPorts, previousPort, p)
+				previousPort, err = joinTwoPortsToRangePortIfPossible(&portMappings, allUsedHostPorts,
+					allUsedContainerPorts, &usedHostPorts, previousPort, p)
 				if err != nil {
 					return nil, err
 				}
 			}
 			if previousPort != nil {
-				addPortToUsedPorts(&portMappings, &allUsedHostPorts,
-					&allUsedContainerPorts, &usedHostPorts, previousPort)
+				if err := addPortToUsedPorts(&portMappings, allUsedHostPorts,
+					allUsedContainerPorts, &usedHostPorts, previousPort); err != nil {
+					return nil, err
+				}
 			}
 
 			// now take care of the hostPort = 0 ports
@@ -274,8 +293,8 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 					Range:         ports[i].rangePort,
 				}
 				var err error
-				previousPort, err = joinTwoContainerPortsToRangePortIfPossible(&portMappings, &allUsedHostPorts,
-					&allUsedContainerPorts, &usedHostPorts, previousPort, p)
+				previousPort, err = joinTwoContainerPortsToRangePortIfPossible(&portMappings, allUsedHostPorts,
+					allUsedContainerPorts, &usedHostPorts, previousPort, p)
 				if err != nil {
 					return nil, err
 				}
@@ -286,8 +305,11 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 				if err != nil {
 					return nil, err
 				}
-				addPortToUsedPorts(&portMappings, &allUsedHostPorts,
-					&allUsedContainerPorts, &usedHostPorts, &newPort)
+
+				if err := addPortToUsedPorts(&portMappings, allUsedHostPorts,
+					allUsedContainerPorts, &usedHostPorts, &newPort); err != nil {
+					return nil, err
+				}
 			}
 
 			allUsedContainerPortsMap[protocol] = allUsedContainerPorts
@@ -301,20 +323,28 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 		for port, protocols := range exposePorts {
 			newProtocols := make([]string, 0, len(protocols))
 			for _, protocol := range protocols {
-				if !allUsedContainerPortsMap[protocol][port] {
+				allUsedContainerPorts := allUsedContainerPortsMap[protocol]
+				// Lookup if the container port was already given an explicit mapping,
+				// if we have no mappings or the port is not set then we need to add it to a random host port
+				if allUsedContainerPorts == nil || !allUsedContainerPorts[port] {
 					p := types.PortMapping{
 						ContainerPort: port,
 						Protocol:      protocol,
 						Range:         1,
 					}
-					allPorts := allUsedContainerPortsMap[protocol]
-					p, err := getRandomHostPort(&allPorts, p)
+					allUsedHostPorts := allUsedHostPortsMap[protocol]
+					if allUsedHostPorts == nil {
+						var temp [65536]bool
+						allUsedHostPorts = &temp
+					}
+					p, err := getRandomHostPort(allUsedHostPorts, p)
 					if err != nil {
 						return nil, err
 					}
 					portMappings = append(portMappings, p)
 					// Mark this port as used so it doesn't get re-generated
-					allPorts[p.HostPort] = true
+					allUsedHostPorts[p.HostPort] = true
+					allUsedHostPortsMap[protocol] = allUsedHostPorts
 				} else {
 					newProtocols = append(newProtocols, protocol)
 				}
