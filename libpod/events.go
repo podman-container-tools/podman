@@ -126,12 +126,10 @@ func (c *Container) newExecDiedEvent(sessionID string, exitCode int) {
 	e.Type = events.Container
 	intExitCode := exitCode
 	e.ContainerExitCode = &intExitCode
-	e.Attributes = make(map[string]string)
-	e.Attributes["execID"] = sessionID
 
-	e.Details = events.Details{
-		Attributes: c.Labels(),
-	}
+	attrs := c.Labels()
+	attrs["execID"] = sessionID
+	e.Attributes = attrs
 
 	if err := c.runtime.eventer.Write(e); err != nil {
 		logrus.Errorf("Unable to write exec died event: %q", err)
@@ -169,6 +167,7 @@ func (p *Pod) newPodEvent(status events.Status) {
 	e.ID = p.ID()
 	e.Name = p.Name()
 	e.Type = events.Pod
+	e.Attributes = p.Labels()
 	if err := p.runtime.eventer.Write(e); err != nil {
 		logrus.Errorf("Unable to write pod event: %q", err)
 	}
@@ -189,6 +188,7 @@ func (v *Volume) newVolumeEvent(status events.Status) {
 	e := events.NewEvent(status)
 	e.Name = v.Name()
 	e.Type = events.Volume
+	e.Attributes = v.Labels()
 	if err := v.runtime.eventer.Write(e); err != nil {
 		logrus.Errorf("Unable to write volume event: %q", err)
 	}

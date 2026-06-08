@@ -443,7 +443,9 @@ EOF
 # bats test_tags=ci:parallel
 @test "events - volume events" {
     local vname=v-$(safename)
-    run_podman volume create $vname
+    local lname=label$(safename | tr -d -)
+    local lvalue="labelvalue-$(safename) $(random_string 5)"
+    run_podman volume create --label="$lname=$lvalue" $vname
     run_podman volume rm $vname
 
     run_podman events --since=1m --stream=false --filter volume=$vname
@@ -454,10 +456,28 @@ EOF
     # Prefix test
     run_podman events --since=1m --stream=false --filter volume=${vname:0:9}
     assert "$output" = "$notrunc_results"
+
+    # Labels test
+    run_podman events --since=1m --stream=false --filter volume=$vname --filter event=create --format "{{.Attributes}}"
+    assert "$output" =~ "${lname}:${lvalue}" "podman-events output includes volume label"
 }
 
 # bats test_tags=ci:parallel
 @test "events - invalid filter" {
     run_podman 125 events --since="the dawn of time...ish"
     assert "$output" =~ "failed to parse event filters"
+}
+
+# bats test_tags=ci:parallel
+@test "events - pod labels in event attributes" {
+    local pname=p-$(safename)
+    local lname=label$(safename | tr -d -)
+    local lvalue="labelvalue-$(safename) $(random_string 5)"
+
+    run_podman pod create --name $pname --label "$lname=$lvalue"
+
+    run_podman events --since=1m --stream=false --filter type=pod --filter event=create --format "{{.Name}} {{.Attributes}}"
+    assert "$output" =~ "$pname .*${lname}:${lvalue}" "podman-events output includes pod label"
+
+    run_podman pod rm -f $pname
 }
