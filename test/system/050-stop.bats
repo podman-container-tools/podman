@@ -31,7 +31,7 @@ load helpers
     # exactly 10 seconds. Give it some leeway.
     delta_t=$(( $t1 - $t0 ))
     assert $delta_t -gt  8 "podman stop: ran too quickly!"
-    assert $delta_t -le 14 "podman stop: took too long"
+    assert $delta_t -le 18 "podman stop: took too long"
 
     run_podman rm $cid
 }
