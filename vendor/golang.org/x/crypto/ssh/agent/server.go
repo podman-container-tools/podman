@@ -240,13 +240,35 @@ func setConstraints(key *AddedKey, constraintBytes []byte) error {
 	return nil
 }
 
+// checkRSAKeyParams enforces the same bounds as parseRSA in the ssh
+// package, and additionally caps the prime factors. Without this,
+// the rsa.PrivateKey built from an Add request would call Precompute()
+// on arbitrary inputs; the CRT coefficient recomputation is cubic in
+// |p| and can consume excessive CPU on oversized keys.
+func checkRSAKeyParams(N, E, P, Q *big.Int) error {
+	if N.BitLen() > 8192 {
+		return errors.New("agent: RSA modulus too large")
+	}
+	if P.BitLen() > 4096 || Q.BitLen() > 4096 {
+		return errors.New("agent: RSA prime too large")
+	}
+	if E.BitLen() > 24 {
+		return errors.New("agent: RSA public exponent too large")
+	}
+	e := E.Int64()
+	if e < 3 || e&1 == 0 {
+		return errors.New("agent: incorrect RSA public exponent")
+	}
+	return nil
+}
+
 func parseRSAKey(req []byte) (*AddedKey, error) {
 	var k rsaKeyMsg
 	if err := ssh.Unmarshal(req, &k); err != nil {
 		return nil, err
 	}
-	if k.E.BitLen() > 30 {
-		return nil, errors.New("agent: RSA public exponent too large")
+	if err := checkRSAKeyParams(k.N, k.E, k.P, k.Q); err != nil {
+		return nil, err
 	}
 	priv := &rsa.PrivateKey{
 		PublicKey: rsa.PublicKey{
@@ -399,8 +421,8 @@ func parseRSACert(req []byte) (*AddedKey, error) {
 		return nil, fmt.Errorf("agent: Unmarshal failed to parse public key: %v", err)
 	}
 
-	if rsaPub.E.BitLen() > 30 {
-		return nil, errors.New("agent: RSA public exponent too large")
+	if err := checkRSAKeyParams(rsaPub.N, rsaPub.E, k.P, k.Q); err != nil {
+		return nil, err
 	}
 
 	priv := rsa.PrivateKey{
