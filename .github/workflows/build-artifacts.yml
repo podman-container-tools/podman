@@ -142,8 +142,6 @@ jobs:
         arch: [amd64, arm64]
     runs-on: windows-latest
     needs: [build-artifacts]
-    env:
-      FETCH_BASE_URL: ${{ github.server_url }}/${{ github.repository }}
     steps:
     - name: Checkout Podman
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -196,7 +194,7 @@ jobs:
         echo "TENANT_ID=${env:AZ_TENANT_ID}" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "CLIENT_SECRET=${env:AZ_CLIENT_SECRET}" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: Pandoc Setup
-      uses: r-lib/actions/setup-pandoc@6f6e5bc62fba3a704f74e7ad7ef7676c5c6a2590 # v2.11.4
+      uses: r-lib/actions/setup-pandoc@a51a8012b0aab7c32ef9d19bf54da93f3254335e # v2.12.0
       with:
         pandoc-version: '3.1.11'
     # Note: Windows assigns a UUID to the installer at build time, it's assumed
