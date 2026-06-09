@@ -6,10 +6,9 @@
 verbose=
 for i; do
     case "$i" in
-        -v|--verbose)   verbose=verbose ;;
+    -v | --verbose) verbose=verbose ;;
     esac
 done
-
 
 die() {
     echo "$(basename $0): $*" >&2
@@ -20,13 +19,13 @@ cd $(dirname $0)/../docs/source/markdown || die "Please run me from top-level li
 
 rc=0
 
-for md in *.1.md;do
+for md in *.1.md; do
     # Read the first line after '# NAME' (or '## NAME'). (FIXME: # and ##
     #               are not the same; should we stick to one convention?)
     # There may be more than one name, e.g. podman-info.1.md has
     # podman-system-info then another line with podman-info. We
     # care only about the first.
-    name=$(grep -E -A1 '^#* NAME' $md|tail -1|awk '{print $1}' | tr -d \\\\)
+    name=$(grep -E -A1 '^#* NAME' $md | tail -1 | awk '{print $1}' | tr -d \\\\)
 
     expect=$(basename $md .1.md)
     if [ "$name" != "$expect" ]; then
@@ -42,8 +41,8 @@ done
 # Make sure the descriptive text in podman-foo.1.md matches the one
 # in the table in podman.1.md. podman-remote is not a podman subcommand,
 # so it is excluded here.
-for md in $(ls -1 *-*.1.md | grep -v remote);do
-    desc=$(grep -E -A1 '^#* NAME' $md|tail -1|sed -e 's/^podman[^ ]\+ - //')
+for md in $(ls -1 *-*.1.md | grep -v remote); do
+    desc=$(grep -E -A1 '^#* NAME' $md | tail -1 | sed -e 's/^podman[^ ]\+ - //')
 
     # podman.1.md has a two-column table; podman-*.1.md all have three.
     parent=$(echo $md | sed -e 's/^\(.*\)-.*$/\1.1.md/')
@@ -59,7 +58,7 @@ for md in $(ls -1 *-*.1.md | grep -v remote);do
         parent="podman-system.1.md"
     fi
     x=3
-    if expr -- "$parent" : ".*-" >/dev/null; then
+    if expr -- "$parent" : ".*-" > /dev/null; then
         x=4
     fi
 
@@ -97,36 +96,36 @@ function compare_usage() {
     local from_help=$(echo "$help_output" | grep -A1 '^Usage:' | tail -1)
 
     # strip off command name from both
-    from_man=$(sed -e "s/\*\*$cmd\*\*[[:space:]]*//" <<<"$from_man")
-    from_help=$(sed -e "s/^[[:space:]]*${cmd}[[:space:]]*//" <<<"$from_help")
+    from_man=$(sed -e "s/\*\*$cmd\*\*[[:space:]]*//" <<< "$from_man")
+    from_help=$(sed -e "s/^[[:space:]]*${cmd}[[:space:]]*//" <<< "$from_help")
 
     # man page lists 'foo [*options*]', help msg shows 'foo [flags]'.
     # Make sure if one has it, the other does too.
-    if expr "$from_man" : "\[\*options\*\]" >/dev/null; then
-        if expr "$from_help" : "\[options\]" >/dev/null; then
+    if expr "$from_man" : "\[\*options\*\]" > /dev/null; then
+        if expr "$from_help" : "\[options\]" > /dev/null; then
             :
         else
             echo "WARNING: $cmd: man page shows '[*options*]', help does not show [options]"
             rc=1
-       fi
-    elif expr "$from_help" : "\[flags\]" >/dev/null; then
+        fi
+    elif expr "$from_help" : "\[flags\]" > /dev/null; then
         echo "WARNING: $cmd: --help shows [flags], man page does not show [*options*]"
         rc=1
     fi
 
     # Strip off options and flags; start comparing arguments
-    from_man=$(sed  -e 's/^\[\*options\*\][[:space:]]*//' <<<"$from_man")
-    from_help=$(sed -e 's/^\[flags\][[:space:]]*//'      <<<"$from_help")
+    from_man=$(sed -e 's/^\[\*options\*\][[:space:]]*//' <<< "$from_man")
+    from_help=$(sed -e 's/^\[flags\][[:space:]]*//' <<< "$from_help")
 
     # Args in man page are '*foo*', in --help are 'FOO'. Convert all to
     # UPCASE simply because it stands out better to the eye.
-    from_man=$(sed -e 's/\*\([a-z-]\+\)\*/\U\1/g' <<<"$from_man")
+    from_man=$(sed -e 's/\*\([a-z-]\+\)\*/\U\1/g' <<< "$from_man")
 
     # FIXME: one of the common patterns is for --help to show 'POD [POD...]'
     # but man page show 'pod ...'. This conversion may help one day, but
     # not yet: there are too many inconsistencies such as '[pod ...]'
     # (brackets) and 'pod...' (no space between).
-#    from_help=$(sed -e 's/\([A-Z]\+\)[[:space:]]\+\[\1[[:space:]]*\.\.\.\]/\1 .../' <<<"$from_help")
+    #    from_help=$(sed -e 's/\([A-Z]\+\)[[:space:]]\+\[\1[[:space:]]*\.\.\.\]/\1 .../' <<<"$from_help")
 
     # Compare man-page and --help usage strings. For now, do so only
     # when run with --verbose.
@@ -142,7 +141,7 @@ function compare_usage() {
 # Pass 3: compare synopses.
 #
 # Make sure the SYNOPSIS line in podman-foo.1.md reads '**podman foo** ...'
-for md in *.1.md;do
+for md in *.1.md; do
     # FIXME: several pages have a multi-line form of SYNOPSIS in which
     #        many or all flags are enumerated. Some of these are trivial
     #        and really should be made into one line (podman-container-exists,
@@ -152,7 +151,7 @@ for md in *.1.md;do
     #        To view those:
     #           $ less $(for i in docs/*.1.md;do x=$(grep -A2 '^#* SYNOPSIS' $i|tail -1); if [ -n "$x" ]; then echo $i;fi;done)
     #
-    synopsis=$(grep -E -A1 '^#* SYNOPSIS' $md|tail -1)
+    synopsis=$(grep -E -A1 '^#* SYNOPSIS' $md | tail -1)
 
     # Command name must be bracketed by double asterisks; options and
     # arguments are bracketed by single ones.
@@ -177,7 +176,7 @@ for md in *.1.md;do
 
     # The convention is to use UPPER CASE in 'podman foo --help',
     # but *lower case bracketed by asterisks* in the man page
-    if expr "$synopsis" : ".*[A-Z]" >/dev/null; then
+    if expr "$synopsis" : ".*[A-Z]" > /dev/null; then
         echo
         printf "Inconsistent capitalization in SYNOPSIS in %s\n" $md
         printf "  '%s' should not contain upper-case characters\n" "$synopsis"
@@ -191,6 +190,5 @@ for md in *.1.md;do
     # messages. This is complicated, so do it in a helper function.
     compare_usage "$md_nodash" "$synopsis"
 done
-
 
 exit $rc

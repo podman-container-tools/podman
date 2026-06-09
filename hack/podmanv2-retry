@@ -19,9 +19,8 @@ die() {
     exit 1
 }
 
-test -n "$PODMAN_V2"       || die "Please set \$PODMAN_V2 (path to podman v2)"
+test -n "$PODMAN_V2" || die "Please set \$PODMAN_V2 (path to podman v2)"
 test -n "$PODMAN_FALLBACK" || die "Please set \$PODMAN_FALLBACK (path to podman)"
-
 
 result=$(${PODMAN_V2} "$@" 2>&1)
 rc=$?

@@ -12,25 +12,25 @@ function echo_bold() {
 }
 
 function pull_image() {
-	echo_bold "... pulling $IMAGE"
-	$ENGINE_A pull $IMAGE -q > /dev/null
-	$ENGINE_B pull $IMAGE -q > /dev/null
+    echo_bold "... pulling $IMAGE"
+    $ENGINE_A pull $IMAGE -q > /dev/null
+    $ENGINE_B pull $IMAGE -q > /dev/null
 }
 
 function setup() {
-	echo_bold "---------------------------------------------------"
-	echo_bold "... comparing $ENGINE_A with $ENGINE_B"
-	echo_bold "... cleaning up previous containers and images"
-	$ENGINE_A system prune -f > /dev/null
-	$ENGINE_B system prune -f > /dev/null
-	pull_image
-	echo ""
+    echo_bold "---------------------------------------------------"
+    echo_bold "... comparing $ENGINE_A with $ENGINE_B"
+    echo_bold "... cleaning up previous containers and images"
+    $ENGINE_A system prune -f > /dev/null
+    $ENGINE_B system prune -f > /dev/null
+    pull_image
+    echo ""
 }
 
 function create_containers() {
-	echo_bold "... creating $NUM_CONTAINERS containers"
-	for i in $(eval echo "{0..$NUM_CONTAINERS}"); do
-		$ENGINE_A create $IMAGE >> /dev/null
-		$ENGINE_B create $IMAGE >> /dev/null
-	done
+    echo_bold "... creating $NUM_CONTAINERS containers"
+    for i in $(eval echo "{0..$NUM_CONTAINERS}"); do
+        $ENGINE_A create $IMAGE >> /dev/null
+        $ENGINE_B create $IMAGE >> /dev/null
+    done
 }

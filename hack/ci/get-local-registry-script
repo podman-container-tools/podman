@@ -48,14 +48,22 @@ Reasons for doing this:
 
 verbose=
 for i; do
-    value=`expr "$i" : '[^=]*=\(.*\)'`
+    value=$(expr "$i" : '[^=]*=\(.*\)')
     case "$i" in
-    -h*|--help)	echo "$usage"; exit 0;;
-    -v|--verbose)	verbose=$i; shift;;
-    -*)	echo "$ME: unrecognized option $i" >&2
-	echo "$usage" >&2
-	exit 1;;
-    *)	break;;
+    -h* | --help)
+        echo "$usage"
+        exit 0
+        ;;
+    -v | --verbose)
+        verbose=$i
+        shift
+        ;;
+    -*)
+        echo "$ME: unrecognized option $i" >&2
+        echo "$usage" >&2
+        exit 1
+        ;;
+    *) break ;;
     esac
 done
 
@@ -70,7 +78,7 @@ function die() {
 function get_imgsfx() {
     test -e .cirrus.yml || die ".cirrus.yml does not exist; please run me from top of repo"
 
-    imgsfx=$(sed -ne 's/^ *IMAGE_SUFFIX:.*"c\(202.*\)"/\1/p' <.cirrus.yml)
+    imgsfx=$(sed -ne 's/^ *IMAGE_SUFFIX:.*"c\(202.*\)"/\1/p' < .cirrus.yml)
     if [[ -z "$imgsfx" ]]; then
         die "Did not find 'IMAGE_SUFFIX:.*c202.*' in .cirrus.yml"
     fi
@@ -139,7 +147,7 @@ query="
 }
 "
 
-query_clean=$(tr -d \\012 <<<"$query")
+query_clean=$(tr -d \\012 <<< "$query")
 
 jsontmp=$(mktemp --tmpdir --suffix=.json $ME.graphql.XXXXXXX)
 

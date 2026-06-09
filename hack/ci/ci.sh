@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 source "$SCRIPT_DIR/lib.sh"
 
@@ -17,7 +17,6 @@ IMAGE="$DISTRO_NAME.x86_64.qcow2.zst"
 
 # IMAGE_URL="~/Downloads/fedora-rawhide.x86_64.qcow2.zst"
 IMAGE_URL="https://objectstorage.us-ashburn-1.oraclecloud.com/n/id0lmbbwgcdv/b/podman-ci-vm-images/o/releases/$AUTOMATION_RELEASE/$IMAGE"
-
 
 trap "limactl delete --force $LIMA_VM_NAME" EXIT
 

@@ -55,7 +55,7 @@ Other options:
   -h            display usage message
 "
 
-die () {
+die() {
     echo "$ME: $*" >&2
     exit 1
 }
@@ -66,16 +66,22 @@ die () {
 
 while getopts "i:u:p:P:hv" opt; do
     case "$opt" in
-        i)         PODMAN_REGISTRY_IMAGE=$OPTARG ;;
-        u)         PODMAN_REGISTRY_USER=$OPTARG  ;;
-        p)         PODMAN_REGISTRY_PASS=$OPTARG  ;;
-        P)         PODMAN_REGISTRY_PORT=$OPTARG  ;;
-        h)         echo "$usage"; exit 0;;
-        v)         verbose=1 ;;
-        \?)        echo "Run '$ME -h' for help" >&2; exit 1;;
+    i) PODMAN_REGISTRY_IMAGE=$OPTARG ;;
+    u) PODMAN_REGISTRY_USER=$OPTARG ;;
+    p) PODMAN_REGISTRY_PASS=$OPTARG ;;
+    P) PODMAN_REGISTRY_PORT=$OPTARG ;;
+    h)
+        echo "$usage"
+        exit 0
+        ;;
+    v) verbose=1 ;;
+    \?)
+        echo "Run '$ME -h' for help" >&2
+        exit 1
+        ;;
     esac
 done
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 # END   option processing
 ###############################################################################
@@ -100,11 +106,11 @@ function podman() {
     fi
 
     # Reset $PODMAN, so ps/logs/stop use same args as the initial start
-    PODMAN="$(<${PODMAN_REGISTRY_WORKDIR}/PODMAN)"
+    PODMAN="$(< ${PODMAN_REGISTRY_WORKDIR}/PODMAN)"
 
-    ${PODMAN} --root    ${PODMAN_REGISTRY_WORKDIR}/root        \
-              --runroot ${PODMAN_REGISTRY_WORKDIR}/runroot     \
-              "$@"
+    ${PODMAN} --root ${PODMAN_REGISTRY_WORKDIR}/root \
+        --runroot ${PODMAN_REGISTRY_WORKDIR}/runroot \
+        "$@"
 }
 
 ###############
@@ -116,7 +122,7 @@ function must_pass() {
     "$@" &> $log
     if [ $? -ne 0 ]; then
         echo "$ME: Command failed: $*" >&2
-        cat $log                       >&2
+        cat $log >&2
 
         # If we ever get here, it's a given that the registry is not running.
         # Clean up after ourselves.
@@ -129,16 +135,16 @@ function must_pass() {
 #  wait_for_port  #  Returns once port is available on localhost
 ###################
 function wait_for_port() {
-    local port=$1                      # Numeric port
+    local port=$1 # Numeric port
 
     local host=127.0.0.1
     local _timeout=5
 
     # Wait
     while [ $_timeout -gt 0 ]; do
-        { exec {unused_fd}<> /dev/tcp/$host/$port; } &>/dev/null && return
+        { exec {unused_fd}<> /dev/tcp/$host/$port; } &> /dev/null && return
         sleep 1
-        _timeout=$(( $_timeout - 1 ))
+        _timeout=$(($_timeout - 1))
     done
 
     die "Timed out waiting for port $port"
@@ -151,8 +157,8 @@ function wait_for_port() {
 function do_start() {
     # If called without a port, assign a random one in the 5xxx range
     if [ -z "${PODMAN_REGISTRY_PORT}" ]; then
-        for port in $(shuf -i 5000-5999);do
-            if ! { exec {unused_fd}<> /dev/tcp/127.0.0.1/$port; } &>/dev/null; then
+        for port in $(shuf -i 5000-5999); do
+            if ! { exec {unused_fd}<> /dev/tcp/127.0.0.1/$port; } &> /dev/null; then
                 PODMAN_REGISTRY_PORT=$port
                 break
             fi
@@ -179,7 +185,7 @@ function do_start() {
 
     # Preserve initial podman path & args, so all subsequent invocations
     # of this script are consistent with the first one.
-    echo "$PODMAN" >${PODMAN_REGISTRY_WORKDIR}/PODMAN
+    echo "$PODMAN" > ${PODMAN_REGISTRY_WORKDIR}/PODMAN
 
     local AUTHDIR=${PODMAN_REGISTRY_WORKDIR}/auth
     mkdir -p $AUTHDIR
@@ -191,21 +197,21 @@ function do_start() {
     set +e
 
     # Give it three tries, to compensate for flakes
-    podman pull ${PODMAN_REGISTRY_IMAGE}      &>/dev/null ||
-        podman pull ${PODMAN_REGISTRY_IMAGE}  &>/dev/null ||
+    podman pull ${PODMAN_REGISTRY_IMAGE} &> /dev/null ||
+        podman pull ${PODMAN_REGISTRY_IMAGE} &> /dev/null ||
         must_pass podman pull ${PODMAN_REGISTRY_IMAGE}
 
     # Registry image needs a cert. Self-signed is good enough.
     local CERT=$AUTHDIR/domain.crt
-    must_pass openssl req -newkey rsa:4096 -nodes -sha256              \
-              -keyout ${AUTHDIR}/domain.key -x509 -days 2              \
-              -out ${AUTHDIR}/domain.crt                               \
-              -subj "/C=US/ST=Foo/L=Bar/O=Red Hat, Inc./CN=localhost"
+    must_pass openssl req -newkey rsa:4096 -nodes -sha256 \
+        -keyout ${AUTHDIR}/domain.key -x509 -days 2 \
+        -out ${AUTHDIR}/domain.crt \
+        -subj "/C=US/ST=Foo/L=Bar/O=Red Hat, Inc./CN=localhost"
 
     # Store credentials where container will see them. We can't run
     # this one via must_pass because we need its stdout.
-    htpasswd -Bbn ${PODMAN_REGISTRY_USER} ${PODMAN_REGISTRY_PASS}   \
-           > $AUTHDIR/htpasswd
+    htpasswd -Bbn ${PODMAN_REGISTRY_USER} ${PODMAN_REGISTRY_PASS} \
+        > $AUTHDIR/htpasswd
     if [ $? -ne 0 ]; then
         rm -rf ${PODMAN_REGISTRY_WORKDIR}
         die "Command failed: htpasswd"
@@ -213,19 +219,19 @@ function do_start() {
 
     # In case someone needs to debug
     echo "${PODMAN_REGISTRY_USER}:${PODMAN_REGISTRY_PASS}" \
-         > $AUTHDIR/htpasswd-plaintext
+        > $AUTHDIR/htpasswd-plaintext
 
     # Run the registry container.
-    must_pass podman run --quiet -d                                     \
-              -p ${PODMAN_REGISTRY_PORT}:5000                           \
-              --name registry                                           \
-              -v $AUTHDIR:/auth:Z                                       \
-              -e "REGISTRY_AUTH=htpasswd"                               \
-              -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"          \
-              -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd"           \
-              -e "REGISTRY_HTTP_TLS_CERTIFICATE=/auth/domain.crt"       \
-              -e "REGISTRY_HTTP_TLS_KEY=/auth/domain.key"               \
-              ${PODMAN_REGISTRY_IMAGE}
+    must_pass podman run --quiet -d \
+        -p ${PODMAN_REGISTRY_PORT}:5000 \
+        --name registry \
+        -v $AUTHDIR:/auth:Z \
+        -e "REGISTRY_AUTH=htpasswd" \
+        -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+        -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd" \
+        -e "REGISTRY_HTTP_TLS_CERTIFICATE=/auth/domain.crt" \
+        -e "REGISTRY_HTTP_TLS_KEY=/auth/domain.key" \
+        ${PODMAN_REGISTRY_IMAGE}
 
     # Confirm that registry started and port is active
     wait_for_port $PODMAN_REGISTRY_PORT
@@ -235,7 +241,6 @@ function do_start() {
         echo "PODMAN_REGISTRY_${v}=\"$(eval echo \$PODMAN_REGISTRY_${v})\""
     done
 }
-
 
 function do_stop() {
     podman stop registry
@@ -250,11 +255,9 @@ function do_stop() {
     fi
 }
 
-
 function do_ps() {
     podman ps -a
 }
-
 
 function do_logs() {
     podman logs registry
@@ -269,11 +272,11 @@ action=${1?ACTION$missing}
 shift
 
 case "$action" in
-    start)  do_start  ;;
-    stop)   do_stop   ;;
-    ps)     do_ps     ;;
-    logs)   do_logs   ;;
-    *)      die "Unknown action '$action'; must be start / stop / ps / logs" ;;
+start) do_start ;;
+stop) do_stop ;;
+ps) do_ps ;;
+logs) do_logs ;;
+*) die "Unknown action '$action'; must be start / stop / ps / logs" ;;
 esac
 
 # END   command-line processing

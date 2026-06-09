@@ -18,7 +18,7 @@ REPO_DIRPATH=$(realpath "$SCRIPT_DIRPATH/../")
 # Help detect what get_ci_vm container called this script
 GET_CI_VM="${GET_CI_VM:-0}"
 in_get_ci_vm() {
-    if ((GET_CI_VM==0)); then
+    if ((GET_CI_VM == 0)); then
         echo "Error: $1 is not intended for use in this context"
         exit 2
     fi
@@ -27,10 +27,10 @@ in_get_ci_vm() {
 # get_ci_vm APIv1 container entrypoint calls into this script
 # to obtain required repo. specific configuration options.
 if [[ "$1" == "--config" ]]; then
-    in_get_ci_vm "$1"  # handles GET_CI_VM==0 case
+    in_get_ci_vm "$1" # handles GET_CI_VM==0 case
     case "$GET_CI_VM" in
-        1)
-            cat <<EOF
+    1)
+        cat << EOF
 DESTDIR="/var/tmp/go/src/github.com/containers/podman"
 UPSTREAM_REPO="https://github.com/containers/podman.git"
 CI_ENVFILE="/etc/ci_environment"
@@ -42,14 +42,14 @@ GCLOUD_CPUS="2"
 GCLOUD_MEMORY="4Gb"
 GCLOUD_DISK="200"
 EOF
-            ;;
-        2)
-            # get_ci_vm APIv2 configuration details
-            echo "AWS_PROFILE=containers"
-            ;;
-        *)
-            echo "Error: Your get_ci_vm container image is too old."
-            ;;
+        ;;
+    2)
+        # get_ci_vm APIv2 configuration details
+        echo "AWS_PROFILE=containers"
+        ;;
+    *)
+        echo "Error: Your get_ci_vm container image is too old."
+        ;;
     esac
 elif [[ "$1" == "--setup" ]]; then
     in_get_ci_vm "$1"

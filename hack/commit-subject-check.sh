@@ -12,22 +12,22 @@ set -euo pipefail
 MAX=90
 
 if [[ $# -ne 1 ]]; then
-	echo "Usage: $0 <git-range>" >&2
-	exit 2
+    echo "Usage: $0 <git-range>" >&2
+    exit 2
 fi
 
 range=$1
 rc=0
 
 while IFS=$'\t' read -r sha subject; do
-	len=${#subject}
-	if [[ $len -eq 0 ]]; then
-		echo "$sha: empty commit subject" >&2
-		rc=1
-	elif [[ $len -ge $MAX ]]; then
-		echo "$sha: subject is $len chars (must be < $MAX): $subject" >&2
-		rc=1
-	fi
+    len=${#subject}
+    if [[ $len -eq 0 ]]; then
+        echo "$sha: empty commit subject" >&2
+        rc=1
+    elif [[ $len -ge $MAX ]]; then
+        echo "$sha: subject is $len chars (must be < $MAX): $subject" >&2
+        rc=1
+    fi
 done < <(git log --no-merges --format='%H%x09%s' "$range")
 
 exit $rc

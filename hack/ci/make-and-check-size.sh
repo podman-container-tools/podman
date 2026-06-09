@@ -90,21 +90,21 @@ make
 # Determine size of each built file.
 # - If this is our first time through, preserve that size in a tmpfile
 # - On all subsequent runs, compare built size to initial size
-for bin in bin/*;do
+for bin in bin/*; do
     size=$(stat -c %s $bin)
 
     saved_size_file=$context_dir/$(basename $bin)
     if [[ -e $saved_size_file ]]; then
         # Not the first time through: compare to original size
         size_orig=$(< $saved_size_file)
-        delta_size=$(( size - size_orig ))
+        delta_size=$((size - size_orig))
 
         printf "%-20s size=%9d  delta=%6d\n" $bin $size $delta_size
         if [[ "$bin" = bin/podman-testing ]]; then
             continue # We compute / list this for completeness, but size does not matter to users.
         fi
         if [[ $delta_size -gt $MAX_BIN_GROWTH ]]; then
-            separator=$(printf "%.0s*" {1..75})   # row of stars, for highlight
+            separator=$(printf "%.0s*" {1..75}) # row of stars, for highlight
             echo "$separator"
             echo "* $bin grew by $delta_size bytes; max allowed is $MAX_BIN_GROWTH."
             echo "*"
@@ -122,7 +122,7 @@ for bin in bin/*;do
         fi
     else
         # First time through: preserve original file size
-        echo $size >$saved_size_file
+        echo $size > $saved_size_file
         printf "%-20s size=%9d\n" $bin $size
     fi
 done

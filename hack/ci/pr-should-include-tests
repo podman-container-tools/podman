@@ -24,24 +24,24 @@ fi
 # Nothing changed under test subdirectory.
 #
 # This is OK if the only files being touched are "safe" ones.
-filtered_changes=$(git diff --name-only $base $head        |
-                       grep -F -vx .cirrus.yml             |
-                       grep -F -vx .pre-commit-config.yaml |
-                       grep -F -vx .gitignore              |
-                       grep -F -vx go.mod                  |
-                       grep -F -vx go.sum                  |
-                       grep -F -vx podman.spec.rpkg        |
-                       grep -F -vx .golangci.yml           |
-                       grep -F -vx winmake.ps1             |
-                       grep -E -v  '/*Makefile$'           |
-                       grep -E -v  '^[^/]+\.md$'           |
-                       grep -E -v  '^.github'              |
-                       grep -E -v  '^contrib/'             |
-                       grep -E -v  '^docs/'                |
-                       grep -E -v  '^hack/'                |
-                       grep -E -v  '^nix/'                 |
-                       grep -E -v  '^vendor/'              |
-                       grep -E -v  '^version/')
+filtered_changes=$(git diff --name-only $base $head |
+    grep -F -vx .cirrus.yml |
+    grep -F -vx .pre-commit-config.yaml |
+    grep -F -vx .gitignore |
+    grep -F -vx go.mod |
+    grep -F -vx go.sum |
+    grep -F -vx podman.spec.rpkg |
+    grep -F -vx .golangci.yml |
+    grep -F -vx winmake.ps1 |
+    grep -E -v '/*Makefile$' |
+    grep -E -v '^[^/]+\.md$' |
+    grep -E -v '^.github' |
+    grep -E -v '^contrib/' |
+    grep -E -v '^docs/' |
+    grep -E -v '^hack/' |
+    grep -E -v '^nix/' |
+    grep -E -v '^vendor/' |
+    grep -E -v '^version/')
 if [[ -z "$filtered_changes" ]]; then
     exit 0
 fi
@@ -70,7 +70,7 @@ fi
 
 # This PR touches non-test files but adds no tests, and
 # the '$OVERRIDE_LABEL' is not set. Fail loudly.
-cat <<EOF
+cat << EOF
 $ME: PR does not include changes in the 'tests' directory
 
 Please write a regression test for what you're fixing. Even if it

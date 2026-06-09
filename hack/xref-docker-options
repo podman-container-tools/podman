@@ -7,21 +7,21 @@
 # implemented in podman but hidden (so of course not in man pages);
 # some are not implemented and never will be (swarm).
 declare -a hidden=(
-    "docker --config"                    # Hidden
-    "docker --context"                   # Hidden
-    "docker --debug"                     # Hidden
-    "docker --host"                      # Hidden
-    "docker -D"                          # Hidden
-    "docker -H"                          # Hidden
+    "docker --config"  # Hidden
+    "docker --context" # Hidden
+    "docker --debug"   # Hidden
+    "docker --host"    # Hidden
+    "docker -D"        # Hidden
+    "docker -H"        # Hidden
 
-    "docker .* --isolation"              # Only for Windows containers
-    "docker .* --kernel-memory"          # CGroupsV1 only, present but hidden
-    "docker .* --link"                   # Deprecated in docker
-    "docker .* --runtime"                # Global option under podman
-    "docker .* --storage-opt"            # Global option under podman
+    "docker .* --isolation"     # Only for Windows containers
+    "docker .* --kernel-memory" # CGroupsV1 only, present but hidden
+    "docker .* --link"          # Deprecated in docker
+    "docker .* --runtime"       # Global option under podman
+    "docker .* --storage-opt"   # Global option under podman
 
-    "docker (container|image) ls"        # Hidden alias to list
-    "docker context"                     # Hidden
+    "docker (container|image) ls" # Hidden alias to list
+    "docker context"              # Hidden
 
     # Hidden
     "docker (container |)logs --details"
@@ -58,15 +58,15 @@ index de9ef8630..b9e4bd0ef 100755
              \$section = lc \$1;
 "
 
-patch --quiet -p1 <<<"$DIFF"
+patch --quiet -p1 <<< "$DIFF"
 
 # Sometimes this produces no output at all. Likely cause is that you
 # have inconsistent .md files, solution is 'make docs'. If that doesn't
 # work, remove the '2>&1 \' from the line below and rerun. I don't feel
 # it's worth the time to improve the error handling here.
-PODMAN=/usr/bin/docker $TMP_SCRIPT 2>&1 \
-    | sed -ne 's/^.*podman \+\(.*\) --help. lists .\(.*\)., which is not.*/- [ ] docker \1 \2/p' \
-    | sed -e 's/ \+/ /g' \
-    | grep -vE "($hidden_re)\$"
+PODMAN=/usr/bin/docker $TMP_SCRIPT 2>&1 |
+    sed -ne 's/^.*podman \+\(.*\) --help. lists .\(.*\)., which is not.*/- [ ] docker \1 \2/p' |
+    sed -e 's/ \+/ /g' |
+    grep -vE "($hidden_re)\$"
 
 rm -f $TMP_SCRIPT

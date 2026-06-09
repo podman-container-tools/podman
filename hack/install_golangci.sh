@@ -3,7 +3,10 @@
 # This script is intended to be a convenience, to be called from the
 # Makefile `.install.golangci-lint` target.  Any other usage is not recommended.
 
-die() { echo "${1:-No error message given} (from $(basename "$0"))"; exit 1; }
+die() {
+    echo "${1:-No error message given} (from $(basename "$0"))"
+    exit 1
+}
 
 [ -n "$VERSION" ] || die "\$VERSION is empty or undefined"
 

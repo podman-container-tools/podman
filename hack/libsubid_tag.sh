@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-if test $(${GO:-go} env GOOS) != "linux" ; then
-	exit 0
+if test $(${GO:-go} env GOOS) != "linux"; then
+    exit 0
 fi
 tmpdir="$PWD/tmp.$RANDOM"
 mkdir -p "$tmpdir"
@@ -24,6 +24,6 @@ int main() {
 	return 0;
 }
 EOF
-if test $? -eq 0 ; then
-	echo libsubid
+if test $? -eq 0; then
+    echo libsubid
 fi

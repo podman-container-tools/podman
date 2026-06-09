@@ -67,35 +67,40 @@ declare -a bats_filter=()
 
 declare -a TESTS
 
-for i;do
-    value=`expr "$i" : '[^=]*=\(.*\)'`
+for i; do
+    value=$(expr "$i" : '[^=]*=\(.*\)')
     case "$i" in
-        -h|--help)  echo "$usage"; exit 0;;
-        --root)     TEST_ROOTLESS= ;;
-        --rootless) TEST_ROOT= ;;
-        --remote)   REMOTE=remote ;;
-        --tap|-t)   bats_opts+=("-t") ;;
-        --ts|-T)    bats_opts+=("-T") ;;
-        --tag=*)    bats_filter=("--filter-tags" "$value")
-                    if [[ "$value" = "ci:parallel" ]]; then
-                        bats_opts+=("--jobs" $(nproc))
-                    fi;;
-        */*.bats)   TESTS+=("$i") ;;
-        *)
-            if [[ $i =~ : ]]; then
-                tname=${i%:*}          # network:localhost -> network
-                filt=${i#*:}           # network:localhost ->   localhost
-                TESTS+=($(echo $TESTS_DIR/*$tname*.bats))
-                bats_filter=("--filter" "$filt")
-            else
-                TESTS+=($(echo $TESTS_DIR/*$i*.bats))
-            fi
-            ;;
+    -h | --help)
+        echo "$usage"
+        exit 0
+        ;;
+    --root) TEST_ROOTLESS= ;;
+    --rootless) TEST_ROOT= ;;
+    --remote) REMOTE=remote ;;
+    --tap | -t) bats_opts+=("-t") ;;
+    --ts | -T) bats_opts+=("-T") ;;
+    --tag=*)
+        bats_filter=("--filter-tags" "$value")
+        if [[ "$value" = "ci:parallel" ]]; then
+            bats_opts+=("--jobs" $(nproc))
+        fi
+        ;;
+    */*.bats) TESTS+=("$i") ;;
+    *)
+        if [[ $i =~ : ]]; then
+            tname=${i%:*} # network:localhost -> network
+            filt=${i#*:}  # network:localhost ->   localhost
+            TESTS+=($(echo $TESTS_DIR/*$tname*.bats))
+            bats_filter=("--filter" "$filt")
+        else
+            TESTS+=($(echo $TESTS_DIR/*$i*.bats))
+        fi
+        ;;
     esac
 done
 
-if [ ${#TESTS[@]} -eq 0 ] ; then
-        TESTS=("$TESTS_DIR")
+if [ ${#TESTS[@]} -eq 0 ]; then
+    TESTS=("$TESTS_DIR")
 fi
 
 # With --remote, use correct binary and make sure daem--I mean server--is live
@@ -125,12 +130,12 @@ export PODMAN_BATS_LEAK_CHECK=1
 # Root
 if [[ "$TEST_ROOT" ]]; then
     echo "# bats ${bats_opts[*]} ${bats_filter[*]} ${TESTS[*]}"
-    sudo    --preserve-env=PODMAN \
-            --preserve-env=QUADLET \
-            --preserve-env=PODMAN_TEST_DEBUG \
-            --preserve-env=CONTAINERS_HELPER_BINARY_DIR \
-            --preserve-env=PODMAN_ROOTLESS_USER \
-            bats "${bats_opts[@]}" "${bats_filter[@]}" "${TESTS[@]}"
+    sudo --preserve-env=PODMAN \
+        --preserve-env=QUADLET \
+        --preserve-env=PODMAN_TEST_DEBUG \
+        --preserve-env=CONTAINERS_HELPER_BINARY_DIR \
+        --preserve-env=PODMAN_ROOTLESS_USER \
+        bats "${bats_opts[@]}" "${bats_filter[@]}" "${TESTS[@]}"
     rc=$?
 fi
 

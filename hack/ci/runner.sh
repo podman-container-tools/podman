@@ -5,12 +5,11 @@
 
 set -eo pipefail
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 source "$SCRIPT_DIR/lib.sh"
 
 parse_args "$@"
-
 
 PRESERVE_ENVS="CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_FS,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM"
 # run as root or or not
@@ -22,30 +21,27 @@ fi
 STORAGE_FS=overlay
 
 case "$DISTRO_NAME" in
-    fedora-current)
-        ;;
-    fedora-prior)
-        STORAGE_FS=vfs
-        ;;
-    fedora-rawhide)
-        # On rawhide enable composefs testing
-        CI_DESIRED_COMPOSEFS="composefs"
-        # Enable sequoia testing
-        TEST_BUILD_TAGS="containers_image_sequoia"
+fedora-current)
+    ;;
+fedora-prior)
+    STORAGE_FS=vfs
+    ;;
+fedora-rawhide)
+    # On rawhide enable composefs testing
+    CI_DESIRED_COMPOSEFS="composefs"
+    # Enable sequoia testing
+    TEST_BUILD_TAGS="containers_image_sequoia"
 
-        # mount a tmpfs for the container storage. This is a work around for the staging pull composefs flake.
-        # FIXME: https://github.com/containers/podman/issues/28813
-        sudo mount -t tmpfs -o size=75%,mode=0700 none /var/lib/containers
-        ;;
-    debian-sid)
-        ;;
-    *)
-        die "Unknown DISTRO_NAME passed $DISTRO_NAME"
-        ;;
+    # mount a tmpfs for the container storage. This is a work around for the staging pull composefs flake.
+    # FIXME: https://github.com/containers/podman/issues/28813
+    sudo mount -t tmpfs -o size=75%,mode=0700 none /var/lib/containers
+    ;;
+debian-sid)
+    ;;
+*)
+    die "Unknown DISTRO_NAME passed $DISTRO_NAME"
+    ;;
 esac
-
-
-
 
 # As of July 2024, CI VMs come built-in with a registry.
 LCR=/var/cache/local-registry/local-cache-registry
@@ -59,7 +55,6 @@ if [[ -x $LCR ]]; then
     done < <(grep '^[^#]' test/NEW-IMAGES || true)
 fi
 
-
 ## Used in tests so we need to export them
 export STORAGE_FS
 export CI_DESIRED_COMPOSEFS
@@ -71,7 +66,7 @@ conf=/etc/containers/storage.conf
 if [[ -e $conf ]]; then
     die "FATAL! INTERNAL ERROR! Cannot override $conf"
 fi
-sudo tee $conf <<EOF
+sudo tee $conf << EOF
 [storage]
 driver = "$STORAGE_FS"
 EOF
@@ -80,7 +75,7 @@ if [[ -n "$CI_DESIRED_COMPOSEFS" ]]; then
     # composefs only works as root so we must set it in the rootful config
     sudo mkdir /etc/containers/storage.rootful.conf.d/
     conf=/etc/containers/storage.rootful.conf.d/99-composefs.conf
-    sudo tee $conf <<EOF
+    sudo tee $conf << EOF
 
 # BEGIN CI-enabled composefs
 [storage.options]
@@ -101,20 +96,18 @@ EOF
     fi
 fi
 
-
 # Machine image is not cached by design.
-if [[ "$TEST" != machine  ]]; then
+if [[ "$TEST" != machine ]]; then
     # Install test registries.conf
     sudo install -v -D -m 644 ./test/registries-cached.conf /etc/containers/registries.conf
 fi
 
 # Add Root user namespace for --userns=auto support in tests
-for which in uid gid;do
+for which in uid gid; do
     if ! grep -qE '^containers:' /etc/sub$which; then
         echo 'containers:10000000:1048576' | sudo tee --append /etc/sub$which
     fi
 done
-
 
 # Load null_blk to use /dev/nullb0 for testing block
 # devices limits
@@ -122,7 +115,6 @@ sudo modprobe null_blk nr_devices=1 || :
 
 # Ensure our CI uses the cache registry
 export CI_USE_REGISTRY_CACHE=1
-
 
 if [[ "$TEST" != build && "$TEST" != unit ]]; then
     ## Remove packaged podman and install the compiled podman
@@ -219,7 +211,6 @@ function run_sys() {
 function run_machine() {
     $SUDO make ${MODE}machine
 }
-
 
 echo
 echo "#################"
