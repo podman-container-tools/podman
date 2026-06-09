@@ -11,3 +11,7 @@ governance:
     - any-glob-to-any-file: OWNERS
     - any-glob-to-any-file: MAINTAINERS.md
     - any-glob-to-any-file: GOVERNANCE.md
+CI:
+  - changed-files:
+    - any-glob-to-any-file: .github/**
+    - any-glob-to-any-file: hack/ci/**
