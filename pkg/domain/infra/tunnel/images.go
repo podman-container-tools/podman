@@ -24,7 +24,6 @@ import (
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/archive"
-	"go.podman.io/storage/pkg/chrootarchive"
 )
 
 func (ir *ImageEngine) Exists(_ context.Context, nameOrID string) (*entities.BoolReport, error) {
@@ -372,7 +371,7 @@ func (ir *ImageEngine) Save(_ context.Context, nameOrID string, tags []string, o
 		return err
 	}
 
-	return chrootarchive.Untar(f, opts.Output, &archive.TarOptions{NoLchown: true})
+	return archive.Untar(f, opts.Output, &archive.TarOptions{NoLchown: true})
 }
 
 func (ir *ImageEngine) Search(_ context.Context, term string, opts entities.ImageSearchOptions) ([]entities.ImageSearchReport, error) {
