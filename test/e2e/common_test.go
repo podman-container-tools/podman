@@ -1547,8 +1547,11 @@ func (s *PodmanSessionIntegration) jq(jqCommand string) (string, error) {
 }
 
 func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers string, label string, extraOptions []string) string {
-	dockerfilePath := filepath.Join(p.TempDir, "Dockerfile-"+stringid.GenerateRandomID())
-	err := os.WriteFile(dockerfilePath, []byte(dockerfile), 0o755)
+	buildDir := filepath.Join(p.TempDir, "build"+stringid.GenerateRandomID())
+	err := os.Mkdir(buildDir, 0o755)
+	Expect(err).ToNot(HaveOccurred())
+	dockerfilePath := filepath.Join(buildDir, "Dockerfile-"+stringid.GenerateRandomID())
+	err = os.WriteFile(dockerfilePath, []byte(dockerfile), 0o644)
 	Expect(err).ToNot(HaveOccurred())
 	cmd := []string{"build", "--pull-never", "--layers=" + layers, "--file", dockerfilePath}
 	if label != "" {
@@ -1560,7 +1563,7 @@ func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers 
 	if len(extraOptions) > 0 {
 		cmd = append(cmd, extraOptions...)
 	}
-	cmd = append(cmd, p.TempDir)
+	cmd = append(cmd, buildDir)
 	session := p.Podman(cmd)
 	session.Wait(240)
 	Expect(session).Should(Exit(0), fmt.Sprintf("BuildImage session output: %q", session.OutputToString()))

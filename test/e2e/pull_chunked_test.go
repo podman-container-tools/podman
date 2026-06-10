@@ -69,11 +69,18 @@ func pullChunkedTests() { // included in pull_test.go, must use a Ginkgo DSL at 
 					registryRef: pullChunkedRegistryPrefix + "chunked-normal",
 					dirPath:     filepath.Join(imageDir, "chunked-normal"),
 				}
+
+				buildDir := filepath.Join(podmanTest.TempDir, "build")
+				err := os.Mkdir(buildDir, 0o755)
+				Expect(err).ToNot(HaveOccurred())
 				chunkedNormalContentPath := "chunked-normal-image-content"
-				err := os.WriteFile(filepath.Join(podmanTest.TempDir, chunkedNormalContentPath), fmt.Appendf(nil, "content-%d", rand.Int64()), 0o600)
+				err = os.WriteFile(filepath.Join(buildDir, chunkedNormalContentPath), fmt.Appendf(nil, "content-%d", rand.Int64()), 0o600)
 				Expect(err).NotTo(HaveOccurred())
 				chunkedNormalContainerFile := fmt.Sprintf("FROM scratch\nADD %s /content", chunkedNormalContentPath)
-				podmanTest.BuildImage(chunkedNormalContainerFile, chunkedNormal.localTag(), "true")
+				err = os.WriteFile(filepath.Join(buildDir, "Containerfile"), []byte(chunkedNormalContainerFile), 0o600)
+				Expect(err).NotTo(HaveOccurred())
+				podmanTest.PodmanExitCleanly("build", "-q", "-t", chunkedNormal.localTag(), "--layers=true", buildDir)
+
 				podmanTest.PodmanExitCleanly("push", "-q", "--tls-verify=false", "--force-compression", "--compression-format=zstd:chunked", chunkedNormal.localTag(), chunkedNormal.registryRef)
 				skopeo := SystemExec("skopeo", []string{"copy", "-q", "--preserve-digests", "--all", "--src-tls-verify=false", chunkedNormal.registryRef, "dir:" + chunkedNormal.dirPath})
 				skopeo.WaitWithDefaultTimeout()
