@@ -339,8 +339,15 @@ jobs:
         priv: [rootless, root]
         mode: [local, remote]
         exclude:
-          # try to keep the task somewhat sane and not run remote test rootless
-          - priv: rootless
+          # try to keep the task somewhat sane and exclude all but one rootless+remote combination
+          - distro: fedora-prior
+            priv: rootless
+            mode: remote
+          - distro: fedora-rawhide
+            priv: rootless
+            mode: remote
+          - distro: debian-sid
+            priv: rootless
             mode: remote
         include:
           # Add buildah bud tests, only runs as root for now.
