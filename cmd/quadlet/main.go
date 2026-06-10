@@ -66,11 +66,33 @@ func logToKmsg(s string) bool {
 	return true
 }
 
+func shouldLogToStderr(kmsgOK bool, dryRun bool, stderrIsTerminal bool) bool {
+	return !kmsgOK || dryRun || stderrIsTerminal
+}
+
+// stderrIsTerminal reports whether stderr is a character device (e.g. a tty).
+// Used as a lightweight isatty so quadlet logs to stderr when run interactively
+// and to kmsg when run non-interactively (e.g. under systemd), without pulling
+// golang.org/x/term (and its golang.org/x/sys dependency) into the generator
+// binary.
+func stderrIsTerminal() bool {
+	fi, err := os.Stderr.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 func Logf(format string, a ...any) {
 	s := fmt.Sprintf(format, a...)
 	line := fmt.Sprintf("quadlet-generator[%d]: %s", os.Getpid(), s)
 
-	if !logToKmsg(line) || dryRunFlag {
+	isTerminal := stderrIsTerminal()
+	kmsgOK := false
+	if !isTerminal {
+		kmsgOK = logToKmsg(line)
+	}
+	if shouldLogToStderr(kmsgOK, dryRunFlag, isTerminal) {
 		fmt.Fprintf(os.Stderr, "%s\n", line)
 		os.Stderr.Sync()
 	}
