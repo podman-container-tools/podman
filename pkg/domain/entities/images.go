@@ -272,6 +272,7 @@ type ImageImportReport = entitiesTypes.ImageImportReport
 
 // ImageSaveOptions provide options for saving images.
 type ImageSaveOptions struct {
+	// 
 	// Compress layers when saving to a directory.
 	Compress bool
 	// Format of saving the image: oci-archive, oci-dir (directory with oci
@@ -289,6 +290,8 @@ type ImageSaveOptions struct {
 	// Quiet - suppress output when copying images
 	Quiet           bool
 	SignaturePolicy string
+	// Zip - zip output tarball 
+	Zip bool
 }
 
 // ImageScpOptions provides options for ImageEngine.Scp()
