@@ -61,7 +61,7 @@ func restart(_ *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("Machine %q restarted successfully\n", vmName)
-	newMachineEvent(events.Stop, events.Event{Name: vmName})
-	newMachineEvent(events.Start, events.Event{Name: vmName})
+
+	newMachineEvent(events.Restart, events.Event{Name: vmName})
 	return nil
 }
