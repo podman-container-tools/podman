@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
@@ -84,6 +85,7 @@ type BuildQuery struct {
 	IDMappingOptions        string             `schema:"idmappingoptions"`
 	IdentityLabel           bool               `schema:"identitylabel"`
 	Ignore                  bool               `schema:"ignore"`
+	IgnoreFile              string             `schema:"ignorefile"`
 	InheritLabels           types.OptionalBool `schema:"inheritlabels"`
 	InheritAnnotations      types.OptionalBool `schema:"inheritannotations"`
 	Isolation               string             `schema:"isolation"`
@@ -167,6 +169,12 @@ func (b *BuildContext) validateLocalAPIPaths() error {
 			continue
 		}
 		if err := localapi.ValidatePathForLocalAPI(ctx.Value); err != nil {
+			return err
+		}
+	}
+
+	if b.IgnoreFile != "" {
+		if err := localapi.ValidatePathForLocalAPI(b.IgnoreFile); err != nil {
 			return err
 		}
 	}
@@ -293,6 +301,33 @@ func processBuildContext(query url.Values, r *http.Request, buildContext *BuildC
 				}
 			}
 		}
+	}
+
+	// Process dockerignore only if no explicit ignorefile was specified
+	if ignorefile := query.Get("ignorefile"); ignorefile != "" {
+		if filepath.IsAbs(ignorefile) {
+			ignoreFilePath := filepath.Clean(ignorefile)
+			// In remote builds, the client may send an absolute path that exists
+			// only on the client filesystem. The file is bundled in the tarball
+			// and unpacked under the context directory at the same absolute path,
+			// so fall back to looking it up there if the absolute path is missing.
+			if err := fileutils.Exists(ignoreFilePath); err != nil {
+				ignoreFilePath = filepath.Join(buildContext.ContextDirectory, ignoreFilePath)
+			}
+			buildContext.IgnoreFile = ignoreFilePath
+		} else {
+			ignoreFilePath, err := securejoin.SecureJoin(buildContext.ContextDirectory, ignorefile)
+			if err != nil {
+				return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file path: %w", err))
+			}
+			buildContext.IgnoreFile = ignoreFilePath
+		}
+	} else {
+		_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
+		if err != nil {
+			return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
+		}
+		buildContext.IgnoreFile = ignoreFile
 	}
 
 	return buildContext, nil
@@ -1013,13 +1048,6 @@ func getLocalBuildContext(r *http.Request, query url.Values, anchorDir string, _
 		return nil, utils.GetGenericBadRequestError(err)
 	}
 
-	// Process dockerignore
-	_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
-	if err != nil {
-		return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
-	}
-	buildContext.IgnoreFile = ignoreFile
-
 	return buildContext, nil
 }
 
@@ -1119,13 +1147,6 @@ func getBuildContext(r *http.Request, query url.Values, anchorDir string, multip
 	if err != nil {
 		return nil, err
 	}
-
-	// Process dockerignore
-	_, ignoreFile, err := util.ParseDockerignore(buildContext.ContainerFiles, buildContext.ContextDirectory)
-	if err != nil {
-		return nil, utils.GetInternalServerError(fmt.Errorf("processing ignore file: %w", err))
-	}
-	buildContext.IgnoreFile = ignoreFile
 
 	return buildContext, nil
 }

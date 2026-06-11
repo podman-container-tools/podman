@@ -200,6 +200,15 @@ func prepareParams(options types.BuildOptions) (url.Values, error) {
 		}
 		params.Set("excludes", bArgs)
 	}
+	if options.IgnoreFile != "" {
+		ignoreFile := options.IgnoreFile
+		if absIgnore, err := filepath.Abs(ignoreFile); err == nil {
+			if relPath, ok := strings.CutPrefix(absIgnore, options.ContextDirectory+string(filepath.Separator)); ok {
+				ignoreFile = relPath
+			}
+		}
+		params.Set("ignorefile", ignoreFile)
+	}
 	if cpuPeriod := options.CommonBuildOpts.CPUPeriod; cpuPeriod > 0 {
 		params.Set("cpuperiod", strconv.Itoa(int(cpuPeriod)))
 	}
@@ -1050,7 +1059,7 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 	}
 
 	buildFilePaths.excludes = options.Excludes
-	if len(buildFilePaths.excludes) == 0 {
+	if len(buildFilePaths.excludes) == 0 && options.IgnoreFile == "" {
 		buildFilePaths.excludes, _, err = util.ParseDockerignore(buildFilePaths.newContainerFiles, options.ContextDirectory)
 		if err != nil {
 			return nil, err
@@ -1071,6 +1080,19 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 		}
 		requestParts.Params.Add("secrets", c)
 		buildFilePaths.tarContent = append(buildFilePaths.tarContent, secretsTarContent...)
+	}
+
+	// If ignorefile is outside the context directory, add it to tarball (same as containerfile)
+	if options.IgnoreFile != "" {
+		absIgnore, err := filepath.Abs(options.IgnoreFile)
+		if err != nil {
+			return nil, fmt.Errorf("cannot resolve ignore file path: %w", err)
+		}
+		if _, ok := strings.CutPrefix(absIgnore, contextDirAbs+string(filepath.Separator)); !ok {
+			if err := fileutils.Lexists(absIgnore); err == nil {
+				buildFilePaths.tarContent = append(buildFilePaths.tarContent, absIgnore)
+			}
+		}
 	}
 
 	requestParts, err = prepareRequestBody(ctx, requestParts, buildFilePaths, options)

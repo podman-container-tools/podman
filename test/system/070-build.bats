@@ -1298,4 +1298,39 @@ function teardown() {
     assert "$output" =~ "--pull.*(default \"missing\")" "pull should default to missing"
 }
 
+@test "podman build --ignorefile overrides .dockerignore" {
+    local contextdir=$PODMAN_TMPDIR/build-test-$(random_string 10)
+    mkdir -p $contextdir
+
+    local testfile=testfile-$(random_string 12)
+    echo "test content" > $contextdir/$testfile
+
+    cat >$contextdir/.dockerignore <<EOF
+$testfile
+EOF
+
+    cat >$contextdir/Containerfile <<EOF
+FROM $IMAGE
+COPY . /testdir/
+RUN find /testdir/
+EOF
+
+    # Empty ignorefile inside context dir
+    local emptyignore=$contextdir/.emptyignore
+    touch $emptyignore
+
+    imgname="b-$(safename)"
+    run_podman build -t $imgname --ignorefile $emptyignore $contextdir
+    assert "$output" =~ "$testfile" "empty ignorefile inside context dir should override .dockerignore"
+    run_podman rmi -f $imgname
+
+    # Empty ignorefile outside context dir
+    local outsideignore=$PODMAN_TMPDIR/.outside-emptyignore
+    touch $outsideignore
+
+    run_podman build -t $imgname --ignorefile $outsideignore $contextdir
+    assert "$output" =~ "$testfile" "empty ignorefile outside context dir should override .dockerignore"
+    run_podman rmi -f $imgname
+}
+
 # vim: filetype=sh
