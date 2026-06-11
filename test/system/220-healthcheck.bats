@@ -399,6 +399,46 @@ function _check_health_log {
 }
 
 
+@test "podman healthcheck - corrupted log file is handled gracefully" {
+    local TMP_DIR_HEALTHCHECK="$PODMAN_TMPDIR/healthcheck"
+    mkdir $TMP_DIR_HEALTHCHECK
+    local ctrname="c-h-$(safename)"
+    local msg="healthmsg-$(random_string)"
+    _create_container_with_health_log_settings $ctrname $msg "{{.Config.HealthLogDestination}}" "--health-log-destination $TMP_DIR_HEALTHCHECK" "$TMP_DIR_HEALTHCHECK" "HealthLogDestination"
+    cid="$output"
+
+    # First make sure there is an uncorrupted log.
+    run_podman healthcheck run $ctrname
+    is "$output" "" "output from 'podman healthcheck run'"
+
+    healthcheck_log_path="${TMP_DIR_HEALTHCHECK}/${cid}-healthcheck.log"
+    count=$(grep -co "$msg" $healthcheck_log_path)
+    assert "$count" -ge 1 "Number of matching health log messages"
+
+    # Corrupt the log file with invalid JSON.
+    echo "{invalid json{" > $healthcheck_log_path
+
+    # podman ps must not fail but should warn and report unhealthy.
+    run_podman 0+w ps --format '{{.Names}} {{.Status}}'
+    assert "$output" =~ "$ctrname" "podman ps must still list the container"
+    assert "$output" =~ "unhealthy" "corrupted log should be reported as unhealthy"
+    assert "$output" =~ "healthcheck log corrupted" "expected warning about corrupted log from ps"
+
+    # Verify that healthcheck run recovers by overwriting the corrupted
+    # log file with a new result while issuing a warning.
+    run_podman 0+w healthcheck run $ctrname
+    assert "$output" =~ "healthcheck log corrupted" "expected warning about corrupted log"
+
+    count=$(grep -co "$msg" $healthcheck_log_path)
+    assert "$count" -ge 1 "Number of matching health log messages after recovery"
+
+    # Run again to verify the warning is gone after the log was rewritten.
+    run_podman healthcheck run $ctrname
+    is "$output" "" "no warnings after log recovery"
+
+    run_podman rm -t 0 -f $ctrname
+}
+
 @test "podman healthcheck --health-log-destination journal" {
     skip_if_remote "We cannot read journalctl over remote."
 

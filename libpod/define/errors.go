@@ -226,4 +226,8 @@ var (
 
 	// ErrHealthCheckTimeout indicates that a HealthCheck timed out.
 	ErrHealthCheckTimeout = errors.New("healthcheck command exceeded timeout")
+
+	// ErrHealthCheckLogCorrupted indicates that the healthcheck log
+	// cannot be parsed.
+	ErrHealthCheckLogCorrupted = errors.New("healthcheck log corrupted")
 )

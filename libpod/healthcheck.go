@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
+	"go.podman.io/storage/pkg/ioutils"
 	"golang.org/x/sys/unix"
 )
 
@@ -351,7 +352,11 @@ func newHealthCheckLog(start, end time.Time, exitCode int, log string) define.He
 func (c *Container) updateHealthStatus(status string) error {
 	healthCheck, err := c.readHealthCheckLog()
 	if err != nil {
-		return err
+		// If the healthcheck log is corrupted, overwrite it with a new result.
+		if !errors.Is(err, define.ErrHealthCheckLogCorrupted) {
+			return err
+		}
+		logrus.Warnf("Failed to read healthcheck log for %s: %v", c.ID(), err)
 	}
 	healthCheck.Status = status
 	return c.writeHealthCheckLog(healthCheck)
@@ -364,7 +369,8 @@ func (c *Container) isUnhealthy() (bool, error) {
 	}
 	healthCheck, err := c.readHealthCheckLog()
 	if err != nil {
-		return false, err
+		// If the state cannot be determined from the log, treat it as unhealthy.
+		return true, err
 	}
 	return healthCheck.Status == define.HealthCheckUnhealthy, nil
 }
@@ -374,7 +380,11 @@ func (c *Container) isUnhealthy() (bool, error) {
 func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult define.HealthCheckStatus, inStartPeriod bool) (define.HealthCheckResults, error) {
 	healthCheck, err := c.readHealthCheckLog()
 	if err != nil {
-		return define.HealthCheckResults{}, err
+		// If the log is corrupted, use an empty result and eventually overwrite it.
+		if !errors.Is(err, define.ErrHealthCheckLogCorrupted) {
+			return healthCheck, err
+		}
+		logrus.Warnf("Failed to read healthcheck log for %s: %v", c.ID(), err)
 	}
 	if hcl.ExitCode == 0 {
 		//	set status to healthy, reset failing state to 0
@@ -402,12 +412,12 @@ func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult def
 	return healthCheck, c.writeHealthCheckLog(healthCheck)
 }
 
-func (c *Container) witeToFileHealthCheckResults(path string, result define.HealthCheckResults) error {
+func (c *Container) writeToFileHealthCheckResults(path string, result define.HealthCheckResults) error {
 	newResults, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("unable to marshall healthchecks for writing: %w", err)
 	}
-	return os.WriteFile(path, newResults, 0o700)
+	return ioutils.AtomicWriteFile(path, newResults, 0o700)
 }
 
 func (c *Container) getHealthCheckLogDestination() string {
@@ -422,7 +432,7 @@ func (c *Container) getHealthCheckLogDestination() string {
 }
 
 func (c *Container) writeHealthCheckLog(result define.HealthCheckResults) error {
-	return c.witeToFileHealthCheckResults(c.getHealthCheckLogDestination(), result)
+	return c.writeToFileHealthCheckResults(c.getHealthCheckLogDestination(), result)
 }
 
 // readHealthCheckLog read HealthCheck logs from the path or events_logger
@@ -432,27 +442,32 @@ func (c *Container) readHealthCheckLog() (define.HealthCheckResults, error) {
 }
 
 // readFromFileHealthCheckLog returns HealthCheck results by reading the container's
-// health check log file.  If the health check log file does not exist, then
-// an empty healthcheck struct is returned
+// health check log file. If the health check log file does not exist, then
+// an empty healthcheck struct is returned. If the health check log file
+// cannot be parsed, the error define.ErrHealthCheckLogCorrupted struct
+// is returned together with an empty define.HealthCheckResults.
 // The caller should lock the container before this function is called.
 func (c *Container) readFromFileHealthCheckLog(path string) (define.HealthCheckResults, error) {
 	var healthCheck define.HealthCheckResults
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			// If the file does not exists just return empty healthcheck and no error.
+			// If the file does not exist just return empty healthcheck and no error.
 			return healthCheck, nil
 		}
 		return healthCheck, fmt.Errorf("failed to read health check log file: %w", err)
 	}
+	// If the file is corrupted, return an empty healthcheck and wrapped ErrHealthCheckLogCorrupted.
 	if err := json.Unmarshal(b, &healthCheck); err != nil {
-		return healthCheck, fmt.Errorf("failed to unmarshal existing healthcheck results in %s: %w", path, err)
+		return healthCheck, fmt.Errorf("%w: %w", define.ErrHealthCheckLogCorrupted, err)
 	}
 	return healthCheck, nil
 }
 
 // HealthCheckStatus returns the current state of a container with a healthcheck.
 // Returns an empty string if no health check is defined for the container.
+// If the healthcheck log is corrupted, the error define.ErrHealthCheckLogCorrupted
+// is returned.
 func (c *Container) HealthCheckStatus() (string, error) {
 	if !c.batched {
 		c.lock.Lock()
@@ -474,7 +489,7 @@ func (c *Container) healthCheckStatus() (string, error) {
 
 	results, err := c.readHealthCheckLog()
 	if err != nil {
-		return "", fmt.Errorf("unable to get healthcheck log for %s: %w", c.ID(), err)
+		return define.HealthCheckUnhealthy, fmt.Errorf("unable to get healthcheck log for %s: %w", c.ID(), err)
 	}
 
 	return results.Status, nil

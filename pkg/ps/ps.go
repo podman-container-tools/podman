@@ -229,7 +229,11 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 
 		healthStatus, err = c.HealthCheckStatus()
 		if err != nil {
-			return err
+			// Do not treat a corrupted healthcheck log as a hard error.
+			if !errors.Is(err, define.ErrHealthCheckLogCorrupted) {
+				return err
+			}
+			logrus.Warnf("Container %v health check log is corrupted: %v", c.ID(), err)
 		}
 
 		restartCount, err = c.RestartCount()

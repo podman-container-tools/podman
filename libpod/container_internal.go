@@ -230,7 +230,9 @@ func (c *Container) shouldRestart() bool {
 	if c.config.HealthCheckOnFailureAction == define.HealthCheckOnFailureActionRestart {
 		isUnhealthy, err := c.isUnhealthy()
 		if err != nil {
+			// If the state cannot be determined, assume unhealthy.
 			logrus.Errorf("Checking if container is unhealthy: %v", err)
+			return true
 		} else if isUnhealthy {
 			return true
 		}
