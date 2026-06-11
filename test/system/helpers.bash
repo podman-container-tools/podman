@@ -784,6 +784,20 @@ function is_aarch64() {
     [ "$(uname -m)" == "aarch64" ]
 }
 
+function is_rhel_or_centos() {
+    if find /etc/redhat-release && grep -Eiq "Red Hat Enterprise Linux|CentOS Stream" /etc/redhat-release; then
+        return 0
+    fi
+    return 1
+}
+
+function is_rawhide() {
+    if find /etc/fedora-release && grep -Eiq "Rawhide" /etc/fedora-release; then
+        return 0
+    fi
+    return 1
+}
+
 function selinux_enabled() {
     /usr/sbin/selinuxenabled 2> /dev/null
 }
@@ -956,6 +970,17 @@ function skip_if_aarch64 {
     fi
 }
 
+function skip_if_rhel_or_centos {
+    if is_rhel_or_centos; then
+        skip "${msg:-skip if RHEL or CentOS Stream}"
+    fi
+}
+
+function skip_if_rawhide {
+    if is_rawhide; then
+        skip "${msg:-skip if Fedora Rawhide}"
+    fi
+}
 #########
 #  die  #  Abort with helpful message
 #########

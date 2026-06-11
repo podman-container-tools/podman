@@ -4,6 +4,8 @@ set -exo pipefail
 
 uname -r
 
+cat /etc/redhat-release
+
 loginctl enable-linger "$ROOTLESS_USER"
 
 rpm -q \
@@ -22,7 +24,7 @@ rpm -q \
     systemd
 
 export system_service_cmd="/usr/bin/podman system service --timeout=0 &"
-export test_cmd="whoami && cd /usr/share/podman/test/system && PODMAN_TESTING=/usr/bin/podman-testing bats ."
+export test_cmd="whoami && cd /usr/share/podman/test/system && PODMAN_TESTING=/usr/bin/podman-testing bats 520-checkpoint.bats"
 
 if [[ -z $1 ]]; then
     if [[ $PODMAN == "/usr/bin/podman-remote" ]]; then

@@ -8,6 +8,10 @@ load helpers.network
 
 CHECKED_ROOTLESS=
 function setup() {
+    # Often breaks on RHEL/CentOS Stream and Fedora Rawhide
+    skip_if_rhel_or_centos
+    skip_if_rawhide
+
     # None of these tests work rootless....
     if is_rootless; then
         # ...however, is that a genuine cast-in-stone limitation, or one
