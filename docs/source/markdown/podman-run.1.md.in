@@ -238,6 +238,8 @@ See [**Environment**](#environment) note below for precedence and examples.
 
 Print usage statement
 
+@@option hooks-dir.run
+
 @@option hostname.container
 
 @@option hosts-file
