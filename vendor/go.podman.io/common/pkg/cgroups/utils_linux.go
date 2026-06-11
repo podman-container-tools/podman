@@ -170,6 +170,9 @@ func getCgroupProcess(procFile string, allowRoot bool) (string, error) {
 			cgroup = parts[2]
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
 	if len(cgroup) == 0 || (!allowRoot && cgroup == "/") {
 		return "", fmt.Errorf("could not find cgroup mount in %q", procFile)
 	}
@@ -266,6 +269,9 @@ func MoveUnderCgroup(cgroup, subtree string, processes []uint32) error {
 				}
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 	return nil
 }

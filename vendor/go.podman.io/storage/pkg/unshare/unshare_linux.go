@@ -680,6 +680,9 @@ func getHostIDMappings(path string) ([]specs.LinuxIDMapping, error) {
 		}
 		mappings = append(mappings, specs.LinuxIDMapping{ContainerID: uint32(cid), HostID: uint32(hid), Size: uint32(size)})
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading ID mappings from %q: %w", path, err)
+	}
 	return mappings, nil
 }
 

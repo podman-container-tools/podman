@@ -24,6 +24,8 @@ func newConnection(facts *entities.PodmanConfig, farmNodeName string) (context.C
 	if connection == nil || farmNodeName != "" {
 		ctx, err := newConnectionWithoutLock(context.Background(), facts)
 		if err != nil {
+			// Clear stale connection so the next call retries.
+			connection = nil
 			return ctx, err
 		}
 		connection = &ctx

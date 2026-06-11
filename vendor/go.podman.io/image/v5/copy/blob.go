@@ -12,13 +12,14 @@ import (
 	"go.podman.io/image/v5/types"
 )
 
-// copyBlobFromStream copies a blob with srcInfo (with known Digest and Annotations and possibly known Size) from srcReader to dest,
-// perhaps sending a copy to an io.Writer if getOriginalLayerCopyWriter != nil,
-// perhaps (de/re/)compressing it if canModifyBlob,
-// and returns a complete blobInfo of the copied blob.
+// copyBlobFromStream copies a blob with srcInfo (with known Digest and Annotations and possibly known Size)
+// from srcReader to dest, perhaps sending a copy to an io.Writer if getOriginalLayerCopyWriter != nil,
+// perhaps (de/re/)compressing it if canModifyBlob, and returns a complete blobInfo of the copied blob.
+// The caller is responsible for calling reporter.reportSuccess() on success.
 func (ic *imageCopier) copyBlobFromStream(ctx context.Context, srcReader io.Reader, srcInfo types.BlobInfo,
 	getOriginalLayerCopyWriter func(decompressor compressiontypes.DecompressorFunc) io.Writer,
 	isConfig bool, toEncrypt bool, bar *progressBar, layerIndex int, emptyLayer bool,
+	reporter progressReporter,
 ) (types.BlobInfo, error) {
 	// The copying happens through a pipeline of connected io.Readers;
 	// that pipeline is built by updating stream.
@@ -84,16 +85,13 @@ func (ic *imageCopier) copyBlobFromStream(ctx context.Context, srcReader io.Read
 		return types.BlobInfo{}, err
 	}
 
-	// === Report progress using the ic.c.options.Progress channel, if required.
+	// === Report progress using the reporter, if required.
 	if ic.c.options.Progress != nil && ic.c.options.ProgressInterval > 0 {
-		progressReader := newProgressReader(
-			stream.reader,
-			ic.c.options.Progress,
-			ic.c.options.ProgressInterval,
-			srcInfo,
-		)
-		defer progressReader.reportDone()
-		stream.reader = progressReader
+		// Note: the reporter can be a no-op if the condition above evaluates
+		// false and in that case we prefer not to wrap the reader,
+		// so that we don’t inhibit users that benefit from optional
+		// interface special cases (e.g. io.WriterTo).
+		stream.reader = newProgressReader(stream.reader, reporter)
 	}
 
 	// === Finally, send the layer stream to dest.

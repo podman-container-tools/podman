@@ -310,6 +310,11 @@ type DifferOptions struct {
 
 	// UseFsVerity defines whether fs-verity is used
 	UseFsVerity DifferFsVerity
+
+	// StagingDirectory is a writable directory the differ can use for
+	// temporary scratch data.  It must reside on the same filesystem
+	// as the destination directory.
+	StagingDirectory string
 }
 
 // Differ defines the interface for using a custom differ.

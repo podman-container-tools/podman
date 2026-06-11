@@ -297,8 +297,8 @@ func sshClient(_url *url.URL, uri string, identity string, machine bool) (Connec
 		val := strings.TrimSuffix(b.String(), "\n")
 		_url.Path = val
 	}
-	dialContext := func(_ context.Context, _, _ string) (net.Conn, error) {
-		return ssh.DialNet(conn, "unix", _url)
+	dialContext := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return ssh.DialNetContext(ctx, conn, "unix", _url)
 	}
 	connection.Client = &http.Client{
 		Transport: &http.Transport{
@@ -314,8 +314,8 @@ func tcpClient(_url *url.URL, opts Options) (Connection, error) {
 	connection := Connection{
 		URI: _url,
 	}
-	dialContext := func(_ context.Context, _, _ string) (net.Conn, error) {
-		return net.Dial("tcp", _url.Host)
+	dialContext := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", _url.Host)
 	}
 	// use proxy if env `CONTAINER_PROXY` set
 	if proxyURI, found := os.LookupEnv("CONTAINER_PROXY"); found {
@@ -480,10 +480,15 @@ func (c *Connection) DoRequest(ctx context.Context, httpBody io.Reader, httpMeth
 		}
 	}
 
-	// Give the Do three chances in the case of a comm/service hiccup
+	// Give the Do three chances in the case of a comm/service hiccup.
+	// Don't retry on context or timeout errors — those won't recover.
 	for i := 1; i <= 3; i++ {
 		response, err = c.Client.Do(req) //nolint:bodyclose // The caller has to close the body.
 		if err == nil {
+			break
+		}
+		var netErr net.Error
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || (errors.As(err, &netErr) && netErr.Timeout()) {
 			break
 		}
 		time.Sleep(time.Duration(i*100) * time.Millisecond)

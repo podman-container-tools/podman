@@ -405,7 +405,7 @@ func createCgroupv2Path(path string) (deferredError error) {
 						newCtrs := [][]byte{}
 						for _, ctr := range ctrs {
 							// Try to enable each controller individually, at least we can give a better error message if any fails.
-							if err := os.WriteFile(subtreeControl, []byte(fmt.Sprintf("+%s\n", ctr)), 0o755); err != nil {
+							if err := os.WriteFile(subtreeControl, fmt.Appendf(nil, "+%s\n", ctr), 0o755); err != nil {
 								// The kernel can return EBUSY when a process was moved to a sub-cgroup
 								// and the controllers are enabled in its parent cgroup.  Retry a few times when
 								// it happens.

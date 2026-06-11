@@ -150,7 +150,7 @@ func (m *openpgpSigningMechanism) Verify(unverifiedSignature []byte) (contents [
 		return nil, "", err
 	}
 	if md.SignatureError != nil {
-		return nil, "", fmt.Errorf("signature error: %v", md.SignatureError)
+		return nil, "", fmt.Errorf("signature error: %w", md.SignatureError)
 	}
 	if md.SignedBy == nil {
 		return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Key not found for key ID %x in signature", md.SignedByKeyId))

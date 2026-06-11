@@ -358,6 +358,9 @@ func parseSubidFile(path, username string) ([]subIDRange, error) {
 			rangeList = append(rangeList, subIDRange{startid, length})
 		}
 	}
+	if err := s.Err(); err != nil {
+		return rangeList, err
+	}
 	return rangeList, nil
 }
 

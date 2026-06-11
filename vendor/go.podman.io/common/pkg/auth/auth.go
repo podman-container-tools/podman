@@ -182,6 +182,9 @@ func Login(ctx context.Context, systemContext *types.SystemContext, opts *LoginO
 		for scanner.Scan() {
 			fmt.Fprint(&stdinPasswordStrBuilder, scanner.Text())
 		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("reading password from stdin: %w", err)
+		}
 		password = stdinPasswordStrBuilder.String()
 	}
 

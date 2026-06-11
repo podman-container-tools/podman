@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -167,6 +168,13 @@ func ParseScpArgs(options ConnectionScpOptions) (string, string, string, bool, e
 }
 
 func DialNet(sshClient *ssh.Client, mode string, url *url.URL) (net.Conn, error) {
+	return DialNetContext(context.Background(), sshClient, mode, url)
+}
+
+// DialNetContext is like DialNet but accepts a context for cancellation.
+// If the context expires before the connection is established, ctx.Err()
+// is returned.
+func DialNetContext(ctx context.Context, sshClient *ssh.Client, mode string, url *url.URL) (net.Conn, error) {
 	port := sshdPort
 	if url.Port() != "" {
 		p, err := strconv.Atoi(url.Port())
@@ -178,7 +186,7 @@ func DialNet(sshClient *ssh.Client, mode string, url *url.URL) (net.Conn, error)
 	if _, _, err := Validate(url.User, url.Hostname(), port, ""); err != nil {
 		return nil, err
 	}
-	return sshClient.Dial(mode, url.Path)
+	return sshClient.DialContext(ctx, mode, url.Path)
 }
 
 func DefineMode(flag string) EngineMode {

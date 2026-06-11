@@ -36,6 +36,7 @@ import (
 	"go.podman.io/storage/pkg/chunked/internal/minimal"
 	path "go.podman.io/storage/pkg/chunked/internal/path"
 	"go.podman.io/storage/pkg/chunked/toc"
+	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/fsverity"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/system"
@@ -441,12 +442,20 @@ func makeCopyBuffer() []byte {
 func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirfd int, useHardLinks bool) (bool, *os.File, int64, error) {
 	srcDirfd, err := unix.Open(source, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			// Source layer was removed; skip reuse, fetch from remote instead.
+			return false, nil, 0, nil
+		}
 		return false, nil, 0, &fs.PathError{Op: "open", Path: source, Err: err}
 	}
 	defer unix.Close(srcDirfd)
 
 	srcFile, err := openFileUnderRoot(srcDirfd, name, unix.O_RDONLY|syscall.O_CLOEXEC, 0)
 	if err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			// Source layer is probably being removed and the file is already gone.
+			return false, nil, 0, nil
+		}
 		return false, nil, 0, err
 	}
 	defer srcFile.Close()
@@ -619,6 +628,40 @@ func collectIDs(entries []fileMetadata) ([]uint32, []uint32) {
 		gids[uint32(entry.GID)] = struct{}{}
 	}
 	return mapToSlice(uids), mapToSlice(gids)
+}
+
+func isReflinkNotSupported(err error) bool {
+	return errors.Is(err, unix.EOPNOTSUPP) ||
+		errors.Is(err, unix.ENOSYS) ||
+		errors.Is(err, unix.EXDEV) ||
+		errors.Is(err, unix.EINVAL)
+}
+
+func createReflink(srcRoot, srcPath, dstDir string) (string, error) {
+	parentDirfd, err := unix.Open(srcRoot, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return "", err
+	}
+	defer unix.Close(parentDirfd)
+
+	srcFile, err := openFileUnderRoot(parentDirfd, srcPath, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return "", err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.CreateTemp(dstDir, "")
+	if err != nil {
+		return "", err
+	}
+	defer dstFile.Close()
+
+	if err := fileutils.Reflink(srcFile, dstFile); err != nil {
+		os.Remove(dstFile.Name())
+		return "", err
+	}
+
+	return filepath.Base(dstFile.Name()), nil
 }
 
 type originFile struct {
@@ -858,13 +901,17 @@ func (c *chunkedDiffer) recordFsVerity(path string, roFile *os.File) error {
 	// enabled on the file.
 	err := fsverity.EnableVerity(path, int(roFile.Fd()))
 	if err != nil {
-		if c.useFsVerity == graphdriver.DifferFsVerityRequired {
+		switch {
+		case c.useFsVerity == graphdriver.DifferFsVerityRequired:
 			return err
-		}
 
 		// If it is not required, ignore the error if the filesystem does not support it.
-		if errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.ENOTTY) {
+		case c.useFsVerity == graphdriver.DifferFsVerityIfAvailable &&
+			(errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.ENOTTY)):
 			return nil
+
+		default:
+			return err
 		}
 	}
 	verity, err := fsverity.MeasureVerity(path, int(roFile.Fd()))
@@ -1769,6 +1816,29 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 
 	wg.Wait()
 
+	// Reflink chunk dedup: when findChunkInOtherLayers locates a chunk
+	// in an existing layer, we cannot use that path directly because
+	// the source layer may be deleted before storeMissingFiles reads
+	// from it.  Instead we reflink (CoW clone) the source file into a
+	// scratch directory so the copy is immune to concurrent deletion.
+	// If the filesystem does not support reflinks we skip chunk dedup
+	// entirely and fetch everything from the network.
+	var chunkRefsDir string
+	if differOpts != nil && differOpts.StagingDirectory != "" {
+		d, err := os.MkdirTemp(differOpts.StagingDirectory, "chunk-refs-")
+		if err != nil {
+			return output, fmt.Errorf("create chunk-refs directory: %w", err)
+		}
+		chunkRefsDir = d
+		defer os.RemoveAll(chunkRefsDir)
+	}
+	// reflinkMap caches reflinks: (source root, source path) → reflinked
+	// filename in chunkRefsDir.  Multiple chunks at different offsets
+	// within the same source file share one reflink.
+	type reflinkKey struct{ root, path string }
+	reflinkMap := make(map[reflinkKey]string)
+	reflinkSupported := chunkRefsDir != ""
+
 	for _, res := range copyResults[:filesToWaitFor] {
 		r := &mergedEntries[res.index]
 
@@ -1812,15 +1882,39 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 
 			switch chunk.ChunkType {
 			case minimal.ChunkTypeData:
+				if !reflinkSupported {
+					break
+				}
 				root, path, offset, err := c.layersCache.findChunkInOtherLayers(chunk)
 				if err != nil {
 					return output, err
 				}
-				if offset >= 0 && validateChunkChecksum(chunk, root, path, offset, c.copyBuffer) {
+				if offset < 0 {
+					break
+				}
+				key := reflinkKey{root: root, path: path}
+				refName, ok := reflinkMap[key]
+				if !ok {
+					refName, err = createReflink(root, path, chunkRefsDir)
+					if err != nil {
+						if isReflinkNotSupported(err) {
+							reflinkSupported = false
+							break
+						}
+						// ENOENT is expected: the source layer can
+						// be deleted concurrently.
+						if errors.Is(err, unix.ENOENT) {
+							break
+						}
+						return output, fmt.Errorf("create reflink for %q: %w", path, err)
+					}
+					reflinkMap[key] = refName
+				}
+				if validateChunkChecksum(chunk, chunkRefsDir, refName, offset, c.copyBuffer) {
 					missingPartsSize -= size
 					mp.OriginFile = &originFile{
-						Root:   root,
-						Path:   path,
+						Root:   chunkRefsDir,
+						Path:   refName,
 						Offset: offset,
 					}
 				}

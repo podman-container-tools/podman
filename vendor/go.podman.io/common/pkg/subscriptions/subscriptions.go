@@ -139,6 +139,9 @@ func getMounts(filePath string) []string {
 				filePath, scanner.Text())
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		logrus.Errorf("Reading file %q: %v", filePath, err)
+	}
 	return mounts
 }
 

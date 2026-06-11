@@ -6,11 +6,6 @@ import (
 	"path/filepath"
 )
 
-const (
-	// Mount type for mounting host dir
-	_typeBind = "bind"
-)
-
 var defaultHelperBinariesDir = []string{
 	// FindHelperBinaries(), as a convention, interprets $BINDIR as the
 	// directory where the current process binary (i.e. podman) is located.

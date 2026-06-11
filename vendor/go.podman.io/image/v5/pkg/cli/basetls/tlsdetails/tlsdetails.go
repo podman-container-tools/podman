@@ -16,7 +16,7 @@ import (
 	"os"
 
 	"go.podman.io/image/v5/pkg/cli/basetls"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // BaseTLSFromOptionalFile returns a basetls.Config matching a containers-tls-details.yaml file at the specified path.

@@ -23,7 +23,7 @@ import (
 	"path"
 
 	"github.com/containers/ocicrypt/crypto/pkcs11"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // OcicryptConfig represents the format of an imgcrypt.conf config file
