@@ -187,7 +187,9 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		defaultEnvs["TERM"] = "xterm"
 	}
 
-	for _, e := range s.EnvMerge {
+	envMergeList := append(rtc.Containers.EnvMerge, s.EnvMerge...)
+
+	for _, e := range envMergeList {
 		processedWord, err := imagebuilder.ProcessWord(e, envLib.Slice(defaultEnvs))
 		if err != nil {
 			return nil, fmt.Errorf("unable to process variables for --env-merge %s: %w", e, err)
