@@ -329,6 +329,7 @@ jobs:
           if-no-files-found: error
 
   big-tests:
+    if: false
     needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
     name: ${{ matrix.test }} ${{ matrix.mode }} ${{ matrix.priv }} ${{ matrix.distro }}
     strategy:
@@ -370,6 +371,7 @@ jobs:
         needs.path-filter.outputs[format('{0}', matrix.test)] == 'true' }}
 
   small-tests:
+    if: false
     needs: [path-filter, build, build-alt, validate-source, windows-installer]
     name: ${{ matrix.test }} ${{ matrix.mode }} ${{ matrix.priv }} ${{ matrix.distro }}
     strategy:
@@ -422,10 +424,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ { runner: cncf-ubuntu-24-96-x86, arch: amd64 } ]
-        # The default runners do not have vrit enabled so we cannot test on arm at the moment.
-        # CNCF staff is looking if they can give us a bare metal host.
-        #  { runner: cncf-ubuntu-32-128-arm, arch: arm64 } ]
+        os:
+          - runner: cncf-ubuntu-24-96-x86
+            arch: amd64
+          # Test bare metal, do not merge.
+          - runner: cncf-ubuntu-bm-arm
+            arch: arm64
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
