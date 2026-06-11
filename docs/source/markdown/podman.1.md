@@ -454,7 +454,7 @@ storage.conf is the storage configuration file for all tools using containers/st
 
 The storage configuration file specifies all of the available container storage options for tools using shared container storage.
 
-When Podman runs in rootless mode, the file `$HOME/.config/containers/storage.conf` is used instead of the system defaults.
+When Podman runs in rootless mode, the file `$XDG_CONFIG_HOME/containers/storage.conf` is used. If `$XDG_CONFIG_HOME` is not set then the file `$HOME/.config/containers/storage.conf` is used instead of the system defaults.
 
 If the **CONTAINERS_STORAGE_CONF** environment variable is set, then its value is used for the storage.conf file rather than the default.
 
