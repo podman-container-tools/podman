@@ -916,11 +916,36 @@ func (p *PodmanTestIntegration) Cleanup() {
 	// first stop everything, rm -fa is unreliable
 	// https://github.com/containers/podman/issues/18180
 	stop := p.Podman([]string{"stop", "--all", "-t", "0"})
-	stop.WaitWithDefaultTimeout()
+	Eventually(stop, DefaultWaitTimeout).Should(Exit(), func() string {
+		p.stopRemoteService(syscall.SIGABRT)
+
+		// Note eventually does not kill the command as such the command is leaked forever without killing it
+		// Also let's use SIGABRT to create a go stack trace so in case there is a deadlock we see it.
+		stop.Signal(syscall.SIGABRT)
+		// Give some time to let the command print the output so it is not printed much later
+		// in the log at the wrong place.
+		time.Sleep(1 * time.Second)
+
+		// As the output is logged by default there no need to dump it here.
+		return fmt.Sprintf("command timed out after %ds: %v",
+			DefaultWaitTimeout, stop.Command.Args)
+	})
 
 	// Remove all pods...
 	podrm := p.Podman([]string{"pod", "rm", "-fa", "-t", "0"})
-	podrm.WaitWithDefaultTimeout()
+	Eventually(podrm, DefaultWaitTimeout).Should(Exit(), func() string {
+		p.stopRemoteService(syscall.SIGABRT)
+
+		// Note eventually does not kill the command as such the command is leaked forever without killing it
+		// Also let's use SIGABRT to create a go stack trace so in case there is a deadlock we see it.
+		podrm.Signal(syscall.SIGABRT)
+		// Give some time to let the command print the output so it is not printed much later
+		// in the log at the wrong place.
+		time.Sleep(1 * time.Second)
+		// As the output is logged by default there no need to dump it here.
+		return fmt.Sprintf("command timed out after %ds: %v",
+			DefaultWaitTimeout, stop.Command.Args)
+	})
 
 	// ...and containers
 	rmall := p.Podman([]string{"rm", "-fa", "-t", "0"})
