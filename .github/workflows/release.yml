@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   check:
+    if: github.repository == 'podman-container-tools/podman'
     name: Check
     runs-on: ubuntu-latest
     steps:

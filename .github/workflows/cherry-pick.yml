@@ -11,7 +11,8 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '/cherry-pick ')
+      contains(github.event.comment.body, '/cherry-pick ') &&
+      github.repository == 'podman-container-tools/podman'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -194,7 +195,8 @@ jobs:
   cherry-pick-on-merge:
     if: |
       github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true
+      github.event.pull_request.merged == true &&
+      github.repository == 'podman-container-tools/podman'
     runs-on: ubuntu-latest
     permissions:
       contents: write

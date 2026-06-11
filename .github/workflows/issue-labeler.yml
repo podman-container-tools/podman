@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   triage:
+    if: github.repository == 'podman-container-tools/podman'
     permissions:
       contents: read  # for github/issue-labeler to get repo contents
       issues: write  # for github/issue-labeler to create or remove labels
