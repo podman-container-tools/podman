@@ -9,7 +9,6 @@ load helpers.registry
 load helpers.systemd
 
 function setup() {
-    skip_if_remote "podman quadlet is not implemented for remote setup yet"
     skip_if_journald_unavailable "Needed for RHEL. FIXME: we might be able to re-enable a subset of tests."
 
     test -x "$QUADLET" || die "Cannot run quadlet tests without executable \$QUADLET ($QUADLET)"
@@ -158,8 +157,9 @@ EOF
 
 
 @test "quadlet verb - install multiple files from directory and remove by app name" {
+    skip_if_remote "app-name grouping requires local directory install semantics"
     # Create a directory for multiple quadlet files
-    local app_name="test-app-$(safe_name)"
+    local app_name="test-app-$(safename)"
     local quadlet_dir="$PODMAN_TMPDIR/$app_name"
     mkdir -p $quadlet_dir
 
@@ -317,7 +317,7 @@ EOF
 @test "quadlet verb - install from URL" {
     # Create a directory for multiple quadlet files
     echo READY > $PODMAN_TMPDIR/ready
-    local quadlet_dir="$PODMAN_TMPDIR/quadlet_diri_$(safe_name)"
+    local quadlet_dir="$PODMAN_TMPDIR/quadlet_diri_$(safename)"
     mkdir -p $quadlet_dir
 
     cat > $quadlet_dir/basic.container <<EOF

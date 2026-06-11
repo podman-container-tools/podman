@@ -3,9 +3,6 @@
 # quadlet-related tests
 #
 
-# NOTE: Once podman-remote quadlet support is added we can enable the podman quadlet tests in
-#       test/system/253-podman-quadlet.bats which should cover it in more detail then.
-
 
 function is_rootless() {
     [ "$(id -u)" -ne 0 ]
