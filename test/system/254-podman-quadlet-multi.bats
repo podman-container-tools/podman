@@ -260,6 +260,7 @@ EOF
     local api_name="api-server_$(random_string)"
     local cache_name="cache_$(random_string)"
     local network_name="app-network_$(random_string)"
+    local nested_server_name="nested-server_$(random_string)"
 
     # Create an individual container quadlet file
     cat > "$app_dir/${frontend_name}.container" <<EOF
@@ -307,18 +308,30 @@ debug=true
 port=3000
 EOF
 
+    # Create a nested .quadlets file
+    mkdir "$app_dir/a"
+    cat > "$app_dir/a/backend_$(random_string).quadlets" <<EOF
+# FileName=$nested_server_name
+[Container]
+Image=$IMAGE
+ContainerName=nested-server-$(random_string)
+PublishPort=8080:8080
+EOF
+
+
     # Install the directory
     run_podman quadlet install "$app_dir" --application=$app_name
 
-    # Verify all quadlets were installed (2 individual + 3 from .quadlets file = 5 total)
+    # Verify all quadlets were installed (2 individual + 3 from .quadlets file + 1 from nested .quadlet file = 6 total)
     assert "$output" =~ "${frontend_name}.container" "install output should contain ${frontend_name}.container"
     assert "$output" =~ "${data_name}.volume" "install output should contain ${data_name}.volume"
     assert "$output" =~ "${api_name}.container" "install output should contain ${api_name}.container"
     assert "$output" =~ "${cache_name}.volume" "install output should contain ${cache_name}.volume"
     assert "$output" =~ "${network_name}.network" "install output should contain ${network_name}.network"
+    assert "$output" =~ "${nested_server_name}.container" "install output should contain ${nested_server_name}.container"
 
-    # Count lines in output (should be 6 lines: 5 quadlets + 1 asset file)
-    assert "${#lines[@]}" -eq 6 "install output should contain exactly six lines"
+    # Count lines in output (should be 7 lines: 6 quadlets + 1 asset file)
+    assert "${#lines[@]}" -eq 7 "install output should contain exactly seven lines"
 
     # Verify all files exist on disk
     [[ -f "$install_dir/$app_name/${frontend_name}.container" ]] || die "${frontend_name}.container should exist on disk"
@@ -327,6 +340,7 @@ EOF
     [[ -f "$install_dir/$app_name/${cache_name}.volume" ]] || die "${cache_name}.volume should exist on disk"
     [[ -f "$install_dir/$app_name/${network_name}.network" ]] || die "${network_name}.network should exist on disk"
     [[ -f "$install_dir/$app_name/app.conf" ]] || die "app.conf should exist on disk"
+    [[ -f "$install_dir/$app_name/a/${nested_server_name}.container" ]] || die "a/${nested_server_name}.container should exist on disk"
 
     # Test quadlet list to verify all quadlets show the same app name
     run_podman quadlet list
@@ -335,6 +349,7 @@ EOF
     local api_line=$(echo "$output" | grep "${api_name}.container")
     local cache_line=$(echo "$output" | grep "${cache_name}.volume")
     local network_line=$(echo "$output" | grep "${network_name}.network")
+    local nested_server_line=$(echo "$output" | grep "${nested_server_name}.container")
 
     # Verify content of individual quadlet files
     run cat "$install_dir/$app_name/${frontend_name}.container"
@@ -349,6 +364,10 @@ EOF
     assert "$output" =~ "\\[Network\\]" "network file should contain [Network] section"
     assert "$output" =~ "Subnet=192.168.1.0/24" "network file should contain correct subnet"
 
+    run cat "$install_dir/$app_name/a/${nested_server_name}.container"
+    assert "$output" =~ "\\[Container\\]" "nested-server container file should contain [Container] section"
+    assert "$output" =~ "ContainerName=nested-server-" "nested-server container file should contain correct name prefix"
+
     # Test that removing one quadlet removes the entire application
     run_podman quadlet rm $app_name --recursive
 
@@ -359,6 +378,7 @@ EOF
     assert "$output" !~ "${api_name}.container" "${api_name}.container should also be removed as part of same app"
     assert "$output" !~ "${cache_name}.volume" "${cache_name}.volume should also be removed as part of same app"
     assert "$output" !~ "${network_name}.network" "${network_name}.network should also be removed as part of same app"
+    assert "$output" !~ "${nested_server_name}.container" "${nested_server_name}.container should also be removed as part of same app"
 
     # All individual files should be removed
     [[ ! -f "$install_dir/$app_name/${frontend_name}.container" ]] || die "${frontend_name}.container should be removed"
@@ -367,4 +387,5 @@ EOF
     [[ ! -f "$install_dir/$app_name/${cache_name}.volume" ]] || die "${cache_name}.volume should be removed"
     [[ ! -f "$install_dir/$app_name/${network_name}.network" ]] || die "${network_name}.network should be removed"
     [[ ! -f "$install_dir/$app_name/app.conf" ]] || die "app.conf should be removed"
+    [[ ! -f "$install_dir/$app_name/a/${nested_server_name}.container" ]] || die "${nested_server_name}.container should be removed"
 }
