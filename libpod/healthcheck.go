@@ -144,9 +144,11 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 
 	// Handle startup HC
 	if isStartup {
-		inStartPeriod = true
 		if hcErr != nil || exitCode != 0 {
 			hcResult = define.HealthCheckStartup
+			if !inStartPeriod {
+				hcResult = define.HealthCheckStartupFailure
+			}
 			if err := c.incrementStartupHCFailureCounter(ctx); err != nil {
 				return define.HealthCheckInternalError, "", err
 			}

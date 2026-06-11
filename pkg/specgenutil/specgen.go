@@ -394,6 +394,31 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 		s.StartupHealthConfig.Successes = int(c.StartupHCSuccesses)
 	}
 
+	// It is necessary to parse time values, as user can
+	// set either "0" or "0s" arguments
+	StartupHCInterval, _ := time.ParseDuration(c.StartupHCInterval)
+	HealthInterval, _ := time.ParseDuration(c.HealthInterval)
+	HealthStartPeriod, _ := time.ParseDuration(c.HealthStartPeriod)
+
+	// This part of code has been created on response to the issue #27724:
+	if c.StartupHCCmd == "" &&
+		StartupHCInterval != HealthInterval &&
+		HealthStartPeriod != time.Duration(0) &&
+		c.HealthCmd != "" {
+		tmpHcConfig, err := MakeHealthCheckFromCli(c.HealthCmd, StartupHCInterval.String(), c.StartupHCRetries, c.HealthTimeout, HealthStartPeriod.String(), true)
+		if err != nil {
+			return err
+		}
+
+		s.StartupHealthConfig = new(define.StartupHealthCheck)
+		s.StartupHealthConfig.Test = tmpHcConfig.Test
+		s.StartupHealthConfig.Interval = tmpHcConfig.Interval
+		s.StartupHealthConfig.StartPeriod = tmpHcConfig.StartPeriod
+		s.StartupHealthConfig.Timeout = tmpHcConfig.Timeout
+		s.StartupHealthConfig.Retries = tmpHcConfig.Retries
+		s.StartupHealthConfig.Successes = int(c.StartupHCSuccesses)
+	}
+
 	if len(s.Pod) == 0 || len(c.Pod) > 0 {
 		s.Pod = c.Pod
 	}

@@ -431,4 +431,14 @@ HEALTHCHECK CMD ls -l / 2>&1`, ALPINE)
 		hc.WaitWithTimeout(10)
 		Expect(hc).Should(ExitWithError(125, "Error: healthcheck command exceeded timeout of 3s"))
 	})
+
+	It("podman healthcheck startup command is not set with startup period", func() {
+		ctrName := "hc-" + RandomString(6)
+		session := podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName, "--health-cmd", "stat /tmp/health", "--health-start-period=15s", "--health-startup-interval=5s", ALPINE, "top")
+		session.WaitWithTimeout(10)
+
+		hc := podmanTest.Podman([]string{"healthcheck", "run", ctrName})
+		hc.WaitWithTimeout(10)
+		Expect(hc.OutputToString()).Should(BeEquivalentTo("starting"))
+	})
 })

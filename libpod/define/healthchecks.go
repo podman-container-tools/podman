@@ -50,6 +50,9 @@ const (
 	// HealthCheckStartup means the healthcheck was unhealthy, but is still
 	// either within the startup HC or the startup period of the healthcheck
 	HealthCheckStartup HealthCheckStatus = iota
+	// HealthCheckStartup means the healthcheck was unhealthy and it is out
+	// of start period
+	HealthCheckStartupFailure HealthCheckStatus = iota
 )
 
 func (s HealthCheckStatus) String() string {
