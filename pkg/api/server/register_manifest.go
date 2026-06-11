@@ -94,6 +94,14 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//    description: "silences extra stream data on push"
 	//    type: boolean
 	//    default: true
+	//  - in: query
+	//    name: retry
+	//    description: Number of times to retry push in case of failure.
+	//    type: integer
+	//  - in: query
+	//    name: retryDelay
+	//    description: Delay between retries in case of push failures.
+	//    type: string
 	// responses:
 	//   200:
 	//     schema:

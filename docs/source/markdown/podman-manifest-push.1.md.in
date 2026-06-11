@@ -56,6 +56,10 @@ When writing the manifest, suppress progress output
 
 Don't copy signatures when pushing images.
 
+@@option retry
+
+@@option retry-delay
+
 #### **--rm**
 
 Delete the manifest list or image index from local storage if pushing succeeds.
