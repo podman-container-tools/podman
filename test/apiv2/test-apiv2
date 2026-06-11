@@ -482,7 +482,8 @@ function start_service() {
         $PODMAN_BIN unshare true
     fi
 
-    CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+    env CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+        ${CONTAINERS_STORAGE_CONF:+CONTAINERS_STORAGE_CONF=$CONTAINERS_STORAGE_CONF} \
         $PODMAN_BIN \
         --root $WORKDIR/server_root --syslog=true \
         system service \
@@ -579,7 +580,7 @@ function start_registry() {
            ${REGISTRY_IMAGE}
 
     wait_for_port localhost $REGISTRY_PORT 10
-    echo "# started registry (auth=$auth) on port $PORT"
+    echo "# started registry (auth=$auth) on port $REGISTRY_PORT"
 }
 
 function stop_registry() {
@@ -594,7 +595,7 @@ function stop_registry() {
         if [[ "$1" = "--cleanup" ]]; then
             podman $OPTS rmi -f -a
         fi
-        echo "# stopped registry on port $PORT"
+        echo "# stopped registry on port $REGISTRY_PORT"
     fi
 
     REGISTRY_PORT=
@@ -655,6 +656,7 @@ function wait_for_port() {
 function podman() {
     echo "\$ $PODMAN_BIN $*"                           >>$WORKDIR/output.log
     env CONTAINERS_REGISTRIES_CONF=$registries_conf_path \
+        ${CONTAINERS_STORAGE_CONF:+CONTAINERS_STORAGE_CONF=$CONTAINERS_STORAGE_CONF} \
         $PODMAN_BIN --root $WORKDIR/server_root "$@"   >>$WORKDIR/output.log 2>&1
 }
 

@@ -707,7 +707,8 @@ type SystemContext struct {
 type ProgressEvent uint
 
 const (
-	// ProgressEventNewArtifact will be fired on progress reader setup
+	// ProgressEventNewArtifact will be fired when starting to process
+	// a new artifact
 	ProgressEventNewArtifact ProgressEvent = iota
 
 	// ProgressEventRead indicates that the artifact download is currently in
@@ -719,7 +720,7 @@ const (
 	ProgressEventDone
 
 	// ProgressEventSkipped is fired when the artifact has been skipped because
-	// its already available at the destination
+	// it's already available at the destination
 	ProgressEventSkipped
 )
 

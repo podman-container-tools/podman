@@ -1,15 +1,11 @@
 package copy
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"math"
-	"time"
 
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
-	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/types"
 )
 
@@ -143,35 +139,4 @@ func (bar *progressBar) mark100PercentComplete() {
 		// That means that we are both _allowed_ to call SetTotal, and we _have to_.
 		bar.SetTotal(-1, true) // total < 0 = set it to bar.Current(), report it; and mark the bar as complete.
 	}
-}
-
-// blobChunkAccessorProxy wraps a BlobChunkAccessor and updates a *progressBar
-// with the number of received bytes.
-type blobChunkAccessorProxy struct {
-	wrapped private.BlobChunkAccessor // The underlying BlobChunkAccessor
-	bar     *progressBar              // A progress bar updated with the number of bytes read so far
-}
-
-// GetBlobAt returns a sequential channel of readers that contain data for the requested
-// blob chunks, and a channel that might get a single error value.
-// The specified chunks must be not overlapping and sorted by their offset.
-// The readers must be fully consumed, in the order they are returned, before blocking
-// to read the next chunk.
-// If the Length for the last chunk is set to math.MaxUint64, then it
-// fully fetches the remaining data from the offset to the end of the blob.
-func (s *blobChunkAccessorProxy) GetBlobAt(ctx context.Context, info types.BlobInfo, chunks []private.ImageSourceChunk) (chan io.ReadCloser, chan error, error) {
-	start := time.Now()
-	rc, errs, err := s.wrapped.GetBlobAt(ctx, info, chunks)
-	if err == nil {
-		total := int64(0)
-		for _, c := range chunks {
-			// do not update the progress bar if there is a chunk with unknown length.
-			if c.Length == math.MaxUint64 {
-				return rc, errs, err
-			}
-			total += int64(c.Length)
-		}
-		s.bar.EwmaIncrInt64(total, time.Since(start))
-	}
-	return rc, errs, err
 }

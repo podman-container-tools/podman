@@ -50,7 +50,7 @@ func parseCompressedNote(filePath string) (compressionNoteContent, error) {
 		}
 		return nil, err
 	}
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
