@@ -237,6 +237,7 @@ type ImagePruneOptions struct {
 	External   bool     `json:"external" schema:"external"`
 	BuildCache bool     `json:"buildcache" schema:"buildcache"`
 	Filter     []string `json:"filter" schema:"filter"`
+	DryRun     bool     `json:"dryrun" schema:"dryrun"`
 }
 
 type (

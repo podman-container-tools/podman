@@ -215,6 +215,26 @@ var _ = Describe("Podman prune", func() {
 		Expect(images.OutputToStringArray()).To(HaveLen(len(CACHE_IMAGES)))
 	})
 
+	It("podman image prune dry run", func() {
+		SkipIfNotAMD64() // List of images is different
+		podmanTest.AddImageToRWStore(ALPINE)
+		podmanTest.AddImageToRWStore(BB)
+
+		images := podmanTest.Podman([]string{"images", "-a"})
+		images.WaitWithDefaultTimeout()
+		Expect(images).Should(ExitCleanly())
+
+		prune := podmanTest.Podman([]string{"image", "prune", "-af", "--dry-run"})
+		prune.WaitWithDefaultTimeout()
+		Expect(prune).Should(ExitCleanly())
+
+		after := podmanTest.Podman([]string{"images", "-a"})
+		after.WaitWithDefaultTimeout()
+		Expect(after).Should(ExitCleanly())
+		// the dry run should not remove or untag any images
+		Expect(after.OutputToStringArray()).To(HaveLen(len(images.OutputToStringArray())))
+	})
+	
 	It("podman system image prune unused images", func() {
 		SkipIfNotAMD64() // List of images is different
 		useCustomNetworkDir(podmanTest, tempdir)
