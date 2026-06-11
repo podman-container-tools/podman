@@ -28,6 +28,14 @@ type QuadletListOptions struct {
 	Filters []string
 }
 
+const (
+	// Quadlet does not have a corresponding loaded systemd unit.
+	QuadletStatusNotLoaded = "Not loaded"
+	// Quadlet is a template loaded into systemd (there is no status
+	// to display in the same sense as for concrete units).
+	QuadletStatusLoadedTemplate = "loaded template"
+)
+
 // A ListQuadlet is a single Quadlet to be listed by `podman quadlet list`
 type ListQuadlet struct {
 	// Name is the name of the Quadlet file
@@ -37,8 +45,9 @@ type ListQuadlet struct {
 	UnitName string
 	// Path to the Quadlet on disk
 	Path string
-	// What is the status of the Quadlet - if present in systemd, will be a
-	// systemd status, else will mention if the Quadlet has syntax errors
+	// What is the status of the Quadlet - either values from systemd
+	// (e.g. active/running), or podman-defined values "Not loaded"
+	// and "loaded template".
 	Status string
 	// If multiple quadlets were installed together they will belong
 	// to common App.

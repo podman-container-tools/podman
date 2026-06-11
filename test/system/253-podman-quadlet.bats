@@ -156,6 +156,70 @@ EOF
     run_podman quadlet rm $ctr_unit
 }
 
+@test "quadlet verb - install, list, print, rm - template" {
+    # Determine the install directory path based on rootless/root
+    local install_dir
+    install_dir=$(get_quadlet_install_dir)
+    # Create a test quadlet file
+    local quadlet_name_without_extension="templated-quadlet@"
+    local quadlet_name=${quadlet_name_without_extension}.container
+    local quadlet_unit_name=${quadlet_name_without_extension}.service
+    local quadlet_instance_name=${quadlet_name_without_extension}instance.service
+    local quadlet_file=$PODMAN_TMPDIR/$quadlet_name
+    cat > "$quadlet_file" <<EOF
+[Container]
+Image=$IMAGE
+Exec=sh -c "echo STARTED CONTAINER; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+    # Test quadlet install
+    run_podman quadlet install "$quadlet_file"
+    assert "$output" =~ "$quadlet_name" "install output should contain quadlet name"
+
+    # Test quadlet list
+    run_podman quadlet list --filter status='loaded template'
+    assert "$output" =~ "$quadlet_name" "list should contain $quadlet_name"
+    assert "$output" =~ "$quadlet_unit_name" "UNIT NAME should be $quadlet_unit_name"
+    assert "$output" =~ "loaded template" "STATUS should be 'loaded template'"
+    assert "$output" =~ "$install_dir/$quadlet_name" "PATH ON DISK should show the quadlet file path"
+
+    # Test quadlet print
+    run_podman quadlet print "$quadlet_name"
+    assert "$output" == "$(<"$quadlet_file")" "print output matches quadlet file"
+
+    # Regenerate the service manually, otherwise PODMAN path is not set correctly in CI
+    QUADLET_UNIT_DIRS="$install_dir" run \
+        timeout --foreground -v --kill=10 $PODMAN_TIMEOUT \
+        $QUADLET $_DASHUSER $UNIT_DIR
+    assert $status -eq 0 "Failed to regenerate the service manually"
+    systemctl daemon-reload
+
+    # Instantiate the template
+    systemctl_start "$quadlet_instance_name"
+
+    # Test quadlet rm without --force (should fail)
+    run_podman 125 quadlet rm "$quadlet_name"
+    assert "$output" =~ "$quadlet_instance_name" "error message should contain running instance name"
+    assert "$output" =~ "quadlet is running" "error message should contain the explanation"
+    # Verify template was not removed
+    run_podman quadlet list
+    assert "$output" =~ "$quadlet_name" "list should contain template"
+
+    # Test quadlet rm with --force (should succeed)
+    run_podman quadlet rm --force "$quadlet_name"
+    assert "$output" =~ "$quadlet_name" "remove output should contain quadlet name"
+    # Verify template was removed
+    run_podman quadlet list
+    assert "$output" !~ "$quadlet_name" "list should not contain removed template"
+
+    # Check that removing template also works without --force when there are no running instances
+    run_podman quadlet install "$quadlet_file"
+    assert "$output" =~ "$quadlet_name" "install output should contain quadlet name"
+    run_podman quadlet rm "$quadlet_name"
+    assert "$output" =~ "$quadlet_name" "remove output should contain quadlet name"
+    # Verify template was removed
+    run_podman quadlet list
+    assert "$output" !~ "$quadlet_name" "list should not contain removed template"
+}
 
 @test "quadlet verb - install multiple files from directory and remove by app name" {
     # Create a directory for multiple quadlet files

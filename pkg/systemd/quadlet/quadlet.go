@@ -940,8 +940,9 @@ func ConvertContainer(container *parser.UnitFile, unitsInfoMap map[string]*UnitI
 	return service, warnings, nil
 }
 
-func isTemplateUnit(unit *parser.UnitFile) bool {
-	base := strings.TrimSuffix(unit.Filename, filepath.Ext(unit.Filename))
+// Determine if the given file name belongs to an uninstantiated template unit.
+func IsTemplateUnitFileName(fileName string) bool {
+	base := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	return strings.HasSuffix(base, "@")
 }
 
@@ -2228,7 +2229,7 @@ func handlePod(quadletUnitFile, serviceUnitFile *parser.UnitFile, groupName stri
 		// If we want to start the container with the pod, we add it to this list.
 		// This creates corresponding Wants=/Before= statements in the pod service.
 		// Do not add this for template units as dependency cannot be created for them.
-		if !isTemplateUnit(quadletUnitFile) && quadletUnitFile.LookupBooleanWithDefault(groupName, KeyStartWithPod, true) {
+		if !IsTemplateUnitFileName(quadletUnitFile.Filename) && quadletUnitFile.LookupBooleanWithDefault(groupName, KeyStartWithPod, true) {
 			podInfo.ContainersToStart = append(podInfo.ContainersToStart, serviceUnitFile.Filename)
 		}
 	}
