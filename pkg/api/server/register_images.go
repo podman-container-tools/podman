@@ -1287,7 +1287,7 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	// - application/json
 	// responses:
 	//   200:
-	//      $ref: "#/responses/registrySearchResponse"
+	//      $ref: "#/responses/registrySearchResponseLibpod"
 	//   500:
 	//      $ref: '#/responses/internalError'
 	r.Handle(VersionedPath("/libpod/images/search"), s.APIHandler(compat.SearchImages)).Methods(http.MethodGet)

@@ -7,6 +7,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	dockerImage "github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/api/types/volume"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/image/v5/manifest"
@@ -93,6 +94,13 @@ type imageDeleteResponse struct {
 // Registry Search
 // swagger:response
 type registrySearchResponse struct {
+	// in:body
+	Body []registry.SearchResult
+}
+
+// Registry Search
+// swagger:response
+type registrySearchResponseLibpod struct {
 	// in:body
 	Body struct {
 		// Index is the image index

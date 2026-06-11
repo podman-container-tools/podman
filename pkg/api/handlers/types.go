@@ -25,7 +25,12 @@ type ImageInspect struct {
 	// If a field in the outer struct has the same name as a field in the embedded struct,
 	// the outer struct's field will shadow or override the embedded one allowing for a clean way to
 	// hide fields from the swagger spec that still exist in the libraries struct.
-	Container       string                  `json:"Container,omitempty"`
+	//
+	// Deprecated: since API v1.44, will no longer be included in API v1.45.
+	// https://docs.docker.com/reference/api/engine/version-history/#v144-api-changes
+	Container string `json:"Container,omitempty"`
+	// Deprecated: since API v1.44, will no longer be included in API v1.45.
+	// https://docs.docker.com/reference/api/engine/version-history/#v144-api-changes
 	ContainerConfig *dockerContainer.Config `json:"ContainerConfig,omitempty"`
 	VirtualSize     int64                   `json:"VirtualSize,omitempty"`
 	Parent          string                  `json:"Parent"`

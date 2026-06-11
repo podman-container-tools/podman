@@ -212,6 +212,12 @@ func GetContainer(w http.ResponseWriter, r *http.Request) {
 		utils.InternalServerError(w, err)
 		return
 	}
+	if _, err := utils.SupportedVersion(r, ">=1.52.0"); err == nil || errors.Is(err, apiutil.ErrVersionNotGiven) {
+		if api.NetworkSettings != nil {
+			api.NetworkSettings.SecondaryIPAddresses = nil
+			api.NetworkSettings.SecondaryIPv6Addresses = nil
+		}
+	}
 	utils.WriteResponse(w, http.StatusOK, api)
 }
 
