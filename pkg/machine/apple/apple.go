@@ -128,9 +128,19 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+
+		debugDevArgs, err := GetDebugDevicesCMDArgs()
+		if err != nil {
+			return nil, nil, err
+		}
+		cmd.Args = append(cmd.Args, debugDevArgs...)
+		cmd.Args = append(cmd.Args, "--gui") // add command line switch to pop the gui open
+
+		cmd.Args = append(cmd.Args, "--log-level", "debug") // Pass through debug logging if enabled
 	}
 
 	endpointArgs, err := GetVfKitEndpointCMDArgs(endpoint)
@@ -138,20 +148,11 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 		return nil, nil, err
 	}
 
+	cmd.Args = append(cmd.Args, endpointArgs...)
+
 	machineDataDir, err := mc.DataDir()
 	if err != nil {
 		return nil, nil, err
-	}
-
-	cmd.Args = append(cmd.Args, endpointArgs...)
-
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		debugDevArgs, err := GetDebugDevicesCMDArgs()
-		if err != nil {
-			return nil, nil, err
-		}
-		cmd.Args = append(cmd.Args, debugDevArgs...)
-		cmd.Args = append(cmd.Args, "--gui") // add command line switch to pop the gui open
 	}
 
 	if mc.LibKrunHypervisor != nil {
