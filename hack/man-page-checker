@@ -36,6 +36,41 @@ for md in *.1.md; do
     fi
 done
 
+# Function: verify_list_and_ps_presence
+# When dealing with the list and ps commands, we can have two instances 
+# with the same description text from the parent.  Allow that for these commands.
+#
+# Arguments: 
+#   $1: The string to search
+#      When present, it should look like:
+#      "| [podman-list(1)](podman-ps.1.md) | Print out information about containers. | | [podman-ps(1)](podman-ps.1.md) | Print out information about containers. |
+#   $2: The description text to count.  From the above example that would be "Print out information about containers"
+verify_list_and_ps_presence() {
+    local input="$1"
+    local desc="$2"
+    local status=0
+
+    # 1. Check for two instances of "-ps.1.md)" 
+    count=$(echo "$input" | grep -o "\-ps\.1\.md" | wc -l)
+
+    if [ "$count" -ne 2 ]; then
+        echo "Error: Expected 2 instances of '-ps.1.md', but found $count."
+        status=1
+    fi
+
+    # 2. Count occurrences of the description, we expect 2 instances.
+    # Using 'grep -F' for fixed-string matching (faster and safer for plain text)
+    local count
+    count=$(echo "$input" | grep -oF "$desc" | wc -l)
+
+    if [[ "$count" -ne 2 ]]; then
+        echo " Expected 2 instances of description '$desc', found: $count"
+        status=1
+    fi
+
+    return $status
+}
+
 # Pass 2: compare descriptions.
 #
 # Make sure the descriptive text in podman-foo.1.md matches the one
@@ -67,13 +102,16 @@ for md in $(ls -1 *-*.1.md | grep -v remote); do
     parent_desc=$(grep $md $parent | awk -F'|' "{print \$$x}" | sed -e 's/^ \+//' -e 's/ \+$//' -e 's/\.$//')
 
     if [ "$desc" != "$parent_desc" ]; then
-        echo
-        printf "Inconsistent subcommand descriptions:\n"
-        printf "  %-32s = '%s'\n" $md "$desc"
-        printf "  %-32s = '%s'\n" $parent "$parent_desc"
-        printf "Please ensure that the NAME section of $md\n"
-        printf "matches the subcommand description in $parent\n"
-        rc=1
+       find_entries_in_parent=$(grep $md $parent)
+       if ! verify_list_and_ps_presence "$find_entries_in_parent" "$desc"; then
+          echo
+          printf "Inconsistent subcommand descriptions:\n"
+          printf "  %-32s = '%s'\n" $md "$desc"
+          printf "  %-32s = '%s'\n" $parent "$parent_desc"
+          printf "Please ensure that the NAME section of $md\n"
+          printf "matches the subcommand description in $parent\n"
+          rc=1
+       fi
     fi
 done
 

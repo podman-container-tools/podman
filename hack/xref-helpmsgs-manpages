@@ -265,6 +265,11 @@ sub xref_by_help {
             }
         }
         else {
+            # As 'list' is an alias pointing to 'ps', there is no
+            # need to search for the non-existant list man page.
+            if ($k eq "list") {
+                next OPTION;
+            }
             # Not documented in man. However, handle '...' as a special case
             # in formatting strings. E.g., 'podman info .Host' is documented
             # in the man page as '.Host ...' to indicate that the subfields
@@ -379,8 +384,12 @@ sub xref_rst {
             }
         }
         else {
-            warn "$ME: Not found in rst: $k\n";
-            ++$Errs;
+            # The 'list' command is an alias for 'ps' and
+            # an entry for it will never be found.
+            if ($k ne "list") {
+                warn "$ME: Not found in rst: $k\n";
+                ++$Errs;
+            }
          }
     }
 
@@ -613,10 +622,16 @@ sub podman_man {
         # The format is slightly different between podman.1.md and subcommands.
         elsif ($section eq 'commands') {
             # In podman.1.md
+
             if ($line =~ /^\|\s*\[podman-(\S+?)\(\d\)\]/) {
-                # $1 will be changed by recursion _*BEFORE*_ left-hand assignment
-                my $subcmd = $1;
-                $man{$subcmd} = podman_man("podman-$subcmd");
+                # Some of the list man pages are only pointers to ps.
+                # If the main page has a 'list' manpage reference pointing
+                # at a 'ps' man page, skip this instance.
+                unless (index($line, "-list") != -1 && index($line, "-ps") != -1) {
+                    # $1 will be changed by recursion _*BEFORE*_ left-hand assignment
+                    my $subcmd = $1;
+                    $man{$subcmd} = podman_man("podman-$subcmd");
+                }
             }
 
             # In podman-<subcommand>.1.md
@@ -631,18 +646,23 @@ sub podman_man {
                     warn "$ME: $subpath:$.: duplicate subcommand '$subcmd'\n";
                     ++$Errs;
                 }
-                $previous_subcmd = $subcmd;
-                $man{$subcmd} = podman_man($link_name);
+                # Some of the list man pages are only pointers to ps.
+                # If the main page has a 'list' manpage reference pointing
+                # at a 'ps' man page, skip this instance.
+                unless (index($line, "-list") != -1 && index($line, "-ps") != -1) {
+                    $previous_subcmd = $subcmd;
+                    $man{$subcmd} = podman_man($link_name);
 
-                # Check for inconsistencies between the displayed man page name
-                # and the actual man page name, e.g.
-                #  '[podman-bar(1)](podman-baz.1.md)
-                $shown_name =~ s/\(\d\)$//;
-                $shown_name =~ s/\\//g;         # backslashed hyphens
-                (my $should_be = $link_name) =~ s/\.1\.md$//;
-                if ($shown_name ne $should_be) {
-                    warn "$ME: $subpath:$.: '$shown_name' should be '$should_be' in '$blob'\n";
-                    ++$Errs;
+                    # Check for inconsistencies between the displayed man page name
+                    # and the actual man page name, e.g.
+                    #  '[podman-bar(1)](podman-baz.1.md)
+                    $shown_name =~ s/\(\d\)$//;
+                    $shown_name =~ s/\\//g;         # backslashed hyphens
+                    (my $should_be = $link_name) =~ s/\.1\.md$//;
+                    if ($shown_name ne $should_be) {
+                        warn "$ME: $subpath:$.: '$shown_name' should be '$should_be' in '$blob'\n";
+                        ++$Errs;
+                    }
                 }
             }
         }
