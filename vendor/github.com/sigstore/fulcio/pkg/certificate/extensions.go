@@ -35,8 +35,9 @@ var (
 	// Deprecated: Use OIDSourceRepositoryRef
 	OIDGitHubWorkflowRef = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 6}
 
-	OIDOtherName = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 7}
-	OIDIssuerV2  = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 8}
+	OIDOtherName    = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 7}
+	OIDIssuerV2     = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 8}
+	OIDTokenSubject = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 24}
 
 	// CI extensions
 	OIDBuildSignerURI                      = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 9}
@@ -136,6 +137,9 @@ type Extensions struct {
 
 	// Deployment target for a workflow or job
 	DeploymentEnvironment string `json:"DeploymentEnvironment,omitempty" yaml:"deployment-environment,omitempty"` // 1.3.6.1.4.1.57264.1.23
+
+	// Raw OIDC token subject (`sub` claim).
+	Subject string `json:"Subject,omitempty" yaml:"subject,omitempty"` // 1.3.6.1.4.1.57264.1.24
 }
 
 func (e Extensions) Render() ([]pkix.Extension, error) {
@@ -348,6 +352,16 @@ func (e Extensions) Render() ([]pkix.Extension, error) {
 			Value: val,
 		})
 	}
+	if e.Subject != "" {
+		val, err := asn1.MarshalWithParams(e.Subject, "utf8")
+		if err != nil {
+			return nil, err
+		}
+		exts = append(exts, pkix.Extension{
+			Id:    OIDTokenSubject,
+			Value: val,
+		})
+	}
 
 	return exts, nil
 }
@@ -433,6 +447,10 @@ func ParseExtensions(ext []pkix.Extension) (Extensions, error) {
 			}
 		case e.Id.Equal(OIDDeploymentEnvironment):
 			if err := ParseDERString(e.Value, &out.DeploymentEnvironment); err != nil {
+				return Extensions{}, err
+			}
+		case e.Id.Equal(OIDTokenSubject):
+			if err := ParseDERString(e.Value, &out.Subject); err != nil {
 				return Extensions{}, err
 			}
 		}

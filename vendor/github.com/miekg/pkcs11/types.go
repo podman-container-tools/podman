@@ -53,7 +53,7 @@ func toList(clist C.CK_ULONG_PTR, size C.CK_ULONG) []uint {
 	for i := 0; i < len(l); i++ {
 		l[i] = uint(C.Index(clist, C.CK_ULONG(i)))
 	}
-	defer C.free(unsafe.Pointer(clist))
+	C.free(unsafe.Pointer(clist))
 	return l
 }
 
@@ -65,9 +65,15 @@ func cBBool(x bool) C.CK_BBOOL {
 	return C.CK_BBOOL(C.CK_FALSE)
 }
 
+// memBytes returns a byte slice that references an arbitrary memory area
+func memBytes(p unsafe.Pointer, len uintptr) []byte {
+	const maxIndex int32 = (1 << 31) - 1
+	return (*([maxIndex]byte))(p)[:len:len]
+}
+
 func uintToBytes(x uint64) []byte {
 	ul := C.CK_ULONG(x)
-	return C.GoBytes(unsafe.Pointer(&ul), C.int(unsafe.Sizeof(ul)))
+	return memBytes(unsafe.Pointer(&ul), unsafe.Sizeof(ul))
 }
 
 // Error represents an PKCS#11 error.
@@ -255,13 +261,14 @@ func NewMechanism(mech uint, x interface{}) *Mechanism {
 	}
 
 	switch p := x.(type) {
-	case *GCMParams, *OAEPParams, *ECDH1DeriveParams:
+	case *GCMParams, *OAEPParams, *ECDH1DeriveParams, *RSAAESKeyWrapParams:
 		// contains pointers; defer serialization until cMechanism
 		m.generator = p
 	case []byte:
 		m.Parameter = p
 	default:
-		panic("parameter must be one of type: []byte, *GCMParams, *OAEPParams, *ECDH1DeriveParams")
+		panic("parameter must be one of type: []byte, *GCMParams, *OAEPParams, *ECDH1DeriveParams," +
+			  " *RSAAESKeyWrapParams")
 	}
 
 	return m
@@ -284,6 +291,8 @@ func cMechanism(mechList []*Mechanism) (arena, *C.CK_MECHANISM) {
 		param, arena = cOAEPParams(p, arena)
 	case *ECDH1DeriveParams:
 		param, arena = cECDH1DeriveParams(p, arena)
+	case *RSAAESKeyWrapParams:
+		param, arena = cRSAAESKeyWrapParams(p, arena)
 	}
 	if len(param) != 0 {
 		buf, len := arena.Allocate(param)

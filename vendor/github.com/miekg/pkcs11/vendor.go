@@ -10,12 +10,12 @@ const (
 
 // Vendor specific mechanisms for HMAC on Ncipher HSMs where Ncipher does not allow use of generic_secret keys.
 const (
-	CKM_NC_SHA_1_HMAC_KEY_GEN  = CKM_NCIPHER + 0x3  /* no params */
-	CKM_NC_MD5_HMAC_KEY_GEN    = CKM_NCIPHER + 0x6  /* no params */
-	CKM_NC_SHA224_HMAC_KEY_GEN = CKM_NCIPHER + 0x24 /* no params */
-	CKM_NC_SHA256_HMAC_KEY_GEN = CKM_NCIPHER + 0x25 /* no params */
-	CKM_NC_SHA384_HMAC_KEY_GEN = CKM_NCIPHER + 0x26 /* no params */
-	CKM_NC_SHA512_HMAC_KEY_GEN = CKM_NCIPHER + 0x27 /* no params */
+	CKM_NC_SHA_1_HMAC_KEY_GEN  = CKM_NCIPHER + 0x3  // no params
+	CKM_NC_MD5_HMAC_KEY_GEN    = CKM_NCIPHER + 0x6  // no params
+	CKM_NC_SHA224_HMAC_KEY_GEN = CKM_NCIPHER + 0x24 // no params
+	CKM_NC_SHA256_HMAC_KEY_GEN = CKM_NCIPHER + 0x25 // no params
+	CKM_NC_SHA384_HMAC_KEY_GEN = CKM_NCIPHER + 0x26 // no params
+	CKM_NC_SHA512_HMAC_KEY_GEN = CKM_NCIPHER + 0x27 // no params
 )
 
 // Vendor specific range for Mozilla NSS.
@@ -67,6 +67,8 @@ const (
 	CKA_NSS_JPAKE_X2                          = CKA_NSS + 32
 	CKA_NSS_JPAKE_X2S                         = CKA_NSS + 33
 	CKA_NSS_MOZILLA_CA_POLICY                 = CKA_NSS + 34
+	CKA_NSS_SERVER_DISTRUST_AFTER             = CKA_NSS + 35
+	CKA_NSS_EMAIL_DISTRUST_AFTER              = CKA_NSS + 36
 	CKA_TRUST_DIGITAL_SIGNATURE               = CKA_TRUST + 1
 	CKA_TRUST_NON_REPUDIATION                 = CKA_TRUST + 2
 	CKA_TRUST_KEY_ENCIPHERMENT                = CKA_TRUST + 3

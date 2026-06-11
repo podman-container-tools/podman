@@ -26,6 +26,11 @@ static inline void putECDH1PublicParams(CK_ECDH1_DERIVE_PARAMS_PTR params, CK_VO
 	params->pPublicData = pPublicData;
 	params->ulPublicDataLen = ulPublicDataLen;
 }
+
+static inline void putRSAAESKeyWrapParams(CK_RSA_AES_KEY_WRAP_PARAMS_PTR params, CK_VOID_PTR pOAEPParams)
+{
+	params->pOAEPParams = pOAEPParams;
+}
 */
 import "C"
 import "unsafe"
@@ -84,7 +89,7 @@ func cGCMParams(p *GCMParams) []byte {
 	p.Free()
 	p.arena = arena
 	p.params = &params
-	return C.GoBytes(unsafe.Pointer(&params), C.int(unsafe.Sizeof(params)))
+	return memBytes(unsafe.Pointer(&params), unsafe.Sizeof(params))
 }
 
 // IV returns a copy of the actual IV used for the operation.
@@ -121,7 +126,7 @@ func NewPSSParams(hashAlg, mgf, saltLength uint) []byte {
 		mgf:     C.CK_RSA_PKCS_MGF_TYPE(mgf),
 		sLen:    C.CK_ULONG(saltLength),
 	}
-	return C.GoBytes(unsafe.Pointer(&p), C.int(unsafe.Sizeof(p)))
+	return memBytes(unsafe.Pointer(&p), unsafe.Sizeof(p))
 }
 
 // OAEPParams can be passed to NewMechanism to implement CKM_RSA_PKCS_OAEP.
@@ -153,7 +158,7 @@ func cOAEPParams(p *OAEPParams, arena arena) ([]byte, arena) {
 		// field is unaligned on windows so this has to call into C
 		C.putOAEPParams(&params, buf, len)
 	}
-	return C.GoBytes(unsafe.Pointer(&params), C.int(unsafe.Sizeof(params))), arena
+	return memBytes(unsafe.Pointer(&params), unsafe.Sizeof(params)), arena
 }
 
 // ECDH1DeriveParams can be passed to NewMechanism to implement CK_ECDH1_DERIVE_PARAMS.
@@ -186,5 +191,25 @@ func cECDH1DeriveParams(p *ECDH1DeriveParams, arena arena) ([]byte, arena) {
 	publicKeyData, publicKeyDataLen := arena.Allocate(p.PublicKeyData)
 	C.putECDH1PublicParams(&params, publicKeyData, publicKeyDataLen)
 
-	return C.GoBytes(unsafe.Pointer(&params), C.int(unsafe.Sizeof(params))), arena
+	return memBytes(unsafe.Pointer(&params), unsafe.Sizeof(params)), arena
 }
+
+type RSAAESKeyWrapParams struct {
+	AESKeyBits uint
+	OAEPParams OAEPParams
+}
+
+func cRSAAESKeyWrapParams(p *RSAAESKeyWrapParams, arena arena) ([]byte, arena) {
+	var param []byte
+	params := C.CK_RSA_AES_KEY_WRAP_PARAMS {
+		ulAESKeyBits: C.CK_MECHANISM_TYPE(p.AESKeyBits),
+	}
+
+	param, arena = cOAEPParams(&p.OAEPParams, arena)
+	if len(param) != 0 {
+		buf, _ := arena.Allocate(param)
+		C.putRSAAESKeyWrapParams(&params, buf)
+	}
+	return memBytes(unsafe.Pointer(&params), unsafe.Sizeof(params)), arena
+}
+

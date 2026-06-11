@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/containers/ocicrypt/crypto/pkcs11"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // EncryptWithJwe returns a CryptoConfig to encrypt with jwe public keys

@@ -23,7 +23,7 @@ import (
 	"go.podman.io/image/v5/internal/multierr"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/homedir"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // restTLSClientConfig is a modified copy of k8s.io/kubernetes/pkg/client/restclient.TLSClientConfig.

@@ -32,4 +32,7 @@ test:
 	go test ./... -test.v
 
 generate-protobuf:
-	protoc  -I utils/keyprovider/ utils/keyprovider/keyprovider.proto --go_out=plugins=grpc:utils/keyprovider
+	protoc  -I utils/keyprovider/ \
+		--go_out=utils/keyprovider --go_opt=paths=source_relative \
+		--go-grpc_out=utils/keyprovider --go-grpc_opt=paths=source_relative \
+		utils/keyprovider/keyprovider.proto

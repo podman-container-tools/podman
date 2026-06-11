@@ -1,6 +1,8 @@
 package pkcs7
 
 import (
+	"bytes"
+	"crypto"
 	"crypto/subtle"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -89,9 +91,10 @@ func verifySignatureAtTime(p7 *PKCS7, signer signerInfo, truststore *x509.CertPo
 		if err != nil {
 			return err
 		}
-		h := hash.New()
-		h.Write(p7.Content)
-		computed := h.Sum(nil)
+		computed, err := calculateHash(p7.Hasher, hash, p7.Content)
+		if err != nil {
+			return err
+		}
 		if subtle.ConstantTimeCompare(digest, computed) != 1 {
 			return &MessageDigestMismatchError{
 				ExpectedDigest: digest,
@@ -145,9 +148,10 @@ func verifySignature(p7 *PKCS7, signer signerInfo, truststore *x509.CertPool) (e
 		if err != nil {
 			return err
 		}
-		h := hash.New()
-		h.Write(p7.Content)
-		computed := h.Sum(nil)
+		computed, err := calculateHash(p7.Hasher, hash, p7.Content)
+		if err != nil {
+			return err
+		}
 		if subtle.ConstantTimeCompare(digest, computed) != 1 {
 			return &MessageDigestMismatchError{
 				ExpectedDigest: digest,
@@ -362,4 +366,20 @@ func unmarshalAttribute(attrs []attribute, attributeType asn1.ObjectIdentifier, 
 		}
 	}
 	return errors.New("pkcs7: attribute type not in attributes")
+}
+
+func calculateHash(hasher Hasher, hashFunc crypto.Hash, content []byte) (computed []byte, err error) {
+	if hasher != nil {
+		computed, err = hasher.Hash(hashFunc, bytes.NewReader(content))
+	} else {
+		if !hashFunc.Available() {
+			return nil, fmt.Errorf("hash function %v not available", hashFunc)
+		}
+
+		h := hashFunc.New()
+		_, _ = h.Write(content)
+		computed = h.Sum(nil)
+	}
+
+	return
 }
