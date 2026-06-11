@@ -42,3 +42,11 @@ type RemoveOptions struct {
 //
 //go:generate go run ../generator/generator.go ExistsOptions
 type ExistsOptions struct{}
+
+// RenameOptions are optional options for renaming volumes
+//
+//go:generate go run ../generator/generator.go RenameOptions
+type RenameOptions struct {
+	// New name for the volume
+	NewName *string
+}

@@ -121,3 +121,7 @@ func (ic *ContainerEngine) VolumeExport(_ context.Context, nameOrID string, opti
 func (ic *ContainerEngine) VolumeImport(_ context.Context, nameOrID string, options entities.VolumeImportOptions) error {
 	return volumes.Import(ic.ClientCtx, nameOrID, options.Input)
 }
+
+func (ic *ContainerEngine) VolumeRename(_ context.Context, nameOrID string, opts entities.VolumeRenameOptions) error {
+	return volumes.Rename(ic.ClientCtx, nameOrID, new(volumes.RenameOptions).WithNewName(opts.NewName))
+}

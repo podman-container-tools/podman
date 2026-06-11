@@ -26,6 +26,14 @@ import (
 
 const volumeSuffix = "+volume"
 
+func (r *Runtime) volumePath(name string) string {
+	return filepath.Join(r.config.Engine.VolumePath, name)
+}
+
+func (r *Runtime) volumeDataPath(name string) string {
+	return filepath.Join(r.volumePath(name), "_data")
+}
+
 // NewVolume creates a new empty volume
 func (r *Runtime) NewVolume(ctx context.Context, options ...VolumeCreateOption) (*Volume, error) {
 	if !r.valid {
@@ -161,7 +169,7 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 		}
 	} else {
 		// Create the mountpoint of this volume
-		volPathRoot := filepath.Join(r.config.Engine.VolumePath, volume.config.Name)
+		volPathRoot := r.volumePath(volume.config.Name)
 		if err := os.MkdirAll(volPathRoot, 0o700); err != nil {
 			return nil, fmt.Errorf("creating volume directory %q: %w", volPathRoot, err)
 		}
@@ -205,7 +213,7 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 			}
 		}
 
-		fullVolPath := filepath.Join(volPathRoot, "_data")
+		fullVolPath := r.volumeDataPath(volume.config.Name)
 		if err := os.MkdirAll(fullVolPath, 0o755); err != nil {
 			return nil, fmt.Errorf("creating volume directory %q: %w", fullVolPath, err)
 		}

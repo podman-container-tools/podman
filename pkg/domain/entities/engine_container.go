@@ -120,6 +120,7 @@ type ContainerEngine interface { //nolint:interfacebloat
 	VolumeList(ctx context.Context, opts VolumeListOptions) ([]*VolumeListReport, error)
 	VolumeMount(ctx context.Context, namesOrIds []string) ([]*VolumeMountReport, error)
 	VolumePrune(ctx context.Context, options VolumePruneOptions) ([]*reports.PruneReport, error)
+	VolumeRename(ctx context.Context, nameOrID string, options VolumeRenameOptions) error
 	VolumeRm(ctx context.Context, namesOrIds []string, opts VolumeRmOptions) ([]*VolumeRmReport, error)
 	VolumeUnmount(ctx context.Context, namesOrIds []string) ([]*VolumeUnmountReport, error)
 	VolumeReload(ctx context.Context) (*VolumeReloadReport, error)

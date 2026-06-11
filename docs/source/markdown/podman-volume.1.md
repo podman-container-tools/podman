@@ -22,6 +22,7 @@ podman volume is a set of subcommands that manage volumes.
 | mount   | [podman-volume-mount(1)](podman-volume-mount.1.md)     | Mount a volume filesystem.                                                     |
 | prune   | [podman-volume-prune(1)](podman-volume-prune.1.md)     | Remove unused volumes.                                                         |
 | reload  | [podman-volume-reload(1)](podman-volume-reload.1.md)   | Reload all volumes from volumes plugins.                                       |
+| rename  | [podman-volume-rename(1)](podman-volume-rename.1.md)   | Rename a volume.                                                               |
 | rm      | [podman-volume-rm(1)](podman-volume-rm.1.md)           | Remove one or more volumes.                                                    |
 | unmount | [podman-volume-unmount(1)](podman-volume-unmount.1.md) | Unmount a volume.                                                     |
 

@@ -84,6 +84,13 @@ t GET libpod/volumes/nonexistent/json 404 \
     .message~.* \
     .response=404
 
+## rename volume
+t POST libpod/volumes/foo2/rename?newName=foo2-renamed 204
+t GET libpod/volumes/foo2/json 404
+t GET libpod/volumes/foo2-renamed/json 200 \
+    .Name=foo2-renamed \
+    .Mountpoint=$volumepath/foo2-renamed/_data
+
 ## Remove volumes
 t DELETE libpod/volumes/foo1 204
 #After remove foo1 volume, this volume should not exist

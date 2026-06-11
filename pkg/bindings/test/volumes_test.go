@@ -68,6 +68,46 @@ var _ = Describe("Podman volumes", func() {
 		Expect(data.Name).To(Equal(vol.Name))
 	})
 
+	It("rename volume", func() {
+		oldName := "rename-old"
+		newName := "rename-new"
+		existingName := "rename-existing"
+
+		vol, err := volumes.Create(connText, entities.VolumeCreateOptions{Name: oldName}, nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = volumes.Rename(connText, vol.Name, new(volumes.RenameOptions).WithNewName(newName))
+		Expect(err).ToNot(HaveOccurred())
+
+		_, err = volumes.Inspect(connText, oldName, nil)
+		Expect(err).To(HaveOccurred())
+		code, err := bindings.CheckResponseCode(err)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(code).To(BeNumerically("==", http.StatusNotFound))
+
+		data, err := volumes.Inspect(connText, newName, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(data.Name).To(Equal(newName))
+
+		_, err = volumes.Create(connText, entities.VolumeCreateOptions{Name: existingName}, nil)
+		Expect(err).ToNot(HaveOccurred())
+		err = volumes.Rename(connText, newName, new(volumes.RenameOptions).WithNewName(existingName))
+		Expect(err).To(HaveOccurred())
+		code, err = bindings.CheckResponseCode(err)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(code).To(BeNumerically("==", http.StatusConflict))
+
+		session := bt.runPodman([]string{"create", "-v", fmt.Sprintf("%s:/data", newName), alpine.name, "true"})
+		session.Wait(45)
+		Expect(session.ExitCode()).To(BeZero())
+
+		err = volumes.Rename(connText, newName, new(volumes.RenameOptions).WithNewName("rename-blocked"))
+		Expect(err).To(HaveOccurred())
+		code, err = bindings.CheckResponseCode(err)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(code).To(BeNumerically("==", http.StatusConflict))
+	})
+
 	It("remove volume", func() {
 		// removing a bogus volume should result in 404
 		err := volumes.Remove(connText, "foobar", nil)

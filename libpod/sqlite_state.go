@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -17,9 +18,6 @@ import (
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/storage"
-
-	// SQLite backend for database/sql
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const schemaVersion = 1
@@ -1347,6 +1345,96 @@ func (s *SQLiteState) RewriteVolumeConfig(volume *Volume, newCfg *VolumeConfig) 
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing transaction to rewrite volume %s config: %w", volume.Name(), err)
+	}
+
+	return nil
+}
+
+// RenameVolume renames the given volume in the database and rewrites its
+// configuration. RewriteVolumeConfig cannot be used here because volume names
+// are stored in both VolumeConfig and VolumeState. Both tables must be updated
+// in one transaction to satisfy the deferred foreign-key relationship between
+// them.
+func (s *SQLiteState) RenameVolume(volume *Volume, newCfg *VolumeConfig) (defErr error) {
+	if !s.valid {
+		return define.ErrDBClosed
+	}
+
+	if !volume.valid {
+		return define.ErrVolumeRemoved
+	}
+
+	newName := newCfg.Name
+	oldName := volume.Name()
+	oldPath := s.runtime.volumePath(oldName)
+	newPath := s.runtime.volumePath(newName)
+
+	json, err := json.Marshal(newCfg)
+	if err != nil {
+		return fmt.Errorf("error marshalling volume %s new config JSON: %w", volume.Name(), err)
+	}
+
+	tx, err := s.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction to rename volume %s: %w", volume.Name(), err)
+	}
+	defer func() {
+		if defErr != nil {
+			if err := tx.Rollback(); err != nil {
+				logrus.Errorf("Rolling back transaction to rename volume %s: %v", volume.Name(), err)
+			}
+		}
+	}()
+
+	// Update VolumeState first.
+	// VolumeState may not exist for all volumes, so we intentionally
+	// do not check RowsAffected here.
+	// The Name column is unique, so renaming to an existing name surfaces as a
+	// SQLite constraint violation on the UPDATE rather than needing a separate
+	// existence query; we map that to ErrVolumeExists.
+	if _, err := tx.Exec("UPDATE VolumeState SET Name=? WHERE Name=?;", newName, oldName); err != nil {
+		if isSQLiteConstraint(err) {
+			return fmt.Errorf("volume with name %q already exists: %w", newName, define.ErrVolumeExists)
+		}
+		return fmt.Errorf("updating volume state name for volume %s: %w", volume.Name(), err)
+	}
+
+	// Update VolumeConfig (Name column + JSON blob)
+	results, err := tx.Exec("UPDATE VolumeConfig SET Name=?, JSON=? WHERE Name=?;", newName, json, oldName)
+	if err != nil {
+		if isSQLiteConstraint(err) {
+			return fmt.Errorf("volume with name %q already exists: %w", newName, define.ErrVolumeExists)
+		}
+		return fmt.Errorf("updating volume config for volume %s: %w", volume.Name(), err)
+	}
+	rows, err := results.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("retrieving volume %s config rename rows affected: %w", volume.Name(), err)
+	}
+	if rows == 0 {
+		volume.valid = false
+		return fmt.Errorf("no volume with name %q found in DB: %w", volume.Name(), define.ErrNoSuchVolume)
+	}
+	if rows > 1 {
+		return fmt.Errorf("renaming volume %s affected %d rows: %w", volume.Name(), rows, define.ErrInternal)
+	}
+
+	renamedStorage := false
+	if err := os.Rename(oldPath, newPath); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("renaming volume directory %q to %q: %w", oldPath, newPath, err)
+		}
+	} else {
+		renamedStorage = true
+	}
+
+	if err := tx.Commit(); err != nil {
+		if renamedStorage {
+			if rerr := os.Rename(newPath, oldPath); rerr != nil {
+				logrus.Errorf("Failed to rollback volume %s directory rename to %q after database commit failed: %v", newName, oldName, rerr)
+			}
+		}
+		return fmt.Errorf("committing transaction to rename volume %s: %w", volume.Name(), err)
 	}
 
 	return nil

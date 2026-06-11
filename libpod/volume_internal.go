@@ -5,7 +5,6 @@ package libpod
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"go.podman.io/podman/v6/libpod/define"
 )
@@ -29,8 +28,9 @@ func (v *Volume) teardownStorage() error {
 		return nil
 	}
 
-	// TODO: Should this be converted to use v.config.MountPoint?
-	return os.RemoveAll(filepath.Join(v.runtime.config.Engine.VolumePath, v.Name()))
+	// Remove the whole volume directory rather than v.config.MountPoint,
+	// which only points at the _data subdirectory, so no state is left behind.
+	return os.RemoveAll(v.runtime.volumePath(v.Name()))
 }
 
 // Volumes with options set, or a filesystem type, or a device to mount need to

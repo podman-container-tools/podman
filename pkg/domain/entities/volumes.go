@@ -52,6 +52,11 @@ type VolumeExportOptions struct {
 	Output io.Writer
 }
 
+// VolumeRenameOptions describes the options for renaming a volume.
+type VolumeRenameOptions struct {
+	NewName string
+}
+
 // VolumeImportOptions describes the options required to import a volume
 type VolumeImportOptions struct {
 	// Input will be closed upon being fully consumed

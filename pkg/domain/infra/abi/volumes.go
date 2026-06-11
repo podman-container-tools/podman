@@ -280,3 +280,12 @@ func (ic *ContainerEngine) VolumeImport(_ context.Context, nameOrID string, opti
 
 	return nil
 }
+
+func (ic *ContainerEngine) VolumeRename(ctx context.Context, nameOrID string, opts entities.VolumeRenameOptions) error {
+	vol, err := ic.Libpod.LookupVolume(nameOrID)
+	if err != nil {
+		return err
+	}
+	_, err = ic.Libpod.RenameVolume(ctx, vol, opts.NewName)
+	return err
+}

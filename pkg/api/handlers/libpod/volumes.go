@@ -271,3 +271,43 @@ func ImportVolume(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteResponse(w, http.StatusNoContent, "")
 }
+
+// RenameVolume renames an existing volume.
+func RenameVolume(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	decoder := r.Context().Value(api.DecoderKey).(*schema.Decoder)
+
+	name := utils.GetName(r)
+	if name == "" {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("volume name must not be empty: %w", define.ErrInvalidArg))
+		return
+	}
+
+	query := struct {
+		NewName string `schema:"newName"`
+	}{}
+	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	vol, err := runtime.LookupVolume(name)
+	if err != nil {
+		utils.VolumeNotFound(w, name, err)
+		return
+	}
+
+	if _, err := runtime.RenameVolume(r.Context(), vol, query.NewName); err != nil {
+		switch {
+		case errors.Is(err, define.ErrVolumeExists), errors.Is(err, define.ErrVolumeBeingUsed):
+			utils.Error(w, http.StatusConflict, err)
+		case errors.Is(err, define.ErrInvalidArg):
+			utils.Error(w, http.StatusBadRequest, err)
+		default:
+			utils.InternalServerError(w, err)
+		}
+		return
+	}
+
+	utils.WriteResponse(w, http.StatusNoContent, nil)
+}

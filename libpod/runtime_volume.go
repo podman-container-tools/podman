@@ -5,6 +5,8 @@ package libpod
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
@@ -108,6 +110,64 @@ func (r *Runtime) GetAllVolumes() ([]*Volume, error) {
 	}
 
 	return r.state.AllVolumes()
+}
+
+// RenameVolume renames the given volume to a new name.
+// The volume must not be in use by any containers, and must use the local
+// driver.
+func (r *Runtime) RenameVolume(_ context.Context, vol *Volume, newName string) (*Volume, error) {
+	if !r.valid {
+		return nil, define.ErrRuntimeStopped
+	}
+
+	vol.lock.Lock()
+	defer vol.lock.Unlock()
+
+	if err := vol.update(); err != nil {
+		return nil, err
+	}
+
+	if newName == "" || !define.NameRegex.MatchString(newName) {
+		return nil, define.RegexError
+	}
+
+	if vol.Name() == newName {
+		return vol, nil
+	}
+
+	// Only local-driver volumes can be renamed
+	driver := vol.Driver()
+	if driver != "" && driver != define.VolumeDriverLocal {
+		return nil, fmt.Errorf("renaming volume %s: rename is not supported for volumes using driver %q: %w", vol.Name(), driver, define.ErrInvalidArg)
+	}
+
+	// Refuse rename if the volume is currently mounted
+	if vol.state.MountCount > 0 {
+		return nil, fmt.Errorf("renaming volume %s: volume is currently mounted: %w", vol.Name(), define.ErrVolumeBeingUsed)
+	}
+
+	// Refuse rename if the volume is in use by any container
+	ctrs, err := r.state.VolumeInUse(vol)
+	if err != nil {
+		return nil, fmt.Errorf("checking if volume %s is in use: %w", vol.Name(), err)
+	}
+	if len(ctrs) > 0 {
+		return nil, fmt.Errorf("volume %s is being used by the following container(s): %s: %w", vol.Name(), strings.Join(ctrs, ", "), define.ErrVolumeBeingUsed)
+	}
+
+	oldName := vol.config.Name
+	config := *vol.config
+	config.Name = newName
+	config.MountPoint = r.volumeDataPath(newName)
+	config.IsAnon = false
+
+	if err := r.state.RenameVolume(vol, &config); err != nil {
+		return nil, fmt.Errorf("renaming volume %s: %w", oldName, err)
+	}
+	vol.config = &config
+
+	vol.newVolumeEvent(events.Rename)
+	return vol, nil
 }
 
 // PruneVolumes removes unused volumes from the system
