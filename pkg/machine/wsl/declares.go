@@ -96,6 +96,19 @@ const resolvConfUserNet = `
 nameserver 192.168.127.1
 `
 
+// createResolvScript writes /etc/resolv.conf with the user-mode networking
+// nameserver as primary and the host's DNS servers (from the WSL-shared
+// resolv.conf) as fallback. This allows DNS to keep working when
+// gvproxy/gvforwarder cannot forward queries, e.g. after a VPN connects
+// and changes the host resolver.
+const createResolvScript = `set -e
+rm -f /etc/resolv.conf
+echo 'nameserver 192.168.127.1' > /etc/resolv.conf
+if [ -f /mnt/wsl/resolv.conf ]; then
+    grep '^nameserver' /mnt/wsl/resolv.conf | grep -v '192\.168\.127\.1' >> /etc/resolv.conf 2>/dev/null || true
+fi
+`
+
 // WSL kernel does not have sg and crypto_user modules
 const overrideSysusers = `[Service]
 LoadCredential=
