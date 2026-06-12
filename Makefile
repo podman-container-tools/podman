@@ -973,7 +973,6 @@ install.docker-docs:
 install.docker-full: install.docker install.docker-docs
 
 .PHONY: install.systemd
-ifneq (,$(findstring systemd,$(BUILDTAGS)))
 PODMAN_GENERATED_UNIT_FILES = contrib/systemd/system/podman-auto-update.service \
 		    contrib/systemd/system/podman.service \
 		    contrib/systemd/system/podman-restart.service \
@@ -1003,9 +1002,6 @@ install.systemd: $(PODMAN_GENERATED_UNIT_FILES)
 	install ${SELINUXOPT} -m 644 contrib/systemd/user/podman-user-wait-network-online.service \
 		$(DESTDIR)${USERSYSTEMDDIR}/podman-user-wait-network-online.service
 	rm -f $^
-else
-install.systemd:
-endif
 
 .PHONY: install.tools
 install.tools: .install.golangci-lint ## Install needed tools
