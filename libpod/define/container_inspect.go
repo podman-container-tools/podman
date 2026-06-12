@@ -342,6 +342,8 @@ type HealthCheckResults struct {
 	FailingStreak int `json:"FailingStreak"`
 	// Log describes healthcheck attempts and results
 	Log []HealthCheckLog `json:"Log"`
+	// Whether state change happened for HealthStatus or not
+	IsStatusChanged bool
 }
 
 // HealthCheckLog describes the results of a single healthcheck
