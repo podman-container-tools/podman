@@ -1343,6 +1343,41 @@ func (c *Container) waitForHealthy(ctx context.Context) error {
 		c.lock.Unlock()
 		defer c.lock.Lock()
 	}
+	var healthStartPeriod time.Duration
+
+	if shc := c.config.StartupHealthCheckConfig; shc != nil && shc.StartPeriod > 0 {
+		healthStartPeriod = shc.StartPeriod
+	} else if hc := c.config.HealthCheckConfig; hc != nil && hc.StartPeriod > 0 {
+		healthStartPeriod = hc.StartPeriod
+	}
+
+	if healthStartPeriod > 0 {
+		extendCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+
+		msg := fmt.Sprintf("EXTEND_TIMEOUT_USEC=%d", (30 * time.Second).Microseconds())
+
+		// Send first extension immediately
+		// systemd.service(5): "The first receipt of this message must occur before TimeoutStartSec= is exceeded."
+		if err := notifyproxy.SendMessage(c.config.SdNotifySocket, msg); err != nil {
+			logrus.Errorf("Sending EXTEND_TIMEOUT_USEC failed: %v", err)
+		}
+		go func() {
+			for {
+				select {
+				case <-extendCtx.Done():
+					return
+				case <-ticker.C:
+					if err := notifyproxy.SendMessage(c.config.SdNotifySocket, msg); err != nil {
+						logrus.Errorf("Sending EXTEND_TIMEOUT_USEC failed: %v", err)
+					}
+				}
+			}
+		}()
+	}
 
 	if _, err := c.WaitForConditionWithInterval(ctx, DefaultWaitInterval, define.HealthCheckHealthy); err != nil {
 		if errors.Is(err, define.ErrNoSuchCtr) {
