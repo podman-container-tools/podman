@@ -4,6 +4,7 @@ package libpod
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/util"
 	"go.podman.io/storage/types"
+	"golang.org/x/term"
 )
 
 func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostConfig *define.InspectContainerHostConfig) error {
@@ -304,6 +306,29 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 	hostConfig.Devices, err = c.GetDevices(hostConfig.Privileged, *ctrSpec, deviceNodes)
 	if err != nil {
 		return err
+	}
+
+	// ConsoleSize.
+	// Default to [0,0] if we can't get it for some reason,
+	// or if the container doesn't have a TTY.
+	hostConfig.ConsoleSize = []uint{0, 0}
+
+	if c.Terminal() {
+		procPath := fmt.Sprintf("/proc/%d/fd/0", c.state.PID)
+
+		f, err := os.Open(procPath)
+		if err != nil {
+			logrus.Debugf("unable to get console size for container %s: %v", c.ID(), err)
+		} else {
+			defer f.Close()
+
+			width, height, err := term.GetSize(int(f.Fd()))
+			if err != nil {
+				logrus.Debugf("could not get terminal size: %v", err)
+			} else {
+				hostConfig.ConsoleSize = []uint{uint(height), uint(width)}
+			}
+		}
 	}
 
 	return nil

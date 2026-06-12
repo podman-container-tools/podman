@@ -626,12 +626,6 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 		}
 	}
 
-	// Terminal size
-	// We can't actually get this for now...
-	// So default to something sane.
-	// TODO: Populate this.
-	hostConfig.ConsoleSize = []uint{0, 0}
-
 	return hostConfig, nil
 }
 
