@@ -934,6 +934,27 @@ t POST libpod/containers/$cid/update \
 
 t DELETE containers/$cid 204
 
+# Verify that exec session with no attach streams specified can be started
+CTRNAME=exectest
+podman run -d --name $CTRNAME $IMAGE top
+echo '{ "Cmd":["sh", "-c", "echo hello > /tmp/testfile"]}' >${TMPD}/exec_empty.json
+t POST "containers/$CTRNAME/exec" ${TMPD}/exec_empty.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t POST exec/$eid/start 200
+# Need to wait for the exec to actually run, given it's detached
+TRIES=5
+while [[ $TRIES -gt 0 ]]; do
+    podman exec $CTRNAME ls /tmp/testfile
+    if [[ "$output" = "/tmp/testfile" ]]; then
+	break
+    fi
+    sleep 1
+    TRIES=$((TRIES - 1))
+done
+podman exec $CTRNAME cat /tmp/testfile
+is "$output" "hello"
+podman rm -f $CTRNAME
+
 rm -rf $TMPD
 
 podman container rm -fa

@@ -166,6 +166,19 @@ func ExecStartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If no streams were requested for attach, detach is implied
+	if !bodyParams.Detach {
+		execSession, err := sessionCtr.ExecSession(sessionID)
+		if err != nil {
+			utils.InternalServerError(w, err)
+			return
+		}
+
+		if !execSession.Config.AttachStderr && !execSession.Config.AttachStdout && !execSession.Config.AttachStdin {
+			bodyParams.Detach = true
+		}
+	}
+
 	if bodyParams.Detach {
 		// If we are detaching, we do NOT want to hijack.
 		// Instead, we perform a detached start, and return 200 if
