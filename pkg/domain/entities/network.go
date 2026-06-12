@@ -26,6 +26,7 @@ type NetworkReloadReport = entitiesTypes.NetworkReloadReport
 // NetworkRmOptions describes options for removing networks
 type NetworkRmOptions struct {
 	Force   bool
+	Ignore  bool
 	Timeout *uint
 }
 

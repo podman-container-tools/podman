@@ -979,6 +979,22 @@ EOF
 }
 
 # bats test_tags=ci:parallel
+@test "podman network rm --ignore bogus" {
+    bogusnet=bogusnet-$(safename)
+    run_podman 1 network rm $bogusnet
+    is "$output" "Error: unable to find network with name or ID $bogusnet: network not found" "Should print error"
+    run_podman network rm --ignore $bogusnet
+    is "$output" "" "Should print no output"
+
+    netname=testnet-$(safename)
+    run_podman network create $netname
+    run_podman network rm --ignore $bogusnet $netname
+    assert "$output" = "$netname" "rm network"
+    run_podman network ls -q
+    assert "$output" !~ "$(safename)" "all networks from this test should be gone"
+}
+
+# bats test_tags=ci:parallel
 @test "podman network rm --dns-option " {
     dns_opt=dns$(random_string)
     run_podman run --rm --dns-opt=${dns_opt} $IMAGE cat /etc/resolv.conf

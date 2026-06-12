@@ -178,6 +178,12 @@ var _ = Describe("Podman networks", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(code).To(BeNumerically("==", http.StatusNotFound))
 
+		// removing a noName network with ignore should succeed
+		options := new(network.RemoveOptions).WithIgnore(true)
+		report, err := network.Remove(connText, "noName", options)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(report).To(BeEmpty())
+
 		// Removing an unused network should work
 		name := "unused"
 		net := types.Network{
@@ -185,7 +191,7 @@ var _ = Describe("Podman networks", func() {
 		}
 		_, err = network.Create(connText, &net)
 		Expect(err).ToNot(HaveOccurred())
-		report, err := network.Remove(connText, name, nil)
+		report, err = network.Remove(connText, name, nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(report[0].Name).To(Equal(name))
 
@@ -211,7 +217,7 @@ var _ = Describe("Podman networks", func() {
 		// Removing with a network in use with force should work with a stopped container
 		err = containers.Stop(connText, container, new(containers.StopOptions).WithTimeout(0))
 		Expect(err).ToNot(HaveOccurred())
-		options := new(network.RemoveOptions).WithForce(true)
+		options = new(network.RemoveOptions).WithForce(true)
 		report, err = network.Remove(connText, name, options)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(report[0].Name).To(Equal(name))

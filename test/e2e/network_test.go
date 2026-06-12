@@ -426,6 +426,11 @@ var _ = Describe("Podman network", func() {
 		Expect(session).Should(ExitWithError(1, "unable to find network with name or ID bogus: network not found"))
 	})
 
+	It("podman network remove --ignore bogus", func() {
+		session := podmanTest.PodmanExitCleanly("network", "rm", "--ignore", "bogus")
+		Expect(session.OutputToString()).To(Equal(""))
+	})
+
 	It("podman network remove --force with pod", func() {
 		netName := "net-" + stringid.GenerateRandomID()
 		session := podmanTest.Podman([]string{"network", "create", netName})

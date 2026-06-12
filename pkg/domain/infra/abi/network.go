@@ -168,6 +168,9 @@ func (ic *ContainerEngine) NetworkRm(ctx context.Context, namesOrIds []string, o
 			return reports, err
 		}
 		if err := ic.Libpod.Network().NetworkRemove(name); err != nil {
+			if options.Ignore && errors.Is(err, define.ErrNoSuchNetwork) {
+				continue
+			}
 			report.Err = err
 		}
 		if len(net.Name) != 0 {

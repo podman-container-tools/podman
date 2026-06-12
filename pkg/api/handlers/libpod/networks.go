@@ -109,7 +109,8 @@ func RemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	decoder := r.Context().Value(api.DecoderKey).(*schema.Decoder)
 	query := struct {
-		Force bool `schema:"force"`
+		Force  bool `schema:"force"`
+		Ignore bool `schema:"ignore"`
 	}{
 		// override any golang type defaults
 	}
@@ -121,12 +122,17 @@ func RemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	name := utils.GetName(r)
 
 	options := entities.NetworkRmOptions{
-		Force: query.Force,
+		Force:  query.Force,
+		Ignore: query.Ignore,
 	}
 	ic := abi.ContainerEngine{Libpod: runtime}
 	reports, err := ic.NetworkRm(r.Context(), []string{name}, options)
 	if err != nil {
 		utils.InternalServerError(w, err)
+		return
+	}
+	if len(reports) == 0 {
+		utils.WriteResponse(w, http.StatusOK, []*entities.NetworkRmReport{})
 		return
 	}
 	if reports[0].Err != nil {

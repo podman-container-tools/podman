@@ -52,7 +52,7 @@ func (ic *ContainerEngine) NetworkReload(_ context.Context, _ []string, _ entiti
 
 func (ic *ContainerEngine) NetworkRm(_ context.Context, namesOrIds []string, opts entities.NetworkRmOptions) ([]*entities.NetworkRmReport, error) {
 	reports := make([]*entities.NetworkRmReport, 0, len(namesOrIds))
-	options := new(network.RemoveOptions).WithForce(opts.Force)
+	options := new(network.RemoveOptions).WithForce(opts.Force).WithIgnore(opts.Ignore)
 	if opts.Timeout != nil {
 		options = options.WithTimeout(*opts.Timeout)
 	}
