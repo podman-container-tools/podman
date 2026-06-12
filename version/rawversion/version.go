@@ -4,4 +4,4 @@ package rawversion
 //
 // This indirection is needed to prevent semver packages from bloating
 // Quadlet's binary size.
-const RawVersion = "5.8.3"
+const RawVersion = "5.8.4-dev"
