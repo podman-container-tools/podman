@@ -379,7 +379,7 @@ the exit codes follow the `chroot` standard, see below:
 | [podman-init(1)](podman-init.1.md)               | Initialize one or more containers                                            |
 | [podman-inspect(1)](podman-inspect.1.md)         | Display artifact, container, image, volume, network, or pod's configuration. |
 | [podman-kill(1)](podman-kill.1.md)               | Kill the main process in one or more containers.                             |
-| [podman-load(1)](podman-load.1.md)               | Load image(s) from a tar archive into container storage.                     |
+| [podman-load(1)](podman-load.1.md)               | Load image(s) from tar archives, directories, or URLs into container storage.|
 | [podman-login(1)](podman-login.1.md)             | Log in to a container registry.                                              |
 | [podman-logout(1)](podman-logout.1.md)           | Log out of a container registry.                                             |
 | [podman-logs(1)](podman-logs.1.md)               | Display the logs of one or more containers.                                  |
@@ -400,7 +400,7 @@ the exit codes follow the `chroot` standard, see below:
 | [podman-rm(1)](podman-rm.1.md)                   | Remove one or more containers.                                               |
 | [podman-rmi(1)](podman-rmi.1.md)                 | Remove one or more locally stored images.                                    |
 | [podman-run(1)](podman-run.1.md)                 | Run a command in a new container.                                            |
-| [podman-save(1)](podman-save.1.md)               | Save image(s) to an archive.                                                 |
+| [podman-save(1)](podman-save.1.md)               | Save image(s) to an archive or directory.                                    |
 | [podman-search(1)](podman-search.1.md)           | Search a registry for an image.                                              |
 | [podman-secret(1)](podman-secret.1.md)           | Manage podman secrets.                                                       |
 | [podman-start(1)](podman-start.1.md)             | Start one or more containers.                                                |

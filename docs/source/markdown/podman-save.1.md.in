@@ -1,7 +1,7 @@
 % podman-save 1
 
 ## NAME
-podman\-save - Save image(s) to an archive
+podman\-save - Save image(s) to an archive or directory
 
 ## SYNOPSIS
 **podman save** [*options*] *name*[:*tag*]
@@ -33,6 +33,7 @@ An image format to produce, one of:
 | **oci-dir**        | A directory using the OCI Image Format                                       |
 | **docker-dir**     | **dir** transport (see **containers-transports(5)**) with v2s2 manifest type |
 
+Note: **oci-dir** and **docker-dir** cannot be loaded with **podman load** on Podman remote clients (including macOS and Windows, excluding WSL2)
 #### **--help**, **-h**
 
 Print usage statement
