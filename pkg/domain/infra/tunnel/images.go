@@ -266,6 +266,7 @@ func (ir *ImageEngine) Import(_ context.Context, opts entities.ImageImportOption
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
 	}
 	return images.Import(ir.ClientCtx, f, options)
 }
@@ -353,6 +354,7 @@ func (ir *ImageEngine) Save(_ context.Context, nameOrID string, tags []string, o
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	info, err := os.Stat(opts.Output)
 	switch {
 	case err == nil:
