@@ -966,6 +966,31 @@ for runtime in "${oci_runtimes[@]}"; do
     t DELETE containers/$cid 204
 done
 
+# 27988: make sure creation with "userns": {"nsmode": "auto"} works even without
+# explicit idmappings. check for the same behaviour the cmd line shows: when the
+# container is created, UsernsMode is ""; after the container is started,
+# UsernsMode becomes "private"
+
+t POST libpod/containers/create \
+  Image=$IMAGE \
+  UserNS='{"NSMode":"auto"}' \
+  201
+cid=$(jq -r '.Id' <<<"$output")
+
+t GET libpod/containers/$cid/json \
+  200 \
+  .HostConfig.UsernsMode=''
+
+t POST   libpod/containers/$cid/start 204
+
+t GET libpod/containers/$cid/json \
+  200 \
+  .HostConfig.UsernsMode=private
+
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+
+# clean up
 podman rmi -f $IMAGE
 
 # Test health status in /containers/json (GH #27786)

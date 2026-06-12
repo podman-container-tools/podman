@@ -217,6 +217,22 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		}
 	}
 
+	// if userns is auto, set up annotation, and default IDMappings if none are set
+	if s.UserNS.IsAuto() {
+		if s.Annotations == nil {
+			s.Annotations = make(map[string]string)
+		}
+		s.Annotations[define.UserNsAnnotation] = string(s.UserNS.NSMode)
+
+		if s.IDMappings == nil {
+			mappings, err := util.ParseIDMapping(namespaces.UsernsMode(s.UserNS.NSMode), nil, nil, "", "")
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.IDMappings = mappings
+		}
+	}
+
 	if err := s.Validate(); err != nil {
 		return nil, nil, nil, fmt.Errorf("invalid config provided: %w", err)
 	}
