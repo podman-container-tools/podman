@@ -61,7 +61,7 @@ jobs:
           private-key: ${{ secrets.STALE_LOCKING_APP_PRIVATE_KEY }}
 
       # Ref: https://github.com/dessant/lock-threads#usage
-      - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7 # v6.0.0
+      - uses: dessant/lock-threads@851cffe46851ddd2051ea7147ebdc995113241c3 # v6.0.1
         with:
           github-token: '${{ steps.generate-token.outputs.token }}'
           process-only: 'issues, prs'
