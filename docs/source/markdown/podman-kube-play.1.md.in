@@ -266,6 +266,8 @@ Define or override a port definition in the YAML file.
 The lists of ports in the YAML file and the command line are merged. Matching is done by using the **containerPort** field.
 If **containerPort** exists in both the YAML file and the option, the latter takes precedence.
 
+In case this options is used with **--replicas** option then number of published ports should be equal to the number of replicas in container spec, e.g. Deployment.spec.replicas is 3, then **--publish** is set to "8080:80,8081:80,8082:80"
+
 #### **--publish-all**
 
 Setting this option to `true` will expose all ports to the host,
@@ -283,6 +285,10 @@ Suppress output information when pulling images
 #### **--replace**
 
 Tears down the pods created by a previous run of `kube play` and recreates the pods. This option is used to keep the existing pods up to date based upon the Kubernetes YAML.
+
+#### **--replicas**
+
+Only one Pod replica is created by default, despite the desired number of Pods in the Kubernetes Deployment resource. This setting overrides the default behavior, allowing the desired number of Pods to be created.
 
 #### **--seccomp-profile-root**=*path*
 

@@ -422,3 +422,18 @@ func (o *PlayOptions) GetNoPodPrefix() bool {
 	}
 	return *o.NoPodPrefix
 }
+
+// WithReplicas set field Replicas to given value
+func (o *PlayOptions) WithReplicas(value bool) *PlayOptions {
+	o.Replicas = &value
+	return o
+}
+
+// GetReplicas returns value of field Replicas
+func (o *PlayOptions) GetReplicas() bool {
+	if o.Replicas == nil {
+		var z bool
+		return z
+	}
+	return *o.Replicas
+}

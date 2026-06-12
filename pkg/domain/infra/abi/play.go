@@ -276,6 +276,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 	ipIndex := 0
 
 	var configMaps []v1.ConfigMap
+	var numReplicas int32
 
 	ranContainers := false
 	// set the ranContainers bool to true if at least one container was successfully started.
@@ -404,15 +405,46 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, fmt.Errorf("unable to read YAML as Kube Deployment: %w", err)
 			}
 
-			r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer)
-			if err != nil {
-				return nil, err
+			numReplicas = 1
+			if deploymentYAML.Spec.Replicas != nil {
+				numReplicas = *deploymentYAML.Spec.Replicas
 			}
-			notifyProxies = append(notifyProxies, proxies...)
 
-			report.Pods = append(report.Pods, r.Pods...)
+			if numReplicas > 1 && options.Replicas {
+				if len(options.PublishPorts) > 0 && len(options.PublishPorts) != int(numReplicas) {
+					return nil, fmt.Errorf("number of Pod replics aren't equal to the number of published ports: %d replicas, %d published ports", numReplicas, len(options.PublishPorts))
+				}
+
+				portToPublish := make([]string, numReplicas)
+				copy(portToPublish, options.PublishPorts)
+				options.PublishPorts = make([]string, 1)
+				for i := range numReplicas {
+					options.PublishPorts[0] = portToPublish[i]
+					podName := fmt.Sprintf("%s-pod-%d", deploymentYAML.ObjectMeta.Name, i)
+					r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer, podName)
+					if err != nil {
+						return nil, err
+					}
+					notifyProxies = append(notifyProxies, proxies...)
+
+					report.Pods = append(report.Pods, r.Pods...)
+					setRanContainers(r)
+				}
+			} else {
+				if numReplicas > 1 {
+					logrus.Warnf("Limiting replica count to 1, use `--replicas` to enable more than one replica")
+				}
+				podName := fmt.Sprintf("%s-pod", deploymentYAML.ObjectMeta.Name)
+				r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer, podName)
+				if err != nil {
+					return nil, err
+				}
+				notifyProxies = append(notifyProxies, proxies...)
+
+				report.Pods = append(report.Pods, r.Pods...)
+				setRanContainers(r)
+			}
 			validKinds++
-			setRanContainers(r)
 		case "Job":
 			var jobYAML v1.Job
 
@@ -563,11 +595,10 @@ func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML 
 	return &report, proxies, nil
 }
 
-func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAML *v1apps.Deployment, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAML *v1apps.Deployment, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, podName string) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	var (
 		deploymentName string
 		podSpec        v1.PodTemplateSpec
-		numReplicas    int32
 		report         entities.PlayKubeReport
 	)
 
@@ -575,16 +606,9 @@ func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAM
 	if deploymentName == "" {
 		return nil, nil, errors.New("deployment does not have a name")
 	}
-	numReplicas = 1
-	if deploymentYAML.Spec.Replicas != nil {
-		numReplicas = *deploymentYAML.Spec.Replicas
-	}
-	if numReplicas > 1 {
-		logrus.Warnf("Limiting replica count to 1, more than one replica is not supported by Podman")
-	}
+
 	podSpec = deploymentYAML.Spec.Template
 
-	podName := fmt.Sprintf("%s-pod", deploymentName)
 	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, deploymentYAML.Annotations, configMaps, serviceContainer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
