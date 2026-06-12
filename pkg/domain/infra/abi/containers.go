@@ -5,12 +5,16 @@ package abi
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -959,6 +963,24 @@ func (ic *ContainerEngine) ContainerExec(ctx context.Context, nameOrID string, o
 		return ec, err
 	}
 
+	// Setup resource limits if requested
+	var cleanupCgroup func() error
+	if options.Resources != nil {
+		cgroupPath, cleanup, err := ic.setupExecCgroup(ctr.Container, options.Resources)
+		if err != nil {
+			return ec, fmt.Errorf("setting up exec resource limits: %w", err)
+		}
+		execConfig.CgroupPath = cgroupPath
+		cleanupCgroup = cleanup
+		defer func() {
+			if cleanupCgroup != nil {
+				if cleanErr := cleanupCgroup(); cleanErr != nil {
+					logrus.Errorf("Cleaning up exec cgroup: %v", cleanErr)
+				}
+			}
+		}()
+	}
+
 	ec, err = terminal.ExecAttachCtr(ctx, ctr.Container, execConfig, &streams)
 	return define.TranslateExecErrorToExitCode(ec, err), err
 }
@@ -988,6 +1010,24 @@ func (ic *ContainerEngine) ContainerExecNoSession(_ context.Context, nameOrID st
 		return ec, err
 	}
 
+	// Setup resource limits if requested
+	var cleanupCgroup func() error
+	if options.Resources != nil {
+		cgroupPath, cleanup, err := ic.setupExecCgroup(ctr.Container, options.Resources)
+		if err != nil {
+			return ec, fmt.Errorf("setting up exec resource limits: %w", err)
+		}
+		execConfig.CgroupPath = cgroupPath
+		cleanupCgroup = cleanup
+		defer func() {
+			if cleanupCgroup != nil {
+				if cleanErr := cleanupCgroup(); cleanErr != nil {
+					logrus.Errorf("Cleaning up exec cgroup: %v", cleanErr)
+				}
+			}
+		}()
+	}
+
 	ec, err = ctr.ExecNoSession(execConfig, &streams, nil)
 	// Translate exit codes for consistency with regular exec
 	return define.TranslateExecErrorToExitCode(ec, err), err
@@ -1011,6 +1051,15 @@ func (ic *ContainerEngine) ContainerExecDetached(_ context.Context, nameOrID str
 	execConfig, err := makeExecConfig(options, ic.Libpod, false)
 	if err != nil {
 		return "", err
+	}
+
+	// Setup resource limits if requested
+	if options.Resources != nil {
+		cgroupPath, _, err := ic.setupExecCgroup(ctr.Container, options.Resources)
+		if err != nil {
+			return "", fmt.Errorf("setting up exec resource limits: %w", err)
+		}
+		execConfig.CgroupPath = cgroupPath
 	}
 
 	// Create and start the exec session
@@ -1884,3 +1933,166 @@ func (ic *ContainerEngine) ContainerUpdate(_ context.Context, updateOptions *ent
 	}
 	return ctr.ID(), nil
 }
+
+// setupExecCgroup creates a sub-cgroup for the exec process and applies resource limits
+// Returns: relativeCgroupPath, cleanupFunc, error
+func (ic *ContainerEngine) setupExecCgroup(ctr *libpod.Container, limits *entities.ExecResourceLimits) (string, func() error, error) {
+	if limits == nil {
+		return "", nil, nil
+	}
+
+	// Verify cgroups v2 is available
+	if _, err := os.Stat("/sys/fs/cgroup/cgroup.controllers"); err != nil {
+		return "", nil, fmt.Errorf("exec resource limits require cgroups v2: %w", err)
+	}
+
+	// Get container's cgroup path (relative, e.g., "user.slice/user-1000.slice/container_id")
+	cgroupPath, err := ctr.CgroupPath()
+	if err != nil {
+		return "", nil, fmt.Errorf("getting container cgroup path: %w", err)
+	}
+
+	// Generate unique exec session cgroup name with cryptographic randomness
+	var randomBytes [8]byte
+	if _, err := rand.Read(randomBytes[:]); err != nil {
+		return "", nil, fmt.Errorf("generating exec ID: %w", err)
+	}
+	execID := fmt.Sprintf("exec-%s", hex.EncodeToString(randomBytes[:]))
+
+	// Cgroup path for runtime (relative to container's actual cgroup)
+	// Container's actual cgroup is at "machine.slice/libpod-xxx.scope/container"
+	// We create exec at "machine.slice/libpod-xxx.scope/exec-123" (sibling of container)
+	// So relative to container: "../exec-123"
+	relativeCgroupPath := filepath.Join("..", execID)
+
+	// Container's cgroup path is the scope (e.g., "machine.slice/libpod-xxx.scope")
+	// Note: CgroupPath() returns just the scope path, not scope/container
+	parentCgroupPath := filepath.Join("/sys/fs/cgroup", cgroupPath)
+
+	// Build cgroup resource limits
+	cgroupRes := buildCgroupResources(limits)
+
+	// Enable necessary controllers in parent's subtree_control before creating child
+	if err := enableSubtreeControllers(parentCgroupPath, cgroupRes); err != nil {
+		return "", nil, fmt.Errorf("enabling controllers in parent cgroup: %w", err)
+	}
+
+	// Absolute filesystem path for creating directory and writing limits
+	// Create as sibling of container cgroup, not child
+	execCgroupPath := filepath.Join(parentCgroupPath, execID)
+
+	// Create the exec cgroup directory
+	if err := os.MkdirAll(execCgroupPath, 0o755); err != nil {
+		return "", nil, fmt.Errorf("creating exec cgroup directory: %w", err)
+	}
+
+	// Apply resource limits to cgroup
+	if err := applyCgroupLimits(execCgroupPath, cgroupRes); err != nil {
+		_ = os.Remove(execCgroupPath)
+		return "", nil, fmt.Errorf("applying cgroup limits: %w", err)
+	}
+
+	// Cleanup function to remove exec cgroup when done
+	cleanup := func() error {
+		return os.RemoveAll(execCgroupPath)
+	}
+
+	return relativeCgroupPath, cleanup, nil
+}
+
+// buildCgroupResources converts ExecResourceLimits to cgroup resource settings
+func buildCgroupResources(limits *entities.ExecResourceLimits) map[string]string {
+	res := make(map[string]string)
+
+	// CPU quota and period
+	if limits.CPUQuota > 0 {
+		period := limits.CPUPeriod
+		if period == 0 {
+			period = 100000 // default 100ms
+		}
+		// Format: "quota period" in microseconds
+		res["cpu.max"] = fmt.Sprintf("%d %d", limits.CPUQuota, period)
+	}
+
+	// Memory limit
+	if limits.Memory != nil && *limits.Memory > 0 {
+		res["memory.max"] = fmt.Sprintf("%d", *limits.Memory)
+	}
+
+	// CPU set
+	if limits.CPUSetCPUs != "" {
+		res["cpuset.cpus"] = limits.CPUSetCPUs
+	}
+
+	return res
+}
+
+// enableSubtreeControllers enables required controllers in parent's cgroup.subtree_control
+func enableSubtreeControllers(parentCgroupPath string, resources map[string]string) error {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	subtreeControlPath := filepath.Join(parentCgroupPath, "cgroup.subtree_control")
+
+	// Read current enabled controllers
+	currentData, err := os.ReadFile(subtreeControlPath)
+	if err != nil {
+		return fmt.Errorf("reading cgroup.subtree_control: %w (resource limits require cgroups v2 with controller delegation)", err)
+	}
+
+	current := string(currentData)
+	controllersToEnable := []string{}
+
+	// Map resource files to controller names
+	for resource := range resources {
+		var controller string
+		switch {
+		case resource == "cpu.max":
+			controller = "cpu"
+		case resource == "memory.max":
+			controller = "memory"
+		case resource == "cpuset.cpus":
+			controller = "cpuset"
+		default:
+			continue
+		}
+
+		// Check if already enabled (avoid redundant writes)
+		if !containsWord(current, controller) {
+			controllersToEnable = append(controllersToEnable, controller)
+		}
+	}
+
+	// Enable each controller
+	for _, controller := range controllersToEnable {
+		enableStr := fmt.Sprintf("+%s", controller)
+		if err := os.WriteFile(subtreeControlPath, []byte(enableStr), 0o644); err != nil {
+			return fmt.Errorf("enabling %s controller: %w (controller delegation may not be available in this environment)", controller, err)
+		}
+	}
+
+	return nil
+}
+
+// containsWord checks if a space-separated string contains a word
+func containsWord(s, word string) bool {
+	for _, w := range strings.Fields(s) {
+		if w == word {
+			return true
+		}
+	}
+	return false
+}
+
+// applyCgroupLimits writes resource limits to cgroup v2 controller files
+func applyCgroupLimits(cgroupPath string, resources map[string]string) error {
+	for controller, value := range resources {
+		controllerPath := filepath.Join(cgroupPath, controller)
+		if err := os.WriteFile(controllerPath, []byte(value), 0o644); err != nil {
+			return fmt.Errorf("writing %s: %w", controller, err)
+		}
+	}
+	return nil
+}
+

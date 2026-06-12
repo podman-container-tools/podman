@@ -80,6 +80,9 @@ type ExecConfig struct {
 	// exiting, and the exit command being executed. If set to 0, there is
 	// no delay. If set, ExitCommand must also be set.
 	ExitCommandDelay uint `json:"exitCommandDelay,omitempty"`
+	// CgroupPath is an optional cgroup path for resource-limited exec.
+	// If set, the exec process runs in this cgroup instead of container's cgroup.
+	CgroupPath string `json:"cgroupPath,omitempty"`
 }
 
 // ExecSession contains information on a single exec session attached to a given
@@ -904,6 +907,17 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 // the container when os.RemoveAll($bundlePath) fails with ENOTEMPTY or EBUSY
 // errors.
 func (c *Container) cleanupExecBundle(sessionID string) (err error) {
+	if session, ok := c.state.ExecSessions[sessionID]; ok && session.Config.CgroupPath != "" {
+		cgroupPath, err := c.cGroupPath()
+		if err != nil {
+			logrus.Warnf("Failed to get container cgroup path for exec cgroup cleanup: %v", err)
+		} else {
+			absPath := filepath.Join("/sys/fs/cgroup", cgroupPath, session.Config.CgroupPath)
+			if removeErr := os.RemoveAll(absPath); removeErr != nil {
+				logrus.Warnf("Failed to remove exec cgroup %s: %v", absPath, removeErr)
+			}
+		}
+	}
 	path := c.execBundlePath(sessionID)
 	for range 50 {
 		err = os.RemoveAll(path)
@@ -1180,6 +1194,7 @@ func prepareForExec(c *Container, session *ExecSession) (*ExecOptions, error) {
 	opts.ExitCommand = session.Config.ExitCommand
 	opts.ExitCommandDelay = session.Config.ExitCommandDelay
 	opts.Privileged = session.Config.Privileged
+	opts.CgroupPath = session.Config.CgroupPath
 
 	return opts, nil
 }
