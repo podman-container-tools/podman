@@ -2061,15 +2061,13 @@ This is equivalent to the `--variant` option of `podman build`.
 
 ### `Volume=`
 
-Mount a volume to containers when executing RUN instructions during the build. This is equivalent to
-the `--volume` option of `podman build`, and generally has the form
-`[[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]]`.
+Mount a host directory into containers when executing RUN instructions during the build. This is equivalent to
+the `--volume` option of `podman build`, and has the form
+`[HOST-DIR:]CONTAINER-DIR[:OPTIONS]`.
 
-If `SOURCE-VOLUME` starts with `.`, Quadlet resolves the path relative to the location of the unit file.
+If `HOST-DIR` starts with `.`, Quadlet resolves the path relative to the location of the unit file.
 
-Special case:
-
-* If `SOURCE-VOLUME` ends with `.volume`, Quadlet will look for the corresponding `.volume` Quadlet unit. If found, Quadlet will use the name of the Volume set in the Unit, otherwise, `systemd-$name` is used. The generated systemd service contains a dependency on the service unit generated for that `.volume` unit, or on `$name-volume.service` if the `.volume` unit is not found. Note: the corresponding `.volume` file must exist.
+Note: `podman build --volume` only supports host directory bind mounts. Because of this, `.volume` references and named volumes may not work as expected, even though Quadlet resolves them.
 
 This key can be listed multiple times.
 
