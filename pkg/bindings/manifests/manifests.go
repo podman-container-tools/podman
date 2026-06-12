@@ -355,6 +355,7 @@ func Modify(ctx context.Context, name string, images []string, options *ModifyOp
 		artifactContentType = writer.FormDataContentType()
 		artifactWriterGroup.Add(1)
 		go func() {
+			defer artifactWriterGroup.Done()
 			defer bodyWriter.Close()
 			defer writer.Close()
 			// start with the body we would have uploaded if we weren't

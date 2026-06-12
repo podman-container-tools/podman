@@ -24,12 +24,13 @@ type manifestAddOptsWrapper struct {
 	entities.ManifestAddOptions
 	artifactOptions entities.ManifestAddArtifactOptions
 
-	tlsVerifyCLI       bool   // CLI only
-	insecure           bool   // CLI only
-	credentialsCLI     string // CLI only
-	artifact           bool   // CLI only
-	artifactConfigFile string // CLI only
-	artifactType       string // CLI only
+	tlsVerifyCLI        bool     // CLI only
+	insecure            bool     // CLI only
+	credentialsCLI      string   // CLI only
+	artifact            bool     // CLI only
+	artifactConfigFile  string   // CLI only
+	artifactType        string   // CLI only
+	artifactAnnotations []string // CLI only
 }
 
 var (
@@ -55,15 +56,19 @@ func init() {
 	flags.BoolVar(&manifestAddOpts.All, "all", false, "add all of the list's images if the image is a list")
 
 	annotationFlagName := "annotation"
-	flags.StringArrayVar(&manifestAddOpts.Annotation, annotationFlagName, nil, "set an `annotation` for the specified image")
+	flags.StringArrayVar(&manifestAddOpts.Annotation, annotationFlagName, nil, "set an `annotation` for the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(annotationFlagName, completion.AutocompleteNone)
 
 	archFlagName := "arch"
-	flags.StringVar(&manifestAddOpts.Arch, archFlagName, "", "override the `architecture` of the specified image")
+	flags.StringVar(&manifestAddOpts.Arch, archFlagName, "", "override the `architecture` of the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(archFlagName, completion.AutocompleteArch)
 
 	artifactFlagName := "artifact"
 	flags.BoolVar(&manifestAddOpts.artifact, artifactFlagName, false, "add all arguments as artifact files rather than as images")
+
+	artifactAnnotationFlagName := "artifact-annotation"
+	flags.StringArrayVar(&manifestAddOpts.artifactAnnotations, artifactAnnotationFlagName, nil, "set an `annotation` in the artifact")
+	_ = addCmd.RegisterFlagCompletionFunc(artifactAnnotationFlagName, completion.AutocompleteNone)
 
 	artifactExcludeTitlesFlagName := "artifact-exclude-titles"
 	flags.BoolVar(&manifestAddOpts.artifactOptions.ExcludeTitles, artifactExcludeTitlesFlagName, false, fmt.Sprintf(`refrain from setting %q annotations on "layers"`, imgspecv1.AnnotationTitle))
@@ -101,15 +106,15 @@ func init() {
 	_ = addCmd.RegisterFlagCompletionFunc(credsFlagName, completion.AutocompleteNone)
 
 	featuresFlagName := "features"
-	flags.StringSliceVar(&manifestAddOpts.Features, featuresFlagName, nil, "override the `features` of the specified image")
+	flags.StringSliceVar(&manifestAddOpts.Features, featuresFlagName, nil, "override the `features` of the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(featuresFlagName, completion.AutocompleteNone)
 
 	osFlagName := "os"
-	flags.StringVar(&manifestAddOpts.OS, osFlagName, "", "override the `OS` of the specified image")
+	flags.StringVar(&manifestAddOpts.OS, osFlagName, "", "override the `OS` of the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(osFlagName, completion.AutocompleteOS)
 
 	osVersionFlagName := "os-version"
-	flags.StringVar(&manifestAddOpts.OSVersion, osVersionFlagName, "", "override the OS `version` of the specified image")
+	flags.StringVar(&manifestAddOpts.OSVersion, osVersionFlagName, "", "override the OS `version` of the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(osVersionFlagName, completion.AutocompleteNone)
 
 	flags.BoolVar(&manifestAddOpts.insecure, "insecure", false, "neither require HTTPS nor verify certificates when accessing the registry")
@@ -117,7 +122,7 @@ func init() {
 	flags.BoolVar(&manifestAddOpts.tlsVerifyCLI, "tls-verify", true, "require HTTPS and verify certificates when accessing the registry")
 
 	variantFlagName := "variant"
-	flags.StringVar(&manifestAddOpts.Variant, variantFlagName, "", "override the `Variant` of the specified image")
+	flags.StringVar(&manifestAddOpts.Variant, variantFlagName, "", "override the `variant` of the specified image or artifact")
 	_ = addCmd.RegisterFlagCompletionFunc(variantFlagName, completion.AutocompleteNone)
 
 	if registry.IsRemote() {
@@ -157,7 +162,7 @@ func add(cmd *cobra.Command, args []string) error {
 
 	if !manifestAddOpts.artifact {
 		var changedArtifactFlags []string
-		for _, artifactOption := range []string{"artifact-type", "artifact-config", "artifact-config-type", "artifact-layer-type", "artifact-subject", "artifact-exclude-titles"} {
+		for _, artifactOption := range []string{"artifact-type", "artifact-config", "artifact-config-type", "artifact-layer-type", "artifact-subject", "artifact-exclude-titles", "artifact-annotation"} {
 			if cmd.Flags().Changed(artifactOption) {
 				changedArtifactFlags = append(changedArtifactFlags, "--"+artifactOption)
 			}
@@ -182,6 +187,16 @@ func add(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("%v", err)
 			}
 			manifestAddOpts.artifactOptions.Config = string(configBytes)
+		}
+		if len(manifestAddOpts.artifactAnnotations) > 0 {
+			manifestAddOpts.artifactOptions.Annotations = make(map[string]string, len(manifestAddOpts.artifactAnnotations))
+			for _, annotation := range manifestAddOpts.artifactAnnotations {
+				key, val, hasVal := strings.Cut(annotation, "=")
+				if !hasVal {
+					return fmt.Errorf("no value given for annotation %q", key)
+				}
+				manifestAddOpts.artifactOptions.Annotations[key] = val
+			}
 		}
 		manifestAddOpts.artifactOptions.ManifestAnnotateOptions = manifestAddOpts.ManifestAnnotateOptions
 		listID, err = registry.ImageEngine().ManifestAddArtifact(context.Background(), args[0], args[1:], manifestAddOpts.artifactOptions)
