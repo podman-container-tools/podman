@@ -113,7 +113,7 @@ func assembleSystemdCgroupName(baseSlice, newSlice string) (string, string, erro
 
 	if rootless.IsRootless() {
 		// When we run as rootless, the cgroup has a path like the following:
-		///sys/fs/cgroup/user.slice/user-@$UID.slice/user@$UID.service/user.slice/user-libpod_pod_$POD_ID.slice
+		///sys/fs/cgroup/user.slice/user-@$UID.slice/user@$UID.service/containers.slice/user-libpod_pod_$POD_ID.slice
 		uid := rootless.GetRootlessUID()
 		raw := fmt.Sprintf("user.slice/user-%d.slice/user@%d.service/%s/%s-%s%s", uid, uid, baseSlice, noSlice, newSlice, sliceSuffix)
 		return raw, systemdPath, nil

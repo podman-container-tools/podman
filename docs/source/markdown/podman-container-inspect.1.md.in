@@ -278,7 +278,7 @@ $ podman container inspect foobar
             "CpuShares": 0,
             "Memory": 0,
             "NanoCpus": 0,
-            "CgroupParent": "user.slice",
+            "CgroupParent": "containers.slice",
             "BlkioWeight": 0,
             "BlkioWeightDevice": null,
             "BlkioDeviceReadBps": null,
