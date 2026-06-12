@@ -244,3 +244,10 @@ type ExecStartConfig struct {
 type ExecRemoveConfig struct {
 	Force bool `json:"Force"`
 }
+
+// LibpodAutoUpdateReport is the return type for auto update via the rest api.
+type LibpodAutoUpdateReports struct {
+	Reports []*entities.AutoUpdateReport
+	// Auto update returns data and possible errors.
+	Errors []string
+}

@@ -346,6 +346,11 @@ sub operation_name {
         $main   = 'image';
         $action = $1;
     }
+    # Top-level autoupdate endpoint
+    elsif ($main eq 'autoupdate') {
+        $main   = 'autoupdate';
+        $action = '';
+    }
     # Top-level system endpoints
     elsif ($main =~ /^(auth|event|info|version)$/) {
         $main   = 'system';
