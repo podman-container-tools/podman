@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/strfmt"
@@ -61,11 +62,12 @@ func (c *ValidateSpec) Execute(args []string) error {
 		}
 	}
 	if result.HasErrors() {
-		str := fmt.Sprintf(invalidSpecMsg, swaggerDoc, specDoc.Version())
+		var buf strings.Builder
+		fmt.Fprintf(&buf, invalidSpecMsg, swaggerDoc, specDoc.Version())
 		for _, desc := range result.Errors {
-			str += fmt.Sprintf("- %s\n", desc.Error())
+			fmt.Fprintf(&buf, "- %s\n", desc.Error())
 		}
-		return errors.New(str)
+		return errors.New(buf.String())
 	}
 
 	return nil

@@ -17,10 +17,12 @@ import (
 	"github.com/toqueteos/webbrowser"
 
 	"github.com/go-openapi/loads"
-	"github.com/go-openapi/runtime/middleware"
+	"github.com/go-openapi/runtime/server-middleware/docui"
 	"github.com/go-openapi/spec"
-	"github.com/go-openapi/swag"
+	"github.com/go-openapi/swag/netutils"
 )
+
+const defaultSpecDoc = "swagger.json"
 
 // ServeCmd to serve a swagger spec with docs ui.
 type ServeCmd struct {
@@ -71,7 +73,7 @@ func (s *ServeCmd) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	sh, sp, err := swag.SplitHostPort(listener.Addr().String())
+	sh, sp, err := netutils.SplitHostPort(listener.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -83,23 +85,29 @@ func (s *ServeCmd) Execute(args []string) error {
 	handler := http.NotFoundHandler()
 	if !s.NoUI {
 		if s.Flavor == "redoc" {
-			handler = middleware.Redoc(middleware.RedocOpts{
-				BasePath: basePath,
-				SpecURL:  path.Join(basePath, "swagger.json"),
-				Path:     s.Path,
-			}, handler)
+			handler = docui.Redoc(
+				handler,
+				docui.WithUIBasePath(basePath),
+				docui.WithUIPath(s.Path),
+				docui.WithSpecURL(path.Join(basePath, defaultSpecDoc)),
+			)
 			visit = fmt.Sprintf("http://%s%s", net.JoinHostPort(sh, strconv.Itoa(sp)), path.Join(basePath, "docs"))
 		} else if visit != "" || s.Flavor == "swagger" {
-			handler = middleware.SwaggerUI(middleware.SwaggerUIOpts{
-				BasePath: basePath,
-				SpecURL:  path.Join(basePath, "swagger.json"),
-				Path:     s.Path,
-			}, handler)
+			handler = docui.SwaggerUI(
+				handler,
+				docui.WithUIBasePath(basePath),
+				docui.WithUIPath(s.Path),
+				docui.WithSpecURL(path.Join(basePath, defaultSpecDoc)),
+			)
 			visit = fmt.Sprintf("http://%s%s", net.JoinHostPort(sh, strconv.Itoa(sp)), path.Join(basePath, s.Path))
 		}
 	}
 
-	handler = handlers.CORS()(middleware.Spec(basePath, b, handler))
+	handler = handlers.CORS()(docui.ServeSpec(
+		b, handler,
+		docui.WithSpecPath(path.Join(basePath, defaultSpecDoc)),
+	),
+	)
 	errFuture := make(chan error)
 	go func() {
 		docServer := new(http.Server)

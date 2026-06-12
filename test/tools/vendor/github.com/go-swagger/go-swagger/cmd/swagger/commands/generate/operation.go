@@ -5,7 +5,6 @@ package generate
 
 import (
 	"errors"
-	"log"
 
 	"github.com/go-swagger/go-swagger/generator"
 )
@@ -83,11 +82,5 @@ func (o *Operation) generate(opts *generator.GenOpts) error {
 }
 
 func (o Operation) log(_ string) {
-	log.Println(`Generation completed!
-
-For this generation to compile you need to have some packages in your go.mod:
-
-	* github.com/go-openapi/runtime
-
-You can get these now with: go mod tidy`)
+	noticeImports()
 }

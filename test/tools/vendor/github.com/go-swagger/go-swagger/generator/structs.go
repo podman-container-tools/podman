@@ -416,7 +416,7 @@ func (g *GenParameter) IsPathParam() bool {
 
 // IsFormParam returns true when this parameter is a form param.
 func (g *GenParameter) IsFormParam() bool {
-	return g.Location == "formData"
+	return g.Location == formData
 }
 
 // IsHeaderParam returns true when this parameter is a header param.
@@ -569,7 +569,7 @@ func (g GenStatusCodeResponses) MarshalJSON() ([]byte, error) {
 		if i > 0 {
 			buf.WriteRune(',')
 		}
-		buf.WriteString(fmt.Sprintf("%q:", strconv.Itoa(v.Code)))
+		fmt.Fprintf(&buf, "%q:", strconv.Itoa(v.Code))
 		buf.Write(rb)
 	}
 	buf.WriteRune('}')
@@ -645,6 +645,7 @@ type GenOperation struct {
 	ProducesMediaTypes   []string
 	ConsumesMediaTypes   []string
 	TimeoutName          string
+	ContextName          string
 
 	Extensions map[string]any
 

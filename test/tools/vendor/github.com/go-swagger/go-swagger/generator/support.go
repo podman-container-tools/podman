@@ -17,7 +17,7 @@ import (
 	"github.com/go-openapi/analysis"
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/spec"
-	"github.com/go-openapi/swag"
+	"github.com/go-openapi/swag/mangling"
 )
 
 // GenerateServer generates a server application.
@@ -60,61 +60,6 @@ func GenerateMarkdown(output string, modelNames, operationIDs []string, opts *Ge
 	return generator.GenerateMarkdown()
 }
 
-func newAppGenerator(name string, modelNames, operationIDs []string, opts *GenOpts) (*appGenerator, error) {
-	if err := opts.CheckOpts(); err != nil {
-		return nil, err
-	}
-
-	if err := opts.setTemplates(); err != nil {
-		return nil, err
-	}
-
-	specDoc, analyzed, err := opts.analyzeSpec()
-	if err != nil {
-		return nil, err
-	}
-
-	models, err := gatherModels(specDoc, modelNames)
-	if err != nil {
-		return nil, err
-	}
-
-	operations := gatherOperations(analyzed, operationIDs)
-
-	if len(operations) == 0 && !opts.IgnoreOperations {
-		return nil, errors.New("no operations were selected")
-	}
-
-	opts.Name = appNameOrDefault(specDoc, name, defaultServerName)
-	if opts.IncludeMain && opts.MainPackage == "" {
-		// default target for the generated main
-		opts.MainPackage = swag.ToCommandName(mainNameOrDefault(specDoc, name, defaultServerName) + "-server")
-	}
-
-	apiPackage := opts.LanguageOpts.ManglePackagePath(opts.APIPackage, defaultOperationsTarget)
-	return &appGenerator{
-		Name:              opts.Name,
-		Receiver:          "o",
-		SpecDoc:           specDoc,
-		Analyzed:          analyzed,
-		Models:            models,
-		Operations:        operations,
-		Target:            opts.Target,
-		DumpData:          opts.DumpData,
-		Package:           opts.LanguageOpts.ManglePackageName(apiPackage, defaultOperationsTarget),
-		APIPackage:        apiPackage,
-		ModelsPackage:     opts.LanguageOpts.ManglePackagePath(opts.ModelPackage, defaultModelsTarget),
-		ServerPackage:     opts.LanguageOpts.ManglePackagePath(opts.ServerPackage, defaultServerTarget),
-		ClientPackage:     opts.LanguageOpts.ManglePackagePath(opts.ClientPackage, defaultClientTarget),
-		OperationsPackage: filepath.Join(opts.LanguageOpts.ManglePackagePath(opts.ServerPackage, defaultServerTarget), apiPackage),
-		Principal:         opts.PrincipalAlias(),
-		DefaultScheme:     opts.DefaultScheme,
-		DefaultProduces:   opts.DefaultProduces,
-		DefaultConsumes:   opts.DefaultConsumes,
-		GenOpts:           opts,
-	}, nil
-}
-
 type appGenerator struct {
 	Name              string
 	Receiver          string
@@ -136,6 +81,74 @@ type appGenerator struct {
 	DefaultProduces   string
 	DefaultConsumes   string
 	GenOpts           *GenOpts
+
+	mangler   mangling.NameMangler
+	mediaMime func(string) string
+}
+
+func newAppGenerator(name string, modelNames, operationIDs []string, opts *GenOpts) (*appGenerator, error) {
+	if err := opts.CheckOpts(); err != nil {
+		return nil, err
+	}
+
+	if err := opts.setTemplates(); err != nil {
+		return nil, err
+	}
+
+	specDoc, analyzed, err := opts.analyzeSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	models, err := gatherModels(specDoc, modelNames)
+	if err != nil {
+		return nil, err
+	}
+
+	operations := gatherOperations(opts, analyzed, operationIDs)
+
+	if len(operations) == 0 && !opts.IgnoreOperations {
+		return nil, errors.New("no operations were selected")
+	}
+
+	opts.Name = opts.appNameOrDefault(specDoc, name, defaultServerName)
+	mangler := opts.LanguageOpts.Mangler
+	funcMap := opts.funcMap
+	mediaMime, ok := funcMap["mediaTypeName"].(func(string) string)
+	if !ok {
+		return nil, errors.New("internal error: mediaTypeName function expected to be func(string) string")
+	}
+
+	if opts.IncludeMain && opts.MainPackage == "" {
+		// default target for the generated main
+		opts.MainPackage = mangler.ToCommandName(opts.mainNameOrDefault(specDoc, name, defaultServerName) + "-server")
+	}
+
+	apiPackage := opts.LanguageOpts.ManglePackagePath(opts.APIPackage, defaultOperationsTarget)
+
+	return &appGenerator{
+		Name:              opts.Name,
+		Receiver:          "o",
+		SpecDoc:           specDoc,
+		Analyzed:          analyzed,
+		Models:            models,
+		Operations:        operations,
+		Target:            opts.Target,
+		DumpData:          opts.DumpData,
+		Package:           opts.LanguageOpts.ManglePackageName(apiPackage, defaultOperationsTarget),
+		APIPackage:        apiPackage,
+		ModelsPackage:     opts.LanguageOpts.ManglePackagePath(opts.ModelPackage, defaultModelsTarget),
+		ServerPackage:     opts.LanguageOpts.ManglePackagePath(opts.ServerPackage, defaultServerTarget),
+		ClientPackage:     opts.LanguageOpts.ManglePackagePath(opts.ClientPackage, defaultClientTarget),
+		OperationsPackage: filepath.Join(opts.LanguageOpts.ManglePackagePath(opts.ServerPackage, defaultServerTarget), apiPackage),
+		Principal:         opts.PrincipalAlias(),
+		DefaultScheme:     opts.DefaultScheme,
+		DefaultProduces:   opts.DefaultProduces,
+		DefaultConsumes:   opts.DefaultConsumes,
+		GenOpts:           opts,
+		mangler:           mangler,
+		mediaMime:         mediaMime,
+	}, nil
 }
 
 func (a *appGenerator) Generate() error {
@@ -201,7 +214,7 @@ func (a *appGenerator) GenerateSupport(ap *GenApp) error {
 		app = &ca
 	}
 
-	baseImport := a.GenOpts.LanguageOpts.baseImport(a.Target)
+	baseImport := a.GenOpts.LanguageOpts.BaseImport(a.Target)
 	serverPath := path.Join(baseImport,
 		a.GenOpts.LanguageOpts.ManglePackagePath(a.ServerPackage, defaultServerTarget))
 
@@ -252,7 +265,7 @@ func (a *appGenerator) makeCodegenApp() (GenApp, error) {
 
 	log.Println("generation target", a.Target)
 
-	baseImport := a.GenOpts.LanguageOpts.baseImport(a.Target)
+	baseImport := a.GenOpts.LanguageOpts.BaseImport(a.Target)
 	defaultImports := a.GenOpts.defaultImports()
 
 	imports := make(map[string]string, sensibleDefaultMapAlloc)

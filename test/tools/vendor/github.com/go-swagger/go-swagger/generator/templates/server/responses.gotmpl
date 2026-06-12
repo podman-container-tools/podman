@@ -32,7 +32,7 @@ for _, {{ varname .Child.ValueExpression }} := range {{ .ValueExpression }} {
   {{- if not .Child.IsArray }}{{ template "sliceitemserverheaderbuilder" .Child }}{{ else }}{{ template "sliceserverheaderbuilder" .Child }}{{ end -}}
 }
 {{ if not .Child.Parent -}}
-{{ varname .ID }} := swag.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ varname .ID }} := stringutils.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 if len({{ varname .ID }}) > 0 {
   hv := {{ varname .ID }}[0]
   if hv != "" {
@@ -40,7 +40,7 @@ if len({{ varname .ID }}) > 0 {
   }
 }
 {{ else -}}
-{{ .ValueExpression }}S := swag.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ .ValueExpression }}S := stringutils.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 if len({{ .ValueExpression }}S) > 0 {
   {{ .ValueExpression }}Ss := {{ .ValueExpression }}S[0]
   if {{ .ValueExpression }}Ss != "" {
@@ -230,10 +230,12 @@ import (
   "github.com/go-openapi/errors"
   "github.com/go-openapi/runtime"
   "github.com/go-openapi/runtime/security"
-  "github.com/go-openapi/swag"
   "github.com/go-openapi/validate"
   "github.com/go-openapi/runtime/middleware"
-
+  "github.com/go-openapi/swag/conv"
+  "github.com/go-openapi/swag/jsonutils"
+  "github.com/go-openapi/swag/stringutils"
+  "github.com/go-openapi/swag/typeutils"
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )

@@ -11,9 +11,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/go-openapi/analysis/diff"
 	"github.com/go-openapi/loads"
-
-	"github.com/go-swagger/go-swagger/cmd/swagger/commands/diff"
 )
 
 // JSONFormat for json.

@@ -16,9 +16,11 @@ import (
   "github.com/go-openapi/runtime"
   cr "github.com/go-openapi/runtime/client"
   "github.com/go-openapi/strfmt"
-  "github.com/go-openapi/swag"
+  "github.com/go-openapi/swag/conv"
+  "github.com/go-openapi/swag/jsonutils"
+  "github.com/go-openapi/swag/stringutils"
+  "github.com/go-openapi/swag/typeutils"
   "github.com/go-openapi/validate"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
@@ -30,24 +32,28 @@ import (
 //
 // To enforce default values in parameter, use SetDefaults or WithDefaults.
 func New{{ pascalize .Name }}Params() *{{ pascalize .Name }}Params {
-  return &{{ pascalize .Name}}Params{
-    {{ camelize .TimeoutName }}: cr.DefaultTimeout,
-  }
+  return New{{ pascalize .Name }}ParamsWithTimeout(cr.DefaultTimeout)
 }
 
 // New{{ pascalize .Name }}ParamsWithTimeout creates a new {{ pascalize .Name }}Params object
 // with the ability to set a timeout on a request.
 func New{{ pascalize .Name }}ParamsWithTimeout(timeout time.Duration) *{{ pascalize .Name }}Params {
   return &{{ pascalize .Name}}Params{
-    {{ camelize .TimeoutName }}: timeout,
+    inner: innerParams{
+      timeout: timeout,
+    },
   }
 }
 
 // New{{ pascalize .Name }}ParamsWithContext creates a new {{ pascalize .Name }}Params object
 // with the ability to set a context for a request.
+//
+// Deprecated: use the operation call with context to pass the context instead of [{{ pascalize .Name }}Params].
 func New{{ pascalize .Name }}ParamsWithContext(ctx context.Context) *{{ pascalize .Name }}Params {
   return &{{ pascalize .Name}}Params{
-    Context: ctx,
+    inner: innerParams{
+      ctx: ctx,
+    },
   }
 }
 
@@ -97,9 +103,9 @@ type {{ pascalize .Name }}Params struct {
     {{ pascalize .ID }} {{ if and (not .IsArray) (not .IsMap) (not .HasDiscriminator) (not .IsInterface) (not .IsStream) (or .IsNullable  ) }}*{{ end }}{{ if not .IsFileParam }}{{ .GoType }}{{ else }}runtime.NamedReadCloser{{ end }}
   {{- end }}
 
-  {{ camelize .TimeoutName }} time.Duration
-  Context context.Context
   HTTPClient *http.Client
+
+  inner innerParams
 }
 
 // WithDefaults hydrates default values in the {{ humanize .Name }} params (not the query body).
@@ -142,8 +148,8 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) SetDefaults() {
   {{- end }}
   }
 
-  val.{{ camelize .TimeoutName }} = {{ .ReceiverName }}.{{ camelize .TimeoutName }}
-  val.Context = {{ .ReceiverName }}.Context
+  val.inner.timeout = {{ .ReceiverName }}.inner.timeout
+  val.inner.ctx= {{ .ReceiverName }}.inner.ctx
   val.HTTPClient = {{ .ReceiverName }}.HTTPClient
   *{{ .ReceiverName }} = val
 {{- else }}
@@ -151,57 +157,60 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) SetDefaults() {
 {{- end }}
 }
 
-// With{{ pascalize .TimeoutName }} adds the timeout to the {{ humanize .Name }} params
+// With{{ pascalize .TimeoutName }} adds the timeout to the {{ humanize .Name }} params.
 func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) With{{ pascalize .TimeoutName }}(timeout time.Duration) *{{ pascalize .Name }}Params {
   {{ .ReceiverName }}.Set{{ pascalize .TimeoutName }}(timeout)
   return {{ .ReceiverName }}
 }
 
-// Set{{ pascalize .TimeoutName }} adds the timeout to the {{ humanize .Name }} params
+// Set{{ pascalize .TimeoutName }} adds the timeout to the {{ humanize .Name }} params.
 func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) Set{{ pascalize .TimeoutName }}(timeout time.Duration) {
-  {{ .ReceiverName }}.{{ camelize .TimeoutName }} = timeout
+  {{ .ReceiverName }}.inner.timeout = timeout
 }
 
-// WithContext adds the context to the {{ humanize .Name }} params
-func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WithContext(ctx context.Context) *{{ pascalize .Name }}Params {
-  {{ .ReceiverName }}.SetContext(ctx)
+// With{{ pascalize .ContextName }} adds the context to the {{ humanize .Name }} params.
+//
+// Deprecated: use the operation call with context to pass the context instead of [{{ pascalize .Name }}Params].
+func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) With{{ pascalize .ContextName }}(ctx context.Context) *{{ pascalize .Name }}Params {
+  {{ .ReceiverName }}.Set{{ pascalize .ContextName }}(ctx)
   return {{ .ReceiverName }}
 }
 
-// SetContext adds the context to the {{ humanize .Name }} params
-func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) SetContext(ctx context.Context) {
-  {{ .ReceiverName }}.Context = ctx
+// Set{{ pascalize .ContextName }} adds the context to the {{ humanize .Name }} params.
+//
+// Deprecated: use the operation call with context to pass the context instead of [{{ pascalize .Name }}Params].
+func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) Set{{ pascalize .ContextName }}(ctx context.Context) {
+  {{ .ReceiverName }}.inner.ctx = ctx
 }
 
-// WithHTTPClient adds the HTTPClient to the {{ humanize .Name }} params
+// WithHTTPClient adds the HTTPClient to the {{ humanize .Name }} params.
 func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WithHTTPClient(client *http.Client) *{{ pascalize .Name }}Params {
   {{ .ReceiverName }}.SetHTTPClient(client)
   return {{ .ReceiverName }}
 }
 
-// SetHTTPClient adds the HTTPClient to the {{ humanize .Name }} params
+// SetHTTPClient adds the HTTPClient to the {{ humanize .Name }} params.
 func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) SetHTTPClient(client *http.Client) {
   {{ .ReceiverName }}.HTTPClient = client
 }
 
 {{- range .Params }}
 
-// With{{ pascalize .ID }} adds the {{ varname .Name  }} to the {{ humanize $.Name }} params
+// With{{ pascalize .ID }} adds the {{ varname .Name  }} to the {{ humanize $.Name }} params.
 func ({{ $.ReceiverName }} *{{ pascalize $.Name }}Params) With{{ pascalize .ID }}({{ varname .Name  }} {{ if and (not .IsArray) (not .IsMap) (not .HasDiscriminator) (not .IsStream) (or .IsNullable  ) }}*{{ end }}{{ if not .IsFileParam }}{{ .GoType }}{{ else }}runtime.NamedReadCloser{{ end }}) *{{ pascalize $.Name }}Params {
   {{ $.ReceiverName }}.Set{{ pascalize .ID }}({{ varname .Name  }})
   return {{ .ReceiverName }}
 }
 
-// Set{{ pascalize .ID }} adds the {{ camelize .Name  }} to the {{ humanize $.Name }} params
+// Set{{ pascalize .ID }} adds the {{ camelize .Name  }} to the {{ humanize $.Name }} params.
 func ({{ $.ReceiverName }} *{{ pascalize $.Name }}Params) Set{{ pascalize .ID }}({{ varname .Name  }} {{ if and (not .IsArray) (not .IsMap) (not .HasDiscriminator) (not .IsStream) (or .IsNullable  ) }}*{{ end }}{{ if not .IsFileParam }}{{ .GoType }}{{ else }}runtime.NamedReadCloser{{ end }}) {
   {{ $.ReceiverName }}.{{ pascalize .ID }} = {{ varname .Name  }}
 }
 {{- end }}
 
-// WriteToRequest writes these params to a swagger request
+// WriteToRequest writes these params to a [runtime.ClientRequest].
 func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime.ClientRequest, reg strfmt.Registry) error {
-
-  if err := r.SetTimeout({{ .ReceiverName }}.{{ camelize .TimeoutName }}); err != nil {
+  if err := r.SetTimeout({{ .ReceiverName }}.inner.timeout); err != nil {
     return err
   }
   var res []error
@@ -300,7 +309,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
   joined{{ pascalize .Name }} := {{ .ReceiverName }}.bindParam{{ pascalize .Name }}(reg)
         {{- else }}
   values{{ pascalize .Name }} := {{ if and (not .IsArray) (not .IsStream) (not .IsMap) (.IsNullable) }}*{{end}}{{ .ValueExpression }}
-  joined{{ pascalize .Name}} := swag.JoinByFormat(values{{ pascalize .Name }}, "{{.CollectionFormat}}")
+  joined{{ pascalize .Name}} := stringutils.JoinByFormat(values{{ pascalize .Name }}, "{{.CollectionFormat}}")
         {{- end }}
 
         {{- if .IsQueryParam }}
@@ -364,7 +373,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
 {{- range .Params }}
   {{- if and (not .IsBodyParam) (not .IsFileParam) .IsArray }}
-// bindParam{{ pascalize $.Name }} binds the parameter {{ .Name }}
+// bindParam{{ pascalize $.Name }} binds the parameter {{ .Name }}.
 func ({{ .ReceiverName }} *{{ pascalize $.Name }}Params) bindParam{{ pascalize .Name }}(formats strfmt.Registry) []string {
   {{ varname .Child.ValueExpression }}R := {{ if and (not .IsArray) (not .IsStream) (not .IsMap) (.IsNullable) }}*{{end}}{{ .ValueExpression }}
 
@@ -383,7 +392,7 @@ func ({{ .ReceiverName }} *{{ pascalize $.Name }}Params) bindParam{{ pascalize .
  }
 
  // {{ .Child.ItemsDepth }}CollectionFormat: {{ printf "%q" .CollectionFormat }}
- {{ varname .Child.ValueExpression }}S := swag.JoinByFormat({{ varname .Child.ValueExpression }}C, {{ printf "%q" .CollectionFormat }})
+ {{ varname .Child.ValueExpression }}S := stringutils.JoinByFormat({{ varname .Child.ValueExpression }}C, {{ printf "%q" .CollectionFormat }})
    {{- if .Child.Parent }}{{/* NOTE: we cannot expect a "multi" CollectionFormat within an inner array */}}
  {{ varname .Child.ValueExpression }}V := {{ varname .Child.ValueExpression }}S[0]
    {{- end }}

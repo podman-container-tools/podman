@@ -29,7 +29,7 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(raw []byte) error 
         {{ pascalize .AdditionalItems.Name }}{{ if or (not .IsExported) .IsSubType }}Field{{ end }} []{{ template "schemaType" .AdditionalItems }} `json:"-"`
       {{- end }}
   }
-  if err := swag.ReadJSON(raw, &data{{ $part }}); err != nil {
+  if err := jsonutils.ReadJSON(raw, &data{{ $part }}); err != nil {
     return err
   }
       {{ range .Properties }}
@@ -37,14 +37,14 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(raw []byte) error 
       {{ end }}
     {{- else if .IsAnonymous }}
   var {{ varname .Name }} {{ .GoType }}
-  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} swag.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
+  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} jsonutils.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
     return err
   }
   {{ .ValueExpression }} = {{ varname .Name }}
     {{- end }}
     {{- if not .IsAnonymous }}{{/* unmarshalling allOf named objects */}}
   var {{ varname .Name }} {{ .GoType }}
-  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} swag.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
+  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} jsonutils.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
     return err
   }
   {{ .ReceiverName }}.{{ dropPackage .GoType }} = {{ varname .Name }}
@@ -70,7 +70,7 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(raw []byte) error 
       {{- end }}
     {{ end }}
     }
-    if err := swag.ReadJSON(raw, &props{{ $part }}); err != nil {
+    if err := jsonutils.ReadJSON(raw, &props{{ $part }}); err != nil {
        return err
     }
     {{- range .Properties }}
@@ -120,13 +120,13 @@ func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
   data{{ $part }}.{{ pascalize .Name }} = {{ $receiverName }}.{{ pascalize .Name }}
       {{ end }}
 
-  jsonData{{ $part }}, err{{ $part }} := swag.WriteJSON(data{{ $part }})
+  jsonData{{ $part }}, err{{ $part }} := jsonutils.WriteJSON(data{{ $part }})
   if err{{ $part }} != nil {
     return nil, err{{ $part }}
   }
   _parts = append(_parts, jsonData{{ $part }})
     {{- else if .IsAnonymous }}{{/* unmarshalling anonymous type composition */}}
-  {{ varname .Name }}, err := swag.WriteJSON({{ .ValueExpression }})
+  {{ varname .Name }}, err := jsonutils.WriteJSON({{ .ValueExpression }})
   if err != nil {
     return nil, err
   }
@@ -134,7 +134,7 @@ func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
     {{- end }}
     {{- if not .IsAnonymous }}
 
-  {{ varname .Name }}, err := swag.WriteJSON({{ $receiverName }}.{{ dropPackage .GoType }})
+  {{ varname .Name }}, err := jsonutils.WriteJSON({{ $receiverName }}.{{ dropPackage .GoType }})
   if err != nil {
     return nil, err
   }
@@ -165,7 +165,7 @@ func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
     {{- range .Properties }}
     props{{ $part }}.{{ pascalize .Name }} = {{ $receiverName }}.{{ pascalize .Name }}
     {{ end }}
-    jsonDataProps{{ $part }}, err{{ $part }} := swag.WriteJSON(props{{ $part }})
+    jsonDataProps{{ $part }}, err{{ $part }} := jsonutils.WriteJSON(props{{ $part }})
     if err{{ $part }} != nil {
         return nil, err{{ $part }}
     }
@@ -175,6 +175,6 @@ func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
   {{- end }}
   {{- if .HasAdditionalItems }}
   {{- end }}
-  return swag.ConcatJSON(_parts...), nil
+  return jsonutils.ConcatJSON(_parts...), nil
 }
 {{- end }}

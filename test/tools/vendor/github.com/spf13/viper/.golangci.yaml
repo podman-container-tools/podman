@@ -1,105 +1,118 @@
-run:
-    timeout: 5m
+version: "2"
 
-linters-settings:
-    gci:
-        sections:
-            - standard
-            - default
-            - prefix(github.com/spf13/viper)
-    gocritic:
-        # Enable multiple checks by tags. See "Tags" section in https://github.com/go-critic/go-critic#usage.
-        enabled-tags:
-            - diagnostic
-            - experimental
-            - opinionated
-            - style
-        disabled-checks:
-            - importShadow
-            - unnamedResult
-    goimports:
-        local-prefixes: github.com/spf13/viper
+run:
+  timeout: 5m
 
 linters:
-    disable-all: true
-    enable:
-        - bodyclose
-        - dogsled
-        - dupl
-        - durationcheck
-        - exhaustive
-        - gci
-        - gocritic
-        - godot
-        - gofmt
-        - gofumpt
-        - goimports
-        - gomoddirectives
-        - goprintffuncname
-        - govet
-        - importas
-        - ineffassign
-        - makezero
-        - misspell
-        - nakedret
-        - nilerr
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - durationcheck
+    - exhaustive
+    - gocritic
+    - godot
+    - gomoddirectives
+    - goprintffuncname
+    - govet
+    - importas
+    - ineffassign
+    - makezero
+    - misspell
+    - nakedret
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+    - whitespace
+
+    # fixme
+    # - cyclop
+    # - errcheck
+    # - errorlint
+    # - exhaustivestruct
+    # - forbidigo
+    # - forcetypeassert
+    # - gochecknoglobals
+    # - gochecknoinits
+    # - gocognit
+    # - goconst
+    # - gocyclo
+    # - gosec
+    # - gosimple
+    # - ifshort
+    # - lll
+    # - nlreturn
+    # - paralleltest
+    # - scopelint
+    # - thelper
+    # - wrapcheck
+
+    # unused
+    # - depguard
+    # - goheader
+    # - gomodguard
+
+    # don't enable:
+    # - asciicheck
+    # - funlen
+    # - godox
+    # - goerr113
+    # - gomnd
+    # - interfacer
+    # - maligned
+    # - nestif
+    # - testpackage
+    # - wsl
+
+  exclusions:
+    rules:
+      - linters:
+        - errcheck
         - noctx
-        - nolintlint
-        - prealloc
-        - predeclared
-        - revive
-        - rowserrcheck
-        - sqlclosecheck
-        - staticcheck
-        - stylecheck
-        - tparallel
-        - typecheck
-        - unconvert
-        - unparam
-        - unused
-        - wastedassign
-        - whitespace
+        path: _test.go
+    presets:
+      - comments
+      - std-error-handling
 
-        # fixme
-        # - cyclop
-        # - errcheck
-        # - errorlint
-        # - exhaustivestruct
-        # - forbidigo
-        # - forcetypeassert
-        # - gochecknoglobals
-        # - gochecknoinits
-        # - gocognit
-        # - goconst
-        # - gocyclo
-        # - gosec
-        # - gosimple
-        # - ifshort
-        # - lll
-        # - nlreturn
-        # - paralleltest
-        # - scopelint
-        # - thelper
-        # - wrapcheck
+  settings:
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false # report any unused nolint directives
+      require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+    gocritic:
+      # Enable multiple checks by tags. See "Tags" section in https://github.com/go-critic/go-critic#usage.
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - style
+      disabled-checks:
+        - importShadow
+        - unnamedResult
 
-        # unused
-        # - depguard
-        # - goheader
-        # - gomodguard
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    # - golines
 
-        # deprecated
-        # - deadcode
-        # - structcheck
-        # - varcheck
-
-        # don't enable:
-        # - asciicheck
-        # - funlen
-        # - godox
-        # - goerr113
-        # - gomnd
-        # - interfacer
-        # - maligned
-        # - nestif
-        # - testpackage
-        # - wsl
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule

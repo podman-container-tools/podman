@@ -24,7 +24,6 @@ import (
 	"syscall"
 	"time"
 
-  "github.com/go-openapi/swag"
   {{ if .UseGoStructFlags }}flags "github.com/jessevdk/go-flags"
   {{ end -}}
   "github.com/go-openapi/runtime/flagext"
@@ -33,8 +32,8 @@ import (
   {{ if .UseFlags }}"flag"
   "strings"
   {{ end -}}
+  "github.com/go-openapi/swag/netutils"
   "golang.org/x/net/netutil"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
@@ -523,7 +522,7 @@ func (s *Server) Listen() error {
       return err
     }
 
-    h, p, err := swag.SplitHostPort(listener.Addr().String())
+    h, p, err := netutils.SplitHostPort(listener.Addr().String())
     if err != nil {
       return err
     }
@@ -538,7 +537,7 @@ func (s *Server) Listen() error {
       return err
     }
 
-    sh, sp, err := swag.SplitHostPort(tlsListener.Addr().String())
+    sh, sp, err := netutils.SplitHostPort(tlsListener.Addr().String())
     if err != nil {
       return err
     }

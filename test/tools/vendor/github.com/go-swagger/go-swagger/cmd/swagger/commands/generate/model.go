@@ -73,17 +73,10 @@ func (m Model) apply(opts *generator.GenOpts) {
 	opts.AcceptDefinitionsOnly = m.AcceptDefinitionsOnly
 }
 
-func (m Model) log(_ string) {
-	log.Println(`Generation completed!
-
-For this generation to compile you need to have some packages in your go.mod:
-
-	* github.com/go-openapi/validate
-	* github.com/go-openapi/strfmt
-
-You can get these now with: go mod tidy`)
-}
-
 func (m *Model) generate(opts *generator.GenOpts) error {
 	return generator.GenerateModels(append(m.Name, m.Models.Models...), opts)
+}
+
+func (m Model) log(_ string) {
+	noticeImports()
 }

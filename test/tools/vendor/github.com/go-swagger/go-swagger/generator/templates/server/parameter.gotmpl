@@ -263,7 +263,7 @@ for {{ if .Child.NeedsIndex }}{{ .IndexVar }}{{ else }}_{{ end }}, {{ varname .C
     {{- if not .Child.SkipParse }}
     // {{ .Child.ItemsDepth }}CollectionFormat: {{ .Child.CollectionFormat }}
     {{- end }}
-    {{ .Child.Child.ValueExpression }}C := {{ if .Child.SkipParse }}{{ varname .Child.ValueExpression }}V{{ else }}swag.SplitByFormat({{ varname .Child.ValueExpression }}V, {{ printf "%q" .Child.CollectionFormat }}){{ end }}
+    {{ .Child.Child.ValueExpression }}C := {{ if .Child.SkipParse }}{{ varname .Child.ValueExpression }}V{{ else }}stringutils.SplitByFormat({{ varname .Child.ValueExpression }}V, {{ printf "%q" .Child.CollectionFormat }}){{ end }}
     {{- if .Child.HasSliceValidations }}
       {{- template "sliceparamvalidator" .Child }}
     {{- end }}
@@ -309,9 +309,11 @@ import (
   "github.com/go-openapi/runtime/security"
   "github.com/go-openapi/runtime/middleware"
   "github.com/go-openapi/strfmt"
-  "github.com/go-openapi/swag"
+  "github.com/go-openapi/swag/conv"
+  "github.com/go-openapi/swag/jsonutils"
+  "github.com/go-openapi/swag/stringutils"
+  "github.com/go-openapi/swag/typeutils"
   "github.com/go-openapi/validate"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
@@ -324,6 +326,11 @@ import (
 // The default value is 32 MB.
 // The multipart parser stores up to this + 10MB.
 var {{ pascalize .Name }}MaxParseMemory int64 = 32 << 20
+
+// {{ pascalize .Name }}MaxBodySize caps the size of the form body.
+//
+// The default value is 32 MB. Larger bodies will error with http status 413.
+var {{ pascalize .Name }}MaxBodySize int64 = 32 << 20
 {{- end }}
 
 // New{{ pascalize .Name }}Params creates a new {{ pascalize .Name }}Params object
@@ -415,18 +422,28 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
   qs := runtime.Values(r.URL.Query())
 {{- end }}
 {{- if .HasFormParams }}
+  isBlocking, err := runtime.BindForm(r,
+    runtime.BindFormMaxParseMemory({{ pascalize .Name }}MaxParseMemory),
+    runtime.BindFormMaxBody({{ pascalize .Name }}MaxBodySize),
+  {{- range .Params }}
+    {{- if .IsFileParam }}
+    runtime.BindFormFile({{ .Path }}, {{ or .Required (not .IsNullable) }}, {{ .ReceiverName }}.bind{{ pascalize .ID }}),
+    {{- end }}
+  {{- end }}
+  )
+  if err != nil {
+    if isBlocking {
+      return err
+    }
 
-  if err := r.ParseMultipartForm({{ pascalize .Name }}MaxParseMemory); err != nil {
-    if !stderrors.Is(err,http.ErrNotMultipart) {
-            return errors.New(400,"%v",err)
-        } else if errParse := r.ParseForm(); errParse != nil {
-            return errors.New(400,"%v",errParse)
-        }
-	}
+    res = append(res, err)
+  }
+
   {{- if .HasFormValueParams }}
   fds := runtime.Values(r.Form)
   {{- end }}
 {{- end }}
+
 {{ range .Params }}
   {{- if not .IsArray }}
     {{- if .IsQueryParam }}
@@ -446,36 +463,11 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
   if err := {{ .ReceiverName }}.bind{{ pascalize .ID }}(r.Header[http.CanonicalHeaderKey({{ .Path }})], true, route.Formats); err != nil {
     res = append(res, err)
   }
-    {{- else if .IsFormParam }}
-      {{- if .IsFileParam }}
-
-  {{ camelize .Name }}, {{ camelize .Name }}Header, err := r.FormFile({{ .Path }})
-  if err != nil {
-        {{- if .IsNullable }}
-      if !stderrors.Is(err, http.ErrMissingFile) {
-        res = append(res, errors.New(400, "reading file %q failed: %v", {{ printf "%q" (camelize .Name) }}, err))
-      }
-      // no-op for missing but optional file parameter
-        {{- else }}
-      res = append(res, errors.New(400, "reading file %q failed: %v", {{ printf "%q" (camelize .Name) }}, err))
-        {{- end }}
-  } else {
-    if errBind := {{ .ReceiverName }}.bind{{ pascalize .ID }}({{ camelize .Name }}, {{ camelize .Name }}Header); errBind != nil {
-        {{- if .Required }}
-      // Required: true
-        {{- end }}
-      res = append(res, errBind)
-    } else {
-      {{ .ReceiverName }}.{{ pascalize .Name }} = &runtime.File{Data: {{ camelize .Name }}, Header: {{ camelize .Name }}Header}
-    }
-  }
-      {{- else }}
-
+    {{- else if and .IsFormParam (not .IsFileParam) }}
   fd{{ pascalize .Name }}, fdhk{{ pascalize .Name }}, _ := fds.GetOK({{ .Path }})
   if err := {{ .ReceiverName }}.bind{{ pascalize .ID }}(fd{{ pascalize .Name }}, fdhk{{ pascalize .Name }}, route.Formats); err != nil {
     res = append(res, err)
   }
-      {{- end }}
     {{- end }}
   {{- else if .IsArray }}
     {{- if .IsQueryParam }}
@@ -555,24 +547,34 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
 {{- $className := (pascalize .Name) }}
 {{ range .Params }}
   {{- if .IsFileParam }}
-// bind{{ pascalize .ID }} binds file parameter {{ .ID }}.
+// bind{{ pascalize .ID }} validates file parameter File1 and assigns it as a *runtime.File on success.
 //
 // The only supported validations on files are MinLength and MaxLength
 func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ pascalize .ID }}(file multipart.File, header *multipart.FileHeader) error {
     {{- if or .MinLength .MaxLength }}
-    size, _ := file.Seek(0, io.SeekEnd)
-    file.Seek(0, io.SeekStart)
+    size, err := file.Seek(0, io.SeekEnd)
+    if err != nil {
+      return errors.New(http.StatusInternalServerError, "%s: %v", {{.Path }}, err)
+    }
+    _, err = file.Seek(0, io.SeekStart)
+    if err != nil {
+      return errors.New(http.StatusInternalServerError, "%s: %v", {{.Path }}, err)
+    }
     {{- end }}
+
     {{- if .MinLength}}
     if size < {{.MinLength}} {
         return errors.ExceedsMinimum({{ .Path }}, {{ printf "%q" .Location }}, {{ .MinLength }}, false, size)
     }
     {{- end }}
+
     {{- if .MaxLength}}
     if size > {{.MaxLength}} {
         return errors.ExceedsMaximum({{ .Path }}, {{ printf "%q" .Location }}, {{ .MaxLength }}, false, size)
     }
     {{- end }}
+
+    {{ .ReceiverName }}.{{ pascalize .Name }} = &runtime.File{Data: file, Header: header}
     return nil
 }
   {{- else if not .IsBodyParam }}
@@ -662,7 +664,7 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ pascalize .ID }}(rawDa
   }
 
   // CollectionFormat: {{ .CollectionFormat }}
-  {{ varname .Child.ValueExpression }}C := swag.SplitByFormat(qv{{ pascalize .Name }}, {{ printf "%q" .CollectionFormat }})
+  {{ varname .Child.ValueExpression }}C := stringutils.SplitByFormat(qv{{ pascalize .Name }}, {{ printf "%q" .CollectionFormat }})
       {{- end }}
       {{- if and .Required (not .AllowEmptyValue) }}
   if len({{ varname .Child.ValueExpression }}C) == 0 {

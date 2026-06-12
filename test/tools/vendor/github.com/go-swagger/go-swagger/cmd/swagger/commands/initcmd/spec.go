@@ -13,7 +13,8 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/go-openapi/spec"
-	"github.com/go-openapi/swag"
+	"github.com/go-openapi/swag/jsonutils"
+	"github.com/go-openapi/swag/mangling"
 )
 
 // Spec represents a command for initializing a new swagger application.
@@ -75,7 +76,7 @@ func (s *Spec) Execute(args []string) error {
 
 	info.Title = s.Title
 	if info.Title == "" {
-		info.Title = swag.ToHumanNameTitle(filepath.Base(realPath))
+		info.Title = mangling.NewNameMangler().ToHumanNameTitle(filepath.Base(realPath))
 	}
 	info.Description = s.Description
 	info.Version = s.Version
@@ -103,7 +104,12 @@ func (s *Spec) Execute(args []string) error {
 		return enc.Encode(doc)
 	}
 
-	b, err := yaml.Marshal(swag.ToDynamicJSON(doc))
+	var dynamicDoc any
+	err = jsonutils.FromDynamicJSON(doc, &dynamicDoc)
+	if err != nil {
+		return err
+	}
+	b, err := yaml.Marshal(dynamicDoc)
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ for _, {{ .Child.ValueExpression }} := range {{ .ValueExpression }} {
 }
 
 {{ if not .Child.Parent -}}
-{{ varname .ID }} := swag.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ varname .ID }} := stringutils.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 {{ if eq .CollectionFormat "multi" }}
 for _, qsv := range {{ varname .ID }} {
   qs.Add({{ printf "%q" .Name }}, qsv)
@@ -47,7 +47,7 @@ if len({{ varname .ID }}) > 0 {
 }
 {{ end }}
 {{ else -}}
-{{ .ValueExpression }}S := swag.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ .ValueExpression }}S := stringutils.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 if len({{ .ValueExpression }}S) > 0 {
   {{ .ValueExpression }}Ss := {{ .ValueExpression }}S[0]
   if {{ .ValueExpression }}Ss != "" {
@@ -63,7 +63,7 @@ for _, {{ .Child.ValueExpression }} := range {{ .ValueExpression }} {
 }
 
 {{ if not .Child.Parent -}}
-{{ varname .ID }} := swag.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ varname .ID }} := stringutils.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 if len({{ varname .ID }}) > 0 {
   psv := {{ varname .ID }}[0]
   if psv != "" {
@@ -73,7 +73,7 @@ if len({{ varname .ID }}) > 0 {
   }
 }
 {{ else -}}
-{{ .ValueExpression }}S := swag.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+{{ .ValueExpression }}S := stringutils.JoinByFormat({{ .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
 if len({{ .ValueExpression }}S) > 0 {
   {{ .ValueExpression }}Ss := {{ .ValueExpression }}S[0]
   if {{ .ValueExpression }}Ss != "" {
@@ -98,7 +98,8 @@ import (
   "strings"
 
   "github.com/go-openapi/strfmt"
-  "github.com/go-openapi/swag"
+  "github.com/go-openapi/swag/conv"
+  "github.com/go-openapi/swag/stringutils"
 )
 
 // {{ pascalize .Name }}URL generates an URL for the {{ humanize .Name }} operation

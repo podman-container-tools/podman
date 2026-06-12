@@ -83,7 +83,7 @@ func (c *MixinSpec) Execute(args []string) error {
 	if c.ExpectedCollisionCount > 0 {
 		// return the number of unexpected collisions as command exit code.
 		// Use shell $? to get the actual number of collisions (it has to be non-zero)
-		if len(collisions) > 0 && len(collisions) != int(c.ExpectedCollisionCount) {
+		if len(collisions) > 0 && len(collisions) != int(c.ExpectedCollisionCount) { // CLI flag value, overflow is not a concern
 			os.Exit(len(collisions))
 		}
 

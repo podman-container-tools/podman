@@ -11,11 +11,12 @@ package {{ .GenOpts.CliPackage }}
 
 import(
     "github.com/spf13/cobra"
+    "github.com/spf13/cobra/doc"
+    "github.com/spf13/viper"
 )
 
 
 func makeMarkdownDocumentationCmd() *cobra.Command {
-
 	var markdownCmd = &cobra.Command{
 		Use:                   "markdown",
 		Short:                 "Generate markdown documentation (that you might be reading right now!!)",
@@ -38,5 +39,6 @@ func makeMarkdownDocumentationCmd() *cobra.Command {
 			logDebugf("Generated markdown successfully!")
 		},
 	}
+
 	return markdownCmd
 }
