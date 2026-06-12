@@ -72,3 +72,34 @@ func TestValidateSCPArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestParseImageSCPArg(t *testing.T) {
+	tests := []struct {
+		name     string
+		arg      string
+		wantUser string
+	}{
+		{
+			name:     "user without domain",
+			arg:      "user@localhost::alpine",
+			wantUser: "user",
+		},
+		{
+			name:     "username containing an @ (e.g. Active Directory)",
+			arg:      "user@domain@localhost::example.com/foo/bar:latest",
+			wantUser: "user@domain",
+		},
+		{
+			name:     "no username before @localhost::",
+			arg:      "@localhost::alpine",
+			wantUser: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			location, _, err := ParseImageSCPArg(tt.arg)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantUser, location.User)
+		})
+	}
+}

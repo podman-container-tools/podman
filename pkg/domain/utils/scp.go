@@ -361,7 +361,10 @@ func ParseImageSCPArg(arg string) (*entities.ScpTransferImageOptions, []string, 
 
 	switch {
 	case strings.Contains(arg, "@localhost::"): // image transfer between users
-		location.User, _, _ = strings.Cut(arg, "@")
+		// Split on "@localhost::" rather than the first "@" so usernames
+		// that themselves contain an "@" (e.g. Active Directory "user@domain")
+		// are preserved. See https://github.com/containers/podman/issues/27655
+		location.User, _, _ = strings.Cut(arg, "@localhost::")
 		location, err = ValidateImagePortion(location, arg)
 		if err != nil {
 			return nil, nil, err

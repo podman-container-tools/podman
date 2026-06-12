@@ -47,4 +47,20 @@ var _ = Describe("podman image scp", func() {
 		// The error given should either be a missing image (due to testing suite complications) or a no such host timeout on ssh
 		Expect(scp).Should(ExitWithError(125, "failed to connect: dial tcp: lookup "))
 	})
+
+	It("podman image scp preserves a username containing an @", func() {
+		// The user-to-user transfer path that looks up the local username
+		// only runs rootful.
+		SkipIfRootless("the local user lookup only happens during a rootful transfer")
+
+		// Regression test for https://github.com/containers/podman/issues/27655:
+		// a username that itself contains an "@" (e.g. an Active Directory
+		// "user@domain") must be parsed as a whole. Before the fix it was
+		// truncated at the first "@", so the lookup failed for "user" instead
+		// of "user@domain". The lookup happens before any image is touched, so
+		// the bogus user is enough to exercise the parsing.
+		scp := podmanTest.Podman([]string{"image", "scp", "user@domain@localhost::" + ALPINE})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, "unknown user user@domain"))
+	})
 })
