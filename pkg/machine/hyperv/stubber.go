@@ -213,8 +213,80 @@ func (h HyperVStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.NineP
 }
 
-func (h HyperVStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
-	return nil
+func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) error {
+	var (
+		err        error
+		executable string
+	)
+	callbackFuncs := machine.CleanUp()
+	defer callbackFuncs.CleanIfErr(&err)
+	go callbackFuncs.CleanOnSignal()
+
+	if len(mc.Mounts) == 0 {
+		return nil
+	}
+
+	var (
+		dirs       *define.MachineDirs
+		gvproxyPID int
+	)
+	dirs, err = env.GetMachineDirs(h.VMType())
+	if err != nil {
+		return err
+	}
+	// GvProxy PID file path is now derived
+	gvproxyPIDFile, err := dirs.RuntimeDir.AppendToNewVMFile("gvproxy.pid", nil)
+	if err != nil {
+		return err
+	}
+	gvproxyPID, err = gvproxyPIDFile.ReadPIDFrom()
+	if err != nil {
+		return err
+	}
+
+	executable, err = os.Executable()
+	if err != nil {
+		return err
+	}
+	// Start the 9p server in the background
+	p9ServerArgs := []string{}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		p9ServerArgs = append(p9ServerArgs, "--log-level=debug")
+	}
+	p9ServerArgs = append(p9ServerArgs, "machine", "server9p")
+
+	for _, mount := range mc.Mounts {
+		if mount.VSockNumber == nil {
+			return fmt.Errorf("mount %s has no vsock port defined", mount.Source)
+		}
+		p9ServerArgs = append(p9ServerArgs, "--serve", fmt.Sprintf("%s:%s", mount.Source, winio.VsockServiceID(uint32(*mount.VSockNumber)).String()))
+	}
+	p9ServerArgs = append(p9ServerArgs, fmt.Sprintf("%d", gvproxyPID))
+
+	logrus.Debugf("Going to start 9p server using command: %s %v", executable, p9ServerArgs)
+
+	fsCmd := exec.Command(executable, p9ServerArgs...)
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		log, err := logCommandToFile(fsCmd, "podman-machine-server9.log")
+		if err != nil {
+			return err
+		}
+		defer log.Close()
+	}
+
+	err = fsCmd.Start()
+	if err != nil {
+		return fmt.Errorf("unable to start 9p server: %v", err)
+	}
+	logrus.Infof("Started podman 9p server as PID %d", fsCmd.Process.Pid)
+
+	// Note: No callback is needed to stop the 9p server, because it will stop when
+	// gvproxy stops
+
+	// Finalize starting shares after we are confident gvproxy is still alive.
+	err = startShares(mc)
+	return err
 }
 
 func (h HyperVStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error, error) {
@@ -703,80 +775,8 @@ func (h HyperVStubber) PrepareIgnition(mc *vmconfigs.MachineConfig, _ *ignition.
 	return &ignOpts, nil
 }
 
-func (h HyperVStubber) PostStartNetworking(mc *vmconfigs.MachineConfig, _ bool) error {
-	var (
-		err        error
-		executable string
-	)
-	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
-	go callbackFuncs.CleanOnSignal()
-
-	if len(mc.Mounts) == 0 {
-		return nil
-	}
-
-	var (
-		dirs       *define.MachineDirs
-		gvproxyPID int
-	)
-	dirs, err = env.GetMachineDirs(h.VMType())
-	if err != nil {
-		return err
-	}
-	// GvProxy PID file path is now derived
-	gvproxyPIDFile, err := dirs.RuntimeDir.AppendToNewVMFile("gvproxy.pid", nil)
-	if err != nil {
-		return err
-	}
-	gvproxyPID, err = gvproxyPIDFile.ReadPIDFrom()
-	if err != nil {
-		return err
-	}
-
-	executable, err = os.Executable()
-	if err != nil {
-		return err
-	}
-	// Start the 9p server in the background
-	p9ServerArgs := []string{}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		p9ServerArgs = append(p9ServerArgs, "--log-level=debug")
-	}
-	p9ServerArgs = append(p9ServerArgs, "machine", "server9p")
-
-	for _, mount := range mc.Mounts {
-		if mount.VSockNumber == nil {
-			return fmt.Errorf("mount %s has no vsock port defined", mount.Source)
-		}
-		p9ServerArgs = append(p9ServerArgs, "--serve", fmt.Sprintf("%s:%s", mount.Source, winio.VsockServiceID(uint32(*mount.VSockNumber)).String()))
-	}
-	p9ServerArgs = append(p9ServerArgs, fmt.Sprintf("%d", gvproxyPID))
-
-	logrus.Debugf("Going to start 9p server using command: %s %v", executable, p9ServerArgs)
-
-	fsCmd := exec.Command(executable, p9ServerArgs...)
-
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		log, err := logCommandToFile(fsCmd, "podman-machine-server9.log")
-		if err != nil {
-			return err
-		}
-		defer log.Close()
-	}
-
-	err = fsCmd.Start()
-	if err != nil {
-		return fmt.Errorf("unable to start 9p server: %v", err)
-	}
-	logrus.Infof("Started podman 9p server as PID %d", fsCmd.Process.Pid)
-
-	// Note: No callback is needed to stop the 9p server, because it will stop when
-	// gvproxy stops
-
-	// Finalize starting shares after we are confident gvproxy is still alive.
-	err = startShares(mc)
-	return err
+func (h HyperVStubber) PostStartNetworking(_ *vmconfigs.MachineConfig, _ bool) error {
+	return nil
 }
 
 func (h HyperVStubber) UpdateSSHPort(_ *vmconfigs.MachineConfig, _ int) error {
