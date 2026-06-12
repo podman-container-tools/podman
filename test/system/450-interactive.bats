@@ -142,4 +142,53 @@ function teardown() {
     run_podman volume rm testVol --force
 }
 
+@test "podman inspect returns attached tty size" {
+
+    # Skip on FreeBSD
+    if [[ "$(uname -s)" == "FreeBSD" ]]; then
+        skip "ConsoleSize not implemented on FreeBSD"
+    fi
+
+    rows=$(( 15 + RANDOM % 60 |   1 ))
+    cols=$(( 15 + RANDOM % 60 & 126 ))
+
+    cname=c-$(safename)
+
+    stty rows $rows cols $cols <$PODMAN_TEST_PTY
+
+    # Run container with attached tty in background.
+    run_podman run -it --name $cname $IMAGE top <$PODMAN_TEST_PTY &
+
+    # Wait for container to appear
+    local timeout=10
+    while :;do
+          sleep 0.5
+          run_podman '?' container exists $cname
+          if [[ $status -eq 0 ]]; then
+              break
+          fi
+          timeout=$((timeout - 1))
+          if [[ $timeout -eq 0 ]]; then
+              run_podman ps -a
+              die "Timed out waiting for container $cname to start"
+          fi
+    done
+
+    # Now that container exists, wait for it to be in running state
+    _ensure_container_running $cname true
+
+    run_podman inspect $cname --format '{{ index .HostConfig.ConsoleSize 0 }} {{ index .HostConfig.ConsoleSize 1 }}'
+    is "$output" "$rows $cols" "podman returns non-zero size when tty is attached"
+
+    run_podman rm -t 0 -f $cname
+
+    # Run container without attached tty in detached mode.
+    run_podman run -dt --name $cname $IMAGE top
+
+    run_podman inspect $cname --format '{{ index .HostConfig.ConsoleSize 0 }} {{ index .HostConfig.ConsoleSize 1 }}'
+    is "$output" "0 0" "podman returns zero size when tty is not attached"
+
+    run_podman rm -t 0 -f $cname
+}
+
 # vim: filetype=sh
