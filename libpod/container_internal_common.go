@@ -1536,8 +1536,18 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 
 	// Let's try to stat() CRIU's inventory file. If it does not exist, it makes
 	// no sense to try a restore. This is a minimal check if a checkpoint exists.
-	if err := fileutils.Exists(filepath.Join(c.CheckpointPath(), "inventory.img")); errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, fmt.Errorf("a complete checkpoint for this container cannot be found, cannot restore: %w", err)
+	// For gVisor, the checkpoint image is called "checkpoint.img".
+	criuInventoryPath := filepath.Join(c.CheckpointPath(), "inventory.img")
+	gvisorCheckpointPath := filepath.Join(c.CheckpointPath(), "checkpoint.img")
+
+	if err := fileutils.Exists(criuInventoryPath); errors.Is(err, fs.ErrNotExist) {
+		if err2 := fileutils.Exists(gvisorCheckpointPath); errors.Is(err2, fs.ErrNotExist) {
+			return nil, 0, fmt.Errorf("a complete checkpoint for this container cannot be found (checked %q and %q): %w", criuInventoryPath, gvisorCheckpointPath, err)
+		} else if err2 != nil {
+			return nil, 0, fmt.Errorf("error checking checkpoint file %q: %w", gvisorCheckpointPath, err2)
+		}
+	} else if err != nil {
+		return nil, 0, fmt.Errorf("error checking inventory file %q: %w", criuInventoryPath, err)
 	}
 
 	if err := crutils.CRCreateFileWithLabel(c.bundlePath(), "restore.log", c.MountLabel()); err != nil {

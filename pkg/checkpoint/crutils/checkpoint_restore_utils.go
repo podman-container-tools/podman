@@ -222,9 +222,22 @@ func CRRuntimeSupportsCheckpointRestore(runtimePath string) bool {
 	if err := cmd.Start(); err != nil {
 		return false
 	}
-	if err := cmd.Wait(); err == nil {
+
+	err := cmd.Wait()
+	if err == nil {
+		// Exited with status 0 means definitely supported.
 		return true
 	}
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		status := exitErr.ExitCode()
+		// "runsc checkpoint --help" exits with 128 (subcommands.ExitUsageError)
+		// and 127 is used for "command not found".
+		if status == 128 {
+			return true
+		}
+	}
+
 	return false
 }
 
