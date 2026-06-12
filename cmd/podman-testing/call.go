@@ -103,9 +103,6 @@ func noop(_ *cobra.Command, args []string) error {
 			return fmt.Errorf("setting up grpc client for podman service: %w", err)
 		}
 		noopClient := grpcpb.NewNoopClient(grpcClient)
-		if noopClient == nil {
-			return fmt.Errorf("setting up client for noop grpc service: %w", err)
-		}
 		var request grpcpb.NoopRequest
 		if encoded := strings.Join(args, ""); len(encoded) > 0 {
 			if err := json.Unmarshal([]byte(encoded), &request); err != nil {

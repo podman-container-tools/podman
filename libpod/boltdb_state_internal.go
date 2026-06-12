@@ -328,7 +328,7 @@ func (s *BoltState) getVolumeFromDB(name []byte, volume *Volume, volBkt *bolt.Bu
 // ocicniPortsToNetTypesPorts convert the old port format to the new one
 // while deduplicating ports into ranges
 //
-//nolint:staticcheck
+//nolint:staticcheck // OCICNIPortMapping is deprecated; kept for backwards-compatible DB migration
 func ocicniPortsToNetTypesPorts(ports []types.OCICNIPortMapping) []types.PortMapping {
 	if len(ports) == 0 {
 		return nil
@@ -377,7 +377,7 @@ func ocicniPortsToNetTypesPorts(ports []types.OCICNIPortMapping) []types.PortMap
 // 3) hostPort
 // 4) container port
 //
-//nolint:staticcheck
+//nolint:staticcheck // OCICNIPortMapping is deprecated; kept for backwards-compatible DB migration
 func compareOCICNIPorts(i, j types.OCICNIPortMapping) bool {
 	if i.HostIP != j.HostIP {
 		return i.HostIP < j.HostIP

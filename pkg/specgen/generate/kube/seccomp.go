@@ -38,7 +38,7 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 			// check if it is prefaced with container.seccomp.security.alpha.kubernetes.io/
 			prefixAndCtr := strings.Split(annKeyValue, "/")
 			// FIXME: Rework for deprecation removal https://github.com/containers/podman/issues/27501
-			//nolint:staticcheck
+			//nolint:staticcheck // deprecated k8s annotation constant
 			if prefixAndCtr[0]+"/" != v1.SeccompContainerAnnotationKeyPrefix {
 				continue
 			} else if len(prefixAndCtr) != 2 {
@@ -55,7 +55,7 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 			seccompPaths.containerPaths[prefixAndCtr[1]] = path
 		}
 		// FIXME: Rework for deprecation removal https://github.com/containers/podman/issues/27501
-		//nolint:staticcheck
+		//nolint:staticcheck // deprecated k8s annotation constant
 		podSeccomp, ok := annotations[v1.SeccompPodAnnotationKey]
 		if ok {
 			seccompPaths.podPath, err = verifySeccompPath(podSeccomp, profileRoot)
@@ -74,11 +74,11 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 func verifySeccompPath(path string, profileRoot string) (string, error) {
 	switch path {
 	// FIXME: Rework for deprecation removal https://github.com/containers/podman/issues/27501
-	//nolint:staticcheck
+	//nolint:staticcheck // deprecated k8s seccomp constant
 	case v1.DeprecatedSeccompProfileDockerDefault:
 		fallthrough
 	// FIXME: Rework for deprecation removal https://github.com/containers/podman/issues/27501
-	//nolint:staticcheck
+	//nolint:staticcheck // deprecated k8s seccomp constant
 	case v1.SeccompProfileRuntimeDefault:
 		return libpod.DefaultSeccompPath()
 	case "unconfined":

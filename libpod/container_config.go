@@ -258,7 +258,7 @@ type ContainerNetworkConfig struct {
 	// namespace. As of podman 4.0 this field is deprecated, use PortMappings
 	// instead. The db will convert the old ports to the new structure for you.
 	// These are not used unless CreateNetNS is true
-	OldPortMappings []types.OCICNIPortMapping `json:"portMappings,omitempty"` //nolint:staticcheck
+	OldPortMappings []types.OCICNIPortMapping `json:"portMappings,omitempty"` //nolint:staticcheck // OCICNIPortMapping is deprecated but kept for backwards-compatible DB migration
 	// ExposedPorts are the ports which are exposed but not forwarded
 	// into the container.
 	// The map key is the port and the string slice contains the protocols,

@@ -98,24 +98,20 @@ func GetEvents(w http.ResponseWriter, r *http.Request) {
 			// Handle these differences for Docker-compat.
 			if !utils.IsLibpodRequest(r) && e.Type == "image" && e.Action == "remove" {
 				// Status is deprecated, but we still like to set it for consumers that might use it.
-				//nolint:staticcheck,nolintlint // we run the linter several times and sometimes it
-				// complains about this and sometimes it doesn't thus the nolintlint
-				e.Status = "delete"
+				e.Status = "delete" //nolint:staticcheck // deprecated field
 				e.Action = "delete"
 			}
 			if !utils.IsLibpodRequest(r) && e.Action == "died" {
-				//nolint:staticcheck,nolintlint // we run the linter several times and sometimes it
-				// complains about this and sometimes it doesn't thus the nolintlint
-				e.Status = "die"
+				e.Status = "die" //nolint:staticcheck // deprecated field
 				e.Action = "die"
 				e.Actor.Attributes["exitCode"] = e.Actor.Attributes["containerExitCode"]
 			}
 
 			// Remove fields which are not set in 1.52 and newer.
 			if _, err := apiutil.SupportedVersion(r, ">=1.52.0"); err == nil && !apiutil.IsLibpodRequest(r) {
-				e.Status = "" //nolint:staticcheck
-				e.ID = ""     //nolint:staticcheck
-				e.From = ""   //nolint:staticcheck
+				e.Status = "" //nolint:staticcheck // deprecated field, cleared for API >= 1.52
+				e.ID = ""     //nolint:staticcheck // deprecated field, cleared for API >= 1.52
+				e.From = ""   //nolint:staticcheck // deprecated field, cleared for API >= 1.52
 			}
 
 			if err := coder.Encode(e); err != nil {

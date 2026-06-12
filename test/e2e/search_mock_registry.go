@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:staticcheck
-	. "github.com/onsi/gomega"    //nolint:staticcheck
+	. "github.com/onsi/ginkgo/v2" //nolint:staticcheck // ST1001: should not use dot imports
+	. "github.com/onsi/gomega"    //nolint:staticcheck // ST1001: should not use dot imports
 )
 
 const (

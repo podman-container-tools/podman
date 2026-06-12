@@ -152,7 +152,7 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 
 loop: // break out of for/select infinite loop
 	for {
-		var report handlers.LegacyJSONMessage //nolint:staticcheck
+		var report handlers.LegacyJSONMessage //nolint:staticcheck // LegacyJSONMessage is deprecated but kept for Docker API compat < v1.52
 
 		select {
 		case e := <-options.Progress:
@@ -204,9 +204,8 @@ loop: // break out of for/select infinite loop
 				report.Error = &jsonstream.Error{
 					Message: msg,
 				}
-				//nolint:staticcheck // Deprecated field, but because consumers might still read it keep it.
 				if _, err := apiutil.SupportedVersion(r, "<1.52.0"); err == nil {
-					report.ErrorMessage = msg
+					report.ErrorMessage = msg //nolint:staticcheck // deprecated field
 				}
 				if err := enc.Encode(report); err != nil {
 					logrus.Warnf("Failed to json encode error %q", err.Error())

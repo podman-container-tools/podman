@@ -289,7 +289,7 @@ func WaitContainer(w http.ResponseWriter, r *http.Request) {
 	utils.WaitContainerDocker(w, r)
 }
 
-//nolint:staticcheck
+//nolint:staticcheck // LegacyNetworkSettings is deprecated but kept for Docker API compat < v1.52
 func convertSecondaryIPPrefixLen(input *define.InspectNetworkSettings, output *handlers.LegacyNetworkSettings) {
 	for index, ip := range input.SecondaryIPAddresses {
 		output.SecondaryIPAddresses[index].PrefixLen = ip.PrefixLength
@@ -485,7 +485,7 @@ func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handl
 	}, nil
 }
 
-//nolint:staticcheck
+//nolint:staticcheck // LegacyImageInspect is deprecated but kept for Docker API compat < v1.52
 func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageInspect, error) {
 	imageID, imageName := l.Image()
 	inspect, err := l.Inspect(sz)
@@ -588,7 +588,7 @@ func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageI
 		Data: inspect.GraphDriver.Data,
 	}
 
-	cb := handlers.LegacyImageInspect{ //nolint:staticcheck
+	cb := handlers.LegacyImageInspect{ //nolint:staticcheck // LegacyImageInspect is deprecated but kept for Docker API compat < v1.52
 		InspectResponse: container.InspectResponse{
 			ID:              l.ID(),
 			Created:         l.CreatedTime().UTC().Format(time.RFC3339Nano), // Docker uses UTC
@@ -702,7 +702,7 @@ func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageI
 		return nil, err
 	}
 
-	networkSettings := handlers.LegacyNetworkSettings{} //nolint:staticcheck
+	networkSettings := handlers.LegacyNetworkSettings{} //nolint:staticcheck // LegacyNetworkSettings is deprecated but kept for Docker API compat < v1.52
 	if err := json.Unmarshal(n, &networkSettings); err != nil {
 		return nil, err
 	}

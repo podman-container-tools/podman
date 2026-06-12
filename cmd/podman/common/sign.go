@@ -120,7 +120,7 @@ func PrepareSigning(pushOpts *entities.ImagePushOptions, cliOpts *SigningCLIOnly
 		if passphrase != "" {
 			opts = append(opts, simplesequoia.WithPassphrase(passphrase))
 		}
-		signer, err := simplesequoia.NewSigner(opts...)
+		signer, err := simplesequoia.NewSigner(opts...) //nolint:staticcheck,nolintlint // SA4023 false positive: stub always errors, real build does not
 		if err != nil {
 			return nil, fmt.Errorf("error using --sign-by-sq-fingerprint: %w", err)
 		}
