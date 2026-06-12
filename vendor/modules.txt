@@ -443,7 +443,7 @@ github.com/nxadm/tail/ratelimiter
 github.com/nxadm/tail/util
 github.com/nxadm/tail/watch
 github.com/nxadm/tail/winfile
-# github.com/onsi/ginkgo/v2 v2.29.0
+# github.com/onsi/ginkgo/v2 v2.30.0
 ## explicit; go 1.25.0
 github.com/onsi/ginkgo/v2
 github.com/onsi/ginkgo/v2/config

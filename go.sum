@@ -281,8 +281,8 @@ github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/nxadm/tail v1.4.11 h1:8feyoE3OzPrcshW5/MJ4sGESc5cqmGkGCWlco4l0bqY=
 github.com/nxadm/tail v1.4.11/go.mod h1:OTaG3NK980DZzxbRq6lEuzgU+mug70nY11sMd4JXXHc=
-github.com/onsi/ginkgo/v2 v2.29.0 h1:rfh+ZFjgJhYWRoIqVf3Uwx/W20yLrcrE2h2GmYVRaag=
-github.com/onsi/ginkgo/v2 v2.29.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
+github.com/onsi/ginkgo/v2 v2.30.0 h1:zxM/9XneXFIy64j6/wAmBIX4zRC7Hu6U8XFNZvDnCQc=
+github.com/onsi/ginkgo/v2 v2.30.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
 github.com/onsi/gomega v1.41.0 h1:OwKp4pXNgVxf6sCplzYo794OFNuoL2q2SBMU5NSWOjA=
 github.com/onsi/gomega v1.41.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
 github.com/opencontainers/cgroups v0.0.6 h1:tfZFWTIIGaUUFImTyuTg+Mr5x8XRiSdZESgEBW7UxuI=
