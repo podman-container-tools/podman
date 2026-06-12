@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/blang/semver/v4"
@@ -297,8 +298,20 @@ func sshClient(_url *url.URL, uri string, identity string, machine bool) (Connec
 		val := strings.TrimSuffix(b.String(), "\n")
 		_url.Path = val
 	}
+	var useFallback atomic.Bool
 	dialContext := func(_ context.Context, _, _ string) (net.Conn, error) {
-		return ssh.DialNet(conn, "unix", _url)
+		if useFallback.Load() {
+			return dialSSHStdio(conn, _url.Path)
+		}
+
+		dial, err := ssh.DialNet(conn, "unix", _url)
+		if err != nil && isUnknownChannelTypeErr(err) {
+			logrus.Debugf("direct-streamlocal channel unsupported, using dial-stdio fallback")
+			useFallback.Store(true)
+			return dialSSHStdio(conn, _url.Path)
+		}
+
+		return dial, err
 	}
 	connection.Client = &http.Client{
 		Transport: &http.Transport{
