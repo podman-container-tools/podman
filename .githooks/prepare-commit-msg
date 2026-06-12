@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# This script automatically adds a Signed-off-by trailer to each commit message, so that your commits
+# will adhere to the DCO (Developer Certificate of Origin) requirements.
+#
+# To enable this hook, run `make init-git-hooks`, or run the following from the
+# root of the repo:
+#
+# $ ln -sf ../../.githooks/prepare-commit-msg .git/hooks/prepare-commit-msg
+
+COMMIT_MESSAGE_FILE="$1"
+AUTHOR=$(git var GIT_AUTHOR_IDENT)
+SIGNOFF=$(echo "$AUTHOR" | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+
+# Check for DCO signoff message. If one doesn't exist, append one.
+if ! grep -qs "^$SIGNOFF" "$COMMIT_MESSAGE_FILE"; then
+  echo "" >> "$COMMIT_MESSAGE_FILE"
+  echo "$SIGNOFF" >> "$COMMIT_MESSAGE_FILE"
+fi

@@ -268,6 +268,17 @@ help: ## (Default) Print listing of key targets with their descriptions
 		awk 'BEGIN {FS = ":(.*)?## "}; \
 			{printf $(_HLPFMT), $$1, $$2}'
 
+.PHONY: init-git-hooks
+init-git-hooks: ## Install prepare-commit-msg hook for automatic DCO signing
+	@if [ -e .git/hooks/prepare-commit-msg ] && [ ! -L .git/hooks/prepare-commit-msg ]; then \
+		echo "Warning: .git/hooks/prepare-commit-msg already exists and is not a symlink."; \
+		echo "Backup your existing hook before running this command."; \
+		exit 1; \
+	fi
+	@mkdir -p .git/hooks
+	ln -sf ../../.githooks/prepare-commit-msg .git/hooks/prepare-commit-msg
+	@echo "DCO sign-off hook installed. Commits will now be automatically signed."
+
 ###
 ### Linting/Formatting/Code Validation targets
 ###
