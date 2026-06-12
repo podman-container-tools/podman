@@ -42,5 +42,9 @@ func pullOCITestDisk(finalDir string, vmType define.VMType) error {
 	if err != nil {
 		return err
 	}
+
+	if err := os.Chmod(fp, 0o400); err != nil {
+		return err
+	}
 	return compression.Decompress(compressedImage, fqImageName)
 }
