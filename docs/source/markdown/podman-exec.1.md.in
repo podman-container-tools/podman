@@ -17,6 +17,36 @@ podman\-exec - Execute a command in a running container
 
 Read the ID of the target container from the specified *file*.
 
+#### **--cpu-period**=*limit*
+
+Limit the CPU period for the Completely Fair Scheduler (CFS) for the exec process, which is a
+duration in microseconds. Once the exec process's CPU quota is used up, it will not
+be scheduled to run until the current period ends. Defaults to 100000 microseconds.
+
+This option constrains only the exec'd process, not the main container process.
+It requires cgroups v2 and is only available in local mode.
+
+#### **--cpu-quota**=*limit*
+
+Limit the CPU Completely Fair Scheduler (CFS) quota for the exec process.
+
+Limit the exec process's CPU usage. By default, exec processes run with the full
+CPU resource available to the container. The limit is a number in microseconds. If provided,
+the exec process is allowed to use that much CPU time until the CPU period
+ends (controllable via **--cpu-period**).
+
+This option constrains only the exec'd process, not the main container process.
+It requires cgroups v2 and is only available in local mode.
+
+#### **--cpuset-cpus**=*number*
+
+CPUs in which to allow the exec process to execute. Can be specified as a comma-separated list
+(e.g. **0,1**), as a range (e.g. **0-3**), or any combination thereof
+(e.g. **0-3,7,11-15**).
+
+This option constrains only the exec'd process, not the main container process.
+It requires cgroups v2 and is only available in local mode.
+
 #### **--detach**, **-d**
 
 Start the exec session, but do not attach to it. The command runs in the background, and the exec session is automatically removed when it completes. The **podman exec** command prints the ID of the exec session and exits immediately after it starts.
@@ -30,6 +60,17 @@ Start the exec session, but do not attach to it. The command runs in the backgro
 @@option interactive
 
 @@option latest
+
+#### **--memory**, **-m**=*number[unit]*
+
+Memory limit for the exec process. A _unit_ can be **b** (bytes), **k** (kibibytes), **m** (mebibytes), or **g** (gibibytes).
+
+Allows the memory available to the exec process to be constrained. If a limit of 0 is specified
+(not using **--memory**), the exec process's memory is not limited. The actual limit may be rounded up
+to a multiple of the operating system's page size.
+
+This option constrains only the exec'd process, not the main container process.
+It requires cgroups v2 and is only available in local mode.
 
 @@option no-session
 
@@ -93,6 +134,26 @@ $ podman exec --user root ctrID ls
 Execute command but do not attach to the exec session leaving the command running in the background:
 ```
 $ podman exec -d ctrID find /path/to/search -name yourfile
+```
+
+Execute a maintenance script with CPU limit to avoid impacting the main container process:
+```
+$ podman exec --cpu-quota=10000 db-container /opt/maintenance.sh
+```
+
+Execute a data processing script with memory limit:
+```
+$ podman exec --memory=512m my-container /usr/local/bin/process-data.sh
+```
+
+Execute a background task pinned to specific CPUs with memory constraint:
+```
+$ podman exec --cpuset-cpus=0-1 --memory=1g my-container /opt/background-job.sh
+```
+
+Execute with multiple resource limits to isolate the exec process:
+```
+$ podman exec --cpu-quota=25000 --cpu-period=100000 --memory=256m --cpuset-cpus=0,1 db-container /opt/vacuum.sh
 ```
 
 ## SEE ALSO

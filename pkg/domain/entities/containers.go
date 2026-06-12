@@ -293,6 +293,19 @@ type ExecOptions struct {
 	Tty         bool
 	User        string
 	WorkDir     string
+	Resources   *ExecResourceLimits
+}
+
+// ExecResourceLimits defines resource constraints for an exec'd process
+type ExecResourceLimits struct {
+	// CPUQuota is the CPU CFS quota in microseconds
+	CPUQuota int64
+	// CPUPeriod is the CPU CFS period in microseconds (default 100000)
+	CPUPeriod uint64
+	// Memory is the memory limit in bytes
+	Memory *int64
+	// CPUSetCPUs limits which CPUs the process can run on (e.g., "0-3", "0,1")
+	CPUSetCPUs string
 }
 
 // ContainerExistsOptions describes the cli values to check if a container exists

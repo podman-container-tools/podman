@@ -413,6 +413,10 @@ func (r *ConmonOCIRuntime) startExec(c *Container, sessionID string, options *Ex
 		args = append(args, formatRuntimeOpts("--preserve-fds", strconv.FormatUint(uint64(preserveFDs), 10))...)
 	}
 
+	if options.CgroupPath != "" {
+		args = append(args, formatRuntimeOpts("--cgroup", options.CgroupPath)...)
+	}
+
 	if options.Terminal {
 		args = append(args, "-t")
 	}

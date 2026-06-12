@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
 	"go.podman.io/podman/v6/cmd/podman/common"
@@ -52,6 +54,11 @@ var (
 	execDetach        bool
 	execCidFile       string
 	execNoSession     bool
+	// Resource limit flags
+	cpuQuota   int64
+	cpuPeriod  uint64
+	memory     string
+	cpusetCpus string
 )
 
 func execFlags(cmd *cobra.Command) {
@@ -101,12 +108,34 @@ func execFlags(cmd *cobra.Command) {
 	flags.Int32(waitFlagName, 0, "Total seconds to wait for container to start")
 	_ = flags.MarkHidden(waitFlagName)
 
+	// Resource limit flags (cgroups v2 only, local mode only)
+	cpuQuotaFlagName := "cpu-quota"
+	flags.Int64Var(&cpuQuota, cpuQuotaFlagName, 0, "Limit CPU CFS quota (in microseconds per period)")
+	_ = cmd.RegisterFlagCompletionFunc(cpuQuotaFlagName, completion.AutocompleteNone)
+
+	cpuPeriodFlagName := "cpu-period"
+	flags.Uint64Var(&cpuPeriod, cpuPeriodFlagName, 0, "Limit CPU CFS period (in microseconds, default 100000)")
+	_ = cmd.RegisterFlagCompletionFunc(cpuPeriodFlagName, completion.AutocompleteNone)
+
+	memoryFlagName := "memory"
+	flags.StringVarP(&memory, memoryFlagName, "m", "", "Memory limit for exec'd process (e.g., 512m)")
+	_ = cmd.RegisterFlagCompletionFunc(memoryFlagName, completion.AutocompleteNone)
+
+	cpusetCpusFlagName := "cpuset-cpus"
+	flags.StringVar(&cpusetCpus, cpusetCpusFlagName, "", "CPUs in which to allow execution (0-3, 0,1)")
+	_ = cmd.RegisterFlagCompletionFunc(cpusetCpusFlagName, completion.AutocompleteNone)
+
 	if !registry.IsRemote() {
 		flags.BoolVar(&execNoSession, "no-session", false, "Do not create a database session for the exec process")
 	}
 
 	if registry.IsRemote() {
 		_ = flags.MarkHidden("preserve-fds")
+		// Resource limits require cgroup manipulation, only supported locally
+		_ = flags.MarkHidden(cpuQuotaFlagName)
+		_ = flags.MarkHidden(cpuPeriodFlagName)
+		_ = flags.MarkHidden(memoryFlagName)
+		_ = flags.MarkHidden(cpusetCpusFlagName)
 	}
 }
 
@@ -165,6 +194,11 @@ func exec(cmd *cobra.Command, args []string) error {
 		if !rootless.IsFdInherited(fd) {
 			return fmt.Errorf("file descriptor %d is not available - the preserve-fds option requires that file descriptors must be passed", fd)
 		}
+	}
+
+	// Process resource limit flags
+	if err := validateAndSetResourceLimits(&execOpts); err != nil {
+		return err
 	}
 
 	if cmd.Flags().Changed("wait") {
@@ -233,6 +267,56 @@ func determineTargetCtrAndCmd(args []string, latestSpecified bool, execCidFilePr
 	}
 	return nameOrID, command, nil
 }
+
+// validateAndSetResourceLimits validates resource limit flags and populates execOpts.Resources
+func validateAndSetResourceLimits(execOpts *entities.ExecOptions) error {
+	// Return early if no resource limits specified
+	if cpuQuota == 0 && cpuPeriod == 0 && memory == "" && cpusetCpus == "" {
+		return nil
+	}
+
+	// CPU period validation
+	if cpuPeriod != 0 && (cpuPeriod < 1000 || cpuPeriod > 1000000) {
+		return fmt.Errorf("cpu-period must be between 1000 (1ms) and 1000000 (1s) microseconds")
+	}
+
+	// CPU quota validation
+	// Note: quota can exceed period for multi-core allocation
+	// (e.g., quota=400000, period=100000 = 4 cores)
+	if cpuQuota != 0 && cpuQuota < 1000 {
+		return fmt.Errorf("cpu-quota must be >= 1000 microseconds (1ms)")
+	}
+
+	// CPUSet format validation (e.g., "0", "0-3", "0,2", "0-3,7,12-15")
+	if cpusetCpus != "" {
+		cpusetPattern := regexp.MustCompile(`^\d+(-\d+)?(,\d+(-\d+)?)*$`)
+		if !cpusetPattern.MatchString(cpusetCpus) {
+			return fmt.Errorf("invalid cpuset-cpus format %q: expected comma-separated CPUs or CPU ranges (e.g., \"0,2\", \"0-3\", \"0-3,7,12-15\")", cpusetCpus)
+		}
+	}
+
+	// Parse memory limit
+	var memoryLimit *int64
+	if memory != "" {
+		// Use docker/go-units parser for robust parsing
+		parsed, err := units.RAMInBytes(memory)
+		if err != nil {
+			return fmt.Errorf("invalid memory limit: %w", err)
+		}
+		memoryLimit = &parsed
+	}
+
+	// Populate execOpts.Resources
+	execOpts.Resources = &entities.ExecResourceLimits{
+		CPUQuota:   cpuQuota,
+		CPUPeriod:  cpuPeriod,
+		Memory:     memoryLimit,
+		CPUSetCPUs: cpusetCpus,
+	}
+
+	return nil
+}
+
 
 func execWait(ctr string, seconds int32) error {
 	maxDuration := time.Duration(seconds) * time.Second
