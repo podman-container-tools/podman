@@ -920,19 +920,20 @@ func Reset(mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
 func validateDestinationPaths(dest string) error {
 	// illegalMounts are locations at the / level of the podman machine where we do want users mounting directly over
 	illegalMounts := map[string]struct{}{
-		"/bin":  {},
-		"/boot": {},
-		"/dev":  {},
-		"/etc":  {},
-		"/home": {},
-		"/proc": {},
-		"/root": {},
-		"/run":  {},
-		"/sbin": {},
-		"/sys":  {},
-		"/tmp":  {},
-		"/usr":  {},
-		"/var":  {},
+		"/bin":                        {},
+		"/boot":                       {},
+		"/dev":                        {},
+		"/etc":                        {},
+		"/home":                       {},
+		"/proc":                       {},
+		"/root":                       {},
+		"/run":                        {},
+		"/sbin":                       {},
+		"/sys":                        {},
+		"/tmp":                        {},
+		"/usr":                        {},
+		"/var":                        {},
+		"/var/lib/containers/storage": {},
 	}
 	mountTarget := path.Clean(dest)
 	if _, ok := illegalMounts[mountTarget]; ok {
