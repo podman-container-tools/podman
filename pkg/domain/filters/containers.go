@@ -97,27 +97,31 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 	case "ancestor":
 		// This needs to refine to match docker
 		// - ancestor=(<image-name>[:tag]|<image-id>| ⟨image@digest⟩) - containers created from an image or a descendant.
+		imgRuntime := r.LibimageRuntime()
+		var resolvedIDs []string
+		var passthrough []string
+		for _, filterValue := range filterValues {
+			img, _, err := imgRuntime.LookupImage(filterValue, nil)
+			if err == nil && img != nil {
+				// filterValue is a resolvable image name[:tag] 
+				// Store the image's ID
+				resolvedIDs = append(resolvedIDs, img.ID())
+				continue
+			}
+			// Not resolvable as a name (possibly ID)
+			passthrough = append(passthrough, filterValue)
+		}
 		return func(c *libpod.Container) bool {
-			for _, filterValue := range filterValues {
-				rootfsImageID, rootfsImageName := c.Image()
-				var imageTag string
-				var imageNameWithoutTag string
-				// Compare with ImageID, ImageName
-				// Will match ImageName if running image has tag latest for other tags exact complete filter must be given
-				name, tag, hasColon := strings.Cut(rootfsImageName, ":")
-				if hasColon {
-					imageNameWithoutTag = name
-					imageTag = tag
-				}
-
-				// Check for substring match on image ID (Docker compatibility)
-				if strings.Contains(rootfsImageID, filterValue) {
+			rootfsImageID, _ := c.Image()
+			// Check ID match for resolved names
+			for _, id := range resolvedIDs {
+				if strings.Contains(rootfsImageID, id) {
 					return true
 				}
-
-				// Check for regex match (advanced use cases)
-				if util.StringMatchRegexSlice(rootfsImageName, filterValues) ||
-					(util.StringMatchRegexSlice(imageNameWithoutTag, filterValues) && imageTag == "latest") {
+			}
+			// Check if given ID matches ancestor ID
+			for _, id := range passthrough {
+				if strings.Contains(rootfsImageID, id) {
 					return true
 				}
 			}
@@ -374,26 +378,30 @@ func GenerateExternalContainerFilterFuncs(filter string, filterValues []string, 
 	case "ancestor":
 		// This needs to refine to match docker
 		// - ancestor=(<image-name>[:tag]|<image-id>| ⟨image@digest⟩) - containers created from an image or a descendant.
-		return func(listContainer *types.ListContainer) bool {
-			for _, filterValue := range filterValues {
-				var imageTag string
-				var imageNameWithoutTag string
-				// Compare with ImageID, ImageName
-				// Will match ImageName if running image has tag latest for other tags exact complete filter must be given
-				name, tag, hasColon := strings.Cut(listContainer.Image, ":")
-				if hasColon {
-					imageNameWithoutTag = name
-					imageTag = tag
-				}
+		imgRuntime := r.LibimageRuntime()
+		var resolvedIDs []string
+		var passthrough []string
+		for _, filterValue := range filterValues {
+			img, _, err := imgRuntime.LookupImage(filterValue, nil)
+			if err == nil && img != nil {
+				// filterValue is a resolvable image name[:tag]
+				// Store the image's ID
+				resolvedIDs = append(resolvedIDs, img.ID())
+				continue
+			}
+			// Not resolvable as a name (possibly ID)
+			passthrough = append(passthrough, filterValue)
+		}
 
-				// Check for substring match on image ID (Docker compatibility)
-				if strings.Contains(listContainer.ImageID, filterValue) {
+		return func(listContainer *types.ListContainer) bool {
+			for _, id := range resolvedIDs {
+				if strings.Contains(listContainer.ImageID, id) {
 					return true
 				}
-
-				// Check for regex match (advanced use cases)
-				if util.StringMatchRegexSlice(listContainer.Image, filterValues) ||
-					(util.StringMatchRegexSlice(imageNameWithoutTag, filterValues) && imageTag == "latest") {
+			}
+			for _, id := range passthrough {
+				id = strings.TrimPrefix(id, "sha256:")
+				if strings.Contains(listContainer.ImageID, id) {
 					return true
 				}
 			}
