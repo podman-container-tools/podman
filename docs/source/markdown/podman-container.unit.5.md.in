@@ -108,6 +108,7 @@ Valid options for `[Container]` are listed below:
 | SecurityLabelLevel=s0:c1,c2          | --security-opt label=level:s0:c1,c2                  |
 | SecurityLabelNested=true             | --security-opt label=nested                          |
 | SecurityLabelType=spc_t              | --security-opt label=type:spc_t                      |
+| ServiceName=name                     | Name the systemd unit `name.service`                 |
 | ShmSize=100m                         | --shm-size=100m                                      |
 | StartWithPod=true                    | If Pod= is defined, container is started by pod      |
 | StopSignal=SIGINT                    | --stop-signal=SIGINT                                 |
@@ -333,6 +334,13 @@ Allow SecurityLabels to function within the container. This allows separation of
 ### `SecurityLabelType=type`
 
 Set the label process type for the container processes.
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit after the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 @@option quadlet:shm-size
 

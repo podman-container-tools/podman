@@ -55,6 +55,7 @@ Valid options for `[Network]` are listed below:
 | NetworkName=foo                     | podman network create foo                                       |
 | Options=isolate=true                | --opt isolate=true                                              |
 | PodmanArgs=--dns=192.168.55.1       | --dns=192.168.55.1                                              |
+| ServiceName=name                    | Name the systemd unit `name.service`                            |
 | Subnet=192.5.0.0/16                 | --subnet 192.5.0.0/16                                           |
 
 
@@ -96,6 +97,13 @@ conflicts with user-managed networks.
 @@option quadlet:opt
 
 @@option quadlet:podman-args
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit by appending `-network` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 @@option quadlet:subnet
 
