@@ -301,4 +301,88 @@ Removed:
 		Expect(volInspect2).Should(ExitCleanly())
 		Expect(volInspect2.OutputToString()).To(ContainSubstring("3"))
 	})
+
+	It("unrelated command after refresh does not log plugin errors for plugin volumes", func() {
+		podmanTest.AddImageToRWStore(volumeTest)
+
+		pluginStatePath := filepath.Join(podmanTest.TempDir, "volumes")
+		err := os.Mkdir(pluginStatePath, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		pluginName := "testvol7"
+		ctrName := "pluginCtrRefresh"
+		podmanTest.PodmanExitCleanly(
+			"run", "--name", ctrName, "--security-opt", "label=disable",
+			"-v", "/run/docker/plugins:/run/docker/plugins",
+			"-v", fmt.Sprintf("%v:%v", pluginStatePath, pluginStatePath),
+			"-d", volumeTest, "--sock-name", pluginName, "--path", pluginStatePath,
+		)
+
+		err = WaitForFile(fmt.Sprintf("/run/docker/plugins/%s.sock", pluginName))
+		Expect(err).ToNot(HaveOccurred())
+
+		vol1 := "refreshVol1-" + stringid.GenerateRandomID()
+		vol2 := "refreshVol2-" + stringid.GenerateRandomID()
+		podmanTest.PodmanExitCleanly("volume", "create", "--driver", pluginName, vol1)
+		podmanTest.PodmanExitCleanly("volume", "create", "--driver", pluginName, vol2)
+
+		podmanTest.StopContainer(ctrName)
+
+		// Simulate post-reboot: tmp state is gone but RunRoot (volume DB) persists.
+		// Use a fresh tmpdir instead of deleting the alive file from setup.
+		refreshTmp := filepath.Join(podmanTest.TempDir, "refresh-tmp")
+		err = os.MkdirAll(refreshTmp, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Unrelated command triggers refresh; must succeed with no stderr.
+		podmanTest.PodmanExitCleanly("--log-level=error", "--tmpdir", refreshTmp, "version")
+
+		for _, vol := range []string{vol1, vol2} {
+			remove := podmanTest.Podman([]string{"volume", "rm", vol})
+			remove.WaitWithDefaultTimeout()
+			Expect(remove).To(ExitWithErrorRegex(125, "has been removed from Podman"))
+		}
+		ls := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(ls.OutputToStringArray()).To(BeEmpty())
+	})
+
+	It("volume inspect and ls with stopped plugin fail without finalize spam", func() {
+		podmanTest.AddImageToRWStore(volumeTest)
+
+		pluginStatePath := filepath.Join(podmanTest.TempDir, "volumes")
+		err := os.Mkdir(pluginStatePath, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		pluginName := "testvol8"
+		ctrName := "pluginCtrInspect"
+		podmanTest.PodmanExitCleanly(
+			"run", "--name", ctrName, "--security-opt", "label=disable",
+			"-v", "/run/docker/plugins:/run/docker/plugins",
+			"-v", fmt.Sprintf("%v:%v", pluginStatePath, pluginStatePath),
+			"-d", volumeTest, "--sock-name", pluginName, "--path", pluginStatePath,
+		)
+
+		err = WaitForFile(fmt.Sprintf("/run/docker/plugins/%s.sock", pluginName))
+		Expect(err).ToNot(HaveOccurred())
+
+		volName := "inspectVol-" + stringid.GenerateRandomID()
+		podmanTest.PodmanExitCleanly("volume", "create", "--driver", pluginName, volName)
+
+		podmanTest.StopContainer(ctrName)
+
+		inspect := podmanTest.Podman([]string{"volume", "inspect", volName})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).To(ExitWithErrorRegex(125, "cannot inspect"))
+
+		ls := podmanTest.Podman([]string{"volume", "ls", "-q"})
+		ls.WaitWithDefaultTimeout()
+		Expect(ls).To(ExitWithErrorRegex(125, "cannot inspect"))
+
+		remove := podmanTest.Podman([]string{"volume", "rm", volName})
+		remove.WaitWithDefaultTimeout()
+		Expect(remove).To(ExitWithErrorRegex(125, "has been removed from Podman"))
+
+		lsAfter := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(lsAfter.OutputToStringArray()).To(BeEmpty())
+	})
 })

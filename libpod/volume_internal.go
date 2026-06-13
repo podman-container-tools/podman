@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/podman/v6/libpod/plugin"
 )
 
 // Creates a new volume
@@ -20,6 +22,12 @@ func newVolume(runtime *Runtime) *Volume {
 	volume.config.Options = make(map[string]string)
 	volume.state.NeedsCopyUp = true
 	volume.state.NeedsChown = true
+	volume.volumePlugin = sync.OnceValues(func() (*plugin.VolumePlugin, error) {
+		if !volume.UsesVolumeDriver() {
+			return nil, nil
+		}
+		return volume.runtime.getVolumePlugin(volume.config)
+	})
 	return volume
 }
 
