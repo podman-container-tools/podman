@@ -71,6 +71,12 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 		}, nil
 	case "status":
 		for _, filterValue := range filterValues {
+			// Docker compat: "dead" and "restarting" are valid Docker
+			// container states that have no direct equivalent in Podman.
+			// Accept them without error; they will not match any container.
+			if filterValue == "dead" || filterValue == "restarting" {
+				continue
+			}
 			if _, err := define.StringToContainerStatus(filterValue); err != nil {
 				return nil, err
 			}
