@@ -464,7 +464,7 @@ func (c *Container) generateInspectContainerConfig(spec *spec.Spec) *define.Insp
 	ctrConfig.SdNotifyMode = c.config.SdNotifyMode
 	ctrConfig.SdNotifySocket = c.config.SdNotifySocket
 
-	// Exosed ports consists of all exposed ports and all port mappings for
+	// Exposed ports consists of all exposed ports and all port mappings for
 	// this container. It does *NOT* follow to another container if we share
 	// the network namespace.
 	exposedPorts := make(map[string]struct{})
