@@ -70,13 +70,14 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 		}
 	}
 
-	// Plugin can be nil if driver is local, but that's OK - superfluous
-	// assignment doesn't hurt much.
-	plugin, err := r.getVolumePlugin(volume.config)
-	if err != nil {
-		return nil, fmt.Errorf("volume %s uses volume plugin %s but it could not be retrieved: %w", volume.config.Name, volume.config.Driver, err)
+	var plugin *volplugin.VolumePlugin
+	if volume.UsesVolumeDriver() {
+		var err error
+		plugin, err = volume.volumePlugin()
+		if err != nil {
+			return nil, fmt.Errorf("volume %s uses volume plugin %s but it could not be retrieved: %w", volume.config.Name, volume.config.Driver, err)
+		}
 	}
-	volume.plugin = plugin
 
 	if volume.config.Driver == define.VolumeDriverLocal {
 		logrus.Debugf("Validating options for local driver")
@@ -150,13 +151,13 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 
 	// Now we get conditional: we either need to make the volume in the
 	// volume plugin, or on disk if not using a plugin.
-	if volume.plugin != nil && !noCreatePluginVolume {
+	if volume.UsesVolumeDriver() && !noCreatePluginVolume {
 		// We can't chown, or relabel, or similar the path the volume is
 		// using, because it's not managed by us.
 		// TODO: reevaluate this once we actually have volume plugins in
 		// use in production - it may be safe, but I can't tell without
 		// knowing what the actual plugin does...
-		if err := makeVolumeInPluginIfNotExist(volume.config.Name, volume.config.Options, volume.plugin); err != nil {
+		if err := makeVolumeInPluginIfNotExist(volume.config.Name, volume.config.Options, plugin); err != nil {
 			return nil, err
 		}
 	} else {
@@ -437,19 +438,14 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 	if v.UsesVolumeDriver() && !ignoreVolumePlugin {
 		canRemove := true
 
-		// Do we have a volume driver?
-		if v.plugin == nil {
+		plugin, err := v.volumePlugin()
+		if err != nil {
 			canRemove = false
-			removalErr = fmt.Errorf("cannot remove volume %s from plugin %s, but it has been removed from Podman: %w", v.Name(), v.Driver(), define.ErrMissingPlugin)
+			removalErr = fmt.Errorf("cannot remove volume %s from plugin %s, but it has been removed from Podman: %w", v.Name(), v.Driver(), err)
 		} else {
-			// Ping the plugin first to verify the volume still
-			// exists.
-			// We're trying to be very tolerant of missing volumes
-			// in the backend, to avoid the problems we see with
-			// sync between c/storage and the Libpod DB.
 			getReq := new(pluginapi.GetRequest)
 			getReq.Name = v.Name()
-			if _, err := v.plugin.GetVolume(getReq); err != nil {
+			if _, err := plugin.GetVolume(getReq); err != nil {
 				canRemove = false
 				removalErr = fmt.Errorf("volume %s could not be retrieved from plugin %s, but it has been removed from Podman: %w", v.Name(), v.Driver(), err)
 			}
@@ -457,7 +453,7 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 		if canRemove {
 			req := new(pluginapi.RemoveRequest)
 			req.Name = v.Name()
-			if err := v.plugin.RemoveVolume(req); err != nil {
+			if err := plugin.RemoveVolume(req); err != nil {
 				return fmt.Errorf("volume %s could not be removed from plugin %s: %w", v.Name(), v.Driver(), err)
 			}
 		}

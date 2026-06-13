@@ -50,14 +50,15 @@ func (v *Volume) mount() error {
 	// ours more. So hardcode container ID to something reasonable, and use
 	// the same one for everything.
 	if v.UsesVolumeDriver() {
-		if v.plugin == nil {
-			return fmt.Errorf("volume plugin %s (needed by volume %s) missing: %w", v.Driver(), v.Name(), define.ErrMissingPlugin)
+		plugin, err := v.volumePlugin()
+		if err != nil {
+			return fmt.Errorf("volume plugin %s (needed by volume %s) missing: %w", v.Driver(), v.Name(), err)
 		}
 
 		req := new(pluginapi.MountRequest)
 		req.Name = v.Name()
 		req.ID = pseudoCtrID
-		mountPoint, err := v.plugin.MountVolume(req)
+		mountPoint, err := plugin.MountVolume(req)
 		if err != nil {
 			return err
 		}
@@ -156,14 +157,15 @@ func (v *Volume) unmount(force bool) error {
 
 	if v.state.MountCount == 0 {
 		if v.UsesVolumeDriver() {
-			if v.plugin == nil {
-				return fmt.Errorf("volume plugin %s (needed by volume %s) missing: %w", v.Driver(), v.Name(), define.ErrMissingPlugin)
+			plugin, err := v.volumePlugin()
+			if err != nil {
+				return fmt.Errorf("volume plugin %s (needed by volume %s) missing: %w", v.Driver(), v.Name(), err)
 			}
 
 			req := new(pluginapi.UnmountRequest)
 			req.Name = v.Name()
 			req.ID = pseudoCtrID
-			if err := v.plugin.UnmountVolume(req); err != nil {
+			if err := plugin.UnmountVolume(req); err != nil {
 				return err
 			}
 
