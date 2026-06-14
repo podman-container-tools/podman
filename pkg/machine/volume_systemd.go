@@ -2,7 +2,6 @@ package machine
 
 import (
 	"fmt"
-	"strings"
 
 	"go.podman.io/podman/v6/pkg/machine/ignition"
 	"go.podman.io/podman/v6/pkg/systemd/parser"
@@ -23,10 +22,19 @@ var fcosDirSymlinks = map[string]string{
 // canonicalizeFCOSMountTarget returns the canonical path for target by
 // substituting any known FCOS root-level symlink prefix.
 func canonicalizeFCOSMountTarget(target string) string {
-	for link, real := range fcosDirSymlinks {
-		if target == link || strings.HasPrefix(target, link+"/") {
-			return real + target[len(link):]
-		}
+	// Guard check for empty strings or paths not starting with '/'
+	if len(target) < 2 || target[0] != '/' {
+		return target
+	}
+
+	// Find the end of the first path component (e.g. "/home" in "/home/alice").
+	end := 1
+	for end < len(target) && target[end] != '/' {
+		end++
+	}
+
+	if real, ok := fcosDirSymlinks[target[:end]]; ok {
+		return real + target[end:]
 	}
 	return target
 }
