@@ -498,6 +498,10 @@ t GET containers/json?filters='{"label":["testl' 500 \
 
 #libpod api list containers sanity checks
 t GET libpod/containers/json?filters='{"status":["removing"]}' 200 length=0
+# Docker-compat: "dead" and "restarting" have no Podman equivalent; accept them
+# without error and return an empty list (matches Docker behaviour).
+t GET libpod/containers/json?filters='{"status":["dead"]}' 200 length=0
+t GET libpod/containers/json?filters='{"status":["restarting"]}' 200 length=0
 t GET libpod/containers/json?filters='{"status":["bogus"]}' 500 \
     .cause="invalid argument"
 t GET libpod/containers/json?filters='garb1age}' 500 \
