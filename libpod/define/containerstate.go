@@ -91,6 +91,13 @@ func StringToContainerStatus(status string) (ContainerStatus, error) {
 		return ContainerStateRemoving, nil
 	case ContainerStateStopping.String():
 		return ContainerStateStopping, nil
+	case "dead":
+		// Docker compatibility: "dead" is equivalent to "exited"
+		return ContainerStateExited, nil
+	case "restarting":
+		// Docker compatibility: "restarting" maps to "stopping" as
+		// Podman does not have a dedicated restarting state
+		return ContainerStateStopping, nil
 	default:
 		return ContainerStateUnknown, fmt.Errorf("unknown container state: %s: %w", status, ErrInvalidArg)
 	}
