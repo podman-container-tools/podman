@@ -7,6 +7,38 @@ import (
 	"go.podman.io/podman/v6/pkg/systemd/parser"
 )
 
+// fcosDirSymlinks maps FCOS root-level symlinks to their real paths.
+// FCOS symlinks several top-level dirs into /var for the read-only rootfs.
+// systemd rejects a mount unit whose Where= traverses a symlink, so we
+// resolve these before writing the ignition unit.
+var fcosDirSymlinks = map[string]string{
+	"/home": "/var/home",
+	"/mnt":  "/var/mnt",
+	"/opt":  "/var/opt",
+	"/root": "/var/roothome",
+	"/srv":  "/var/srv",
+}
+
+// canonicalizeFCOSMountTarget returns the canonical path for target by
+// substituting any known FCOS root-level symlink prefix.
+func canonicalizeFCOSMountTarget(target string) string {
+	// Guard check for empty strings or paths not starting with '/'
+	if len(target) < 2 || target[0] != '/' {
+		return target
+	}
+
+	// Find the end of the first path component (e.g. "/home" in "/home/alice").
+	end := 1
+	for end < len(target) && target[end] != '/' {
+		end++
+	}
+
+	if real, ok := fcosDirSymlinks[target[:end]]; ok {
+		return real + target[end:]
+	}
+	return target
+}
+
 // GenerateSystemDFilesForVirtiofsMounts generates the systemd unit files needed
 // to mount virtiofs volumes inside a FCOS guest VM. It is shared between the
 // AppleHV, LibKrun, and QEMU providers.
@@ -30,10 +62,13 @@ func GenerateSystemDFilesForVirtiofsMounts(mounts []VirtIoFs) ([]ignition.Unit, 
 			return nil, err
 		}
 
+		// Use the canonical path so systemd accepts the Where= value.
+		// On FCOS /home is a symlink to var/home; systemd rejects non-canonical paths.
+		canonicalTarget := canonicalizeFCOSMountTarget(mnt.Target)
 		virtiofsMount := ignition.Unit{
 			Enabled:  ignition.BoolToPtr(true),
-			Name:     fmt.Sprintf("%s.mount", parser.PathEscape(mnt.Target)),
-			Contents: ignition.StrToPtr(fmt.Sprintf(mountUnitFile, mnt.Tag, mnt.Target)),
+			Name:     fmt.Sprintf("%s.mount", parser.PathEscape(canonicalTarget)),
+			Contents: ignition.StrToPtr(fmt.Sprintf(mountUnitFile, mnt.Tag, canonicalTarget)),
 		}
 
 		unitFiles = append(unitFiles, virtiofsMount)
