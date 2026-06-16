@@ -494,6 +494,10 @@ t GET containers/json?filters='garb1age}' 500 \
     .cause="invalid character 'g' looking for beginning of value"
 t GET containers/json?filters='{"label":["testl' 500 \
     .cause="unexpected end of JSON input"
+# Docker-compat: "dead" and "restarting" have no Podman equivalent; accept them
+# without error and return an empty list (matches Docker behaviour).
+t GET containers/json?filters='{"status":["dead"]}' 200 length=0
+t GET containers/json?filters='{"status":["restarting"]}' 200 length=0
 
 
 #libpod api list containers sanity checks
