@@ -479,10 +479,9 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 	s.Annotations[define.KubeHealthCheckAnnotation] = "true"
 
 	// Environment Variables
-	envs := map[string]string{}
-	for _, env := range imageData.Config.Env {
-		key, val, _ := strings.Cut(env, "=")
-		envs[key] = val
+	envs, err := generate.ParseImageEnvs(imageData.Config.Env)
+	if err != nil {
+		return nil, err
 	}
 
 	// Process envFrom first (lower precedence)
