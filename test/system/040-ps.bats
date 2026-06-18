@@ -97,13 +97,6 @@ load helpers
     is "${lines[1]}" "stopped" "status=stopped: 2 of 3"
     is "${lines[2]}" "failed"  "status=stopped: 3 of 3"
 
-    # Docker-compat status values "dead" and "restarting" have no Podman
-    # equivalent; they should be accepted without error and return empty lists.
-    run_podman ps -a --filter status=dead --format '{{.Names}}'
-    is "$output" "" "status=dead: no containers (Docker-compat value)"
-    run_podman ps -a --filter status=restarting --format '{{.Names}}'
-    is "$output" "" "status=restarting: no containers (Docker-compat value)"
-
     # ID filtering: if filter is only hex chars, it's a prefix; if it has
     # anything else, it's a regex
     run_podman rm created

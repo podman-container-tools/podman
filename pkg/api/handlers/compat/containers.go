@@ -126,6 +126,28 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 
 	filterFuncs := make([]libpod.ContainerFilter, 0, len(*filterMap))
 	all := query.All || query.Limit > 0
+
+	// Docker-compat: "dead" and "restarting" are valid Docker status values
+	// that have no equivalent in Podman.  Strip them from the status filter
+	// before passing to the domain layer (they match no container); preserve
+	// the "all=true" behaviour that any status filter implies.
+	if statusVals, ok := (*filterMap)["status"]; ok {
+		all = true // a status filter always means "include all containers"
+		podmanVals := statusVals[:0]
+		for _, s := range statusVals {
+			if s != "dead" && s != "restarting" {
+				podmanVals = append(podmanVals, s)
+			}
+		}
+		if len(podmanVals) == 0 {
+			// Only Docker-specific values were requested; no Podman
+			// container can be in those states, so return empty immediately.
+			utils.WriteResponse(w, http.StatusOK, []*handlers.Container{})
+			return
+		}
+		(*filterMap)["status"] = podmanVals
+	}
+
 	if len(*filterMap) > 0 {
 		for k, v := range *filterMap {
 			generatedFunc, err := filters.GenerateContainerFilterFuncs(k, v, runtime)
@@ -135,12 +157,6 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 			}
 			filterFuncs = append(filterFuncs, generatedFunc)
 		}
-	}
-
-	// Docker thinks that if status is given as an input, then we should override
-	// the all setting and always deal with all containers.
-	if len((*filterMap)["status"]) > 0 {
-		all = true
 	}
 	if !all {
 		runningOnly, err := filters.GenerateContainerFilterFuncs("status", []string{define.ContainerStateRunning.String()}, runtime)
