@@ -109,6 +109,12 @@ func RemoveFilesExcept(path string, excludeFile string) error {
 	return nil
 }
 
+
+// ProgressBar initializes a progress bar container and an individual bar. 
+//
+// CRITICAL: The caller MUST call `p.Wait()` on the returned *mpb.Progress 
+// container (typically via `defer p.Wait()`) once processing is complete to 
+// prevent a goroutine leak.
 func ProgressBar(prefix string, size int64, onComplete string) (*mpb.Progress, *mpb.Bar) {
 	p := mpb.New(
 		mpb.WithWidth(80), // Do not go below 80, see bug #17718
