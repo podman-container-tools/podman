@@ -3,6 +3,7 @@ package seccomp
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ContainerImageLabel is the key of the image annotation embedding a seccomp
@@ -50,4 +51,9 @@ func LookupPolicy(s string) (Policy, error) {
 	sort.Strings(keys)
 
 	return -1, fmt.Errorf("invalid seccomp policy %q: valid policies are %+q", s, keys)
+}
+
+// IsProfileInline reports whether profile contains an inline JSON object.
+func IsProfileInline(profile string) bool {
+	return strings.HasPrefix(strings.TrimSpace(profile), "{")
 }
