@@ -739,6 +739,8 @@ func (c *Container) WaitForConditionWithInterval(ctx context.Context, waitTimeou
 
 	resultChan := make(chan waitResult)
 	waitForExit := false
+	waitForNextExit := false
+	waitForRemoved := false
 	wantedStates := make(map[define.ContainerStatus]bool, len(conditions))
 	wantedHealthStates := make(map[string]bool)
 
@@ -749,7 +751,33 @@ func (c *Container) WaitForConditionWithInterval(ctx context.Context, waitTimeou
 				return -1, fmt.Errorf("cannot use condition %q: container %s has no healthcheck", rawCondition, c.ID())
 			}
 			wantedHealthStates[rawCondition] = true
+		case define.ContainerWaitConditionNextExit:
+			waitForNextExit = true
+		case define.ContainerWaitConditionRemoved:
+			waitForRemoved = true
+		case define.ContainerWaitConditionNotRunning:
+			// Reuse the WaitForExit path so we return the real exit
+			// code instead of -1 (which is what the state-matching
+			// goroutine would emit). WaitForExit handles every
+			// "not running" sub-state correctly: Configured/Created
+			// -> 0 (never ran), Stopped/Exited/Removing -> recorded
+			// exit code, Running -> blocks for conmon and then
+			// returns the code. The "Stopping" state intentionally
+			// isn't matched (conmon is still alive -> WaitForExit
+			// blocks for it to exit), mirroring the notRunningStates
+			// slice in pkg/api/handlers/utils/containers.go.
+			waitForExit = true
 		default:
+			// "created" is displayed for both ContainerStateConfigured
+			// (libpod's "configured") and ContainerStateCreated. Match
+			// both so the CLI behaves the way users expect. Do not
+			// modify StringToContainerStatus itself — other callers
+			// rely on its strict 1:1 mapping.
+			if rawCondition == define.ContainerStateConfigured.String() {
+				wantedStates[define.ContainerStateConfigured] = true
+				wantedStates[define.ContainerStateCreated] = true
+				continue
+			}
 			condition, err := define.StringToContainerStatus(rawCondition)
 			if err != nil {
 				return -1, err
@@ -774,6 +802,67 @@ func (c *Container) WaitForConditionWithInterval(ctx context.Context, waitTimeou
 		go func() {
 			code, err := c.WaitForExit(ctx, waitTimeout)
 			trySend(code, err)
+		}()
+	}
+
+	if waitForNextExit {
+		// Subscribe to died events synchronously (before spawning the
+		// goroutine) so the subscription is in place before this
+		// function returns control. Otherwise we race with the
+		// container actually dying.
+		eventChan := make(chan events.ReadResult, 1)
+		eventCtx, eventCancel := context.WithCancel(ctx)
+		defer eventCancel()
+		err := c.runtime.Events(eventCtx, events.ReadOptions{
+			EventChannel: eventChan,
+			Filters: []string{
+				"event=died",
+				"type=container",
+				fmt.Sprintf("container=%s", c.ID()),
+			},
+			Stream: true,
+		})
+		if err != nil {
+			return -1, fmt.Errorf("subscribing to died events: %w", err)
+		}
+		go func() {
+			for evt := range eventChan {
+				if evt.Error != nil {
+					trySend(-1, evt.Error)
+					return
+				}
+				if evt.Event != nil && evt.Event.ContainerExitCode != nil {
+					trySend(int32(*evt.Event.ContainerExitCode), nil)
+					return
+				}
+			}
+		}()
+	}
+
+	if waitForRemoved {
+		go func() {
+			for {
+				_, err := c.State()
+				if err != nil {
+					if errors.Is(err, define.ErrNoSuchCtr) || errors.Is(err, define.ErrCtrRemoved) {
+						exitCode, exitErr := c.runtime.state.GetContainerExitCode(c.ID())
+						if exitErr == nil {
+							trySend(exitCode, nil)
+							return
+						}
+						trySend(-1, nil)
+						return
+					}
+					trySend(-1, err)
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(waitTimeout):
+					continue
+				}
+			}
 		}()
 	}
 

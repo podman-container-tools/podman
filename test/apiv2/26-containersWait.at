@@ -71,3 +71,28 @@ t POST "containers/${CTR2}/wait?condition=next-exit" 200 \
   .StatusCode=42 \
   .Error=null
 podman rm -f "${CTR2}"
+
+# libpod endpoint: Docker-style condition names should also be accepted.
+CTR3="libpodWaitNextExit"
+podman create --name "${CTR3}" "${IMAGE}" sh -c "exit 9"
+
+# not-running matches the freshly-created container immediately and returns
+# 0 (matches Docker: a never-started container is "not running" → exit 0).
+t POST "libpod/containers/${CTR3}/wait?condition=not-running" 200 "0"
+
+# next-exit must wait for the container to actually run and exit.
+(sleep 2; podman start "${CTR3}") &
+child_pid=$!
+t POST "libpod/containers/${CTR3}/wait?condition=next-exit" 200 "9"
+wait "${child_pid}"
+
+# After the container has exited, not-running must return the recorded
+# exit code (regression guard: the state-matching path would return -1).
+t POST "libpod/containers/${CTR3}/wait?condition=not-running" 200 "9"
+
+# removed waits for the container to be removed; exit code from the most
+# recent run is returned.
+(sleep 2; podman rm "${CTR3}") &
+child_pid=$!
+t POST "libpod/containers/${CTR3}/wait?condition=removed" 200 "9"
+wait "${child_pid}"

@@ -1324,7 +1324,10 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//       - exited
 	//       - healthy
 	//       - initialized
+	//       - next-exit
+	//       - not-running
 	//       - paused
+	//       - removed
 	//       - removing
 	//       - running
 	//       - stopped
