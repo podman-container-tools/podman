@@ -34,6 +34,15 @@ var (
 		Args:              validate.NoArgs,
 		ValidArgsFunction: completion.AutocompleteNone,
 	}
+	listCmd = &cobra.Command{
+		Use:               "list [options]",
+		Aliases:           []string{"ls", "ps"},
+		Short:             "List pods",
+		Long:              psDescription,
+		RunE:              pods,
+		Args:              validate.NoArgs,
+		ValidArgsFunction: completion.AutocompleteNone,
+	}
 )
 
 var (
@@ -45,6 +54,10 @@ var (
 func init() {
 	registry.Commands = append(registry.Commands, registry.CliCommand{
 		Command: psCmd,
+		Parent:  podCmd,
+	})
+	registry.Commands = append(registry.Commands, registry.CliCommand{
+		Command: listCmd,
 		Parent:  podCmd,
 	})
 	flags := psCmd.Flags()

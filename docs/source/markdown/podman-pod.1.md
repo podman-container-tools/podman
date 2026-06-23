@@ -18,6 +18,7 @@ podman pod is a set of subcommands that manage pods, or groups of containers.
 | exists  | [podman-pod-exists(1)](podman-pod-exists.1.md)    | Check if a pod exists in local storage.                                           |
 | inspect | [podman-pod-inspect(1)](podman-pod-inspect.1.md)  | Display information describing a pod.                                             |
 | kill    | [podman-pod-kill(1)](podman-pod-kill.1.md)        | Kill the main process of each container in one or more pods.                      |
+| list    | [podman-pod-ps(1)](podman-pod-ps.1.md)            | Print out information about pods.(alias ls)                                       |
 | logs    | [podman-pod-logs(1)](podman-pod-logs.1.md)        | Display logs for pod with one or more containers.                                 |
 | pause   | [podman-pod-pause(1)](podman-pod-pause.1.md)      | Pause one or more pods.                                                           |
 | prune   | [podman-pod-prune(1)](podman-pod-prune.1.md)      | Remove all stopped pods and their containers.                                     |

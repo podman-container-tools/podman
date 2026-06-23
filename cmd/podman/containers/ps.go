@@ -27,6 +27,7 @@ var (
 	psDescription = "Prints out information about the containers"
 	psCommand     = &cobra.Command{
 		Use:               "ps [options]",
+		Aliases:           []string{"ls", "list"},
 		Short:             "List containers",
 		Long:              psDescription,
 		RunE:              ps,
@@ -35,6 +36,18 @@ var (
 		Example: `podman ps -a
 podman ps -a --format "{{.ID}}  {{.Image}}  {{.Labels}}  {{.Mounts}}"
 podman ps --size --sort names`,
+	}
+
+	listCommand = &cobra.Command{
+		Use:               "list [options]",
+		Short:             "List containers",
+		Long:              psDescription,
+		RunE:              ps,
+		Args:              validate.NoArgs,
+		ValidArgsFunction: completion.AutocompleteNone,
+		Example: `podman ps -a
+  podman list -a --format "{{.ID}}  {{.Image}}  {{.Labels}}  {{.Mounts}}"
+  podman ls --size --sort names`,
 	}
 
 	psContainerCommand = &cobra.Command{
@@ -59,6 +72,9 @@ var (
 func init() {
 	registry.Commands = append(registry.Commands, registry.CliCommand{
 		Command: psCommand,
+	})
+	registry.Commands = append(registry.Commands, registry.CliCommand{
+		Command: listCommand,
 	})
 	listFlagSet(psCommand)
 	validate.AddLatestFlag(psCommand, &listOpts.Latest)
