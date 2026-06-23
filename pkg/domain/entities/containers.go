@@ -310,6 +310,7 @@ type ContainerStartOptions struct {
 	Interactive bool
 	Latest      bool
 	SigProxy    bool
+	PIDFile     string
 	Stdout      *os.File
 	Stderr      *os.File
 	Stdin       *os.File
