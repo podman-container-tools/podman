@@ -11,6 +11,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/docker/reference"
 	compression "go.podman.io/image/v5/pkg/compression/types"
+	"go.podman.io/storage/pkg/idtools"
 )
 
 // ImageTransport is a top-level namespace for ways to store/load an image.
@@ -700,6 +701,20 @@ type SystemContext struct {
 	CompressionFormat *compression.Algorithm
 	// CompressionLevel specifies what compression level is used
 	CompressionLevel *int
+
+	// === storage.Transport overrides ===
+	// UIDMap specifies the UID mappings to apply when creating layers for the storage transport.
+	UIDMap []idtools.IDMap
+	// GIDMap specifies the GID mappings to apply when creating layers for the storage transport.
+	GIDMap []idtools.IDMap
+	// HostUIDMapping explicitly requests host UID mapping for the
+	// storage transport, preventing inheritance from parent layers.
+	// Mutually exclusive with UIDMap.
+	HostUIDMapping bool
+	// HostGIDMapping explicitly requests host GID mapping for the
+	// storage transport, preventing inheritance from parent layers.
+	// Mutually exclusive with GIDMap.
+	HostGIDMapping bool
 }
 
 // ProgressEvent is the type of events a progress reader can produce
