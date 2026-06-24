@@ -1455,6 +1455,11 @@ func readConmonPipeData(runtimeName string, pipe *os.File, ociLog string) (int, 
 			if ociLog != "" {
 				ociLogData, err := os.ReadFile(ociLog)
 				if err == nil {
+					if errs, err := parseOCIErrors(ociLogData); err == nil {
+						if tcpErr := checkOCIErrorsForTCPEstablished(errs); tcpErr != nil {
+							return -1, tcpErr
+						}
+					}
 					var ociErr ociError
 					if err := json.Unmarshal(ociLogData, &ociErr); err == nil {
 						return -1, getOCIRuntimeError(runtimeName, ociErr.Msg)
@@ -1468,6 +1473,11 @@ func readConmonPipeData(runtimeName string, pipe *os.File, ociLog string) (int, 
 			if ociLog != "" {
 				ociLogData, err := os.ReadFile(ociLog)
 				if err == nil {
+					if errs, err := parseOCIErrors(ociLogData); err == nil {
+						if tcpErr := checkOCIErrorsForTCPEstablished(errs); tcpErr != nil {
+							return ss.si.Data, tcpErr
+						}
+					}
 					var ociErr ociError
 					if err := json.Unmarshal(ociLogData, &ociErr); err == nil {
 						return ss.si.Data, getOCIRuntimeError(runtimeName, ociErr.Msg)

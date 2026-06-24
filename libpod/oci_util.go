@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +29,34 @@ type ociError struct {
 	Level string `json:"level,omitempty"`
 	Time  string `json:"time,omitempty"`
 	Msg   string `json:"msg,omitempty"`
+}
+
+func parseOCIErrors(log []byte) ([]ociError, error) {
+	var errs []ociError
+	for _, line := range bytes.Split(log, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var e ociError
+		if err := json.Unmarshal(line, &e); err != nil {
+			return nil, err
+		}
+		errs = append(errs, e)
+	}
+	return errs, nil
+}
+
+// checkOCIErrorsForTCPEstablished tries to match
+// an ociError indicating established TCP connections
+// and convert it to a user-facing message.
+func checkOCIErrorsForTCPEstablished(errs []ociError) error {
+	for _, e := range errs {
+		if strings.Contains(e.Msg, "Connected TCP socket in image") {
+			return fmt.Errorf("checkpoint contains established TCP connections, restore requires --tcp-established or --tcp-close: %w", define.ErrOCIRuntime)
+		}
+	}
+	return nil
 }
 
 // Bind ports to keep them closed on the host
