@@ -1029,6 +1029,27 @@ var _ = Describe("Podman kube generate", func() {
 		Expect(kube).Should(ExitCleanly())
 	})
 
+	It("multiple containers with same user namespace configuration", func() {
+		name1 := "c1"
+		name2 := "c2"
+		_ = podmanTest.PodmanExitCleanly("run", "--userns", "auto:size=30", "-dt", "--name", name1, ALPINE, "top")
+		_ = podmanTest.PodmanExitCleanly("run", "--userns", "auto:size=30", "-dt", "--name", name2, ALPINE, "top")
+
+		gen := podmanTest.PodmanExitCleanly("kube", "generate", name1, name2)
+		Expect(gen.OutputToString()).To(ContainSubstring("io.podman.annotations.userns: auto:size=10"))
+	})
+
+	It("multiple containers with differing user namespace configuration", func() {
+		name1 := "c1"
+		name2 := "c2"
+		_ = podmanTest.PodmanExitCleanly("run", "--userns", "auto:size=30", "-dt", "--name", name1, ALPINE, "top")
+		_ = podmanTest.PodmanExitCleanly("run", "--userns", "auto:size=40", "-dt", "--name", name2, ALPINE, "top")
+
+		gen := podmanTest.Podman([]string{"kube", "generate", name1, name2})
+		gen.WaitWithDefaultTimeout()
+		Expect(gen).Should(ExitWithError(125, "two or more containers have differing user namespace configuration, cannot place in same Kubernetes pod: invalid argument"))
+	})
+
 	It("with containers in pods should fail", func() {
 		pod1 := podmanTest.Podman([]string{"run", "-dt", "--pod", "new:pod1", "--name", "top1", CITEST_IMAGE, "top"})
 		pod1.WaitWithDefaultTimeout()

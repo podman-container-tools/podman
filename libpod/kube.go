@@ -764,7 +764,17 @@ func simplePodWithV1Containers(ctx context.Context, ctrs []*Container, getServic
 			if !podmanOnly && define.IsReservedAnnotation(k) {
 				continue
 			}
-			kubeAnnotations[fmt.Sprintf("%s/%s", k, removeUnderscores(ctr.Name()))] = v
+			// Certain annotations should be applied to the whole pod.
+			// For others, add container name as a suffix.
+			// For annotations such as this, error if already set.
+			if k == define.UserNsAnnotation {
+				if oldV, ok := kubeAnnotations[k]; ok && oldV != v {
+					return nil, fmt.Errorf("two or more containers have differing user namespace configuration, cannot place in same Kubernetes pod: %w", define.ErrInvalidArg)
+				}
+				kubeAnnotations[k] = v
+			} else {
+				kubeAnnotations[fmt.Sprintf("%s/%s", k, removeUnderscores(ctr.Name()))] = v
+			}
 		}
 
 		// Convert auto-update labels into kube annotations
