@@ -9,7 +9,7 @@ else
 endif
 GVPROXY_VERSION=$(shell $(GO) list -m -f '{{.Version}}' github.com/containers/gvisor-tap-vsock)
 VFKIT_VERSION ?= 0.6.1
-KRUNKIT_VERSION ?= 1.2.1
+KRUNKIT_VERSION ?= 1.2.2
 GVPROXY_RELEASE_URL ?= https://github.com/containers/gvisor-tap-vsock/releases/download/$(GVPROXY_VERSION)/gvproxy-darwin
 VFKIT_RELEASE_URL ?= https://github.com/crc-org/vfkit/releases/download/v$(VFKIT_VERSION)/vfkit-unsigned
 KRUNKIT_RELEASE_URL ?= https://github.com/containers/krunkit/releases/download/v$(KRUNKIT_VERSION)/krunkit-podman-unsigned-$(KRUNKIT_VERSION).tgz
