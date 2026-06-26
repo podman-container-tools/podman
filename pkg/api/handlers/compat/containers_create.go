@@ -406,6 +406,27 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 		parsedTmp = append(parsedTmp, finalString)
 	}
 
+
+
+	// If the podman service is running inside a container (e.g. Quadlet/systemd),
+	// and the Docker-compat client did not request a specific AppArmor profile,
+	// inject "apparmor=unconfined" to avoid crun failing to write
+	// /proc/thread-self/attr/apparmor/exec on kernel >= 6.17 where the outer
+	// container's AppArmor policy blocks change_profile.
+	// See: https://github.com/containers/podman/issues/28992
+	if _, statErr := os.Stat("/run/.containerenv"); statErr == nil {
+		hasApparmorOpt := false
+		for _, opt := range cc.HostConfig.SecurityOpt {
+			if strings.HasPrefix(opt, "apparmor=") {
+				hasApparmorOpt = true
+				break
+			}
+		}
+		if !hasApparmorOpt {
+			cc.HostConfig.SecurityOpt = append(cc.HostConfig.SecurityOpt, "apparmor=unconfined")
+		}
+	}
+
 	// Note: several options here are marked as "don't need". this is based
 	// on speculation by Matt and I. We think that these come into play later
 	// like with start. We believe this is just a difference in podman/compat
