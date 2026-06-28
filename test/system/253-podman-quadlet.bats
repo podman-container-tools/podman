@@ -156,6 +156,70 @@ EOF
     run_podman quadlet rm $ctr_unit
 }
 
+@test "quadlet verb - install, list, print, rm - template" {
+    # Determine the install directory path based on rootless/root
+    local install_dir
+    install_dir=$(get_quadlet_install_dir)
+    # Create a test quadlet file
+    local quadlet_name_without_extension="templated-quadlet@"
+    local quadlet_name=${quadlet_name_without_extension}.container
+    local quadlet_unit_name=${quadlet_name_without_extension}.service
+    local quadlet_instance_name=${quadlet_name_without_extension}instance.service
+    local quadlet_file=$PODMAN_TMPDIR/$quadlet_name
+    cat > "$quadlet_file" <<EOF
+[Container]
+Image=$IMAGE
+Exec=sh -c "echo STARTED CONTAINER; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+    # Test quadlet install
+    run_podman quadlet install "$quadlet_file"
+    assert "$output" =~ "$quadlet_name" "install output should contain quadlet name"
+
+    # Test quadlet list
+    run_podman quadlet list --filter status='loaded template'
+    assert "$output" =~ "$quadlet_name" "list should contain $quadlet_name"
+    assert "$output" =~ "$quadlet_unit_name" "UNIT NAME should be $quadlet_unit_name"
+    assert "$output" =~ "loaded template" "STATUS should be 'loaded template'"
+    assert "$output" =~ "$install_dir/$quadlet_name" "PATH ON DISK should show the quadlet file path"
+
+    # Test quadlet print
+    run_podman quadlet print "$quadlet_name"
+    assert "$output" == "$(<"$quadlet_file")" "print output matches quadlet file"
+
+    # Regenerate the service manually, otherwise PODMAN path is not set correctly in CI
+    QUADLET_UNIT_DIRS="$install_dir" run \
+        timeout --foreground -v --kill=10 $PODMAN_TIMEOUT \
+        $QUADLET $_DASHUSER $UNIT_DIR
+    assert $status -eq 0 "Failed to regenerate the service manually"
+    systemctl daemon-reload
+
+    # Instantiate the template
+    systemctl_start "$quadlet_instance_name"
+
+    # Test quadlet rm without --force (should fail)
+    run_podman 125 quadlet rm "$quadlet_name"
+    assert "$output" =~ "$quadlet_instance_name" "error message should contain running instance name"
+    assert "$output" =~ "quadlet is running" "error message should contain the explanation"
+    # Verify template was not removed
+    run_podman quadlet list
+    assert "$output" =~ "$quadlet_name" "list should contain template"
+
+    # Test quadlet rm with --force (should succeed)
+    run_podman quadlet rm --force "$quadlet_name"
+    assert "$output" =~ "$quadlet_name" "remove output should contain quadlet name"
+    # Verify template was removed
+    run_podman quadlet list
+    assert "$output" !~ "$quadlet_name" "list should not contain removed template"
+
+    # Check that removing template also works without --force when there are no running instances
+    run_podman quadlet install "$quadlet_file"
+    assert "$output" =~ "$quadlet_name" "install output should contain quadlet name"
+    run_podman quadlet rm "$quadlet_name"
+    assert "$output" =~ "$quadlet_name" "remove output should contain quadlet name"
+    # Verify template was removed
+    run_podman quadlet list
+    assert "$output" !~ "$quadlet_name" "list should not contain removed template"
+}
 
 @test "quadlet verb - install multiple files from directory and remove by app name" {
     # Create a directory for multiple quadlet files
@@ -262,24 +326,35 @@ Environment=FOO1=foo1
 Exec=sh -c "echo STARTED NGINX; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
 EOF
 
+    mkdir $quadlet_dir/sub
+    cat > $quadlet_dir/sub/nginxsub.container <<EOF
+[Container]
+Image=$IMAGE
+Environment=FOO2=foo2
+Exec=sh -c "echo STARTED NGINX SUB; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+
     # Without --application should fail
     run_podman 125 quadlet install $quadlet_dir
     assert "$output" =~ "application name cannot be empty when installing from directory" "install from directory without --application must fail with application cannot be empty error message"
 
     # Test quadlet install with directory
     run_podman quadlet install --application=foo $quadlet_dir
+    assert "$output" =~ "nginxsub.container" "install should list nginxsub that is in a subfolder"
 
     # Test quadlet list to verify all containers were installed
     run_podman quadlet list
     assert "$output" =~ "alpine1.container" "list should contain alpine1.container"
     assert "$output" =~ "alpine2.container" "list should contain alpine2.container"
     assert "$output" =~ "nginx.container" "list should contain nginx.container"
+    assert "$output" =~ "nginxsub.container" "list should contain nginxsub.container"
 
     # Test quadlet list with filter for alpine containers
     run_podman quadlet list --filter name=alpine*
     assert "$output" =~ "alpine1.container" "filtered list should contain alpine1.container"
     assert "$output" =~ "alpine2.container" "filtered list should contain alpine2.container"
     assert "$output" !~ "nginx.container" "filtered list should not contain nginx.container"
+    assert "$output" !~ "nginxsub.container" "filtered list should not contain nginxsub.container"
 
     # Test quadlet print for each container
     run_podman quadlet print alpine1.container
@@ -290,6 +365,9 @@ EOF
 
     run_podman quadlet print nginx.container
     assert "$output" =~ "Environment=FOO1=foo1" "print should contain environment for nginx container"
+
+    run_podman quadlet print nginxsub.container
+    assert "$output" =~ "Environment=FOO2=foo2" "print should contain environment for nginxsub container"
 
     # Test quadlet rm using one quadlet file name without recursive (should fail)
     run_podman 125 quadlet rm "alpine1.container"
@@ -401,7 +479,7 @@ EOF
     run_podman quadlet rm --recursive mount-test.container
 
     # Verify the test.txt file should not exists in $install_dir
-    if [[ -f "$install_dir/test.txt" ]]; then
+    if [[ -f "$install_dir/bar/test.txt" ]]; then
             die "test.txt file should not exist in install directory $install_dir after removal"
     fi
 

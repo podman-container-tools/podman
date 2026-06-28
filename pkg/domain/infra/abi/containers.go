@@ -890,6 +890,13 @@ func makeExecConfig(options entities.ExecOptions, rt *libpod.Runtime, noSession 
 	execConfig.PreserveFD = options.PreserveFD
 	execConfig.AttachStdin = options.Interactive
 
+	// Size the exec terminal at creation so a process that reads its window size
+	// at startup (e.g. `stty size`) observes the right value, rather than relying
+	// on the asynchronous resize that follows attach.
+	if options.Tty {
+		execConfig.ConsoleSize = options.ConsoleSize
+	}
+
 	// Only set up exit command for regular exec sessions, not no-session mode
 	if !noSession {
 		// Make an exit command

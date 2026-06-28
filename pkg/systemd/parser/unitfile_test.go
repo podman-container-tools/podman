@@ -371,6 +371,32 @@ func TestLookupQuoteStripping(t *testing.T) {
 	}
 }
 
+func TestLookupIntParsesSignedNumbers(t *testing.T) {
+	unit := NewUnitFile()
+	unit.Add("Service", "Positive", "42")
+	unit.Add("Service", "ExplicitPositive", "+42")
+	unit.Add("Service", "Negative", "-42")
+	unit.Add("Service", "Hex", "0x2a")
+	unit.Add("Service", "Octal", "052")
+
+	tests := []struct {
+		key      string
+		expected int64
+	}{
+		{"Positive", 42},
+		{"ExplicitPositive", 42},
+		{"Negative", -42},
+		{"Hex", 42},
+		{"Octal", 42},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			assert.Equal(t, tt.expected, unit.LookupInt("Service", tt.key, 0))
+		})
+	}
+}
+
 func FuzzParser(f *testing.F) {
 	for _, sample := range samples {
 		f.Add([]byte(sample))

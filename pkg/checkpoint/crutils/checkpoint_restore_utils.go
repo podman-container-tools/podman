@@ -166,6 +166,7 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, destination st
 		if err != nil {
 			return includeFiles, fmt.Errorf("exporting root file-system diff to %q: %w", rootfsDiffPath, err)
 		}
+		defer rootfsTar.Close()
 		rootfsDiffFile, err := os.Create(rootfsDiffPath)
 		if err != nil {
 			return includeFiles, fmt.Errorf("creating root file-system diff file %q: %w", rootfsDiffPath, err)

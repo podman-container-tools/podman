@@ -70,14 +70,15 @@ function teardown() {
 
     run_podman rm -t 0 -f mystty
 
-    # FIXME: the checks below are flaking a lot (see #10710).
+    # The same must hold for podman exec. The exec pseudo-terminal is now sized
+    # at creation (honoring the requested ConsoleSize), so stty reads the right
+    # dimensions immediately instead of racing the asynchronous resize that
+    # previously followed attach (see #10710).
+    run_podman run -d --name mystty $IMAGE top
+    run_podman exec -it mystty stty size <$PODMAN_TEST_PTY
+    is "$output" "$rows $cols$CR" "stty under podman exec reads the correct dimensions"
 
-    # check that the same works for podman exec
-#    run_podman run -d --name mystty $IMAGE top
-#    run_podman exec -it mystty stty size <$PODMAN_TEST_PTY
-#    is "$output" "$rows $cols" "stty under podman exec reads the correct dimensions"
-#
-#    run_podman rm -t 0 -f mystty
+    run_podman rm -t 0 -f mystty
 }
 
 

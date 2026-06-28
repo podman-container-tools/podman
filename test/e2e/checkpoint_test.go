@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -440,6 +441,72 @@ var _ = Describe("Podman checkpoint", func() {
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
+	})
+
+	It("podman checkpoint with --leave-running keeps the file system consistent with the memory image", func() {
+		// A live checkpoint must capture the memory image and the root
+		// file system at the same instant. The workload keeps an in-memory
+		// counter in sync with a value on the root file system; the on-disk
+		// value must never get ahead of the in-memory counter. If the file
+		// system is captured after CRIU resumed the container (the bug this
+		// guards against), restore either fails (diff tar caught a file
+		// mid-write) or observes an on-disk value ahead of memory.
+		script := `trap 'exit 0' TERM; f=/counter; n=0; echo "$n" > "$f"; ` +
+			`while true; do read d < "$f"; case "$d" in ""|*[!0-9]*) d=0;; esac; ` +
+			`if [ "$d" -gt "$n" ]; then echo "disk=$d mem=$n" >> /inconsistent; fi; ` +
+			`n=$((n+1)); echo "$n" > "$f"; sleep 0.1; done`
+
+		localRunString := getRunString([]string{ALPINE, "sh", "-c", script})
+		cid := podmanTest.PodmanExitCleanly(localRunString...).OutputToString()
+
+		// counter returns the workload's on-disk counter, or -1 if it cannot
+		// be read yet.
+		counter := func() int {
+			s := podmanTest.Podman([]string{"exec", cid, "cat", "/counter"})
+			s.WaitWithDefaultTimeout()
+			if s.ExitCode() != 0 {
+				return -1
+			}
+			n, err := strconv.Atoi(strings.TrimSpace(s.OutputToString()))
+			if err != nil {
+				return -1
+			}
+			return n
+		}
+
+		// Wait until the workload is up and has advanced its counter, instead
+		// of sleeping for a fixed amount of time.
+		Eventually(counter, "10s", "200ms").Should(BeNumerically(">", 0))
+
+		fileName := filepath.Join(podmanTest.TempDir, "consistency-"+cid+".tar")
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "--leave-running", "--export", fileName, cid)
+
+		// The source container must be running and responsive (thawed) after
+		// a live checkpoint; a leaked freeze would make this exec hang.
+		podmanTest.PodmanExitCleanly("exec", cid, "true")
+
+		// Remove the original and restore from the checkpoint image. The
+		// restored process resumes from the captured memory image while its
+		// root file system comes from the captured diff. A torn diff (file
+		// captured mid-write) makes this restore fail.
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", cid)
+
+		podmanTest.PodmanExitCleanly("container", "restore", "--import", fileName)
+		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(1))
+
+		// Wait until the restored workload has run at least one more iteration
+		// (its counter advances) so the consistency check actually executes,
+		// rather than sleeping for a fixed amount of time.
+		var restored int
+		Eventually(func() bool {
+			restored = counter()
+			return restored >= 0
+		}, "10s", "200ms").Should(BeTrue())
+		Eventually(counter, "10s", "200ms").Should(BeNumerically(">", restored))
+
+		check := podmanTest.PodmanExitCleanly("exec", cid, "sh", "-c", "cat /inconsistent 2>/dev/null || true")
+		Expect(check.OutputToString()).To(BeEmpty(),
+			"restored container's file system is inconsistent with its memory image")
 	})
 
 	It("podman checkpoint and restore container with same IP", func() {

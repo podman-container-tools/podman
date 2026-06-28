@@ -147,7 +147,7 @@ var _ = Describe("Podman healthcheck run", func() {
 
 		hc := podmanTest.Podman([]string{"healthcheck", "run", "hc"})
 		hc.WaitWithDefaultTimeout()
-		Expect(hc).Should(ExitWithError(125, "is not running"))
+		Expect(hc).Should(ExitWithError(125, "is not running: can only create exec sessions on running containers: container state improper"))
 	})
 
 	It("podman healthcheck on container without healthcheck", func() {

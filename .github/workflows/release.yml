@@ -188,7 +188,6 @@ jobs:
           --------------
           EOF
 
-          echo "${GITHUB_TOKEN}" | gh auth login --with-token
           gh release view "$VERSION" \
             --repo "${GITHUB_REPOSITORY}" --json=body --jq '.body' >> email_body.txt
 

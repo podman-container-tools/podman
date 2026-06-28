@@ -167,10 +167,6 @@ func configureSystem(mc *vmconfigs.MachineConfig, dist string, ansibleConfig *vm
 		return err
 	}
 
-	if err := wslPipe(containersConf, dist, "sh", "-c", "cat > /etc/containers/containers.conf"); err != nil {
-		return fmt.Errorf("could not create containers.conf for guest OS: %w", err)
-	}
-
 	if err := setupPodmanDockerSock(dist, mc.HostUser.Rootful); err != nil {
 		return err
 	}

@@ -201,6 +201,9 @@ type ExecOptions struct {
 	Env map[string]string
 	// Terminal is whether to create a new TTY for the exec session.
 	Terminal bool
+	// ConsoleSize is an optional initial size for the exec session's TTY,
+	// applied at creation when Terminal is true.
+	ConsoleSize *resize.TerminalSize
 	// Cwd is the working directory for the executed command. If unset, the
 	// working directory of the container will be used.
 	Cwd string

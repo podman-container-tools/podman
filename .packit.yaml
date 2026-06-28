@@ -55,6 +55,8 @@ jobs:
       failure_comment:
         message: "[NON-BLOCKING] Packit jobs failed. @containers/packit-build please check. Everyone else, feel free to ignore."
     enable_net: true
+    # CAUTION: The builds from these jobs are consumed by podman-machine-os
+    # during the release process. Any change here should be mindful of it.
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64

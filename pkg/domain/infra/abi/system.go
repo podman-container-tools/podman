@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
@@ -271,6 +272,12 @@ func (ic *ContainerEngine) SystemDf(ctx context.Context, _ entities.SystemDfOpti
 		}
 		volSize, err := directory.Size(mountPoint)
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				// volume is not locked here, if the directory is missing
+				// all of the sudden we must assume the volume was removed
+				// in parallel and ignore it like in the case below
+				continue
+			}
 			return nil, err
 		}
 		inUse, err := v.VolumeInUse()

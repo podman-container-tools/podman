@@ -704,6 +704,16 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 	pspec.Terminal = false
 	if options.Terminal {
 		pspec.Terminal = true
+		// Size the exec PTY at creation so the process reads the correct
+		// window size immediately. Without this the PTY starts at 0x0 and is
+		// only corrected by an asynchronous resize, which can arrive after a
+		// one-shot process has already read its size.
+		if options.ConsoleSize != nil {
+			pspec.ConsoleSize = &spec.Box{
+				Height: uint(options.ConsoleSize.Height),
+				Width:  uint(options.ConsoleSize.Width),
+			}
+		}
 	}
 	if len(env) > 0 {
 		pspec.Env = append(pspec.Env, env...)

@@ -32,6 +32,21 @@ func (o *RemoveOptions) GetForce() bool {
 	return *o.Force
 }
 
+// WithIgnore set field Ignore to given value
+func (o *RemoveOptions) WithIgnore(value bool) *RemoveOptions {
+	o.Ignore = &value
+	return o
+}
+
+// GetIgnore returns value of field Ignore
+func (o *RemoveOptions) GetIgnore() bool {
+	if o.Ignore == nil {
+		var z bool
+		return z
+	}
+	return *o.Ignore
+}
+
 // WithTimeout set field Timeout to given value
 func (o *RemoveOptions) WithTimeout(value uint) *RemoveOptions {
 	o.Timeout = &value

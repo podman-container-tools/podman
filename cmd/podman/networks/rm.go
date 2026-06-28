@@ -34,6 +34,7 @@ var networkRmOptions entities.NetworkRmOptions
 
 func networkRmFlags(flags *pflag.FlagSet) {
 	flags.BoolVarP(&networkRmOptions.Force, "force", "f", false, "remove any containers using network")
+	flags.BoolVarP(&networkRmOptions.Ignore, "ignore", "i", false, "ignore if a specified network does not exist")
 	timeFlagName := "time"
 	flags.IntVarP(&stopTimeout, timeFlagName, "t", int(containerConfig.Engine.StopTimeout), "Seconds to wait for running containers to stop before killing the container")
 	_ = networkrmCommand.RegisterFlagCompletionFunc(timeFlagName, completion.AutocompleteNone)
@@ -60,7 +61,7 @@ func networkRm(cmd *cobra.Command, args []string) error {
 	}
 	responses, err := registry.ContainerEngine().NetworkRm(registry.Context(), args, networkRmOptions)
 	if err != nil {
-		if networkRmOptions.Force && strings.Contains(err.Error(), define.ErrNoSuchNetwork.Error()) {
+		if (networkRmOptions.Force || networkRmOptions.Ignore) && strings.Contains(err.Error(), define.ErrNoSuchNetwork.Error()) {
 			return nil
 		}
 		setExitCode(err)
@@ -70,7 +71,7 @@ func networkRm(cmd *cobra.Command, args []string) error {
 		if r.Err == nil {
 			fmt.Println(r.Name)
 		} else {
-			if networkRmOptions.Force && strings.Contains(r.Err.Error(), define.ErrNoSuchNetwork.Error()) {
+			if (networkRmOptions.Force || networkRmOptions.Ignore) && strings.Contains(r.Err.Error(), define.ErrNoSuchNetwork.Error()) {
 				continue
 			}
 			setExitCode(r.Err)

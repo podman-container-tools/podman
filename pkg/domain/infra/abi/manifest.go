@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -502,13 +503,31 @@ func (ir *ImageEngine) ManifestPush(ctx context.Context, name, destination strin
 	pushOptions.CompressionLevel = opts.CompressionLevel
 	pushOptions.AddCompression = opts.AddCompression
 	pushOptions.ForceCompressionFormat = opts.ForceCompressionFormat
+	pushOptions.MaxRetries = opts.Retry
 
-	compressionFormat := opts.CompressionFormat
-	if compressionFormat == "" {
-		config, err := ir.Libpod.GetConfigNoCopy()
+	config, err := ir.Libpod.GetConfigNoCopy()
+	if err != nil {
+		return "", err
+	}
+
+	if pushOptions.MaxRetries == nil {
+		retry := config.Engine.Retry
+		pushOptions.MaxRetries = &retry
+	}
+	retryDelay := opts.RetryDelay
+	if retryDelay == "" {
+		retryDelay = config.Engine.RetryDelay
+	}
+	if retryDelay != "" {
+		duration, err := time.ParseDuration(retryDelay)
 		if err != nil {
 			return "", err
 		}
+		pushOptions.RetryDelay = &duration
+	}
+
+	compressionFormat := opts.CompressionFormat
+	if compressionFormat == "" {
 		compressionFormat = config.Engine.CompressionFormat
 	}
 	if compressionFormat != "" {
@@ -519,10 +538,6 @@ func (ir *ImageEngine) ManifestPush(ctx context.Context, name, destination strin
 		pushOptions.CompressionFormat = &algo
 	}
 	if pushOptions.CompressionLevel == nil {
-		config, err := ir.Libpod.GetConfigNoCopy()
-		if err != nil {
-			return "", err
-		}
 		pushOptions.CompressionLevel = config.Engine.CompressionLevel
 	}
 

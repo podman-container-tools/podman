@@ -84,14 +84,21 @@ func (s *APIServer) registerQuadletHandlers(r *mux.Router) error {
 	// summary: Install quadlet files
 	// description: |
 	//   Install one or more files for a quadlet application. Each request should contain a single quadlet file
-	//   and optionally more files such as containerfile, kube yaml or configuration files. Supports both tar
-	//   archives and multipart form data uploads.
+	//   and optionally more files such as containerfile, kube yaml or configuration files. When additional
+	//   files are passed, the application query parameter should be specified. Supports both tar archives and
+	//   multipart form data uploads.
 	// consumes:
 	// - application/x-tar
 	// - multipart/form-data
 	// produces:
 	// - application/json
 	// parameters:
+	//  - in: query
+	//    name: application
+	//    type: string
+	//    description: |
+	//      Group quadlet and associated files in a directory with the application name.
+	//      Required when additional files are passed.
 	//  - in: query
 	//    name: replace
 	//    type: boolean
@@ -196,7 +203,7 @@ func (s *APIServer) registerQuadletHandlers(r *mux.Router) error {
 	//    name: force
 	//    type: boolean
 	//    default: false
-	//    description: Remove running quadlet by stopping it first
+	//    description: Remove running quadlets (in case of uninstantiated template quadlets, stop its instances).
 	//  - in: query
 	//    name: ignore
 	//    type: boolean

@@ -126,6 +126,15 @@ Instead of providing the *container ID* or *name*, use the last created *contain
 Leave the *container* running after checkpointing instead of stopping it.\
 The default is **false**.
 
+To keep the checkpoint consistent, Podman freezes the *container's* cgroup
+before dumping its memory and only thaws it again after the root file-system
+changes and named volumes have been captured. This means the *container* is
+paused for the duration of the checkpoint, but its memory image and file system
+are guaranteed to reflect the same point in time. Containers started with
+**--cgroups=disabled** cannot be frozen and therefore do not get this
+guarantee. If freezing the *container* fails, Podman continues with checkpointing
+and warns that this consistency guarantee could not be provided.
+
 #### **--pre-checkpoint**, **-P**
 
 Dump the *container's* memory information only, leaving the *container* running. Later

@@ -16,6 +16,8 @@ The image of the container exported by **podman export** can be imported by **po
 To export image(s) with parent layers, use **podman save**.
 Note: `:` is a restricted character and cannot be part of the file name.
 
+**podman export** operates on a *container's* filesystem: it flattens the filesystem into a single-layer tarball with no image layers, history or tags. This is different from **podman save**, which archives an *image* and preserves its layers, history and tags. To archive an image instead, see **podman-save(1)**.
+
 **podman [GLOBAL OPTIONS]**
 
 **podman export [GLOBAL OPTIONS]**

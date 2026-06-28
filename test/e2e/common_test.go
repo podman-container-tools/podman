@@ -568,7 +568,6 @@ func PodmanTestCreateUtil(tempDir string, target PodmanTestCreateUtilTarget) *Po
 
 	// Set up registries.conf ENV variable
 	p.setDefaultRegistriesConfigEnv()
-	// Rewrite the PodmanAsUser function
 	p.PodmanMakeOptions = p.makeOptions
 	return p
 }
@@ -1242,49 +1241,6 @@ func SkipIfConmonVersionLessThan(minVersion string) {
 	}
 }
 
-// SkipIfNetavarkVersionLessThan skips a test if the current network backend is
-// netavark and its version is less than the specified minimum version (e.g., "1.17.2").
-// The function is a no-op when netavark is not the active network backend.
-func SkipIfNetavarkVersionLessThan(minVersion string) {
-	session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.NetworkBackendInfo.Backend}}=={{.Host.NetworkBackendInfo.Version}}")
-	out := strings.TrimSpace(session.OutputToString())
-
-	backend, rawVersion, ok := strings.Cut(out, "==")
-	if !ok {
-		Fail(fmt.Sprintf("[netavark]: unexpected podman info output: %q", out))
-	}
-	if backend != "netavark" {
-		return
-	}
-
-	rawVersion = strings.TrimSpace(rawVersion)
-	if rawVersion == "" {
-		Fail(fmt.Sprintf("[netavark]: unexpected empty version in podman info output: %q", out))
-	}
-
-	parts := strings.Fields(rawVersion)
-	if len(parts) == 0 {
-		Fail(fmt.Sprintf("[netavark]: unexpected netavark version format: %q", rawVersion))
-	}
-
-	versionStr := strings.TrimPrefix(parts[len(parts)-1], "v")
-
-	current, err := semver.Parse(versionStr)
-	if err != nil {
-		Fail(fmt.Sprintf("[netavark]: failed to parse netavark version %q: %v", rawVersion, err))
-	}
-
-	minVersion = strings.TrimPrefix(strings.TrimSpace(minVersion), "v")
-	minVer, err := semver.Parse(minVersion)
-	if err != nil {
-		Fail(fmt.Sprintf("[netavark]: failed to parse minimum version %q: %v", minVersion, err))
-	}
-
-	if current.Compare(minVer) < 0 {
-		Skip(fmt.Sprintf("[netavark]: need netavark >= %s; have %s", minVersion, versionStr))
-	}
-}
-
 // SkipIfNotActive skips a test if the given systemd unit is not active
 func SkipIfNotActive(unit string, reason string) {
 	checkReason(reason)
@@ -1297,17 +1253,6 @@ func SkipIfNotActive(unit string, reason string) {
 		return
 	}
 	Skip(fmt.Sprintf("[systemd]: unit %s is not active (%v): %s", unit, err, reason))
-}
-
-// PodmanAsUser is the exec call to podman on the filesystem with the specified uid/gid and environment
-func (p *PodmanTestIntegration) PodmanAsUser(args []string, uid, gid uint32, cwd string, env []string) *PodmanSessionIntegration {
-	podmanSession := p.PodmanExecBaseWithOptions(args, PodmanExecOptions{
-		UID: uid,
-		GID: gid,
-		CWD: cwd,
-		Env: env,
-	})
-	return &PodmanSessionIntegration{podmanSession}
 }
 
 // RestartRemoteService stop and start API Server, usually to change config

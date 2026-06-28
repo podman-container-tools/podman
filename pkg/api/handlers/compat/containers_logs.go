@@ -94,7 +94,7 @@ func LogsFromContainer(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	options.WaitGroup = &wg
 
-	logChannel := make(chan *logs.LogLine, tail+1)
+	logChannel := make(chan *logs.LogLine, 5)
 	if err := runtime.Log(r.Context(), []*libpod.Container{ctnr}, options, logChannel); err != nil {
 		utils.InternalServerError(w, fmt.Errorf("failed to obtain logs for Container '%s': %w", name, err))
 		return

@@ -86,7 +86,7 @@ ENV hello=world
 
 	It("podman run --env-host environment test", func() {
 		env := append(os.Environ(), "FOO=BAR")
-		session := podmanTest.PodmanAsUser([]string{"run", "--rm", "--env-host", ALPINE, "/bin/printenv", "FOO"}, 0, 0, "", env)
+		session := podmanTest.PodmanExecBaseWithOptions([]string{"run", "--rm", "--env-host", ALPINE, "/bin/printenv", "FOO"}, PodmanExecOptions{Env: env})
 		session.WaitWithDefaultTimeout()
 		if IsRemote() {
 			// podman-remote does not support --env-host
@@ -96,7 +96,7 @@ ENV hello=world
 		Expect(session).Should(ExitCleanly())
 		Expect(session.OutputToString()).To(ContainSubstring("BAR"))
 
-		session = podmanTest.PodmanAsUser([]string{"run", "--rm", "--env", "FOO=BAR1", "--env-host", ALPINE, "/bin/printenv", "FOO"}, 0, 0, "", env)
+		session = podmanTest.PodmanExecBaseWithOptions([]string{"run", "--rm", "--env", "FOO=BAR1", "--env-host", ALPINE, "/bin/printenv", "FOO"}, PodmanExecOptions{Env: env})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(session.OutputToString()).To(ContainSubstring("BAR1"))

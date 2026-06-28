@@ -165,10 +165,6 @@ type ContainerState struct {
 	// ExecSessions contains all exec sessions that are associated with this
 	// container.
 	ExecSessions map[string]*ExecSession `json:"newExecSessions,omitempty"`
-	// LegacyExecSessions are legacy exec sessions from older versions of
-	// Podman.
-	// These are DEPRECATED and will be removed in a future release.
-	LegacyExecSessions map[string]*legacyExecSession `json:"execSessions,omitempty"`
 	// NetNS is the path or name of the NetNS
 	NetNS string `json:"netns,omitempty"`
 	// NetworkStatus contains the network Status for all networks

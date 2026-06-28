@@ -24,12 +24,11 @@ import (
 
 	"github.com/cyphar/filepath-securejoin/pathrs-lite"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 // MkdirAllInRoot attempts to make
 //
-//	path, _ := securejoin.SecureJoin(root, unsafePath)
+//	path, _ := securejoin.SecureJoin(root.Name(), unsafePath)
 //	os.MkdirAll(path, mode)
 //	os.Open(path)
 //
@@ -48,8 +47,8 @@ import (
 // handling if unsafePath has already been scoped within the rootfs (this is
 // needed for a lot of runc callers and fixing this would require reworking a
 // lot of path logic).
-func MkdirAllInRoot(root, unsafePath string, mode os.FileMode) (*os.File, error) {
-	unsafePath, err := hallucinateUnsafePath(root, unsafePath)
+func MkdirAllInRoot(root *os.File, unsafePath string, mode os.FileMode) (*os.File, error) {
+	unsafePath, err := hallucinateUnsafePath(root.Name(), unsafePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct hallucinated target path: %w", err)
 	}
@@ -67,13 +66,7 @@ func MkdirAllInRoot(root, unsafePath string, mode os.FileMode) (*os.File, error)
 		mode &= 0o1777
 	}
 
-	rootDir, err := os.OpenFile(root, unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, fmt.Errorf("open root handle: %w", err)
-	}
-	defer rootDir.Close()
-
 	return retryEAGAIN(func() (*os.File, error) {
-		return pathrs.MkdirAllHandle(rootDir, unsafePath, mode)
+		return pathrs.MkdirAllHandle(root, unsafePath, mode)
 	})
 }

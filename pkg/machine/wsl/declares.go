@@ -8,12 +8,6 @@ const (
 	currentMachineVersion       = 3
 )
 
-const containersConf = `[containers]
-
-[engine]
-cgroup_manager = "cgroupfs"
-`
-
 const appendPort = `grep -q Port\ %d /etc/ssh/sshd_config || echo Port %d >> /etc/ssh/sshd_config`
 
 const changePort = `sed -E -i 's/^Port[[:space:]]+[0-9]+/Port %d/' /etc/ssh/sshd_config`

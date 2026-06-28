@@ -109,7 +109,6 @@ var _ = Describe("Podman pod rm", func() {
 		session := podmanTest.RunTopContainerInPod("", podid1)
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		podmanTest.WaitForContainer()
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(1))
 		GinkgoWriter.Printf("Started container running in one pod")
 

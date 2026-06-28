@@ -7,6 +7,12 @@ const (
 	// RunOCIKeepOriginalGroups tells the OCI runtime to leak the users
 	// current groups into the container
 	RunOCIKeepOriginalGroups = "run.oci.keep_original_groups"
+	// KubeMountContextTypeAnnotation is the Kubernetes-safe annotation used to
+	// round-trip RunOCIMountContextType through kube generate/play.
+	KubeMountContextTypeAnnotation = "io.podman.annotations.mount-context-type"
+	// KubeKeepOriginalGroupsAnnotation is the Kubernetes-safe annotation used to
+	// round-trip RunOCIKeepOriginalGroups through kube generate/play.
+	KubeKeepOriginalGroupsAnnotation = "io.podman.annotations.keep-original-groups"
 	// InspectAnnotationCIDFile is used by Inspect to determine if a
 	// container ID file was created for the container.
 	// If an annotation with this key is found in the OCI spec, it will be
@@ -186,10 +192,26 @@ const (
 // already reserved annotation that Podman sets during container creation.
 func IsReservedAnnotation(value string) bool {
 	switch value {
-	case InspectAnnotationCIDFile, InspectAnnotationAutoremove, InspectAnnotationPrivileged, InspectAnnotationPublishAll, InspectAnnotationInit, InspectAnnotationLabel, InspectAnnotationSeccomp, InspectAnnotationApparmor, InspectResponseTrue, InspectResponseFalse, VolumesFromAnnotation:
+	case InspectAnnotationCIDFile, InspectAnnotationAutoremove, InspectAnnotationPrivileged, InspectAnnotationPublishAll, InspectAnnotationInit, InspectAnnotationLabel, InspectAnnotationSeccomp, InspectAnnotationApparmor, InspectResponseTrue, InspectResponseFalse, VolumesFromAnnotation, KubeMountContextTypeAnnotation, KubeKeepOriginalGroupsAnnotation:
 		return true
 
 	default:
 		return false
 	}
+}
+
+type AnnotationAlias struct {
+	Runtime string
+	Kube    string
+}
+
+var OCIRuntimeAnnotationAliases = []AnnotationAlias{
+	{
+		Runtime: RunOCIKeepOriginalGroups,
+		Kube:    KubeKeepOriginalGroupsAnnotation,
+	},
+	{
+		Runtime: RunOCIMountContextType,
+		Kube:    KubeMountContextTypeAnnotation,
+	},
 }

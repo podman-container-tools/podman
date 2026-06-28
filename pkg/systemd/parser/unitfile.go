@@ -661,7 +661,7 @@ func convertNumber(v string) (int64, error) {
 		v = v[1:]
 	} else if strings.HasPrefix(v, "-") {
 		v = v[1:]
-		mult = int64(-11)
+		mult = int64(-1)
 	}
 
 	switch {

@@ -19,7 +19,7 @@ type LastWrite struct {
 	state []byte // Contents of the lock file.
 }
 
-var lastWriterIDCounter uint64 // Private state for newLastWriterID
+var lastWriterIDCounter atomic.Uint64 // Private state for newLastWriterID
 
 const lastWriterIDSize = 64 // This must be the same as len(stringid.GenerateRandomID)
 // newLastWrite returns a new "last write" ID.
@@ -37,7 +37,7 @@ func newLastWrite() LastWrite {
 	// efficiently if the size of the value changes.
 	pid := os.Getpid()
 	tm := time.Now().UnixNano()
-	counter := atomic.AddUint64(&lastWriterIDCounter, 1)
+	counter := lastWriterIDCounter.Add(1)
 
 	res := make([]byte, lastWriterIDSize)
 	binary.LittleEndian.PutUint64(res[0:8], uint64(tm))

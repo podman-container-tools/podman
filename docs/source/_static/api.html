@@ -15,67 +15,16 @@
         margin: 0;
         padding: 0;
       }
-      /*
-       * ReadTheDocs injects its version selector which is confusing on
-       * this page since it doesn't affect the API version. So we hide it.
-       */
-      readthedocs-flyout {
-        display: none;
-      }
-      /* Our own version selector. */
-      #versionSelect {
-        position: fixed;
-        /*
-         * Like the ReadTheDocs selector we put it in the bottom-right corner.
-         * When the browser is narrow ReDoc puts its menu button in the same corner,
-         * the position here is chosen not to overlap with that.
-         */
-        bottom: 14px;
-        right: 14px;
-        z-index: 99;
-      }
     </style>
   </head>
   <body>
     <script src="https://cdn.jsdelivr.net/npm/redoc@v2/bundles/redoc.standalone.js"> </script>
-    <select id="versionSelect" aria-label="Version">
-      <option>latest</option>
-    </select>
     <div id="redoc-container"></div>
-    <script type="module">
-      const versionSelect = document.getElementById("versionSelect");
-      const resp = await fetch("versions.json");
-      const versions = await resp.json();
-      for (const version of versions) {
-        const opt = document.createElement("option");
-        opt.textContent = "v" + version;
-        versionSelect.append(opt);
-      }
-      // get version from query (default to latest)
-      var queryString = window.location.search;
-      var query = new URLSearchParams(queryString);
-      var version = "latest";
-      if (query.has("version")) {
-        versionSelect.value = query.get("version");
-      }
-
-      function load() {
-        // Note: We replace the whole container element because otherwise Redoc.init calls
-        // after the initial Redoc.init call take a second rather than just a few ms.
-        let redocContainer = document.createElement('div');
-        redocContainer.id = 'redoc-container';
-        let oldContainer =  document.getElementById("redoc-container");
-        oldContainer.parentNode.replaceChild(redocContainer, oldContainer);
-
-        Redoc.init("https://storage.googleapis.com/libpod-master-releases/swagger-" + versionSelect.value + ".yaml", {
-          sortPropsAlphabetically: true,
-          sortOperationsAlphabetically: true,
-        }, redocContainer);
-        history.pushState(null, '', '?version=' + versionSelect.value);
-        document.title = 'Reference ' + versionSelect.value;
-      }
-      load();
-      versionSelect.addEventListener('change', load);
+    <script>
+      Redoc.init("swagger.yaml", {
+        sortPropsAlphabetically: true,
+        sortOperationsAlphabetically: true,
+      }, document.getElementById("redoc-container"));
     </script>
   </body>
 </html>

@@ -19,7 +19,7 @@ import (
 
 const (
 	sigCatch  = "trap \"echo FOO >> /h/fifo \" 8; echo READY >> /h/fifo; while :; do sleep 0.25; done"
-	sigCatch2 = "trap \"echo Received\" SIGFPE; while :; do sleep 0.25; done"
+	sigCatch2 = "trap \"echo Received\" SIGFPE; echo READY; while :; do sleep 0.25; done"
 )
 
 var _ = Describe("Podman run with --sig-proxy", func() {
@@ -95,7 +95,8 @@ var _ = Describe("Podman run with --sig-proxy", func() {
 		signal := syscall.SIGFPE
 		session, pid := podmanTest.PodmanPID([]string{"run", "--name", "test2", "--sig-proxy=false", FEDORA_MINIMAL, "bash", "-c", sigCatch2})
 
-		Expect(WaitForContainer(podmanTest)).To(BeTrue(), "WaitForContainer()")
+		// need to ensure the process is ready to get signals
+		Expect(podmanTest.WaitContainerReady("test2", "READY", 5, 1)).To(BeTrue(), "bash signal listener ready")
 
 		// Kill with given signal
 		// Should be no output, SIGPOLL is usually ignored

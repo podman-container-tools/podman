@@ -123,6 +123,18 @@ func applyHealthCheckOverrides(s *specgen.SpecGenerator, healthCheckFromImage *m
 	return nil
 }
 
+func ParseImageEnvs(imageEnvs []string) (map[string]string, error) {
+	envs := make(map[string]string, len(imageEnvs))
+	for _, env := range imageEnvs {
+		key, val, hasValue := strings.Cut(env, "=")
+		if !hasValue || key == "" {
+			return nil, fmt.Errorf("invalid image env variable %q", env)
+		}
+		envs[key] = val
+	}
+	return envs, nil
+}
+
 // Fill any missing parts of the spec generator (e.g. from the image).
 // Returns a set of warnings or any fatal error that occurred.
 func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerator) ([]string, error) {
@@ -168,15 +180,14 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	if err != nil {
 		return nil, fmt.Errorf("parsing fields in containers.conf: %w", err)
 	}
-	var envs map[string]string
 
 	// Image Environment defaults
 	if inspectData != nil {
 		// Image envs from the image if they don't exist
 		// already, overriding the default environments
-		envs, err = envLib.ParseSlice(inspectData.Config.Env)
+		envs, err := ParseImageEnvs(inspectData.Config.Env)
 		if err != nil {
-			return nil, fmt.Errorf("env fields from image failed to parse: %w", err)
+			return nil, err
 		}
 		defaultEnvs = envLib.Join(envLib.DefaultEnvVariables(), envLib.Join(defaultEnvs, envs))
 	}

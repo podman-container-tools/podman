@@ -223,7 +223,7 @@ func destructivelyPrioritizeReplacementCandidatesWithMax(cs []CandidateWithTime,
 	remainingCapacity := totalLimit - knownLocationCandidatesUsed
 	unknownLocationCandidatesUsed := min(noLocationLimit, remainingCapacity, len(unknownLocationCandidates))
 	res := make([]blobinfocache.BICReplacementCandidate2, knownLocationCandidatesUsed)
-	for i := 0; i < knownLocationCandidatesUsed; i++ {
+	for i := range knownLocationCandidatesUsed {
 		res[i] = knownLocationCandidates[i].candidate
 	}
 	// If candidates with unknown location are found, lets add them to final list

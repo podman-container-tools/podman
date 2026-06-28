@@ -6,9 +6,14 @@ version: 2
 
 # Set the version of Python and other tools you might need
 build:
-  os: ubuntu-22.04
+  os: ubuntu-26.04
   tools:
-    python: "3.11"
+    python: "3.14"
+    golang: "1.25"
+  jobs:
+    pre_build:
+      - make swagger
+      - mv pkg/api/swagger.yaml docs/source/_static/swagger.yaml
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:

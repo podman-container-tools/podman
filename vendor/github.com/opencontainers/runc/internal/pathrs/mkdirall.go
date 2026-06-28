@@ -24,6 +24,14 @@ import (
 	"path/filepath"
 )
 
+func splitPath(path string) (dirPath, filename string, err error) {
+	dirPath, filename = filepath.Split(path)
+	if filepath.Join("/", filename) == "/" {
+		return "", "", fmt.Errorf("root subpath %q has bad trailing component %q", path, filename)
+	}
+	return dirPath, filename, nil
+}
+
 // MkdirAllParentInRoot is like [MkdirAllInRoot] except that it only creates
 // the parent directory of the target path, returning the trailing component so
 // the caller has more flexibility around constructing the final inode.
@@ -31,19 +39,19 @@ import (
 // Callers need to be very careful operating on the trailing path, as trivial
 // mistakes like following symlinks can cause security bugs. Most people
 // should probably just use [MkdirAllInRoot] or [CreateInRoot].
-func MkdirAllParentInRoot(root, unsafePath string, mode os.FileMode) (*os.File, string, error) {
+func MkdirAllParentInRoot(root *os.File, unsafePath string, mode os.FileMode) (*os.File, string, error) {
 	// MkdirAllInRoot also does hallucinateUnsafePath, but we need to do it
 	// here first because when we split unsafePath into (dir, file) components
 	// we want to be doing so with the hallucinated path (so that trailing
 	// dangling symlinks are treated correctly).
-	unsafePath, err := hallucinateUnsafePath(root, unsafePath)
+	unsafePath, err := hallucinateUnsafePath(root.Name(), unsafePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to construct hallucinated target path: %w", err)
 	}
 
-	dirPath, filename := filepath.Split(unsafePath)
-	if filepath.Join("/", filename) == "/" {
-		return nil, "", fmt.Errorf("create parent dir in root subpath %q has bad trailing component %q", unsafePath, filename)
+	dirPath, filename, err := splitPath(unsafePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("split path %q for mkdir parent: %w", unsafePath, err)
 	}
 
 	dirFd, err := MkdirAllInRoot(root, dirPath, mode)

@@ -29,6 +29,12 @@ type ExecConfig struct {
 	Command []string `json:"command"`
 	// Terminal is whether the exec session will allocate a pseudoterminal.
 	Terminal bool `json:"terminal,omitempty"`
+	// ConsoleSize is an optional initial size for the exec session's
+	// pseudoterminal, applied at creation when Terminal is true. This lets a
+	// one-shot exec read the correct window size immediately instead of
+	// relying on an asynchronous resize that may arrive after the process has
+	// already started.
+	ConsoleSize *resize.TerminalSize `json:"consoleSize,omitempty"`
 	// AttachStdin is whether the STDIN stream will be forwarded to the exec
 	// session's first process when attaching. Only available if Terminal is
 	// false.
@@ -151,14 +157,6 @@ func (e *ExecSession) Inspect() (*define.InspectExecSession, error) {
 	output.ProcessConfig.User = e.Config.User
 
 	return output, nil
-}
-
-// legacyExecSession contains information on an active exec session. It is a
-// holdover from a previous Podman version and is DEPRECATED.
-type legacyExecSession struct {
-	ID      string   `json:"id"`
-	Command []string `json:"command"`
-	PID     int      `json:"pid"`
 }
 
 func (c *Container) verifyExecConfig(config *ExecConfig) error {
@@ -613,58 +611,6 @@ func (c *Container) ExecHTTPStartAndAttach(sessionID string, r *http.Request, w 
 	return lastErr
 }
 
-// ExecStop stops an exec session in the container.
-// If a timeout is provided, it will be used; otherwise, the timeout will
-// default to the stop timeout of the container.
-// Cleanup will be invoked automatically once the session is stopped.
-func (c *Container) ExecStop(sessionID string, timeout *uint) error {
-	if !c.batched {
-		c.lock.Lock()
-		defer c.lock.Unlock()
-
-		if err := c.syncContainer(); err != nil {
-			return err
-		}
-	}
-
-	session, ok := c.state.ExecSessions[sessionID]
-	if !ok {
-		return fmt.Errorf("container %s has no exec session with ID %s: %w", c.ID(), sessionID, define.ErrNoSuchExecSession)
-	}
-
-	if session.State != define.ExecStateRunning {
-		return fmt.Errorf("container %s exec session %s is %q, can only stop running sessions: %w", c.ID(), session.ID(), session.State.String(), define.ErrExecSessionStateInvalid)
-	}
-
-	logrus.Infof("Stopping container %s exec session %s", c.ID(), session.ID())
-
-	finalTimeout := c.StopTimeout()
-	if timeout != nil {
-		finalTimeout = *timeout
-	}
-
-	// Stop the session
-	if err := c.ociRuntime.ExecStopContainer(c, session.ID(), finalTimeout); err != nil {
-		return err
-	}
-
-	var cleanupErr error
-
-	// Retrieve exit code and update status
-	if err := retrieveAndWriteExecExitCode(c, session.ID()); err != nil {
-		cleanupErr = err
-	}
-
-	if err := c.cleanupExecBundle(session.ID()); err != nil {
-		if cleanupErr != nil {
-			logrus.Errorf("Stopping container %s exec session %s: %v", c.ID(), session.ID(), cleanupErr)
-		}
-		cleanupErr = err
-	}
-
-	return cleanupErr
-}
-
 // ExecCleanup cleans up an exec session in the container, removing temporary
 // files associated with it.
 func (c *Container) ExecCleanup(sessionID string) error {
@@ -898,37 +844,18 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 	return session.ExitCode, nil
 }
 
-// cleanupExecBundle cleans up an exec session after completion.
-// MUST BE CALLED with container `c` locked.
-// Please be careful when using this function since it might temporarily unlock
-// the container when os.RemoveAll($bundlePath) fails with ENOTEMPTY or EBUSY
-// errors.
+// cleanupExecBundle cleans up an exec session bundle path after completion.
 func (c *Container) cleanupExecBundle(sessionID string) (err error) {
 	path := c.execBundlePath(sessionID)
-	for range 50 {
+	for range 100 {
 		err = os.RemoveAll(path)
 		if err == nil || errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		if pathErr, ok := err.(*os.PathError); ok {
-			err = pathErr.Err
-			if errors.Is(err, unix.ENOTEMPTY) || errors.Is(err, unix.EBUSY) {
-				// give other processes a chance to use the container
-				if !c.batched {
-					if err := c.save(); err != nil {
-						return err
-					}
-					c.lock.Unlock()
-				}
-				time.Sleep(time.Millisecond * 100)
-				if !c.batched {
-					c.lock.Lock()
-					if err := c.syncContainer(); err != nil {
-						return err
-					}
-				}
-				continue
-			}
+		// retry the removal on ENOTEMPTY/EBUSY after a short sleep
+		if errors.Is(err, unix.ENOTEMPTY) || errors.Is(err, unix.EBUSY) {
+			time.Sleep(time.Millisecond * 50)
+			continue
 		}
 		return err
 	}
@@ -1028,11 +955,6 @@ func (c *Container) getExecSessionPID(sessionID string) (int, string, error) {
 	if ok {
 		return session.PID, session.PIDData, nil
 	}
-	oldSession, ok := c.state.LegacyExecSessions[sessionID]
-	if ok {
-		return oldSession.PID, "", nil
-	}
-
 	return -1, "", fmt.Errorf("no exec session with ID %s found in container %s: %w", sessionID, c.ID(), define.ErrNoSuchExecSession)
 }
 
@@ -1042,12 +964,6 @@ func (c *Container) getExecSessionPID(sessionID string) (int, string, error) {
 // function performs further checks to return an accurate list.
 func (c *Container) getKnownExecSessions() []string {
 	knownSessions := []string{}
-	// First check legacy sessions.
-	// TODO: This is DEPRECATED and will be removed in a future major
-	// release.
-	for sessionID := range c.state.LegacyExecSessions {
-		knownSessions = append(knownSessions, sessionID)
-	}
 	// Next check new exec sessions, but only if in running state
 	for sessionID, session := range c.state.ExecSessions {
 		if session.State == define.ExecStateRunning {
@@ -1061,7 +977,6 @@ func (c *Container) getKnownExecSessions() []string {
 // getActiveExecSessions checks if there are any active exec sessions in the
 // current container. Returns an array of active exec sessions.
 // Will continue through errors where possible.
-// Currently handles both new and legacy, deprecated exec sessions.
 func (c *Container) getActiveExecSessions() ([]string, error) {
 	activeSessions := []string{}
 	knownSessions := c.getKnownExecSessions()
@@ -1079,28 +994,22 @@ func (c *Container) getActiveExecSessions() ([]string, error) {
 			continue
 		}
 		if !alive {
-			_, isLegacy := c.state.LegacyExecSessions[id]
-			if isLegacy {
-				delete(c.state.LegacyExecSessions, id)
-				needSave = true
-			} else {
-				session := c.state.ExecSessions[id]
-				exitCode, err := c.readExecExitCode(session.ID())
-				if err != nil {
-					if lastErr != nil {
-						logrus.Errorf("Checking container %s exec sessions: %v", c.ID(), lastErr)
-					}
-					lastErr = err
+			session := c.state.ExecSessions[id]
+			exitCode, err := c.readExecExitCode(session.ID())
+			if err != nil {
+				if lastErr != nil {
+					logrus.Errorf("Checking container %s exec sessions: %v", c.ID(), lastErr)
 				}
-				session.ExitCode = exitCode
-				session.PID = 0
-				session.PIDData = ""
-				session.State = define.ExecStateStopped
-
-				c.newExecDiedEvent(session.ID(), exitCode)
-
-				needSave = true
+				lastErr = err
 			}
+			session.ExitCode = exitCode
+			session.PID = 0
+			session.PIDData = ""
+			session.State = define.ExecStateStopped
+
+			c.newExecDiedEvent(session.ID(), exitCode)
+			needSave = true
+
 			if err := c.cleanupExecBundle(id); err != nil {
 				if lastErr != nil {
 					logrus.Errorf("Checking container %s exec sessions: %v", c.ID(), lastErr)
@@ -1156,7 +1065,6 @@ func (c *Container) removeAllExecSessions() error {
 		}
 	}
 	c.state.ExecSessions = nil
-	c.state.LegacyExecSessions = nil
 
 	return lastErr
 }
@@ -1180,6 +1088,7 @@ func prepareForExec(c *Container, session *ExecSession) (*ExecOptions, error) {
 	opts.ExitCommand = session.Config.ExitCommand
 	opts.ExitCommandDelay = session.Config.ExitCommandDelay
 	opts.Privileged = session.Config.Privileged
+	opts.ConsoleSize = session.Config.ConsoleSize
 
 	return opts, nil
 }

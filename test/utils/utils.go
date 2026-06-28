@@ -39,7 +39,6 @@ var (
 // the inheritance structs
 type PodmanTestCommon interface {
 	MakeOptions(args []string, options PodmanExecOptions) []string
-	WaitForContainer() bool
 	WaitContainerReady(id string, expStr string, timeout int, step int) bool
 }
 
@@ -90,7 +89,6 @@ func (p *PodmanTest) MakeOptions(args []string, options PodmanExecOptions) []str
 // PodmanExecOptions modify behavior of PodmanTest.PodmanExecBaseWithOptions and its callers.
 // Users should typically leave most fields default-initialized, and only set those that are relevant to them.
 type PodmanExecOptions struct {
-	UID, GID         uint32   // default: inherited form the current process
 	CWD              string   // default: inherited form the current process
 	Env              []string // default: inherited form the current process
 	NoEvents         bool
@@ -126,15 +124,9 @@ func (p *PodmanTest) PodmanExecBaseWithOptions(args []string, options PodmanExec
 	} else {
 		GinkgoWriter.Printf("Running: (env: %v) %s %s\n", options.Env, strings.Join(runCmd, " "), strings.Join(podmanOptions, " "))
 	}
-	if options.UID != 0 || options.GID != 0 {
-		pythonCmd := fmt.Sprintf("import os; import sys; uid = %d; gid = %d; cwd = '%s'; os.setgid(gid); os.setuid(uid); os.chdir(cwd) if len(cwd)>0 else True; os.execv(sys.argv[1], sys.argv[1:])", options.GID, options.UID, options.CWD)
-		runCmd = append(runCmd, podmanOptions...)
-		nsEnterOpts := append([]string{"-c", pythonCmd}, runCmd...)
-		command = exec.Command("python", nsEnterOpts...)
-	} else {
-		runCmd = append(runCmd, podmanOptions...)
-		command = exec.Command(runCmd[0], runCmd[1:]...)
-	}
+
+	runCmd = append(runCmd, podmanOptions...)
+	command = exec.Command(runCmd[0], runCmd[1:]...)
 	if options.Env != nil {
 		command.Env = options.Env
 	}
@@ -153,18 +145,6 @@ func (p *PodmanTest) PodmanExecBaseWithOptions(args []string, options PodmanExec
 		Fail(fmt.Sprintf("unable to run podman command: %s\n%v", strings.Join(podmanOptions, " "), err))
 	}
 	return &PodmanSession{session}
-}
-
-// WaitForContainer waits on a started container
-func (p *PodmanTest) WaitForContainer() bool {
-	for range 10 {
-		if p.NumberOfContainersRunning() > 0 {
-			return true
-		}
-		time.Sleep(1 * time.Second)
-	}
-	GinkgoWriter.Printf("WaitForContainer(): timed out\n")
-	return false
 }
 
 // NumberOfContainersRunning returns an int of how many
@@ -254,11 +234,6 @@ func (p *PodmanTest) WaitContainerReady(id string, expStr string, timeout int, s
 	}
 }
 
-// WaitForContainer is a wrapper function for accept inheritance PodmanTest struct.
-func WaitForContainer(p PodmanTestCommon) bool {
-	return p.WaitForContainer()
-}
-
 // WaitContainerReady is a wrapper function for accept inheritance PodmanTest struct.
 func WaitContainerReady(p PodmanTestCommon, id string, expStr string, timeout int, step int) bool {
 	return p.WaitContainerReady(id, expStr, timeout, step)
@@ -315,34 +290,6 @@ func (s *PodmanSession) GrepString(term string) (bool, []string) {
 		}
 	}
 	return matches, greps
-}
-
-// ErrorGrepString takes session stderr output and behaves like grep. it returns a bool
-// if successful and an array of strings on positive matches
-func (s *PodmanSession) ErrorGrepString(term string) (bool, []string) {
-	var (
-		greps   []string
-		matches bool
-	)
-
-	for _, line := range s.ErrorToStringArray() {
-		if strings.Contains(line, term) {
-			matches = true
-			greps = append(greps, line)
-		}
-	}
-	return matches, greps
-}
-
-// LineInOutputStartsWith returns true if a line in a
-// session output starts with the supplied string
-func (s *PodmanSession) LineInOutputStartsWith(term string) bool {
-	for _, i := range s.OutputToStringArray() {
-		if strings.HasPrefix(i, term) {
-			return true
-		}
-	}
-	return false
 }
 
 // LineInOutputContains returns true if a line in a

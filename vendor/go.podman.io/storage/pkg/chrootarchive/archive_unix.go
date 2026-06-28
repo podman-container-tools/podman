@@ -182,7 +182,7 @@ func tar() {
 		root = src
 	}
 
-	if err := realChroot(root); err != nil {
+	if err := chroot(root); err != nil {
 		fatal(err)
 	}
 

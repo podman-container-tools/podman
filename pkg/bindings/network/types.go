@@ -45,6 +45,7 @@ type InspectOptions struct{}
 type RemoveOptions struct {
 	// Force removes the network even if it is being used
 	Force   *bool
+	Ignore  *bool
 	Timeout *uint
 }
 

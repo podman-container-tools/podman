@@ -1776,7 +1776,7 @@ func AutocompleteSDNotify(_ *cobra.Command, _ []string, _ string) ([]string, cob
 
 var containerStatuses = []string{"created", "running", "paused", "stopped", "exited", "unknown"}
 
-var quadletStatuses = []string{"Not loaded", "active/running", "inactive/dead", "failed/failed", "activating/start", "deactivating/stop"}
+var quadletStatuses = []string{entities.QuadletStatusNotLoaded, entities.QuadletStatusLoadedTemplate, "active/running", "inactive/dead", "failed/failed", "activating/start", "deactivating/stop"}
 
 // AutocompletePsFilters - Autocomplete ps filter options.
 func AutocompletePsFilters(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {

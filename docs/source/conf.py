@@ -14,13 +14,9 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-import json
-import os
 import re
+import os
 import subprocess
-
-from docutils.parsers.rst import Directive
-from docutils import nodes
 
 # Define the canonical URL for our custom docs.podman.io domain configured on Read the Docs
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
@@ -107,35 +103,5 @@ def convert_markdown_title(app, docname, source):
         # after the user's last visit.
         source[0] = re.sub(r"^% (.*)\s(\d)", r"```{title} \g<1>\n```", source[0])
 
-
-class APIVersionsDirective(Directive):
-    """
-    Custom directive to generate a bullet list from the versions defined in _static/versions.json.
-
-    Usage in RST:
-        .. api-versions::
-    """
-    required_arguments = 0
-    has_content = False
-
-    def run(self):
-        env = self.state.document.settings.env
-        json_file = f"{env.app.confdir}/_static/versions.json"
-
-        with open(json_file, "r") as f:
-            versions = json.load(f)
-
-        bullet_list = nodes.bullet_list()
-
-        for version in versions:
-            list_item = nodes.list_item()
-            paragraph = nodes.paragraph()
-            paragraph += nodes.reference("", f"version {version}", refuri=f"_static/api.html?version=v{version}")
-            list_item += paragraph
-            bullet_list += list_item
-
-        return [bullet_list]
-
 def setup(app):
-    app.add_directive("api-versions", APIVersionsDirective)
     app.connect("source-read", convert_markdown_title)

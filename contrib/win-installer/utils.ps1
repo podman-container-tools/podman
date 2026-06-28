@@ -4,7 +4,8 @@ function Get-Latest-Podman-Setup-From-GitHub {
         [ValidateSet("amd64", "arm64")]
         [string] $arch = "amd64"
     )
-    return Get-Podman-Setup-From-GitHub "latest" $arch
+    # Starting from v6.0 we stopped publishing the setup
+    return Get-Podman-Setup-From-GitHub "v5.8.3" $arch
 }
 
 function Get-Podman-Setup-From-GitHub {
@@ -16,7 +17,7 @@ function Get-Podman-Setup-From-GitHub {
     )
 
     Write-Host "Downloading the $arch $version Podman windows setup from GitHub..."
-    $apiUrl = "https://api.github.com/repos/podman-container-tools/podman/releases/$version"
+    $apiUrl = "https://api.github.com/repos/podman-container-tools/podman/releases/tags/$version"
     $headers = @{"User-Agent"="PowerShell"}
     if ($env:GITHUB_TOKEN) {
         $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"

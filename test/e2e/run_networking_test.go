@@ -1548,8 +1548,6 @@ options ndots:1
 
 	for _, tc := range multiIPTests {
 		It(fmt.Sprintf("podman run container with %s", tc.name), func() {
-			SkipIfNetavarkVersionLessThan("v1.17.3")
-
 			netName := "test-net-" + stringid.GenerateRandomID()
 			netCreateArgs := []string{"network", "create"}
 			for _, subnet := range tc.subnets {

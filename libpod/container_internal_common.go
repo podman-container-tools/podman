@@ -1238,6 +1238,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 	if err != nil {
 		return fmt.Errorf("reading checkpoint directory %q: %w", c.ID(), err)
 	}
+	defer input.Close()
 
 	outFile, err := os.Create(options.TargetFile)
 	if err != nil {
@@ -1275,6 +1276,55 @@ func (c *Container) checkpointRestoreSupported(version int) error {
 	return nil
 }
 
+// freezeForCheckpoint freezes the container's cgroup for the duration of a live
+// (options.KeepRunning) checkpoint so that the rootfs diff and named volumes are
+// captured at the same time as the CRIU images. It returns a thaw function that
+// the caller must defer.
+//
+// Freezing is best-effort: containers without cgroups cannot be frozen and a
+// freeze failure is non-fatal.
+func (c *Container) freezeForCheckpoint(options ContainerCheckpointOptions) func() {
+	noop := func() {}
+
+	if !options.KeepRunning || options.PreCheckPoint {
+		return noop
+	}
+
+	if c.config.NoCgroups {
+		logrus.Warnf("Container %s runs without cgroups, cannot freeze it during checkpoint: the file system of a --leave-running checkpoint may be inconsistent with CRIU images", c.ID())
+		return noop
+	}
+
+	// Use c.pause()/c.unpause() so the paused state is recorded in the
+	// database. If the checkpoint is then interrupted (e.g. by SIGKILL) Podman
+	// still knows the container is frozen and can recover it to a sane state.
+	if err := c.pause(); err != nil {
+		// Do not hard-fail a previously working checkpoint: warn that
+		// consistency cannot be guaranteed and continue.
+		logrus.Warnf("Freezing container %s during checkpoint failed, the file system of a --leave-running checkpoint may be inconsistent with CRIU images: %v", c.ID(), err)
+		return noop
+	}
+
+	return func() {
+		if err := c.unpause(); err != nil {
+			logrus.Errorf("Thawing container %s after checkpoint: %v", c.ID(), err)
+		}
+	}
+}
+
+// checkpoint dumps the container's state with the OCI runtime (CRIU) and, unless
+// options.KeepRunning is set, stops the container afterwards. The memory image is
+// written first; the root-fs diff and named volumes are captured later, in
+// exportCheckpoint/createCheckpointImage.
+//
+// For a live checkpoint (options.KeepRunning) CRIU thaws the tasks as soon as the
+// memory dump finishes, so without further action the process keeps running while
+// the file system is still being captured. The resulting checkpoint would then
+// have a memory image and a file system that reflect different points in time. To
+// keep them consistent, the container's cgroup is frozen before the runtime is
+// invoked and only thawed once the checkpoint image/archive has been written.
+// Containers running without cgroups cannot be frozen and keep the previous,
+// weaker guarantee. A freeze failure is non-fatal so existing setups keep working.
 func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointOptions) (*define.CRIUCheckpointRestoreStatistics, int64, error) {
 	if err := c.checkpointRestoreSupported(criu.MinCriuVersion); err != nil {
 		return nil, 0, err
@@ -1299,6 +1349,11 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 	// Setting CheckpointLog early in case there is a failure.
 	c.state.CheckpointLog = path.Join(c.bundlePath(), "dump.log")
 	c.state.CheckpointPath = c.CheckpointPath()
+
+	// Freeze a live checkpoint so its file system is captured at the same
+	// instant as the memory image; the deferred thaw runs once the checkpoint
+	// has been written.
+	defer c.freezeForCheckpoint(options)()
 
 	runtimeCheckpointDuration, err := c.ociRuntime.CheckpointContainer(c, options)
 	if err != nil {

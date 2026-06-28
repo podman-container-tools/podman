@@ -7,6 +7,7 @@ import (
 	"time"
 
 	nettypes "go.podman.io/common/libnetwork/types"
+	"go.podman.io/common/pkg/resize"
 	imageTypes "go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities/types"
@@ -283,6 +284,7 @@ type ContainerLogsOptions struct {
 // a container
 type ExecOptions struct {
 	Cmd         []string
+	ConsoleSize *resize.TerminalSize
 	DetachKeys  string
 	Envs        map[string]string
 	Interactive bool

@@ -23,8 +23,8 @@ Supported filters:
 | Filter     | Description                                                                                      |
 |------------|--------------------------------------------------------------------------------------------------|
 | name       | Filter by quadlet name                                                                           |
-| status     | Filter by quadlet status. Valid values: `Not loaded`, `active/running`, `inactive/dead`, `failed/failed`, `activating/start`, `deactivating/stop` |
 | pod        | Filter by the `Pod=` value (displays only for .container units)                                  |
+| status     | Filter by quadlet status. Valid values: `Not loaded`, `loaded template`, `active/running`, `inactive/dead`, `failed/failed`, `activating/start`, `deactivating/stop` |
 
 #### **--format**=*format*
 
@@ -38,7 +38,7 @@ Print results with a Go template.
 | .Name           | Name of the Quadlet file                         |
 | .Path           | Quadlet file path on disk                        |
 | .Pod            | Pod quadlet file from `Pod=` in `[Container]` (empty if not set) |
-| .Status         | Quadlet status corresponding to systemd unit     |
+| .Status         | Quadlet status corresponding to systemd unit (`Not loaded` and `loaded template` are from podman, other values are from systemd)    |
 | .UnitName       | Systemd unit name corresponding to quadlet       |
 
 @@option noheading

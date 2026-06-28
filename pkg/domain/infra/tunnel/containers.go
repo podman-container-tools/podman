@@ -618,6 +618,12 @@ func makeExecConfig(options entities.ExecOptions) *handlers.ExecCreateConfig {
 	createConfig.Env = env
 	createConfig.WorkingDir = options.WorkDir
 	createConfig.Cmd = options.Cmd
+	// Size the exec terminal at creation, mirroring the local path, so the
+	// service does not have to rely on the asynchronous resize that follows
+	// attach. ConsoleSize is ordered [height, width].
+	if options.Tty && options.ConsoleSize != nil {
+		createConfig.ConsoleSize = &[2]uint{uint(options.ConsoleSize.Height), uint(options.ConsoleSize.Width)}
+	}
 
 	return createConfig
 }

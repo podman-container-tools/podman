@@ -125,9 +125,9 @@ load helpers
 
 # DO NOT CHANGE "sleep infinity"! This is how we get a container to
 # remain in state "stopping" for long enough to check it.
-# $1 = container name, $2 = optional stop-timeout (default 2)
+# $1 = container name, $2 = optional stop-timeout (default 4)
 function __run_healthcheck_container() {
-    local stop_timeout=${2:-2}
+    local stop_timeout=${2:-4}
     run_podman run -d --name $1 \
                --health-cmd /bin/false \
                --health-interval 1s \

@@ -6092,6 +6092,46 @@ spec:
 		Expect(kube).Should(ExitWithError(125, "annotation "+define.VolumesFromAnnotation+" without target volume is reserved for internal use"))
 	})
 
+	It("test with keep-groups OCI annotation round trip", func() {
+		SkipIfRemote("the --group-add keep-groups option is not supported in remote mode")
+
+		ctr := "ctr-keep-groups"
+		ctrNameInKubePod := ctr + "-pod-" + ctr
+		outputFile := filepath.Join(podmanTest.TempDir, "pod.yaml")
+		kubeAnnotation := define.KubeKeepOriginalGroupsAnnotation + "/" + ctr
+
+		podmanTest.PodmanExitCleanly("create", "--name", ctr, "--group-add", "keep-groups", CITEST_IMAGE, "top")
+		podmanTest.PodmanExitCleanly("kube", "generate", "-f", outputFile, ctr)
+
+		kubeYaml, err := os.ReadFile(outputFile)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(kubeYaml).ToNot(ContainSubstring(define.RunOCIKeepOriginalGroups + "/" + ctr))
+		Expect(kubeYaml).To(ContainSubstring(kubeAnnotation + `: "1"`))
+
+		podmanTest.PodmanExitCleanly("kube", "play", "--start=false", outputFile)
+		inspect := podmanTest.PodmanExitCleanly("inspect", "-f", "{{ index .Config.Annotations \""+define.RunOCIKeepOriginalGroups+"\" }}", ctrNameInKubePod)
+		Expect(inspect.OutputToString()).To(Equal("1"))
+	})
+
+	It("test with mount-context-type OCI annotation round trip", func() {
+		ctr := "ctr-mount-context"
+		ctrNameInKubePod := ctr + "-pod-" + ctr
+		outputFile := filepath.Join(podmanTest.TempDir, "pod.yaml")
+		kubeAnnotation := define.KubeMountContextTypeAnnotation + "/" + ctr
+
+		podmanTest.PodmanExitCleanly("create", "--name", ctr, "--annotation", define.RunOCIMountContextType+"=rootcontext", CITEST_IMAGE, "top")
+		podmanTest.PodmanExitCleanly("kube", "generate", "-f", outputFile, ctr)
+
+		kubeYaml, err := os.ReadFile(outputFile)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(kubeYaml).ToNot(ContainSubstring(define.RunOCIMountContextType + "/" + ctr))
+		Expect(kubeYaml).To(ContainSubstring(kubeAnnotation + `: rootcontext`))
+
+		podmanTest.PodmanExitCleanly("kube", "play", "--start=false", outputFile)
+		inspect := podmanTest.PodmanExitCleanly("inspect", "-f", "{{ index .Config.Annotations \""+define.RunOCIMountContextType+"\" }}", ctrNameInKubePod)
+		Expect(inspect.OutputToString()).To(Equal("rootcontext"))
+	})
+
 	It("test with reserved autoremove annotation in yaml", func() {
 		ctr := "ctr"
 		ctrNameInKubePod := ctr + "-pod-" + ctr

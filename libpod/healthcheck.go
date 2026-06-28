@@ -28,9 +28,8 @@ func (r *Runtime) HealthCheck(ctx context.Context, name string) (define.HealthCh
 		return define.HealthCheckContainerNotFound, fmt.Errorf("unable to look up %s to perform a health check: %w", name, err)
 	}
 
-	hcStatus, err := checkHealthCheckCanBeRun(container)
-	if err != nil {
-		return hcStatus, err
+	if !container.HasHealthCheck() {
+		return define.HealthCheckNotDefined, fmt.Errorf("container %s has no defined healthcheck", container.ID())
 	}
 
 	isStartupHC := false
@@ -60,8 +59,17 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 
 	timeStart := time.Now()
 	if c.HealthCheckConfig().StartPeriod > 0 {
+		// state must be synced from DB
+		c.lock.Lock()
+		if err := c.syncContainer(); err != nil {
+			c.lock.Unlock()
+			return define.HealthCheckInternalError, "", err
+		}
 		// there is a start-period we need to honor; we add startPeriod to container start time
 		startPeriodTime := c.state.StartedTime.Add(c.HealthCheckConfig().StartPeriod)
+		c.lock.Unlock()
+		// Do not stay locked here, in healthCheckExec it will lock again.
+
 		if timeStart.Before(startPeriodTime) {
 			// we are still in the start period, flip the inStartPeriod bool
 			inStartPeriod = true
@@ -119,6 +127,8 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 	if hcErr != nil {
 		hcResult = define.HealthCheckFailure
 		switch {
+		case errors.Is(hcErr, define.ErrCtrStateInvalid):
+			return define.HealthCheckContainerStopped, "", fmt.Errorf("container %s is not running: %w", c.ID(), hcErr)
 		case errors.Is(hcErr, define.ErrOCIRuntimeNotFound) ||
 			errors.Is(hcErr, define.ErrOCIRuntimePermissionDenied) ||
 			errors.Is(hcErr, define.ErrOCIRuntime):
@@ -217,20 +227,6 @@ func (c *Container) processHealthCheckStatus(status string) error {
 	}
 
 	return nil
-}
-
-func checkHealthCheckCanBeRun(c *Container) (define.HealthCheckStatus, error) {
-	cstate, err := c.State()
-	if err != nil {
-		return define.HealthCheckInternalError, err
-	}
-	if cstate != define.ContainerStateRunning {
-		return define.HealthCheckContainerStopped, fmt.Errorf("container %s is not running", c.ID())
-	}
-	if !c.HasHealthCheck() {
-		return define.HealthCheckNotDefined, fmt.Errorf("container %s has no defined healthcheck", c.ID())
-	}
-	return define.HealthCheckDefined, nil
 }
 
 // Increment the current startup healthcheck success counter.

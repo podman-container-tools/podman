@@ -37,11 +37,7 @@ directory with the application name. The application name is required when
 specifying a directory path. An application name can't have a quadlet extension
 as suffix. For example `foo.container` isn't a valid application name.
 
-#### **--reload-systemd**
-
-Reload systemd after installing Quadlets (default true).
-In order to disable it users need to manually set the value
-of this flag to `false`.
+@@option reload-systemd
 
 #### **--replace**, **-r**
 

@@ -55,7 +55,9 @@ podman-port.1.md
 podman-ps.1.md
 podman-pull.1.md
 podman-push.1.md
+podman-quadlet-install.1.md
 podman-quadlet-list.1.md
+podman-quadlet-rm.1.md
 podman-restart.1.md
 podman-rm.1.md
 podman-run.1.md

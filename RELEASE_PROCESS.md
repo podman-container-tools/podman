@@ -156,8 +156,6 @@ spelled with complete minutiae.
    1. Edit `version/rawversion/version.go` and bump the `Version` value to the new
       release version.  If there were API changes, also bump `APIVersion` value.
       Make sure to also bump the version in the swagger.yaml `pkg/api/server/docs.go`
-      For major and minor versions also add the new version to
-      `docs/source/_static/versions.json` to show the new swagger version on docs.podman.io.
    1. Commit this and sign the commit (`git commit -a -s -S`). The commit message
       should be `Bump to vX.Y.Z` (using the actual version numbers).
    1. Push this single change to your GitHub fork, and make a new PR,

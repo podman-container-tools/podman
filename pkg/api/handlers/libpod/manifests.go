@@ -359,6 +359,8 @@ func ManifestPush(w http.ResponseWriter, r *http.Request) {
 		ForceCompressionFormat bool     `schema:"forceCompressionFormat"`
 		Format                 string   `schema:"format"`
 		RemoveSignatures       bool     `schema:"removeSignatures"`
+		Retry                  uint     `schema:"retry"`
+		RetryDelay             string   `schema:"retryDelay"`
 		TLSVerify              bool     `schema:"tlsVerify"`
 		Quiet                  bool     `schema:"quiet"`
 		AddCompression         []string `schema:"addCompression"`
@@ -418,6 +420,10 @@ func ManifestPush(w http.ResponseWriter, r *http.Request) {
 	if _, found := r.URL.Query()["tlsVerify"]; found {
 		options.SkipTLSVerify = types.NewOptionalBool(!query.TLSVerify)
 	}
+	if _, found := r.URL.Query()["retry"]; found {
+		options.Retry = &query.Retry
+	}
+	options.RetryDelay = query.RetryDelay
 
 	imageEngine := abi.ImageEngine{Libpod: runtime}
 	source := utils.GetName(r)

@@ -15,6 +15,11 @@ Delete one or more Podman networks.
 The `force` option removes all containers that use the named network. If the container is
 running, the container is stopped and removed.
 
+#### **--ignore**, **-i**
+
+Ignore the error when a specified network does not exist.
+Other failures, including a network being in use, are still returned.
+
 #### **--time**, **-t**=*seconds*
 
 Seconds to wait before forcibly stopping the running containers that are using the specified network. The --force option must be specified to use the --time option. Use -1 for infinite wait.

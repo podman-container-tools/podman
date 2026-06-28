@@ -155,11 +155,17 @@ func (overlayWhiteoutConverter) ConvertReadWithHandler(hdr *tar.Header, path str
 type directHandler struct{}
 
 func (d directHandler) Setxattr(path, name string, value []byte) error {
-	return unix.Setxattr(path, name, value, 0)
+	if err := unix.Setxattr(path, name, value, 0); err != nil {
+		return &os.PathError{Op: "setxattr", Path: path, Err: err}
+	}
+	return nil
 }
 
 func (d directHandler) Mknod(path string, mode uint32, dev int) error {
-	return unix.Mknod(path, mode, dev)
+	if err := unix.Mknod(path, mode, dev); err != nil {
+		return &os.PathError{Op: "mknod", Path: path, Err: err}
+	}
+	return nil
 }
 
 func (d directHandler) Chown(path string, uid, gid int) error {

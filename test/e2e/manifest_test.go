@@ -602,7 +602,7 @@ RUN touch /file
 		Expect(output).To(ContainSubstring("Storing list signatures"))
 	})
 
-	It("push must retry", func() {
+	It("push must retry with defaults", func() {
 		SkipIfRemote("warning is not relayed in remote setup")
 		session := podmanTest.Podman([]string{"manifest", "create", "foo", imageList})
 		session.WaitWithDefaultTimeout()
@@ -612,6 +612,19 @@ RUN touch /file
 		push.WaitWithDefaultTimeout()
 		Expect(push).Should(ExitWithError(125, "Failed, retrying in 1s ... (1/3)"))
 		Expect(push.ErrorToString()).To(MatchRegexp("Copying blob.*Failed, retrying in 1s \\.\\.\\. \\(1/3\\).*Copying blob.*Failed, retrying in 2s"))
+	})
+
+	It("push must retry with options", func() {
+		podmanTest.PodmanExitCleanly("manifest", "create", "foo", imageList)
+
+		push := podmanTest.Podman([]string{"manifest", "push", "--all", "--retry", "2", "--retry-delay", "100ms", "--tls-verify=false", "--remove-signatures", "foo", "localhost:7000/bogus"})
+		push.WaitWithDefaultTimeout()
+		Expect(push).Should(ExitWithError(125, "connect: connection refused"))
+		// The retrying warning is not relayed in the remote setup, so only
+		// assert it for the local client.
+		if !IsRemote() {
+			Expect(push.ErrorToString()).To(MatchRegexp("Copying blob.*Failed, retrying in 100ms \\.\\.\\. \\(1/2\\).*Copying blob.*Failed, retrying in 100ms \\.\\.\\. \\(2/2\\)"))
+		}
 	})
 
 	It("authenticated push", func() {

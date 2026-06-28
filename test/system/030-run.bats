@@ -1909,4 +1909,56 @@ EOF
     run_podman rmi $image
 }
 
+@test "podman run host env leak" {
+    # We need to create a invalid image config env value without "="
+    skopeo copy containers-storage:$IMAGE dir:$PODMAN_TMPDIR
+    config_digest=$(jq -r .config.digest $PODMAN_TMPDIR/manifest.json)
+    plain_digest=${config_digest#*:}
+    newfile="$PODMAN_TMPDIR/newfile"
+    # Append bad env to existing image envs
+    jq  '.config.Env += ["HOST*"]' $PODMAN_TMPDIR/$plain_digest >$newfile
+    # Get new digest and size so we can update the manifest
+    newdigest="$(sha256sum $newfile | cut -d" " -f 1)"
+    size=$(stat -c %s $newfile)
+    mv $newfile $PODMAN_TMPDIR/$newdigest
+    jq ".config.digest = \"sha256:$newdigest\" | .config.size=$size" $PODMAN_TMPDIR/manifest.json > $PODMAN_TMPDIR/manifest.json.new
+    mv $PODMAN_TMPDIR/manifest.json.new $PODMAN_TMPDIR/manifest.json
+
+    image="localhost/envimage:123"
+    skopeo copy dir:$PODMAN_TMPDIR containers-storage:$image
+
+    run_podman image inspect $image --format '{{.Config.Env}}'
+    assert "$output" =~ "HOST\*" "invalid env in image"
+
+    HOSTENV=123 run_podman 125 run --rm $image printenv HOSTENV
+    assert "$output" =~ 'invalid image env variable "HOST\*"' "Host env leak from image env on podman run"
+
+    podname="p-$(safename)"
+    ctrname="c-$(safename)"
+
+    fname="$PODMAN_TMPDIR/kube_$(safename).yaml"
+    echo "
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: test
+  name: $podname
+spec:
+  restartPolicy: Never
+  containers:
+    - name: $ctrname
+      image: $image
+      command:
+      - printenv
+      - HOSTENV
+" > $fname
+
+    run_podman 125 kube play $fname
+    assert "$output" =~ 'invalid image env variable "HOST\*"' "Host env leak from image env on kube play"
+
+    run_podman pod rm $podname
+    run_podman rmi $image
+}
+
 # vim: filetype=sh

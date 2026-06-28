@@ -125,6 +125,12 @@ func (ic *ContainerEngine) VolumeInspect(_ context.Context, namesOrIds []string,
 	for _, v := range vols {
 		inspectOut, err := v.Inspect()
 		if err != nil {
+			if opts.All && errors.Is(err, define.ErrNoSuchVolume) {
+				// Volume must have been removed in the meantime,
+				// because all volumes were requested just ignore
+				// the case to make inspecting all volumes not fail randomly.
+				continue
+			}
 			return nil, nil, err
 		}
 		config := entities.VolumeConfigResponse{

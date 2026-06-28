@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/env"
@@ -618,7 +619,7 @@ func (p *Pod) podWithContainers(ctx context.Context, containers []*Container, po
 				if !podmanOnly && (define.IsReservedAnnotation(k)) {
 					continue
 				}
-				podAnnotations[fmt.Sprintf("%s/%s", k, removeUnderscores(ctr.Name()))] = v
+				podAnnotations[fmt.Sprintf("%s/%s", kubeAnnotationAlias(k), removeUnderscores(ctr.Name()))] = v
 			}
 			// Convert auto-update labels into kube annotations
 			maps.Copy(podAnnotations, getAutoUpdateAnnotations(ctr.Name(), ctr.Labels()))
@@ -764,7 +765,7 @@ func simplePodWithV1Containers(ctx context.Context, ctrs []*Container, getServic
 			if !podmanOnly && define.IsReservedAnnotation(k) {
 				continue
 			}
-			kubeAnnotations[fmt.Sprintf("%s/%s", k, removeUnderscores(ctr.Name()))] = v
+			kubeAnnotations[fmt.Sprintf("%s/%s", kubeAnnotationAlias(k), removeUnderscores(ctr.Name()))] = v
 		}
 
 		// Convert auto-update labels into kube annotations
@@ -1073,7 +1074,43 @@ func containerToV1Container(ctx context.Context, c *Container, getService bool) 
 		}
 		dns.Options = dnsOptions
 	}
+
+	if hc := c.config.HealthCheckConfig; hc != nil {
+		kubeContainer.LivenessProbe = healthConfigToProbe(hc)
+	}
+
 	return kubeContainer, kubeVolumes, &dns, annotations, nil
+}
+
+// healthConfigToProbe converts a container's Schema2HealthConfig into a
+// Kubernetes Probe for use as a LivenessProbe in generated kube YAML.
+func healthConfigToProbe(hc *manifest.Schema2HealthConfig) *v1.Probe {
+	// Test[0] is the type: NONE, CMD, or CMD-SHELL. NONE means disabled.
+	if hc == nil || len(hc.Test) == 0 || hc.Test[0] == define.HealthConfigTestNone {
+		return nil
+	}
+
+	var cmd []string
+	switch hc.Test[0] {
+	case define.HealthConfigTestCmd:
+		cmd = hc.Test[1:]
+	case define.HealthConfigTestCmdShell:
+		cmd = append([]string{"/bin/sh", "-c"}, hc.Test[1:]...)
+	default:
+		return nil
+	}
+
+	probe := &v1.Probe{
+		Handler: v1.Handler{
+			Exec: &v1.ExecAction{Command: cmd},
+		},
+		InitialDelaySeconds: int32(hc.StartPeriod.Seconds()),
+		TimeoutSeconds:      int32(hc.Timeout.Seconds()),
+		PeriodSeconds:       int32(hc.Interval.Seconds()),
+		FailureThreshold:    int32(hc.Retries),
+	}
+
+	return probe
 }
 
 // portMappingToContainerPort takes a portmapping and converts
@@ -1447,6 +1484,15 @@ func generateKubeVolumeDeviceFromLinuxDevice(devices []specs.LinuxDevice) []v1.V
 		volumeDevices = append(volumeDevices, vd)
 	}
 	return volumeDevices
+}
+
+func kubeAnnotationAlias(annotationKey string) string {
+	for _, alias := range define.OCIRuntimeAnnotationAliases {
+		if alias.Runtime == annotationKey {
+			return alias.Kube
+		}
+	}
+	return annotationKey
 }
 
 func removeUnderscores(s string) string {

@@ -42,6 +42,14 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 	libpodConfig := new(libpod.ExecConfig)
 	libpodConfig.Command = input.Cmd
 	libpodConfig.Terminal = input.Tty
+	// Preserve the requested initial terminal size so the exec PTY can be sized
+	// at creation (docker sends ConsoleSize as [height, width]).
+	if input.ConsoleSize != nil {
+		libpodConfig.ConsoleSize = &resize.TerminalSize{
+			Height: uint16(input.ConsoleSize[0]),
+			Width:  uint16(input.ConsoleSize[1]),
+		}
+	}
 	libpodConfig.AttachStdin = input.AttachStdin
 	libpodConfig.AttachStderr = input.AttachStderr
 	libpodConfig.AttachStdout = input.AttachStdout

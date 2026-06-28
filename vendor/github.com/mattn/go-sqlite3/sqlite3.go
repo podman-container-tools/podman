@@ -2075,7 +2075,9 @@ func (c *SQLiteConn) GetFilename(schemaName string) string {
 	if schemaName == "" {
 		schemaName = "main"
 	}
-	return C.GoString(C.sqlite3_db_filename(c.db, C.CString(schemaName)))
+	cSchema := C.CString(schemaName)
+	defer C.free(unsafe.Pointer(cSchema))
+	return C.GoString(C.sqlite3_db_filename(c.db, cSchema))
 }
 
 // GetLimit returns the current value of a run-time limit.

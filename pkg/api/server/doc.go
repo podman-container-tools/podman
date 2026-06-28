@@ -46,13 +46,13 @@
 //	Schemes: http, https
 //	Host: podman.io
 //	BasePath: /
-//	Version: 5.0.0
+//	Version: 6.0.0
 //	License: Apache-2.0 https://opensource.org/licenses/Apache-2.0
 //	Contact: Podman <podman@lists.podman.io> https://podman.io/community
 //
 //	InfoExtensions:
 //	x-logo:
-//	  - url: https://raw.githubusercontent.com/containers/libpod/main/logo/podman-logo.png
+//	  - url: https://raw.githubusercontent.com/podman-container-tools/podman/main/logo/podman-logo.png
 //	  - altText: "Podman logo"
 //
 //	Produces:

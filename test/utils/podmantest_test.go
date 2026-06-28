@@ -32,17 +32,6 @@ var _ = Describe("PodmanTest test", func() {
 		Expect(podmanTest.NumberOfPods()).To(Equal(2))
 	})
 
-	It("Test WaitForContainer", func() {
-		FakeOutputs["ps -q"] = []string{"one", "two"}
-		Expect(WaitForContainer(podmanTest)).To(BeTrue())
-
-		FakeOutputs["ps -q"] = []string{"one"}
-		Expect(WaitForContainer(podmanTest)).To(BeTrue())
-
-		FakeOutputs["ps -q"] = []string{""}
-		Expect(WaitForContainer(podmanTest)).To(Not(BeTrue()))
-	})
-
 	It("Test GetContainerStatus", func() {
 		FakeOutputs["ps --all --format={{.Status}}"] = []string{"Need func update"}
 		Expect(podmanTest.GetContainerStatus()).To(Equal("Need func update"))

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
+	"go.podman.io/common/pkg/resize"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/validate"
@@ -18,6 +19,7 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	envLib "go.podman.io/podman/v6/pkg/env"
 	"go.podman.io/podman/v6/pkg/rootless"
+	"golang.org/x/term"
 )
 
 var (
@@ -188,6 +190,16 @@ func exec(cmd *cobra.Command, args []string) error {
 	}
 	streams.AttachOutput = true
 	streams.AttachError = true
+
+	// When allocating a TTY, capture the current terminal size up front so the
+	// exec pseudo-terminal is created at the right size, rather than relying on
+	// the asynchronous resize that follows attach. This matters for short-lived
+	// commands that read their window size at startup (e.g. `stty size`).
+	if execOpts.Tty {
+		if w, h, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
+			execOpts.ConsoleSize = &resize.TerminalSize{Width: uint16(w), Height: uint16(h)}
+		}
+	}
 
 	if execNoSession {
 		exitCode, err := registry.ContainerEngine().ContainerExecNoSession(registry.Context(), nameOrID, execOpts, streams)

@@ -237,6 +237,10 @@ func (s *APIServer) registerNetworkHandlers(r *mux.Router) error {
 	//    name: force
 	//    type: boolean
 	//    description: remove containers associated with network
+	//  - in: query
+	//    name: ignore
+	//    type: boolean
+	//    description: ignore if a specified network does not exist
 	// produces:
 	// - application/json
 	// responses:

@@ -669,7 +669,6 @@ var _ = Describe("Podman network create", func() {
 
 	DescribeTable("podman network create with special route types",
 		func(subnet string, route string, expectedDest string, expectedRouteType types.RouteType, expectedMetric *uint32) {
-			SkipIfNetavarkVersionLessThan("2.0.0")
 			netName := "subnet-" + stringid.GenerateRandomID()
 			nc := podmanTest.Podman([]string{
 				"network",

@@ -116,7 +116,8 @@ func getAllQuadlets(ctx context.Context, conn *dbus.Conn) ([]*entities.ListQuadl
 	// Get the root paths of all quadlets available to the current user
 	quadletDirs := systemdquadlet.GetUnitDirs(rootless.IsRootless(), false)
 
-	allServiceNames := make([]string, 0)
+	concreteServiceNames := make([]string, 0)
+	templateServiceNames := make([]string, 0)
 
 	// for every quadlet dir, let's get the quadlets
 	for _, dir := range quadletDirs {
@@ -154,36 +155,69 @@ func getAllQuadlets(ctx context.Context, conn *dbus.Conn) ([]*entities.ListQuadl
 				report.Pod = pod
 			}
 
-			allServiceNames = append(allServiceNames, serviceName)
+			if systemdquadlet.IsTemplateUnitFileName(serviceName) {
+				templateServiceNames = append(templateServiceNames, serviceName)
+			} else {
+				concreteServiceNames = append(concreteServiceNames, serviceName)
+			}
 			partialReports[serviceName] = report
 		}
 	}
 
-	// Get status of all systemd units with given names.
-	statuses, err := conn.ListUnitsByNamesContext(ctx, allServiceNames)
-	if err != nil {
-		return nil, fmt.Errorf("querying systemd for unit status: %w", err)
-	}
-	if len(statuses) != len(allServiceNames) {
-		logrus.Warnf("Queried for %d services but received %d responses", len(allServiceNames), len(statuses))
+	// Get status of concrete systemd units with given names.
+	if len(concreteServiceNames) > 0 {
+		statuses, err := conn.ListUnitsByNamesContext(ctx, concreteServiceNames)
+		if err != nil {
+			return nil, fmt.Errorf("querying systemd for unit status: %w", err)
+		}
+		if len(statuses) != len(concreteServiceNames) {
+			logrus.Warnf("Queried for %d services but received %d responses", len(concreteServiceNames), len(statuses))
+		}
+
+		for _, unitStatus := range statuses {
+			report, ok := partialReports[unitStatus.Name]
+			if !ok {
+				logrus.Errorf("Unexpected unit returned by systemd - was not searching for %s", unitStatus.Name)
+			}
+			logrus.Debugf("Unit %s has status %s %s %s", unitStatus.Name, unitStatus.LoadState, unitStatus.ActiveState, unitStatus.SubState)
+			report.UnitName = unitStatus.Name
+
+			// Unit is not loaded
+			if unitStatus.LoadState != "loaded" {
+				report.Status = entities.QuadletStatusNotLoaded
+			} else {
+				report.Status = fmt.Sprintf("%s/%s", unitStatus.ActiveState, unitStatus.SubState)
+			}
+			reports = append(reports, &report)
+			delete(partialReports, unitStatus.Name)
+		}
 	}
 
-	for _, unitStatus := range statuses {
-		report, ok := partialReports[unitStatus.Name]
-		if !ok {
-			logrus.Errorf("Unexpected unit returned by systemd - was not searching for %s", unitStatus.Name)
+	// Uninstantiated template units need to be handled separately, because
+	// ListUnitsBy* functions do not return anything for templates.
+	if len(templateServiceNames) > 0 {
+		unitFiles, err := conn.ListUnitFilesByPatternsContext(ctx, []string{}, templateServiceNames)
+		if err != nil {
+			return nil, fmt.Errorf("querying systemd for unit file: %w", err)
 		}
-		logrus.Debugf("Unit %s has status %s %s %s", unitStatus.Name, unitStatus.LoadState, unitStatus.ActiveState, unitStatus.SubState)
-		report.UnitName = unitStatus.Name
+		unitFilesFound := make(map[string]struct{})
+		for _, unitFile := range unitFiles {
+			unitFilesFound[filepath.Base(unitFile.Path)] = struct{}{}
+		}
+		for _, templateServiceName := range templateServiceNames {
+			report := partialReports[templateServiceName]
 
-		// Unit is not loaded
-		if unitStatus.LoadState != "loaded" {
-			report.Status = "Not loaded"
-		} else {
-			report.Status = fmt.Sprintf("%s/%s", unitStatus.ActiveState, unitStatus.SubState)
+			report.UnitName = templateServiceName
+
+			if _, ok := unitFilesFound[templateServiceName]; ok {
+				report.Status = entities.QuadletStatusLoadedTemplate
+			} else {
+				report.Status = entities.QuadletStatusNotLoaded
+			}
+
+			reports = append(reports, &report)
+			delete(partialReports, templateServiceName)
 		}
-		reports = append(reports, &report)
-		delete(partialReports, unitStatus.Name)
 	}
 
 	// This should not happen.
@@ -191,7 +225,7 @@ func getAllQuadlets(ctx context.Context, conn *dbus.Conn) ([]*entities.ListQuadl
 	// We can find them with LoadState, as we do above.
 	// Handle it anyways because it's easy enough to do.
 	for _, report := range partialReports {
-		report.Status = "Not loaded"
+		report.Status = entities.QuadletStatusNotLoaded
 		reports = append(reports, &report)
 	}
 
@@ -199,12 +233,7 @@ func getAllQuadlets(ctx context.Context, conn *dbus.Conn) ([]*entities.ListQuadl
 }
 
 func removeQuadlet(ctx context.Context, conn *dbus.Conn, quadlet *entities.ListQuadlet, force bool) error {
-	switch quadlet.Status {
-	case "Not loaded":
-	case "inactive/dead":
-		// Nothing to do here if it doesn't exist in systemd
-		break
-	case "active/running":
+	if quadlet.Status == "active/running" {
 		if !force {
 			return fmt.Errorf("quadlet %s is running and force is not set, refusing to remove: %w", quadlet.Name, define.ErrQuadletRunning)
 		}
@@ -221,8 +250,79 @@ func removeQuadlet(ctx context.Context, conn *dbus.Conn, quadlet *entities.ListQ
 			return fmt.Errorf("unable to stop quadlet %s: %s", quadlet.Name, stopResult)
 		}
 	}
+	if quadlet.Status == entities.QuadletStatusLoadedTemplate {
+		if err := stopLoadedTemplateInstances(ctx, conn, quadlet, force); err != nil {
+			return err
+		}
+	}
 
 	return os.Remove(quadlet.Path)
+}
+
+// stopLoadedTemplateInstances handles the running instances of a template.
+// If force is set, the instances are stopped and error is returned on failure.
+// If force is not set, stopping is refused and error is returned on running instances.
+func stopLoadedTemplateInstances(ctx context.Context, conn *dbus.Conn, quadlet *entities.ListQuadlet, force bool) error {
+	extension := filepath.Ext(quadlet.UnitName)
+
+	// The regular expression in this pattern matches the template itself as well, but the
+	// ListUnitsBy* functions do not return anything for templates.
+	instancePattern := strings.TrimSuffix(quadlet.UnitName, extension) + "*" + extension
+	instances, err := conn.ListUnitsByPatternsContext(ctx, []string{}, []string{instancePattern})
+	if err != nil {
+		return fmt.Errorf("querying systemd for instances of %q: %w", quadlet.UnitName, err)
+	}
+
+	var runningInstanceErrors []error
+	for _, instanceStatus := range instances {
+		properties, err := conn.GetUnitPropertiesContext(ctx, instanceStatus.Name)
+		if err != nil {
+			logrus.Errorf("getting unit properties for %q: %v", instanceStatus.Name, err)
+			continue
+		}
+
+		sourcePath, ok := properties["SourcePath"].(string)
+		if !ok || sourcePath == "" {
+			logrus.Warnf("source path not found for unit %q", instanceStatus.Name)
+			continue
+		}
+
+		if filepath.Clean(sourcePath) != filepath.Clean(quadlet.Path) {
+			// Nothing to do here if the unit is not associated with this quadlet
+			continue
+		}
+
+		if instanceStatus.LoadState != "loaded" {
+			// Nothing to do here if the instance is not loaded
+			continue
+		}
+
+		if instanceStatus.ActiveState == "active" {
+			if !force {
+				runningInstanceErrors = append(runningInstanceErrors, fmt.Errorf("template %q has running instance %q and force is not set, refusing to remove: %w", quadlet.Name, instanceStatus.Name, define.ErrQuadletRunning))
+				continue
+			}
+			logrus.Debugf("Going to stop systemd unit %q (Instance of template %q)", instanceStatus.Name, quadlet.Name)
+
+			ch := make(chan string)
+			if _, err := conn.StopUnitContext(ctx, instanceStatus.Name, "replace", ch); err != nil {
+				runningInstanceErrors = append(runningInstanceErrors, fmt.Errorf("stopping instance %q of template %q: %w", instanceStatus.Name, quadlet.Name, err))
+				continue
+			}
+
+			logrus.Debugf("Waiting for systemd unit %q to stop", instanceStatus.Name)
+			stopResult := <-ch
+			if stopResult != "done" && stopResult != "skipped" {
+				runningInstanceErrors = append(runningInstanceErrors, fmt.Errorf("unable to stop instance %q of template %q: %q", instanceStatus.Name, quadlet.Name, stopResult))
+			}
+		}
+	}
+
+	if len(runningInstanceErrors) > 0 {
+		return errors.Join(runningInstanceErrors...)
+	}
+
+	return nil
 }
 
 // getQuadletServiceNameAndUnit parses a Quadlet file and returns both the
