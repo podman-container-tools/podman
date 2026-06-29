@@ -111,6 +111,12 @@ func (n *netavarkNetwork) allocIPs(opts *types.NetworkOptions) error {
 
 						// convert to 4 byte ipv4 if needed
 						util.NormalizeIP(&staticIP)
+
+						// Ensure the requested IP is not the subnet's Gateway
+						if subnet.Gateway != nil && staticIP.Equal(subnet.Gateway) {
+							return newIPAMError(nil, "address already in use: requested static IP %s matches the subnet gateway", staticIP.String())
+						}
+
 						id := subnetBkt.Get(staticIP)
 						if id != nil {
 							return newIPAMError(nil, "requested ip address %s is already allocated to container ID %s", staticIP.String(), string(id))

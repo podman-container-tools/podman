@@ -401,6 +401,12 @@ func pullImage(cmd *cobra.Command, imageName string, cliVals *entities.Container
 		pullOptions.RetryDelay = val
 	}
 
+	pullOptions.UserNS = cliVals.UserNS
+	pullOptions.UIDMap = cliVals.UIDMap
+	pullOptions.GIDMap = cliVals.GIDMap
+	pullOptions.SubUIDName = cliVals.SubUIDName
+	pullOptions.SubGIDName = cliVals.SubGIDName
+
 	if cliVals.Creds != "" {
 		creds, err := util.ParseRegistryCreds(cliVals.Creds)
 		if err != nil {

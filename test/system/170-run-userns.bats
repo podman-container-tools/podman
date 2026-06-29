@@ -204,3 +204,35 @@ EOF
 
     run_podman rm -f $cname
 }
+
+# CANNOT BE PARALLELIZED because other tests may use $NONLOCAL_IMAGE
+@test "podman run --userns=keep-id does not create mapped layers" {
+    skip_if_not_rootless "keep-id mapped layers only relevant for rootless"
+    skip_if_remote "reads local storage files"
+
+    NONLOCAL_IMAGE="$PODMAN_NONLOCAL_IMAGE_FQN"
+
+    run_podman '?' rmi -f $NONLOCAL_IMAGE
+    run_podman 1 image exists $NONLOCAL_IMAGE
+
+    run_podman run --rm --userns=keep-id $NONLOCAL_IMAGE true
+
+    run_podman image inspect --format '{{.Id}}' $NONLOCAL_IMAGE
+    local image_id="${output#sha256:}"
+
+    run_podman info --format '{{.Store.GraphRoot}}'
+    local graphroot="$output"
+    run_podman info --format '{{.Store.GraphDriverName}}'
+    local graphdriver="$output"
+    local images_json="$graphroot/${graphdriver}-images/images.json"
+
+    # Verify no mapped-layers were created for this image
+    local mapped_count
+    mapped_count=$(jq --arg id "$image_id" \
+        '[.[] | select(.id == $id) | (."mapped-layers" // []) | length] | .[0] // 0' \
+        "$images_json")
+    assert "$mapped_count" == "0" \
+        "Image should have no mapped-layers (got $mapped_count)"
+
+    run_podman rmi $NONLOCAL_IMAGE
+}

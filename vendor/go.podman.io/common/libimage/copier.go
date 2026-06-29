@@ -27,6 +27,7 @@ import (
 	"go.podman.io/image/v5/transports"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage"
+	"go.podman.io/storage/pkg/idtools"
 )
 
 const (
@@ -149,6 +150,17 @@ type CopyOptions struct {
 	// IdentityToken is used to authenticate the user and get
 	// an access token for the registry.
 	IdentityToken string `json:"identitytoken,omitempty"`
+
+	// ----- ID Mapping ---------------------------------------------------
+
+	// UIDMap and GIDMap are used for setting up image layers with the
+	// correct UID/GID mappings when pulling into storage.
+	UIDMap []idtools.IDMap
+	GIDMap []idtools.IDMap
+	// HostUIDMapping and HostGIDMapping explicitly request host
+	// mappings, preventing inheritance from parent layers.
+	HostUIDMapping bool
+	HostGIDMapping bool
 
 	// ----- internal -----------------------------------------------------
 
@@ -279,6 +291,11 @@ func NewCopier(options *CopyOptions, sc *types.SystemContext) (*Copier, error) {
 	if options.CompressionLevel != nil {
 		c.systemContext.CompressionLevel = options.CompressionLevel
 	}
+
+	c.systemContext.UIDMap = options.UIDMap
+	c.systemContext.GIDMap = options.GIDMap
+	c.systemContext.HostUIDMapping = options.HostUIDMapping
+	c.systemContext.HostGIDMapping = options.HostGIDMapping
 
 	// NOTE: for the sake of consistency it's called Oci* in the CopyOptions.
 	c.systemContext.OCIAcceptUncompressedLayers = options.OciAcceptUncompressedLayers

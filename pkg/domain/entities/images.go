@@ -79,6 +79,17 @@ type ImagePullOptions struct {
 	// OciDecryptConfig contains the config that can be used to decrypt an image if it is
 	// encrypted if non-nil. If nil, it does not attempt to decrypt an image.
 	OciDecryptConfig *encconfig.DecryptConfig
+	// UserNS is the user namespace mode (e.g., "keep-id", "nomap", "host").
+	// Mappings are resolved server-side from this mode.
+	UserNS string
+	// UIDMap and GIDMap are the raw user-provided UID/GID mappings
+	// (e.g., from --uidmap/--gidmap flags).
+	UIDMap []string
+	GIDMap []string
+	// SubUIDName and SubGIDName are the user/group names for subordinate
+	// UID/GID ranges.
+	SubUIDName string
+	SubGIDName string
 }
 
 // ImagePullStatus contains the status of the image pull
