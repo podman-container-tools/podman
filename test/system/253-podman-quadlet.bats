@@ -9,7 +9,6 @@ load helpers.registry
 load helpers.systemd
 
 function setup() {
-    skip_if_remote "podman quadlet is not implemented for remote setup yet"
     skip_if_journald_unavailable "Needed for RHEL. FIXME: we might be able to re-enable a subset of tests."
 
     test -x "$QUADLET" || die "Cannot run quadlet tests without executable \$QUADLET ($QUADLET)"
@@ -157,6 +156,10 @@ EOF
 }
 
 @test "quadlet verb - install, list, print, rm - template" {
+    # In remote mode the quadlet generator bakes the podman-remote binary path
+    # into ExecStart= with no --url flag, so systemctl cannot start the unit.
+    skip_if_remote "template quadlet units use podman-remote in ExecStart which cannot connect without a socket URL"
+
     # Determine the install directory path based on rootless/root
     local install_dir
     install_dir=$(get_quadlet_install_dir)

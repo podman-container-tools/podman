@@ -135,23 +135,33 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read multipart: %w", err)
 		}
-		defer part.Close()
 
 		filename := part.FileName()
 		if filename == "" {
-			// Skip parts without filenames
+			part.Close()
 			continue
 		}
 
-		// Create file in temp directory
+		filename = filepath.Clean(filename)
+		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "..") {
+			part.Close()
+			return nil, fmt.Errorf("invalid filename %q: path traversal not allowed", filename)
+		}
+
 		filePath := filepath.Join(quadletDir, filename)
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
+			part.Close()
+			return nil, fmt.Errorf("failed to create directory for %s: %w", filename, err)
+		}
 		file, err := os.Create(filePath)
 		if err != nil {
+			part.Close()
 			return nil, fmt.Errorf("failed to create file %s: %w", filename, err)
 		}
-		defer file.Close()
 
 		_, err = io.Copy(file, part)
+		file.Close()
+		part.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to write file %s: %w", filename, err)
 		}
@@ -222,8 +232,7 @@ func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
 
 	countQuadletFiles := 0
 	for _, filePath := range filePaths {
-		isQuadletFile := quadlet.IsExtSupported(filePath)
-		if isQuadletFile {
+		if quadlet.IsExtSupported(filePath) || filepath.Ext(filePath) == ".quadlets" {
 			countQuadletFiles++
 		}
 	}
@@ -235,8 +244,9 @@ func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
 	// QuadletInstall expects the quadlet file to be first in the list.
 	// filepath.Walk returns files in lexicographic order, so a non-quadlet
 	// file (e.g. "Containerfile") may sort before the ".container" file.
+	// .quadlets multi-file bundles are also valid primary files.
 	for i, filePath := range filePaths {
-		if quadlet.IsExtSupported(filePath) {
+		if quadlet.IsExtSupported(filePath) || filepath.Ext(filePath) == ".quadlets" {
 			filePaths[0], filePaths[i] = filePaths[i], filePaths[0]
 			break
 		}
@@ -249,7 +259,19 @@ func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
 		ReloadSystemd: query.ReloadSystemd,
 	}
 
-	installReport, err := containerEngine.QuadletInstall(r.Context(), filePaths, installOptions)
+	// When an application name is set, pass the reconstructed directory to
+	// QuadletInstall rather than individual file paths. This lets the abi layer
+	// enter its directory-walk branch which preserves nested subdirectory
+	// structure (e.g. files under an "a/" subdir stay under "a/" after install).
+	// In local mode the CLI passes the directory directly; remote mode must
+	// replicate that by handing the temp directory to the abi layer.
+	installPaths := filePaths
+	if query.Application != "" {
+		quadletDir := filepath.Join(contextDirectory, "quadlets")
+		installPaths = []string{quadletDir}
+	}
+
+	installReport, err := containerEngine.QuadletInstall(r.Context(), installPaths, installOptions)
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
