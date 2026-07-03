@@ -273,6 +273,11 @@ setting up a container healthcheck, see the `HealthCmd` option for more.
 Specify a Quadlet `.pod` unit to link the container to.
 The value must take the form of `<name>.pod` and the `.pod` unit must exist.
 
+In this value, Quadlet expands the `%N` specifier to the container's service name (the
+`ServiceName=` value if set, otherwise the name derived from the unit file), for example
+`Pod=%N.pod`. The expansion happens while the unit is generated, and `%N` is the only
+specifier resolved in this key.
+
 Quadlet will add all the necessary parameters to link between the container and the pod and between their corresponding services.
 
 
@@ -443,6 +448,7 @@ DefaultDependencies=false
 By default, the container is named `systemd-<unitname>`. Use `ContainerName=` to override.
 
 Avoid using systemd specifiers like `%N` in resource names—they break inter-resource linking.
+The exception is `%N` in `Pod=`, which Quadlet expands while generating the unit.
 
 # TEMPLATE UNITS
 
