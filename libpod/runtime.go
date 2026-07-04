@@ -41,9 +41,11 @@ import (
 	"go.podman.io/podman/v6/pkg/systemd"
 	"go.podman.io/podman/v6/pkg/util"
 	"go.podman.io/storage"
+	"go.podman.io/storage/pkg/configfile"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/lockfile"
 	"go.podman.io/storage/pkg/unshare"
+	storageTypes "go.podman.io/storage/types"
 )
 
 // Set up the JSON library for all of Libpod
@@ -60,6 +62,12 @@ type storageSet struct {
 	VolumePathSet      bool
 	GraphDriverNameSet bool
 	TmpDirSet          bool
+	// userConfiguredGraphDriver is the driver explicitly set in the
+	// main storage.conf files (user, admin, system), excluding any
+	// drop-in files. Empty if no main config file set a driver. This
+	// value lets mergeDBConfig distinguish a user choice from a value
+	// injected by a vendor drop-in.
+	userConfiguredGraphDriver string
 }
 
 // Runtime is the core libpod runtime
@@ -197,6 +205,17 @@ func newRuntimeFromConfig(ctx context.Context, conf *config.Config, options ...R
 		return nil, err
 	}
 	runtime.storageConfig = storeOpts
+
+	// Also load the main storage.conf files (without drop-ins) so we can
+	// later tell whether the user explicitly set a graph driver, as
+	// opposed to a value injected by a vendor or distribution drop-in.
+	// A failure here is non-fatal: fall back to the legacy behaviour
+	// (warn whenever the resolved driver differs from the database).
+	if userDriver, perr := loadUserConfiguredGraphDriver(); perr != nil {
+		logrus.Debugf("Could not load user-configured graph driver separately: %v", perr)
+	} else {
+		runtime.storageSet.userConfiguredGraphDriver = userDriver
+	}
 
 	// Overwrite config with user-given configuration options
 	for _, opt := range options {
@@ -1097,6 +1116,25 @@ type DBConfig struct {
 	VolumePath  string
 }
 
+// loadUserConfiguredGraphDriver returns the graph driver value from the
+// main storage.conf files (user, admin, system), excluding any drop-in
+// files. The returned value is empty when no main config file sets a
+// driver. This is used to distinguish a user-chosen driver from a value
+// injected by a vendor or distribution drop-in (see mergeDBConfig).
+func loadUserConfiguredGraphDriver() (string, error) {
+	config := new(storageTypes.TomlConfig)
+	err := configfile.ParseTOML(config, &configfile.File{
+		Name:                 "storage",
+		Extension:            "conf",
+		UserId:               unshare.GetRootlessUID(),
+		DoNotLoadDropInFiles: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	return config.Storage.Driver, nil
+}
+
 // mergeDBConfig merges the configuration from the database.
 func (r *Runtime) mergeDBConfig(dbConfig *DBConfig) {
 	c := &r.config.Engine
@@ -1119,10 +1157,23 @@ func (r *Runtime) mergeDBConfig(dbConfig *DBConfig) {
 	}
 
 	if !r.storageSet.GraphDriverNameSet && dbConfig.GraphDriver != "" {
-		if r.storageConfig.GraphDriverName != dbConfig.GraphDriver &&
-			r.storageConfig.GraphDriverName != "" {
-			logrus.Errorf("User-selected graph driver %q overwritten by graph driver %q from database - delete libpod local files (%q) to resolve.  May prevent use of images created by other tools",
-				r.storageConfig.GraphDriverName, dbConfig.GraphDriver, r.storageConfig.GraphRoot)
+		// The "user's choice" for the warning comparison is the driver
+		// the user explicitly set in their main config files, NOT the
+		// resolved (post-drop-in) value. Vendor or distribution drop-ins
+		// can override the user's choice without their knowledge
+		// (https://blog.podman.io/2026/06/podman-6-configuration-file-changes/);
+		// surfacing such an override as "User-selected graph driver
+		// overwritten" blames the user for a configuration they did not
+		// author. See https://github.com/podman-container-tools/podman/issues/29120.
+		userDriver := r.storageSet.userConfiguredGraphDriver
+		if userDriver == "" {
+			// No explicit user setting; the resolved value reflects the
+			// drop-in or compiled-in default, which is fine to surface.
+			userDriver = r.storageConfig.GraphDriverName
+		}
+		if userDriver != "" && userDriver != dbConfig.GraphDriver {
+			logrus.Errorf("User-selected graph driver %q overwritten by graph driver %q from database. The database driver will be used. To use the configured driver, run `podman system reset` (this deletes all containers, images, and volumes) or update the storage configuration to match the database.",
+				userDriver, dbConfig.GraphDriver)
 		}
 		r.storageConfig.GraphDriverName = dbConfig.GraphDriver
 	}
