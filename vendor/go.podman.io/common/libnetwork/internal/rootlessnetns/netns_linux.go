@@ -205,10 +205,8 @@ func (n *Netns) setupPasta(nsPath string) error {
 
 	extraOpts := []string{"--pid", pidPath}
 
-	var socketPath string
 	if n.config.Network.RootlessPortForwarder == config.RootlessPortForwarderPasta {
-		socketPath = n.getPath(pestoSocketFile)
-		extraOpts = append(extraOpts, "-c", socketPath)
+		extraOpts = append(extraOpts, "-c", n.getPath(pestoSocketFile))
 	}
 
 	pastaOpts := pasta.SetupOptions{
@@ -248,10 +246,9 @@ func (n *Netns) setupPasta(nsPath string) error {
 	}
 
 	n.info = &types.RootlessNetnsInfo{
-		IPAddresses:     res.IPAddresses,
-		DnsForwardIps:   res.DNSForwardIPs,
-		MapGuestIps:     res.MapGuestAddrIPs,
-		PestoSocketPath: socketPath,
+		IPAddresses:   res.IPAddresses,
+		DnsForwardIps: res.DNSForwardIPs,
+		MapGuestIps:   res.MapGuestAddrIPs,
 	}
 	if err := n.serializeInfo(); err != nil {
 		return wrapError("serialize info", err)
@@ -630,6 +627,11 @@ func (n *Netns) Run(lock *lockfile.LockFile, toRun func() error) error {
 // host.containers.internal entries.
 func (n *Netns) Info() *types.RootlessNetnsInfo {
 	return n.info
+}
+
+// PestoSocketPath returns the path to the pesto control socket.
+func (n *Netns) PestoSocketPath() string {
+	return n.getPath(pestoSocketFile)
 }
 
 func refCount(dir string, inc int) (int, error) {

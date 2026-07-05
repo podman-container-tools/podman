@@ -28,21 +28,34 @@ type AutoUserNsOptions struct {
 	AdditionalGIDMappings []idtools.IDMap
 }
 
-// IDMappingOptions are used for specifying how ID mapping should be set up for
-// a layer or container.
+// IDMappingOptions specifies the caller's desired UID/GID mapping for a
+// layer or container.
+//
+// These options express what the caller wants, the mapping that the
+// container's user namespace should use.  They do not describe what is
+// stored on disk.  Depending on the graph driver, the store may apply
+// the mapping at layer creation time (by chowning files) or defer it to
+// mount time (using idmapped mounts or fuse-overlayfs options), but
+// that distinction is transparent to the caller.
+//
+// The resolution order for the effective UID/GID maps is:
+//  1. If HostUIDMapping/HostGIDMapping is true, no mapping is used (the
+//     corresponding UIDMap/GIDMap is ignored and treated as empty).
+//  2. If UIDMap/GIDMap contain at least one entry, those mappings are used.
+//  3. Otherwise, if the layer has a parent, the parent's mappings are inherited.
+//  4. Otherwise, the Store-level default mappings are used.
 type IDMappingOptions struct {
-	// UIDMap and GIDMap are used for setting up a layer's root filesystem
-	// for use inside of a user namespace where ID mapping is being used.
-	// If HostUIDMapping/HostGIDMapping is true, no mapping of the
-	// respective type will be used.  Otherwise, if UIDMap and/or GIDMap
-	// contain at least one mapping, one or both will be used.  By default,
-	// if neither of those conditions apply, if the layer has a parent
-	// layer, the parent layer's mapping will be used, and if it does not
-	// have a parent layer, the mapping which was passed to the Store
-	// object when it was initialized will be used.
+	// HostUIDMapping indicates that no UID mapping should be applied.
+	// When true, UIDMap is ignored and files are accessed with host UIDs.
 	HostUIDMapping bool
+	// HostGIDMapping indicates that no GID mapping should be applied.
+	// When true, GIDMap is ignored and files are accessed with host GIDs.
 	HostGIDMapping bool
-	UIDMap         []idtools.IDMap
+	// UIDMap defines the UID mappings for the user namespace.
+	// Only used when HostUIDMapping is false.
+	UIDMap []idtools.IDMap
+	// GIDMap defines the GID mappings for the user namespace.
+	// Only used when HostGIDMapping is false.
 	GIDMap         []idtools.IDMap
 	AutoUserNs     bool
 	AutoUserNsOpts AutoUserNsOptions

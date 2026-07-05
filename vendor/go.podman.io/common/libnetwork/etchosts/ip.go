@@ -33,8 +33,7 @@ type HostContainersInternalOptions struct {
 	HostNetwork bool
 }
 
-// Lookup "host.containers.internal" dns name so we can add it to /etc/hosts when running inside podman machine.
-var machineHostContainersInternalIP = sync.OnceValue(func() string {
+func gvProxyHostIP() string {
 	var errMsg string
 	addrs, err := net.LookupIP(HostContainersInternal)
 	if err == nil {
@@ -47,15 +46,22 @@ var machineHostContainersInternalIP = sync.OnceValue(func() string {
 	}
 	logrus.Warnf("Failed to resolve %s for the host entry ip address: %s", HostContainersInternal, errMsg)
 	return ""
+}
+
+// Lookup "host.containers.internal" dns name so we can add it to /etc/hosts when running inside podman machine.
+var machineHostContainersInternalIP = sync.OnceValue(func() string {
+	// If machine using gvproxy we let the gvproxy dns server handle resolve the name and then use that ip.
+	if machine.IsGvProxyBased() {
+		return gvProxyHostIP()
+	}
+	return wslHostIP()
 })
 
 // GetHostContainersInternalIP returns the host.containers.internal ip.
 func GetHostContainersInternalIP(opts HostContainersInternalOptions) string {
 	switch opts.Conf.Containers.HostContainersInternalIP {
 	case "":
-		// If empty (default) we will automatically choose one below.
-		// If machine using gvproxy we let the gvproxy dns server handle resolve the name and then use that ip.
-		if machine.IsGvProxyBased() {
+		if machine.IsPodmanMachine() {
 			return machineHostContainersInternalIP()
 		}
 	case "none":

@@ -167,8 +167,11 @@ type Layer struct {
 	// Flags is arbitrary data about the layer.
 	Flags map[string]any `json:"flags,omitempty"`
 
-	// UIDMap and GIDMap are used for setting up a layer's contents
-	// for use inside of a user namespace where UID mapping is being used.
+	// UIDMap and GIDMap are the on-disk ID mappings for this layer: the
+	// chown mapping that was applied to the layer's files at creation
+	// time.  When the driver supports shifting (idmapped mounts), no
+	// chown occurs and these fields are empty.  The caller's requested
+	// mapping is applied at mount time instead (see Container.UIDMap/GIDMap).
 	UIDMap []idtools.IDMap `json:"uidmap,omitempty"`
 	GIDMap []idtools.IDMap `json:"gidmap,omitempty"`
 
@@ -1600,8 +1603,8 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 		UIDs:               templateUIDs,
 		GIDs:               templateGIDs,
 		Flags:              newMapFrom(moreOptions.Flags),
-		UIDMap:             copySlicePreferringNil(moreOptions.UIDMap),
-		GIDMap:             copySlicePreferringNil(moreOptions.GIDMap),
+		UIDMap:             copySlicePreferringNil(moreOptions.IDMappingOptions.UIDMap),
+		GIDMap:             copySlicePreferringNil(moreOptions.IDMappingOptions.GIDMap),
 		BigDataNames:       []string{},
 		location:           r.pickStoreLocation(moreOptions.Volatile, writeable),
 	}
@@ -1645,7 +1648,10 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 		}
 	}
 
-	idMappings := idtools.NewIDMappingsFromMaps(moreOptions.UIDMap, moreOptions.GIDMap)
+	idMappings := idtools.NewIDMappingsFromMaps(moreOptions.IDMappingOptions.UIDMap, moreOptions.IDMappingOptions.GIDMap)
+	if moreOptions.IDMappingOptions.HostUIDMapping && moreOptions.IDMappingOptions.HostGIDMapping {
+		idMappings = &idtools.IDMappings{}
+	}
 	opts := drivers.CreateOpts{
 		MountLabel: mountLabel,
 		StorageOpt: options,
@@ -2601,7 +2607,7 @@ func (r *layerStore) stageWithUnlockedStore(sl *maybeStagedLayerExtraction, pare
 	result, err := applyDiff(layerOptions, sl.diff, f, func(payload io.Reader) (int64, error) {
 		cleanup, stagedLayer, size, err := sl.staging.StartStagingDiffToApply(parent, drivers.ApplyDiffOpts{
 			Diff:     payload,
-			Mappings: idtools.NewIDMappingsFromMaps(layerOptions.UIDMap, layerOptions.GIDMap),
+			Mappings: idtools.NewIDMappingsFromMaps(layerOptions.IDMappingOptions.UIDMap, layerOptions.IDMappingOptions.GIDMap),
 			// MountLabel is not supported for the unlocked extraction, see the comment in (*store).PutLayer()
 			MountLabel: "",
 		})

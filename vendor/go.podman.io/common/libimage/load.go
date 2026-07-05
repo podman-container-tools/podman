@@ -110,6 +110,12 @@ func (r *Runtime) Load(ctx context.Context, path string, options *LoadOptions) (
 			return loadedImages, err
 		}
 		logrus.Debugf("Error loading %s (%s): %v", path, transportName, err)
+
+		if errors.Is(err, errNoSpace) {
+			// %.0w makes err visible to error.Unwrap() without including any text
+			return nil, fmt.Errorf("no space left on device%.0w", err)
+		}
+
 		loadErrors = append(loadErrors, fmt.Errorf("%s: %v", transportName, err))
 	}
 

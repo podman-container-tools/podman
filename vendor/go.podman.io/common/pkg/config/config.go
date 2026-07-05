@@ -635,6 +635,10 @@ type NetworkConfig struct {
 	// bridge networks. Valid values are RootlessPortForwarderRootlessport
 	// (default, userspace TCP/UDP proxy) and RootlessPortForwarderPasta
 	// (experimental, pasta's kernel splice preserving the original source IP).
+	//
+	// Must only be changed when no containers are running. Switching while
+	// containers are active leads to leaked port-forwarding rules or cleanup
+	// failures.
 	RootlessPortForwarder string `toml:"rootless_port_forwarder,omitempty"`
 }
 

@@ -1504,7 +1504,7 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 
 	readWrite := !inAdditionalStore
 
-	if !d.SupportsShifting(options.UidMaps, options.GidMaps) || options.DisableShifting {
+	if !d.SupportsShifting(options.UidMaps, options.GidMaps) {
 		disableShifting = true
 	}
 

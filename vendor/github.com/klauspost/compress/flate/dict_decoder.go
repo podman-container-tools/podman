@@ -28,9 +28,10 @@ type dictDecoder struct {
 	hist []byte // Sliding window history
 
 	// Invariant: 0 <= rdPos <= wrPos <= len(hist)
-	wrPos int  // Current output position in buffer
-	rdPos int  // Have emitted hist[:rdPos] already
-	full  bool // Has a full window length been written yet?
+	wrPos   int   // Current output position in buffer
+	rdPos   int   // Have emitted hist[:rdPos] already
+	flushed int64 // Total bytes returned by readFlush since init
+	full    bool  // Has a full window length been written yet?
 }
 
 // init initializes dictDecoder to have a sliding window dictionary of the given
@@ -167,15 +168,32 @@ loop:
 	return dstPos - dstBase
 }
 
+// appendWindow appends the current sliding window (up to len(hist) most recent
+// bytes, oldest first) to dst.
+func (dd *dictDecoder) appendWindow(dst []byte) []byte {
+	if dd.full {
+		dst = append(dst, dd.hist[dd.wrPos:]...)
+		return append(dst, dd.hist[:dd.wrPos]...)
+	}
+	return append(dst, dd.hist[:dd.wrPos]...)
+}
+
 // readFlush returns a slice of the historical buffer that is ready to be
 // emitted to the user. The data returned by readFlush must be fully consumed
 // before calling any other dictDecoder methods.
 func (dd *dictDecoder) readFlush() []byte {
 	toRead := dd.hist[dd.rdPos:dd.wrPos]
+	dd.flushed += int64(len(toRead))
 	dd.rdPos = dd.wrPos
 	if dd.wrPos == len(dd.hist) {
 		dd.wrPos, dd.rdPos = 0, 0
 		dd.full = true
 	}
 	return toRead
+}
+
+// decoded reports the total number of bytes written into the dictionary since
+// init (i.e. excluding any preset dict bytes).
+func (dd *dictDecoder) decoded() int64 {
+	return dd.flushed + int64(dd.wrPos-dd.rdPos)
 }

@@ -31,3 +31,7 @@ func (n *Netns) Run(lock *lockfile.LockFile, toRun func() error) error {
 func (n *Netns) Info() *types.RootlessNetnsInfo {
 	return &types.RootlessNetnsInfo{}
 }
+
+func (n *Netns) PestoSocketPath() string {
+	return ""
+}

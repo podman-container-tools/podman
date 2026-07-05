@@ -36,6 +36,10 @@ type ContainerNetwork interface {
 	// Only used as rootless and should return an error as root.
 	RootlessNetnsInfo() (*RootlessNetnsInfo, error)
 
+	// PestoSocketPath returns the path to the pesto control socket
+	// for dynamic port forwarding. Empty when not available.
+	PestoSocketPath() string
+
 	// Drivers will return the list of supported network drivers
 	// for this interface.
 	Drivers() []string
@@ -377,9 +381,6 @@ type RootlessNetnsInfo struct {
 	DnsForwardIps []string
 	// MapGuestIps should be used for the host.containers.internal entry when set
 	MapGuestIps []string
-	// PestoSocketPath is the path to the pasta control socket for dynamic
-	// port forwarding via pesto. Empty when pasta was started without -c.
-	PestoSocketPath string
 }
 
 // FilterFunc can be passed to NetworkList to filter the networks.

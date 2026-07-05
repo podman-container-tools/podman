@@ -215,3 +215,11 @@ func (n *netavarkNetwork) RootlessNetnsInfo() (*types.RootlessNetnsInfo, error) 
 	}
 	return n.rootlessNetns.Info(), nil
 }
+
+func (n *netavarkNetwork) PestoSocketPath() string {
+	if n.rootlessNetns == nil {
+		logrus.Debug("PestoSocketPath: rootlessNetns is nil")
+		return ""
+	}
+	return n.rootlessNetns.PestoSocketPath()
+}

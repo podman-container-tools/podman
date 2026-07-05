@@ -633,13 +633,39 @@ type AutoUserNsOptions = types.AutoUserNsOptions
 
 type IDMappingOptions = types.IDMappingOptions
 
+// LayerIDMappingOptions are the on-disk ID mappings for a layer.
+//
+// Unlike the caller-facing IDMappingOptions (which expresses what mapping
+// the caller wants), these record how files are actually stored.  The two
+// may differ: when the graph driver supports shifting, no chown
+// occurs so HostUIDMapping/HostGIDMapping are true and UIDMap/GIDMap
+// are empty, even though the caller requested a non-trivial mapping.
+// The caller's requested mapping is still honored at mount time via
+// the Container's UIDMap/GIDMap.
+type LayerIDMappingOptions struct {
+	// HostUIDMapping is true when files in this layer are stored with host
+	// UIDs.
+	HostUIDMapping bool
+	// HostGIDMapping is true when files in this layer are stored with host
+	// GIDs.  See HostUIDMapping for details.
+	HostGIDMapping bool
+	// UIDMap is the on-disk UID mapping: it records the chown that was
+	// applied to the layer's files at creation time.  Empty when
+	// HostUIDMapping is true.
+	UIDMap []idtools.IDMap
+	// GIDMap is the on-disk GID mapping: it records the chown that was
+	// applied to the layer's files at creation time.  Empty when
+	// HostGIDMapping is true.
+	GIDMap []idtools.IDMap
+}
+
 // LayerOptions is used for passing options to a Store's CreateLayer() and PutLayer() methods.
 type LayerOptions struct {
 	// IDMappingOptions specifies the type of ID mapping which should be
 	// used for this layer.  If nothing is specified, the layer will
 	// inherit settings from its parent layer or, if it has no parent
 	// layer, the Store object.
-	types.IDMappingOptions
+	IDMappingOptions LayerIDMappingOptions
 	// TemplateLayer is the ID of a layer whose contents will be used to
 	// initialize this layer.  If set, it should be a child of the layer
 	// which we want to use as the parent of the new layer.
@@ -708,10 +734,18 @@ type ImageBigDataOption struct {
 
 // ContainerOptions is used for passing options to a Store's CreateContainer() method.
 type ContainerOptions struct {
-	// IDMappingOptions specifies the type of ID mapping which should be
-	// used for this container's layer.  If nothing is specified, the
-	// container's layer will inherit settings from the image's top layer
-	// or, if it is not being created based on an image, the Store object.
+	// IDMappingOptions specifies the caller's desired ID mapping for the
+	// container's user namespace.
+	//
+	// These express what the caller wants, not what ends up on disk.
+	// The store records them in the Container and uses them at mount
+	// time.  How the layer's files are stored depends on whether the
+	// driver supports shifting: if it does, no chown occurs and the
+	// mapping is applied at mount time; otherwise files are chowned at
+	// layer creation time.
+	//
+	// If nothing is specified, mappings are inherited from the image's top
+	// layer or, if no image, from the Store's defaults.
 	types.IDMappingOptions
 	LabelOpts []string
 	// Flags is a set of named flags and their values to store with the container.
@@ -1518,14 +1552,14 @@ func populateLayerOptions(s *store, rlstore rwLayerStore, rlstores []roLayerStor
 		options.BigData = slices.Clone(lOptions.BigData)
 		options.Flags = copyMapPreferringNil(lOptions.Flags)
 	}
-	if options.HostUIDMapping {
-		options.UIDMap = nil
+	if options.IDMappingOptions.HostUIDMapping {
+		options.IDMappingOptions.UIDMap = nil
 	}
-	if options.HostGIDMapping {
-		options.GIDMap = nil
+	if options.IDMappingOptions.HostGIDMapping {
+		options.IDMappingOptions.GIDMap = nil
 	}
-	uidMap := options.UIDMap
-	gidMap := options.GIDMap
+	uidMap := options.IDMappingOptions.UIDMap
+	gidMap := options.IDMappingOptions.GIDMap
 	if parent != "" {
 		var err error
 		parentLayer, unlock, err = getParentLayer(rlstore, rlstores, parent)
@@ -1546,26 +1580,26 @@ func populateLayerOptions(s *store, rlstore rwLayerStore, rlstores []roLayerStor
 				return nil, nil, unlock, ErrParentIsContainer
 			}
 		}
-		if !options.HostUIDMapping && len(options.UIDMap) == 0 {
+		if !options.IDMappingOptions.HostUIDMapping && len(options.IDMappingOptions.UIDMap) == 0 {
 			uidMap = parentLayer.UIDMap
 		}
-		if !options.HostGIDMapping && len(options.GIDMap) == 0 {
+		if !options.IDMappingOptions.HostGIDMapping && len(options.IDMappingOptions.GIDMap) == 0 {
 			gidMap = parentLayer.GIDMap
 		}
 	} else {
-		if !options.HostUIDMapping && len(options.UIDMap) == 0 {
+		if !options.IDMappingOptions.HostUIDMapping && len(options.IDMappingOptions.UIDMap) == 0 {
 			uidMap = s.uidMap
 		}
-		if !options.HostGIDMapping && len(options.GIDMap) == 0 {
+		if !options.IDMappingOptions.HostGIDMapping && len(options.IDMappingOptions.GIDMap) == 0 {
 			gidMap = s.gidMap
 		}
 	}
 	if s.canUseShifting(uidMap, gidMap) {
-		options.IDMappingOptions = types.IDMappingOptions{HostUIDMapping: true, HostGIDMapping: true, UIDMap: nil, GIDMap: nil}
+		options.IDMappingOptions = LayerIDMappingOptions{HostUIDMapping: true, HostGIDMapping: true, UIDMap: nil, GIDMap: nil}
 	} else {
-		options.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: options.HostUIDMapping,
-			HostGIDMapping: options.HostGIDMapping,
+		options.IDMappingOptions = LayerIDMappingOptions{
+			HostUIDMapping: options.IDMappingOptions.HostUIDMapping,
+			HostGIDMapping: options.IDMappingOptions.HostGIDMapping,
 			UIDMap:         copySlicePreferringNil(uidMap),
 			GIDMap:         copySlicePreferringNil(gidMap),
 		}
@@ -1856,14 +1890,14 @@ func (s *store) imageTopLayerForMapping(image *Image, ristore roImageStore, rlst
 	// mappings, and register it as an alternate top layer in the image.
 	var layerOptions LayerOptions
 	if s.canUseShifting(options.UIDMap, options.GIDMap) {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
+		layerOptions.IDMappingOptions = LayerIDMappingOptions{
 			HostUIDMapping: true,
 			HostGIDMapping: true,
 			UIDMap:         nil,
 			GIDMap:         nil,
 		}
 	} else {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
+		layerOptions.IDMappingOptions = LayerIDMappingOptions{
 			HostUIDMapping: options.HostUIDMapping,
 			HostGIDMapping: options.HostGIDMapping,
 			UIDMap:         copySlicePreferringNil(options.UIDMap),
@@ -2008,20 +2042,12 @@ func (s *store) CreateContainer(id string, names []string, image, layer, metadat
 		// But in transient store mode, all container layers are volatile.
 		Volatile: options.Volatile || s.transientStore,
 	}
-	if s.canUseShifting(uidMap, gidMap) {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: true,
-			HostGIDMapping: true,
-			UIDMap:         nil,
-			GIDMap:         nil,
-		}
-	} else {
-		layerOptions.IDMappingOptions = types.IDMappingOptions{
-			HostUIDMapping: idMappingsOptions.HostUIDMapping,
-			HostGIDMapping: idMappingsOptions.HostGIDMapping,
-			UIDMap:         copySlicePreferringNil(uidMap),
-			GIDMap:         copySlicePreferringNil(gidMap),
-		}
+	useHostMapping := idMappingsOptions.HostUIDMapping || s.canUseShifting(uidMap, gidMap)
+	layerOptions.IDMappingOptions = LayerIDMappingOptions{
+		HostUIDMapping: useHostMapping,
+		HostGIDMapping: useHostMapping,
+		UIDMap:         copySlicePreferringNil(uidMap),
+		GIDMap:         copySlicePreferringNil(gidMap),
 	}
 	if options.Flags == nil {
 		options.Flags = make(map[string]any)
@@ -3040,7 +3066,17 @@ func (s *store) MountImage(id string, mountOpts []string, mountLabel string) (st
 		MountLabel: mountLabel,
 		Options:    append(mountOpts, "ro"),
 	}
-	return rlstore.Mount(ilayer.ID, options)
+	if rlstore.Exists(ilayer.ID) {
+		return rlstore.Mount(ilayer.ID, options)
+	}
+	// check if the layer is in a read-only store, and return a better error message
+	for _, store := range lstores {
+		// required read lock is acquired earlier in this function
+		if store.Exists(ilayer.ID) {
+			return "", fmt.Errorf("mounting read/only store images is not allowed: %w", ErrStoreIsReadOnly)
+		}
+	}
+	return "", ErrLayerUnknown
 }
 
 func (s *store) Mount(id, mountLabel string) (string, error) {
@@ -3074,10 +3110,6 @@ func (s *store) Mount(id, mountLabel string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if options.UidMaps != nil || options.GidMaps != nil {
-		options.DisableShifting = !s.canUseShifting(options.UidMaps, options.GidMaps)
-	}
-
 	if err := rlstore.startWriting(); err != nil {
 		return "", err
 	}
