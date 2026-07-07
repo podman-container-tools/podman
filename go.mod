@@ -12,7 +12,7 @@ require (
 	github.com/checkpoint-restore/go-criu/v8 v8.3.0
 	github.com/containers/gvisor-tap-vsock v0.8.9
 	github.com/containers/libhvee v0.11.0
-	github.com/containers/ocicrypt v1.3.1-0.20260527145308-c03ceaa8ff0d
+	github.com/containers/ocicrypt v1.3.1
 	github.com/containers/psgo v1.10.0
 	github.com/containers/winquit v1.1.0
 	github.com/coreos/go-systemd/v22 v22.7.0
@@ -73,7 +73,7 @@ require (
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
 	golang.org/x/term v0.44.0
-	google.golang.org/grpc v1.81.1
+	google.golang.org/grpc v1.82.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/inf.v0 v0.9.1
 	gopkg.in/yaml.v3 v3.0.1

@@ -25,8 +25,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/containers/ocicrypt/config/pkcs11config"
 	"github.com/containers/ocicrypt/crypto/pkcs11"
 	"github.com/go-jose/go-jose/v4"
+	"go.yaml.in/yaml/v3"
 	"golang.org/x/crypto/openpgp"
 )
 
@@ -216,22 +218,37 @@ func SortDecryptionKeys(b64ItemList string) (map[string][][]byte, error) {
 				return nil, errors.New("Could not base64 decode a passed decryption key password")
 			}
 		}
+
 		var key string
-		isPrivKey, err := IsPrivateKey(keyData, password)
-		if IsPasswordError(err) {
-			return nil, err
-		}
-		if isPrivKey {
-			key = "privkeys"
-			if _, ok := dcparameters["privkeys-passwords"]; !ok {
-				dcparameters["privkeys-passwords"] = [][]byte{password}
-			} else {
-				dcparameters["privkeys-passwords"] = append(dcparameters["privkeys-passwords"], password)
+		if IsPkcs11PrivateKey(keyData) {
+			p11conf, err := pkcs11config.GetUserPkcs11Config()
+			if err != nil {
+				return nil, err
 			}
-		} else if IsCertificate(keyData) {
-			key = "x509s"
-		} else if IsGPGPrivateKeyRing(keyData) {
-			key = "gpg-privatekeys"
+			p11ConfYaml, err := yaml.Marshal(p11conf)
+			if err != nil {
+				return nil, fmt.Errorf("Could not marshal Pkcs11Config to Yaml: %w", err)
+			}
+			dcparameters["pkcs11-config"] = [][]byte{p11ConfYaml}
+
+			key = "pkcs11-yamls"
+		} else {
+			isPrivKey, err := IsPrivateKey(keyData, password)
+			if IsPasswordError(err) {
+				return nil, err
+			}
+			if isPrivKey {
+				key = "privkeys"
+				if _, ok := dcparameters["privkeys-passwords"]; !ok {
+					dcparameters["privkeys-passwords"] = [][]byte{password}
+				} else {
+					dcparameters["privkeys-passwords"] = append(dcparameters["privkeys-passwords"], password)
+				}
+			} else if IsCertificate(keyData) {
+				key = "x509s"
+			} else if IsGPGPrivateKeyRing(keyData) {
+				key = "gpg-privatekeys"
+			}
 		}
 		if key != "" {
 			values := dcparameters[key]

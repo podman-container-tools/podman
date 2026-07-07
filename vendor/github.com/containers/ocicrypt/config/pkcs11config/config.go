@@ -111,7 +111,6 @@ func getDefaultCryptoConfigOpts() (*OcicryptConfig, error) {
 // GetUserPkcs11Config gets the user's Pkcs11Conig either from a configuration file or if none is
 // found the default ones are returned
 func GetUserPkcs11Config() (*pkcs11.Pkcs11Config, error) {
-	fmt.Print("Note: pkcs11 support is currently experimental\n")
 	ic, err := getConfiguration()
 	if err != nil {
 		return &pkcs11.Pkcs11Config{}, err
