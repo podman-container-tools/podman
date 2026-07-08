@@ -7,6 +7,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	dockerImage "github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/network"
+	dockerRegistry "github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/api/types/volume"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/image/v5/manifest"
@@ -36,6 +37,13 @@ type history struct {
 type imageInspect struct {
 	// in:body
 	Body handlers.ImageInspect
+}
+
+// Distribution Inspect
+// swagger:response
+type distributionInspectResponse struct {
+	// in:body
+	Body dockerRegistry.DistributionInspect
 }
 
 // Image Load
