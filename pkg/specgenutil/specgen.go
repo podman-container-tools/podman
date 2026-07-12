@@ -869,6 +869,11 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 				return fmt.Errorf("invalid log label %q", o)
 			}
 			logLabels[labelKey] = labelVal
+		case "labels":
+			if val == "" {
+				return fmt.Errorf("invalid log labels %q", o)
+			}
+			s.LogConfiguration.LogPromotedLabels = strings.Split(val, ",")
 		default:
 			logOpts[key] = val
 		}

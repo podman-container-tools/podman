@@ -674,6 +674,12 @@ func (c *Container) LogLabels() map[string]string {
 	return c.config.LogLabels
 }
 
+// LogPromotedLabels returns the container label keys that should be
+// promoted as structured journald fields.
+func (c *Container) LogPromotedLabels() []string {
+    return c.config.LogPromotedLabels
+}
+
 // RestartPolicy returns the container's restart policy.
 func (c *Container) RestartPolicy() string {
 	return c.config.RestartPolicy

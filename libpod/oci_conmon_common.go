@@ -8,20 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"slices"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
-	"text/template"
-	"time"
-
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/config"
@@ -39,6 +25,20 @@ import (
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/regexp"
 	"golang.org/x/sys/unix"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"text/template"
+	"time"
+	"unicode"
 )
 
 const (
@@ -915,8 +915,12 @@ func (r *ConmonOCIRuntime) getLogData(ctr *Container) (string, map[string]string
 	logTag := ctr.LogTag()
 	logLabels := ctr.LogLabels()
 
+	logPromotedLabels := ctr.LogPromotedLabels()
+
 	// inspectLocked is expensive, skip it if possible
-	if logTag == "" && len(logLabels) == 0 {
+	if logTag == "" &&
+		len(logLabels) == 0 &&
+		len(logPromotedLabels) == 0 {
 		return "", nil, nil
 	}
 
@@ -954,7 +958,14 @@ func (r *ConmonOCIRuntime) getLogData(ctr *Container) (string, map[string]string
 		}
 		parsedLogLabels[labelKey] = b.String()
 	}
-
+	for _, key := range logPromotedLabels {
+		if value, ok := data.Config.Labels[key]; ok {
+			journalKey := sanitizeJournaldFieldName(key)
+			if journalKey != "" {
+				parsedLogLabels[journalKey] = value
+			}
+		}
+	}
 	return parsedLogTag, parsedLogLabels, nil
 }
 
@@ -1293,6 +1304,27 @@ var journaldFieldNameRegexp = regexp.Delayed(`^[A-Z0-9_]+$`)
 
 func validJournaldFieldName(s string) bool {
 	return journaldFieldNameRegexp.MatchString(s)
+}
+
+// sanitizeJournaldFieldName converts a container label key into a valid
+// journald field name, matching Docker's behavior.
+func sanitizeJournaldFieldName(s string) string {
+	n := ""
+	for _, v := range s {
+		if 'a' <= v && v <= 'z' {
+			v = unicode.ToUpper(v)
+		} else if ('Z' < v || v < 'A') && ('9' < v || v < '0') {
+			v = '_'
+		}
+
+		// journald fields cannot begin with '_'
+		if n == "" && v == '_' {
+			continue
+		}
+
+		n += string(v)
+	}
+	return n
 }
 
 // sharedConmonArgs takes common arguments for exec and create/restore and formats them for the conmon CLI

@@ -33,6 +33,9 @@ type LogConfig struct {
 	// A set of options to accompany the log driver.
 	// Optional.
 	Options map[string]string `json:"options,omitempty"`
+	// LogPromotedLabels contains container label keys that should be
+	// promoted to structured journald fields.
+	LogPromotedLabels []string `json:"logPromotedLabels,omitempty"`
 }
 
 // ContainerBasicConfig contains the basic parts of a container.

@@ -1065,6 +1065,17 @@ func WithLogLabels(logLabels map[string]string) CtrCreateOption {
 	}
 }
 
+func WithLogPromotedLabels(logPromotedLabels []string) CtrCreateOption {
+    return func(ctr *Container) error {
+        if ctr.valid {
+            return define.ErrCtrFinalized
+        }
+
+        ctr.config.LogPromotedLabels = logPromotedLabels
+        return nil
+    }
+}
+
 // WithCgroupsMode disables the creation of Cgroups for the conmon process.
 func WithCgroupsMode(mode string) CtrCreateOption {
 	return func(ctr *Container) error {

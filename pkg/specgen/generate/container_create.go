@@ -568,6 +568,9 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		if len(s.LogConfiguration.Labels) > 0 {
 			options = append(options, libpod.WithLogLabels(s.LogConfiguration.Labels))
 		}
+		if len(s.LogConfiguration.LogPromotedLabels) > 0 {
+ 			options = append(options, libpod.WithLogPromotedLabels(s.LogConfiguration.LogPromotedLabels))
+		}
 		if len(s.LogConfiguration.Driver) > 0 {
 			options = append(options, libpod.WithLogDriver(s.LogConfiguration.Driver))
 		}
