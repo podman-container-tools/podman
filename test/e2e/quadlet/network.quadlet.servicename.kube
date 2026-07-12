@@ -1,0 +1,8 @@
+## assert-podman-args "--network" "test-network"
+## assert-key-is "Unit" "Requires" "basic.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+
+
+[Kube]
+Yaml=deployment.yml
+Network=service-name.network

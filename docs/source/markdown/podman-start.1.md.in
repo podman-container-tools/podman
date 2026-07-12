@@ -1,0 +1,108 @@
+% podman-start 1
+
+## NAME
+podman\-start - Start one or more containers
+
+## SYNOPSIS
+**podman start** [*options*] *container* ...
+
+**podman container start** [*options*] *container* ...
+
+## DESCRIPTION
+Start one or more containers using container IDs or names as input.  The *attach* and *interactive*
+options cannot be used to override the *--tty* and *--interactive* options from when the container
+was created. Starting an already running container with the *--attach* option, Podman simply
+attaches to the container.
+
+## OPTIONS
+
+#### **--all**
+
+Start all the containers, default is only running containers.
+
+#### **--attach**, **-a**
+
+Attach container's STDOUT and STDERR.  The default is false. This option cannot be used when
+starting multiple containers.
+
+@@option detach-keys
+
+@@option filter.container
+
+@@option interactive
+
+@@option latest
+
+@@option sig-proxy
+
+The default is **true** when attaching, **false** otherwise.
+
+## EXAMPLE
+
+Start specified container:
+```
+podman start mywebserver
+```
+
+Start multiple containers:
+```
+podman start 860a4b231279 5421ab43b45
+```
+
+Start specified container in interactive mode with terminal attached:
+```
+podman start --interactive --attach 860a4b231279
+```
+
+Start last created container in interactive mode (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
+```
+podman start -i -l
+```
+
+Start containers by label:
+```
+$ podman start --filter label=app=frontend
+9351ccb3ef4272532bc0c188bd4f0ddfc2b0de217732cd108259ea126b014647
+```
+Start container by name:
+```
+$ podman start --filter name=backend-app1
+93308911bd4769cda03b75eb7f56588e862e0ea3568f25e1e3defa4138b9b973
+```
+
+Start containers by status:
+```
+$ podman start --filter status=exited
+f8e85f84a749b205fb602895afa6ec8a866045ff27b82f843033712c8b93a2c9
+34f997d354017a0076402c3a79245a5b8bd11b597c84385bec25ae8941fd5238
+47972eb04aa7c77705b597a929957d1e8a392e00b44c0a2a7f88a01f9f860d11
+```
+Start container by name:
+```
+$ podman start --filter name=backend-app1
+93308911bd4769cda03b75eb7f56588e862e0ea3568f25e1e3defa4138b9b973
+```
+
+Start containers by volume:
+```
+$ podman start --filter volume=web-vol
+4a3332649ed8bec1e0d82e113074b9a13d45582007aeac969c005992cc480a73
+```
+Start container by network:
+```
+$ podman start --filter network=web-net
+4a3332649ed8bec1e0d82e113074b9a13d45582007aeac969c005992cc480a73
+f8e85f84a749b205fb602895afa6ec8a866045ff27b82f843033712c8b93a2c9
+```
+Start container by ancestor:
+```
+$ podman start --filter ancestor=nginx
+4a3332649ed8bec1e0d82e113074b9a13d45582007aeac969c005992cc480a73
+47972eb04aa7c77705b597a929957d1e8a392e00b44c0a2a7f88a01f9f860d11
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**
+
+## HISTORY
+November 2018, Originally compiled by Brent Baude <bbaude@redhat.com>

@@ -1,0 +1,17 @@
+[Unit]
+Description=A template for running K8s workloads via podman-kube-play
+Documentation=man:podman-kube-play(1)
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=%t/containers
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+TimeoutStopSec=70
+ExecStart=@@PODMAN@@ kube play --replace --service-container=true %I
+ExecStop=@@PODMAN@@ kube down %I
+Type=notify
+NotifyAccess=all
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,5 @@
+services:
+  alpine:
+    image: alpine
+    network_mode: "pasta:--ipv4-only,--mtu,1280"
+    command: ["top"]

@@ -1,0 +1,5 @@
+## assert-podman-global-args "network" "--network-config-dir=/etc/network-config"
+## assert-podman-global-args "network" "--log-level=debug"
+
+[Network]
+GlobalArgs=--network-config-dir=/etc/network-config --log-level=debug

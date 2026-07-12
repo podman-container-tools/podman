@@ -1,0 +1,5 @@
+## assert-podman-args "--network" "host"
+
+[Container]
+Image=localhost/imagename
+Network=host

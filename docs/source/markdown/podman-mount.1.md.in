@@ -1,0 +1,72 @@
+% podman-mount 1
+
+## NAME
+podman\-mount - Mount a working container's root filesystem
+
+## SYNOPSIS
+**podman mount** [*options*] [*container* ...]
+
+**podman container mount** [*options*] [*container* ...]
+
+## DESCRIPTION
+Mounts the specified containers' root file system in a location which can be
+accessed from the host, and returns its location.
+
+Podman lists all of the currently mounted containers, including external containers, when the command is executed
+without any arguments. External containers are containers in container/storage by tools other than Podman.
+For example Buildah and CRI-O.
+
+Rootless mode only supports mounting VFS driver, unless Podman is run within the user namespace
+via the `podman unshare` command. All other storage drivers fails to mount.
+
+## RETURN VALUE
+The location of the mounted file system.  On error an empty string and errno is
+returned.
+
+## OPTIONS
+
+#### **--all**, **-a**
+
+Mount all podman containers. (External containers are not mounted)
+
+#### **--format**=*format*
+
+Print the mounted containers in specified format (json).
+
+@@option latest
+
+#### **--no-trunc**
+
+Do not truncate the output (default *false*).
+
+## EXAMPLES
+
+In rootful mode, Mount specified container.
+```
+# podman mount c831414b10a3
+/var/lib/containers/storage/overlay/f3ac502d97b5681989dff84dfedc8354239bcecbdc2692f9a639f4e080a02364/merged
+```
+
+In rootless mode, container mounting only works from inside the user namespace.
+```
+$ podman unshare
+# podman mount affectionate_mcnulty
+/home/dwalsh/.local/share/containers/storage/overlay/4218326b9a80619aef005ff95067f76687ad975ce101c176598fb416f6186906/merged
+```
+
+List the currently mounted containers:
+```
+podman mount
+c831414b10a3 /var/lib/containers/storage/overlay/f3ac502d97b5681989dff84dfedc8354239bcecbdc2692f9a639f4e080a02364/merged
+a7060253093b /var/lib/containers/storage/overlay/0ff7d7ca68bed1ace424f9df154d2dd7b5a125c19d887f17653cbcd5b6e30ba1/merged
+```
+
+Mount multiple containers:
+```
+podman mount c831414b10a3 a7060253093b
+/var/lib/containers/storage/overlay/f3ac502d97b5681989dff84dfedc8354239bcecbdc2692f9a639f4e080a02364/merged
+/var/lib/containers/storage/overlay/0ff7d7ca68bed1ace424f9df154d2dd7b5a125c19d887f17653cbcd5b6e30ba1/merged
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-unmount(1)](podman-unmount.1.md)**, **[podman-unshare(1)](podman-unshare.1.md)**, **mount(8)**

@@ -1,0 +1,6 @@
+[Container]
+Image=localhost/imagename
+## assert-podman-args-key-val "--mount" "," "type=volume,source=test-volume,destination=/path/in/container,ro=true"
+## assert-key-is "Unit" "Requires" "basic.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+Mount=type=volume,source=service-name.volume,destination=/path/in/container,ro=true

@@ -1,0 +1,49 @@
+all:
+  - '.github/workflows/ci.yml'
+  - '.github/workflows/lima.yml'
+  - 'hack/**'
+  - 'Makefile'
+  - 'vendor/**'
+  - 'test/tools/**'
+  - 'test/registries*.conf'
+  - 'version/rawversion/*'
+
+code:
+  # We look for all .go, .c, .h files in the source except under test/**
+  - '!(test/**)**/*.@(go|c|h)'
+
+apiv2:
+  - 'test/apiv2/**'
+  - 'test/python/**'
+
+bindings:
+ - 'pkg/bindings/test/**'
+
+docker_py:
+ - 'test/python/**'
+
+unit:
+  - '**/*_test.go'
+
+compose_v2:
+  - 'test/compose/**'
+
+int:
+  - 'test/e2e/**'
+  - 'test/utils/**'
+
+sys:
+  - 'test/system/**'
+
+machine:
+  - 'cmd/podman/machine/**'
+  - 'pkg/machine/**'
+  - '**/*machine*.go'
+
+upgrade:
+  - 'test/upgrade/**'
+  - 'test/system/*.bash'
+
+windows:
+  - 'winmake.ps1'
+  - 'hack/ci/win-*.ps1'

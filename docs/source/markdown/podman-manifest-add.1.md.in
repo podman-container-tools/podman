@@ -1,0 +1,162 @@
+% podman-manifest-add 1
+
+## NAME
+podman\-manifest\-add - Add an image or artifact to a manifest list or image index
+
+## SYNOPSIS
+**podman manifest add** [*options*] *listnameorindexname* [*transport*]:*imagename* *imageorartifactname* [...]
+
+## DESCRIPTION
+
+Adds the specified image to the specified manifest list or image index, or
+creates an artifact manifest and adds it to the specified image index.
+
+## RETURN VALUE
+
+The list image's ID.
+
+## OPTIONS
+
+#### **--all**
+
+If the image which is added to the list or index is itself a list or
+index, add all of the contents to the local list.  By default, only one image
+from such a list or index is added to the list or index.  Combining
+*--all* with any of the other options described below is NOT recommended.
+
+@@option annotation.manifest
+
+#### **--arch**=*architecture*
+
+Override the architecture which the list or index records as a requirement for
+the image.  If *imageName* refers to a manifest list or image index, the
+architecture information is retrieved from it.  Otherwise, it is
+retrieved from the image's configuration information.
+
+#### **--artifact**
+
+Create an artifact manifest and add it to the image index.  Arguments after the
+index name will be interpreted as file names rather than as image references.
+In most scenarios, the **--artifact-type** option should also be specified.
+
+#### **--artifact-config**=*path*
+
+When creating an artifact manifest and adding it to the image index, use the
+specified file's contents as the configuration blob in the artifact manifest.
+In most scenarios, leaving the default value, which signifies an empty
+configuration, unchanged, is the preferred option.
+
+#### **--artifact-config-type**=*type*
+
+When creating an artifact manifest and adding it to the image index, use the
+specified MIME type as the `mediaType` associated with the configuration blob
+in the artifact manifest.  In most scenarios, leaving the default value, which
+signifies either an empty configuration or the standard OCI configuration type,
+unchanged, is the preferred option.
+
+#### **--artifact-exclude-titles**
+
+When creating an artifact manifest and adding it to the image index, do not
+set "org.opencontainers.image.title" annotations equal to the file's basename
+for each file added to the artifact manifest.  Tools which retrieve artifacts
+from a registry may use these values to choose names for files when saving
+artifacts to disk, so this option is not recommended unless it is required
+for interoperability with a particular registry.
+
+#### **--artifact-layer-type**=*type*
+
+When creating an artifact manifest and adding it to the image index, use the
+specified MIME type as the `mediaType` associated with the files' contents.  If
+not specified, guesses based on either the files names or their contents will
+be made and used, but the option should be specified if certainty is needed.
+
+#### **--artifact-subject**=*imageName*
+
+When creating an artifact manifest and adding it to the image index, set the
+*subject* field in the artifact manifest to mark the artifact manifest as being
+associated with the specified image in some way.  An artifact manifest can only
+be associated with, at most, one subject.
+
+#### **--artifact-type**=*type*
+
+When creating an artifact manifest, use the specified MIME type as the
+manifest's `artifactType` value instead of the less informative default value.
+
+@@option authfile
+
+@@option cert-dir
+
+@@option creds
+
+@@option features
+
+#### **--os**=*OS*
+
+Override the OS which the list or index records as a requirement for the image.
+If *imagename* refers to a manifest list or image index, the OS information
+is retrieved from it.  Otherwise, it is retrieved from the image's
+configuration information.
+
+@@option os-version
+
+@@option tls-verify
+
+@@option variant.manifest
+
+## Transport
+
+ Multiple transports are supported:
+
+  **docker://**_docker-reference_ _(default)_
+  An image in a registry implementing the "Docker Registry HTTP API V2". By default, uses the authorization state in `$XDG_RUNTIME_DIR/containers/auth.json`, which is set using `(podman login)`. If the authorization state is not found there, `$HOME/.docker/config.json` is checked, which is set using `(docker login)`.
+
+    $ podman manifest add mylist:v1.11 docker://quay.io/username/myimage
+
+  **containers-storage:**_oci-reference_
+  An image in _oci-reference_ format stored in the local container storage. _oci-reference_ must contain a tag.
+
+    $ podman manifest add mylist:v1.11 containers-storage:quay.io/username/myimage
+
+  **dir:**_path_
+  An existing local directory _path_ storing the manifest, layer tarballs, and signatures as individual files. This
+  is a non-standardized format, primarily useful for debugging or noninvasive container inspection.
+
+    $ podman manifest add dir:/tmp/myimage
+
+  **docker-archive:**_path_[**:**_docker-reference_]
+  An image is stored in the `docker save` formatted file.  _docker-reference_ is only used when creating such a
+  file, and it must not contain a digest.
+
+    $ podman manifest add docker-archive:/tmp/myimage
+
+  **docker-daemon:**_docker-reference_
+  An image in _docker-reference_ format stored in the docker daemon internal storage. The _docker-reference_ can also be an image ID (docker-daemon:algo:digest).
+
+    $ sudo podman manifest add docker-daemon:docker.io/library/myimage:33
+
+  **oci-archive:**_path_**:**_tag_
+  An image _tag_ in a directory compliant with "Open Container Image Layout Specification" at _path_.
+
+    $ podman manifest add oci-archive:/tmp/myimage
+
+## EXAMPLES
+
+Add specified default image from source manifest list to destination manifest list:
+```
+podman manifest add mylist:v1.11 docker://fedora
+71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
+```
+
+Add all images from source manifest list to destination manifest list:
+```
+podman manifest add --all mylist:v1.11 docker://fedora
+71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
+```
+
+Add selected image matching arch and variant from source manifest list to destination manifest list:
+```
+podman manifest add --arch arm64 --variant v8 mylist:v1.11 docker://71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**

@@ -1,0 +1,231 @@
+% podman-pod-ps 1
+
+## NAME
+podman\-pod\-ps - Print out information about pods
+
+## SYNOPSIS
+**podman pod ps** [*options*]
+
+## DESCRIPTION
+**podman pod ps** lists all pods on the system.
+By default it lists:
+
+ * pod ID
+ * pod name
+ * the time the pod was created
+ * number of containers attached to pod
+ * container ID of the pod infra container
+ * status of pod as defined by the following table
+
+|  **Status**  | **Description**                                 |
+| ------------ | ------------------------------------------------|
+| Created      | No containers running nor stopped               |
+| Running      | at least one container is running               |
+| Stopped      | At least one container stopped and none running |
+| Exited       | All containers stopped in pod                   |
+| Dead         | Error retrieving state                          |
+
+
+## OPTIONS
+
+#### **--ctr-ids**
+
+Display the container IDs
+
+#### **--ctr-names**
+
+Display the container names
+
+#### **--ctr-status**
+
+Display the container statuses
+
+@@option filter.pod-ps
+
+#### **--format**=*format*
+
+Pretty-print containers to JSON or using a Go template
+
+Valid placeholders for the Go template are listed below:
+
+| **Placeholder**     | **Description**                                      |
+|---------------------|------------------------------------------------------|
+| .Cgroup             | Cgroup path of pod                                   |
+| .ContainerIds       | Comma-separated list of container IDs in the pod     |
+| .ContainerNames     | Comma-separated list of container names in the pod   |
+| .ContainerStatuses  | Comma-separated list of container statuses           |
+| .Created            | Creation time of pod                                 |
+| .ID                 | Container ID                                         |
+| .InfraID            | Pod infra container ID                               |
+| .Label *string*     | Specified label of the pod                           |
+| .Labels             | All the labels assigned to the pod                   |
+| .Name               | Name of pod                                          |
+| .Networks           | Show all networks connected to the infra container   |
+| .NumberOfContainers | Show the number of containers attached to pod        |
+| .Restarts           | Show the total number of container restarts in a pod |
+| .Status             | Status of pod                                        |
+
+#### **--help**, **-h**
+
+Print usage statement
+
+#### **--latest**, **-l**
+
+Show the latest pod created (all states) (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+#### **--namespace**, **--ns**
+
+Display namespace information of the pod
+
+#### **--no-trunc**
+
+Do not truncate the output (default *false*).
+
+@@option noheading
+
+#### **--quiet**, **-q**
+
+Print the numeric IDs of the pods only
+
+#### **--sort**
+
+Sort by created, ID, name, status, or number of containers
+
+Default: created
+
+## EXAMPLES
+
+List all pods.
+```
+$ podman pod ps
+POD ID         NAME              STATUS    CREATED          INFRA ID       # OF CONTAINERS
+00dfd6fa02c0   jolly_goldstine   Running   31 hours ago     ba465ab0a3a4   1
+f4df8692e116   nifty_torvalds    Created   10 minutes ago   331693bff40a   2
+```
+
+List all pods along with container names within the pods.
+```
+$ podman pod ps --ctr-names
+POD ID         NAME              STATUS    CREATED          INFRA ID       NAMES
+00dfd6fa02c0   jolly_goldstine   Running   31 hours ago     ba465ab0a3a4   loving_archimedes
+f4df8692e116   nifty_torvalds    Created   10 minutes ago   331693bff40a   thirsty_hawking,wizardly_golick
+```
+
+List all pods along with status, names and ids.
+```
+$ podman pod ps --ctr-status --ctr-names --ctr-ids
+POD ID         NAME              STATUS    CREATED          INFRA ID       IDS                         NAMES                             STATUS
+00dfd6fa02c0   jolly_goldstine   Running   31 hours ago     ba465ab0a3a4   ba465ab0a3a4                loving_archimedes                 running
+f4df8692e116   nifty_torvalds    Created   10 minutes ago   331693bff40a   331693bff40a,8e428daeb89e   thirsty_hawking,wizardly_golick   configured,configured
+```
+
+List all pods and print ID, Container Names, and cgroups.
+```
+$ podman pod ps --format "{{.ID}}  {{.ContainerNames}}  {{.Cgroup}}"
+00dfd6fa02c0   loving_archimedes   /libpod_parent
+f4df8692e116   thirsty_hawking,wizardly_golick   /libpod_parent
+```
+
+List all pods with two containers sorted by pod ID.
+```
+$ podman pod ps --sort id --filter ctr-number=2
+POD ID         NAME             STATUS    CREATED          INFRA ID       # OF CONTAINERS
+f4df8692e116   nifty_torvalds   Created   10 minutes ago   331693bff40a   2
+```
+
+List all pods with their container ids.
+```
+$ podman pod ps  --ctr-ids
+POD ID         NAME              STATUS    CREATED          INFRA ID       IDS
+00dfd6fa02c0   jolly_goldstine   Running   31 hours ago     ba465ab0a3a4   ba465ab0a3a4
+f4df8692e116   nifty_torvalds    Created   10 minutes ago   331693bff40a   331693bff40a,8e428daeb89e
+```
+
+List all pods with container ids without truncating IDs.
+```
+$ podman pod ps --no-trunc --ctr-ids
+POD ID                                                             NAME              STATUS    CREATED          INFRA ID                                                           IDS
+00dfd6fa02c0a2daaedfdf8fcecd06f22ad114d46d167d71777224735f701866   jolly_goldstine   Running   31 hours ago     ba465ab0a3a4e15e3539a1e79c32d1213a02b0989371e274f98e0f1ae9de7050   ba465ab0a3a4e15e3539a1e79c32d1213a02b0989371e274f98e0f1ae9de7050
+f4df8692e116a3e6d1d62572644ed36ca475d933808cc3c93435c45aa139314b   nifty_torvalds    Created   10 minutes ago   331693bff40a926b6d52b184e116afd15497610c378d5d4c42945dd6e33b75b0   331693bff40a926b6d52b184e116afd15497610c378d5d4c42945dd6e33b75b0,8e428daeb89e69b71e7916a13accfb87d122889442b5c05c2d99cf94a3230e9d
+```
+
+List all pods with container names.
+```
+$ podman pod ps --ctr-names
+POD ID         NAME   STATUS    CREATED        INFRA ID       NAMES
+314f4da82d74   hi     Created   17 hours ago   a9f2d2165675   jovial_jackson,hopeful_archimedes,vibrant_ptolemy,heuristic_jennings,keen_raman,hopeful_newton,mystifying_bose,silly_lalande,serene_lichterman ...
+```
+
+List pods containing the specified container ID
+```
+$ podman pod ps --filter ctr-ids=aceb3b775797
+POD ID        NAME        STATUS      CREATED        INFRA ID      # OF CONTAINERS
+952330c7cff0  web-app     Running     3 minutes ago  b0f247c49669  3
+```
+
+List all pods with exactly 2 containers
+```
+$ podman pod ps --filter ctr-number=2
+POD ID        NAME         STATUS      CREATED        INFRA ID      # OF CONTAINERS
+b2ae050d17be  labeled-pod  Running     2 minutes ago  fda2a486b939  2
+```
+
+List pods with containers in `exited` status
+```
+$ podman pod ps --filter ctr-status=exited
+POD ID        NAME         STATUS      CREATED        INFRA ID      # OF CONTAINERS
+06c3a107763a  maintenance  Degraded    4 minutes ago  67e500cbb678  3
+1e3424d7e9c0  db-cluster   Degraded    4 minutes ago  d6650a490b69  3
+```
+
+Filter pod by ID
+```
+$ podman pod ps --filter id=95938982244d
+POD ID        NAME        STATUS      CREATED        INFRA ID      # OF CONTAINERS
+95938982244d  nettest     Running     4 minutes ago  a28d133e8c63  3
+```
+
+Filter pod by label
+```
+$ podman pod ps --filter label=tier=frontend
+POD ID        NAME         STATUS      CREATED       INFRA ID      # OF CONTAINERS
+b2ae050d17be  labeled-pod  Running     1 second ago  fda2a486b939  2
+```
+
+Filter pod by name
+```
+$ podman pod ps --filter name=db-cluster
+POD ID        NAME        STATUS      CREATED        INFRA ID      # OF CONTAINERS
+1e3424d7e9c0  db-cluster  Degraded    4 minutes ago  d6650a490b69  3
+```
+
+Filter pod by pod status (e.g., Degraded)
+```
+$ podman pod ps --filter status=degraded
+POD ID        NAME         STATUS      CREATED        INFRA ID      # OF CONTAINERS
+95938982244d  nettest      Degraded    7 minutes ago  a28d133e8c63  3
+06c3a107763a  maintenance  Degraded    8 minutes ago  67e500cbb678  3
+1e3424d7e9c0  db-cluster   Degraded    8 minutes ago  d6650a490b69  3
+952330c7cff0  web-app      Degraded    8 minutes ago  b0f247c49669  3
+```
+
+Filter pods created before a time threshold (`--until`)
+```
+$ podman pod ps --filter until=2m
+POD ID        NAME         STATUS      CREATED        INFRA ID      # OF CONTAINERS
+b2ae050d17be  labeled-pod  Running     3 minutes ago  fda2a486b939  2
+95938982244d  nettest      Degraded    8 minutes ago  a28d133e8c63  3
+deee8956522e  utility      Running     8 minutes ago  6b730e3ac334  3
+06c3a107763a  maintenance  Degraded    8 minutes ago  67e500cbb678  3
+1e3424d7e9c0  db-cluster   Degraded    8 minutes ago  d6650a490b69  3
+952330c7cff0  web-app      Degraded    8 minutes ago  b0f247c49669  3
+```
+
+## pod ps
+Print a list of pods
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**
+
+## HISTORY
+July 2018, Originally compiled by Peter Hunt <pehunt@redhat.com>

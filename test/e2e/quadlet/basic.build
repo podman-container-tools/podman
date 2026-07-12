@@ -1,0 +1,13 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service"
+## assert-key-is-regex "Unit" "Wants" "network-online.target|podman-user-wait-network-online.service"
+## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
+## assert-key-is-regex "Service" "WorkingDirectory" "/.*/podman-e2e-.*/subtest-.*/quadlet"
+## assert-key-is "Service" "Type" "oneshot"
+## !assert-key-is "Service" "RemainAfterExit" "yes"
+## assert-key-is "Service" "SyslogIdentifier" "%N"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit

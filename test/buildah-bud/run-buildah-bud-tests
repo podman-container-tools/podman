@@ -1,0 +1,285 @@
+#!/bin/bash
+
+ME=$(basename $0)
+
+###############################################################################
+# BEGIN user-customizable section
+
+# Buildah main repository; unlikely to change often
+BUILDAH_REPO=github.com/containers/buildah
+BUILDAH_MODULE=go.podman.io/buildah
+
+# Tag name used to identify the base checkout
+BASE_TAG=buildah-bud-in-podman
+
+# END   user-customizable section
+###############################################################################
+
+usage="Usage: $ME [--help] [--no-checkout] [--no-test] [--filter=TESTNAME]
+
+Flags, useful for manual debugging:
+
+  --no-checkout   Skip checkout step, go directly to running tests.
+                  Useful when rerunning tests.
+
+  --no-test       Do checkout only, but do not run tests. Useful when
+                  testing the apply-podman-deltas script.
+
+  --filter=NAME   Passed on to bats; runs only tests that match NAME
+
+  --remote        Test with podman-remote. Will start its own server.
+"
+
+# Parse command-line options (used in development only, not in CI)
+do_checkout=y
+do_test=y
+declare -a bats_filter=()
+for i; do
+    value=$(expr "$i" : '[^=]*=\(.*\)')
+    case "$i" in
+        --no-checkout)  do_checkout= ; shift;;
+        --no-test)      do_test=     ; shift;;
+        --filter=*)     bats_filter=("--filter" "$value"); shift;;
+        --remote)       PODBIN_NAME=remote;;
+       -h|--help)       echo "$usage"; exit 0;;
+        *)              echo "$ME: Unrecognized option '$i'" >&2; exit 1;;
+    esac
+done
+
+# Patches helpers.bash and potentially other files (bud.bats? Dockerfiles?)
+#
+# The patch file is horrible to generate:
+#    1) cd to the checked-out buildah/tests directory
+#    2) make your edits
+#    3) git commit -asm 'blah blah blah'
+#       3a) if checked-out directory already includes earlier patches,
+#           you may need to 'git commit --amend' instead
+#    4) git format-patch HEAD^
+#    5) sed -e 's/ \+$//' 0001* >../PATCH-FILE-PATH
+#    6) vim that file, remove trailing empty newlines
+#    7) cd back out of buildah directory, and git-commit this new patch file
+#
+# FIXME: this makes me nervous. The diff will probably need tweaking
+#        over time. I don't think we need to version it, because we
+#        *have* to be in lockstep with a specific buildah version,
+#        so problems should only arise when we re-vendor.
+#        But I'm still nervous and can't put my finger on the reason.
+#
+# Complicated invocation needed because we 'cd' down below.
+BUD_TEST_DIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
+PATCHES=${BUD_TEST_DIR}/buildah-tests.diff
+
+# Friendlier relative path to our buildah-tests dir
+BUD_TEST_DIR_REL=$(dirname $(git ls-files --full-name ${BASH_SOURCE[0]}))
+# Path to podman binary; again, do it before we cd
+PODMAN_BINARY=$(pwd)/bin/podman
+REMOTE=
+# If remote, start server & change path
+if [[ "${PODBIN_NAME:-}" = "remote" ]]; then
+    REMOTE=1
+    PODMAN_BINARY+="-remote"
+fi
+
+function die() {
+    failhint=
+    echo "$ME: $*" >&2
+    exit 1
+}
+
+# From here on out, any unexpected abort will try to offer helpful hints
+failhint=
+trap 'if [[ $? != 0 ]]; then if [[ -n $failhint ]]; then echo;echo "***************************************";echo "$failhint";echo;echo "Please see $BUD_TEST_DIR_REL/README.md for advice";fi;fi' 0
+
+# Find the version of buildah we've vendored in, so we can run the right tests.
+# Note first check if buildah is being replaced with a different version in which case we need to use that one.
+buildah_replace=$(go list -m -f '{{if .Replace}}{{.Replace}}{{end}}' $BUILDAH_MODULE)
+buildah_checkout_repo="$BUILDAH_REPO"
+
+if [[ -z "$buildah_replace" ]]; then
+    # No replace this is fine, check the main version
+    buildah_version=$(go list -m -f '{{.Version}}' $BUILDAH_MODULE)
+else
+    # replace string is "REPO VERSION" so split this into our two vars
+    buildah_checkout_repo="${buildah_replace% *}"
+    buildah_version="${buildah_replace#* }"
+fi
+
+
+if [[ -z "$buildah_version" ]]; then
+    # This should not happen
+    die "Did not find '$BUILDAH_REPO' in go.mod"
+fi
+
+# From here on out, any error is fatal
+set -e
+
+# Run sudo early, to refresh the credentials cache. This is a NOP under CI,
+# but might be appreciated by developers who run this script, step away
+# during the git-checkout-buildah step, then come back twenty minutes later
+# to an expired sudo prompt and no tests have run. (No need to do this
+# for checkout; only when running tests)
+export SUDO=
+if [[ -n $do_test ]] && ! [[ "$PRIV_NAME" == "rootless" ]]; then
+    SUDO=sudo
+    $SUDO --validate
+fi
+
+# Before pulling buildah (while still cd'ed to podman repo), try to determine
+# if this is a PR, and if so if it's a revendoring of buildah. We use this to
+# try to offer a helpful hint on failure.
+is_revendor=
+if [[ -n $CIRRUS_CHANGE_IN_REPO ]]; then
+    if [[ -n $DEST_BRANCH ]]; then
+        head=${CIRRUS_CHANGE_IN_REPO}
+        # Base of this PR.
+        base=$(set -x;git merge-base ${DEST_BRANCH} $head)
+        changes=$(set -x;git diff --name-status $base $head)
+        if [[ -n $changes ]]; then
+            if [[ $changes =~ vendor/$BUILDAH_MODULE ]]; then
+                is_revendor=y
+            fi
+        fi
+    fi
+fi
+
+# Pull buildah, including tests
+buildah_dir=test-buildah-$buildah_version
+if [[ -n $do_checkout ]]; then
+    if [[ -d $buildah_dir ]]; then
+        die "Directory already exists: $buildah_dir"
+    fi
+
+    # buildah_version should usually be vX.Y, but sometimes a PR under test
+    # will need a special unreleased version (go calls then "pseudoversions").
+    # In the usual case, we can do a shallow git clone:
+    shallow_checkout="--branch $buildah_version"
+    if [[ $buildah_version =~ .*[0-9]{14}-.* ]] ; then
+        # ...but with a pseudoversion, we must git-clone the entire repo,
+        # then do a git checkout within it
+        shallow_checkout=
+    fi
+
+    failhint="'git clone' failed - this should never happen!"
+    (set -x;git clone -q $shallow_checkout https://$buildah_checkout_repo $buildah_dir)
+
+    # Recent versions of git (like `2.39`) disallow some operations (like `am`)
+    # without an identity being set.  In this case, git will throw an error
+    # with a helpful error message for humans to ponder.  However, when running
+    # under automation, nobody cares about this condition or message, because
+    # the environment is disposable.
+    if [[ "$CI" == "true" ]]; then
+        (
+        _gc='git config --global'
+        set -x
+        $_gc user.email "TMcTestFace@example.com"
+        $_gc user.name "Testy McTestface"
+        $_gc --add safe.directory $buildah_dir
+        )
+    fi
+
+    cd $buildah_dir
+    if [[ -z $shallow_checkout ]]; then
+        # extract the SHA (rightmost field) from, e.g., v1.2-YYYMMDD-<sha>
+        sha=${buildah_version##*-}
+
+        failhint="'git checkout $sha' failed - this should never happen!"
+        (set -x;git checkout -q $sha)
+    fi
+
+    # Give it a recognizable tag; this will be useful if we need to update
+    # the set of patches
+    (set -x;git tag $BASE_TAG)
+
+    # Build buildah and the copy, inet, dumpspec, and passwd test helpers
+    failhint="error building buildah. This should never happen."
+    (set -x;make bin/buildah)
+    failhint="error building buildah's copy helper. This should never happen."
+    (set -x;make bin/copy)
+    failhint="error building buildah's inet helper. This should never happen."
+    (set -x;make bin/inet)
+    failhint="error building buildah's dumpspec helper. This should never happen."
+    (set -x;make bin/dumpspec)
+    failhint="error building buildah's passwd helper. This should never happen."
+    (set -x;make bin/passwd)
+
+    # The upcoming patch may fail. Before we try it, create a helper script
+    # for a developer to push a new set of diffs to podman-land.
+    failhint=
+    sed -e "s,\[BASETAG\],${BASE_TAG},g" \
+        -e "s,\[BUILDAHREPO\],${buildah_checkout_repo},g" \
+        < ${BUD_TEST_DIR}/make-new-buildah-diffs \
+        > make-new-buildah-diffs
+    chmod 755 make-new-buildah-diffs
+
+    # Apply custom patches. We do this _after_ building, although it shouldn't
+    # matter because these patches should only apply to test scripts and not
+    # to any buildah sources.
+    failhint="
+Error applying patch file. This can happen when you vendor in a new buildah.
+You will want to:
+
+  *** START A NEW TERMINAL WINDOW!              ***
+  *** ...so you can refer to these instructions ***
+
+  - cd test-buildah-*   (into the buildah-bud test directory)
+
+  - look for 'tests/*.rej'
+  - resolve conflicts manually
+  - git add tests/helpers.bash
+  - git am --continue
+  - ./make-new-buildah-diffs
+
+  - cd .. (back to podman source dir)
+
+...and git-commit the new .diff file as part of your podman PR.
+"
+    (set -x;git am --reject <$PATCHES)
+
+   # Now apply our custom skips and error-message changes. This is maintained
+    # in a custom script, not a .diff file, because diffs are WAY too hard for
+    # humans to read and update.
+    APPLY=apply-podman-deltas
+    failhint="
+Error applying podman-specific deltas. This sometimes happens when you
+vendor in a new buildah. You will want to:
+
+  - inspect the errors shown above
+  - find the corresponding lines in $BUD_TEST_DIR_REL/$APPLY
+  - edit/delete them as necessary
+"
+    (set -x;$BUD_TEST_DIR/$APPLY)
+else
+    # Called with --no-checkout
+    test -d $buildah_dir || die "Called with --no-checkout, but $buildah_dir does not exist"
+
+    cd $buildah_dir
+fi
+
+if [[ -n $do_test ]]; then
+    failhint="Error running buildah bud tests under podman."
+    if [[ -n $is_revendor ]]; then
+        failhint+="
+
+It looks like you're vendoring in a new buildah. The likely failure
+here is that there's a new test in bud.bats that uses functionality
+not (yet) in podman build. You will likely need to 'skip' that test.
+"
+    else
+        failhint+="
+
+Is it possible that your PR breaks podman build in some way? Please
+review the test failure and double-check your changes.
+"
+    fi
+
+    (set -x;$SUDO env TMPDIR=/var/tmp \
+                 PODMAN_BINARY=$PODMAN_BINARY \
+                 PODMAN_SERVER_LOG=$PODMAN_SERVER_LOG \
+                 REMOTE=$REMOTE \
+                 BUILDAH_BINARY=$(pwd)/bin/buildah \
+                 COPY_BINARY=$(pwd)/bin/copy \
+                 INET_BINARY=$(pwd)/bin/inet \
+                 DUMPSPEC_BINARY=$(pwd)/bin/dumpspec \
+                 PASSWD_BINARY=$(pwd)/bin/passwd \
+                 bats -j $(nproc) "${bats_filter[@]}" tests/bud.bats)
+fi

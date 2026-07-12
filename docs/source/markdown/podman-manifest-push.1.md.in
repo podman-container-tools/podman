@@ -1,0 +1,95 @@
+% podman-manifest-push 1
+
+## NAME
+podman\-manifest\-push - Push a manifest list or image index to a registry
+
+## SYNOPSIS
+**podman manifest push** [*options*] *listnameorindexname* [*destination*]
+
+## DESCRIPTION
+Pushes a manifest list or image index to a registry.
+
+## RETURN VALUE
+The list image's ID and the digest of the image's manifest.
+
+## OPTIONS
+
+#### **--add-compression**=*compression*
+
+Makes sure that requested compression variant for each platform is added to the manifest list keeping original instance
+intact in the same manifest list. Supported values are (`gzip`, `zstd` and `zstd:chunked`). Following flag can be used
+multiple times.
+
+Note that `--compression-format` controls the compression format of each instance in the manifest list. `--add-compression`
+will add another variant for each instance in the list with the specified compressions. `--compression-format` gzip `--add-compression`
+zstd will push a manifest list with each instance being compressed with gzip plus an additional variant of each instance
+being compressed with zstd.
+
+#### **--all**
+
+Push the images mentioned in the manifest list or image index, in addition to
+the list or index itself. (Default true)
+
+@@option authfile
+
+@@option cert-dir
+
+@@option compression-format
+
+@@option compression-level
+
+@@option creds
+
+@@option digestfile
+
+@@option force-compression
+
+#### **--format**, **-f**=*format*
+
+Manifest list type (oci or v2s2) to use when pushing the list (default is oci).
+
+#### **--quiet**, **-q**
+
+When writing the manifest, suppress progress output
+
+#### **--remove-signatures**
+
+Don't copy signatures when pushing images.
+
+@@option retry
+
+@@option retry-delay
+
+#### **--rm**
+
+Delete the manifest list or image index from local storage if pushing succeeds.
+
+#### **--sign-by**=*fingerprint*
+
+Sign the pushed images with a “simple signing” signature using the specified key. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sigstore
+
+#### **--sign-by-sigstore-private-key**=*path*
+
+Sign the pushed images with a sigstore signature using a private key at the specified path. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sq-fingerprint
+
+@@option sign-passphrase-file
+
+@@option tls-verify
+
+## DESTINATION
+
+ DESTINATION is the location the container image is pushed to. It supports all transports from `containers-transports(5)`. If no transport is specified, the `docker` (i.e., container registry) transport is used.  For remote clients, including Mac and Windows (excluding WSL2) machines, `docker` is the only supported transport.
+
+## EXAMPLES
+
+Push manifest list to container registry:
+```
+podman manifest push mylist:v1.11 docker://registry.example.org/mylist:v1.11
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**, **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**

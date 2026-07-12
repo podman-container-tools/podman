@@ -1,0 +1,139 @@
+#!/usr/bin/env bpftrace
+
+// Traces podman and conmon commands for there exit status and all process that
+// send signals to them. Also prints stderr for all podman container cleanup processes.
+// The goal is to be able to trace all podman cleanup errors, while there is an
+// option to log the errors to the syslog that only works of the process if the
+// process got there and not if it was killed before. This program here will trace
+// the exit status as well so we know even if it was killed by a signal.
+//
+// This is script uses https://github.com/bpftrace/bpftrace to compile this into
+// kernel ebpf.
+//
+// Usage: sudo ./podman_cleanup_tracer.bt
+// see below for output format
+
+BEGIN {
+    print("Output format is one of:");
+    print("exec   TIME PID PPID COMM ARGV(truncated)");
+    print("cmd    TIME PID PPID ARGV(full)");
+    print("exit   TIME PID PPID COMM EXIT_CODE EXIT_SIGNAL");
+    print("kill   TIME PID PPID COMM SIGNAL TPID RET");
+    print("stderr TIME PID PPID COMM OUTPUT");
+}
+
+// Trace all exec calls to find all podman + conmon processes, it will also catch
+// netavark and aardvark-dns as they have podman in the path as well but this is
+// good so we can see any errors there as well.
+tracepoint:syscalls:sys_enter_exec*
+/ strcontains(str(args.argv[0], 128), "podman") || strcontains(str(args.argv[0], 128), "conmon")  /
+{
+
+    // create entry in pid map so we can check the pid later
+    @pids[pid] = 1;
+
+    // Find the podman cleanup process spawned by conmon.
+    // I tried matching argv but there seems to be no way to iterate over it.
+    // In practise parent name conmon and argv0 podman should contain all the
+    // cleanup processes we care about.
+    if (comm == "conmon" && strcontains(str(args.argv[0], 128), "podman")) {
+        @cleanupPids[pid] = 1;
+    }
+
+    printf("%-6s %s %-8d %-8d %-12s ",
+        "exec",
+        strftime("%H:%M:%S.%f", nsecs),
+        pid,
+        curtask->real_parent->tgid,
+        comm
+    );
+
+    // Unfortunately this doesn't print the full argv0 as there is some limit,
+    // as such we use the /proc/<>/cmdline reading hack below on exec exit.
+    join(args->argv);
+}
+
+
+// Print the full cmdline
+tracepoint:syscalls:sys_exit_exec*
+/ @pids[pid] /
+{
+    printf("%-6s %s %-8d %-8d ",
+        "cmd",
+        strftime("%H:%M:%S.%f", nsecs),
+        pid,
+        curtask->real_parent->tgid
+    );
+    // This can fail to open the file it is done in user space and
+    // thus racy if the process exits quickly.
+    cat("/proc/%d/cmdline", pid);
+    print("");
+}
+
+
+// Trace all exits for the pids we matched above,
+// pid == tid is used to only match the main exit
+// and not all thread exits which we do not care about.
+tracepoint:sched:sched_process_exit
+/ @pids[pid] && pid == tid /
+{
+    printf("%-6s %s %-8d %-8d %-12s %d %d\n",
+        "exit",
+        strftime("%H:%M:%S.%f", nsecs),
+        pid,
+        curtask->real_parent->tgid,
+        comm,
+        curtask->exit_code >> 8,  // actual exit code
+        curtask->exit_code & 0xFF // signal number if killed
+    );
+
+    // process is done remove pid from map
+    delete(@pids[pid]);
+    if (@cleanupPids[pid]) {
+        delete(@cleanupPids[pid]);
+    }
+}
+
+// Trace all kill calls that target our pids.
+// This will not catch signals send via pidfd_send_signal because
+// I don't see a way to translate the pidfd to our target pids and
+// I don't want to log all send signals on the system.
+tracepoint:syscalls:sys_enter_kill
+/ @pids[args.pid] /
+{
+	@tpid[tid] = args.pid;
+	@tsig[tid] = args.sig;
+}
+
+tracepoint:syscalls:sys_exit_kill
+/ @tpid[tid] /
+{
+	printf("%-6s %s %-8d %-8d %-12s %d %-8d %d\n",
+        "kill",
+		strftime("%H:%M:%S.%f", nsecs),
+		pid,
+        curtask->real_parent->tgid,
+        comm,
+        @tsig[tid],
+        @tpid[tid],
+        args.ret
+    );
+	delete(@tpid[tid]);
+	delete(@tsig[tid]);
+}
+
+
+// Print anything written on stderr for the podman container cleanup process.
+tracepoint:syscalls:sys_enter_write
+/ @cleanupPids[pid] && args.fd == 2 /
+{
+    printf("%-6s %s %-8d %-8d %-12s",
+        "stderr",
+		strftime("%H:%M:%S.%f", nsecs),
+		pid,
+        curtask->real_parent->tgid,
+        comm
+    );
+
+    printf("%s", str(args.buf, args.count));
+}

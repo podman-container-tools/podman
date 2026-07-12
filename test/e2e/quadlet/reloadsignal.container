@@ -1,0 +1,7 @@
+## assert-podman-reload-args "kill"
+## assert-podman-reload-args "systemd-%N"
+## assert-podman-reload-args "--signal" "SIGHUP"
+
+[Container]
+Image=localhost/imagename
+ReloadSignal=SIGHUP

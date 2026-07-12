@@ -1,0 +1,6 @@
+## assert-failed
+## assert-stderr-contains "source parameter is required for mount type image"
+
+[Container]
+Image=localhost/imagename
+Mount=type=image,destination=/path/in/container,ro

@@ -1,0 +1,244 @@
+# -*- sh -*-
+#
+# network-related tests
+#
+
+t GET networks/non-existing-network 404 \
+  .cause='network not found'
+
+t POST libpod/networks/create name='"network1"' 200 \
+  .name=network1 \
+  .created~[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}.*
+
+network1_id=$(jq -r '.id' <<<"$output")
+
+t POST /v3.4.0/libpod/networks/create name='"bad_version"' 400 \
+    .cause='given version is not supported'
+
+# --data '{"name":"network2","subnets":[{"subnet":"10.10.254.0/24"}],"Labels":{"abc":"val"}}'
+t POST libpod/networks/create name='"network2"' \
+  subnets='[{"subnet":"10.10.254.0/24"}]' \
+  labels='{"abc":"val"}' \
+  200 \
+  .name=network2 \
+  .subnets[0].subnet=10.10.254.0/24 \
+  .subnets[0].gateway=10.10.254.1 \
+  .labels.abc=val
+
+# --data '{"name":"network3","subnets":[{"subnet":"10.10.133.0/24"}],"Labels":{"xyz":"val"}}'
+t POST libpod/networks/create name="network3" \
+  subnets='[{"subnet":"10.10.133.0/24"}]' \
+  labels='{"xyz":"val"}' \
+  200 \
+  .name=network3 \
+  .subnets[0].subnet=10.10.133.0/24 \
+  .subnets[0].gateway=10.10.133.1 \
+  .labels.xyz=val
+
+# --data '{"name":"network4","subnets":[{"subnet":"10.10.134.0/24"}],"Labels":{"zaq":"val"}}'
+t POST libpod/networks/create name="network4" \
+  subnets='[{"subnet":"10.10.134.0/24"}]' \
+  labels='{"zaq":"val"}' \
+  200 \
+  .name=network4 \
+  .subnets[0].subnet=10.10.134.0/24 \
+  .subnets[0].gateway=10.10.134.1 \
+  .labels.zaq=val
+
+# test for empty mask
+t POST libpod/networks/create subnets='[{"subnet":"10.10.134.0"}]' 400 \
+  .cause~'.*invalid CIDR address: 10.10.134.0'
+# test for invalid mask
+t POST libpod/networks/create subnets='[{"subnet":"10.10.134.0/65"}]' 400 \
+  .cause~'.*invalid CIDR address: 10.10.134.0/65'
+
+# network list
+t GET libpod/networks/json 200
+t GET libpod/networks/json?filters='{"name":["network1"]}' 200 \
+  length=1 \
+  .[0].name=network1
+t GET networks 200
+
+#inspect network
+t GET libpod/networks/network1/json 200 \
+  .name="network1"
+
+#network list docker endpoint
+t GET networks?filters='{"name":["network1","network2"]}' 200 \
+  length=2
+t GET networks?filters='{"name":["network"]}' 200 \
+  length=4
+t GET networks?filters='{"label":["abc"]}' 200 \
+  length=1
+# old docker filter type see #9526
+t GET networks?filters='{"label":{"abc":true}}' 200 \
+  length=1
+t GET networks?filters="{\"id\":[\"$network1_id\"]}" 200 \
+  length=1 \
+  .[0].Name=network1 \
+  .[0].Id=$network1_id
+# invalid filter
+t GET networks?filters='{"dangling":["true","0"]}' 500 \
+  .cause="got more than one value for filter key \"dangling\""
+# (#9293 with no networks the endpoint should return empty array instead of null)
+t GET networks?filters='{"name":["doesnotexists"]}' 200 \
+  "[]"
+
+# check default name in list endpoint
+t GET networks 200 \
+  .[].Name~.*bridge.*
+
+# network inspect docker
+t GET networks/$network1_id 200 \
+  .Name=network1 \
+  .Id=$network1_id \
+  .Scope=local
+
+# inspect default bridge network
+t GET networks/bridge 200 \
+  .Name=bridge
+
+# inspect default bridge network with real podman name should return real name
+t GET networks/podman 200 \
+  .Name=podman
+
+# network create docker
+t POST networks/create Name=net3\ IPAM='{"Config":[]}' 201
+# Since Docker API 1.44, the server always checks for duplicate networks, even
+# when the deprecated CheckDuplicate parameter is set
+t POST networks/create Name=net3 409
+t POST networks/create Name=net3\ CheckDuplicate=false 409
+# network delete docker
+t DELETE networks/net3 204
+
+#compat api list networks sanity checks
+t GET networks?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET networks?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+#libpod api list networks sanity checks
+t GET libpod/networks/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET libpod/networks/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+# Prune networks compat api
+t POST networks/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t POST networks/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+
+# Prune networks libpod api
+t POST libpod/networks/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t POST libpod/networks/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+
+# prune networks using filter - compat api
+t POST networks/prune?filters='{"label":["xyz"]}' 200
+t GET networks?filters='{"label":["xyz"]}' 200 length=0
+
+# prune networks using filter - libpod api
+t POST libpod/networks/prune?filters='{"label":["zaq=val"]}' 200
+t GET libpod/networks/json?filters='{"label":["zaq=val"]}' 200 length=0
+
+# clean the network
+t DELETE libpod/networks/network1 200 \
+  .[0].Name~network1 \
+  .[0].Err=null
+t DELETE libpod/networks/network2 200 \
+  .[0].Name~network2 \
+  .[0].Err=null
+
+# test until filter - libpod api
+# create network via cli to test that the server can use it
+podman network create --label xyz network5
+
+# with date way back in the past, network should not be deleted
+t POST libpod/networks/prune?filters='{"until":["500000"]}' 200
+t GET libpod/networks/json?filters='{"label":["xyz"]}' 200 length=1
+
+# with date far in the future, network should be deleted
+t POST libpod/networks/prune?filters='{"until":["5000000000"]}' 200
+t GET libpod/networks/json?filters='{"label":["xyz"]}' 200 length=0
+
+# test until filter - compat api
+t POST networks/create Name='"network6"' Labels='{"zaq":""}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+
+# with date way back in the past, network should not be deleted
+t POST networks/prune?filters='{"until":["500000"]}' 200
+t GET networks?filters='{"label":["zaq"]}' 200 length=1
+
+# with date far in the future, network should be deleted
+t POST networks/prune?filters='{"until":["5000000000"]}' 200
+t GET networks?filters='{"label":["zaq"]}' 200 length=0
+
+# test macvlan network response
+# we have to use a static subnet because of netavark does not support dhcp yet
+t POST libpod/networks/create name='"macvlan1"' driver="macvlan" subnets='[{"subnet":"10.10.135.0/24"}]' 200 \
+  .name=macvlan1 \
+  .driver=macvlan
+
+# libpod api inspect the macvlan network
+t GET libpod/networks/macvlan1/json 200 .name="macvlan1"
+
+# compat api inspect the macvlan network
+t GET networks/macvlan1 200 .Name="macvlan1"
+
+# clean the macvlan network
+t DELETE libpod/networks/macvlan1 200 \
+  .[0].Name~macvlan1 \
+  .[0].Err=null
+
+#
+# test networks with containers
+#
+podman pull $IMAGE &>/dev/null
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+# create a network
+podman network create --subnet 10.10.253.0/24 --gateway 10.10.253.1 network5
+t GET libpod/networks/json?filters='{"name":["network5"]}' 200 \
+  .[0].id~[0-9a-f]\\{64\\}
+nid=$(jq -r '.[0].id' <<<"$output")
+# create a pod on a network
+CNAME=mynettest
+podman run --network network5 --name $CNAME --ip 10.10.253.2 --mac-address 0a:01:73:78:43:18 -td $IMAGE top
+t GET libpod/containers/json?all=true 200 \
+  .[0].Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.[0].Id' <<<"$output")
+# compat api inspect network
+t GET networks/$nid 200 .Name="network5" \
+  .Containers[\"$cid\"].Name=$CNAME \
+  .Containers[\"$cid\"].MacAddress=0a:01:73:78:43:18 \
+  .Containers[\"$cid\"].IPv4Address=10.10.253.2/24
+# clean the network
+podman network rm -f network5
+
+#
+# Test connecting container to network when connection already exists
+#
+podman network create netcon
+podman create --network bridge --name c1 $IMAGE top
+
+# connect c1 to the network for the first time.
+t POST networks/netcon/connect Container=c1 200 OK
+# connect c1 to netcon again should not error
+t POST networks/netcon/connect Container=c1 200 OK
+
+# connect c1 to netcon here should error as the container is running and it is already connected
+podman start c1
+t POST networks/netcon/connect Container=c1 403 .cause="network is already connected"
+
+# connect c1 to netcon here should not error as container was stopped
+podman stop c1
+t POST networks/netcon/connect Container=c1 200 OK
+
+# cleanup
+podman network rm -f netcon
+
+# vim: filetype=sh

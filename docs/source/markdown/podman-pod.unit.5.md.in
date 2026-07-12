@@ -1,0 +1,145 @@
+% podman-pod.unit 5
+
+# NAME
+
+podman\-pod.unit - systemd unit files for managing Podman pods using Quadlet
+
+# SYNOPSIS
+
+*name*.pod
+
+# DESCRIPTION
+
+Pod units are named with a `.pod` extension and contain a `[Pod]` section describing
+the pod that is created and run as a service. The resulting service file contains a line like
+`ExecStartPre=podman pod create …`, and most of the keys in this section control the command-line
+options passed to Podman.
+
+By default, the Podman pod has the same name as the unit, but with a `systemd-` prefix, i.e.
+a `$name.pod` file creates a `$name-pod.service` unit and a `systemd-$name` Podman pod. The
+`PodName` option allows for overriding this default name with a user-provided one.
+
+# OPTIONS
+
+Valid options for `[Pod]` are listed below:
+
+| **[Pod] options**                   | **podman pod create equivalent** |
+|-------------------------------------|----------------------------------------|
+| AddHost=example\.com:192.168.10.11  | --add-host example.com:192.168.10.11   |
+| ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                |
+| DNS=192.168.55.1                    | --dns=192.168.55.1                     |
+| DNSOption=ndots:1                   | --dns-option=ndots:1                   |
+| DNSSearch=example.com               | --dns-search example.com               |
+| ExitPolicy=stop                     | --exit-policy stop                     |
+| GIDMap=0:10000:10                   | --gidmap=0:10000:10                    |
+| GlobalArgs=--log-level=debug        | --log-level=debug                      |
+| HostName=name                       | --hostname=name                        |
+| IP=192.5.0.1                        | --ip 192.5.0.1                         |
+| IP6=2001:db8::1                     | --ip6 2001:db8::1                      |
+| Label="XYZ"                         | --label "XYZ"                          |
+| Network=host                        | --network host                         |
+| NetworkAlias=name                   | --network-alias name                   |
+| PodmanArgs=\-\-cpus=2               | --cpus=2                               |
+| PodName=name                        | --name=name                            |
+| PublishPort=8080:80                 | --publish 8080:80                      |
+| ServiceName=name                    | Name the systemd unit `name.service`   |
+| ShmSize=100m                        | --shm-size=100m                        |
+| SubGIDMap=gtest                     | --subgidname=gtest                     |
+| SubUIDMap=utest                     | --subuidname=utest                     |
+| UIDMap=0:10000:10                   | --uidmap=0:10000:10                    |
+| UserNS=keep-id:uid=200,gid=210      | --userns keep-id:uid=200,gid=210       |
+| Volume=/source:/dest                | --volume /source:/dest                 |
+
+Supported keys in the `[Pod]` section are:
+
+@@option quadlet:add-host
+
+@@option quadlet:module
+
+@@option quadlet:dns
+
+@@option quadlet:dns-option.container
+
+@@option quadlet:dns-search.container
+
+### `ExitPolicy=stop`
+
+Set the exit policy of the pod when the last container exits. Default for quadlets is **stop**.
+
+To keep the pod active, set `ExitPolicy=continue`.
+
+@@option quadlet:gidmap.container
+
+@@option quadlet:global-args
+
+
+@@option quadlet:hostname.container
+
+@@option quadlet:ip
+
+@@option quadlet:ip6
+
+@@option quadlet:label
+
+@@option quadlet:network
+
+@@option quadlet:network-alias
+
+@@option quadlet:podman-args
+
+### `PodName=name`
+
+The (optional) name of the Podman pod.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.pod` file creates a `systemd-$name` Podman pod to avoid conflicts with user-managed pods.
+
+Please note that pods and containers cannot have the same name.
+So, if PodName is set, it must not conflict with any container.
+
+@@option quadlet:publish
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit by appending `-pod` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note that the name should not include the `.service` file extension.
+
+@@option quadlet:shm-size
+
+@@option quadlet:subgidname
+
+@@option quadlet:subuidname
+
+@@option quadlet:uidmap.pod
+
+@@option quadlet:userns.pod
+
+@@option quadlet:volume
+
+
+# EXAMPLES
+
+Example: container in a pod
+
+test.pod:
+
+```
+[Pod]
+PodName=test
+```
+
+centos.container:
+
+```
+[Container]
+Image=quay.io/centos/centos:latest
+Exec=sh -c "sleep inf"
+Pod=test.pod
+```
+
+# SEE ALSO
+
+[podman-kube-play(1)](https://docs.podman.io/en/latest/markdown/podman-kube-play.1.html),
+[podman-systemd.unit(5)](podman-systemd.unit.5.md),
+[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)

@@ -1,0 +1,8 @@
+## assert-key-is Unit RequiresMountsFor "%t/containers"
+## assert-key-is Service Type forking
+## assert-key-is Service Restart always
+
+[Pod]
+
+[Service]
+Restart=always

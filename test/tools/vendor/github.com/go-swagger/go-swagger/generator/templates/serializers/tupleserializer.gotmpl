@@ -1,0 +1,66 @@
+{{ define "tupleSerializer" }}
+// UnmarshalJSON unmarshals this tuple type from a JSON array
+func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(raw []byte) error {
+  // stage 1, get the array but just the array
+  var stage1 []json.RawMessage
+  buf := bytes.NewBuffer(raw)
+  dec := json.NewDecoder(buf)
+  dec.UseNumber()
+
+  if err := dec.Decode(&stage1); err != nil {
+    return err
+  }
+
+  // stage 2: hydrates struct members with tuple elements
+  {{- if .AdditionalItems }}
+  var lastIndex int
+  {{ end }}
+  {{ range $idx, $val := .Properties }}if len(stage1) > {{ $idx }} {
+    var data{{ pascalize .Name }} {{ template "dereffedSchemaType" . }}
+    buf = bytes.NewBuffer(stage1[{{ $idx }}])
+    dec := json.NewDecoder(buf)
+    dec.UseNumber()
+    if err := dec.Decode(&data{{ pascalize .Name }}); err != nil {
+      return err
+    }
+    {{ .ReceiverName }}.{{ if .IsExported }}{{ pascalize .Name }}{{ else }}{{ camelize .Name }}{{ end }} = {{ if .IsNullable }}&{{ end }}data{{ pascalize .Name }}
+    {{ if $.AdditionalItems }}
+    lastIndex = {{ $idx }}
+    {{ end }}
+  }
+  {{ end }}
+  {{ if .AdditionalItems }}
+  // stage 3: hydrates AdditionalItems
+  if len(stage1) > lastIndex+1 {
+    for _, val := range stage1[lastIndex+1:] {
+      var toadd {{ template "schemaType" .AdditionalItems }}
+      buf = bytes.NewBuffer(val)
+      dec := json.NewDecoder(buf)
+      dec.UseNumber()
+      if err := dec.Decode({{ if not .AdditionalItems.IsNullable }}&{{ end }}toadd); err != nil {
+        return err
+      }
+      {{- with .AdditionalItems }}
+        {{ $.ValueExpression }}.{{- if .IsExported }}{{ pascalize .Name }}{{ else }}{{ camelize .Name }}{{ end }} = append({{ $.ValueExpression }}.{{- if .IsExported }}{{ pascalize .Name }}{{ else }}{{ camelize .Name }}{{ end }}, toadd)
+      {{- end }}
+    }
+  }
+  {{- end }}
+  return nil
+}
+
+// MarshalJSON marshals this tuple type into a JSON array
+func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
+  data := []any{
+  {{ range .Properties -}}
+    {{.ReceiverName}}.{{ pascalize .Name }},
+  {{- end }}
+  }
+  {{ with .AdditionalItems }}
+  for _, v := range {{ $.ValueExpression }}.{{ if .IsExported }}{{ pascalize .Name }}{{ else }}{{ camelize .Name }}{{ end }} {
+    data = append(data, v)
+  }
+  {{- end }}
+  return json.Marshal(data)
+}
+{{- end }}

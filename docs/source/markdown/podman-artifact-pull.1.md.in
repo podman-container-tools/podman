@@ -1,0 +1,68 @@
+% podman-artifact-pull 1
+
+## NAME
+podman\-artifact\-pull - Pulls an artifact from a registry and stores it locally
+
+## SYNOPSIS
+**podman artifact pull** [*options*] *source*
+
+
+## DESCRIPTION
+podman artifact pull copies an artifact from a registry onto the local machine.
+
+
+## SOURCE
+SOURCE is the location from which the artifact image is obtained.
+
+```
+# Pull from a registry
+$ podman artifact pull quay.io/foobar/artifact:special
+```
+
+## OPTIONS
+
+@@option authfile
+
+@@option cert-dir
+
+@@option creds
+
+@@option decryption-key
+
+
+#### **--help**, **-h**
+
+Print the usage statement.
+
+@@option quiet
+
+@@option retry
+
+@@option retry-delay
+
+@@option tls-verify
+
+## FILES
+
+## EXAMPLES
+Pull an artifact from a registry
+
+```
+podman artifact pull quay.io/baude/artifact:josey
+Getting image source signatures
+Copying blob e741c35a27bb done   |
+Copying config 44136fa355 done   |
+Writing manifest to image destination
+
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-artifact(1)](podman-artifact.1.md)**, **[podman-login(1)](podman-login.1.md)**, **[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.
+
+## HISTORY
+Jan 2025, Originally compiled by Brent Baude <bbaude@redhat.com>

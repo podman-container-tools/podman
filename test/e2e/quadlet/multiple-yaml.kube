@@ -1,0 +1,10 @@
+## assert-podman-args "kube"
+## assert-podman-args "play"
+## assert-podman-final-args-regex .*/podman-e2e-.*/subtest-.*/quadlet/foo.yml .*/podman-e2e-.*/subtest-.*/quadlet/bar.yml
+## assert-podman-stop-post-args "kube"
+## assert-podman-stop-post-args "down"
+## assert-podman-stop-post-final-args-regex .*/podman-e2e-.*/subtest-.*/quadlet/foo.yml .*/podman-e2e-.*/subtest-.*/quadlet/bar.yml
+
+[Kube]
+Yaml=foo.yml
+Yaml=bar.yml

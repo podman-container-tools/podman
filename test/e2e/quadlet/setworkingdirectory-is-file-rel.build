@@ -1,0 +1,7 @@
+## assert-podman-args "--file" "Containerfile"
+## assert-key-is-regex "Service" "WorkingDirectory" "/.*/podman-e2e-.*/subtest-.*/quadlet"
+
+[Build]
+ImageTag=localhost/imagename
+File=Containerfile
+SetWorkingDirectory=file

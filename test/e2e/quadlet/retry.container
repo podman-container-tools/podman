@@ -1,0 +1,7 @@
+## assert-podman-args "--retry" "5"
+## assert-podman-args "--retry-delay" "10s"
+
+[Container]
+Image=localhost/imagename
+Retry=5
+RetryDelay=10s

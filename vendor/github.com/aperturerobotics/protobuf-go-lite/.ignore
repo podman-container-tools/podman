@@ -1,0 +1,5 @@
+*.pb.go
+*.pb.ts
+go.sum
+testdata
+thirdparty

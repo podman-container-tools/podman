@@ -1,0 +1,284 @@
+name: Generate Contributor Certificate Preview
+
+# This action triggers automatically when a pull request is closed,
+# or can be run manually from the Actions tab.
+on:
+  pull_request_target:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      contributor_username:
+        description: 'The GitHub username of the contributor'
+        required: true
+      pr_number:
+        description: 'The pull request number'
+        required: true
+
+permissions: {}
+
+jobs:
+  screenshot_and_comment:
+    # This job runs if the PR was merged or if it's a manual trigger.
+    # The logic for first-time contributors is handled in a dedicated step below.
+    if: |
+     (
+       github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.merged == true
+     ) &&
+     github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Write access for certificate storage
+      pull-requests: write  # Write access to comment on PRs
+      actions: read  # Read access for workflow actions
+    steps:
+      # Step 1: Check if this is the contributor's first merged PR.
+      # This step is the source of truth and will control the execution of subsequent steps.
+      - name: Check for first merged PR
+        id: check_first_pr
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const author = context.payload.pull_request.user.login;
+            const query = `repo:${context.repo.owner}/${context.repo.repo} is:pr is:merged author:${author}`;
+
+            console.log(`Searching for merged PRs from @${author} with query: "${query}"`);
+
+            const result = await github.rest.search.issuesAndPullRequests({ q: query });
+            const mergedPRs = result.data.total_count;
+
+            if (mergedPRs === 1) {
+              console.log(`SUCCESS: This is the first merged PR from @${author}. Proceeding...`);
+              core.setOutput('is_first_pr', 'true');
+            } else {
+              console.log(`INFO: Skipping certificate generation. @${author} has ${mergedPRs} total merged PRs.`);
+              core.setOutput('is_first_pr', 'false');
+            }
+
+      # Step 2: Checkout the repository containing the certificate HTML file.
+      - name: Checkout containers/automation repository
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: containers/automation
+          path: automation-repo
+          persist-credentials: false
+
+      # Step 3: Update the HTML file locally
+      - name: Update HTML file
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        env:
+          CONTRIBUTOR_NAME: ${{ github.event.inputs.contributor_username || github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          HTML_FILE="automation-repo/certificate-generator/certificate_generator.html"
+          MERGE_DATE=$(date -u +"%B %d, %Y")
+
+          sed --sandbox -i -e "/id=\"contributorName\"/s/value=\"[^\"]*\"/value=\"${CONTRIBUTOR_NAME}\"/" ${HTML_FILE} || { echo "ERROR: Failed to update contributor name."; exit 1; }
+          sed --sandbox -i -e "/id=\"prNumber\"/s/value=\"[^\"]*\"/value=\"#${PR_NUMBER}\"/" ${HTML_FILE} || { echo "ERROR: Failed to update PR number."; exit 1; }
+          sed --sandbox -i -e "/id=\"mergeDate\"/s/value=\"[^\"]*\"/value=\"${MERGE_DATE}\"/" ${HTML_FILE} || { echo "ERROR: Failed to update merge date."; exit 1; }
+
+      # Step 4: Setup Node.js environment
+      - name: Setup Node.js
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: latest
+
+      # Step 5: Install Puppeteer
+      - name: Install Puppeteer
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        run: |
+          npm install puppeteer || { echo "ERROR: Failed to install Puppeteer."; exit 1; }
+
+      # Step 6: Take a screenshot of the certificate div
+      - name: Create and run screenshot script
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        run: |
+          cat <<'EOF' > screenshot.js
+          const puppeteer = require('puppeteer');
+          const path = require('path');
+          (async () => {
+            const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+            const page = await browser.newPage();
+            const htmlPath = 'file://' + path.resolve('automation-repo/certificate-generator/certificate_generator.html');
+            await page.goto(htmlPath, { waitUntil: 'networkidle0' });
+            await page.setViewport({ width: 1080, height: 720 });
+            const element = await page.$('#certificatePreview');
+            if (!element) {
+              console.error('Could not find element #certificatePreview.');
+              process.exit(1);
+            }
+            await element.screenshot({ path: 'certificate.png' });
+            await browser.close();
+            console.log('Screenshot saved as certificate.png');
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
+          node screenshot.js || { echo "ERROR: Screenshot script failed."; exit 1; }
+
+      # Step 7: Upload certificate image to separate repository
+      - name: Upload certificate to separate repository
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CONTRIBUTOR_USERNAME: ${{ github.event.inputs.contributor_username }}
+          USER_LOGIN: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        with:
+          github-token: ${{ secrets.CERTIFICATES_REPO_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            try {
+              // Check if certificate.png exists
+              if (!fs.existsSync('certificate.png')) {
+                throw new Error('certificate.png not found!');
+              }
+
+              // Debug: Check token and repository access
+              console.log('Testing repository access...');
+              const certificatesOwner = process.env.CERTIFICATES_REPO_OWNER || context.repo.owner;
+              const certificatesRepo = process.env.CERTIFICATES_REPO_NAME || 'automation';
+
+              // Test repository access first
+              try {
+                await github.rest.repos.get({
+                  owner: certificatesOwner,
+                  repo: certificatesRepo
+                });
+                console.log(`✅ Repository access confirmed: ${certificatesOwner}/${certificatesRepo}`);
+              } catch (accessError) {
+                console.error(`❌ Repository access failed: ${accessError.message}`);
+                throw new Error(`Cannot access repository ${certificatesOwner}/${certificatesRepo}. Check token permissions and repository existence.`);
+              }
+
+              // Read the certificate image
+              const imageBuffer = fs.readFileSync('certificate.png');
+              const base64Content = imageBuffer.toString('base64');
+
+              console.log(`Certificate image size: ${imageBuffer.length} bytes`);
+
+              // Create a unique filename with timestamp
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+              const contributorName = context.eventName === 'workflow_dispatch'
+                ? process.env.CONTRIBUTOR_USERNAME
+                : process.env.USER_LOGIN;
+              const prNumber = context.eventName === 'workflow_dispatch'
+                ? process.env.PR_NUMBER
+                : context.issue.number;
+
+              const filename = `certificates/${contributorName}-${prNumber}-${timestamp}.png`;
+
+              // Configuration for the certificates repository
+              const certificatesBranch = process.env.CERTIFICATES_REPO_BRANCH || 'main';
+
+              console.log(`Uploading to repository: ${certificatesOwner}/${certificatesRepo}`);
+              console.log(`File path: ${filename}`);
+              console.log(`Branch: ${certificatesBranch}`);
+
+              // Upload the file to the certificates repository
+              await github.rest.repos.createOrUpdateFileContents({
+                owner: certificatesOwner,
+                repo: certificatesRepo,
+                path: filename,
+                message: `Add certificate for ${contributorName} from ${context.repo.owner}/${context.repo.repo} (PR #${prNumber})\n\nSigned-off-by: Podman Bot <podman.bot@example.com>`,
+                content: base64Content,
+                branch: certificatesBranch,
+                author: {
+                  name: 'Podman Bot',
+                  email: 'podman.bot@example.com'
+                },
+                committer: {
+                  name: 'Podman Bot',
+                  email: 'podman.bot@example.com'
+                }
+              });
+
+              // Create the image URL
+              const imageUrl = `https://github.com/${certificatesOwner}/${certificatesRepo}/raw/${certificatesBranch}/${filename}`;
+
+              console.log(`Certificate uploaded successfully: ${imageUrl}`);
+
+              // Store the image URL for the comment step
+              core.exportVariable('CERTIFICATE_IMAGE_URL', imageUrl);
+              core.exportVariable('CERTIFICATE_UPLOADED', 'true');
+
+            } catch (error) {
+              console.error('Failed to upload certificate:', error);
+              console.error('Error details:', error.message);
+
+              // Provide helpful error message if it's likely a permissions issue
+              let errorMsg = error.message;
+              if (error.status === 404) {
+                errorMsg += ' (Repository not found - check CERTIFICATES_REPO_OWNER and CERTIFICATES_REPO_NAME environment variables, or ensure the automation repository exists and the token has access)';
+              } else if (error.status === 403) {
+                errorMsg += ' (Permission denied - check that CERTIFICATES_REPO_TOKEN has write access to the automation repository)';
+              }
+
+              core.exportVariable('CERTIFICATE_UPLOADED', 'false');
+              core.exportVariable('UPLOAD_ERROR', errorMsg);
+            }
+
+      # Step 8: Comment on Pull Request with embedded image
+      - name: Comment with embedded certificate image
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CONTRIBUTOR_USERNAME: ${{ github.event.inputs.contributor_username }}
+          USER_LOGIN: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        with:
+          script: |
+            try {
+              let body;
+
+              // Check if certificate was uploaded successfully
+              if (process.env.CERTIFICATE_UPLOADED === 'true') {
+                const imageUrl = process.env.CERTIFICATE_IMAGE_URL;
+                console.log(`Using uploaded certificate image: ${imageUrl}`);
+
+                // Create the image content with the uploaded image URL
+                const imageContent = `![Certificate Preview](${imageUrl})`;
+                body = imageContent;
+              } else {
+                console.log('Certificate upload failed, providing fallback message');
+                const errorMsg = process.env.UPLOAD_ERROR || 'Unknown error';
+                body = `📜 **Certificate Preview**\n\n_Certificate generation completed, but there was an issue uploading the image: ${errorMsg}_\n\nPlease check the workflow logs for more details.`;
+              }
+
+              if (context.eventName === 'workflow_dispatch') {
+                // Manual trigger case
+                const contributorName = process.env.CONTRIBUTOR_USERNAME;
+                const prNumber = process.env.PR_NUMBER;
+                body = `📜 Certificate preview generated for @${contributorName} (PR #${prNumber}):\n\n${body}`;
+              } else {
+                // Auto trigger case for first-time contributors
+                const username = process.env.USER_LOGIN;
+                body = `🎉 Congratulations on your first merged pull request, @${username}! Thank you for your contribution.\n\nHere's a preview of your certificate:\n\n${body}`;
+              }
+
+              const issueNumber = context.eventName === 'workflow_dispatch' ?
+                parseInt(process.env.PR_NUMBER) :
+                context.issue.number;
+
+              await github.rest.issues.createComment({
+                issue_number: issueNumber,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body,
+              });
+            } catch (error) {
+              core.setFailed(`ERROR: Failed to comment on PR. Details: ${error.message}`);
+            }
+
+      # Step 9: Clean up temporary files
+      - name: Clean up temporary files
+        if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.check_first_pr.outputs.is_first_pr == 'true') }}
+        run: |
+          rm -f certificate.png

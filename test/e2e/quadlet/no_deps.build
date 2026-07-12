@@ -1,0 +1,11 @@
+## assert-key-is-empty "Unit" "Wants"
+## assert-key-is-empty "Unit" "After"
+## assert-key-is-empty "Unit" "Before"
+
+[Quadlet]
+DefaultDependencies=no
+
+[Build]
+ImageTag=localhost/imagename
+File=Containerfile
+SetWorkingDirectory=dir

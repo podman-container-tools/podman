@@ -1,0 +1,360 @@
+#!/usr/bin/perl
+#
+# swagger-check - Look for inconsistencies between swagger and source code
+#
+package LibPod::SwaggerCheck;
+
+use v5.14;
+use strict;
+use warnings;
+
+use File::Find;
+
+(our $ME = $0) =~ s|.*/||;
+(our $VERSION = '$Revision: 1.7 $ ') =~ tr/[0-9].//cd;
+
+# For debugging, show data structures using DumpTree($var)
+#use Data::TreeDumper; $Data::TreeDumper::Displayaddress = 0;
+
+###############################################################################
+# BEGIN user-customizable section
+
+our $Default_Dir =  'pkg/api/server';
+
+# END   user-customizable section
+###############################################################################
+
+###############################################################################
+# BEGIN boilerplate args checking, usage messages
+
+sub usage {
+    print  <<"END_USAGE";
+Usage: $ME [OPTIONS] DIRECTORY-TO-CHECK
+
+$ME scans all .go files under the given DIRECTORY-TO-CHECK
+(default: $Default_Dir), looking for lines of the form 'r.Handle(...)'
+or 'r.HandleFunc(...)'. For each such line, we check for a preceding
+swagger comment line and verify that the comment line matches the
+declarations in the r.Handle() invocation.
+
+For example, the following would be a correctly-matching pair of lines:
+
+    // swagger:operation GET /images/json compat getImages
+    r.Handle(VersionedPath("/images/json"), s.APIHandler(compat.GetImages)).Methods(http.MethodGet)
+
+...because http.MethodGet matches GET in the comment, the endpoint
+is /images/json in both cases, the APIHandler() says "compat" so
+that's the swagger tag, and the swagger operation name is the
+same as the APIHandler but with a lower-case first letter.
+
+The following is an inconsistency as reported by this script:
+
+pkg/api/server/register_info.go:
+-       // swagger:operation GET /info libpod libpodGetInfo
++       // ................. ... ..... compat
+        r.Handle(VersionedPath("/info"), s.APIHandler(compat.GetInfo)).Methods(http.MethodGet)
+
+...because APIHandler() says 'compat' but the swagger comment
+says 'libpod'.
+
+OPTIONS:
+
+  -v, --verbose  show verbose progress indicators
+  -n, --dry-run  make no actual changes
+
+  --help         display this message
+  --version      display program name and version
+END_USAGE
+
+    exit;
+}
+
+# Command-line options.  Note that this operates directly on @ARGV !
+our $debug   = 0;
+our $force   = 0;
+our $verbose = 0;
+our $NOT     = '';              # print "blahing the blah$NOT\n" if $debug
+sub handle_opts {
+    use Getopt::Long;
+    GetOptions(
+        'debug!'     => \$debug,
+        'dry-run|n!' => sub { $NOT = ' [NOT]' },
+        'force'      => \$force,
+        'verbose|v'  => \$verbose,
+
+        help         => \&usage,
+        man          => \&man,
+        version      => sub { print "$ME version $VERSION\n"; exit 0 },
+    ) or die "Try `$ME --help' for help\n";
+}
+
+# END   boilerplate args checking, usage messages
+###############################################################################
+
+############################## CODE BEGINS HERE ###############################
+
+my $exit_status = 0;
+
+# The term is "modulino".
+__PACKAGE__->main()                                     unless caller();
+
+# Main code.
+sub main {
+    # Note that we operate directly on @ARGV, not on function parameters.
+    # This is deliberate: it's because Getopt::Long only operates on @ARGV
+    # and there's no clean way to make it use @_.
+    handle_opts();                      # will set package globals
+
+    # Fetch command-line arguments.  Barf if too many.
+    my $dir = shift(@ARGV) || $Default_Dir;
+    die "$ME: Too many arguments; try $ME --help\n"                 if @ARGV;
+
+    # Find and act upon all matching files
+    find { wanted => sub { finder(@_) }, no_chdir => 1 }, $dir;
+
+    exit $exit_status;
+}
+
+
+############
+#  finder  #  File::Find action - looks for 'r.Handle' or 'r.HandleFunc'
+############
+sub finder {
+    my $path = $File::Find::name;
+    return if     $path =~ m|/\.|;              # skip dotfiles
+    return unless $path =~ /\.go$/;             # Only want .go files
+
+    print $path, "\n"                           if $debug;
+
+    # Read each .go file. Keep a running tally of all '// comment' lines;
+    # if we see a 'r.Handle()' or 'r.HandleFunc()' line, pass it + comments
+    # to analysis function.
+    open my $in, '<', $path
+        or die "$ME: Cannot read $path: $!\n";
+    my @comments;
+    while (my $line = <$in>) {
+        if ($line =~ m!^\s*//!) {
+            push @comments, $line;
+        }
+        else {
+            # Not a comment line. If it's an r.Handle*() one, process it.
+            if ($line =~ m!^\s*r\.Handle(Func)?\(!) {
+                handle_handle($path, $line, @comments)
+                    or $exit_status = 1;
+            }
+
+            # Reset comments
+            @comments = ();
+        }
+    }
+    close $in;
+}
+
+
+###################
+#  handle_handle  #  Cross-check a 'r.Handle*' declaration against swagger
+###################
+#
+# Returns false if swagger comment is inconsistent with function call,
+# true if it matches or if there simply isn't a swagger comment.
+#
+sub handle_handle {
+    my $path     = shift;               # for error messages only
+    my $line     = shift;               # in: the r.Handle* line
+    my @comments = @_;                  # in: preceding comment lines
+
+    # Preserve the original line, so we can show it in comments
+    my $line_orig = $line;
+
+    # Strip off the 'r.Handle*(' and leading whitespace; preserve the latter
+    $line =~ s!^(\s*)r\.Handle(Func)?\(!!
+        or die "$ME: INTERNAL ERROR! Got '$line'!\n";
+    my $indent = $1;
+
+    # Some have VersionedPath, some don't. Doesn't seem to make a difference
+    # in terms of swagger, so let's just ignore it.
+    $line =~ s!^VersionedPath\(([^\)]+)\)!$1!;
+    $line =~ m!^"(/[^"]+)",!
+        or die "$ME: $path:$.: Cannot grok '$line'\n";
+    my $endpoint = $1;
+
+    # Some function declarations require an argument of the form '{name:.*}'
+    # but the swagger (which gets derived from the comments) should not
+    # include them. Normalize all such args to just '{name}'.
+    $endpoint =~ s/\{name:\.\*\}/\{name\}/;
+
+    # e.g. /auth, /containers/*/rename, /distribution, /monitor, /plugins
+    return 1 if $line =~ /\.UnsupportedHandler/;
+
+    #
+    # Determine the HTTP METHOD (GET, POST, DELETE, HEAD)
+    #
+    my $method;
+    if ($line =~ /generic.VersionHandler/) {
+        $method = 'GET';
+    }
+    elsif ($line =~ m!\.Methods\((.*)\)!) {
+        my $x = $1;
+
+        if ($x =~ /Method(Post|Get|Delete|Head)/) {
+            $method = uc $1;
+        }
+        elsif ($x =~ /\"(HEAD|GET|POST)"/) {
+            $method = $1;
+        }
+        else {
+            die "$ME: $path:$.: Cannot grok $x\n";
+        }
+    }
+    else {
+        warn "$ME: $path:$.: No Methods in '$line'\n";
+        return 1;
+    }
+
+    #
+    # Determine the SWAGGER TAG. Assume 'compat' unless we see libpod; but
+    # this can be overruled (see special case below)
+    #
+    my $tag = ($endpoint =~ /(libpod)/ ? $1 : 'compat');
+
+    #
+    # Determine the OPERATION. Done in a helper function because there
+    # are a lot of complicated special cases.
+    #
+    my $operation = operation_name($method, $endpoint);
+
+    # Special case: the following endpoints all get a custom tag
+    if ($endpoint =~ m!/(pods|manifests)/!) {
+        $tag = $1;
+    }
+
+    # Special case: anything related to 'events' gets a system tag
+    if ($endpoint =~ m!/events!) {
+        $tag = 'system';
+    }
+
+    state $previous_path;                # Previous path name, to avoid dups
+
+    #
+    # Compare actual swagger comment to what we expect based on Handle call.
+    #
+    my $expect = " // swagger:operation $method $endpoint $tag $operation ";
+    my @actual = grep { /swagger:operation/ } @comments;
+
+    return 1 if !@actual;         # No swagger comment in file; oh well
+
+    my $actual = $actual[0];
+
+    # (Ignore whitespace discrepancies)
+    (my $a_trimmed = $actual) =~ s/\s+/ /g;
+
+    return 1 if $a_trimmed eq $expect;
+
+    # Mismatch. Display it. Start with filename, if different from previous
+    print "\n";
+    if (!$previous_path || $previous_path ne $path) {
+        print $path, ":\n";
+    }
+    $previous_path = $path;
+
+    # Show the actual line, prefixed with '-' ...
+    print "- $actual[0]";
+    # ...then our generated ones, but use '...' as a way to ignore matches
+    print "+ $indent//";
+    my @actual_split = split ' ', $actual;
+    my @expect_split = split ' ', $expect;
+    for my $i (1 .. $#actual_split) {
+        print " ";
+        if ($actual_split[$i] eq ($expect_split[$i]||'')) {
+            print "." x length($actual_split[$i]);
+        }
+        else {
+            # Show the difference. Use terminal highlights if available.
+            print "\e[1;37m"            if -t *STDOUT;
+            print $expect_split[$i];
+            print "\e[m"                if -t *STDOUT;
+        }
+    }
+    print "\n";
+
+    # Show the r.Handle* code line itself
+    print "  ", $line_orig;
+
+    return;
+}
+
+
+####################
+#  operation_name  #  Given a method + endpoint, return the swagger operation
+####################
+sub operation_name {
+    my ($method, $endpoint) = @_;
+
+    # /libpod/foo/bar -> (libpod, foo, bar)
+    my @endpoints = grep { /\S/ } split '/', $endpoint;
+
+    # /libpod endpoints -> add 'Libpod' to end, e.g. PodStatsLibpod
+    my $Libpod = '';
+    my $main = shift(@endpoints);
+    if ($main eq 'libpod') {
+        $Libpod = ucfirst($main);
+        $main = shift(@endpoints);
+    }
+    $main =~ s/s$//;         # e.g. Volumes -> Volume
+
+    # Next path component is an optional action:
+    #    GET    /containers/json               -> ContainerList
+    #    DELETE /libpod/containers/{name}      -> ContainerDelete
+    #    GET    /libpod/containers/{name}/logs -> ContainerLogsLibpod
+    my $action = shift(@endpoints) || 'list';
+    $action = 'list'   if $action eq 'json';
+    $action = 'delete' if $method eq 'DELETE';
+
+    # Anything with {id}, {name}, {name:..} may have a following component
+    if ($action =~ m!\{.*\}!) {
+        $action = shift(@endpoints) || 'inspect';
+        $action = 'inspect' if $action eq 'json';
+    }
+
+    # All sorts of special cases
+    if ($action eq 'df') {
+        $action = 'dataUsage';
+    }
+    elsif ($action eq "delete" && $endpoint eq "/libpod/play/kube") {
+        $action = "KubeDown"
+    }
+    elsif ($action eq "list" && $endpoint eq "/libpod/quadlets") {
+        $action = "Install"
+    }
+    # Grrrrrr, this one is annoying: some operations get an extra 'All'
+    elsif ($action =~ /^(delete|get|stats)$/ && $endpoint !~ /\{/) {
+        $action .= "All";
+        $main .= 's' if $main eq 'container';
+    }
+    # No real way to used MixedCase in an endpoint, so we have to hack it here
+    elsif ($action eq 'showmounted') {
+        $action = 'showMounted';
+    }
+    # Ping is a special endpoint, and even if /libpod/_ping, no 'Libpod'
+    elsif ($main eq '_ping') {
+        $main = 'system';
+        $action = 'ping';
+        $Libpod = '';
+    }
+    # Top-level compat endpoints
+    elsif ($main =~ /^(build|commit)$/) {
+        $main   = 'image';
+        $action = $1;
+    }
+    # Top-level system endpoints
+    elsif ($main =~ /^(auth|event|info|version)$/) {
+        $main   = 'system';
+        $action = $1;
+        $action .= 's' if $action eq 'event';
+    }
+
+    return "\u${main}\u${action}$Libpod";
+}
+
+
+1;

@@ -1,0 +1,14 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-podman-args "--label" "org.foo.Arg0=arg0"
+## assert-podman-args "--label" "org.foo.Arg1=arg1"
+## assert-podman-args "--label" "org.foo.Arg2=arg 2"
+## assert-podman-args "--label" "org.foo.Arg3=arg3"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Label=org.foo.Arg1=arg1 "org.foo.Arg2=arg 2" \
+  org.foo.Arg3=arg3
+
+Label=org.foo.Arg0=arg0

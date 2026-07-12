@@ -1,0 +1,184 @@
+#!/usr/bin/perl
+
+(our $ME = $0) =~ s|^.*/||;
+
+use v5.20;
+
+our $DSM = 'docs/source/markdown';
+
+my ($oldname, $newname);
+my %oldname;
+my %changed;
+open my $git_diff, '-|', 'git', 'log', '-1', '-p'
+    or die "$ME: Cannot fork: $!\n";
+while (my $line = <$git_diff>) {
+    chomp $line;
+
+    if ($line =~ m!^\-\-\-\s+a/$DSM/(podman-\S+\.md(\.in)?)!) {
+        $oldname = $1;
+        $newname = undef;
+    }
+    elsif ($line =~ m!^\+\+\+\s+b/$DSM/(podman-\S+\.md(\.in)?)!) {
+        $newname = $1;
+        $oldname{$newname} = $oldname;
+    }
+    elsif ($newname) {
+        if ($line =~ s/^-####\s+//) {
+            $line =~ /^\*\*--(\S+?)\*\*/
+                or die "$ME: in $newname: weird '$line'";
+            $changed{$newname}{$1}{name} //= $1;
+        }
+        # Usually the same, but not for host.container and host.pod.md
+        elsif ($line =~ /^\+\@\@option\s+(\S+)/) {
+            my $optfile = $1;
+            if ($optfile =~ /^(.*)\.\S+$/) {
+                $changed{$newname}{$1}{name} = $optfile;
+            }
+        }
+    }
+}
+close $git_diff;
+
+# Pass 2: read each oldfile, parse changed options
+for my $f (sort keys %changed) {
+    my $oldfile = $oldname{$f};
+    open my $git_fh, '-|', 'git', 'show', "HEAD^:$DSM/$oldfile"
+        or die "$ME: Cannot fork: $!\n";
+    my $opt;
+    while (my $line = <$git_fh>) {
+        if ($line =~ /^####\s+\*\*--(\S+?)\*\*/) {
+            $opt = $1;
+            if ($changed{$f}{$opt}) {
+                $changed{$f}{$opt}{text} = $line;
+            }
+            else {
+                undef $opt;
+            }
+        }
+        elsif ($line =~ /^#/ || $line =~ /^\@\@option\s/) {
+            undef $opt;
+        }
+        elsif ($opt) {
+            $changed{$f}{$opt}{text} .= $line;
+        }
+    }
+    close $git_fh
+        or die "$ME: Error running git on $oldfile\n";
+}
+
+# Pass 3: write out files
+my $tempdir = "/tmp/$ME.diffs";
+system('rm', '-rf', $tempdir);
+mkdir $tempdir, 0755;
+
+for my $md_file (sort keys %changed) {
+    for my $opt (sort keys %{$changed{$md_file}}) {
+        my $d = "$tempdir/$changed{$md_file}{$opt}{name}";
+        mkdir $d, 0755;
+
+        my $outfile = "$d/$md_file";
+        open my $fh, '>', $outfile
+            or die "$ME: Cannot create $outfile: $!\n";
+        # strip all trailing newlines
+        (my $text = $changed{$md_file}{$opt}{text}) =~ s/\n+$/\n/s;
+        print { $fh } $text;
+        close $fh
+            or die "$ME: Error writing $outfile: $!\n";
+
+        my $new_text = "$DSM/options/$changed{$md_file}{$opt}{name}.md";
+        die "$ME: $md_file: File does not exist: $new_text\n" if ! -e $new_text;
+        system('cp', $new_text, "$d/zzz-chosen.md");
+    }
+}
+
+# Now run diffuse
+chdir $tempdir or die;
+my @all_opts = glob("*");
+for my $i (0..$#all_opts) {
+    my $opt = $all_opts[$i];
+    chdir "$tempdir/$opt"
+        or die "??? Internal error, cannot cd $tempdir/$opt: $!";
+
+    $| = 1; printf "--%s (%d/%d) ", $opt, $i+1, scalar(@all_opts);
+
+    my @all_files = glob("*");
+    if (all_files_identical(@all_files)) {
+        pop @all_files;
+        print "[identical between @all_files]\n";
+        next;
+    }
+
+    # Prompt
+    print "[Y/n/q] ";
+    my $ans = <STDIN>;
+    next if $ans =~ /^n/i;
+    exit 0 if $ans =~ /^q/i;
+
+    # Try to cull the files (remove identical ones)
+    my @files = glob("*");
+    my $winner = pop @files;
+
+    for my $f (@files) {
+        system('cmp', '-s', $f, $winner);
+        if ($? == 0) {
+            print "[ $f is the one we went with; removing from list ]\n";
+            unlink $f;
+            next;
+        }
+
+        system('wdiff', '-1', '-2', '-3', $f, $winner);
+        if ($? == 0) {
+            print "[ $f is whitespace-identical with what we went with ]\n";
+            unlink $f;
+            next;
+        }
+    }
+
+    # Recompute @files, in case some were deleted above
+    @files = glob("*"); pop @files;
+
+    for (my $i=0; $i < $#files; $i++) {
+        my $f1 = $files[$i];
+        next unless -e $f1;
+
+        for (my $j=$i+1; $j <= $#files; $j++) {
+            my $f2 = $files[$j];
+            next unless -e $f2;
+
+            system('wdiff', '-1', '-2', '-3', $f1, $f2);
+            if ($? == 0) {
+                print "[ $f2 : removing, it =~ $f1 ]\n";
+                unlink $f2;
+            }
+        }
+    }
+
+    # Recompute @files, in case some were deleted above
+    @files = glob("*");
+
+    # diffuse works great for 3-4 files, passable for 5, not at all for >5
+    if (@files <= 5) {
+        system("diffuse", "-w", @files) == 0
+            or die "Diffuse failed\n";
+    }
+    else {
+        # Too many files. Go by threes.
+        my $winner = pop @files;
+        for (my $i=0; $i < @files; $i += 3) {
+            system("diffuse", "-w", @files[$i..$i+2], $winner);
+        }
+    }
+}
+
+
+sub all_files_identical {
+    my %sha;
+    for my $f (@_) {
+        my $result = qx{sha256sum $f};
+        $result =~ /^([0-9a-f]+)\s/
+            or die "Internal error: unexpected result from sha256sum $f: $result";
+        $sha{$1}++;
+    }
+
+    return (keys(%sha) == 1);
+}

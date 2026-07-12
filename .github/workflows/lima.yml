@@ -1,0 +1,88 @@
+name: lima
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        required: true
+        type: string
+      test:
+        required: true
+        type: string
+      priv:
+        required: false
+        type: string
+      mode:
+        required: false
+        type: string
+      runner:
+        required: true
+        type: string
+      timeout:
+        required: false
+        type: number
+      if:
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+env:
+  # CI automation repo release for the VM image downloads in ci.sh.
+  # ENV is managed by renovate, do not change the name without
+  # updating the renovate config in the automation repo.
+  AUTOMATION_RELEASE: 20260616t073924z
+
+jobs:
+  lima:
+    if: ${{ inputs.if }}
+    name: lima # main name is set by who spawns this job
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout || 20 }} # default to 20m timeout if non specified
+    permissions: {}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # TODO: figure out how to cache the binaries from the build job to the actual test tasks
+      # - name: Download binaries
+      #   if: ${{ inputs.test != 'build' }} # Download build binaries for tests to not compile them again.
+      #   uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      #   with:
+      #     name: "binaries-${{ inputs.distro }}"
+      #     path: bin/
+
+      - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
+        id: lima
+        with:
+          version: v2.1.1
+
+      # NOTE, we are not using a cache here as documented in the lima action.
+      # This is because our VM images are above 5GB and the total github limit is 10 GB which means
+      # it will clean out the other image basically right away making the cache useless for other tasks.
+      # Also most importantly while testing it the cache was slower, the VM images are hosted in the
+      # oracle cloud bucket which is already local to the oracle CI runners unlike the cache which is
+      # stored by github somewhere else.
+
+      - name: Run test on lima
+        run: | # zizmor: ignore[template-injection]
+          ./hack/ci/ci.sh ${{ inputs.test }} ${{ inputs.mode }} ${{ inputs.priv }} ${{ inputs.distro }}
+
+      # TODO: figure out how to cache the binaries from the build job to the actual test tasks
+      # - name: Upload binaries as artifact
+      #   if: ${{ inputs.test == 'build' }}
+      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+      #   with:
+      #     name: "binaries-${{ inputs.distro }}"
+      #     path: "bin/"
+      #     if-no-files-found: error
+
+      - name: Upload journal as artifact
+        if: always() # always collect the log
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: "journal-${{ inputs.test }}-${{ inputs.mode }}-${{ inputs.priv }}-${{ inputs.distro }}.log"
+          path: "./hack/ci/journal.log"
+          if-no-files-found: ignore

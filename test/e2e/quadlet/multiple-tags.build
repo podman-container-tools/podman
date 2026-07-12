@@ -1,0 +1,7 @@
+## assert-podman-args "--tag" "localhost/imagename:v1"
+## assert-podman-args "--tag" "localhost/imagename:latest"
+
+[Build]
+ImageTag=localhost/imagename:v1
+ImageTag=localhost/imagename:latest
+SetWorkingDirectory=unit

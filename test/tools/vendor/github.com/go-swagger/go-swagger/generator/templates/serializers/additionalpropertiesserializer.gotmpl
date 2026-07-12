@@ -1,0 +1,94 @@
+{{ define "additionalPropertiesSerializer" }}
+// UnmarshalJSON unmarshals this object with additional properties from JSON
+func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(data []byte) error {
+  // stage 1, bind the properties
+  var stage1 {{ template "withoutAdditionalBody" . }}
+  if err := json.Unmarshal(data, &stage1); err != nil {
+    return err
+  }
+  var rcv {{ pascalize .Name }}
+  {{ range .Properties }}
+  rcv.{{ pascalize .Name }} = stage1.{{ pascalize .Name }}
+  {{- end }}
+  *{{ .ReceiverName }} = rcv
+
+  // stage 2, remove properties and add to map
+  stage2 := make(map[string]{{ if .AdditionalProperties }}json.RawMessage{{ else }}any{{ end }})
+  if err := json.Unmarshal(data, &stage2); err != nil {
+    return err
+  }
+
+  {{ range .Properties }}
+  delete(stage2, {{ printf "%q" .Name }})
+  {{- end }}
+
+  {{- if .AdditionalProperties }}
+  // stage 3, add additional properties values
+  if len(stage2) > 0 {
+    result := make(map[string]{{ template "schemaType" .AdditionalProperties }})
+    for k, v := range stage2 {
+      var toadd {{ template "schemaType" .AdditionalProperties }}
+      if err := json.Unmarshal(v, {{if not .AdditionalProperties.IsNullable }}&{{ end }}toadd); err != nil {
+        return err
+      }
+      result[k] = toadd
+    }
+    {{ .ValueExpression }} = result
+  }
+  {{- else }}
+  {{ .ValueExpression }} = stage2
+  {{- end }}
+
+  return nil
+}
+
+// MarshalJSON marshals this object with additional properties into a JSON object
+func ({{.ReceiverName}} {{ pascalize .Name }}) MarshalJSON() ([]byte, error) {
+  var stage1 {{ template "withoutAdditionalBody" . }}
+  {{ range .Properties }}
+  stage1.{{ pascalize .Name }} = {{ .ValueExpression }}
+  {{- end }}
+
+  // make JSON object for known properties
+  props, err := json.Marshal(stage1)
+  if err != nil {
+    return nil, err
+  }
+
+  if len({{ .ValueExpression }}) == 0 { // no additional properties
+    return props, nil
+  }
+
+  // make JSON object for the additional properties
+  additional, err := json.Marshal({{ .ValueExpression }})
+  if err != nil {
+    return nil, err
+  }
+
+  if len(props) < 3 { // "{}": only additional properties
+    return additional, nil
+  }
+
+  // concatenate the 2 objects
+  return swag.ConcatJSON(props, additional), nil
+}
+{{- end }}
+
+{{ define "noAdditionalPropertiesSerializer" }}
+// UnmarshalJSON unmarshals this object while disallowing additional properties from JSON
+func ({{.ReceiverName}} *{{ pascalize .Name }}) UnmarshalJSON(data []byte) error {
+  var props {{ template "withoutAdditionalBody" . }}
+
+  dec := json.NewDecoder(bytes.NewReader(data))
+  dec.DisallowUnknownFields()
+  if err := dec.Decode(&props); err != nil {
+    return err
+  }
+
+  {{- $rcv :=  .ReceiverName }}
+  {{ range .Properties }}
+    {{ .ReceiverName }}.{{ pascalize .Name }} = props.{{ pascalize .Name }}
+  {{- end }}
+  return nil
+}
+{{- end }}

@@ -1,0 +1,11 @@
+## assert-podman-args "--uidmap" "0:10000:10"
+## assert-podman-args "--uidmap" "10:20000:10"
+## assert-podman-args "--gidmap" "0:10000:10"
+## assert-podman-args "--gidmap" "10:20000:10"
+
+[Container]
+Image=localhost/imagename
+UIDMap=0:10000:10
+UIDMap=10:20000:10
+GIDMap=0:10000:10
+GIDMap=10:20000:10

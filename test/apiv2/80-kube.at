@@ -1,0 +1,149 @@
+# -*- sh -*-
+#
+# test more container-related endpoints
+#
+
+podman create $IMAGE true
+
+t GET libpod/containers/json?last=1 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Image=$IMAGE \
+  .[0].Command[0]="true" \
+  .[0].IsInfra=false
+
+cid=$(jq -r '.[0].Id' <<<"$output")
+
+# Make sure that generate-kube works
+
+t GET libpod/generate/kube?names=$cid 200
+like "$output" ".*apiVersion:.*" "Check generated kube yaml - apiVersion"
+like "$output" ".*kind:\\sPod.*" "Check generated kube yaml - kind: Pod"
+like "$output" ".*metadata:.*" "Check generated kube yaml - metadata"
+like "$output" ".*spec:.*" "Check generated kube yaml - spec"
+
+t GET "libpod/generate/kube?service=true&names=$cid" 200
+like "$output" ".*apiVersion:.*" "Check generated kube yaml(service=true) - apiVersion"
+like "$output" ".*kind:\\sPod.*" "Check generated kube yaml(service=true) - kind: Pod"
+like "$output" ".*metadata:.*" "Check generated kube yaml(service=true) - metadata"
+like "$output" ".*spec:.*" "Check generated kube yaml(service=true) - spec"
+like "$output" ".*kind:\\sService.*" "Check generated kube yaml(service=true) - kind: Service"
+
+t GET "libpod/generate/kube?type=deployment&names=$cid" 200
+like "$output" ".*apiVersion:.*" "Check generated kube yaml - apiVersion"
+like "$output" ".*kind:\\sDeployment.*" "Check generated kube yaml - kind: Deployment"
+like "$output" ".*metadata:.*" "Check generated kube yaml - metadata"
+like "$output" ".*spec:.*" "Check generated kube yaml - spec"
+
+t GET "libpod/generate/kube?type=job&names=$cid" 200
+like "$output" ".*apiVersion:.*" "Check generated kube yaml - apiVersion"
+like "$output" ".*kind:\\sJob.*" "Check generated kube yaml - kind: Job"
+like "$output" ".*metadata:.*" "Check generated kube yaml - metadata"
+like "$output" ".*spec:.*" "Check generated kube yaml - spec"
+
+TMPD=$(mktemp -d podman-apiv2-test-kube.XXXXXX)
+YAML="${TMPD}/kube.yaml"
+echo "$output" > $YAML
+
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+# Make sure that kube-play works
+
+t POST   libpod/kube/play $YAML 200 \
+  .Pods[0].ID~[0-9a-f]\\{64\\} \
+  .Pods[0].ContainerErrors=null \
+  .Pods[0].Containers[0]~[0-9a-f]\\{64\\}
+
+t POST   libpod/kube/play $YAML 500
+
+t POST   'libpod/kube/play?replace=true' $YAML 200 \
+  .Pods[0].ID~[0-9a-f]\\{64\\} \
+  .Pods[0].ContainerErrors=null \
+  .Pods[0].Containers[0]~[0-9a-f]\\{64\\}
+
+t DELETE libpod/kube/play $YAML 200 \
+  .StopReport[0].Id~[0-9a-f]\\{64\\} \
+  .RmReport[0].Id~[0-9a-f]\\{64\\}
+
+# Make sure that play-kube works
+
+t POST   libpod/play/kube $YAML 200 \
+  .Pods[0].ID~[0-9a-f]\\{64\\} \
+  .Pods[0].ContainerErrors=null \
+  .Pods[0].Containers[0]~[0-9a-f]\\{64\\}
+
+t DELETE libpod/play/kube $YAML 200 \
+  .StopReport[0].Id~[0-9a-f]\\{64\\} \
+  .RmReport[0].Id~[0-9a-f]\\{64\\}
+
+rm -rf $TMPD
+
+# check kube play works when uploading body as a tar
+TMPD=$(mktemp -d podman-apiv2-test-kube.XXXXXX)
+KUBE_PLAY_TAR="${TMPD}/kubeplay.tar"
+cat > $TMPD/play.yaml << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-tar-remote
+spec:
+  containers:
+    - name: container
+      image: ${IMAGE}
+EOF
+# Tar the content of the tmp folder
+tar --format=posix -C $TMPD -cvf ${KUBE_PLAY_TAR} play.yaml &> /dev/null
+t POST "libpod/play/kube" $KUBE_PLAY_TAR 200 \
+   .Pods[0].ID~[0-9a-f]\\{64\\} \
+   .Pods[0].ContainerErrors=null \
+   .Pods[0].Containers[0]~[0-9a-f]\\{64\\}
+# Cleanup
+t DELETE libpod/kube/play $TMPD/play.yaml 200 \
+  .StopReport[0].Id~[0-9a-f]\\{64\\} \
+  .RmReport[0].Id~[0-9a-f]\\{64\\}
+rm -rf $TMPD
+
+# check kube play is capable of building the image when uploading body as a tar
+
+TMPD=$(mktemp -d podman-apiv2-test-kube-build.XXXXXX)
+KUBE_PLAY_TAR="${TMPD}/kubeplay.tar"
+# Generate an unique label value
+LABEL_VALUE="foo-$(date +%s)"
+cat > $TMPD/play.yaml << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-build-remote
+spec:
+  containers:
+    - name: container
+      image: barfoo
+EOF
+mkdir $TMPD/barfoo
+cat > $TMPD/barfoo/Containerfile << EOF
+FROM ${IMAGE}
+LABEL bar="${LABEL_VALUE}"
+EOF
+
+tar --format=posix -C $TMPD -cvf ${KUBE_PLAY_TAR} . &> /dev/null
+
+t POST "libpod/play/kube?build=true" $KUBE_PLAY_TAR 200 \
+   .Pods[0].ID~[0-9a-f]\\{64\\} \
+   .Pods[0].ContainerErrors=null \
+   .Pods[0].Containers[0]~[0-9a-f]\\{64\\}
+
+# Get the container id created
+cid=$(jq -r '.Pods[0].Containers[0]' <<<"$output")
+
+# Ensure the image build has the label defined in the Containerfile
+t GET containers/$cid/json 200 \
+    .Config.Labels.bar="${LABEL_VALUE}"
+
+# Cleanup
+t DELETE "libpod/kube/play" $TMPD/play.yaml 200 \
+   .StopReport[0].Id~[0-9a-f]\\{64\\} \
+   .RmReport[0].Id~[0-9a-f]\\{64\\}
+
+rm -rf $TMPD
+
+# vim: filetype=sh

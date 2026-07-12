@@ -1,0 +1,5 @@
+## assert-podman-pre-args "--name" "test-pod"
+## assert-podman-pre-args "--infra-name" "test-pod-infra"
+
+[Pod]
+PodName=test-pod

@@ -1,0 +1,7 @@
+## assert-key-is Unit RequiresMountsFor "%t/containers"
+## assert-key-is Service Type oneshot
+## assert-key-is Service RemainAfterExit yes
+## assert-key-is-regex Service ExecStart ".*/podman network create --ignore systemd-basic"
+## assert-key-is Service SyslogIdentifier "%N"
+
+[Network]

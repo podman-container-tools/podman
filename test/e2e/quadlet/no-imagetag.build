@@ -1,0 +1,5 @@
+## assert-failed
+## assert-stderr-contains "no ImageTag key specified"
+
+[Build]
+SetWorkingDirectory=unit

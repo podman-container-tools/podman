@@ -1,0 +1,6 @@
+## assert-podman-args "--tag" "localhost/podman-hello"
+## assert-podman-args "--file" "https://raw.githubusercontent.com/containers/PodmanHello/main/Containerfile"
+
+[Build]
+File=https://raw.githubusercontent.com/containers/PodmanHello/main/Containerfile
+ImageTag=localhost/podman-hello

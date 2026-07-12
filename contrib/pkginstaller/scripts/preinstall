@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+rm -rf /opt/podman
+
+if [ ! -d "/etc/paths.d" ]; then
+    mkdir -p /etc/paths.d
+fi
+
+# Create directory to be able to add podman
+# man pages into the "man" path
+if [ ! -d "/usr/local/etc/man.d" ]; then
+    mkdir -p /usr/local/etc/man.d
+fi

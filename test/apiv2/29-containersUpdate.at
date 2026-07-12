@@ -1,0 +1,34 @@
+# -*- sh -*-
+#
+# Tests for the container update endpoint
+#
+
+podman pull $IMAGE &>/dev/null
+podman rm -a -f &>/dev/null
+
+# test that r_limits are preserved when omitted from update body (RHEL-178653)
+# The bug: parseRLimits() returned empty non-nil slice when r_limits was absent,
+# which triggered full rlimit replacement in container_internal.go, wiping existing rlimits.
+t POST libpod/containers/create \
+  Image=$IMAGE           \
+  r_limits='[{"type":"nofile","soft":52191,"hard":127585}]' \
+  201                    \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+# Verify ulimit is set at create time
+t GET libpod/containers/$cid/json 200 \
+  .HostConfig.Ulimits[0].Soft=52191
+
+# Update an unrelated field (health log destination) without mentioning r_limits
+t POST libpod/containers/$cid/update \
+  health_log_destination=local \
+  201
+
+# Ulimits must survive the update
+t GET libpod/containers/$cid/json 200 \
+  .HostConfig.Ulimits[0].Soft=52191
+
+t DELETE containers/$cid 204
+
+podman container rm -fa

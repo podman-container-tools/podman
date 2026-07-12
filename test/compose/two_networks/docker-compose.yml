@@ -1,0 +1,11 @@
+version: '3'
+services:
+  con1:
+    image: alpine
+    command: top
+    networks:
+      - net1
+      - net2
+networks:
+  net1:
+  net2:

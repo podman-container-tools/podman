@@ -1,0 +1,112 @@
+#!/bin/bash -e
+# Execute podman while capturing the API stream
+#
+# Script will run an instance of podman sand-boxed, the API stream will be captured and then formatted for readability.
+
+if [[ $(id -u) != 0 ]]; then
+    echo >&2 "$0 must be run as root."
+    exit 2
+fi
+
+if ! command -v socat > /dev/null 2>&1; then
+    echo 1>&2 "socat not found on PATH"
+fi
+
+PODMAN=${PODMAN:-podman}
+if ! command -v "$PODMAN" > /dev/null 2>&1; then
+    echo 1>&2 "$PODMAN not found on PATH"
+fi
+
+function usage() {
+    echo 1>&2 $0 '[-v] [-h]'
+}
+
+while getopts "vh" arg; do
+    case $arg in
+    v)
+        VERBOSE='-v'
+        export PODMAN_LOG_LEVEL=debug
+        ;;
+    h)
+        usage
+        exit 0
+        ;;
+    \?)
+        usage
+        exit 2
+        ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+function cleanup() {
+    set +xeuo pipefail
+    rm -r "$1"
+    kill -9 $REAP_PIDS
+
+    sed -e 's/^> /\nClient Request> /' -e 's/^< /\nServer Response< /' -i /tmp/podman-socat.log
+}
+
+# Create temporary directory for storage
+export TMPDIR=$(mktemp -d /tmp/podman.XXXXXXXXXX)
+trap "cleanup $TMPDIR" EXIT
+
+# Need locations to store stuff
+mkdir -p "${TMPDIR}"/{podman,crio,crio-run,cni/net.d,ctnr,tunnel}
+
+export CNI_CONFIG_PATH=${TMPDIR}/cni/net.d
+cat > "$CNI_CONFIG_PATH"/87-podman-bridge.conflist <<- EOT
+{
+  "cniVersion": "0.3.0",
+  "name": "podman",
+  "plugins": [{
+      "type": "bridge",
+      "bridge": "cni0",
+      "isGateway": true,
+      "ipMasq": true,
+      "ipam": {
+        "type": "host-local",
+        "subnet": "10.88.0.0/16",
+        "routes": [{
+          "dst": "0.0.0.0/0"
+        }]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {
+        "portMappings": true
+      }
+    }
+  ]
+}
+EOT
+
+PODMAN_ARGS="--storage-driver=vfs \
+  --root=${TMPDIR}/crio \
+  --runroot=${TMPDIR}/crio-run \
+  --network-config-dir=$CNI_CONFIG_PATH \
+  --cgroup-manager=systemd \
+  "
+if [[ -n $VERBOSE ]]; then
+    PODMAN_ARGS="$PODMAN_ARGS --log-level=$PODMAN_LOG_LEVEL --syslog=true"
+fi
+PODMAN="$PODMAN $PODMAN_ARGS"
+
+PODMAN_HOST="${TMPDIR}/podman/podman-socat.sock"
+SOCAT_HOST="${TMPDIR}/podman/podman.sock"
+
+cat <<- EOT
+Podman service running at unix://$SOCAT_HOST
+See /tmp/podman-socat.log for API stream capture
+See /tmp/podman-service.log for service logging
+
+usage: sudo bin/podman-remote --url unix://$SOCAT_HOST images
+
+^C to exit
+EOT
+
+$PODMAN system service --timeout=0 "unix://$PODMAN_HOST" > /tmp/podman-service.log 2>&1 &
+REAP_PIDS=$!
+
+socat -v "UNIX-LISTEN:$SOCAT_HOST",fork,reuseaddr,unlink-early "UNIX-CONNECT:$PODMAN_HOST" > /tmp/podman-socat.log 2>&1

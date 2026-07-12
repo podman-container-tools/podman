@@ -1,0 +1,8 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-podman-args "--pull=never"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Pull=never

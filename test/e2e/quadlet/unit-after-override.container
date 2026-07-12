@@ -1,0 +1,7 @@
+## assert-last-key-is-regex "Unit" "After" "^$"
+
+[Unit]
+After=
+
+[Container]
+Image=localhost/imagename

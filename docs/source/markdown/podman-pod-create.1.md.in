@@ -1,0 +1,269 @@
+% podman-pod-create 1
+
+## NAME
+podman\-pod\-create - Create a new pod
+
+## SYNOPSIS
+**podman pod create** [*options*] [*name*]
+
+## DESCRIPTION
+
+Creates an empty pod, or unit of multiple containers, and prepares it to have
+containers added to it. The pod can be created with a specific name. If a name
+is not given a random name is generated. The pod ID is printed to STDOUT. You
+can then use **podman create --pod `<pod_id|pod_name>` ...** to add containers
+to the pod, and **podman pod start `<pod_id|pod_name>`** to start the pod.
+
+The operator can identify a pod in three ways:
+UUID long identifier (“f78375b1c487e03c9438c729345e54db9d20cfa2ac1fc3494b6eb60872e74778”)
+UUID short identifier (“f78375b1c487”)
+Name (“jonah”)
+
+podman generates a UUID for each pod, and if a name is not assigned
+to the container with **--name** then a random string name is generated
+for it. This name is useful to identify a pod.
+
+Note: resource limit related flags work by setting the limits explicitly in the pod's cgroup parent
+for all containers joining the pod. A container can override the resource limits when joining a pod.
+For example, if a pod was created via **podman pod create --cpus=5**, specifying **podman container create --pod=`<pod_id|pod_name>` --cpus=4** causes the container to use the smaller limit. Also, containers which specify their own cgroup, such as **--cgroupns=host**, do NOT get the assigned pod level cgroup resources.
+
+## OPTIONS
+
+@@option add-host
+
+The /etc/hosts file is shared between all containers in the pod.
+
+@@option blkio-weight
+
+@@option blkio-weight-device
+
+@@option cgroup-parent
+
+@@option cpu-shares
+
+#### **--cpus**=*amount*
+
+Set the total number of CPUs delegated to the pod. Default is 0.000 which indicates that there is no limit on computation power.
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option device
+
+Note: the pod implements devices by storing the initial configuration passed by the user and recreating the device on each container added to the pod.
+
+@@option device-read-bps
+
+@@option device-write-bps
+
+#### **--dns**=*ipaddr*
+
+Set custom DNS servers in the /etc/resolv.conf file that is shared between all containers in the pod. A special option, "none" is allowed which disables creation of /etc/resolv.conf for the pod.
+
+#### **--dns-option**=*option*
+
+Set custom DNS options in the /etc/resolv.conf file that is shared between all containers in the pod.
+
+#### **--dns-search**=*domain*
+
+Set custom DNS search domains in the /etc/resolv.conf file that is shared between all containers in the pod.
+
+#### **--exit-policy**=**continue** | *stop*
+
+Set the exit policy of the pod when the last container exits.  Supported policies are:
+
+| Exit Policy        | Description                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| *continue*         | The pod continues running, by keeping its infra container alive, when the last container exits. Used by default.           |
+| *stop*             | The pod (including its infra container) is stopped when the last container exits. Used in `kube play` and quadlets.        |
+
+@@option gidmap.pod
+
+@@option gpus
+
+#### **--help**, **-h**
+
+Print usage statement.
+
+@@option hostname.pod
+
+@@option hosts-file
+
+#### **--infra**
+
+Create an infra container and associate it with the pod. An infra container is a lightweight container used to coordinate the shared kernel namespace of a pod. Default: true.
+
+@@option infra-command
+
+@@option infra-conmon-pidfile
+
+#### **--infra-image**=*image*
+
+The custom image that is used for the infra container.  Unless specified, Podman builds a custom local image which does not require pulling down an image.
+
+@@option infra-name
+
+@@option ip
+
+@@option ip6
+
+@@option label
+
+@@option label-file
+
+@@option mac-address
+
+@@option memory
+
+@@option memory-swap
+
+#### **--name**, **-n**=*name*
+
+Assign a name to the pod.
+
+@@option network
+
+Invalid if using **--dns**, **--dns-option**, or **--dns-search** with **--network** set to **none** or **container:**_id_.
+
+@@option network-alias
+
+@@option no-hostname
+
+@@option no-hosts
+
+This option conflicts with **--add-host**.
+
+@@option pid.pod
+
+#### **--pod-id-file**=*path*
+
+Write the pod ID to the file.
+
+@@option publish
+
+**Note:** You must not publish ports of containers in the pod individually,
+but only by the pod itself.
+
+**Note:** This cannot be modified once the pod is created.
+
+@@option replace
+
+@@option restart
+
+Default restart policy for all the containers in a pod.
+
+@@option security-opt
+
+#### **--share**=*namespace*
+
+A comma-separated list of kernel namespaces to share. If none or "" is specified, no namespaces are shared, and the infra container is not created unless explicitly specified via **--infra=true**. The namespaces to choose from are cgroup, ipc, net, pid, uts. If the option is prefixed with a "+", the namespace is appended to the default list. Otherwise, it replaces the default list. Defaults match Kubernetes default (ipc, net, uts)
+
+#### **--share-parent**
+
+This boolean determines whether or not all containers entering the pod use the pod as their cgroup parent. The default value of this option is true. Use the **--share** option to share the cgroup namespace rather than a cgroup parent in a pod.
+
+Note: This option conflicts with the **--share=cgroup** option since that option sets the pod as the cgroup parent but enters the container into the same cgroupNS as the infra container.
+
+@@option shm-size
+
+@@option shm-size-systemd
+
+@@option subgidname
+
+@@option subuidname
+
+@@option sysctl
+
+@@option uidmap.pod
+
+@@option userns.pod
+
+@@option uts.pod
+
+@@option volume
+
+@@option volumes-from
+
+## EXAMPLES
+
+Create a named pod.
+```
+$ podman pod create --name test
+```
+
+Create a named pod.
+```
+$ podman pod create mypod
+```
+
+Create a pod without an infra container.
+```
+$ podman pod create --infra=false
+```
+
+Create a named pod with infra container command to run.
+```
+$ podman pod create --infra-command /top toppod
+```
+
+Create a pod with published ports on the host.
+```
+$ podman pod create --publish 8443:443
+```
+
+Create a pod with the specified network.
+```
+$ podman pod create --network pasta
+```
+
+Create a pod on two networks.
+```
+$ podman pod create --network net1:ip=10.89.1.5 --network net2:ip=10.89.10.10
+```
+
+Create a pod with shared CPU and memory limits for all containers.
+```
+$ podman pod create --cpus=2 --memory=512m mypod
+```
+
+Create a pod with shared volume mounts accessible to all containers.
+```
+$ podman pod create --volume /host/path:/container/path:Z mypod
+```
+
+Create a pod with shared resource limits and volume mounts for all containers.
+```
+$ podman pod create --volume /data:/data:Z --volume /config:/etc/config:ro --cpus=1.5 --memory=1g --cpu-shares=512 mypod
+```
+
+Create a pod with shared device access and resource limits.
+```
+$ podman pod create --device /dev/sda:/dev/sda:rw --cpus=4 --memory=2g --blkio-weight=500 mypod
+```
+
+Create a pod with shared CPU set limits and volumes from another container that will be shared to all containers in the pod.
+```
+$ podman pod create --cpuset-cpus=0,2 --volumes-from=source-container --memory=1g mypod
+```
+
+Create a pod with shared resources and add containers to it.
+```
+$ podman pod create --cpus=2 --memory=1g --volume /data:/data:Z mypod
+$ podman create --pod mypod nginx
+$ podman create --pod mypod redis
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-kube-play(1)](podman-kube-play.1.md)**, **containers.conf(1)**, **[cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.
+
+## HISTORY
+July 2018, Originally compiled by Peter Hunt <pehunt@redhat.com>
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a core value of open source. The `master` and `slave` mount propagation terminology used here is problematic and divisive, and needs to be changed. However, these terms are currently used within the Linux kernel and must be used as-is at this time. When the kernel maintainers rectify this usage, Podman will follow suit immediately.

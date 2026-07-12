@@ -1,0 +1,31 @@
+% podman-manifest-inspect 1
+
+## NAME
+podman\-manifest\-inspect - Display a manifest list or image index
+
+## SYNOPSIS
+**podman manifest inspect** [*options*] *listnameorindexname*
+
+## DESCRIPTION
+
+Displays the manifest list or image index stored using the specified image name.
+
+## RETURN VALUE
+
+A formatted JSON representation of the manifest list or image index.
+
+## OPTIONS
+
+@@option authfile
+
+@@option tls-verify
+
+## EXAMPLES
+
+Inspect the manifest of mylist:v1.11.
+```
+podman manifest inspect mylist:v1.11
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**

@@ -1,0 +1,103 @@
+# This file is distributed under the same license as the Podman package.
+# Translators:
+# Takuya Nishimura <tanishim@redhat.com>, 2023.
+msgid ""
+msgstr ""
+"Project-Id-Version: Podman \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-08-29 22:22+0900\n"
+"PO-Revision-Date: 2023-08-29 22:22+0900\n"
+"Last-Translator: Takuya Nishimura <tanishim@redhat.com>\n"
+"Language: ja\n"
+"Language-Team: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: ../../source/Tutorials.rst:4
+msgid "Tutorials"
+msgstr "チュートリアル"
+
+#: ../../source/Tutorials.rst:5
+msgid ""
+"Here are a number of useful tutorials to get you up and running with "
+"Podman. If you are familiar with the Docker `Container Engine`_ the "
+"command in Podman_ should be quite familiar. If you are brand new to "
+"containers, take a look at our `Introduction`."
+msgstr ""
+
+#: ../../source/Tutorials.rst:7
+msgid ""
+"`Basic Setup and Use of Podman "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/podman_tutorial.md>`_:"
+" Learn how to set up Podman and perform some basic commands with the "
+"utility."
+msgstr ""
+
+#: ../../source/Tutorials.rst:8
+msgid ""
+"`Basic Setup and Use of Podman in a Rootless environment "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md>`_:"
+" The steps required to set up rootless Podman are enumerated."
+msgstr ""
+
+#: ../../source/Tutorials.rst:9
+msgid ""
+"`Podman for Windows "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/podman-"
+"for-windows.md>`_: A guide to installing and using Podman on Windows."
+msgstr ""
+
+#: ../../source/Tutorials.rst:10
+msgid ""
+"`Podman Remote Clients on Mac/Windows "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/mac_win_client.md>`_:"
+" Advanced setup for connecting to a remote Linux system using the Podman "
+"remote client on Mac and Windows."
+msgstr ""
+
+#: ../../source/Tutorials.rst:11
+msgid ""
+"`How to sign and distribute container images using Podman "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/image_signing.md>`_:"
+" Learn how to set up and use image signing with Podman."
+msgstr ""
+
+#: ../../source/Tutorials.rst:12
+msgid ""
+"`Podman remote-client tutorial "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/remote_client.md>`_:"
+" A brief how-to on using the Podman remote-client."
+msgstr ""
+
+#: ../../source/Tutorials.rst:13
+msgid ""
+"`How to use libpod for custom/derivative projects "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/podman-"
+"derivative-api.md>`_: How the libpod API can be used within your own "
+"project."
+msgstr ""
+
+#: ../../source/Tutorials.rst:14
+msgid ""
+"`How to use Podman's Go RESTful bindings "
+"<https://github.com/containers/podman/tree/main/pkg/bindings>`_: An "
+"introduction to using our RESTful Golang bindings in an external "
+"application."
+msgstr ""
+
+#: ../../source/Tutorials.rst:15
+msgid ""
+"`Common network setups "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/basic_networking.md>`_:"
+" A basic guide to common network setups for Podman."
+msgstr ""
+
+#: ../../source/Tutorials.rst:16
+msgid ""
+"`Socket activation "
+"<https://github.com/containers/podman/blob/main/docs/tutorials/socket_activation.md>`_:"
+" Learn how to run containers that support socket activation."
+msgstr ""

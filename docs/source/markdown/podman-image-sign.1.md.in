@@ -1,0 +1,72 @@
+% podman-image-sign 1
+
+## NAME
+podman-image-sign - Create a signature for an image
+
+## SYNOPSIS
+**podman image sign** [*options*] *image* [*image* ...]
+
+## DESCRIPTION
+**podman image sign** creates a local signature for one or more local images that have
+been pulled from a registry. The signature is written to a directory
+derived from the registry configuration files in `$HOME/.config/containers/registries.d` if it exists,
+otherwise `/etc/containers/registries.d` (unless overridden at compile-time), see **containers-registries.d(5)** for more information.
+By default, the signature is written into `/var/lib/containers/sigstore` for root and `$HOME/.local/share/containers/sigstore` for non-root users
+
+## OPTIONS
+
+#### **--all**, **-a**
+
+Sign all the manifests of the multi-architecture image (default false).
+
+@@option authfile
+
+@@option cert-dir
+
+#### **--directory**, **-d**=*dir*
+
+Store the signatures in the specified directory.  Default: /var/lib/containers/sigstore
+
+#### **--help**, **-h**
+
+Print usage statement.
+
+#### **--sign-by**=*identity*
+
+Override the default identity of the signature.
+
+## EXAMPLES
+Sign the busybox image with the identity of foo@bar.com with a user's keyring and save the signature in /tmp/signatures/.
+
+```bash
+   $ sudo podman image sign --sign-by foo@bar.com --directory /tmp/signatures docker://privateregistry.example.com/foobar
+
+   $ sudo podman image sign --authfile=/tmp/foobar.json --sign-by foo@bar.com --directory /tmp/signatures docker://privateregistry.example.com/foobar
+```
+
+## RELATED CONFIGURATION
+
+The write (and read) location for signatures is defined in YAML-based
+configuration files in /etc/containers/registries.d/ for root,
+or $HOME/.config/containers/registries.d for non-root users.  When signing
+an image, Podman uses those configuration files to determine
+where to write the signature based on the name of the originating
+registry or a default storage value unless overridden with the --directory
+option. For example, consider the following configuration file.
+
+```yaml
+docker:
+  privateregistry.example.com:
+    sigstore: file:///var/lib/containers/sigstore
+```
+
+When signing an image preceded with the registry name 'privateregistry.example.com',
+the signature is written into sub-directories of
+/var/lib/containers/sigstore/privateregistry.example.com. The use of 'sigstore' also means
+the signature is 'read' from that same location on a pull-related function.
+
+## SEE ALSO
+**[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**, **[containers-registries.d(5)](https://github.com/containers/image/blob/main/docs/containers-registries.d.5.md)**
+
+## HISTORY
+November 2018, Originally compiled by Qi Wang (qiwan at redhat dot com)

@@ -1,0 +1,8 @@
+## assert-podman-reload-args "exec"
+## assert-podman-reload-args "systemd-%N"
+## assert-podman-reload-final-args "/some/binary file" "--arg1" "arg 2"
+
+[Container]
+Image=localhost/imagename
+ReloadCmd="/some/binary file" --arg1 \
+  "arg 2"

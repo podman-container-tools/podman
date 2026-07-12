@@ -1,0 +1,21 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+	<PropertyGroup>
+		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+		<SuppressIces>ICE24</SuppressIces>
+	</PropertyGroup>
+	<ItemGroup>
+		<HarvestDirectory Include="..\docs">
+			<ComponentGroupName>ManFiles</ComponentGroupName>
+			<DirectoryRefId>INSTALLDIR</DirectoryRefId>
+			<SuppressRootDirectory>true</SuppressRootDirectory>
+		</HarvestDirectory>
+		<BindPath Include="..\docs" />
+		<Compile Include="podman-main.wxs;podman-ui-main.wxs;podman-ui-welcome-dlg.wxs" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="PanelSwWixExtension4" Version="5.4.5.422" />
+		<PackageReference Include="WixToolset.Heat" Version="5.0.2" />
+		<PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+		<PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+	 </ItemGroup>
+</Project>

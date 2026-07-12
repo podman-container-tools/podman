@@ -1,0 +1,4 @@
+
+# images is empty and should be override on the cli
+#  --set '.images=[{"location":"https://github.com/podman-io/automation/releases/latest/v0.2.31.rd5/alpine-lima-rd-3.18.0-x86_64.iso", "arch": "x86_64"}]'
+images:

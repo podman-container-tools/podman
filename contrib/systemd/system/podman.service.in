@@ -1,0 +1,16 @@
+[Unit]
+Description=Podman API Service
+Requires=podman.socket
+After=podman.socket
+Documentation=man:podman-system-service(1)
+StartLimitIntervalSec=0
+
+[Service]
+Delegate=true
+Type=exec
+KillMode=process
+Environment=LOGGING="--log-level=info"
+ExecStart=@@PODMAN@@ $LOGGING system service
+
+[Install]
+WantedBy=default.target

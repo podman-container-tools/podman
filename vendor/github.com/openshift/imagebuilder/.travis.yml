@@ -1,0 +1,31 @@
+language: go
+
+os: linux
+
+arch:
+  - amd64
+  - arm64
+
+dist: noble
+
+services:
+  - docker
+
+go:
+  - "1.25.5"
+
+before_install:
+  - docker pull mirror.gcr.io/alpine
+  - docker pull mirror.gcr.io/busybox
+  - docker pull public.ecr.aws/docker/library/centos:7
+  - docker pull mirror.gcr.io/debian
+  - docker pull registry.fedoraproject.org/fedora-minimal
+  - docker pull registry.fedoraproject.org/fedora-minimal:44-x86_64
+  - docker pull registry.fedoraproject.org/fedora-minimal:44-aarch64
+  - docker pull mirror.gcr.io/golang:1.25
+  - chmod -R go-w ./dockerclient/testdata
+
+script:
+  - make build
+  - make test
+  - travis_wait 45 make test-conformance DOCKER_API_VERSION=1.44

@@ -1,0 +1,15 @@
+services:
+  test:
+    image: alpine
+    command: ["top"]
+    volumes:
+      - /dev:/dev-host
+    security_opt:
+      - label=disable
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: cdi
+            device_ids: ['vendor.com/device=myKmsg']
+            capabilities: []

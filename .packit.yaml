@@ -1,0 +1,185 @@
+---
+# See the documentation for more information:
+# https://packit.dev/docs/configuration/
+
+downstream_package_name: podman
+upstream_tag_template: v{version}
+
+# These files get synced from upstream to downstream (Fedora / CentOS Stream) on every
+# propose-downstream job. This is done so tests maintained upstream can be run
+# downstream in Zuul CI and Bodhi.
+# Ref: https://packit.dev/docs/configuration#files_to_sync
+files_to_sync:
+  - src: rpm/gating.yaml
+    dest: gating.yaml
+    delete: true
+  - src: plans/
+    dest: plans/
+    delete: true
+    mkpath: true
+  - src: test/tmt/
+    dest: test/tmt/
+    delete: true
+    mkpath: true
+  - src: .fmf/
+    dest: .fmf/
+    delete: true
+  - .packit.yaml
+
+packages:
+  podman-fedora:
+    pkg_tool: fedpkg
+    specfile_path: rpm/podman.spec
+  podman-centos:
+    pkg_tool: centpkg
+    specfile_path: rpm/podman.spec
+  podman-eln:
+    specfile_path: rpm/podman.spec
+
+# Disable automatic merging for Copr builds (and subsequent Testing Farm)
+merge_pr_in_ci: false
+
+srpm_build_deps:
+  - git-archive-all
+  - make
+
+actions:
+  fix-spec-file: "bash contrib/packit-tmt/packit-copr-rpm.sh"
+  pre-sync: "bash contrib/packit-tmt/packit-rpm-git-commit.sh"
+
+jobs:
+  - job: copr_build
+    trigger: pull_request
+    packages: [podman-fedora]
+    notifications: &packit_generic_failure_notification
+      failure_comment:
+        message: "[NON-BLOCKING] Packit jobs failed. @containers/packit-build please check. Everyone else, feel free to ignore."
+    enable_net: true
+    # CAUTION: The builds from these jobs are consumed by podman-machine-os
+    # during the release process. Any change here should be mindful of it.
+    targets:
+      - fedora-all-x86_64
+      - fedora-all-aarch64
+    # Re-enable these scans if OpenScanHub starts scanning go packages
+    # https://packit.dev/posts/openscanhub-prototype
+    osh_diff_scan_after_copr_build: false
+
+  # Ignore until golang is updated in distro buildroot to go 1.23.3+
+  - job: copr_build
+    trigger: ignore
+    packages: [podman-eln]
+    notifications: *packit_generic_failure_notification
+    enable_net: true
+    targets:
+      fedora-eln-x86_64:
+        additional_repos:
+          - "https://kojipkgs.fedoraproject.org/repos/eln-build/latest/x86_64/"
+      fedora-eln-aarch64:
+        additional_repos:
+          - "https://kojipkgs.fedoraproject.org/repos/eln-build/latest/aarch64/"
+
+  # Ignore until golang is updated in distro buildroot to go 1.23.3+
+  - job: copr_build
+    trigger: ignore
+    packages: [podman-centos]
+    notifications: *packit_generic_failure_notification
+    enable_net: true
+    targets:
+      - centos-stream-9-x86_64
+      - centos-stream-9-aarch64
+      - centos-stream-10-x86_64
+      - centos-stream-10-aarch64
+
+  # Run on commit to main branch
+  - job: copr_build
+    trigger: commit
+    packages: [podman-fedora]
+    branch: main
+    owner: rhcontainerbot
+    project: podman-next
+    enable_net: true
+
+  # Tests on Fedora
+  - job: tests
+    trigger: pull_request
+    packages: [podman-fedora]
+    notifications: *packit_generic_failure_notification
+    targets:
+      - fedora-all
+    tmt_plan: "/plans/system/*"
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
+
+  - job: tests
+    identifier: cockpit-revdeps
+    trigger: pull_request
+    packages: [podman-fedora]
+    notifications:
+      failure_comment:
+        message: "Cockpit tests failed for commit {commit_sha}. @jelly, @mvollmer please check."
+    targets:
+      - fedora-latest-stable
+      - fedora-development
+    tmt_plan: "/plans/cockpit-podman"
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/g/cockpit/main-builds/repo/fedora-$releasever/group_cockpit-main-builds-fedora-$releasever.repo
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
+          tmt:
+            context:
+              revdeps: "yes"
+
+  - job: tests
+    identifier: tmt-revdeps
+    trigger: pull_request
+    packages: [podman-fedora]
+    notifications:
+      failure_comment:
+        message: "tmt tests failed for commit {commit_sha}. @lsm5, @psss, @thrix please check."
+    targets:
+      - fedora-latest
+    tmt_plan: "/plans/tmt"
+    tf_extra_params:
+      environments:
+        - artifacts:
+          - type: repository-file
+            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
+          tmt:
+            context:
+              revdeps: "yes"
+
+  # NOTE: Breaking changes related to Podman6 will only be shipped to Fedora
+  # Rawhide (to be Fedora 45) and newer.
+  # TODO: Update dist_git_branches as and when new Fedora releases are
+  # available.
+  - job: propose_downstream
+    trigger: release
+    update_release: false
+    packages: [podman-fedora]
+    dist_git_branches: &fedora_targets
+      - fedora-rawhide
+
+  - job: koji_build
+    trigger: commit
+    packages: [podman-fedora]
+    sidetag_group: podman-releases
+    dist_git_branches: *fedora_targets
+
+  - job: bodhi_update
+    trigger: koji_build
+    packages: [podman-fedora]
+    sidetag_group: podman-releases
+    # Dependencies are not rpm dependencies, but packages that should go in the
+    # same bodhi update
+    # Ref: https://packit.dev/docs/fedora-releases-guide/releasing-multiple-packages
+    dependencies:
+      - buildah
+      - containers-common
+      - skopeo
+    dist_git_branches: *fedora_targets

@@ -1,0 +1,35 @@
+tags:
+    - name: artifacts
+      description: Actions related to artifacts
+    - name: containers
+      description: Actions related to containers
+    - name: exec
+      description: Actions related to exec
+    - name: images
+      description: Actions related to images
+    - name: manifests
+      description: Actions related to manifests
+    - name: networks
+      description: Actions related to networks
+    - name: pods
+      description: Actions related to pods
+    - name: volumes
+      description: Actions related to volumes
+    - name: secrets
+      description: Actions related to secrets
+    - name: system
+      description: Actions related to Podman engine
+    - name: containers (compat)
+      description: Actions related to containers for the compatibility endpoints
+    - name: exec (compat)
+      description: Actions related to exec for the compatibility endpoints
+    - name: images (compat)
+      description: Actions related to images for the compatibility endpoints
+    - name: networks (compat)
+      description: Actions related to networks for the compatibility endpoints
+    - name: volumes (compat)
+      description: Actions related to volumes for the compatibility endpoints
+    - name: secrets (compat)
+      description: Actions related to secrets for the compatibility endpoints
+    - name: system (compat)
+      description: Actions related to Podman and compatibility engines

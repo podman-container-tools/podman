@@ -1,0 +1,171 @@
+#!/bin/bash
+#
+# get-local-registry-script - fetches local-registry script from automation_images repo
+#
+ME=$(basename $0)
+
+###############################################################################
+# BEGIN global settings
+
+SCRIPTNAME=cache_images/local-cache-registry
+
+REPO=containers/automation_images
+
+GITHUB_GRAPHQL=https://api.github.com/graphql
+
+# END   global settings
+###############################################################################
+
+usage="Usage: $ME [--help] [-v|--verbose] [IMG_SFX]
+
+--help          display usage message
+-v, --verbose   verbose output
+
+$ME fetches the $SCRIPTNAME tool
+from the github $REPO repo.
+If successful, the script will be left in cwd.
+
+It is up to you to invoke it:
+
+    \$ sudo ./$(basename $SCRIPTNAME) initialize
+
+This will set up a local registry and prepopulate it with
+images used in tests. Initialization may take tens of minutes
+on a slow connection.
+
+To use this registry in e2e or apiv2 tests:
+
+    export CI_USE_REGISTRY_CACHE=1
+
+To use in system tests, you need to overwrite /etc/containers/registries.conf
+because system tests, by definition, use system settings. This is left as
+an exercise for the reader.
+
+Reasons for doing this:
+  1) Consistency with CI environment
+  2) Speedier (and less flaky) tests
+"
+
+verbose=
+for i; do
+    value=$(expr "$i" : '[^=]*=\(.*\)')
+    case "$i" in
+    -h* | --help)
+        echo "$usage"
+        exit 0
+        ;;
+    -v | --verbose)
+        verbose=$i
+        shift
+        ;;
+    -*)
+        echo "$ME: unrecognized option $i" >&2
+        echo "$usage" >&2
+        exit 1
+        ;;
+    *) break ;;
+    esac
+done
+
+###############################################################################
+# BEGIN helper functions
+
+function die() {
+    echo "$ME: $*" >&2
+    exit 1
+}
+
+function get_imgsfx() {
+    test -e .cirrus.yml || die ".cirrus.yml does not exist; please run me from top of repo"
+
+    imgsfx=$(sed -ne 's/^ *IMAGE_SUFFIX:.*"c\(202.*\)"/\1/p' < .cirrus.yml)
+    if [[ -z "$imgsfx" ]]; then
+        die "Did not find 'IMAGE_SUFFIX:.*c202.*' in .cirrus.yml"
+    fi
+
+    expr "$imgsfx" : "^20[0-9]\{6\}t[0-9]\{6\}z-" &> /dev/null || die "IMAGE_SUFFIX '$imgsfx' (from .cirrus.yml) does not match expected YYYYMMDDtHHMMSS-* form"
+
+    echo $imgsfx
+}
+
+function get_script() {
+    local tag=$1
+
+    local tmpfile=$(mktemp --tmpdir --suffix=.sh $ME.fetched-script.XXXXXXX)
+
+    local url="https://raw.githubusercontent.com/${REPO}/$tag/$SCRIPTNAME"
+    test -n "$verbose" && echo "[ $url ]" >&2
+
+    curl -s -f -o $tmpfile $url
+    if [[ $? -eq 0 ]]; then
+        chmod 755 $tmpfile
+        mv -f $tmpfile $SCRIPTNAME
+        echo $SCRIPTNAME
+        return
+    fi
+    rm -f $tmpfile
+}
+
+# END   helper functions
+###############################################################################
+# BEGIN code
+
+if [[ -n "$1" ]]; then
+    imgsfx=$1
+    shift
+    if [[ -n "$*" ]]; then
+        die "Too many arguments; run $ME --help for help"
+    fi
+else
+    imgsfx=$(get_imgsfx)
+fi
+test -n "$verbose" && echo "[ imgsfx=$imgsfx ]" >&2
+
+# Easy case: this is a tagged automation_images build
+fetched_script=$(get_script $imgsfx)
+if [[ -n "$fetched_script" ]]; then
+    echo $fetched_script
+    exit 0
+fi
+
+# Nope, not a tagged build. Look for imgsfx in PR
+query="
+{
+    \"query\": \"{
+        search(query: \\\"repo:$REPO is:pr c$imgsfx\\\", type:ISSUE, first:10) {
+            edges {
+               node { ... on PullRequest {
+                       number
+                       title
+                       commits(last:30)  { nodes { commit { committedDate, oid } } }
+                       comments(last:30) { nodes { createdAt author { login } body } }
+                   }
+               }
+            }
+        }
+    }\"
+}
+"
+
+query_clean=$(tr -d \\012 <<< "$query")
+
+jsontmp=$(mktemp --tmpdir --suffix=.json $ME.graphql.XXXXXXX)
+
+curl -s -S -H "Authorization: bearer $GITHUB_TOKEN" -X POST --data "$query_clean" $GITHUB_GRAPHQL > $jsontmp
+
+# There should be one and exactly one comment from github-actions
+# that mentions the given imgsfx. Find its timestamp
+img_timestamp=$(jq -C -r '.data.search.edges.[].node.comments.nodes.[] | select(.author.login="github-actions") | select(.body | contains("c'${imgsfx}'")).createdAt' < $jsontmp)
+if [[ -z "$img_timestamp" ]]; then
+    die "Did not find a github-actions comment mentioning '$imgsfx'"
+fi
+
+# Some time prior to that comment, there was a commit pushed to github
+# that resulted in that build. Find that commit's SHA (OID).
+push_sha=$(jq -C -r '.data.search.edges.[].node.commits.nodes.[].commit | select(.committedDate < "'${img_timestamp}'").oid' < $jsontmp)
+
+# Got all the info we need. Clean up tmpfile
+rm -f $jsontmp
+
+# This must succeed.
+get_script $push_sha

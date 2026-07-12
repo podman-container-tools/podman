@@ -1,0 +1,199 @@
+# -*- sh -*-
+#
+# Tests for manifest list endpoints
+
+start_registry
+export REGISTRY_PORT
+
+# Creates the manifest list
+t POST /v3.4.0/libpod/manifests/create?name=abc 200 \
+    .Id~[0-9a-f]\\{64\\}
+id_abc=$(jq -r '.Id' <<<"$output")
+
+t POST /v4.0.0/libpod/manifests/xyz 201 \
+    .Id~[0-9a-f]\\{64\\}
+id_xyz=$(jq -r '.Id' <<<"$output")
+
+t GET /v3.4.0/libpod/manifests/$id_abc/exists 204
+t GET /v4.0.0/libpod/manifests/$id_xyz/exists 204
+
+id_abc_image=$($PODMAN_BIN --root $WORKDIR/server_root image build -q --format=docker -<<EOF
+FROM alpine
+RUN >file1
+EOF
+)
+
+id_xyz_image=$($PODMAN_BIN --root $WORKDIR/server_root image build -q --format=docker -<<EOF
+FROM alpine
+RUN >file2
+EOF
+)
+
+# manifest add --annotation tests
+t POST /v3.4.0/libpod/manifests/$id_abc/add images="[\"containers-storage:$id_abc_image\"]" 200
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='update' images="[\"containers-storage:$id_xyz_image\"]" annotations="{\"foo\":\"bar\"}" annotation="[\"hoge=fuga\"]" 400 \
+    .cause='can not set both Annotation and Annotations'
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='update' images="[\"containers-storage:$id_xyz_image\"]" annotations="{\"foo\":\"bar\"}" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    .manifests[0].annotations.foo="bar"
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='update' images="[\"containers-storage:$id_xyz_image\"]" annotation="[\"hoge=fuga\"]" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    .manifests[0].annotations.hoge="fuga"
+
+# manifest annotate tests
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200
+xyz_digest=$(jq -r '.manifests[0].digest' <<<"$output")
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='annotate' images="[\"containers-storage:$id_xyz_image\"]" annotations="{\"foo2\":\"bar2\"}" annotation="[\"hoge2=fuga2\"]" 400 \
+    .cause='can not set both Annotation and Annotations'
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='annotate' images="[\"$xyz_digest\"]" annotations="{\"foo2\":\"bar2\"}" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    .manifests[0].annotations.foo2="bar2"
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='annotate' images="[\"$xyz_digest\"]" annotation="[\"hoge2=fuga2\"]" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    .manifests[0].annotations.hoge2="fuga2"
+
+# registry-related tests
+t POST "/v3.4.0/libpod/manifests/abc:latest/push?destination=localhost:$REGISTRY_PORT%2Fabc:latest&tlsVerify=false&all=true" 200
+t POST "/v4.0.0/libpod/manifests/xyz:latest/registry/localhost:$REGISTRY_PORT%2Fxyz:latest?all=true" 400 \
+  .cause='x509: certificate signed by unknown authority'
+t POST "/v4.0.0/libpod/manifests/xyz:latest/registry/localhost:$REGISTRY_PORT%2Fxyz:latest?tlsVerify=false&all=true" 200
+
+# /v3.x cannot delete a manifest list
+t DELETE /v4.0.0/libpod/manifests/$id_abc 200
+t DELETE /v4.0.0/libpod/manifests/$id_xyz 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/exists 404
+t DELETE /v4.0.0/libpod/manifests/$id_xyz 404
+t DELETE /v4.0.0/libpod/manifests/$id_xyz?ignore=true 200
+
+# manifest add --artifact tests
+truncate -s 20M $WORKDIR/zeroes
+function test_artifacts_with_args() {
+    # these values, ideally, are local to our caller
+    local args="$artifact_annotations $artifact_config $artifact_config_type $artifact_exclude_titles $artifact_layer_type $artifact_type"
+    t POST /v6.0.0/libpod/manifests/artifacts 201
+    local id_artifacts=$(jq -r '.Id' <<<"$output")
+    t PUT /v6.0.0/libpod/manifests/$id_artifacts operation='update' $args --form=listed.txt="oh yeah" --form=zeroes=@"$WORKDIR/zeroes" 200
+    t POST "/v6.0.0/libpod/manifests/artifacts:latest/registry/localhost:$REGISTRY_PORT%2Fartifacts:latest?tlsVerify=false&all=true" 200
+
+    local index=$(skopeo inspect --raw --tls-verify=false docker://localhost:$REGISTRY_PORT/artifacts:latest)
+    # jq <<<"$index"
+    local digest=$(jq -r '.manifests[0].digest' <<<"$index")
+    local artifact=$(skopeo inspect --raw --tls-verify=false docker://localhost:$REGISTRY_PORT/artifacts@${digest})
+    # jq <<<"$artifact"
+
+    local expect_type
+    case ${artifact_type} in
+    artifact_type=*)
+        expect_type=${artifact_type#artifact_type=}
+        expect_type=${expect_type:-null};;
+    *)
+        expect_type=application/vnd.unknown.artifact.v1;;
+    esac
+    is $(jq -r '.artifactType'<<<"$artifact") "${expect_type}" "artifactType in artifact manifest with artifact_type arg \"${artifact_type}\""
+    is $(jq -r '.manifests[0].artifactType'<<<"$index") "${expect_type}" "artifactType in image index with artifact_type arg \"${artifact_type}\""
+
+    local expect_annotations
+    case ${artifact_annotations} in
+    artifact_annotations=*)
+        expect_annotations=$(jq -r '.foo' <<<"${artifact_annotations#artifact_annotations=}");;
+    *)
+        expect_annotations=null;;
+    esac
+    is $(jq -r '.annotations["foo"]'<<<"$artifact") "$expect_annotations" "\"foo\" annotation in artifact manifest with artifact_annotations arg \"${artifact_annotations}\""
+
+    local expect_config_size
+    case ${artifact_config} in
+    artifact_config=*)
+        expect_config_size=$(wc -c <<<"${artifact_config#artifact_config=}")
+        expect_config_size=$((expect_config_size-1))
+        if [[ $expect_config_size -eq 0 ]]; then
+            expect_config_size=2
+        fi ;;
+    *)
+        expect_config_size=2;;
+    esac
+    is $(jq -r '.config.size'<<<"$artifact") "$expect_config_size" "size of config blob in artifact manifest with artifact_config arg \"${artifact_config}\""
+
+    local expect_config_type
+    case ${artifact_config_type} in
+    artifact_config_type=*)
+        expect_config_type=${artifact_config_type#artifact_config_type=}
+        if [[ -z "$expect_config_type" ]] ; then
+            if [[ -n "${artifact_config#artifact_config=}" ]] ; then
+                expect_config_type=application/vnd.oci.image.config.v1+json
+            else
+                expect_config_type=application/vnd.oci.empty.v1+json
+            fi
+        fi;;
+    *)
+        if [[ -n "${artifact_config#artifact_config=}" ]] ; then
+            expect_config_type=application/vnd.oci.image.config.v1+json
+        else
+            expect_config_type=application/vnd.oci.empty.v1+json
+        fi;;
+    esac
+    is $(jq -r '.config.mediaType'<<<"$artifact") "$expect_config_type" "mediaType of config blob in artifact manifest with artifact_config_type arg \"${artifact_config_type}\" and artifact_config arg \"${artifact_config}\""
+
+    local expect_first_layer_type expect_second_layer_type
+    case ${artifact_layer_type} in
+    artifact_layer_type=*)
+        expect_first_layer_type=${artifact_layer_type#artifact_layer_type=}
+        expect_first_layer_type=${expect_first_layer_type:-text/plain}
+        expect_second_layer_type=${artifact_layer_type#artifact_layer_type=}
+        expect_second_layer_type=${expect_second_layer_type:-application/octet-stream};;
+    *)
+        expect_first_layer_type=text/plain;
+        expect_second_layer_type=application/octet-stream;;
+    esac
+    is $(jq -r '.layers[0].mediaType'<<<"$artifact") "$expect_first_layer_type" "mediaType of listed.txt layer in artifact manifest with artifact_layer_type arg \"${artifact_layer_type}\""
+    is $(jq -r '.layers[1].mediaType'<<<"$artifact") "$expect_second_layer_type" "mediaType of zeroes layer in artifact manifest with artifact_layer_type arg \"${artifact_layer_type}\""
+
+    local expect_first_title expect_second_title
+    case ${artifact_exclude_titles} in
+    artifact_exclude_titles=true)
+        expect_first_title=null;
+        expect_second_title=null;;
+    *)
+        expect_first_title=listed.txt;
+        expect_second_title=zeroes;;
+    esac
+    is $(jq -r '.layers[0].annotations["org.opencontainers.image.title"]'<<<"$artifact") "$expect_first_title" "org.opencontainers.image.title annotation on listed.txt layer in artifact manifest with artifact_exclude_titles arg \"${artifact_exclude_titles}\""
+    is $(jq -r '.layers[1].annotations["org.opencontainers.image.title"]'<<<"$artifact") "$expect_second_title" "org.opencontainers.image.title annotation on zeroes layer in artifact manifest with artifact_exclude_titles arg \"${artifact_exclude_titles}\""
+
+    t DELETE /v6.0.0/libpod/manifests/$id_artifacts 200
+}
+
+function test_artifacts() {
+    local artifact_annotations
+    local artifact_config
+    local artifact_config_type
+    local artifact_exclude_titles
+    local artifact_layer_type
+    local artifact_type
+    for artifact_annotations in "" artifact_annotations='{"foo":"bar"}' ; do
+        test_artifacts_with_args
+    done
+    for artifact_config in "" artifact_config= artifact_config="{}"; do
+        for artifact_config_type in "" artifact_config_type= artifact_config_type=text/plain ; do
+            test_artifacts_with_args
+        done
+    done
+    for artifact_exclude_titles in "" artifact_exclude_titles=true ; do
+        test_artifacts_with_args
+    done
+    for artifact_layer_type in "" artifact_layer_type= artifact_layer_type=text/plain artifact_layer_type=application/octet-stream ; do
+        test_artifacts_with_args
+    done
+    for artifact_type in "" artifact_type= artifact_type=text/plain artifact_type=application/octet-stream ; do
+        test_artifacts_with_args
+    done
+}
+test_artifacts
+
+podman rmi -a
+stop_registry

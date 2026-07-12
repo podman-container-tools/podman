@@ -1,0 +1,125 @@
+% podman-network-create 1
+
+## NAME
+podman\-network-create - Create a Podman network
+
+## SYNOPSIS
+**podman network create**  [*options*] [*name*]
+
+## DESCRIPTION
+Create a network configuration for use with Podman. By default, Podman creates a bridge connection.
+A *Macvlan* connection can be created with the *-d macvlan* option. A parent device for macvlan or
+ipvlan can be designated with the *-o parent=`<device>`* or *--interface-name=`<device>`* option.
+
+If no options are provided, Podman assigns a free subnet and name for the network.
+
+Upon completion of creating the network, Podman displays the name of the newly added network.
+
+## OPTIONS
+
+@@option disable-dns
+
+@@option dns
+
+@@option driver
+
+@@option gateway
+
+#### **--ignore**
+
+Ignore the create request if a network with the same name already exists instead of failing.
+**Note:** trying to create a network with an existing name and different parameters does not change the configuration of the existing one.
+
+@@option interface-name
+
+@@option internal
+
+@@option ip-range
+
+@@option ipam-driver
+
+@@option ipv6
+
+@@option label.network
+
+@@option opt
+
+#### **--route**=*route*
+
+A static route in the format `<destination in CIDR notation>,<gateway|type>,<route metric (optional)>`.
+The gateway must be a valid ip address or alternatively a type can be set instead which must be either
+of `blackhole`, `unreachable` or `prohibit` and means the subnet will not be routed anywhere.
+This route will be added to every container in this network. It can be specified multiple times if more than one static route is desired.
+
+Note, routes are added into the container namespace, if a container is given the CAP_NET_ADMIN capability it is able to alter
+the routes so this cannot be used for security relevant things in that case.
+
+@@option subnet
+
+## EXAMPLES
+
+Create a network with no options.
+```
+$ podman network create
+podman2
+```
+
+Create a network named *newnet* that uses *192.5.0.0/16* for its subnet.
+```
+$ podman network create --subnet 192.5.0.0/16 newnet
+newnet
+```
+
+Create an IPv6 network named *newnetv6* with a subnet of *2001:db8::/64*.
+```
+$ podman network create --subnet 2001:db8::/64 --ipv6 newnetv6
+newnetv6
+```
+
+Create a network named *newnet* that uses *192.168.33.0/24* and defines a gateway as *192.168.33.3*.
+```
+$ podman network create --subnet 192.168.33.0/24 --gateway 192.168.33.3 newnet
+newnet
+```
+
+Create a network that uses a *192.168.55.0/24* subnet and has an IP address range of *192.168.55.129 - 192.168.55.254*.
+```
+$ podman network create --subnet 192.168.55.0/24 --ip-range 192.168.55.128/25
+podman5
+```
+
+Create a network with a static IPv4 and IPv6 subnet and set a gateway.
+```
+$ podman network create --subnet 192.168.55.0/24 --gateway 192.168.55.3 --subnet fd52:2a5a:747e:3acd::/64 --gateway fd52:2a5a:747e:3acd::10
+podman4
+```
+
+Create a network with a static subnet and a static route.
+```
+$ podman network create --subnet 192.168.33.0/24 --route 10.1.0.0/24,192.168.33.10 newnet
+```
+
+Create a network with a static subnet and a static route without a default
+route.
+```
+$ podman network create --subnet 192.168.33.0/24 --route 10.1.0.0/24,192.168.33.10 --opt no_default_route=true newnet
+```
+
+Create a network with a route type blackhole. This means the traffic to the destination subnet will be dropped silently.
+```
+$ podman network create --route 10.1.0.0/24,blackhole --opt no_default_route=true newnet
+```
+
+Create a Macvlan based network using the host interface eth0. Macvlan networks can only be used as root.
+```
+$ sudo podman network create -d macvlan -o parent=eth0 --subnet 192.5.0.0/16 newnet
+newnet
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-network(1)](podman-network.1.md)**, **[podman-network-inspect(1)](podman-network-inspect.1.md)**, **[podman-network-ls(1)](podman-network-ls.1.md)**, **[containers.conf(5)](https://github.com/containers/common/blob/main/docs/containers.conf.5.md)**
+
+## HISTORY
+August 2021, Updated with the new network format by Paul Holzinger <pholzing@redhat.com>
+
+August 2019, Originally compiled by Brent Baude <bbaude@redhat.com>

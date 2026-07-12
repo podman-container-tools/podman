@@ -1,0 +1,317 @@
+% podman-farm-build 1
+
+## NAME
+podman\-farm\-build - Build images on farm nodes, then bundle them into a manifest list
+
+## SYNOPSIS
+**podman farm build** [*options*] [*context*]
+
+## DESCRIPTION
+**podman farm build** Builds an image on all nodes in a farm and bundles them up into a manifest list.
+It executes the `podman build` command on the nodes in the farm with the given Containerfile. Once the
+images are built on all the farm nodes, the images will be pushed to the registry given via the **--tag**
+flag. Once all the images have been pushed, a manifest list will be created locally and pushed to the registry
+as well.
+
+The manifest list will contain an image per native architecture type that is present in the farm.
+
+The primary function of this command is to create multi-architecture builds that will be faster than doing it
+via emulation using `podman build --arch --platform`.
+
+If no farm is specified, the build will be sent out to all the nodes that `podman system connection` knows of.
+
+Note: Since the images built are directly pushed to a registry, the user must pass in a full image name using the
+**--tag** option in the format _registry_**/**_repository_**/**_imageName_[**:**_tag_]`.
+
+## OPTIONS
+
+@@option add-host
+
+@@option annotation.image
+
+@@option authfile
+
+@@option build-arg
+
+@@option build-arg-file
+
+@@option build-context
+
+@@option cache-from
+
+@@option cache-to
+
+@@option cache-ttl
+
+@@option cap-add.image
+
+@@option cap-drop.image
+
+@@option cert-dir
+
+@@option cgroup-parent
+
+@@option cgroupns.image
+
+#### **--cleanup**
+
+Remove built images from farm nodes on success (Default: false).
+
+@@option compat-volumes
+
+@@option compression-format
+
+@@option compression-level
+
+@@option cpp-flag
+
+@@option cpu-period
+
+@@option cpu-quota
+
+@@option cpu-shares
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option created-annotation
+
+@@option creds
+
+@@option decryption-key
+
+@@option device
+
+Note: if the user only has access rights via a group, accessing the device
+from inside a rootless container fails. The **[crun(1)](https://github.com/containers/crun/tree/main/crun.1.md)** runtime offers a
+workaround for this by adding the option
+**--annotation run.oci.keep_original_groups=1**.
+
+@@option disable-compression
+
+@@option dns
+
+This option cannot be combined with **--network** that is set to **none**.
+
+Note: this option takes effect only during *RUN* instructions in the build.
+It does not affect _/etc/resolv.conf_ in the final image.
+
+@@option dns-option.image
+
+@@option dns-search.image
+
+@@option env.image
+
+@@option farm
+
+This option specifies the name of the farm to be used in the build process.
+
+@@option file
+
+@@option force-compression
+
+@@option force-rm
+
+@@option format
+
+@@option from
+
+@@option group-add
+
+@@option help
+
+@@option hooks-dir
+
+@@option http-proxy
+
+@@option identity-label
+
+@@option ignorefile
+
+@@option iidfile
+
+@@option iidfile-raw
+
+@@option inherit-annotations
+
+@@option inherit-labels
+
+@@option ipc.image
+
+@@option isolation
+
+@@option jobs
+
+@@option label.image
+
+@@option layer-label
+
+@@option layers
+
+#### **--local**, **-l**
+
+Build image on local machine as well as on farm nodes.
+
+@@option logfile
+
+@@option memory
+
+@@option memory-swap
+
+#### **--mount**=*mount-specification*
+
+Adds this mount to each `RUN` command in a Containerfile before executing.  For example:
+
+`podman build --mount=type=secret,id=mysecret …`
+
+and a Containerfile entry of:
+
+`RUN cat /run/secrets/mysecret`
+
+Has the same effect as:
+
+`RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret`
+
+@@option network.image
+
+@@option no-cache
+
+@@option no-hostname
+
+@@option no-hosts
+
+This option conflicts with **--add-host**.
+
+@@option omit-history
+
+@@option os-feature
+
+@@option os-version.image
+
+@@option pid.image
+
+#### **--platforms**=*p1,p2,p3...*
+
+Build only on farm nodes that match the given platforms.
+
+@@option pull.image
+
+@@option quiet
+
+@@option retry
+
+@@option retry-delay
+
+@@option rewrite-timestamp
+
+@@option rm
+
+@@option runtime
+
+@@option runtime-flag
+
+@@option save-stages
+
+@@option sbom
+
+@@option sbom-image-output
+
+@@option sbom-image-purl-output
+
+@@option sbom-merge-strategy
+
+@@option sbom-output
+
+@@option sbom-purl-output
+
+@@option sbom-scanner-command
+
+@@option sbom-scanner-image
+
+@@option secret.image
+
+@@option security-opt.image
+
+@@option shm-size
+
+@@option skip-unused-stages
+
+@@option source-date-epoch
+
+@@option source-policy-file
+
+@@option squash
+
+@@option squash-all
+
+@@option ssh
+
+@@option stage-labels
+
+@@option tag
+
+@@option target
+
+@@option timestamp
+
+@@option tls-verify
+
+@@option ulimit.image
+
+@@option unsetannotation
+
+@@option unsetenv.image
+
+@@option unsetlabel
+
+@@option userns.image
+
+@@option userns-gid-map
+
+@@option userns-gid-map-group
+
+@@option userns-uid-map
+
+@@option userns-uid-map-user
+
+@@option uts
+
+@@option volume.image
+
+## EXAMPLES
+
+Build named image and manifest list using specified Containerfile with default farm:
+```
+$ podman farm build --local -t name -f /path/to/containerfile .
+```
+
+Build named image and manifest list using the specified farm:
+```
+$ podman farm build --farm myfarm -t name .
+```
+
+Build named image and manifest list using the specified farm, removing all images from farm nodes, after they are pushed to registry:
+```
+$ podman farm build --farm myfarm --cleanup -t name .
+```
+
+Build named images and manifest list for specified platforms using default farm:
+```
+$ podman farm build --platforms arm64,amd64 -t name .
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-farm(1)](podman-farm.1.md)**, **[buildah(1)](https://github.com/containers/buildah/blob/main/docs/buildah.1.md)**, **[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**, **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**, **[crun(1)](https://github.com/containers/crun/blob/main/crun.1.md)**, **[runc(8)](https://github.com/opencontainers/runc/blob/main/man/runc.8.md)**, **[useradd(8)](https://www.unix.com/man-page/redhat/8/useradd)**, **[Containerfile(5)](https://github.com/containers/container-libs/blob/main/common/docs/Containerfile.5.md)**, **[containerignore(5)](https://github.com/containers/container-libs/blob/main/common/docs/containerignore.5.md)**
+
+## HISTORY
+
+September 2023, Originally compiled by Urvashi Mohnani `<umohnani@redhat.com>`
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a
+core value of open source. The `master` and `slave` mount propagation
+terminology used here is problematic and divisive, and needs to be changed.
+However, these terms are currently used within the Linux kernel and must be
+used as-is at this time. When the kernel maintainers rectify this usage,
+Podman will follow suit immediately.

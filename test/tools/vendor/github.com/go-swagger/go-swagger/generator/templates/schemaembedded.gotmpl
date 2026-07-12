@@ -1,0 +1,21 @@
+{{ define "schemaEmbedded" }}
+type {{ pascalize .Name }} struct {
+  {{ if .ElemType.IsNullable }}*{{ end }}{{ .ElemType.GoType }}
+}
+
+func ({{.ReceiverName }} {{ if or .IsTuple .IsComplexObject }}*{{ end }}{{ if .Discriminates }}{{ camelize .Name }}{{ else if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) Validate(formats strfmt.Registry) error {
+  var f any = {{ .ReceiverName }}.{{ dropPackage .ElemType.GoType }}
+  if v, ok := f.(runtime.Validatable) ; ok {
+    return v.Validate(formats)
+  }
+  return nil
+}
+
+func ({{.ReceiverName }} {{ if or .IsTuple .IsComplexObject }}*{{ end }}{{ if .Discriminates }}{{ camelize .Name }}{{ else if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+  var f any = {{ .ReceiverName }}.{{ dropPackage .ElemType.GoType }}
+  if v, ok := f.(runtime.ContextValidatable) ; ok {
+    return v.ContextValidate(ctx, formats)
+  }
+  return nil
+}
+{{- end }}

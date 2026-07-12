@@ -1,0 +1,6 @@
+## assert-podman-final-args .
+## assert-key-is-regex "Service" "WorkingDirectory" "/.*/podman-e2e-.*/subtest-.*/quadlet"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=.

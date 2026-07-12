@@ -1,0 +1,5 @@
+## assert-podman-args "--log-driver" "journald"
+
+[Container]
+Image=localhost/imagename
+LogDriver=journald

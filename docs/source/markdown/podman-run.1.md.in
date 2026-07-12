@@ -1,0 +1,1026 @@
+% podman-run 1
+
+## NAME
+podman\-run - Run a command in a new container
+
+## SYNOPSIS
+**podman run** [*options*] *image* [*command* [*arg* ...]]
+
+**podman container run** [*options*] *image* [*command* [*arg* ...]]
+
+## DESCRIPTION
+
+Run a process in a new container. **podman run** starts a process with its own
+file system, its own networking, and its own isolated process tree. The _image_
+which starts the process may define defaults related to the process that will be
+run in the container, the networking to expose, and more, but **podman run**
+gives final control to the operator or administrator who starts the container
+from the image. For that reason **podman run** has more options than any other
+Podman command.
+
+If the _image_ is not already loaded then **podman run** will pull the _image_, and
+all image dependencies, from the repository in the same way running **podman
+pull** _image_, before it starts the container from that image.
+
+Several files will be automatically created within the container. These include
+_/etc/hosts_, _/etc/hostname_, and _/etc/resolv.conf_ to manage networking.
+These will be based on the host's version of the files, though they can be
+customized with options (for example, **--dns** may override the host's DNS
+servers in the created _resolv.conf_). Additionally, a container environment
+file is created in each container to indicate to programs they are running in a
+container. This file is located at _/run/.containerenv_ (or
+_/var/run/.containerenv_ for FreeBSD containers). When using the
+--privileged flag the .containerenv contains name/value pairs indicating the
+container engine version, whether the engine is running in rootless mode, the
+container name and ID, as well as the image name and ID that the container is based on. Note: _/run/.containerenv_ will not be created when a volume is mounted on /run.
+
+When running from a user defined network namespace, the _/etc/netns/NSNAME/resolv.conf_
+will be used if it exists, otherwise _/etc/resolv.conf_ will be used.
+
+Default settings are defined in `containers.conf`. Most settings for remote
+connections use the servers containers.conf, except when documented in man
+pages.
+
+## IMAGE
+
+  The image is specified using transport:path format. If no transport is specified, the `docker` (container registry)
+transport is used by default. For remote Podman, including Mac and Windows (excluding WSL2) machines, `docker` is the only allowed transport.
+
+  **dir:**_path_
+  An existing local directory _path_ storing the manifest, layer tarballs and signatures as individual files. This
+is a non-standardized format, primarily useful for debugging or noninvasive container inspection.
+
+    $ podman save --format docker-dir fedora -o /tmp/fedora
+    $ podman run dir:/tmp/fedora echo hello
+
+  **docker://**_docker-reference_ (Default)
+  An image reference stored in a remote container image registry. Example: "quay.io/podman/stable:latest".
+The reference can include a path to a specific registry; if it does not, the
+registries listed in registries.conf are queried to find a matching image.
+By default, credentials from `podman login` (stored at
+$XDG_RUNTIME_DIR/containers/auth.json by default) are used to authenticate;
+otherwise it falls back to using credentials in $HOME/.docker/config.json.
+
+    $ podman run registry.fedoraproject.org/fedora:latest echo hello
+
+  **docker-archive:**_path_[**:**_docker-reference_]
+An image stored in the `docker save` formatted file. _docker-reference_ is only used when creating such a
+file, and it must not contain a digest.
+
+    $ podman save --format docker-archive fedora -o /tmp/fedora
+    $ podman run docker-archive:/tmp/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+  **docker-daemon:**_docker-reference_
+  An image in _docker-reference_ format stored in the docker daemon internal storage. The _docker-reference_ can also be an image ID (docker-daemon:algo:digest).
+
+    $ sudo docker pull fedora
+    $ sudo podman run docker-daemon:docker.io/library/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+  **oci-archive:**_path_**:**_tag_
+  An image in a directory compliant with the "Open Container Image Layout Specification" at the specified _path_
+and specified with a _tag_.
+
+    $ podman save --format oci-archive fedora -o /tmp/fedora
+    $ podman run oci-archive:/tmp/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+## OPTIONS
+@@option add-host
+
+@@option annotation.container
+
+@@option arch
+
+@@option attach
+
+@@option authfile
+
+@@option blkio-weight
+
+@@option blkio-weight-device
+
+@@option cap-add
+
+@@option cap-drop
+
+@@option cert-dir
+
+@@option cgroup-conf
+
+@@option cgroup-parent
+
+@@option cgroupns
+
+@@option cgroups
+
+@@option chrootdirs
+
+@@option cidfile.write
+
+@@option conmon-pidfile
+
+@@option cpu-period
+
+@@option cpu-quota
+
+@@option cpu-rt-period
+
+@@option cpu-rt-runtime
+
+@@option cpu-shares
+
+@@option cpus.container
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option creds
+
+@@option decryption-key
+
+#### **--detach**, **-d**
+
+Detached mode: run the container in the background and print the new container ID. The default is *false*.
+
+At any time run **podman ps** in
+the other shell to view a list of the running containers. Reattach to a
+detached container with **podman attach** command.
+
+When attached via tty mode, detach from the container (and leave it
+running) using a configurable key sequence. The default sequence is `ctrl-p,ctrl-q`.
+Specify the key sequence using the **--detach-keys** option, or configure
+it in the **containers.conf** file: see **containers.conf(5)** for more information.
+
+@@option detach-keys
+
+@@option device
+
+Note: if the user only has access rights via a group, accessing the device
+from inside a rootless container fails. Use the `--group-add keep-groups`
+flag to pass the user's supplementary group access into the container.
+
+@@option device-cgroup-rule
+
+@@option device-read-bps
+
+@@option device-read-iops
+
+@@option device-write-bps
+
+@@option device-write-iops
+
+@@option disable-content-trust
+
+@@option dns
+
+This option cannot be combined with **--network** that is set to **none** or **container:**_id_.
+
+@@option dns-option.container
+
+@@option dns-search.container
+
+@@option entrypoint
+
+@@option env
+
+See [**Environment**](#environment) note below for precedence and examples.
+
+@@option env-file
+
+See [**Environment**](#environment) note below for precedence and examples.
+
+@@option env-host
+
+@@option env-merge
+
+@@option expose
+
+@@option gidmap.container
+
+@@option gpus
+
+@@option group-add
+
+@@option group-entry
+
+@@option health-cmd
+
+@@option health-interval
+
+@@option health-log-destination
+
+@@option health-max-log-count
+
+@@option health-max-log-size
+
+@@option health-on-failure
+
+@@option health-retries
+
+@@option health-start-period
+
+@@option health-startup-cmd
+
+@@option health-startup-interval
+
+@@option health-startup-retries
+
+@@option health-startup-success
+
+@@option health-startup-timeout
+
+@@option health-timeout
+
+#### **--help**
+
+Print usage statement
+
+@@option hostname.container
+
+@@option hosts-file
+
+@@option hostuser
+
+@@option http-proxy
+
+@@option image-volume
+
+@@option init
+
+@@option init-path
+
+@@option interactive
+
+@@option ip
+
+@@option ip6
+
+@@option ipc
+
+@@option label
+
+@@option label-file
+
+@@option link-local-ip
+
+@@option log-driver
+
+@@option log-opt
+
+@@option mac-address
+
+@@option memory
+
+@@option memory-reservation
+
+@@option memory-swap
+
+@@option memory-swappiness
+
+@@option mount
+
+@@option name.container
+
+@@option network
+
+Invalid if using **--dns**, **--dns-option**, or **--dns-search** with **--network** set to **none** or **container:**_id_.
+
+If used together with **--pod**, the container joins the pod's network namespace.
+
+@@option network-alias
+
+@@option no-healthcheck
+
+@@option no-hostname
+
+@@option no-hosts
+
+This option conflicts with **--add-host**.
+
+@@option oom-kill-disable
+
+@@option oom-score-adj
+
+@@option os.pull
+
+#### **--passwd**
+
+Allow Podman to add entries to /etc/passwd and /etc/group when used in conjunction with the --user option.
+This is used to override the Podman provided user setup in favor of entrypoint configurations such as libnss-extrausers.
+
+@@option passwd-entry
+
+@@option personality
+
+@@option pid.container
+
+@@option pidfile
+
+@@option pids-limit
+
+@@option platform
+
+@@option pod.run
+
+@@option pod-id-file.container
+
+@@option preserve-fd
+
+@@option preserve-fds
+
+@@option privileged
+
+@@option publish
+
+**Note:** If a container runs within a pod, it is not necessary to publish the port for
+the containers in the pod. The port must only be published by the pod itself. Pod network
+stacks act like the network stack on the host - meaning a variety of containers in the pod
+and programs in the container all share a single interface, IP address, and
+associated ports. If one container binds to a port, no other container can use that port
+within the pod while it is in use. Containers in the pod can also communicate over localhost
+by having one container bind to localhost in the pod, and another connect to that port.
+
+@@option publish-all
+
+@@option pull
+
+#### **--quiet**, **-q**
+
+Suppress output information when pulling images
+
+@@option rdt-class
+
+@@option read-only
+
+@@option read-only-tmpfs
+
+@@option replace
+
+@@option requires
+
+@@option restart
+
+@@option retry
+
+@@option retry-delay
+
+#### **--rm**
+
+Automatically remove the container and any anonymous unnamed volume associated with
+the container when it exits. The default is **false**.
+
+#### **--rmi**
+
+After exit of the container, remove the image unless another
+container is using it. Implies --rm on the new container. The default is *false*.
+
+@@option rootfs
+
+@@option sdnotify
+
+@@option seccomp-policy
+
+@@option secret
+
+@@option security-opt
+
+@@option shm-size
+
+@@option shm-size-systemd
+
+@@option sig-proxy
+
+The default is **true**.
+
+@@option stop-signal
+
+@@option stop-timeout
+
+@@option subgidname
+
+@@option subuidname
+
+@@option sysctl
+
+@@option systemd
+
+@@option timeout
+
+@@option tls-verify
+
+@@option tmpfs
+
+@@option tty
+
+```
+echo "asdf" | podman run --rm -i someimage /bin/cat
+```
+
+@@option tz
+
+@@option uidmap.container
+
+@@option ulimit
+
+@@option umask
+
+@@option unsetenv
+
+@@option unsetenv-all
+
+@@option user
+
+@@option userns.container
+
+@@option uts.container
+
+@@option variant.container
+
+@@option volume
+
+Use the **--group-add keep-groups** option to pass the user's supplementary group access into the container.
+
+@@option volumes-from
+
+@@option workdir
+
+## Exit Status
+
+The exit code from **podman run** gives information about why the container
+failed to run or why it exited. When **podman run** exits with a non-zero code,
+the exit codes follow the **chroot**(1) standard, see below:
+
+  **125** The error is with Podman itself
+
+    $ podman run --foo busybox; echo $?
+    Error: unknown flag: --foo
+    125
+
+  **126** The _contained command_ cannot be invoked
+
+    $ podman run busybox /etc; echo $?
+    Error: container_linux.go:346: starting container process caused "exec: \"/etc\": permission denied": OCI runtime error
+    126
+
+  **127** The _contained command_ cannot be found
+
+    $ podman run busybox foo; echo $?
+    Error: container_linux.go:346: starting container process caused "exec: \"foo\": executable file not found in $PATH": OCI runtime error
+    127
+
+  **Exit code** _contained command_ exit code
+
+    $ podman run busybox /bin/sh -c 'exit 3'; echo $?
+    3
+
+## EXAMPLES
+
+### Running container in read-only mode
+
+During container image development, containers often need to write to the image
+content. Installing packages into _/usr_, for example. In production,
+applications seldom need to write to the image.  Container applications write
+to volumes if they need to write to file systems at all. Applications can be
+made more secure by running them in read-only mode using the **--read-only** switch.
+This protects the container's image from modification. By default read-only
+containers can write to temporary data. Podman mounts a tmpfs on _/run_ and
+_/tmp_ within the container.
+
+```
+$ podman run --read-only -i -t fedora /bin/bash
+```
+
+If the container does not write to any file
+system within the container, including tmpfs, set --read-only-tmpfs=false.
+```
+$ podman run --read-only --read-only-tmpfs=false --tmpfs /run -i -t fedora /bin/bash
+```
+
+### Exposing shared libraries inside of container as read-only using a glob
+
+```
+$ podman run --mount type=glob,src=/usr/lib64/libnvidia\*,ro=true -i -t fedora /bin/bash
+```
+
+### Exposing log messages from the container to the host's log
+
+Bind mount the _/dev/log_ directory to have messages that are logged in the container  show up in the host's
+syslog/journal.
+
+```
+$ podman run -v /dev/log:/dev/log -i -t fedora /bin/bash
+```
+
+From inside the container test this by sending a message to the log.
+
+```
+(bash)# logger "Hello from my container"
+```
+
+Then exit and check the journal.
+
+```
+(bash)# exit
+
+$ journalctl -b | grep Hello
+```
+
+This lists the message sent to the logger.
+
+### Attaching to one or more from STDIN, STDOUT, STDERR
+
+Without specifying the **-a** option, Podman attaches everything (stdin, stdout, stderr).
+Override the default by specifying -a (stdin, stdout, stderr), as in:
+
+```
+$ podman run -a stdin -a stdout -i -t fedora /bin/bash
+```
+
+### Sharing IPC between containers
+
+Using **shm_server.c** available here: https://www.cs.cf.ac.uk/Dave/C/node27.html
+
+Testing **--ipc=host** mode:
+
+Host shows a shared memory segment with 7 pids attached, happens to be from httpd:
+
+```
+$ sudo ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0x01128e25 0          root       600        1000       7
+```
+
+Now run a regular container, and it correctly does NOT see the shared memory segment from the host:
+
+```
+$ podman run -it shm ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+```
+
+Run a container with the new **--ipc=host** option, and it now sees the shared memory segment from the host httpd:
+
+```
+$ podman run -it --ipc=host shm ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0x01128e25 0          root       600        1000       7
+```
+Testing **--ipc=container:**_id_ mode:
+
+Start a container with a program to create a shared memory segment:
+```
+$ podman run -it shm bash
+$ sudo shm/shm_server &
+$ sudo ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0x0000162e 0          root       666        27         1
+```
+Create a 2nd container correctly shows no shared memory segment from 1st container:
+```
+$ podman run shm ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+```
+
+Create a 3rd container using the **--ipc=container:**_id_ option, now it shows the shared memory segment from the first:
+
+```
+$ podman run -it --ipc=container:ed735b2264ac shm ipcs -m
+$ sudo ipcs -m
+
+------ Shared Memory Segments --------
+key        shmid      owner      perms      bytes      nattch     status
+0x0000162e 0          root       666        27         1
+```
+
+### Mapping Ports for External Usage
+
+The exposed port of an application can be mapped to a host port using the **-p**
+flag. For example, an httpd port 80 can be mapped to the host port 8080 using the
+following:
+
+```
+$ podman run -p 8080:80 -d fedora/httpd
+```
+
+### Mounting External Volumes
+
+To mount a host directory as a container volume, specify the absolute path to
+the directory and the absolute path for the container directory separated by a
+colon. If the source is a named volume maintained by Podman, it is recommended to
+use its name rather than the path to the volume. Otherwise the volume is
+considered an orphan and wiped by the **podman volume prune** command:
+
+```
+$ podman run -v /var/db:/data1 -i -t fedora bash
+
+$ podman run -v data:/data2 -i -t fedora bash
+
+$ podman run -v /var/cache/dnf:/var/cache/dnf:O -ti fedora dnf -y update
+```
+
+If the container needs a writable mounted volume by a non root user inside the container, use the **U** option. This option tells Podman to chown the source volume to match the default UID and GID used within the container.
+```
+$ podman run -d -e MARIADB_ROOT_PASSWORD=root --user mysql --userns=keep-id -v ~/data:/var/lib/mysql:Z,U mariadb
+```
+
+Alternatively if the container needs a writable volume by a non root
+user inside of the container, the --userns=keep-id option allows users to
+specify the UID and GID of the user executing Podman to specific UIDs and GIDs
+within the container. Since the processes running in the container run as the user's UID, they can read/write files owned by the user.
+```
+$ podman run -d -e MARIADB_ROOT_PASSWORD=root --user mysql --userns=keep-id:uid=999,gid=999 -v ~/data:/var/lib/mysql:Z mariadb
+```
+
+Using **--mount** flags to mount a host directory as a container folder, specify
+the absolute path to the directory or the volume name, and the absolute path
+within the container directory:
+
+
+````
+$ podman run --mount type=bind,src=/var/db,target=/data1 busybox sh
+
+$ podman run --mount type=bind,src=volume-name,target=/data1 busybox sh
+````
+
+The **--mount** flag provides a structured, key-value style for defining mounts
+inside containers. It is similar in purpose to **-v** or **--volume**, but offers
+greater clarity for complex or multi-option configurations. The general syntax
+is:
+
+```
+--mount type=<TYPE>,src=<SOURCE>,dst=<TARGET>[,options...]
+```
+
+Supported mount types include **bind**, **volume**, **tmpfs**, **artifact**,
+**devpts**, **image**, **glob**, and **ramfs**. Each type serves a different
+purpose in how data is attached to the container.
+
+#### Bind mounts
+
+Bind mounts directly link a directory or file on the host into the container.
+Changes made in one are immediately visible in the other. Use bind mounts when
+both the host and container need access to the same files, such as configuration
+files or source code.
+
+Example:
+
+```
+podman run --mount type=bind,src=/etc/config,dst=/app/config alpine cat /app/config/file.conf
+```
+
+#### Volume mounts
+
+Volume mounts use Podman-managed named volumes that persist independently of
+containers. They are ideal for persistent data such as databases or logs and are
+isolated from direct host paths.
+
+Example:
+
+```
+podman volume create mydata
+podman run --mount type=volume,src=mydata,dst=/var/lib/data postgres
+```
+
+#### Tmpfs mounts
+
+A tmpfs mount creates an in-memory filesystem on the host that is mounted inside
+the container. Data stored here is temporary and removed when the container
+stops or the host reboots. tmpfs mounts are useful for temporary caches or
+sensitive data that should not persist to disk.
+
+Example:
+
+```
+podman run --mount type=tmpfs,dst=/cache,tmpfs-size=64m alpine
+```
+
+#### Artifact, devpts, image, glob, and ramfs mounts
+
+Other specialized mount types are available for advanced use cases:
+
+- **artifact** - Mounts read-only content from a container image or artifact.
+- **devpts** - Provides a pseudo-terminal device inside the container.
+- **image** - Mounts files directly from another container image.
+- **glob** - Mounts multiple host files matching a glob pattern.
+- **ramfs** - Similar to tmpfs but backed directly by system RAM without size limits.
+
+These mount types are less commonly used and often appear in internal or
+advanced Podman workflows.
+
+In summary, **--mount** provides a single consistent interface for connecting
+external storage to containers. Choose the mount type that best fits your use
+case: **bind** for direct host access, **volume** for persistent data managed by
+Podman, and **tmpfs** for ephemeral in-memory storage.
+
+When using SELinux, be aware that the host has no knowledge of container SELinux
+policy. Therefore, in the above example, if SELinux policy is enforced, the
+_/var/db_ directory is not writable to the container. A "Permission Denied"
+message occurs, and an **avc:** message is added to the host's syslog.
+
+To work around this, at time of writing this man page, the following command
+needs to be run in order for the proper SELinux policy type label to be attached
+to the host directory:
+
+```
+$ chcon -Rt svirt_sandbox_file_t /var/db
+```
+
+Now, writing to the _/data1_ volume in the container is allowed and the
+changes are reflected on the host in _/var/db_.
+
+### Using alternative security labeling
+
+Override the default labeling scheme for each container by specifying
+the **--security-opt** flag. For example, specify the MCS/MLS level, a
+requirement for MLS systems. Specifying the level in the following command
+allows the same content to be shared between containers.
+
+```
+podman run --security-opt label=level:s0:c100,c200 -i -t fedora bash
+```
+
+An MLS example might be:
+
+```
+$ podman run --security-opt label=level:TopSecret -i -t rhel7 bash
+```
+
+To disable the security labeling for this container versus running with the
+#### **--permissive** flag, use the following command:
+
+```
+$ podman run --security-opt label=disable -i -t fedora bash
+```
+
+Tighten the security policy on the processes within a container by specifying an
+alternate type for the container. For example, run a container
+that is only allowed to listen on Apache ports by executing the following
+command:
+
+```
+$ podman run --security-opt label=type:svirt_apache_t -i -t centos bash
+```
+
+Note that an SELinux policy defining a **svirt_apache_t** type must be written.
+
+To mask additional specific paths in the container, specify the paths
+separated by a colon using the **mask** option with the **--security-opt**
+flag.
+
+```
+$ podman run --security-opt mask=/foo/bar:/second/path fedora bash
+```
+
+To unmask all the paths that are masked by default, set the **unmask** option to
+**ALL**. Or to only unmask specific paths, specify the paths as shown above with
+the **mask** option.
+
+```
+$ podman run --security-opt unmask=ALL fedora bash
+```
+
+To unmask all the paths that start with /proc, set the **unmask** option to
+**/proc/***.
+
+```
+$ podman run --security-opt unmask=/proc/* fedora bash
+```
+
+```
+$ podman run --security-opt unmask=/foo/bar:/sys/firmware fedora bash
+```
+
+### Setting device weight via **--blkio-weight-device** flag.
+
+```
+$ podman run -it --blkio-weight-device "/dev/sda:200" ubuntu
+```
+
+### Using a podman container with input from a pipe
+
+```
+$ echo "asdf" | podman run --rm -i --entrypoint /bin/cat someimage
+asdf
+```
+
+### Setting automatic user namespace separated containers
+
+```
+# podman run --userns=auto:size=65536 ubi8-micro cat /proc/self/uid_map
+0 2147483647      65536
+# podman run --userns=auto:size=65536 ubi8-micro cat /proc/self/uid_map
+0 2147549183      65536
+```
+
+### Setting Namespaced Kernel Parameters (Sysctls)
+
+The **--sysctl** sets namespaced kernel parameters (sysctls) in the
+container. For example, to turn on IP forwarding in the containers
+network namespace, run this command:
+
+```
+$ podman run --sysctl net.ipv4.ip_forward=1 someimage
+```
+
+Note that not all sysctls are namespaced. Podman does not support changing sysctls
+inside of a container that also modify the host system. As the kernel
+evolves we expect to see more sysctls become namespaced.
+
+See the definition of the **--sysctl** option above for the current list of
+supported sysctls.
+
+### Set UID/GID mapping in a new user namespace
+
+Running a container in a new user namespace requires a mapping of
+the UIDs and GIDs from the host.
+
+```
+$ podman run --uidmap 0:30000:7000 --gidmap 0:30000:7000 fedora echo hello
+```
+
+### Configuring Storage Options from the command line
+
+Podman allows for the configuration of storage by changing the values
+in the _/etc/container/storage.conf_ or by using global options. This
+shows how to use an additional image store for a one-time run of busybox
+using global options.
+
+```
+podman --log-level=debug --storage-opt "additionalimagestore=/tmp/readonly-images" run busybox /bin/sh
+```
+
+### Configure timezone in a container
+
+```
+$ podman run --tz=local alpine date
+$ podman run --tz=Asia/Shanghai alpine date
+$ podman run --tz=US/Eastern alpine date
+```
+
+### Adding dependency containers
+
+The first container, container1, is not started initially, but must be running before container2 starts.
+The `podman run` command starts the container automatically before starting container2.
+
+```
+$ podman create --name container1 -t -i fedora bash
+$ podman run --name container2 --requires container1 -t -i fedora bash
+```
+
+Multiple containers can be required.
+
+```
+$ podman create --name container1 -t -i fedora bash
+$ podman create --name container2 -t -i fedora bash
+$ podman run --name container3 --requires container1,container2 -t -i fedora bash
+```
+
+### Configure keep supplemental groups for access to volume
+
+```
+$ podman run -v /var/lib/design:/var/lib/design --group-add keep-groups ubi8
+```
+
+### Configure execution domain for containers using personality flag
+
+```
+$ podman run --name container1 --personality=LINUX32 fedora bash
+```
+
+### Run a container with external rootfs mounted as an overlay
+
+```
+$ podman run --name container1 --rootfs /path/to/rootfs:O bash
+```
+
+### Handling Timezones in java applications in a container.
+
+In order to use a timezone other than UTC when running a
+Java application within a container, the `TZ` environment variable must be
+set within the container. Java applications ignores the value set with the
+`--tz` option.
+
+```
+# Example run
+podman run -ti --rm  -e TZ=EST mytzimage
+lrwxrwxrwx. 1 root root 29 Nov  3 08:51 /etc/localtime -> ../usr/share/zoneinfo/Etc/UTC
+Now with default timezone:
+Fri Nov 19 18:10:55 EST 2021
+Java default sees the following timezone:
+2021-11-19T18:10:55.651130-05:00
+Forcing UTC:
+Fri Nov 19 23:10:55 UTC 2021
+```
+
+### Run a container connected to two networks (called net1 and net2) with a static ip
+
+```
+$ podman run --network net1:ip=10.89.1.5 --network net2:ip=10.89.10.10 alpine ip addr
+```
+
+### Define a healthcheck at run time and verify it
+
+```
+$ podman create -d --name healthcheck-example -p 8080:80 \
+  --health-cmd '["CMD-SHELL","wget -q --spider http://127.0.0.1:80 || exit 1"]' \
+  --health-interval 30s --health-timeout 5s --health-retries 3 \
+  docker.io/library/nginx:alpine
+
+$ podman inspect healthcheck-example | jq '.[0].State.Health'
+```
+
+### Rootless Containers
+
+Podman runs as a non-root user on most systems. This feature requires that a new enough version of **shadow-utils**
+be installed. The **shadow-utils** package must include the **newuidmap**(1) and **newgidmap**(1) executables.
+
+In order for users to run rootless, there must be an entry for their username in _/etc/subuid_ and _/etc/subgid_ which lists the UIDs for their user namespace.
+
+Rootless Podman works better if the fuse-overlayfs package is installed.
+The **fuse-overlayfs** package provides a userspace overlay storage driver, otherwise users need to use
+the **vfs** storage driver, which can be disk space expensive and less
+performant than other drivers.
+
+To enable VPN on the container, pasta networking is used by default;
+otherwise, containers need to be run with the --network=host flag.
+
+## ENVIRONMENT
+
+Environment variables within containers can be set using multiple different options,
+in the following order of precedence (later entries override earlier entries):
+
+- Container image: Any environment variables specified in the container image.
+- **--http-proxy**: By default, several environment variables are passed in from the host, such as **http_proxy** and **no_proxy**. See **--http-proxy** for details.
+- **--env-host**: Host environment of the process executing Podman is added.
+- **--env-file**: Any environment variables specified via env-files. If multiple files are specified, then they override each other in order of entry.
+- **--env**: Any environment variables specified overrides previous settings.
+
+Run containers and set the environment ending with a __*__.
+The trailing __*__ glob functionality is only active when no value is specified:
+
+```
+$ export ENV1=a
+$ podman run --env 'ENV*' alpine env | grep ENV
+ENV1=a
+$ podman run --env 'ENV*=b' alpine env | grep ENV
+ENV*=b
+```
+
+## CONMON
+
+When Podman starts a container it actually executes the conmon program, which
+then executes the OCI Runtime.  Conmon is the container monitor.  It is a small
+program whose job is to watch the primary process of the container, and if the
+container dies, save the exit code.  It also holds open the tty of the
+container, so that it can be attached to later. This is what allows Podman to
+run in detached mode (backgrounded), so Podman can exit but conmon continues to
+run.  Each container has their own instance of conmon. Conmon waits for the
+container to exit, gathers and saves the exit code, and then launches a Podman
+process to complete the container cleanup, by shutting down the network and
+storage.   For more information about conmon, see the conmon(8) man
+page.
+
+## FILES
+
+**/etc/subuid**
+
+**/etc/subgid**
+
+NOTE: Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to use `/var/tmp`.
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-save(1)](podman-save.1.md)**, **[podman-ps(1)](podman-ps.1.md)**, **[podman-attach(1)](podman-attach.1.md)**, **[podman-pod-create(1)](podman-pod-create.1.md)**, **[podman-port(1)](podman-port.1.md)**, **[podman-start(1)](podman-start.1.md)**, **[podman-kill(1)](podman-kill.1.md)**, **[podman-stop(1)](podman-stop.1.md)**, **[podman-generate-systemd(1)](podman-generate-systemd.1.md)**, **[podman-rm(1)](podman-rm.1.md)**, **[subgid(5)](https://www.unix.com/man-page/linux/5/subgid)**, **[subuid(5)](https://www.unix.com/man-page/linux/5/subuid)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**, **[podman-systemd.unit(5)](podman-systemd.unit.5.md)**, **[setsebool(8)](https://man7.org/linux/man-pages/man8/setsebool.8.html)**, **[pasta(1)](https://passt.top/builds/latest/web/passt.1.html)**, **[fuse-overlayfs(1)](https://github.com/containers/fuse-overlayfs/blob/main/fuse-overlayfs.1.md)**, **proc(5)**, **[conmon(8)](https://github.com/containers/conmon/blob/main/docs/conmon.8.md)**, **personality(2)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.
+
+See [podman-rootless(7)](https://github.com/containers/podman/blob/main/rootless.md)
+for rootless issues.
+
+## HISTORY
+September 2018, updated by Kunal Kushwaha `<kushwaha_kunal_v7@lab.ntt.co.jp>`
+
+October 2017, converted from Docker documentation to Podman by Dan Walsh for Podman `<dwalsh@redhat.com>`
+
+November 2015, updated by Sally O'Malley `<somalley@redhat.com>`
+
+June 2014, updated by Sven Dowideit `<SvenDowideit@home.org.au>`
+
+April 2014, Originally compiled by William Henry `<whenry@redhat.com>` based on docker.com source material and internal work.
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a core value of open source. The `master` and `slave` mount propagation terminology used here is problematic and divisive, and needs to be changed. However, these terms are currently used within the Linux kernel and must be used as-is at this time. When the kernel maintainers rectify this usage, Podman will follow suit immediately.

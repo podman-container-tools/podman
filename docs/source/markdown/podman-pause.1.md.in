@@ -1,0 +1,58 @@
+% podman-pause 1
+
+## NAME
+podman\-pause - Pause one or more containers
+
+## SYNOPSIS
+**podman pause** [*options*] [*container*...]
+
+**podman container pause** [*options*] [*container*...]
+
+## DESCRIPTION
+Pauses all the processes in one or more containers.  You may use container IDs or names as input.
+
+## OPTIONS
+
+#### **--all**, **-a**
+
+Pause all running containers.
+
+@@option cidfile.read
+
+@@option filter.container
+
+@@option latest
+
+## EXAMPLE
+
+Pause specified container:
+```
+podman pause mywebserver
+```
+
+Pause container by partial container ID:
+```
+podman pause 860a4b23
+```
+
+Pause all **running** containers:
+```
+podman pause --all
+```
+
+Pause container using ID specified in given files:
+```
+podman pause --cidfile /home/user/cidfile-1
+podman pause --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2
+```
+
+Pause the latest container. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
+```
+podman pause --latest
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-unpause(1)](podman-unpause.1.md)**
+
+## HISTORY
+September 2017, Originally compiled by Dan Walsh <dwalsh@redhat.com>

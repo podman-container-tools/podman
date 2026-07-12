@@ -1,0 +1,23 @@
+% podman-compose 1
+
+## NAME
+podman\-compose - Run Compose workloads via an external compose provider
+
+## SYNOPSIS
+**podman compose** [*options*] [*command* [*arg* ...]]
+
+## DESCRIPTION
+**podman compose** is a thin wrapper around an external compose provider such as docker-compose or podman-compose.  This means that `podman compose` is executing another tool that implements the compose functionality but sets up the environment in a way to let the compose provider communicate transparently with the local Podman socket.  The specified options as well as the command and argument are passed directly to the compose provider.
+
+The default compose providers are `docker-compose` and `podman-compose`.  If installed, `docker-compose` takes precedence since it is the original implementation of the Compose specification and is widely used on the supported platforms (i.e., Linux, Mac OS, Windows).
+
+If you want to change the default behavior or have a custom installation path for your provider of choice, please change the `compose_providers` field in `containers.conf(5)` to `compose_providers = ["/path/to/provider"]`. You may also set the `PODMAN_COMPOSE_PROVIDER` environment variable.
+
+By default, `podman compose` will emit a warning saying that it executes an external command. This warning can be disabled by setting `compose_warning_logs` to false in `containers.conf(5)` or setting the `PODMAN_COMPOSE_WARNING_LOGS` environment variable to false. See the man page for `containers.conf(5)` for more information.
+
+## OPTIONS
+
+To see supported options of the installed compose provider, please run `podman compose --help`.
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**

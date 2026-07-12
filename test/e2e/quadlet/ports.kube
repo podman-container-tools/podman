@@ -1,0 +1,44 @@
+[Kube]
+Yaml=/opt/k8s/deployment.yml
+
+## assert-podman-args --publish 127.0.0.1:80:90
+PublishPort=127.0.0.1:80:90
+
+## assert-podman-args --publish 0.0.0.0:80:91
+PublishPort=0.0.0.0:80:91
+
+## assert-podman-args --publish :80:92
+PublishPort=:80:92
+
+## assert-podman-args --publish 127.0.0.1::93
+PublishPort=127.0.0.1::93
+
+## assert-podman-args --publish 0.0.0.0::94
+PublishPort=0.0.0.0::94
+
+## assert-podman-args --publish ::95
+PublishPort=::95
+
+## assert-podman-args --publish 80:96
+PublishPort=80:96
+
+## assert-podman-args --publish 97
+PublishPort=97
+
+## assert-podman-args --publish 1234/udp
+PublishPort=1234/udp
+
+## assert-podman-args --publish 1234:1234/udp
+PublishPort=1234:1234/udp
+
+## assert-podman-args --publish 127.0.0.1:1234:1234/udp
+PublishPort=127.0.0.1:1234:1234/udp
+
+## assert-podman-args --publish 1234/tcp
+PublishPort=1234/tcp
+
+## assert-podman-args --publish 1234:1234/tcp
+PublishPort=1234:1234/tcp
+
+## assert-podman-args --publish 127.0.0.1:1234:1234/tcp
+PublishPort=127.0.0.1:1234:1234/tcp

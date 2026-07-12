@@ -1,0 +1,12 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+formatters:
+  enable:
+    - gofumpt
+
+# Show all issues at once so it is visible how much must be fixed
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

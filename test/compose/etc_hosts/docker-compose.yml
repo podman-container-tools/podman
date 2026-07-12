@@ -1,0 +1,19 @@
+version: '3.3'
+
+services:
+  test:
+    image: alpine
+    command: ["top"]
+    hostname: foobar
+    networks:
+      net1:
+        aliases:
+          - foobar
+
+networks:
+  net1:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.123.0.0/24

@@ -1,0 +1,7 @@
+FROM alpine:latest
+
+#include "common"
+
+RUNHELLO
+
+#include "install-base"

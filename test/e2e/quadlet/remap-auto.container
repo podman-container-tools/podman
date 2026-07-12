@@ -1,0 +1,5 @@
+## assert-podman-args --userns auto
+
+[Container]
+Image=localhost/imagename
+RemapUsers=auto

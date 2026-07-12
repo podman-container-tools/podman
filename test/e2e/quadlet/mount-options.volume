@@ -1,0 +1,7 @@
+## assert-last-key-contains Service ExecStart " --opt o=uid=0,gid=11,rw,compress=zstd "
+
+[Volume]
+# Test usernames too
+User=root
+Group=11
+Options=rw,compress=zstd

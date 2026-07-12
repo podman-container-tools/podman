@@ -1,0 +1,7 @@
+## assert-failed
+## assert-stderr-contains "ReloadCmd and ReloadSignal are mutually exclusive but both are set"
+
+[Container]
+Image=localhost/imagename
+ReloadCmd=/usr/bin/command
+ReloadSignal=SIGHUP

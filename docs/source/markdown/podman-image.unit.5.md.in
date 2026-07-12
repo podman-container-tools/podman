@@ -1,0 +1,132 @@
+% podman-image.unit 5
+
+# NAME
+
+podman\-image.unit - systemd unit files for managing container image pulls using Podman Quadlet
+
+# SYNOPSIS
+
+*name*.image
+
+# DESCRIPTION
+
+Image files are named with a `.image` extension and contain a section `[Image]` describing the
+container image pull command. The generated service is a one-time command that ensures that the image
+exists on the host, pulling it if needed.
+
+Using image units allows containers and volumes to depend on images being automatically pulled. This is
+particularly interesting when using special options to control image pulls.
+
+# USAGE SUMMARY
+
+The `.image` file is parsed by the `podman-system-generator` at boot or reload, generating a systemd
+`.service` that runs `podman image pull`.
+
+A `.image` file can be referenced in a `.container` file's `Image=` option.
+
+# OPTIONS
+
+Valid options for `[Image]` are listed below:
+
+| **[Image] options**                    | **podman image pull equivalent**                 |
+|----------------------------------------|--------------------------------------------------|
+| AllTags=true                           | --all-tags                                       |
+| Arch=aarch64                           | --arch=aarch64                                   |
+| AuthFile=/etc/registry/auth\.json      | --authfile=/etc/registry/auth\.json              |
+| CertDir=/etc/registry/certs            | --cert-dir=/etc/registry/certs                   |
+| ContainersConfModule=/etc/nvd\.conf    | --module=/etc/nvd\.conf                          |
+| Creds=myname\:mypassword               | --creds=myname\:mypassword                       |
+| DecryptionKey=/etc/registry\.key       | --decryption-key=/etc/registry\.key              |
+| GlobalArgs=--log-level=debug           | --log-level=debug                                |
+| Image=quay\.io/centos/centos:latest    | podman image pull quay.io/centos/centos\:latest  |
+| ImageTag=quay\.io/centos/centos:latest | Use this name when resolving `.image` references |
+| OS=windows                             | --os=windows                                     |
+| PodmanArgs=--os=linux                  | --os=linux                                       |
+| Policy=always                          | --policy=always                                  |
+| Retry=5                                | --retry=5                                        |
+| RetryDelay=10s                         | --retry-delay=10s                                |
+| TLSVerify=false                        | --tls-verify=false                               |
+| Variant=arm/v7                         | --variant=arm/v7                                 |
+
+@@option quadlet:all-tags
+
+@@option quadlet:arch
+
+@@option quadlet:authfile
+
+@@option quadlet:cert-dir
+
+@@option quadlet:module
+
+@@option quadlet:creds
+
+@@option quadlet:decryption-key
+
+@@option quadlet:global-args
+
+### `Image=`
+
+The image to pull.
+It is recommended to use a fully qualified image name rather than a short name, both for
+performance and robustness reasons.
+
+The format of the name is the same as when passed to `podman pull`. It supports using
+`:tag` or digests to guarantee the specific image version.
+
+### `ImageTag=`
+
+The actual Fully Qualified Image Name (FQIN) of the referenced `Image`.
+Only meaningful when the source is a file or directory archive.
+
+For example, an image saved into a `docker-archive` with the following Podman command:
+
+`podman image save --format docker-archive --output /tmp/archive-file.tar quay.io/podman/stable:latest`
+
+requires setting
+- `Image=docker-archive:/tmp/archive-file.tar`
+- `ImageTag=quay.io/podman/stable:latest`
+
+@@option quadlet:os.pull
+
+@@option quadlet:podman-args
+
+@@option quadlet:policy
+
+@@option quadlet:retry
+
+@@option quadlet:retry-delay
+
+@@option quadlet:tls-verify
+
+@@option quadlet:variant.container
+
+# EXAMPLES
+
+Basic image pull:
+
+```
+[Image]
+Image=quay.io/centos/centos:latest
+```
+
+Pull from docker archive:
+
+```
+[Image]
+Image=docker-archive:/tmp/centos.tar
+ImageTag=quay.io/centos/centos:latest
+```
+
+Pull with credentials:
+
+```
+[Image]
+Image=quay.io/private/image:latest
+Creds=myuser:mypassword
+```
+
+# SEE ALSO
+
+[podman-image-pull(1)](podman-image-pull.1.md),
+[podman-systemd.unit(5)](podman-systemd.unit.5.md),
+[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)

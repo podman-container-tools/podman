@@ -1,0 +1,13 @@
+## assert-podman-args "--build-arg" "FOO=BAR"
+## assert-podman-args "--build-arg" "BIZ=BAZ"
+## assert-podman-args "--build-arg" "MULTIPLE=ARGUMENTS"
+## assert-podman-args "--build-arg" "WORKS=FINE"
+
+
+[Build]
+ImageTag=image:latest
+SetWorkingDirectory=unit
+BuildArg=FOO=BAR
+BuildArg=BIZ=BAZ
+BuildArg=MULTIPLE=ARGUMENTS \
+  WORKS=FINE

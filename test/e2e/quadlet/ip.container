@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--ip" "10.88.64.128"
+## assert-podman-args "--ip6" "fd46:db93:aa76:ac37::10"
+
+[Container]
+Image=localhost/imagename
+IP=10.88.64.128
+IP6=fd46:db93:aa76:ac37::10

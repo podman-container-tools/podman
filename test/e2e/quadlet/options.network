@@ -1,0 +1,5 @@
+## assert-podman-final-args systemd-options
+## assert-podman-args "--opt" "mtu=1504"
+
+[Network]
+Options=mtu=1504

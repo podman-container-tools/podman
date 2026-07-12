@@ -1,0 +1,5 @@
+## assert-podman-args "--stop-timeout" "20"
+
+[Container]
+Image=localhost/imagename
+StopTimeout=20

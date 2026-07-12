@@ -1,0 +1,6 @@
+[codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = bin,vendor,.git,go.sum,.cirrus.yml,"*.fish,RELEASE_NOTES.md,*.xz,*.gz,*.ps1,*.tar,swagger.yaml,*.tgz,bin2img,*ico,*.png,*.1,*.5,copyimg,*.orig,apidoc.go
+check-hidden = true
+ignore-regex = \b(Not|assert)In\b
+ignore-words-list = ddress,secon,passt,bu,hastable,te,clos,ans,pullrequest,uint,iff,od,seeked,splitted,marge,erro,hist,ether,specif,whit,decorder,sems

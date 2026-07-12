@@ -1,0 +1,131 @@
+% podman-kube.unit 5
+
+# NAME
+
+podman\-kube.unit - systemd unit files for managing Podman Kubernetes YAML deployments using Quadlet
+
+# SYNOPSIS
+
+*name*.kube
+
+# DESCRIPTION
+
+Kube units are named with a `.kube` extension and contain a `[Kube]` section describing
+how `podman kube play` runs as a service. The resulting service file contains a line like
+`ExecStart=podman kube play … file.yml`, and most of the keys in this section control the command-line
+options passed to Podman. However, some options also affect the details of how systemd is set up to run and
+interact with the container.
+
+There is only one required key, `Yaml`, which defines the path to the Kubernetes YAML file.
+
+# USAGE SUMMARY
+
+The `.kube` file is parsed by the `podman-system-generator` at boot or reload, generating a systemd
+`.service` that runs `podman kube play`. That service can be managed like any other unit:
+
+```bash
+systemctl --user start name.service
+```
+
+# OPTIONS
+
+Valid options for `[Kube]` are listed below:
+
+| **[Kube] options**                  | **podman kube play equivalent**                                  |
+| ------------------------------------| -----------------------------------------------------------------|
+| AutoUpdate=registry                 | --annotation "io.containers.autoupdate=registry"                 |
+| ConfigMap=/tmp/config.map           | --configmap /tmp/config.map                                      |
+| ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                                          |
+| ExitCodePropagation=how             | How to propagate container error status                          |
+| GlobalArgs=--log-level=debug        | --log-level=debug                                                |
+| KubeDownForce=true                  | --force (for `podman kube down`)                                 |
+| LogDriver=journald                  | --log-driver journald                                            |
+| Network=host                        | --network host                                                   |
+| PodmanArgs=\-\-annotation=key=value | --annotation=key=value                                           |
+| PublishPort=8080:80                 | --publish 8080:80                                                |
+| SetWorkingDirectory=yaml            | Set `WorkingDirectory` of unit file to location of the YAML file |
+| UserNS=keep-id:uid=200,gid=210      | --userns keep-id:uid=200,gid=210                                 |
+| Yaml=/tmp/kube.yaml                 | podman kube play /tmp/kube.yaml                                  |
+
+Supported keys in the `[Kube]` section are:
+
+
+### `AutoUpdate=`
+
+Indicates whether pods and containers from this Kubernetes workload are auto-updated ([podman-auto-update(1)](podman-auto-update.1.md)). `AutoUpdate` can be specified multiple times. The following values are supported:
+
+* `registry`: Requires a fully-qualified image reference (e.g., quay.io/podman/stable:latest) to be used to create the container. This enforcement is necessary to know which images to actually check and pull. If an image ID was used, Podman does not know which image to check/pull anymore.
+
+* `local`: Tells Podman to compare the image a container is using to the image with its raw name in local storage. If an image is updated locally, Podman simply restarts the systemd unit executing the Kubernetes Quadlet.
+
+* `name/(local|registry)`: Tells Podman to perform the `local` or `registry` auto-update on the specified container name.
+
+
+@@option quadlet:configmap
+
+@@option quadlet:module
+
+### `ExitCodePropagation=how`
+
+Control how the main PID of the systemd service should exit. The following values are supported:
+- `all`: exit non-zero if all containers have failed (i.e., exited non-zero)
+- `any`: exit non-zero if any container has failed
+- `none`: exit zero and ignore failed containers
+
+The current default value is `none`.
+
+@@option quadlet:global-args
+
+### `KubeDownForce=true`
+
+Remove all resources, including volumes, when calling `podman kube down`.
+Equivalent to the Podman `--force` option.
+
+@@option quadlet:log-driver
+
+@@option quadlet:network
+
+@@option quadlet:podman-args
+
+@@option quadlet:publish
+
+### `SetWorkingDirectory=yaml`
+
+Set the `WorkingDirectory` directive in the `[Service]` section of the systemd service unit file.
+Used to allow `podman kube play` to correctly resolve relative paths.
+Supported values are `yaml` and `unit` to set the working directory to that of the YAML file or Quadlet unit file, respectively.
+
+Alternatively, users can explicitly set the `WorkingDirectory` directive in the `[Service]` section of the `.kube` file.
+Please note that if the `WorkingDirectory` directive in the `[Service]` section is set,
+Quadlet will not set it even if `SetWorkingDirectory` is set.
+
+@@option quadlet:userns.container
+
+### `Yaml=path`
+
+The path, absolute or relative to the location of the unit file, to the Kubernetes YAML file to use.
+
+
+# EXAMPLES
+
+Deploy from local YAML:
+
+```
+[Unit]
+Description=A kubernetes yaml based service
+Before=local-fs.target
+
+[Kube]
+Yaml=/opt/k8s/deployment.yml
+
+[Install]
+# Start by default on boot
+WantedBy=multi-user.target default.target
+```
+
+# SEE ALSO
+
+[podman-kube-generate(1)](podman-kube-generate.1.md),
+[podman-kube-play(1)](podman-kube-play.1.md),
+[podman-systemd.unit(5)](podman-systemd.unit.5.md),
+[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)

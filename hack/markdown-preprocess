@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+#
+# markdown-preprocess - filter *.md.in files, convert to .md
+#
+"""
+Simpleminded include mechanism for podman man pages.
+"""
+
+import filecmp
+import glob
+import os
+import re
+import sys
+
+class Preprocessor():
+    """
+    Doesn't really merit a whole OO approach, except we have a lot
+    of state variables to pass around, and self is a convenient
+    way to do that. Better than globals, anyway.
+    """
+    def __init__(self):
+        self.infile = ''
+        self.pod_or_container = ''
+        self.used_by = {}
+
+    def render(self, text: str, context: dict) -> str:
+        """
+        Renders the `text` handling the following extra formatting features:
+
+        ```
+        << if variable >>
+        ...
+        << endif >>
+
+        << if not variable >>
+        ...
+        << else >>
+        ...
+        << endif >>
+
+        << "foo" if variable else "bar" >>
+        ```
+
+        Returns the rendered text.
+        """
+        # Match << ... >>
+        TOK = re.compile(r"<<(.*?)>>", re.DOTALL)
+        out = []
+        pos = 0
+        stack = []  # each frame: {"active": bool, "seen_else": bool}
+
+        def is_active():
+            return all(f["active"] for f in stack)
+
+        def get_variable(name: str):
+            v = context.get(name, None)
+            if v is None:
+                raise ValueError(f"undefined variable: {name}")
+            return v
+
+        def truthy(name: str) -> bool:
+            name = name.strip()
+            if name.startswith("not "):
+                v = get_variable(name[4:].strip())
+                return not bool(v)
+            return bool(get_variable(name))
+
+        for m in TOK.finditer(text):
+            # write literal up to token
+            literal = text[pos:m.start()]
+            if is_active():
+                out.append(literal)
+            pos = m.end()
+
+            inner = m.group(1).strip()
+
+            # control blocks
+            if inner.startswith("if ") and len(inner[3:].strip().split(" ")) in [1, 2]:
+                cond = inner[3:].strip()
+                stack.append({"active": is_active() and truthy(cond), "seen_else": False})
+                continue
+            if inner == "else":
+                if not stack:
+                    raise ValueError("`else` without `if`")
+                frame = stack[-1]
+                if frame["seen_else"]:
+                    raise ValueError("multiple `else` in the same `if`")
+                frame["seen_else"] = True
+                parent_active = all(f["active"] for f in stack[:-1])
+                frame["active"] = parent_active and not frame["active"]
+                continue
+            if inner == "endif":
+                if not stack:
+                    raise ValueError("`end` without `if`")
+                stack.pop()
+                continue
+
+            # inline "X if cond else Y" ---
+            if " if " in inner and " else " in inner:
+                try:
+                    # split by " if " then " else "
+                    then_part, rest = inner.split(" if ", 1)
+                    cond, else_part = rest.split(" else ", 1)
+                    cond = cond.strip()
+                    chosen = then_part if truthy(cond) else else_part
+                    if is_active():
+                        out.append(chosen.strip().strip("'\""))
+                except Exception as e:
+                    raise ValueError(f"Invalid inline if/else syntax: {inner}") from e
+                continue
+
+            # Unrecognized token (e.g. `<<a|b>>` for replace_type, or `<<subcommand>>`):
+            # preserve verbatim so downstream processing can handle it.
+            if is_active():
+                out.append(m.group(0))
+
+        # trailing literal
+        if is_active():
+            out.append(text[pos:])
+
+        if stack:
+            raise ValueError("unclosed `if` block(s)")
+        return "".join(out)
+
+    def process(self, infile:str):
+        """
+        Main calling point: preprocesses one file
+        """
+        self.infile = infile
+        # Some options are the same between containers and pods; determine
+        # which description to use from the name of the source man page.
+        self.pod_or_container = 'container'
+        if '-pod-' in infile or '-kube-' in infile:
+            self.pod_or_container = 'pod'
+
+        # foo.md.in -> foo.md -- but always write to a tmpfile
+        outfile = os.path.splitext(infile)[0]
+        outfile_tmp = outfile + '.tmp.' + str(os.getpid())
+
+        with open(infile, 'r', encoding='utf-8') as fh_in, open(outfile_tmp, 'w', encoding='utf-8', newline='\n') as fh_out:
+            for line in fh_in:
+                try:
+                    # '@@option foo' -> include file options/foo.md
+                    if line.startswith('@@option '):
+                        _, optionname = line.strip().split(" ")
+                        is_quadlet = optionname.startswith("quadlet:")
+                        if is_quadlet:
+                            optionname = optionname[len("quadlet:"):]
+                        optionfile = os.path.join("options", optionname + '.md')
+                        self.track_optionfile(optionfile)
+                        self.insert_file(fh_out, optionfile, is_quadlet)
+                    # '@@include relative-path/must-exist.md'
+                    elif line.startswith('@@include '):
+                        _, path = line.strip().split(" ")
+                        self.insert_file(fh_out, path)
+                    else:
+                        fh_out.write(line)
+                except Exception as ex:
+                    raise Exception(f"Error while processing {infile} line '{line[:-1]}'") from ex
+
+        os.chmod(outfile_tmp, 0o444)
+        os.rename(outfile_tmp, outfile)
+
+    def track_optionfile(self, optionfile: str):
+        """
+        Keep track of which man pages use which option files
+        """
+        if optionfile not in self.used_by:
+            self.used_by[optionfile] = []
+        self.used_by[optionfile].append(self.podman_subcommand('full'))
+
+    def rewrite_optionfiles(self):
+        """
+        Rewrite all option files, such that they include header comments
+        cross-referencing all the man pages in which they're used.
+        """
+        for optionfile in self.used_by:
+            tmpfile = optionfile + '.tmp.' + str(os.getpid())
+            with open(optionfile, 'r', encoding='utf-8') as fh_in, open(tmpfile, 'w', encoding='utf-8', newline='\n') as fh_out:
+                fh_out.write("####> This option file is used in:\n")
+                used_by = ', '.join(x for x in self.used_by[optionfile])
+                fh_out.write(f"####>   podman {used_by}\n")
+                fh_out.write("####> If file is edited, make sure the changes\n")
+                fh_out.write("####> are applicable to all of those.\n")
+                for line in fh_in:
+                    if not line.startswith('####>'):
+                        fh_out.write(line)
+            # Compare files; only rewrite if the new one differs
+            if not filecmp.cmp(optionfile, tmpfile):
+                os.unlink(optionfile)
+                os.rename(tmpfile, optionfile)
+            else:
+                os.unlink(tmpfile)
+
+    def insert_file(self, fh_out, path: str, is_quadlet=False):
+        """
+        Reads one option file, writes it out to the given output filehandle
+        """
+        # Comment intended to help someone viewing the .md file.
+        # Leading newline is important because if two lines are
+        # consecutive without a break, sphinx (but not go-md2man)
+        # treats them as one line and will unwantedly render the
+        # comment in its output.
+        fh_out.write("\n[//]: # (BEGIN included file " + path + ")\n")
+        with open(path, 'r', encoding='utf-8') as fh_included:
+            rendered = self.render(fh_included.read(), {"is_quadlet": is_quadlet})
+            for opt_line in rendered.splitlines():
+                if opt_line.startswith('####>'):
+                    continue
+
+                opt_line = self.replace_type(opt_line)
+                opt_line = opt_line.replace('<<subcommand>>', self.podman_subcommand())
+                opt_line = opt_line.replace('<<fullsubcommand>>', self.podman_subcommand('full'))
+                fh_out.write(opt_line + '\n')
+            fh_out.write("\n[//]: # (END   included file " + path + ")\n")
+
+    def podman_subcommand(self, full=None) -> str:
+        """
+        Returns the string form of the podman command, based on man page name;
+        e.g., 'foo bar' for podman-foo-bar.1.md.in
+        """
+        subcommand = self.infile
+        # Special case: 'podman-pod-start' becomes just 'start'
+        if not full:
+            if subcommand.startswith("podman-pod-"):
+                subcommand = subcommand[len("podman-pod-"):]
+        # For quadlet man-pages, the subcommand is simply the full manpage name.
+        if subcommand.endswith(".unit.5.md.in"):
+            return subcommand
+        if subcommand.startswith("podman-"):
+            subcommand = subcommand[len("podman-"):]
+        if subcommand.endswith(".1.md.in"):
+            subcommand = subcommand[:-len(".1.md.in")]
+        return subcommand.replace("-", " ")
+
+    def replace_type(self, line: str) -> str:
+        """
+        Replace instances of '<<pod string|container string>>' with the
+        appropriate one based on whether this is a pod-related man page
+        or not.
+        """
+        # Internal helper function: determines the desired half of the <a|b> string
+        def replwith(matchobj):
+            lhs, rhs = matchobj[0].split('|')
+            # Strip off '<<' and '>>'
+            lhs = lhs[2:]
+            rhs = rhs[:len(rhs)-2]
+
+            # Check both sides for 'pod' followed by (non-"m" or end-of-string).
+            # The non-m prevents us from triggering on 'podman', which could
+            # conceivably be present in both sides. And we check for 'pod',
+            # not 'container', because it's possible to have something like
+            # <<container in pod|container>>.
+            if re.match('.*pod([^m]|$)', lhs, re.IGNORECASE):
+                if re.match('.*pod([^m]|$)', rhs, re.IGNORECASE):
+                    raise Exception(f"'{matchobj[0]}' matches 'pod' in both left and right sides")
+                # Only left-hand side has "pod"
+                if self.pod_or_container == 'pod':
+                    return lhs
+                return rhs
+
+            # 'pod' not in lhs, must be in rhs
+            if not re.match('.*pod([^m]|$)', rhs, re.IGNORECASE):
+                raise Exception(f"'{matchobj[0]}' does not match 'pod' in either side")
+            if self.pod_or_container == 'pod':
+                return rhs
+            return lhs
+
+        return re.sub(r'<<[^\|>]*\|[^\|>]*>>', replwith, line)
+
+
+def main():
+    "script entry point"
+    script_dir = os.path.abspath(os.path.dirname(__file__))
+    man_dir = os.path.join(script_dir,"../docs/source/markdown")
+
+    try:
+        os.chdir(man_dir)
+    except FileNotFoundError as ex:
+        raise Exception("Please invoke me from the base repo dir") from ex
+
+    # No longer possible to invoke us with args: reject any such invocation
+    if len(sys.argv) > 1:
+        raise Exception("This script accepts no arguments")
+
+    preprocessor = Preprocessor()
+    for infile in sorted(glob.glob('*.md.in')):
+        preprocessor.process(infile)
+
+    # Now rewrite all option files
+    preprocessor.rewrite_optionfiles()
+
+if __name__ == "__main__":
+    main()

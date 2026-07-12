@@ -1,0 +1,267 @@
+{{ define "serverheaderbuilder" }}
+{{ if not .IsArray }}{{ template "simpleserverheaderbuilder" . }}{{ else }}{{ template "sliceserverheaderbuilder" . }}{{ end }}
+{{- end }}
+{{ define "simpleserverheaderbuilder" }}
+{{ if .IsNullable -}}
+var {{ varname .ID }} string
+if {{ .ReceiverName }}.{{ pascalize .ID }} != nil {
+  {{ varname .ID }} = {{ if .Formatter }}{{ .Formatter }}(*{{ .ReceiverName }}.{{ pascalize .ID }}){{ else }}{{ if not .IsCustomFormatter }}*{{ end }}{{ .ReceiverName }}.{{ pascalize .ID }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}
+}
+{{ else }}{{ varname .ID }} := {{ if .Formatter }}{{ .Formatter }}({{ .ReceiverName }}.{{ pascalize .ID }}){{ else }}{{ .ReceiverName }}.{{ pascalize .ID }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}
+{{ end -}}
+if {{ varname .ID }} != "" {
+  rw.Header().Set({{ printf "%q" .Name }}, {{ varname .ID }})
+}
+{{ end }}
+{{ define "sliceitemserverheaderbuilder" }}
+{{ if .IsNullable -}}
+var {{ .ValueExpression }}S string
+if {{ .ValueExpression }} != nil {
+  {{ .ValueExpression }}S = {{ if .Formatter }}{{ .Formatter }}(*{{ .ValueExpression }}){{ else }}*{{ .ValueExpression }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}
+}
+{{ else -}}
+{{ .ValueExpression }}S := {{ if .Formatter }}{{ .Formatter }}({{ .ValueExpression }}){{ else }}{{ .ValueExpression }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}
+{{ end -}}
+if {{ .ValueExpression }}S != "" {
+  {{ .ValueExpression }}R = append({{ .ValueExpression }}R, {{ .ValueExpression }}S)
+}
+{{ end }}
+{{define "sliceserverheaderbuilder" }}
+var {{ varname .Child.ValueExpression }}R []string
+for _, {{ varname .Child.ValueExpression }} := range {{ .ValueExpression }} {
+  {{- if not .Child.IsArray }}{{ template "sliceitemserverheaderbuilder" .Child }}{{ else }}{{ template "sliceserverheaderbuilder" .Child }}{{ end -}}
+}
+{{ if not .Child.Parent -}}
+{{ varname .ID }} := swag.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+if len({{ varname .ID }}) > 0 {
+  hv := {{ varname .ID }}[0]
+  if hv != "" {
+    rw.Header().Set({{ printf "%q" .Name }}, hv)
+  }
+}
+{{ else -}}
+{{ .ValueExpression }}S := swag.JoinByFormat({{ varname .Child.ValueExpression }}R, {{ printf "%q" .CollectionFormat }})
+if len({{ .ValueExpression }}S) > 0 {
+  {{ .ValueExpression }}Ss := {{ .ValueExpression }}S[0]
+  if {{ .ValueExpression }}Ss != "" {
+    {{ .ValueExpression }}R = append({{ .ValueExpression }}R, {{ .ValueExpression }}Ss)
+  }
+}
+{{ end -}}
+{{ end -}}
+{{ define "serverresponse" }}
+{{ if ne .Code -1 }}// {{pascalize .Name}}Code is the HTTP code returned for type {{ pascalize .Name}}
+const {{ pascalize .Name}}Code int = {{ .Code }}{{ end }}
+
+/*{{ if .Description }}{{ pascalize .Name }} {{ blockcomment .Description }}{{else}}{{ pascalize .Name }} {{ humanize .Name }}{{end}}
+
+swagger:response {{ camelize .Name }}
+*/
+type {{ pascalize .Name }} struct {
+  {{ if eq .Code -1 }}
+  _statusCode int
+  {{ end }}{{ range .Headers }}/*{{if .Description }}{{ blockcomment .Description }}{{ end }}
+  {{ if .Maximum }}
+  Maximum: {{ if .ExclusiveMaximum }}< {{ end }}{{ .Maximum }}{{ end }}{{ if .Minimum }}
+  Minimum: {{ if .ExclusiveMinimum }}> {{ end }}{{ .Minimum }}{{ end }}{{ if .MultipleOf }}
+  Multiple Of: {{ .MultipleOf }}{{ end }}{{ if .MaxLength }}
+  Max Length: {{ .MaxLength }}{{ end }}{{ if .MinLength }}
+  Min Length: {{ .MinLength }}{{ end }}{{ if .Pattern }}
+  Pattern: {{ .Pattern }}{{ end }}{{ if .MaxItems }}
+  Max Items: {{ .MaxItems }}{{ end }}{{ if .MinItems }}
+  Min Items: {{ .MinItems }}{{ end }}{{ if .UniqueItems }}
+  Unique: true{{ end }}{{ if .HasDefault }}
+  Default: {{ printGoLiteral .Default }}{{ end }}
+  */
+  {{ pascalize .Name }} {{ .GoType }} `json:"{{.Name}}{{ if not .Required }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+  {{ end }}
+  {{ if .Schema }}{{ with .Schema }}
+  /*{{if .Description }}{{ blockcomment .Description }}{{ end }}{{ if .Maximum }}
+  Maximum: {{ if .ExclusiveMaximum }}< {{ end }}{{ .Maximum }}{{ end }}{{ if .Minimum }}
+  Minimum: {{ if .ExclusiveMinimum }}> {{ end }}{{ .Minimum }}{{ end }}{{ if .MultipleOf }}
+  Multiple Of: {{ .MultipleOf }}{{ end }}{{ if .MaxLength }}
+  Max Length: {{ .MaxLength }}{{ end }}{{ if .MinLength }}
+  Min Length: {{ .MinLength }}{{ end }}{{ if .Pattern }}
+  Pattern: {{ .Pattern }}{{ end }}{{ if .MaxItems }}
+  Max Items: {{ .MaxItems }}{{ end }}{{ if .MinItems }}
+  Min Items: {{ .MinItems }}{{ end }}{{ if .UniqueItems }}
+  Unique: true{{ end }}
+  In: Body
+  */{{ end }}
+  Payload {{ if and (not .Schema.IsBaseType) .Schema.IsComplexObject }}*{{ end }}{{ .Schema.GoType }} `json:"body,omitempty"`
+  {{ end }}
+}
+
+// New{{ pascalize .Name }} creates {{ pascalize .Name }} with default headers values
+func New{{ pascalize .Name }}({{ if eq .Code -1 }}code int{{ end }}) *{{ pascalize .Name }} { {{ if eq .Code -1 }}
+if code <= 0 {
+    code = 500
+  }
+{{ end }}
+{{ if .Headers.HasSomeDefaults }}
+  var (
+  // initialize headers with default values
+  {{ range .Headers }}
+      {{ if .HasDefault -}}
+          {{ varname .ID}}Default =
+              {{- if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"" )) }}{{ .Zero }}{{/* strfmt type initializer requires UnmarshalText(), e.g. Date, Datetime, Duration */}}
+              {{- else if and .IsPrimitive .IsCustomFormatter (stringContains .Zero "(\"" ) }}{{.GoType}}({{- printGoLiteral .Default }}){{/* strfmt type initializer takes string */}}
+              {{- else if and .IsPrimitive (not .IsCustomFormatter) -}}{{.GoType}}({{- printGoLiteral .Default }}){{/* regular go primitive type initializer */}}
+              {{- else if .IsArray -}}{{- /* Do not initialize from possible defaults in nested arrays */ -}}
+                  {{- if and .Child.IsPrimitive .Child.IsCustomFormatter }}{{ .Zero }}{{/* initialization strategy with UnmarshalText() */}}
+                  {{- else if .Child.IsArray -}}{{ .Zero }}{{/* initialization strategy with json.Unmarshal() */}}
+                  {{- else if and .Child.IsPrimitive (not .Child.IsCustomFormatter) -}}{{.GoType}}{{- arrayInitializer .Default }}{{/* regular go primitive type initializer: simple slice initializer */}}
+                  {{- else }}{{ printGoLiteral .Default }}{{/* all other cases (e.g. schema) [should not occur] */}}
+                  {{- end }}
+              {{- else }}{{ printGoLiteral .Default }}{{/* case .Schema */}}
+              {{- end }}
+      {{- end }}
+  {{- end }}
+  )
+
+{{ range .Headers }}{{ if .HasDefault -}}{{- /* carry out UnmarshalText initialization strategy */ -}}
+      {{ if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"")) }}{{ varname .ID}}Default.UnmarshalText([]byte({{ printf "%q" .Default }}))
+      {{ else if .IsArray -}}
+          {{ if or ( and .Child.IsPrimitive .Child.IsCustomFormatter ) .Child.IsArray -}}
+          if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+            // panics if specification is invalid
+            msg := fmt.Sprintf("invalid default value for header {{ varname .ID }}: %v",err)
+            panic(msg)
+          }
+          {{ end -}}
+      {{- end }}
+  {{- end }}
+{{- end }}
+{{ end }}
+  return &{{ pascalize .Name }}{
+    {{ if eq .Code -1 }}_statusCode: code,{{ end }}
+    {{ range .Headers }}{{ if .HasDefault }}
+    {{ pascalize .Name}}: {{ if and (not .IsArray) (not .HasDiscriminator) (not .IsInterface) (not .IsStream) .IsNullable }}&{{ end }}{{ varname .ID }}Default,
+    {{ end }}
+  {{ end -}}
+  }
+}
+
+{{ if eq .Code -1 }}
+// WithStatusCode adds the status to the {{ humanize .Name }} response
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) WithStatusCode(code int) *{{ pascalize .Name }} {
+  {{ .ReceiverName }}._statusCode = code
+  return {{ .ReceiverName }}
+}
+
+// SetStatusCode sets the status to the {{ humanize .Name }} response
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) SetStatusCode(code int) {
+  {{ .ReceiverName }}._statusCode = code
+}
+{{ end }}{{ range .Headers }}
+// With{{ pascalize .Name }} adds the {{ camelize .Name  }} to the {{ humanize $.Name }} response
+func ({{ $.ReceiverName }} *{{ pascalize $.Name }}) With{{ pascalize .Name }}({{ varname .Name  }} {{ .GoType}}) *{{ pascalize $.Name }} {
+  {{ $.ReceiverName }}.{{ pascalize .Name }} = {{ varname .Name  }}
+  return {{ .ReceiverName }}
+}
+
+// Set{{ pascalize .Name }} sets the {{ camelize .Name  }} to the {{ humanize $.Name }} response
+func ({{ $.ReceiverName }} *{{ pascalize $.Name }}) Set{{ pascalize .Name }}({{ varname .Name  }} {{ .GoType}}) {
+  {{ $.ReceiverName }}.{{ pascalize .Name }} = {{ varname .Name  }}
+}
+{{ end }}{{ if .Schema }}
+// WithPayload adds the payload to the {{ humanize .Name }} response
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) WithPayload(payload {{ if and .Schema.IsComplexObject (not .Schema.IsBaseType) }}*{{ end }}{{ .Schema.GoType }}) *{{ pascalize .Name }} {
+  {{ .ReceiverName }}.Payload = payload
+  return {{ .ReceiverName }}
+}
+
+// SetPayload sets the payload to the {{ humanize .Name }} response
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) SetPayload(payload {{ if and .Schema.IsComplexObject (not .Schema.IsBaseType) }}*{{ end }}{{ .Schema.GoType }}) {
+  {{ .ReceiverName }}.Payload = payload
+}
+{{ end }}
+
+// WriteResponse to the client
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) WriteResponse(rw http.ResponseWriter, producer runtime.Producer) {
+  {{ range .Headers }}
+  // response header {{.Name}}
+    {{ template "serverheaderbuilder" . -}}
+  {{ end }}
+  {{ if not .Schema }}
+  rw.Header().Del(runtime.HeaderContentType) // Remove Content-Type on empty responses
+  {{ end }}
+  rw.WriteHeader({{ if eq .Code -1 }}{{ .ReceiverName }}._statusCode{{ else }}{{ .Code }}{{ end }})
+  {{- if .Schema }}
+    {{- if .Schema.IsComplexObject }}
+  if {{ .ReceiverName }}.Payload != nil {
+    {{- end }}
+    payload := {{ .ReceiverName }}.Payload
+    {{- if and (not .Schema.IsInterface) (or .Schema.IsArray .Schema.IsMap) }}
+    if payload == nil {
+      // return empty {{ if .Schema.IsArray }}array{{ else if .Schema.IsMap }}map{{ end }}
+      payload =
+      {{- if or .Schema.IsAliased .Schema.IsComplexObject }}
+        {{- if and (not .Schema.IsBaseType) .Schema.IsComplexObject }}&{{ end  }}{{ .Schema.GoType -}} {}
+      {{- else }}
+        {{- .Schema.Zero }}
+      {{- end }}
+    }
+    {{ end }}
+    if err := producer.Produce(rw, payload); err != nil {
+      panic(err) // let the recovery middleware deal with this
+    }
+    {{- if .Schema.IsComplexObject }}
+  }
+    {{- end }}
+  {{- end }}
+}
+
+{{ if $.StrictResponders }}
+func ({{ .ReceiverName }} *{{ pascalize .Name }}) {{ pascalize .OperationName }}Responder() {}
+{{- end }}
+{{ end }}{{"// Code generated by go-swagger; DO NOT EDIT."}}
+
+
+{{ if .Copyright -}}// {{ comment .Copyright -}}{{ end }}
+
+
+package {{ .Package }}
+
+import (
+  "fmt"
+  "net/http"
+
+  "github.com/go-openapi/errors"
+  "github.com/go-openapi/runtime"
+  "github.com/go-openapi/runtime/security"
+  "github.com/go-openapi/swag"
+  "github.com/go-openapi/validate"
+  "github.com/go-openapi/runtime/middleware"
+
+  {{ imports .DefaultImports }}
+  {{ imports .Imports }}
+)
+
+{{ range .Responses }}
+{{ template "serverresponse" . }}
+{{ end }}
+{{ if .DefaultResponse }}
+{{ template "serverresponse" .DefaultResponse }}
+{{ end }}
+
+{{ if $.StrictResponders }}
+type {{ pascalize .Name }}NotImplementedResponder struct {
+  middleware.Responder
+}
+
+func (*{{ pascalize .Name }}NotImplementedResponder) {{ pascalize .Name }}Responder() {}
+
+func {{ pascalize .Name }}NotImplemented() {{ pascalize .Name }}Responder {
+  return &{{ pascalize .Name }}NotImplementedResponder{
+    middleware.NotImplemented(
+      "operation authentication.{{ pascalize .Name }} has not yet been implemented",
+      ),
+  }
+}
+
+type {{ pascalize .Name }}Responder interface {
+  middleware.Responder
+  {{ pascalize .Name }}Responder()
+}
+{{ end }}

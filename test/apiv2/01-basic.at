@@ -1,0 +1,89 @@
+# -*- sh -*-
+#
+# The earliest most basic tests. If any of these fail, life is bad
+#
+
+# NOTE: paths with a leading slash will be interpreted as-is;
+#       paths without will have '/v1.44/' prepended.
+t GET  /_ping        200 OK
+t HEAD /_ping        200
+t GET  /libpod/_ping 200 OK
+t HEAD /libpod/_ping 200
+
+t GET  _ping        200 OK
+like "$(<$WORKDIR/curl.headers.out)" $'.*\nOstype: ' "#19767 - undocumented part of docker API"
+t HEAD _ping        200
+t GET  libpod/_ping 200 OK
+t HEAD libpod/_ping 200
+
+for i in /version version; do
+    t GET  $i      200                               \
+      .Components[0].Name="Podman Engine"            \
+      .Components[0].Details.APIVersion~6[0-9.-]\\+  \
+      .Components[0].Details.MinAPIVersion=4.0.0     \
+      .Components[0].Details.Os=linux                \
+      .ApiVersion=1.44                               \
+      .MinAPIVersion=1.24                            \
+      .Os=linux
+done
+
+#
+# Garbage tests - requests that should yield errors
+#
+t GET  /nonesuch                       404
+t POST /nonesuch                       404
+t GET  container/nonesuch/json         404
+t GET  libpod/containers/nonesuch/json 404
+
+#### FIXME: maybe someday: t GET 'libpod/containers/json?a=b'     400
+
+# Method not allowed
+t POST   /_ping                    405
+t DELETE /_ping                    405
+t POST   libpod/containers/json    405
+t POST   libpod/pods/abc           405
+t POST   info                      405
+t GET    libpod/containers/create  405
+
+#
+# system info
+#
+# Some day perhaps it will always be runc; for now, cgroupsv2 requires crun
+#
+# FIXME: run 'podman info --format=json', and compare select fields
+runtime=runc
+if have_cgroupsv2; then
+    runtime=crun
+fi
+t GET info 200                \
+  .OSType=linux               \
+  .DefaultRuntime~.*$runtime  \
+  .MemTotal~[0-9]\\+
+
+# Timing: make sure server stays responsive.
+# Because /info may need to check storage, it may be slow the first time.
+# Let's invoke it once to prime caches, then run ten queries in a timed loop.
+t GET info 200
+t0=$SECONDS
+for i in $(seq 1 10); do
+    # FIXME: someday: refactor t(), separate out the 'curl' logic so we
+    #        can call it directly. Then we won't get ten annoying 'ok' lines.
+    t GET info 200
+done
+t1=$SECONDS
+delta_t=$((t1 - t2))
+
+# Desired number of seconds in which we expect to run.
+# FIXME: 10 seconds is a lot! PR #8076 opened to investigate why.
+want=10
+if [ $delta_t -le $want ]; then
+    _show_ok 1 "Time for ten /info requests ($delta_t seconds) <= ${want}s"
+else
+    _show_ok 0 "Time for ten /info requests" "<= $want seconds" "$delta_t seconds"
+fi
+
+# Simple events test (see #7078)
+t GET "events?stream=false&since=30s"  200
+t GET "libpod/events?stream=false&since=30s"  200
+
+# vim: filetype=sh

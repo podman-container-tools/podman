@@ -1,0 +1,136 @@
+% podman-update 1
+
+## NAME
+podman\-update - Update the configuration of a given container
+
+## SYNOPSIS
+**podman update** [*options*] *container*
+
+**podman container update** [*options*] *container*
+
+## DESCRIPTION
+
+Updates the configuration of an existing container, allowing changes to resource limits and healthchecks.
+
+## OPTIONS
+
+@@option blkio-weight
+
+@@option blkio-weight-device
+
+@@option cpu-period
+
+@@option cpu-quota
+
+@@option cpu-rt-period
+
+@@option cpu-rt-runtime
+
+@@option cpu-shares
+
+@@option cpus.container
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option device-read-bps
+
+@@option device-read-iops
+
+@@option device-write-bps
+
+@@option device-write-iops
+
+@@option env.update
+
+@@option health-cmd
+
+@@option health-interval
+
+Changing this setting resets the timer.
+
+@@option health-log-destination
+
+Warning: Changing this setting may cause the loss of previous logs.
+
+@@option health-max-log-count
+
+@@option health-max-log-size
+
+@@option health-on-failure
+
+@@option health-retries
+
+@@option health-start-period
+
+@@option health-startup-cmd
+
+@@option health-startup-interval
+
+Changing this setting resets the timer, depending on the state of the container.
+
+@@option health-startup-retries
+
+@@option health-startup-success
+
+@@option health-startup-timeout
+
+@@option health-timeout
+
+@@option latest
+
+@@option memory
+
+@@option memory-reservation
+
+@@option memory-swap
+
+@@option memory-swappiness
+
+@@option no-healthcheck
+
+@@option pids-limit
+
+@@option restart
+
+@@option ulimit
+
+Note: Ulimit changes apply after container restart.
+
+@@option unsetenv.update
+
+
+## EXAMPLES
+
+Update a container with a new cpu quota and period:
+```
+podman update --cpus=0.5 ctrID
+```
+
+Update the latest container with a new cpu value:
+```
+podman update --latest --cpus=1
+```
+
+Update a container's ulimit:
+```
+podman update --ulimit nofile=1024:1024 ctrID
+```
+
+Update a container with multiple options at ones:
+```
+podman update --cpus 5 --cpuset-cpus 0 --cpu-shares 123 --cpuset-mems 0 \\
+  --memory 1G --memory-swap 2G --memory-reservation 2G \\
+  --blkio-weight-device /dev/sda:123 --blkio-weight 123 \\
+  --device-read-bps /dev/sda:10mb --device-write-bps /dev/sda:10mb \\
+  --device-read-iops /dev/sda:1000 --device-write-iops /dev/sda:1000 \\
+  --pids-limit 123 ctrID
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-create(1)](podman-create.1.md)**, **[podman-run(1)](podman-run.1.md)**
+
+## HISTORY
+June 2025, Latest option added by Hayato Kihara <kai.21banana@gmail.com>
+August 2022, Originally written by Charlie Doern <cdoern@redhat.com>

@@ -1,0 +1,5 @@
+[Kube]
+Yaml=/opt/k8s/deployment.yml
+
+## assert-podman-args "--service-exit-code-propagation=all"
+ExitCodePropagation=all

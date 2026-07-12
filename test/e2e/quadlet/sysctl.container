@@ -1,0 +1,8 @@
+## assert-podman-args "--sysctl" "net.ipv6.conf.all.disable_ipv6=1"
+## assert-podman-args "--sysctl" "net.ipv6.conf.all.use_tempaddr=1"
+## assert-podman-args "--sysctl" "net.ipv4.conf.lo.force_igmp_version=0"
+
+[Container]
+Image=localhost/imagename
+Sysctl=net.ipv6.conf.all.disable_ipv6=1 net.ipv6.conf.all.use_tempaddr=1
+Sysctl=net.ipv4.conf.lo.force_igmp_version=0

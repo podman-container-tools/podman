@@ -1,0 +1,3 @@
+docker:
+     quay.io/multi-signed:
+         lookaside: https://quay.example.com/sigstore

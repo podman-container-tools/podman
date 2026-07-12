@@ -1,0 +1,162 @@
+% podman-rm 1
+
+## NAME
+podman\-rm - Remove one or more containers
+
+## SYNOPSIS
+**podman rm** [*options*] *container*
+
+**podman container rm** [*options*] *container*
+
+## DESCRIPTION
+**podman rm** removes one or more containers from the host.  The container name or ID can be used.  This does not remove images.
+Running or unusable containers are not removed without the **-f** option.
+
+## OPTIONS
+
+#### **--all**, **-a**
+
+Remove all containers.  Can be used in conjunction with **-f** as well.
+
+@@option cidfile.read
+
+Command does not fail when *file* is missing and user specified --ignore.
+
+#### **--depend**
+
+Remove selected container and recursively remove all containers that depend on it.
+
+@@option filter.container
+
+#### **--force**, **-f**
+
+Force the removal of running and paused containers. Forcing a container removal also
+removes containers from container storage even if the container is not known to Podman.
+For example, containers that are created by different container engines like Buildah.
+In addition, forcing can be used to remove unusable containers, e.g. containers
+whose OCI runtime has become unavailable.
+
+@@option ignore
+Further ignore when the specified `--cidfile` does not exist as it may have
+already been removed along with the container.
+
+@@option latest
+
+@@option time
+
+The --force option must be specified to use the --time option.
+
+#### **--volumes**, **-v**
+
+Remove anonymous volumes associated with the container. This does not include named volumes
+created with **podman volume create**, or the **--volume** option of **podman run** and **podman create**.
+
+## EXAMPLES
+Remove container with a given name:
+```
+$ podman rm mywebserver
+```
+
+Remove container with a given name and all of the containers that depend on it:
+```
+$ podman rm --depend mywebserver
+```
+
+Remove multiple containers with given names or IDs:
+```
+$ podman rm mywebserver myflaskserver 860a4b23
+```
+
+Remove multiple containers with IDs read from files:
+```
+$ podman rm --cidfile ./cidfile-1 --cidfile /home/user/cidfile-2
+```
+
+Forcibly remove container with a given ID:
+```
+$ podman rm -f 860a4b23
+```
+
+Forcibly remove a container with a specified timeout (in seconds) before sending SIGKILL:
+```
+$ podman rm --time 2 --force 860a4b23
+```
+
+Forcibly remove a container instantly without waiting:
+```
+$ podman rm --time 0 --force 860a4b23
+```
+
+Remove all containers regardless of the run state:
+```
+$ podman rm -f -a
+```
+
+Forcibly remove the last created container. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
+```
+$ podman rm -f --latest
+```
+
+Remove by name:
+```
+$ podman rm --filter name=test-alpine
+34f997d354017a0076402c3a79245a5b8bd11b597c84385bec25ae8941fd5238
+```
+
+Remove by label:
+```
+$ podman rm --filter label=app=frontend
+5a3694a13436168ea99490e74b489566c646d6a0db29868f57113298110d1b1c
+```
+
+Remove by status:
+```
+$ podman rm --filter status=exited
+4a3332649ed8bec1e0d82e113074b9a13d45582007aeac969c005992cc480a73
+f8e85f84a749b205fb602895afa6ec8a866045ff27b82f843033712c8b93a2c9
+7d17e850c9b172f11a3e20bab81da6fc694c35c2dc38d84083eb57869dcaca63
+47972eb04aa7c77705b597a929957d1e8a392e00b44c0a2a7f88a01f9f860d11
+```
+
+Remove by ancestor:
+```
+$ podman rm --filter ancestor=nginx
+8a7668cdec27664559a7da55ed5cda101f904441f7245e248218580656b2bae3
+0d297b336bf31d141c7720a791c45dafdb8b5033deaab12f29b88e5bff6b122d
+134475ac5140687d1eefff19f937dc24755f6c18e37e11d61b1084b59f1bdbe2
+```
+
+Remove by volume:
+```
+$ podman rm --filter volume=web-vol
+b3f4d4c6a67e2ef1e089efdc8ff3a47dba008eb0ff1e53ae60f59279cb43f9ba
+```
+
+Remove by network:
+```
+$ podman rm --filter network=web-net
+1c057cac90c0512df86197599eef5a9485afc900b1ade03c9739fa24c360bbda
+```
+
+Remove containers ignoring errors if they don't exist :
+```
+$ podman rm --ignore mycontainer1 mycontainer2 nonexistent-container
+mycontainer1
+mycontainer2
+```
+
+
+## Exit Status
+  **0** All specified containers removed
+
+  **1** One of the specified containers did not exist, and no other failures
+
+  **2** One of the specified containers is paused or running
+
+  **125** The command fails for any other reason
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**
+
+## HISTORY
+August 2017, Originally compiled by Ryan Cole <rycole@redhat.com>

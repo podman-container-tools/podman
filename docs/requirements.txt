@@ -1,0 +1,4 @@
+# requirements file for readthedocs pip installs
+
+# use md instead of rst
+myst_parser

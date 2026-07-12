@@ -1,0 +1,51 @@
+require:
+    - podman-tests
+    - psmisc
+
+environment:
+    # PODMAN_TESTING envvar is set in system.sh
+    PODMAN: /usr/bin/podman
+    QUADLET: /usr/libexec/podman/quadlet
+    ROOTLESS_USER: "fedora"
+adjust+:
+    - when: distro == centos-stream
+      environment+:
+        ROOTLESS_USER: "ec2-user"
+    - when: distro == rhel
+      environment+:
+        ROOTLESS_USER: "cloud-user"
+    - when: initiator != "packit"
+      environment+:
+        RELEASE_TESTING: true
+
+/local-root:
+    tag: [ local, root ]
+    summary: local rootful test
+    test: bash ./system.sh
+    duration: 30m
+
+/local-rootless:
+    tag: [ local, rootless ]
+    summary: rootless test
+    test: bash ./system.sh rootless
+    duration: 30m
+
+/remote-root:
+    tag: [ remote, root ]
+    summary: remote rootful test
+    test: bash ./system.sh
+    duration: 30m
+    environment+:
+        PODMAN: /usr/bin/podman-remote
+    require+:
+        - podman-remote
+
+/remote-rootless:
+    tag: [ remote, rootless ]
+    summary: remote rootless test
+    test: bash ./system.sh rootless
+    duration: 30m
+    environment+:
+        PODMAN: /usr/bin/podman-remote
+    require+:
+        - podman-remote

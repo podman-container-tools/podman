@@ -1,0 +1,8 @@
+## assert-key-is-regex "Service" "WorkingDirectory" "/etc/containers/systemd"
+
+[Service]
+WorkingDirectory=/etc/containers/systemd
+
+[Kube]
+Yaml=deployment.yml
+SetWorkingDirectory=unit

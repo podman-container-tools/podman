@@ -1,0 +1,24 @@
+## assert-podman-final-args localhost/imagename:latest
+## assert-podman-args --publish 9091:9091
+## assert-podman-args "--name" "greatName"
+
+[Unit]
+Wants=network-online.target
+After=network-online.target
+
+#   -e HOST_WHITELIST= `#optional` \
+
+[Container]
+# Image=localhost/otherimagename:latest
+Image=localhost/imagename:latest
+; Image=localhost/image:latest
+ContainerName=greatName
+; ContainerName=otherName
+# HostName=my-hostname
+Label=io.containers.autoupdate=registry
+Environment=PUID=1000 PGID=100 SEED_RATIO=1.3 TZ=Europe/Prague
+Volume=./.config:/config
+Volume=./downloads:/downloads
+#   -v /path/to/watch/folder:/watch \
+;   -v /other/path/to/watch/folder:/watch \
+PublishPort=9091:9091

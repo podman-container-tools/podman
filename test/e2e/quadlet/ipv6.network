@@ -1,0 +1,13 @@
+## assert-podman-final-args systemd-ipv6
+## assert-podman-args "--ipv6"
+## assert-key-is Service Type exec
+## assert-key-is Service RemainAfterExit no
+## assert-last-key-contains Service SyslogIdentifier "Modify %N"
+
+[Network]
+IPv6=yes
+
+[Service]
+Type=exec
+RemainAfterExit=no
+SyslogIdentifier="Modify %N"

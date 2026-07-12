@@ -1,0 +1,725 @@
+name: "ci"
+
+on:
+  push:
+    branches:
+      - main
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  path-filter:
+    runs-on: ubuntu-latest
+    if: github.repository == 'podman-container-tools/podman'
+    outputs:
+      all: ${{ steps.filter.outputs.all }}
+      code: ${{ steps.filter.outputs.code }}
+      apiv2: ${{ steps.filter.outputs.apiv2 }}
+      bindings: ${{ steps.filter.outputs.bindings }}
+      docker_py: ${{ steps.filter.outputs.docker_py }}
+      unit: ${{ steps.filter.outputs.unit }}
+      compose_v2: ${{ steps.filter.outputs.compose_v2 }}
+      int: ${{ steps.filter.outputs.int }}
+      sys: ${{ steps.filter.outputs.sys }}
+      machine: ${{ steps.filter.outputs.machine }}
+      upgrade: ${{ steps.filter.outputs.upgrade }}
+      windows: ${{ steps.filter.outputs.windows }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        with:
+          filters: .github/filters.yaml
+
+
+  validate-source:
+    name: Validate source code changes
+    runs-on: cncf-ubuntu-8-32-x86
+    if: github.repository == 'podman-container-tools/podman'
+    permissions:
+      pull-requests: read # For hack/ci/pr-should-include-tests to query PR labels.
+    env:
+      # Base commit of this PR; used by the Makefile and the helper scripts to
+      # compute the commit range (git merge-base $DEST_BRANCH HEAD).
+      DEST_BRANCH: ${{ github.event.pull_request.base.sha || github.ref_name }}
+      PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      PR_HEAD: ${{ github.event.pull_request.head.sha || '' }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Check out the actual PR head (not the synthetic merge commit) so
+          # the commit-range checks validate the contributor's commits.
+          # Unless on branch push then checkout the normal ref that triggered the job
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          # Full history (all branches) is required for git merge-base to find
+          # the fork point against the base branch.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gawk \
+            libassuan-dev \
+            libbtrfs-dev \
+            libgpgme-dev \
+            libseccomp-dev \
+            libsystemd-dev \
+            libclone-perl \
+            man-db \
+            podman \
+            python3-pip
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Read golangci-lint version from Makefile
+        id: gv
+        run: |
+          v=$(awk -F':=' '/^GOLANGCI_LINT_VERSION/ {gsub(/ /,"",$2); print $2; exit}' Makefile)
+          echo "version=v${v}" >> $GITHUB_OUTPUT
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.gv.outputs.version }}
+          install-only: true
+          skip-cache: true # cache causes flaky results https://github.com/podman-container-tools/podman/issues/28893
+
+      - name: Install pre-commit
+        run: pipx install pre-commit
+
+      - name: Validate source
+        run: make validate-source
+
+      # TODO: I think these should be part of the validate-source target
+      - name: Check make vendor is clean
+        run: |
+          make vendor
+          SUGGESTION="run 'make vendor' and commit all changes" ./hack/tree_status.sh
+
+      - name: Check make -C test/tools vendor is clean
+        run: |
+          make -C test/tools vendor
+          SUGGESTION="run 'make -C test/tools vendor' and commit all changes" ./hack/tree_status.sh
+
+      - name: Check make generate-bindings is clean
+        run: |
+          make generate-bindings
+          SUGGESTION="run 'make generate-bindings' and commit all changes" ./hack/tree_status.sh
+
+      - name: Build and validate the swagger API spec
+        # 'make swagger' builds pkg/api/swagger.yaml via the go-swagger tool,
+        # which validates that the spec generates cleanly.
+        run: make swagger
+
+      - name: Check that the PR includes tests
+        env:
+          # For hack/ci/pr-should-include-tests to query PR labels.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make tests-included
+
+      - name: Validate renovate config
+        run: |
+          diffs=$(git diff --name-only "$DEST_BRANCH" "${PR_HEAD:-HEAD}")
+          # The renovate validator image is large, only pull it when needed.
+          if ! grep -E -q '^\.github/renovate\.json5' <<<"$diffs"; then
+            echo "renovate config unchanged, skipping."
+            exit 0
+          fi
+          echo "Checking renovate config."
+          podman run --rm \
+            -v ./.github/renovate.json5:/usr/src/app/renovate.json5:z \
+            ghcr.io/renovatebot/renovate:latest \
+            renovate-config-validator
+
+      # IMPORTANT: keep this as the LAST step. Don't add anything after this.
+      # The 'git rebase' below rewrites HEAD and, on failure, leaves the
+      # checkout mid-rebase, so any step running afterwards would see a
+      # mutated/detached repo state.
+      - name: Build each commit
+        # Confirm that every commit in the PR builds on its own (so that
+        # 'git bisect' stays usable) and that no binary grows beyond the
+        # limit enforced by hack/ci/make-and-check-size.sh.
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          # For hack/ci/make-and-check-size.sh to query PR labels.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # git rebase rewrites commits, so it needs a committer identity.
+          git config user.name "CI"
+          git config user.email "ci@podman.io"
+          context_dir=$(mktemp -d --tmpdir make-size-check.XXXXXXX)
+          savedhead=$(git rev-parse HEAD)
+          # Make a copy of the script as we'll be rolling git back.
+          cp -a ./hack/ci/make-and-check-size.sh .
+          # Replay only the PR's own commits: the fork point against the base
+          # branch, not the (possibly advanced) base branch tip.
+          pr_base=$(git merge-base "$DEST_BRANCH" HEAD)
+          # Build the PR base first; this run records the baseline binary
+          # sizes that subsequent (per-commit) runs compare against.
+          git checkout --quiet "$pr_base"
+          ./make-and-check-size.sh "$context_dir"
+          # Back to the PR head, then build (and size-check) each commit.
+          git checkout --quiet "$savedhead"
+          git rebase "$pr_base" -x "./make-and-check-size.sh $context_dir"
+          rm -rf "$context_dir" ./make-and-check-size.sh
+
+  build-alt:
+    name: Cross Build (Linux, FreeBSD)
+    runs-on: cncf-ubuntu-16-64-x86
+    if: github.repository == 'podman-container-tools/podman'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run cross build
+        run: make cross
+
+  build:
+    name: build ${{ matrix.distro }}
+    if: github.repository == 'podman-container-tools/podman'
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [fedora-current, fedora-prior, fedora-rawhide, debian-sid]
+    uses: ./.github/workflows/lima.yml
+    with:
+      runner: cncf-ubuntu-8-32-x86
+      test: build
+      distro: ${{ matrix.distro }}
+      timeout: 20
+
+  windows-installer:
+    name: windows installer ${{ matrix.provider }}
+    runs-on: windows-2025-vs2026
+    if: github.repository == 'podman-container-tools/podman'
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [hyperv, wsl]
+    env:
+      PROVIDER: ${{ matrix.provider }}
+    steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          choco install -y pandoc
+
+      - name: Build podman
+        shell: pwsh
+        run: |
+          .\winmake.ps1 podman-remote
+          .\bin\windows\podman.exe --version
+
+      - name: Fetch gvproxy
+        shell: pwsh
+        run: .\winmake.ps1 win-gvproxy
+
+      - name: Build docs
+        shell: pwsh
+        run: .\winmake.ps1 docs
+
+      - name: Build MSI (current version)
+        shell: pwsh
+        run: .\winmake.ps1 installer
+
+      - name: Build MSI (next version 9.9.9)
+        shell: pwsh
+        run: .\winmake.ps1 installer 9.9.9
+
+      - name: Run installer test
+        shell: pwsh
+        env:
+          # pass in ro token just so we can use it for API calls to not get rate limited
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .\winmake.ps1 installertest $env:PROVIDER
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: windows-installer-${{ matrix.provider }}-diag
+          path: |
+            contrib/win-installer/*.msi
+            contrib/win-installer/*.log
+          if-no-files-found: warn
+
+  macos-installer:
+    name: macos installer
+    runs-on: macos-26
+    if: github.repository == 'podman-container-tools/podman'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build core binaries
+        run: |
+          make podman-remote
+          make podman-mac-helper
+
+      - name: Upload test binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: podman-macos-bin
+          # Single path keeps the `bin/` prefix; a path list would trigger LCA
+          # stripping and lose it, breaking chmod in the machine job.
+          path: bin
+          if-no-files-found: error
+
+      - name: Build .pkg installer
+        run: |
+          pushd contrib/pkginstaller
+          make ARCH=aarch64 NO_CODESIGN=1 pkginstaller
+          popd
+
+      - name: Build release zip
+        run: make podman-remote-release-darwin_arm64.zip
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: podman-darwin-arm64
+          path: |
+            podman-remote-release-darwin_arm64.zip
+            contrib/pkginstaller/out/podman-installer-macos-*.pkg
+          if-no-files-found: error
+
+  big-tests:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    name: ${{ matrix.test }} ${{ matrix.mode }} ${{ matrix.priv }} ${{ matrix.distro }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [fedora-current, fedora-prior, fedora-rawhide, debian-sid]
+        test: [sys, int]
+        priv: [rootless, root]
+        mode: [local, remote]
+        exclude:
+          # try to keep the task somewhat sane and exclude all but one rootless+remote combination
+          - distro: fedora-prior
+            priv: rootless
+            mode: remote
+          - distro: fedora-rawhide
+            priv: rootless
+            mode: remote
+          - distro: debian-sid
+            priv: rootless
+            mode: remote
+        include:
+          # Add buildah bud tests, only runs as root for now.
+          - test: bud
+            distro: fedora-current
+            priv: root
+            mode: local
+          - test: bud
+            distro: fedora-current
+            priv: root
+            mode: remote
+    uses: ./.github/workflows/lima.yml
+    with:
+      runner: cncf-ubuntu-8-32-x86
+      test: ${{ matrix.test }}
+      distro: ${{ matrix.distro }}
+      mode: ${{ matrix.mode }}
+      priv: ${{ matrix.priv }}
+      timeout: ${{ matrix.timeout || 30 }}
+      # Top level if does not work because it does not have access to the matrix context.
+      # However we can hack around by passing this input argument and the workflow_call
+      # can then use this in the if condition to make it work that way.
+      if: >-
+        ${{ github.event_name != 'pull_request' ||
+        needs.path-filter.outputs.all == 'true' ||
+        needs.path-filter.outputs.code == 'true' ||
+        needs.path-filter.outputs[format('{0}', matrix.test)] == 'true' }}
+
+  small-tests:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer]
+    name: ${{ matrix.test }} ${{ matrix.mode }} ${{ matrix.priv }} ${{ matrix.distro }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [fedora-current]
+        test: [apiv2, bindings, compose_v2, docker_py, unit]
+        priv: [rootless, root]
+        exclude:
+          # bindings, and docker_py, upgrade are only run as root
+          - test: bindings
+            priv: rootless
+          - test: docker_py
+            priv: rootless
+
+        include:
+          # need an extra include for the upgrade tests to set the mode
+          - test: upgrade
+            distro: fedora-current
+            mode: v5.3.1
+            priv: root
+          - test: upgrade
+            distro: fedora-current
+            mode: v5.6.2
+            priv: root
+
+    uses: ./.github/workflows/lima.yml
+    with:
+      runner: cncf-ubuntu-4-16-x86
+      test: ${{ matrix.test }}
+      distro: ${{ matrix.distro }}
+      priv: ${{ matrix.priv }}
+      mode: ${{ matrix.mode }}
+      timeout: 20
+      if: >-
+        ${{ github.event_name != 'pull_request' ||
+        needs.path-filter.outputs.all == 'true' ||
+        needs.path-filter.outputs.code == 'true' ||
+        needs.path-filter.outputs[format('{0}', matrix.test)] == 'true' }}
+
+  machine-linux:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    # Note we do not check for "code" here because we do not want to trigger machine tests for all code changes.
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.path-filter.outputs.all == 'true' ||
+      needs.path-filter.outputs.machine == 'true'
+    name: machine linux ${{ matrix.os.arch }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ { runner: cncf-ubuntu-24-96-x86, arch: amd64 } ]
+        # The default runners do not have vrit enabled so we cannot test on arm at the moment.
+        # CNCF staff is looking if they can give us a bare metal host.
+        #  { runner: cncf-ubuntu-32-128-arm, arch: arm64 } ]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: "Install gvproxy"
+        run: |
+          VERSION=$(go list -m -f '{{.Version}}' github.com/containers/gvisor-tap-vsock)
+          echo "Installing gvproxy $VERSION"
+          sudo mkdir -p /usr/local/libexec/podman/
+          sudo curl --fail -L -o /usr/local/libexec/podman/gvproxy https://github.com/containers/gvisor-tap-vsock/releases/download/$VERSION/gvproxy-linux-${{ matrix.os.arch }}
+          sudo chmod +x /usr/local/libexec/podman/gvproxy
+
+      - name: "Install dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system virtiofsd
+          sudo ln -sfr /usr/libexec/virtiofsd /usr/local/libexec/podman/virtiofsd
+
+      # The default podman ship in ubuntu comes with an old unsupported registries.conf v1 format,
+      # just remove it as we need no special config.
+      - name: "Configure registries.conf"
+        run: |
+          sudo rm -f /etc/containers/registries.conf
+
+      # podman-machine needs kvm access
+      - name: "Fix kvm permissions"
+        run: |
+          sudo chmod 666 /dev/kvm
+
+      - name: "Build podman-remote"
+        run: |
+          make podman-remote
+
+      - name: "Run machine tests"
+        run: |
+          make localmachine
+
+  windows-unit:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.path-filter.outputs.all == 'true' ||
+      needs.path-filter.outputs.code == 'true' ||
+      needs.path-filter.outputs.unit == 'true' ||
+      needs.path-filter.outputs.windows == 'true'
+    name: windows unit
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
+    permissions: {}
+    steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run unit tests
+        shell: pwsh
+        run: .\winmake.ps1 localunit
+
+  windows-e2e:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.path-filter.outputs.all == 'true' ||
+      needs.path-filter.outputs.code == 'true' ||
+      needs.path-filter.outputs.int == 'true' ||
+      needs.path-filter.outputs.windows == 'true'
+    name: windows e2e
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
+    steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build podman
+        shell: pwsh
+        run: |
+          .\winmake.ps1 podman-remote
+          .\bin\windows\podman.exe --version
+
+      - name: Run non-machine e2e tests
+        shell: pwsh
+        run: .\winmake.ps1 ginkgo-run
+
+  windows-machine:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    # Note we do not check for "code" here because we do not want to trigger machine tests for all code changes.
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.path-filter.outputs.all == 'true' ||
+      needs.path-filter.outputs.machine == 'true' ||
+      needs.path-filter.outputs.windows == 'true'
+    name: windows machine ${{ matrix.provider }}
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [hyperv, wsl]
+    env:
+      CONTAINERS_MACHINE_PROVIDER: ${{ matrix.provider }}
+    steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Diagnostics
+        shell: pwsh
+        run: |
+          Get-ComputerInfo | Select-Object OsName, OsVersion, CsProcessors, CsNumberOfLogicalProcessors, CsTotalPhysicalMemory | Format-List
+          Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V | Format-List
+          Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor | Format-List
+          Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform | Format-List
+          Get-CimInstance Win32_Processor | Select-Object Name, VirtualizationFirmwareEnabled, VMMonitorModeExtensions | Format-List
+          Get-Disk | Format-Table -AutoSize
+
+      - name: Build podman
+        shell: pwsh
+        run: |
+          .\winmake.ps1 podman-remote
+          .\bin\windows\podman.exe --version
+
+      - name: Fetch gvproxy
+        shell: pwsh
+        run: .\winmake.ps1 win-gvproxy
+
+      - name: WSL info
+        if: matrix.provider == 'wsl'
+        shell: pwsh
+        env:
+          WSL_UTF8: '1'
+        run: |
+          wsl --update
+          wsl --version
+          wsl --status
+
+      - name: Uninstall WSL
+        if: matrix.provider == 'hyperv'
+        env:
+          WSL_UTF8: '1'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          wsl --uninstall
+          wsl --status
+
+      - name: Configure container policy
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:AppData\containers" | Out-Null
+          Copy-Item -Path pkg\machine\ocipull\policy.json -Destination "$env:AppData\containers"
+
+      - name: Run machine e2e
+        shell: pwsh
+        run: .\winmake.ps1 localmachine
+
+  macos-machine:
+    needs: [path-filter, build, build-alt, validate-source, windows-installer, macos-installer]
+    # Note we do not check for "code" here because we do not want to trigger machine tests for all code changes.
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.path-filter.outputs.all == 'true' ||
+      needs.path-filter.outputs.machine == 'true'
+    name: macos machine ${{ matrix.provider }}
+    runs-on:
+      group: mac-pool
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [applehv, libkrun]
+    env:
+      PROVIDER: ${{ matrix.provider }}
+      CONTAINERS_MACHINE_PROVIDER: ${{ matrix.provider }}
+      # machine_test.go rejects TMPDIR >= 22 chars on darwin (socket path budget).
+      TMPDIR: /private/tmp/ci
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Pre-clean machine state
+        run: ./hack/ci/gha_mac_cleanup.sh
+
+      - name: Download test binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: podman-macos-bin
+          # `path: bin` on upload sent the *contents* of bin/ (no prefix).
+          # Extract into bin/ to restore the layout.
+          path: bin
+
+      - name: Restore executable bits
+        run: chmod +x bin/darwin/podman bin/darwin/podman-mac-helper
+
+      - name: Run machine e2e
+        run: make localmachine
+
+      - name: Post-run cleanup
+        if: always()
+        run: ./hack/ci/gha_mac_cleanup.sh
+
+### TODO missing
+# Farm, needs extra setup I need to look into
+
+  # Merge protection is setup for this job name, do not change it.
+  success:
+    name: "Total Success"
+    if: always()
+    needs:
+      - path-filter
+      - validate-source
+      - build
+      - build-alt
+      - big-tests
+      - small-tests
+      - machine-linux
+      - windows-installer
+      - windows-unit
+      - windows-e2e
+      - windows-machine
+      - macos-installer
+      - macos-machine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all required jobs
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All required jobs passed or were skipped"

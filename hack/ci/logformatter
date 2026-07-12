@@ -1,0 +1,960 @@
+#!/usr/bin/perl
+#
+# logformatter - highlight a Cirrus test log (ginkgo or bats)
+#
+# Adapted from https://raw.githubusercontent.com/edsantiago/greasemonkey/podman-ginkgo-highlight
+#
+package LibPod::CI::LogFormatter;
+
+use v5.14;
+use utf8;
+
+# Grumble. CI system doesn't have 'open'
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+binmode STDERR, ':utf8';
+
+use strict;
+use warnings;
+
+(our $ME = $0) =~ s|.*/||;
+
+our $VERSION = '0.3';
+
+# Autoflush stdout
+$| = 1;
+
+# For debugging, show data structures using DumpTree($var)
+#use Data::TreeDumper; $Data::TreeDumper::Displayaddress = 0;
+
+###############################################################################
+# BEGIN user-customizable section
+
+# Stylesheet for highlighting or de-highlighting parts of lines
+our $CSS = <<'END_CSS';
+/* wrap long lines - don't require user to scroll right */
+.tt           { font-family: monospace; line-break: normal; overflow-wrap: normal; white-space: pre-wrap; }
+
+/* synopsis table at top */
+table.synopsis { border: none; border-collapse: collapse; margin-left: 2em; margin-top: 2ex; }
+.synopsis th   { font-weight: normal; font-size: 110%; text-align: right; }
+.synopsis td   { font-weight: bold;   font-size: 120%; font-family: monospace; }
+
+/* test results */
+.testname     { font-size: 125%; color: #444; }
+.boring       { color: #999; }
+.timestamp    { color: #999; }
+.log-debug    { color: #999; }
+.log-info     { color: #333; }
+.log-warning  { color: #f60; }
+.log-error    { background: #fee; color: #900; font-weight: bold; }
+.error-retry  { color: #c33; font-size: 125%; font-weight: bold; border-top: 1px solid #f00; }
+.log-passed   { color: #393; }
+.log-failed   { color: #F00; font-weight: bold; font-size: 150%; }
+.log-skipped  { color: #F90; }
+.log-flakey   { background: #f93; font-weight: bold; font-size: 150%; }
+.log-slow     { background: #FF0; color: #000; font-weight: bold; }
+.subtest      { background: #eee; }
+.subsubtest   { color: #F39; font-weight: bold; }
+.string       { color: #00c; }
+.command      { font-weight: bold; color: #000; }
+.changed      { color: #000; font-weight: bold; }
+
+/* Ginkgo "Enter/Exit [foo]": visually separate from each other */
+.ginkgo-timeline   { margin-top: 1ex; margin-bottom: 1ex; }
+
+/* BeforeEach and AfterEach tend to be boring. Gray them out. */
+.ginkgo-beforeeach { background: #f0f0f0; color: #999; }
+.ginkgo-aftereach  { background: #f0f0f0; color: #999; }
+.ginkgo-beforeeach b { color: #000; }
+.ginkgo-aftereach  b { color: #000; }
+
+/* [It] is where the test happens but we don't need any special highlights */
+.ginkgo-it           { }
+
+/* Final summary line at bottom */
+.ginkgo-final-success { background: #393; font-weight: bold; font-size: 150%; }
+.ginkgo-final-fail    { background: #f00; font-weight: bold; font-size: 150%; }
+
+/* links to source files: not as prominent as links to errors */
+a.codelink:link    { color: #000; }
+a.codelink:visited { color: #666; }
+a.codelink:hover   { background: #000; color: #999; }
+
+/* The timing tests at bottom: remove underline, it's too cluttery. */
+a.timing           { text-decoration: none; }
+.timing:hover      { background: #FF9; }  /* highlight row for easy reading */
+
+/* BATS styles */
+.bats-passed    { color: #393; }
+.bats-failed    { color: #F00; font-weight: bold; }
+.bats-flaked    { color: #F93; font-weight: bold; }
+.bats-skipped   { color: #F90; }
+.bats-log       { color: #933; }
+.bats-log-failblock { color: #b00; background-color: #fee; display: inline-flex; margin: 0 -500%; padding: 0 500% !important; }
+
+.bats-summary   { font-size: 150%; }
+
+/* error titles: display next to timestamp, not on separate line */
+h2,h3 { display: inline; }
+END_CSS
+
+# END   user-customizable section
+###############################################################################
+
+###############################################################################
+# BEGIN boilerplate args checking, usage messages
+
+sub usage {
+    print  <<"END_USAGE";
+Usage: $ME [OPTIONS] TEST_NAME
+
+$ME is a filter; it HTMLifies an input stream (presumably
+Ginkgo or BATS log results), writing HTML results to an output file
+but passing stdin unmodified to stdout. It is intended to run in
+the Cirrus CI environment.
+
+Parameters:
+
+    TEST_NAME   descriptive name; output file will be TEST_NAME.log.html
+
+OPTIONS:
+
+  --help         display this message
+  --man          display program man page
+  --version      display program name and version
+END_USAGE
+
+    exit;
+}
+
+# Command-line options.  Note that this operates directly on @ARGV !
+our $debug   = 0;
+our $force   = 0;
+our $verbose = 0;
+our $NOT     = '';              # print "blahing the blah$NOT\n" if $debug
+sub handle_opts {
+    use Getopt::Long;
+    GetOptions(
+        'debug!'     => \$debug,
+        'dry-run|n!' => sub { $NOT = ' [NOT]' },
+        'force'      => \$force,
+        'verbose|v'  => \$verbose,
+
+        help         => \&usage,
+        version      => sub { print "$ME version $VERSION\n"; exit 0 },
+    ) or die "Try `$ME --help' for help\n";
+}
+
+# END   boilerplate args checking, usage messages
+###############################################################################
+
+############################## CODE BEGINS HERE ###############################
+
+# The term is "modulino".
+__PACKAGE__->main()                                     unless caller();
+
+# Main code.
+sub main {
+    # Note that we operate directly on @ARGV, not on function parameters.
+    # This is deliberate: it's because Getopt::Long only operates on @ARGV
+    # and there's no clean way to make it use @_.
+    handle_opts();                      # will set package globals
+
+    # In case someone is tempted to run us on the command line
+    die "$ME: this is a filter, not an interactive script\n" if -t *STDIN;
+
+    # Fetch command-line arguments.  Barf if too many.
+    my $test_name = shift(@ARGV)
+        or die "$ME: missing TEST_NAME argument; try $ME --help\n";
+    warn "$ME: Too many arguments; ignoring extras. try $ME --help\n" if @ARGV;
+
+    format_log($test_name);
+}
+
+
+sub format_log {
+    my $test_name = shift;              # in: e.g. 'integration_test'
+
+    my $outfile = "$test_name.log.html";
+    my $out_tmp = "$outfile.tmp.$$";
+    open my $out_fh, '>:utf8', $out_tmp
+        or warn "$ME: Cannot create $out_tmp: $!\n";
+
+    # Boilerplate: HTML headers for output file
+    print { $out_fh } <<"END_HTML"      if $out_fh;
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html
+        PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+         "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>$test_name</title>
+<style type="text/css">
+$CSS
+</style>
+
+<!-- on page load, go to bottom: that's where the error summary is -->
+<script language="javascript">
+function scrollToBottom() {
+    if (window.scrollY < 10) {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+}
+window.addEventListener("load", scrollToBottom, false);
+</script>
+</head>
+<body>
+END_HTML
+
+    # Synopsis of this job: show job environment, links to PR and Cirrus
+    print { $out_fh } "<h2>Synopsis</h2>\n<hr/>\n",
+        job_synopsis($test_name), "<hr/>\n";
+
+    # FOR DEBUGGING: dump environment, but in HTML comments to not clutter
+    # This is safe. There is a TOKEN envariable, but it's not sensitive.
+    # There are no sensitive/secret values in our execution environment,
+    # but we're careful anyway. $SECRET_ENV_RE is set in lib.sh
+    my $filter_re = $ENV{SECRET_ENV_RE} || 'ACCOUNT|GC[EP]|PASSW|SECRET|TOKEN';
+    $filter_re .= '|BASH_FUNC';   # These are long and un-useful
+
+    print { $out_fh } "<!-- Environment: -->\n";
+    for my $e (sort keys %ENV) {
+        next if $e =~ /$filter_re/;
+
+        my $val = escapeHTML($ENV{$e});
+        $val =~ s/--/-&#x002D;/g;       # double dash not valid in comments
+        printf { $out_fh } "<!--  %-20s %s -->\n", $e, $val;
+    }
+
+    # State variables
+    my $previous_timestamp = '';  # timestamp of previous line
+    my $previous_timestamp_fine;  # fine-grain timestamp (BATS only)
+    my $cirrus_task;              # Cirrus task number, used for linking
+    my $git_commit;               # git SHA, used for linking to source files
+    my $subtest_status;           # pass, fail, skip, flake - for each subtest
+    my $subtest_name;             # assembled from two or more Describe()/It()s
+    my $in_failure;               # binary flag: are we in an error dump?
+    my $in_timing;                # binary flag: are we in the timing section?
+    my $after_divider = 999;      # Count of lines after seeing '-----'
+    my $current_output;           # for removing duplication
+    my $looks_like_bats;          # binary flag: for detecting BATS results
+    my $looks_like_python;        #   " "   "  : for colorizing python tests
+    my %bats_count;               # For summary line: count of pass/fail/skip
+
+    # When running in cirrus, we have the commit SHA
+    $git_commit = $ENV{CIRRUS_CHANGE_IN_REPO};
+
+    print { $out_fh } "<div class='tt'> <!-- begin processed output -->\n";
+
+    # Assume rootful prompt, check for rootless (here and in log itself, below)
+    my $Prompt = '#';
+    $Prompt = '$' if $test_name =~ /rootless/;
+
+    # Main loop: read input, one line at a time, and write out reformatted
+  LINE:
+    while (my $line = <STDIN>) {
+        # ARGH. Some log files have NUL characters , apparently because
+        # certain tests write tar to stdout. Bleagh. Although it seems
+        # rude to strip those from our (purportedly untouched) log,
+        # it's worse to read log files with random NULs.
+        $line =~ s/\0//g;
+
+        print $line;                    # Immediately dump back to stdout
+
+        $Prompt = '$' if $line =~ /Runner executing .* as rootless /;
+
+        # Remain robust in face of errors: always write stdout even if no HTML
+        next LINE if ! $out_fh;
+
+        chomp $line;
+        $line = escapeHTML($line);
+
+        # Temporarily strip off leading timestamp
+        $line =~ s/^(\[\+\d+s\]\s)//;
+        my $timestamp = $1 || '';
+        if ($previous_timestamp && $timestamp eq $previous_timestamp) {
+            $timestamp = ' ' x length($timestamp);
+        }
+        elsif ($timestamp) {
+            $previous_timestamp = $timestamp;
+        }
+
+        # Helper function for printing a formatted line. This should almost
+        # always be followed by 'next LINE'.
+        my $print_line = sub {
+            my $css = shift;
+
+            print { $out_fh } "<span class=\"timestamp\">$timestamp</span>"
+                if $timestamp;
+            print { $out_fh } "<span class='$css'>"     if $css;
+            print { $out_fh } $line;
+            print { $out_fh } "</span>"                 if $css;
+            print { $out_fh } "\n";
+        };
+
+        # ARGH! Special case for tests that run 'cat /proc/self/attr/current:
+        # that file terminates with NUL, so ginkgo logs concatenate the next
+        # output line, which is usually "Running: next-podman-command".
+        # This makes the log readable by splitting into two lines.
+        if ($line =~ /^(\s*)(\S+_u:\S+_t:\S+:c\S+)(Running:.*)/) {
+            my ($indent, $selinux, $nextline) = ($1||'', $2, $3);
+            # Print the SELinux line, unmodified...
+            $line = $indent . $selinux;
+            $print_line->();
+            # ...then forget that, and continue processing (fall through)
+            # with the 'Running' line.
+            $line = $indent . $nextline;
+        }
+
+        # Try to identify the git commit we're working with...
+        if ($line =~ m!/define.gitCommit=([0-9a-f]+)!) {
+            $git_commit = $1;
+        }
+        # ...so we can link to specific lines in source files
+        if ($git_commit) {
+            #           1  12  3                 34     4 5   526  6
+            $line =~ s{^(.*)(\/(containers\/[^/]+)(\/\S+):(\d+))(.*)$}
+                      {$1<a class="codelink" href='https://github.com/$3/blob/$git_commit$4#L$5'>$2</a>$6};
+
+            # Same, for python errors
+            #           1  12  3                 34         4             5   526
+            $line =~ s{^(.*)(\/(containers\/[^/]+)(\/\S+\.py).*,\s+line\s+(\d+))(,\s+in.*)$}
+                      {$1<a class="codelink" href='https://github.com/$3/blob/$git_commit$4#L$5'>$2</a>$6};
+
+            # And, sigh, Macintosh always has to be different
+            #           1              123    3 4   425  5
+            $line =~ s{^(.*/ci/task-\d+)((/\S+):(\d+))(.*)$}
+                      {$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit$3#L$4">$2</a>$5};
+
+            # ...as does Windows
+            #           1                             123    3 4   435  5
+            $line =~ s{^(.*/Local/cirrus-ci-build/repo)((/\S+):(\d+))(.*)$}
+                      {$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit$3#L$4">$2</a>$5}
+        }
+
+        # Try to identify the cirrus task
+        if ($line =~ /cirrus-task-(\d+)/) {
+            $cirrus_task = $1;
+        }
+
+        # logrus messages, always highlighted
+        #              1   2   2 13     34  4 5      56   6 7    78  8
+        if ($line =~ /^(\s*(#\s)?)(time=)(.*) (level=)(\S+) (msg=)(.*)/) {
+            my $span = "<span class='log-$6'>";
+            $line = "$1$3$span$4</span> $5$span$6</span> $7$span$8</span>";
+        }
+
+        # BATS handling. This will recognize num_tests both at start and end
+        if ($line =~ /^1\.\.(\d+)$/) {
+            $looks_like_bats = 1;
+            $bats_count{expected_total} += $1;
+            undef $looks_like_python;
+        }
+        # Since the number of tests can't always be predicted, recognize
+        # some leading text strings that indicate BATS output to come.
+        elsif ($line =~ /^TAP\s+version\s/ || $line =~ m!/test-apiv2!) {
+            $looks_like_bats = 1;
+            $bats_count{expected_total} = -1; # Expect to be overridden at end!
+            undef $looks_like_python;
+        }
+
+        # 'python -m unittest' means we're starting some pythony stuff
+        elsif ($line =~ m!/python.*\sunittest\s!) {
+            $looks_like_python = 1;
+            undef $looks_like_bats;
+        }
+        elsif ($looks_like_python && $line =~ m!Ran\s+(\d+)\s+tests\s+in\s!) {
+            # End of python tests. However, we're still likely to see a
+            # summary line saying 'OK' or 'FAILED'. Deal with that by
+            # resetting $looks_like_python to 0, which the next elsif catches
+            $bats_count{expected_total} += $1;
+            $looks_like_python = 0;
+            print { $out_fh } "</div>\n"            if $in_failure;
+            undef $in_failure;
+        }
+        elsif (defined($looks_like_python) && !$looks_like_python) {
+            # The final python summary line. Show it in its appropriate color.
+            if ($line =~ /^\s*(OK|FAILED)\s+\(/) {
+                undef $looks_like_python;
+                my $css = ($1 eq 'OK' ? 'passed' : 'failed');
+                $print_line->("bats-$css");
+                next LINE;
+            }
+        }
+
+        if ($looks_like_bats) {
+            my $css;
+
+            # 2023-05-16 run_podman() now displays NS-precision timestamps
+            # on commands and their output. This is cluttery, so if we
+            # see these, strip them and display in the left-hand (coarse)
+            # timestamp column instead. Hovering will display the full time.
+            #
+            #               1   1  23   3 4   4 5        52
+            if ($line =~ s{^(#\s)\[((\d+):(\d+):(\d+\.\d+))\]\s}{$1}) {
+                my ($full, $h, $m, $s) = ($2, $3, $4, $5);
+                my $timestamp_fine = $h * 3600.0 + $m * 60.0 + $s;
+                my $short;
+                if ($previous_timestamp_fine) {
+                    # This will fail if we do a midnight wraparound. NBD.
+                    my $delta = $timestamp_fine - $previous_timestamp_fine;
+
+                    # Human-readable format
+                    if ($delta > 10) {
+                        $short = sprintf("%04ds", $delta);
+                    }
+                    elsif ($delta > 1) {
+                        $short = sprintf("%03.2fs", $delta);
+                    }
+                    elsif ($delta > 0.001) {
+                        $short = sprintf("%03dms", $delta * 1000.0);
+                    }
+                    else {
+                        # Ultra-improbable
+                        $short = sprintf("%03dns", $delta * 1_000_000.0);
+                    }
+                }
+                else {
+                    $short = "     ";
+                }
+
+                # left-hand timestamp [+0001s] becomes <+013ms>
+                $timestamp = "<span title=\"$full\">&lt;+$short&gt;</span> ";
+                $previous_timestamp_fine = $timestamp_fine;
+            }
+
+            # Readability: /long/path/to/podman -> podman (hover for full path)
+            # Also make it boldface, to make commands stand out
+            $line =~ s{^(#\s+(#|\$)\s+)(\S+/)(podman\S*)(\s.*)}
+                      {$1<b><span title="$3$4">$4</span>$5</b>};
+
+            if    ($line =~ /^ok\s.*\s# skip/)    { $css = 'skipped'       }
+            elsif ($line =~ /^ok\s/)              { $css = 'passed'        }
+            elsif ($line =~ /^not\s+ok\s/)        { $css = 'failed'        }
+            elsif ($line =~ /^# #(\/v|\| |\\\^)/) { $css = 'log-failblock' }
+            elsif ($line =~ /^#\s/)               { $css = 'log'           }
+
+            # Link to source file. This is ugly: we have to hardcode 'podman'
+            # and 'test/system' because there's no way to get them from log.
+            #
+            #          1  2      2               13     4         43           5
+            $line =~ s{(in(\stest)?\s+file\s+\S+/)(\S+\.(bats|bash)),\s+line\s+(\d+)}{$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit/test/system/$3#L$5">$3, line $5</a>};
+
+            if ($css) {
+                # Make it linkable, e.g. foo.html#t--00001
+                if ($line =~ /^(not\s+)?ok\s+(\d+)\s+(.*)/) {
+                    my ($notok, $num, $name) = ($1, $2, $3);
+                    # Parallel system tests are shown as |nnn| instead of [nnn]
+                    my $p = '';
+                    $p = 'p' if $name =~ /^\s*\|\d+\|/;
+
+                    $line = sprintf("<a name='t--%05d%s'>%s</a>", $num, $p, $line);
+
+                    push @{$bats_count{__fail_list}}, [ $num, $name ] if $notok;
+                }
+                $bats_count{$css}++;
+                $css = "bats-$css";
+            }
+
+            $print_line->($css);
+            next LINE;
+        }
+        elsif ($looks_like_python) {
+            my $css;
+
+            if    ($line =~ /\s\.\.\.\sskipped/) { $css = 'skipped' }
+            elsif ($line =~ /\s\.\.\.\sok\s*$/)  { $css = 'passed'  }
+            elsif ($line =~ /\s\.\.\.\sFAIL/)    { $css = 'failed'  }
+            elsif ($line =~ /^\s*={40}/)         {
+                # Begins a block of multiple lines including a stack trace
+                print { $out_fh } "<div class='log-error'>\n" unless $in_failure;
+                $in_failure = 1;
+            }
+
+            if ($css) {
+                $bats_count{$css}++;
+                $css = "bats-$css";
+            }
+            $print_line->($css);
+            next LINE;
+        }
+
+        #
+        # Must be ginkgo
+        #
+        if ($line =~ s!^(\s*)(&[gl]t;)\s+(Enter|Exit)\s+\[(\w+)\]!!) {
+            my ($indent, $arrow, $action, $block) = ($1, $2, $3, $4);
+            if ($action eq 'Enter') {
+                printf { $out_fh } "<div class=\"ginkgo-timeline ginkgo-%s\">",
+                    lc($block);
+                $line = "$indent&rarr; Enter [<b>$block</b>]$line";
+                $print_line->();
+
+                # machine tests, run without -p, don't have a blank line
+                # separating headers from logs; but this works just fine.
+                $after_divider = 999;
+            }
+            else {
+                # Can be a div within a div
+                if ($in_failure) {
+                    $in_failure = 0;
+                    print { $out_fh } "</div>";
+                }
+
+                $line = "$indent&larr; Exit  [$block]$line";
+                $print_line->();
+
+                print { $out_fh } "</div>";
+            }
+
+            next LINE;
+        }
+
+        # Ginkgo v2 nicely lumps all retries for the same given test
+        if ($line =~ /^\s*Attempt\s+\#\d+\s+Failed\.\s+Retr/) {
+            $print_line->("error-retry");
+            next LINE;
+        }
+
+        # Timing section at the bottom of the page
+        if ($line =~ / timing results\s*$/) {
+            $in_timing = 1;
+        }
+        elsif ($in_timing) {
+            if ($line =~ /^\s*(\S.*\S)\s+(\d+\.\d+)\s*$/) {
+                my ($name, $time) = ($1, $2);
+                my $id = make_id($1, 'timing');
+
+                # Try to column-align the timing numbers. Some test names
+                # will be longer than our max - oh well.
+                my $spaces = 90 - length(unescapeHTML($name));
+                $spaces = 1 if $spaces < 1;
+                $spaces++ if $time < 10;
+                my $spacing = ' ' x $spaces;
+                $line = qq{<span class="timing"><a href="#t--$id">$name</a>$spacing$time</span>};
+            }
+            else {
+                $in_timing = 0;
+            }
+        }
+
+        # Ginkgo summary line. Colorize Passed, Failed, Flaked, Skipped
+        if ($line =~ /^(\s*)(FAIL|SUCCESS)!(\s+--\s+)(.*\d+\sPassed.*)/) {
+            my ($indent, $status, $dashes, $rhs) = ($1, $2, $3, $4);
+            my @counts = split('\|', $rhs);
+            my @formatted;
+            for my $c (@counts) {
+                $c =~ /^(\s*)(\d+)\s+(\w+)(\s*)$/
+                    or warn "$ME: line $.: WEIRD: '$c' in '$rhs' from '$line'";
+                my ($lhs, $n, $category, $rhs) = ($1||'', $2, $3, $4||'');
+                # Only highlight if count > 0, so "0 Failed" doesn't yell
+                if ($n > 0) {
+                    # Yes, we use 'bats-xxxx' classes even though we're ginkgo.
+                    push @formatted, sprintf("%s<span class=\"bats-%s\"><b>%d</b> %s</span>%s",
+                                             $lhs, lc($category), $n, $category, $rhs);
+                }
+                else {
+                    # Zero. Leave unhighlighted.
+                    push @formatted, $c;
+                }
+            }
+            $line = sprintf("%s<span class=\"ginkgo-final-%s\">%s!</span>%s%s",
+                            $indent,
+                            lc($status), $status,
+                            $dashes, join('|', @formatted));
+            $print_line->();
+            next LINE;
+        }
+
+        #
+        # Ginkgo error reformatting
+        #
+        if ($line =~ /^\s*\[(FAILED|PANICKED)\]/) {
+            # Begins a block of multiple lines including a stack trace
+            print { $out_fh } "<div class='log-error'>\n";
+            $in_failure = 1;
+        }
+        elsif ($line =~ /^-----------/) {
+            if ($in_failure) {
+                # Ends a stack trace block
+                $in_failure = 0;
+                print { $out_fh } "</div>\n";
+            }
+            $after_divider = 1;
+            $subtest_status = 'passed';         # until proven otherwise
+            $subtest_name = '';
+
+            print { $out_fh } "</div>\n<hr />\n<div class='tt'>\n";
+            # Always show timestamp at start of each new test
+            $previous_timestamp = '';
+            next LINE;
+        }
+        # (bindings test sometimes emits 'Running' with leading bullet char)
+        elsif ($line =~ s!^•?(\s*)Running:!<span class="boring">$1$Prompt</span>!) {
+            # Highlight the important (non-boilerplate) podman command.
+            $line =~ s/\s+--remote\s+/ /g;      # --remote takes no args
+            # Strip out the global podman options, but show them on hover
+            $line =~ s{(\S+\/podman(-remote)?)((\s+--(root|runroot|runtime|tmpdir|storage-opt|conmon|cgroup-manager|\S+-backend|network-config-dir|pull-option|storage-driver|url) \S+)*)(\s.*)}{
+                my ($full_path, $remote, $options, $args) = ($1, $2||'', $3, $6);
+
+                $options =~ s/^\s+//;
+                # Separate each '--foo bar' with newlines for readability
+                $options =~ s/ --/\n--/g;
+                qq{<span title="$full_path"><b>podman$remote</b></span> <span class=\"boring\" title=\"$options\">[options]</span><b>$args</b>};
+            }e;
+
+            # Quadlet output messages have a weird "... with FOO=path"
+            # addition that's hard to read. Make it friendlier.
+            #          1        2       213    34                45   5
+            $line =~ s{(\S+/bin/(quadlet))(\s.*)(\s+with\s+Q\S+?=)(\S+)}
+                      {<span title="$1"><b>$2$3</b></span><span class="boring">$4</span><b>$5</b>};
+
+            $current_output = '';
+        }
+        # Windows
+        #                 1   12                        2  3  3
+        elsif ($line =~ /^(\s*)(C:\\Users.*\\podman\.exe)\s(.*)$/) {
+            $line = qq{$1C&gt; <span title="$2"><b>podman.exe</b></span> <b>$3</b>};
+        }
+        elsif ($line =~ /^\s*Error:/ || $line =~ / level=(warning|error) /) {
+            $line = "<span class='log-warning'>" . $line . "</span>";
+        }
+        elsif ($line =~ /^panic:/) {
+            $line = "<span class='log-error'>" . $line . "</span>";
+        }
+        else {
+            $current_output .= ' ' . $line;
+        }
+
+        # One line after each divider, there's a status/timing line.
+        if ($after_divider == 1) {
+            # When run with -p, ginkgo emits timing information on the
+            # first line after the divider. (Without -p, it's at the end).
+            # Recognize this, because it affects our recognition (below)
+            # of the test name.
+            $line =~ s{(\[(\d+)\.\d+\s+seconds\])}{
+                if ($2 > 5) { "<b><span class='log-slow'>$1</span></b>" }
+                else        { "<b>$1</b>" }
+            }e && --$after_divider;
+
+            # Make FAILED and SKIPPING visible. (Only works with ginkgo -p;
+            # without -p, status is at the bottom of the test block)
+            if ($line =~ s!^(.*\[(SKIPPED|FAILED|FLAKEY).*\].*)!<span class="log-\L$2\E">$1</span>!) {
+                $subtest_status = lc($2);
+            }
+
+            # FIXME: gray out entire block if it's skipped?
+        }
+
+        # Test name recognition, linking, and highlighting.
+        # The lines after each divider, until the first empty line, are
+        # one or more test name specifiers, a nested level of Description()
+        # and It() names:
+        #    -----------
+        #    * blah [N seconds]     <<<---- only when run with -p
+        #    Podman foo
+        #    /var/tmp/go/src/path/to/this/file.go:lineno
+        #       podman bar
+        #       /var/tmp/go/src/path/to/this/file.go:lineno
+        #
+        # There may even be three nested levels (e.g., quadlet). We
+        # look for non-path lines and assemble them -- "Podman foo",
+        # " Podman foo podman bar" -- giving each an HTML anchor
+        # to which we can link from the summary section at bottom.
+        if ($after_divider <= 10) {      # Assume no more than ~5 levels
+            if ($line =~ /^\s*$/) {
+                # Stop looking when we get to the blank line
+                $after_divider = 999;
+            }
+            elsif ($line =~ /span.*class=.boring./) {
+                # Sigh. Bindings tests run without -p, and have no blank line
+                # separator. Use the first command to signal real logs.
+                # FIXME: can we solve this with ReportBeforeEach()?
+                #   https://onsi.github.io/ginkgo/#generating-reports-programmatically
+                $after_divider = 999;
+            }
+            elsif ($line =~ m!^\s*(/\S+|C:/)!) {
+                # Source code path: skip
+            }
+            elsif ($line =~ /<b/) {
+                # Already-formatted line (like the "N seconds" one): skip
+            }
+            elsif ($line =~ /^\s*(\[It\]\s*)?(.*)/) {
+                # Test description or name! Remove the "It", and make an anchor
+                $subtest_name .= " " if $subtest_name;
+                $subtest_name .= $2;
+                my $id = make_id($subtest_name, 'anchor');
+                $line = "<a name='t--$id' /><h2 class=\"log-$subtest_status\">$line</h2>";
+
+                # Special case for tests that fail outside of a Describe()
+                # block, e.g., global After/BeforeEach. We still want to
+                # highlight those in the <h2>, but do not include "TOP-LEVEL"
+                # in the anchor name for the actual test name (which will
+                # come later, a few lines down).
+                $subtest_name = '' if $subtest_name =~ /^\s*TOP-LEVEL/;
+            }
+        }
+        ++$after_divider;
+
+        # Highlight test name when it appears in the middle of commands.
+        # But make it boring, because we already have the test name in large
+        # bold just above. (Except in skipped tests).
+        $line =~ s!^(\s*)(\[It\]\s+.*)!$1<span class="testname">$2</span>!;
+
+        # Failure name corresponds to a previously-seen block.
+        #              1     2           2   3  3   4                       4   15           5
+        if ($line =~ /^(\s*\[(FAIL|PANIC!)\] (.*) \[(It|BeforeEach|AfterEach)\] )([A-Za-z-].*)/) {
+            my ($lhs, $type, $desc, $ginkgo_fluff, $testname) = ($1, $2, $3, $4, $5);
+            $desc =~ s/^TOP-LEVEL\s*//;
+            my $id = make_id("$desc $testname", 'link');
+
+            $line = "<span class=\"log-error\">$lhs<a href='#t--$id'>$testname</a></span>";
+        }
+
+        print { $out_fh } "<span class=\"timestamp\">$timestamp</span>"
+            if $timestamp;
+        print { $out_fh } $line, "\n";
+    }
+
+    my $have_formatted_log;     # Set on success
+
+    if ($out_fh) {
+        # Summary line for BATS tests
+        if (keys %bats_count) {
+            print { $out_fh } "<hr/><span class='bats-summary'>Summary:";
+            my $total = 0;
+            my $comma = '';
+            for my $class (qw(passed failed skipped)) {
+                if (my $n = $bats_count{$class}) {
+                    printf { $out_fh } "%s <span class='bats-%s'>%d %s</span>",
+                        $comma, $class, $n, ucfirst($class);
+                    $total += $n;
+                    $comma = ',';
+                }
+            }
+
+            printf { $out_fh } ". Total tests: $total";
+            if (my $expected_total = $bats_count{expected_total}) {
+                if ($total != $expected_total) {
+                    print { $out_fh } " <span class='bats-failed'>(WARNING: expected $expected_total)</span>";
+                }
+            }
+            print { $out_fh } "</span>\n";
+        }
+
+        print { $out_fh } "</div>  <!-- end processed output -->\n";
+
+        # Did we find a cirrus task? Link back.
+        if ($cirrus_task) {
+            print { $out_fh } <<"END_HTML";
+<hr />
+<h3>Cirrus <a href="https://cirrus-ci.com/task/$cirrus_task">task $cirrus_task</a></h3>
+END_HTML
+        }
+
+        # FIXME: need a safe way to get TZ
+        printf { $out_fh } <<"END_HTML", scalar(CORE::localtime);
+<hr />
+<small>Processed %s by $ME v$VERSION</small>
+</body>
+</html>
+END_HTML
+
+        if (close $out_fh) {
+            if (rename $out_tmp => $outfile) {
+                $have_formatted_log = 1;
+            }
+            else {
+                warn "$ME: Could not rename $out_tmp: $!\n";
+            }
+        }
+        else {
+            warn "$ME: Error writing $out_tmp: $!\n";
+        }
+    }
+
+    # Grumble. Github only shows the last N lines of the log... which is
+    # anti-helpful when you want a quick synopsis of what failed. Write a
+    # summary at the tail, to make it easier for humans to see what went wrong.
+    if (my $fails = $bats_count{__fail_list}) {
+        print  "\n";
+        printf "Failed tests (%d):\n", scalar(@$fails);
+        printf " - %d %s\n", @$_ for @$fails;
+    }
+
+    # If Cirrus magic envariables are available, write a link to results.
+    # FIXME: it'd be so nice to make this a clickable live link.
+    #
+    # As of June 2022 we use the Cirrus API[1] as the source of our logs,
+    # instead of linking directly to googleapis.com. This will allow us
+    # to abstract cloud-specific details, so we can one day use Amazon cloud.
+    # See #14569 for more info.
+    #
+    #   [1] https://cirrus-ci.org/guide/writing-tasks/#latest-build-artifacts
+    if ($have_formatted_log && $ENV{CIRRUS_TASK_ID}) {
+        my $URL_BASE = "https://api.cirrus-ci.com";
+        my $task_id  = $ENV{CIRRUS_TASK_ID};
+
+        # Link by *taskID*, not buildID + taskname. First, this is shorter
+        # and less duplicaty. Second, and more important, buildID + taskname
+        # is non-unique, and a link to a flake log will be clobbered.
+        my $URL = "${URL_BASE}/v1/artifact/task/$task_id/html/${outfile}";
+
+        print "\n\nAnnotated results:\n  $URL\n";
+    }
+}
+
+
+#############
+#  make_id  #  Given a test name, generate an anchor link name
+#############
+sub make_id {
+    my $name = shift;                   # in: test title
+    my $type = shift;                   # in: differentiator (anchor, link)
+
+    state %counter;
+
+    $name =~ s/\r//g;                   # strip windows ^Ms
+    $name =~ s/^\s+|\s+$//g;            # strip leading/trailing whitespace
+    $name =~ s/^\[It\]\s*//;            # strip leading "[It] "
+    $name =~ s/\&#\d+;//g;              # 'doesn&#39;t' -> 'doesnt'
+    $name =~ s/\&quot;/-/g;             # '&quot;path&quot;' -> '-path-'
+    $name =~ s/[^a-zA-Z0-9_-]/-/g;      # Convert non-alphanumeric to dash
+    $name =~ s/-{3,}/-/g;               # '------' to just '-'
+
+    # Keep a running tally of how many times we've seen this identifier
+    # for this given type! This lets us cross-match, in the bottom of
+    # the page, the first/second/third failure of a given test.
+    $name .= "--" . ++$counter{$type}{$name};
+
+    $name;
+}
+
+
+###############################################################################
+# BEGIN job_synopsis and related helpers
+
+##################
+#  job_synopsis  #  Job details, links to github/cirrus
+##################
+sub job_synopsis {
+    my $subtest_name = shift;           # e.g. integration_test
+
+    my $s = <<"END_SYNOPSIS";
+<table class="synopsis">
+END_SYNOPSIS
+
+    # PR 1234 - title of the pr
+    my $pr_title = escapeHTML(_env_replace("{CIRRUS_CHANGE_TITLE}"));
+    $s .= _tr("GitHub PR", sprintf("%s - %s",
+                                   _a("{CIRRUS_PR}", "https://{CIRRUS_REPO_CLONE_HOST}/{CIRRUS_REPO_FULL_NAME}/pull/{CIRRUS_PR}"),
+                                   $pr_title));
+
+    # PR author, if signed-off-by
+    if (my $msg = _env_replace("{CIRRUS_COMMIT_MESSAGE}")) {
+        while ($msg =~ /^Signed-off-by:\s+(\S.*\S)$/gmi) {
+            $s .= _tr("Author", escapeHTML($1));
+        }
+    }
+
+    # eg "test fedora", "special_testing_rootless"
+    # WARNING: As of 2020-10-05, $CIRRUS_TASK_NAME reflects the same
+    # descriptive content as our $subtest_name argument (confirm via
+    # cross-checking runner.sh:logformatter() vs cirrus.yml:&std_name_fmt).
+    # If this ever becomes untrue, just add _tr("Subtest", $subtest_name).
+    my $test_name = _env_replace("{CIRRUS_TASK_NAME}");
+    # (Special-case cleanup: Cirrus\ quotes\ spaces; remove for readability).
+    $test_name =~ s/\\\s+/ /g;
+    $s .= _tr("Test name", $test_name);
+
+    # Macs always have to be different
+    my $is_mac = ($test_name =~ /darwin/);
+
+    # Link to further Cirrus results, e.g. other runs.
+    # Build is mostly boring, it's usually TASK that we want to see.
+    $s .= _tr("Cirrus", sprintf("<small>Build %s</small> / <b>Task %s</b>",
+                                _a("{CIRRUS_BUILD_ID}", "https://cirrus-ci.com/build/{CIRRUS_BUILD_ID}"),
+                                _a("{CIRRUS_TASK_ID}", "https://cirrus-ci.com/task/{CIRRUS_TASK_ID}")));
+
+    # Logs: link to original (unformatted) log; journal; cleanup tracer; and, if remote, server
+    my @logs;
+    push @logs, _a("main", sprintf("https://api.cirrus-ci.com/v1/task/{CIRRUS_TASK_ID}/logs/%s.log",
+                                   ($is_mac ? 'test' : 'main')));
+    push @logs, _a("journal", "https://api.cirrus-ci.com/v1/task/{CIRRUS_TASK_ID}/logs/journal.log")
+        unless $is_mac;
+
+    push @logs, _a("cleanup tracer", "https://api.cirrus-ci.com/v1/artifact/task/{CIRRUS_TASK_ID}/cleanup_tracer/podman-cleanup-tracer.log")
+        unless $is_mac;
+
+    # System tests are single-threaded, and have a server log available
+    if ($test_name =~ /sys\s+remote\s/) {
+        push @logs, _a("remote server", "https://api.cirrus-ci.com/v1/artifact/task/{CIRRUS_TASK_ID}/server_log/podman-server.log");
+    }
+    $s .= _tr("Logs", join(" / ", @logs));
+
+    # PR_BASE_SHA (set in lib.sh) can tell us if our parent includes--or
+    # doesn't--a purported fix for a flake. Note about the URL: "commits", plural,
+    # links to a git history listing; if we used "commit", singular, that would
+    # be less useful.
+    if (my $base = $ENV{PR_BASE_SHA}) {
+        $s .= _tr("Base commit", _a($base, "https://{CIRRUS_REPO_CLONE_HOST}/{CIRRUS_REPO_FULL_NAME}/commits/$base"));
+    }
+
+    $s .= "</table>\n";
+    return $s;
+}
+
+
+sub _tr {
+    my ($th, $td) = @_;
+    return "<tr><th>$th:</th><td>$td</td></tr>\n";
+}
+
+sub _a {
+    my ($name, $href) = map { _env_replace($_) } @_;
+
+    if ($href =~ /UNDEFINED/) {
+        return "$name ($href)";
+    }
+    return "<a href='$href'>$name</a>";
+}
+
+sub _env_replace {
+    my $s_in = shift;
+
+    $s_in =~ s[\{(.*?)\}][$ENV{$1} || "[$1 UNDEFINED]"]ge;
+
+    return $s_in;
+}
+
+# END   job_synopsis and related helpers
+###############################################################################
+# BEGIN html-formatting helpers
+
+sub escapeHTML {
+    my $s = shift;
+
+    state %chars;
+    %chars = ('&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => '&#39;')
+        if keys(%chars) == 0;
+    my $class = join('', sort keys %chars);
+    $s =~ s/([$class])/$chars{$1}/ge;
+
+    return $s;
+}
+
+sub unescapeHTML {
+    my $s = shift;
+
+    # We don't actually care about the character, only its length
+    $s =~ s/\&\#?[a-z0-9]+;/./g;
+
+    return $s;
+}
+
+# END   html-formatting helpers
+###############################################################################
+
+1;

@@ -1,0 +1,122 @@
+% podman-auto-update 1
+
+## NAME
+podman\-auto-update - Auto update containers according to their auto-update policy
+
+## SYNOPSIS
+**podman auto-update** [*options*]
+
+## DESCRIPTION
+**podman auto-update** pulls down new container images and restarts containers configured for auto updates.
+To make use of auto updates, the container or Kubernetes workloads must run inside a systemd unit.
+After a successful update of an image, the containers using the image get updated by restarting the systemd units they run in.
+Please refer to `podman-systemd.unit(5)` on how to run Podman under systemd.
+
+To configure a container for auto updates, it must be created with the `io.containers.autoupdate` label or the `AutoUpdate` field in `podman-systemd.unit(5)` with one of the following two values:
+
+* `registry`: If the label is present and set to `registry`, Podman reaches out to the corresponding registry to check if the image has been updated.
+The label `image` is an alternative to `registry` maintained for backwards compatibility.
+An image is considered updated if the digest in the local storage is different than the one of the remote image.
+If an image must be updated, Podman pulls it down and restarts the systemd unit executing the container.
+The registry policy requires a fully-qualified image reference (e.g., quay.io/podman/stable:latest) to be used to create the container.
+This enforcement is necessary to know which image to actually check and pull.
+If an image ID was used, Podman would not know which image to check/pull anymore.
+
+* `local`: If the autoupdate label is set to `local`, Podman compares the image digest of the container to the one in the local container storage.
+If they differ, the local image is considered to be newer and the systemd unit gets restarted.
+
+### Auto Updates and Kubernetes YAML
+
+Podman supports auto updates for Kubernetes workloads.  The auto-update policy can be configured directly via `podman-systemd.unit(5)` or inside the Kubernetes YAML with the Podman-specific annotations mentioned below:
+
+* `io.containers.autoupdate`: "registry|local" to apply the auto-update policy to all containers
+* `io.containers.autoupdate/$container`: "registry|local" to apply the auto-update policy to `$container` only
+* `io.containers.sdnotify`: "conmon|container" to apply the sdnotify policy to all containers
+* `io.containers.sdnotify/$container`: "conmon|container" to apply the sdnotify policy to `$container` only
+
+By default, the autoupdate policy is set to "disabled", the sdnotify policy is set to "conmon".
+
+### Systemd Unit and Timer
+
+Podman ships with a `podman-auto-update.service` systemd unit. This unit is triggered daily at midnight by the `podman-auto-update.timer` systemd timer.
+The timer can be altered for custom time-based updates if desired.
+The unit can further be invoked by other systemd units (e.g., via the dependency tree) or manually via **systemctl start podman-auto-update.service**.
+
+## OPTIONS
+
+@@option authfile
+
+Alternatively, the `io.containers.autoupdate.authfile` container label can be configured.  In that case, Podman will use the specified label's value instead.
+
+#### **--dry-run**
+
+Check for the availability of new images but do not perform any pull operation or restart any service or container.
+The `UPDATED` field indicates the availability of a new image with "pending".
+
+#### **--format**=*format*
+
+Change the default output format.  This can be of a supported type like 'json' or a Go template.
+Valid placeholders for the Go template are listed below:
+
+| **Placeholder** | **Description**                          |
+| --------------- | ---------------------------------------- |
+| .Container      | ID and name of the container             |
+| .ContainerID    | ID of the container                      |
+| .ContainerName  | Name of the container                    |
+| .Image          | Name of the image                        |
+| .Policy         | Auto-update policy of the container      |
+| .Unit           | Name of the systemd unit                 |
+| .Updated        | Update status: true,false,failed,pending |
+
+#### **--rollback**
+
+If restarting a systemd unit after updating the image has failed, rollback to using the previous image and restart the unit another time.  Default is true.
+
+Note that detecting if a systemd unit has failed is best done by the container sending the READY message via SDNOTIFY.
+This way, restarting the unit waits until having received the message or a timeout kicked in.
+Without that, restarting the systemd unit may succeed even if the container has failed shortly after.
+
+For a container to send the READY message via SDNOTIFY it must be created with the `--sdnotify=container` option (see podman-run(1)).
+The application running inside the container can then execute `systemd-notify --ready` when ready or use the sdnotify bindings of the specific programming language (e.g., sd_notify(3)).
+
+@@option tls-verify
+
+## EXAMPLES
+
+Create a Quadlet file configured for auto updates:
+```
+$ cat ~/.config/containers/systemd/sleep.container
+[Container]
+Image=registry.fedoraproject.org/fedora:latest
+Exec=sleep infinity
+AutoUpdate=registry
+```
+
+Generate a systemd service from the Quadlet file by reloading the systemd user daemon:
+```
+$ systemctl --user daemon-reload
+```
+
+Start the systemd service and make sure the container is running
+```
+$ systemctl --user start sleep.service
+$ podman ps
+CONTAINER ID  IMAGE                                     COMMAND         CREATED        STATUS        PORTS       NAMES
+f8e4759798d4  registry.fedoraproject.org/fedora:latest  sleep infinity  2 seconds ago  Up 2 seconds              systemd-sleep
+```
+
+Check if a new image is available via `--dry-run`:
+```
+$ podman auto-update --dry-run --format "{{.Image}} {{.Updated}}"
+registry.fedoraproject.org/fedora:latest   pending
+```
+
+Update the service:
+```
+$ podman auto-update
+UNIT           CONTAINER                     IMAGE                                     POLICY      UPDATED
+sleep.service  f8e4759798d4 (systemd-sleep)  registry.fedoraproject.org/fedora:latest  registry    true
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-generate-systemd(1)](podman-generate-systemd.1.md)**, **[podman-run(1)](podman-run.1.md)**, **[podman-systemd.unit(5)](podman-systemd.unit.5.md)**, **sd_notify(3)**, **[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)**

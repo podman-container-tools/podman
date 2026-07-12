@@ -1,0 +1,69 @@
+# This file is distributed under the same license as the Podman package.
+# Translators:
+# Takuya Nishimura <tanishim@redhat.com>, 2023.
+msgid ""
+msgstr ""
+"Project-Id-Version: Podman \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-08-29 22:22+0900\n"
+"PO-Revision-Date: 2023-08-29 22:22+0900\n"
+"Last-Translator: Takuya Nishimura <tanishim@redhat.com>\n"
+"Language: ja\n"
+"Language-Team: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: ../../source/Reference.rst:4
+msgid "Reference"
+msgstr "リファレンス"
+
+#: ../../source/Reference.rst:6
+msgid "Show the API documentation for version:"
+msgstr ""
+
+#: ../../source/Reference.rst:8
+msgid "`latest (main branch) <_static/api.html>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:10
+msgid "`version 4.5 <_static/api.html?version=v4.5>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:12
+msgid "`version 4.4 <_static/api.html?version=v4.4>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:14
+msgid "`version 4.3 <_static/api.html?version=v4.3>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:16
+msgid "`version 4.2 <_static/api.html?version=v4.2>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:18
+msgid "`version 4.1 <_static/api.html?version=v4.1>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:20
+msgid "`version 4.0 <_static/api.html?version=v4.0>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:22
+msgid "`version 3.4 <_static/api.html?version=v3.4>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:24
+msgid "`version 3.3 <_static/api.html?version=v3.3>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:26
+msgid "`version 3.2 <_static/api.html?version=v3.2>`_"
+msgstr ""
+
+#: ../../source/Reference.rst:28
+msgid "`version 3.1 <_static/api.html?version=v3.1>`_"
+msgstr ""

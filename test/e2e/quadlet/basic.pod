@@ -1,0 +1,10 @@
+## assert-key-is Unit RequiresMountsFor "%t/containers"
+## assert-key-is Service Type forking
+## assert-key-is Service SyslogIdentifier "%N"
+## assert-key-is Service Restart on-failure
+## assert-key-is-regex Service ExecStartPre ".*/podman pod create --infra-conmon-pidfile=%t/%N.pid --replace --exit-policy stop --infra-name systemd-basic-infra --name systemd-basic"
+## assert-key-is-regex Service ExecStart ".*/podman pod start systemd-basic"
+## assert-key-is-regex Service ExecStop ".*/podman pod stop --ignore --time=10 systemd-basic"
+## assert-key-is-regex Service ExecStopPost ".*/podman pod rm --ignore --force systemd-basic"
+
+[Pod]

@@ -1,0 +1,7 @@
+## assert-podman-global-args "kube" "--module=/etc/container/1.conf"
+## assert-podman-global-args "kube" "--module=/etc/container/2.conf"
+
+[Kube]
+Yaml=file.yml
+ContainersConfModule=/etc/container/1.conf
+ContainersConfModule=/etc/container/2.conf

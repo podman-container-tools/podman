@@ -1,0 +1,18 @@
+version: '3'
+services:
+  writer:
+    environment:
+      - PODMAN_MSG=podman_rulez
+    build: write
+    ports:
+      - '5000:5000'
+    volumes:
+      - data:/data
+  reader:
+    build: read
+    ports:
+      - '5001:5000'
+    volumes:
+      - data:/data
+volumes:
+  data:

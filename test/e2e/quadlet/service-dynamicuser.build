@@ -1,0 +1,8 @@
+## assert-stderr-contains "using key DynamicUser in the Service group is not supported"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+
+[Service]
+DynamicUser=foobar

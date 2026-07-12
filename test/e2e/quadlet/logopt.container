@@ -1,0 +1,11 @@
+## assert-podman-args "--log-opt" "path=/var/log/some-logs.json"
+## assert-podman-args "--log-opt" "size=10mb"
+## assert-podman-args "--log-opt" "tag="{{.ImageName}}""
+## assert-podman-args "--log-opt" "label=CONTAINER_LABEL=LabelValue"
+
+[Container]
+Image=localhost/imagename
+LogOpt=path=/var/log/some-logs.json
+LogOpt=size=10mb
+LogOpt=tag="{{.ImageName}}"
+LogOpt=label=CONTAINER_LABEL=LabelValue

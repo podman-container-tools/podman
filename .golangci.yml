@@ -1,0 +1,108 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: disable
+
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - decorder
+    - dogsled
+    - durationcheck
+    - errchkjson
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - gocritic
+    - goprintffuncname
+    - grouper
+    - iface
+    - inamedparam
+    - interfacebloat
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - nilerr
+    - nilnesserr
+    - nolintlint
+    - nosprintfhostport
+    - prealloc
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - testableexamples
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    forbidigo:
+      forbid:
+        # os.Is* error checking functions predate errors.Is. Therefore, they
+        # only support errors returned by the os package and subtly fail
+        # to deal with other wrapped error types.
+        # New code should use errors.Is(err, error-type) instead.
+        - pattern: ^os\.Is(Exist|NotExist|Permission|Timeout)$
+          pkg: ^os$
+          msg: Use errors.Is instead.
+      analyze-types: true
+
+    staticcheck:
+      checks:
+        - all
+        - -ST1003 # https://staticcheck.dev/docs/checks/#ST1003 Poorly chosen identifier.
+        - -QF1008 # https://staticcheck.dev/docs/checks/#QF1008 Omit embedded fields from selector expression.
+    nolintlint:
+      require-specific: true
+    revive:
+      rules:
+        - name: unused-parameter
+  exclusions:
+    generated: strict
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      - linters:
+          - recvcheck
+        path: pkg/k8s.io/
+      - path: _test\.go
+        linters:
+          - prealloc
+      - linters:
+          - unused
+        text: "(rootlessPortSyncR|rootlessPortSyncW)"
+      # TODO: remove once https://github.com/leighmcculloch/gocheckcompilerdirectives/issues/7 is fixed.
+      - text: "compiler directive unrecognized: //go:fix"
+        linters:
+          - gocheckcompilerdirectives
+
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

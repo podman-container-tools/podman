@@ -1,0 +1,8 @@
+## assert-podman-args "--retry" "5"
+## assert-podman-args "--retry-delay" "10s"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Retry=5
+RetryDelay=10s

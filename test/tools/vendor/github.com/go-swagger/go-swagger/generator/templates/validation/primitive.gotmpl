@@ -1,0 +1,29 @@
+{{if .MinLength}}
+if err := validate.MinLength({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, {{.MinLength}}); err != nil {
+  return err
+}
+{{end}}
+{{if .MaxLength}}
+if err := validate.MaxLength({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, {{.MaxLength}}); err != nil {
+  return err
+}
+{{end}}
+{{if .Pattern}}
+if err := validate.Pattern({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, `{{escapeBackticks .Pattern}}`); err != nil {
+  return err
+}
+{{end}}
+{{if .Minimum}}
+  {{ template "validationMinimum" . }}
+{{end}}
+{{if .Maximum}}
+  {{ template "validationMaximum" . }}
+{{end}}
+{{if .MultipleOf}}
+  {{ template "validationMultipleOf" . }}
+{{end}}
+{{if .Enum}}
+if err := validate.EnumCase({{ path . }}, {{ printf "%q" .Location }}, {{ if and (not .IsArray) (not .HasDiscriminator) (not .IsInterface) .IsNullable }}*{{ end }}{{.ValueExpression}}{{ if .IsCustomFormatter }}.String(){{ end }}, {{ printGoLiteral .Enum}}, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+  return err
+}
+{{end}}

@@ -1,0 +1,175 @@
+name: Release Pipeline Validation
+on:
+  schedule:
+    # Run daily at 03:17 UTC
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to build (branch or tag, e.g. "main" or "v9.8.7")'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  get-latest-release:
+    name: Get branch for latest release
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'schedule' &&
+      github.repository == 'podman-container-tools/podman'
+    outputs:
+      release_ref: ${{ steps.set.outputs.release_ref }}
+    steps:
+      - name: Get release branch from latest tag
+        id: set
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          tag=$(gh api "repos/$REPO/releases/latest" --jq '.tag_name' 2>/dev/null || echo '')
+          if [ -z "$tag" ]; then
+            echo "release_ref=main" >> "$GITHUB_OUTPUT"
+            echo "No releases found, using main"
+            exit 0
+          fi
+          # Release branch is vX.Y for tag vX.Y.Z (strip the .Z)
+          release_branch="${tag%.*}"
+          if [ "$release_branch" = "$tag" ]; then
+            release_branch='main'
+          fi
+          echo "release_ref=$release_branch" >> "$GITHUB_OUTPUT"
+          echo "Latest release $tag -> branch: $release_branch"
+
+  build-artifacts-main:
+    name: Build Artifacts (main)
+    uses: ./.github/workflows/release-build-artifacts.yml
+    if: |
+      github.event_name == 'schedule' &&
+      github.repository == 'podman-container-tools/podman'
+    with:
+      version: 'main'
+    secrets:
+      MACOS_APPLICATION_CERT: ${{ secrets.MACOS_APPLICATION_CERT }}
+      MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+      MACOS_INSTALLER_CERT: ${{ secrets.MACOS_INSTALLER_CERT }}
+      MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+      MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+      AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
+      AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
+      AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
+
+  build-artifacts-latest-branch:
+    name: Build Artifacts (latest release branch)
+    uses: ./.github/workflows/release-build-artifacts.yml
+    if: github.event_name == 'schedule'
+    needs:  [get-latest-release]
+    with:
+      version: ${{ needs.get-latest-release.outputs.release_ref }}
+    secrets:
+      MACOS_APPLICATION_CERT: ${{ secrets.MACOS_APPLICATION_CERT }}
+      MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+      MACOS_INSTALLER_CERT: ${{ secrets.MACOS_INSTALLER_CERT }}
+      MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+      MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+      AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
+      AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
+      AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
+
+  build-artifacts-single:
+    name: Build Artifacts
+    uses: ./.github/workflows/release-build-artifacts.yml
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'podman-container-tools/podman'
+    with:
+      version: ${{ inputs.ref }}
+    secrets:
+      MACOS_APPLICATION_CERT: ${{ secrets.MACOS_APPLICATION_CERT }}
+      MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+      MACOS_INSTALLER_CERT: ${{ secrets.MACOS_INSTALLER_CERT }}
+      MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+      MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+      AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
+      AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
+      AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
+
+  validate-tokens:
+    name: Validate GitHub tokens
+    if: github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PODMANBOT_TOKEN
+        env:
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "/repos/$REPO" --jq '.default_branch' > /dev/null
+          echo "PODMANBOT_TOKEN is valid and has repo access"
+
+  open-failure-issue:
+    name: Open issue on failure
+    runs-on: ubuntu-latest
+    needs: [validate-tokens, get-latest-release, build-artifacts-main, build-artifacts-latest-branch]
+    if: failure() && github.event_name == 'schedule'
+    permissions:
+      issues: write
+    steps:
+      - name: Create or update failure issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          VALIDATE_TOKENS_RESULT: ${{ needs.validate-tokens.result }}
+          BUILD_MAIN_RESULT: ${{ needs.build-artifacts-main.result }}
+          BUILD_BRANCH_RESULT: ${{ needs.build-artifacts-latest-branch.result }}
+        run: |
+          RUN_URL="${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          TITLE="Release Pipeline Validation failed"
+          BODY="Release Pipeline Validation workflow failed.
+
+          @podman-container-tools/podman-maintainers PTAL
+
+          **Workflow run:** $RUN_URL
+
+          **Failed jobs:**
+          - validate-tokens: $VALIDATE_TOKENS_RESULT
+          - build-artifacts-main: $BUILD_MAIN_RESULT
+          - build-artifacts-latest-branch: $BUILD_BRANCH_RESULT"
+
+          # Check for existing open issue
+          EXISTING_ISSUE=$(gh issue list \
+            --repo "$REPO" \
+            --state open \
+            --search "in:title $TITLE" \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo '')
+
+          if [ -n "$EXISTING_ISSUE" ]; then
+            echo "Found existing issue #$EXISTING_ISSUE, adding comment"
+            gh issue comment "$EXISTING_ISSUE" --repo "$REPO" --body "$BODY"
+          else
+            echo "No existing issue found, creating new one"
+            gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY"
+          fi

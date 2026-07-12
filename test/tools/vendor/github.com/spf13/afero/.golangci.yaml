@@ -1,0 +1,18 @@
+linters-settings:
+    gci:
+        sections:
+            - standard
+            - default
+            - prefix(github.com/spf13/afero)
+
+linters:
+    disable-all: true
+    enable:
+        - gci
+        - gofmt
+        - gofumpt
+        - staticcheck
+
+issues:
+    exclude-dirs:
+        - gcsfs/internal/stiface

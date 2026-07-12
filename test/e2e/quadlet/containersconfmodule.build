@@ -1,0 +1,8 @@
+## assert-podman-global-args "build" "--module=/etc/container/1.conf"
+## assert-podman-global-args "build" "--module=/etc/container/2.conf"
+
+[Build]
+ImageTag=image:latest
+SetWorkingDirectory=unit
+ContainersConfModule=/etc/container/1.conf
+ContainersConfModule=/etc/container/2.conf

@@ -1,0 +1,3 @@
+FROM alpine
+WORKDIR /app
+RUN apk update && apk add py3-pip && pip3 install flask && rm -fr /var/cache/apk/*

@@ -1,0 +1,13 @@
+## assert-podman-pre-args "--foo"
+## assert-podman-pre-args "--bar"
+## assert-podman-pre-args "--also"
+## assert-podman-pre-args "--with-key=value"
+## assert-podman-pre-args "--with-space" "yes"
+
+
+[Pod]
+PodmanArgs="--foo" \
+  --bar
+PodmanArgs=--also
+PodmanArgs=--with-key=value
+PodmanArgs=--with-space yes

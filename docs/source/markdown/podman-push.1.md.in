@@ -1,0 +1,164 @@
+% podman-push 1
+
+## NAME
+podman\-push - Push an image, manifest list or image index from local storage to elsewhere
+
+## SYNOPSIS
+**podman push** [*options*] *image* [*destination*]
+
+**podman image push** [*options*] *image* [*destination*]
+
+## DESCRIPTION
+Pushes an image, manifest list or image index from local storage to a specified
+destination.
+
+## Image storage
+Images are pushed from those stored in local image storage.
+
+## DESTINATION
+
+ DESTINATION is the location the container image is pushed to. It supports all transports from `containers-transports(5)`. If no transport is specified, the `docker` (i.e., container registry) transport is used.  For remote clients, including Mac and Windows (excluding WSL2) machines, `docker` is the only supported transport.
+
+```
+# Push to a container registry
+$ podman push quay.io/podman/stable
+
+# Push to a container registry via the docker transport
+$ podman push docker://quay.io/podman/stable
+
+# Push to a container registry with another tag
+$ podman push myimage quay.io/username/myimage
+
+# Push to a local directory
+$ podman push myimage dir:/tmp/myimage
+
+# Push to a tarball in the docker-archive format
+$ podman push myimage docker-archive:/tmp/myimage
+
+# Push to a local docker daemon
+$ sudo podman push myimage docker-daemon:docker.io/library/myimage:33
+
+# Push to a tarball in the OCI format
+$ podman push myimage oci-archive:/tmp/myimage
+```
+
+## OPTIONS
+
+@@option authfile
+
+@@option cert-dir
+
+@@option dir-compress
+
+Note: This flag can only be set when using the **dir** transport
+
+@@option compression-format
+
+@@option compression-level
+
+@@option creds
+
+@@option digestfile
+
+@@option disable-content-trust
+
+#### **--encrypt-layer**=*layer(s)*
+
+Layer(s) to encrypt: 0-indexed layer indices with support for negative indexing (e.g. 0 is the first layer, -1 is the last layer). If not defined, encrypts all layers if encryption-key flag is specified.
+
+#### **--encryption-key**=*key*
+
+The [protocol:keyfile] specifies the encryption protocol, which can be JWE (RFC7516), PGP (RFC4880), and PKCS7 (RFC2315) and the key material required for image encryption. For instance, jwe:/path/to/key.pem or pgp:admin@example.com or pkcs7:/path/to/x509-file.
+
+@@option force-compression
+
+#### **--format**, **-f**=*format*
+
+Manifest Type (oci, v2s2, or v2s1) to use when pushing an image.
+
+@@option quiet
+
+#### **--remove-signatures**
+
+Discard any pre-existing signatures in the image.
+
+@@option retry
+
+@@option retry-delay
+
+#### **--sign-by**=*key*
+
+Add a “simple signing” signature at the destination using the specified key. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sigstore
+
+#### **--sign-by-sigstore-private-key**=*path*
+
+Add a sigstore signature at the destination using a private key at the specified path. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sq-fingerprint
+
+@@option sign-passphrase-file
+
+@@option tls-verify
+
+## EXAMPLES
+
+Push the specified image to a local directory:
+```
+# podman push imageID dir:/path/to/image
+```
+
+Push the specified image to a local directory in OCI format:
+```
+# podman push imageID oci-archive:/path/to/layout:image:tag
+```
+
+Push the specified image to a container registry:
+```
+# podman push imageID docker://registry.example.com/repository:tag
+```
+
+Push the specified image to a container registry and save the digest in the specified file:
+```
+# podman push --digestfile=/tmp/mydigest imageID docker://registry.example.com/repository:tag
+```
+
+Push the specified image into the local Docker daemon container store:
+```
+# podman push imageID docker-daemon:image:tag
+```
+
+Push the specified image with a different image name using credentials from an alternate authfile path:
+```
+# podman push --authfile temp-auths/myauths.json alpine docker://docker.io/umohnani/alpine
+Getting image source signatures
+Copying blob sha256:5bef08742407efd622d243692b79ba0055383bbce12900324f75e56f589aedb0
+ 4.03 MB / 4.03 MB [========================================================] 1s
+Copying config sha256:ad4686094d8f0186ec8249fc4917b71faa2c1030d7b5a025c29f26e19d95c156
+ 1.41 KB / 1.41 KB [========================================================] 1s
+Writing manifest to image destination
+Storing signatures
+```
+
+Push the specified image to a local directory as an OCI image:
+```
+# podman push --format oci registry.access.redhat.com/rhel7 dir:rhel7-dir
+Getting image source signatures
+Copying blob sha256:9cadd93b16ff2a0c51ac967ea2abfadfac50cfa3af8b5bf983d89b8f8647f3e4
+ 71.41 MB / 71.41 MB [======================================================] 9s
+Copying blob sha256:4aa565ad8b7a87248163ce7dba1dd3894821aac97e846b932ff6b8ef9a8a508a
+ 1.21 KB / 1.21 KB [========================================================] 0s
+Copying config sha256:f1b09a81455c351eaa484b61aacd048ab613c08e4c5d1da80c4c46301b03cf3b
+ 3.01 KB / 3.01 KB [========================================================] 0s
+Writing manifest to image destination
+Storing signatures
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-pull(1)](podman-pull.1.md)**, **[podman-login(1)](podman-login.1.md)**, **[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**, **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**, **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.

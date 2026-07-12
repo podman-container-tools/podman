@@ -1,0 +1,64 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2019, team
+# This file is distributed under the same license as the Podman package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2023.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Podman \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-08-29 22:22+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ja\n"
+"Language-Team: ja <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: ../../source/volume.rst:2
+msgid "Volume"
+msgstr ""
+
+#: ../../source/volume.rst:3
+msgid ":doc:`create <markdown/podman-volume-create.1>` Create a new volume"
+msgstr ""
+
+#: ../../source/volume.rst:5
+msgid ""
+":doc:`exists <markdown/podman-volume-exists.1>` Check if the given volume"
+" exists"
+msgstr ""
+
+#: ../../source/volume.rst:7
+msgid ""
+":doc:`export <markdown/podman-volume-export.1>` Exports volume to "
+"external tar"
+msgstr ""
+
+#: ../../source/volume.rst:9
+msgid ""
+":doc:`import <markdown/podman-volume-import.1>` Import tarball contents "
+"into a podman volume"
+msgstr ""
+
+#: ../../source/volume.rst:11
+msgid ""
+":doc:`inspect <markdown/podman-volume-inspect.1>` Display detailed "
+"information on one or more volumes"
+msgstr ""
+
+#: ../../source/volume.rst:13
+msgid ":doc:`ls <markdown/podman-volume-ls.1>` List volumes"
+msgstr ""
+
+#: ../../source/volume.rst:15
+msgid ":doc:`prune <markdown/podman-volume-prune.1>` Remove all unused volumes"
+msgstr ""
+
+#: ../../source/volume.rst:17
+msgid ":doc:`rm <markdown/podman-volume-rm.1>` Remove one or more volumes"
+msgstr ""

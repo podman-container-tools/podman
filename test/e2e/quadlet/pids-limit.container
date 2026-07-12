@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--pids-limit" "8765432"
+
+[Container]
+Image=localhost/imagename
+PidsLimit=8765432

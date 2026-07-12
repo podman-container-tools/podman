@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+</head>
+<body>
+<div align="left" style="font-family: Helvetica; padding-left: 10px;">
+    <br/>
+    <p style="color: #020202; font-size: 12px;">This will install <span style="color: #46b9d6; font-size: 12px;">Podman __VERSION__</span>
+        on your computer. You will be guided through the steps necessary to install this software.</p>
+    <br/>
+    <p style="color: #abb0b0; font-size: 12px;">Click <span style="color: #626666">“Continue"</span> to continue the
+        setup</p>
+</div>
+</body>
+</html>

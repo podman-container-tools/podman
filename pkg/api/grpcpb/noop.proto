@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package io.podman.v1;
+
+option go_package = "go.podman.io/podman/v6/pkg/api/grpcpb";
+
+service Noop {
+  rpc Noop(NoopRequest) returns (NoopResponse);
+}
+
+message NoopRequest {
+  string ignored = 1;
+}
+
+message NoopResponse {
+  string ignored = 1;
+}

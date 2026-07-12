@@ -1,0 +1,303 @@
+# This file is distributed under the same license as the Podman package.
+# Translators:
+# Takuya Nishimura <tanishim@redhat.com>, 2023.
+msgid ""
+msgstr ""
+"Project-Id-Version: Podman \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-08-29 22:22+0900\n"
+"PO-Revision-Date: 2023-08-29 22:22+0900\n"
+"Last-Translator: Takuya Nishimura <tanishim@redhat.com>\n"
+"Language: ja\n"
+"Language-Team: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: ../../source/Commands.rst:4
+msgid "Commands"
+msgstr "コマンド"
+
+#: ../../source/Commands.rst:6
+msgid ""
+":doc:`Podman <markdown/podman.1>` (Pod Manager) Global Options, "
+"Environment Variables, Exit Codes, Configuration Files, and more"
+msgstr ""
+
+#: ../../source/Commands.rst:8
+msgid ":doc:`attach <markdown/podman-attach.1>` Attach to a running container"
+msgstr ""
+
+#: ../../source/Commands.rst:10
+msgid ""
+":doc:`auto-update <markdown/podman-auto-update.1>` Auto update containers"
+" according to their auto-update policy"
+msgstr ""
+
+#: ../../source/Commands.rst:12
+msgid ""
+":doc:`build <markdown/podman-build.1>` Build an image using instructions "
+"from Containerfiles"
+msgstr ""
+
+#: ../../source/Commands.rst:14
+msgid ""
+":doc:`commit <markdown/podman-commit.1>` Create new image based on the "
+"changed container"
+msgstr ""
+
+#: ../../source/Commands.rst:16
+msgid ":doc:`container <markdown/podman-container.1>` Manage Containers"
+msgstr ""
+
+#: ../../source/Commands.rst:18
+msgid ""
+":doc:`cp <markdown/podman-cp.1>` Copy files/folders between a container "
+"and the local filesystem"
+msgstr ""
+
+#: ../../source/Commands.rst:20
+msgid ""
+":doc:`create <markdown/podman-create.1>` Create but do not start a "
+"container"
+msgstr ""
+
+#: ../../source/Commands.rst:22
+msgid ""
+":doc:`diff <markdown/podman-diff.1>` Inspect changes on container's file "
+"systems"
+msgstr ""
+
+#: ../../source/Commands.rst:24
+msgid ":doc:`events <markdown/podman-events.1>` Show podman events"
+msgstr ""
+
+#: ../../source/Commands.rst:26
+msgid ":doc:`exec <markdown/podman-exec.1>` Run a process in a running container"
+msgstr ""
+
+#: ../../source/Commands.rst:28
+msgid ""
+":doc:`export <markdown/podman-export.1>` Export container's filesystem "
+"contents as a tar archive"
+msgstr ""
+
+#: ../../source/Commands.rst:30
+msgid ":doc:`generate <markdown/podman-generate.1>` Generated structured data"
+msgstr ""
+
+#: ../../source/Commands.rst:32
+msgid ":doc:`healthcheck <markdown/podman-healthcheck.1>` Manage Healthcheck"
+msgstr ""
+
+#: ../../source/Commands.rst:34
+msgid ""
+":doc:`history <markdown/podman-history.1>` Show history of a specified "
+"image"
+msgstr ""
+
+#: ../../source/Commands.rst:36
+msgid ":doc:`image <markdown/podman-image.1>` Manage images"
+msgstr ""
+
+#: ../../source/Commands.rst:38
+msgid ":doc:`images <markdown/podman-images.1>` List images in local storage"
+msgstr ""
+
+#: ../../source/Commands.rst:40
+msgid ""
+":doc:`import <markdown/podman-import.1>` Import a tarball to create a "
+"filesystem image"
+msgstr ""
+
+#: ../../source/Commands.rst:42
+msgid ":doc:`info <markdown/podman-info.1>` Display podman system information"
+msgstr ""
+
+#: ../../source/Commands.rst:44
+msgid ":doc:`init <markdown/podman-init.1>` Initialize one or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:46
+msgid ""
+":doc:`inspect <markdown/podman-inspect.1>` Display the configuration of a"
+" container or image"
+msgstr ""
+
+#: ../../source/Commands.rst:48
+msgid ""
+":doc:`kill <markdown/podman-kill.1>` Kill one or more running containers "
+"with a specific signal"
+msgstr ""
+
+#: ../../source/Commands.rst:50
+msgid ":doc:`kube <markdown/podman-kube.1>` Play a pod"
+msgstr ""
+
+#: ../../source/Commands.rst:52
+msgid ":doc:`load <markdown/podman-load.1>` Load an image from container archive"
+msgstr ""
+
+#: ../../source/Commands.rst:54
+msgid ":doc:`login <markdown/podman-login.1>` Log in to a container registry"
+msgstr ""
+
+#: ../../source/Commands.rst:56
+msgid ":doc:`logout <markdown/podman-logout.1>` Log out of a container registry"
+msgstr ""
+
+#: ../../source/Commands.rst:58
+msgid ":doc:`logs <markdown/podman-logs.1>` Fetch the logs of a container"
+msgstr ""
+
+#: ../../source/Commands.rst:60
+msgid ":doc:`machine <markdown/podman-machine.1>` Manage podman's virtual machine"
+msgstr ""
+
+#: ../../source/Commands.rst:62
+msgid ""
+":doc:`manifest <markdown/podman-manifest.1>` Create and manipulate "
+"manifest lists and image indexes"
+msgstr ""
+
+#: ../../source/Commands.rst:64
+msgid ""
+":doc:`mount <markdown/podman-mount.1>` Mount a working container's root "
+"filesystem"
+msgstr ""
+
+#: ../../source/Commands.rst:66
+msgid ":doc:`network <markdown/podman-network.1>` Manage Networks"
+msgstr ""
+
+#: ../../source/Commands.rst:68
+msgid ""
+":doc:`pause <markdown/podman-pause.1>` Pause all the processes in one or "
+"more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:70
+msgid ":doc:`pod <markdown/podman-pod.1>` Manage pods"
+msgstr ""
+
+#: ../../source/Commands.rst:72
+msgid ""
+":doc:`port <markdown/podman-port.1>` List port mappings or a specific "
+"mapping for the container"
+msgstr ""
+
+#: ../../source/Commands.rst:74
+msgid ":doc:`ps <markdown/podman-ps.1>` List containers"
+msgstr ""
+
+#: ../../source/Commands.rst:76
+msgid ":doc:`pull <markdown/podman-pull.1>` Pull an image from a registry"
+msgstr ""
+
+#: ../../source/Commands.rst:78
+msgid ""
+":doc:`push <markdown/podman-push.1>` Push an image to a specified "
+"destination"
+msgstr ""
+
+#: ../../source/Commands.rst:80
+msgid ":doc:`rename <markdown/podman-rename.1>` Rename an existing container"
+msgstr ""
+
+#: ../../source/Commands.rst:82
+msgid ":doc:`restart <markdown/podman-restart.1>` Restart one or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:84
+msgid ":doc:`rm <markdown/podman-rm.1>` Remove one or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:86
+msgid ""
+":doc:`rmi <markdown/podman-rmi.1>` Remove one or more images from local "
+"storage"
+msgstr ""
+
+#: ../../source/Commands.rst:88
+msgid ":doc:`run <markdown/podman-run.1>` Run a command in a new container"
+msgstr ""
+
+#: ../../source/Commands.rst:90
+msgid ":doc:`save <markdown/podman-save.1>` Save image to an archive"
+msgstr ""
+
+#: ../../source/Commands.rst:92
+msgid ":doc:`search <markdown/podman-search.1>` Search registry for image"
+msgstr ""
+
+#: ../../source/Commands.rst:94
+msgid ":doc:`secret <markdown/podman-secret.1>` Manage podman secrets"
+msgstr ""
+
+#: ../../source/Commands.rst:96
+msgid ":doc:`start <markdown/podman-start.1>` Start one or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:98
+msgid ""
+":doc:`stats <markdown/podman-stats.1>` Display a live stream of container"
+" resource usage statistics"
+msgstr ""
+
+#: ../../source/Commands.rst:100
+msgid ":doc:`stop <markdown/podman-stop.1>` Stop one or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:102
+msgid ":doc:`system <markdown/podman-system.1>` Manage podman"
+msgstr ""
+
+#: ../../source/Commands.rst:104
+msgid ":doc:`tag <markdown/podman-tag.1>` Add an additional name to a local image"
+msgstr ""
+
+#: ../../source/Commands.rst:106
+msgid ""
+":doc:`top <markdown/podman-top.1>` Display the running processes of a "
+"container"
+msgstr ""
+
+#: ../../source/Commands.rst:108
+msgid ""
+":doc:`unmount <markdown/podman-unmount.1>` Unmount working container's "
+"root filesystem"
+msgstr ""
+
+#: ../../source/Commands.rst:110
+msgid ""
+":doc:`unpause <markdown/podman-unpause.1>` Unpause the processes in one "
+"or more containers"
+msgstr ""
+
+#: ../../source/Commands.rst:112
+msgid ""
+":doc:`unshare <markdown/podman-unshare.1>` Run a command in a modified "
+"user namespace"
+msgstr ""
+
+#: ../../source/Commands.rst:114
+msgid ""
+":doc:`untag <markdown/podman-untag.1>` Remove one or more names from a "
+"locally-stored image"
+msgstr ""
+
+#: ../../source/Commands.rst:116
+msgid ""
+":doc:`version <markdown/podman-version.1>` Display the Podman Version "
+"Information"
+msgstr ""
+
+#: ../../source/Commands.rst:118
+msgid ":doc:`volume <markdown/podman-volume.1>` Manage volumes"
+msgstr ""
+
+#: ../../source/Commands.rst:120
+msgid ":doc:`wait <markdown/podman-wait.1>` Block on one or more containers"
+msgstr ""

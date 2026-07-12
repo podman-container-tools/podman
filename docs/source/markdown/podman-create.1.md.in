@@ -1,0 +1,577 @@
+% podman-create 1
+
+## NAME
+podman\-create - Create a new container
+
+## SYNOPSIS
+**podman create** [*options*] *image* [*command* [*arg* ...]]
+
+**podman container create** [*options*] *image* [*command* [*arg* ...]]
+
+## DESCRIPTION
+
+Creates a writable container layer over the specified image and prepares it for
+running the specified command. The container ID is then printed to STDOUT. This
+is similar to **podman run -d** except the container is never started. Use the
+**podman start** *container* command to start the container at any point.
+
+The initial status of the container created with **podman create** is 'created'.
+
+Default settings for flags are defined in `containers.conf`. Most settings for
+remote connections use the server's containers.conf, except when documented in
+man pages.
+
+## IMAGE
+
+  The image is specified using transport:path format. If no transport is specified, the `docker` (container registry)
+transport is used by default. For remote Podman, including Mac and Windows (excluding WSL2) machines, `docker` is the only allowed transport.
+
+  **dir:**_path_
+  An existing local directory _path_ storing the manifest, layer tarballs and signatures as individual files. This
+is a non-standardized format, primarily useful for debugging or noninvasive container inspection.
+
+    $ podman save --format docker-dir fedora -o /tmp/fedora
+    $ podman create dir:/tmp/fedora echo hello
+
+  **docker://**_docker-reference_ (Default)
+  An image reference stored in  a remote container image registry. Example: "quay.io/podman/stable:latest".
+The reference can include a path to a specific registry; if it does not, the
+registries listed in registries.conf is queried to find a matching image.
+By default, credentials from `podman login` (stored at
+$XDG_RUNTIME_DIR/containers/auth.json by default) is used to authenticate;
+otherwise it falls back to using credentials in $HOME/.docker/config.json.
+
+    $ podman create registry.fedoraproject.org/fedora:latest echo hello
+
+  **docker-archive:**_path_[**:**_docker-reference_]
+An image stored in the `docker save` formatted file. _docker-reference_ is only used when creating such a
+file, and it must not contain a digest.
+
+    $ podman save --format docker-archive fedora -o /tmp/fedora
+    $ podman create docker-archive:/tmp/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+  **docker-daemon:**_docker-reference_
+  An image in _docker-reference_ format stored in the docker daemon internal storage. The _docker-reference_ can also be an image ID (docker-daemon:algo:digest).
+
+    $ sudo docker pull fedora
+    $ sudo podman create docker-daemon:docker.io/library/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+  **oci-archive:**_path_**:**_tag_
+  An image in a directory compliant with the "Open Container Image Layout Specification" at the specified _path_
+and specified with a _tag_.
+
+    $ podman save --format oci-archive fedora -o /tmp/fedora
+    $ podman create oci-archive:/tmp/fedora echo hello
+  Note: On remote clients, including Mac and Windows (excluding WSL2) machines, this transport is not supported.
+
+## OPTIONS
+
+@@option add-host
+
+@@option annotation.container
+
+@@option arch
+
+@@option attach
+
+@@option authfile
+
+@@option blkio-weight
+
+@@option blkio-weight-device
+
+@@option cap-add
+
+@@option cap-drop
+
+@@option cert-dir
+
+@@option cgroup-conf
+
+@@option cgroup-parent
+
+@@option cgroupns
+
+@@option cgroups
+
+@@option chrootdirs
+
+@@option cidfile.write
+
+@@option conmon-pidfile
+
+@@option cpu-period
+
+@@option cpu-quota
+
+@@option cpu-rt-period
+
+@@option cpu-rt-runtime
+
+@@option cpu-shares
+
+@@option cpus.container
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option creds
+
+@@option decryption-key
+
+@@option device
+
+Note: if the user only has access rights via a group, accessing the device
+from inside a rootless container fails. Use the `--group-add keep-groups`
+flag to pass the user's supplementary group access into the container.
+
+@@option device-cgroup-rule
+
+@@option device-read-bps
+
+@@option device-read-iops
+
+@@option device-write-bps
+
+@@option device-write-iops
+
+@@option disable-content-trust
+
+@@option dns
+
+This option cannot be combined with **--network** that is set to **none** or **container:**_id_.
+
+@@option dns-option.container
+
+@@option dns-search.container
+
+@@option entrypoint
+
+@@option env
+
+See [**Environment**](#environment) note below for precedence and examples.
+
+@@option env-file
+
+See [**Environment**](#environment) note below for precedence and examples.
+
+@@option env-host
+
+@@option env-merge
+
+@@option expose
+
+@@option gidmap.container
+
+@@option gpus
+
+@@option group-add
+
+@@option group-entry
+
+@@option health-cmd
+
+@@option health-interval
+
+@@option health-log-destination
+
+@@option health-max-log-count
+
+@@option health-max-log-size
+
+@@option health-on-failure
+
+@@option health-retries
+
+@@option health-start-period
+
+@@option health-startup-cmd
+
+@@option health-startup-interval
+
+@@option health-startup-retries
+
+@@option health-startup-success
+
+@@option health-startup-timeout
+
+@@option health-timeout
+
+#### **--help**
+
+Print usage statement
+
+@@option hostname.container
+
+@@option hosts-file
+
+@@option hostuser
+
+@@option http-proxy
+
+@@option image-volume
+
+@@option init
+
+#### **--init-ctr**=*type*
+
+(Pods only).
+When using pods, create an init style container, which is run after the infra container is started
+but before regular pod containers are started.  Init containers are useful for running
+setup operations for the pod's applications.
+
+Valid values for `init-ctr` type are *always* or *once*.  The *always* value
+means the container runs with each and every `pod start`, whereas the *once*
+value means the container only runs once when the pod is started and then the container is removed.
+
+Init containers are only run on pod `start`.  Restarting a pod does not execute
+any init containers.  Furthermore, init containers can only be created in a
+pod when that pod is not running.
+
+@@option init-path
+
+@@option interactive
+
+@@option ip
+
+@@option ip6
+
+@@option ipc
+
+@@option label
+
+@@option label-file
+
+@@option link-local-ip
+
+@@option log-driver
+
+@@option log-opt
+
+@@option mac-address
+
+@@option memory
+
+@@option memory-reservation
+
+@@option memory-swap
+
+@@option memory-swappiness
+
+@@option mount
+
+@@option name.container
+
+@@option network
+
+Invalid if using **--dns**, **--dns-option**, or **--dns-search** with **--network** set to **none** or **container:**_id_.
+
+If used together with **--pod**, the container does not join the pod's network namespace.
+
+@@option network-alias
+
+@@option no-healthcheck
+
+@@option no-hostname
+
+@@option no-hosts
+
+This option conflicts with **--add-host**.
+
+@@option oom-kill-disable
+
+@@option oom-score-adj
+
+@@option os.pull
+
+@@option passwd-entry
+
+@@option personality
+
+@@option pid.container
+
+@@option pidfile
+
+@@option pids-limit
+
+@@option platform
+
+@@option pod.run
+
+@@option pod-id-file.container
+
+@@option privileged
+
+@@option publish
+
+**Note:** If a container runs within a pod, it is not necessary to publish the port for
+the containers in the pod. The port must only be published by the pod itself. Pod network
+stacks act like the network stack on the host - when there are a variety of containers in the pod,
+and programs in the container, all sharing a single interface and IP address, and
+associated ports. If one container binds to a port, no other container can use that port
+within the pod while it is in use. Containers in the pod can also communicate over localhost
+by having one container bind to localhost in the pod, and another connect to that port.
+
+@@option publish-all
+
+@@option pull
+
+#### **--quiet**, **-q**
+
+Suppress output information when pulling images
+
+@@option rdt-class
+
+@@option read-only
+
+@@option read-only-tmpfs
+
+@@option replace
+
+@@option requires
+
+@@option restart
+
+@@option retry
+
+@@option retry-delay
+
+#### **--rm**
+
+Automatically remove the container and any anonymous unnamed volume associated with
+the container when it exits. The default is **false**.
+
+@@option rootfs
+
+@@option sdnotify
+
+@@option seccomp-policy
+
+@@option secret
+
+@@option security-opt
+
+@@option shm-size
+
+@@option shm-size-systemd
+
+@@option stop-signal
+
+@@option stop-timeout
+
+@@option subgidname
+
+@@option subuidname
+
+@@option sysctl
+
+@@option systemd
+
+@@option timeout
+
+@@option tls-verify
+
+@@option tmpfs
+
+@@option tty
+
+@@option tz
+
+@@option uidmap.container
+
+@@option ulimit
+
+@@option umask
+
+@@option unsetenv
+
+@@option unsetenv-all
+
+@@option user
+
+@@option userns.container
+
+@@option uts.container
+
+@@option variant.container
+
+@@option volume
+
+Use the **--group-add keep-groups** option to pass the user's supplementary group access into the container.
+
+@@option volumes-from
+
+@@option workdir
+
+## EXAMPLES
+
+Create a container using a local image:
+```
+$ podman create alpine ls
+```
+
+Create a container using a local image and annotate it:
+```
+$ podman create --annotation HELLO=WORLD alpine ls
+```
+
+Create a container using a local image, allocating a pseudo-TTY, keeping stdin open and name it myctr:
+```
+  podman create -t -i --name myctr alpine ls
+```
+
+Running a container in a new user namespace requires a mapping of
+the UIDs and GIDs from the host:
+```
+$ podman create --uidmap 0:30000:7000 --gidmap 0:30000:7000 fedora echo hello
+```
+
+Setting automatic user-namespace separated containers:
+```
+# podman create --userns=auto:size=65536 ubi8-init
+```
+
+Configure the timezone in a container:
+```
+$ podman create --tz=local alpine date
+$ podman create --tz=Asia/Shanghai alpine date
+$ podman create --tz=US/Eastern alpine date
+```
+
+Ensure the first container (container1) is running before the second container (container2) is started:
+```
+$ podman create --name container1 -t -i fedora bash
+$ podman create --name container2 --requires container1 -t -i fedora bash
+$ podman start --attach container2
+```
+
+Create a container which requires multiple containers:
+```
+$ podman create --name container1 -t -i fedora bash
+$ podman create --name container2 -t -i fedora bash
+$ podman create --name container3 --requires container1,container2 -t -i fedora bash
+$ podman start --attach container3
+```
+
+Expose shared libraries inside of container as read-only using a glob:
+```
+$ podman create --mount type=glob,src=/usr/lib64/libnvidia\*,ro -i -t fedora /bin/bash
+```
+
+Create a container allowing supplemental groups to have access to the volume:
+```
+$ podman create -v /var/lib/design:/var/lib/design --group-add keep-groups ubi8
+```
+
+Configure execution domain for containers using the personality option:
+```
+$ podman create --name container1 --personality=LINUX32 fedora bash
+```
+
+Create a container with external rootfs mounted as an overlay:
+```
+$ podman create --name container1 --rootfs /path/to/rootfs:O bash
+```
+
+Create a container connected to two networks (called net1 and net2) with a static ip:
+```
+$ podman create --network net1:ip=10.89.1.5 --network net2:ip=10.89.10.10 alpine ip addr
+```
+
+### Define a healthcheck at run time and verify it
+
+```
+$ podman create -d --name healthcheck-example -p 8080:80 \
+  --health-cmd '["CMD-SHELL","wget -q --spider http://127.0.0.1:80 || exit 1"]' \
+  --health-interval 30s --health-timeout 5s --health-retries 3 \
+  docker.io/library/nginx:alpine
+
+$ podman inspect --format '{{.State.Health}}' healthcheck-example
+```
+
+### Rootless Containers
+
+Podman runs as a non-root user on most systems. This feature requires that a new enough version of shadow-utils
+be installed. The shadow-utils package must include the newuidmap and newgidmap executables.
+
+In order for users to run rootless, there must be an entry for their username in /etc/subuid and /etc/subgid which lists the UIDs for their user namespace.
+
+Rootless Podman works better if the fuse-overlayfs package is installed.
+The fuse-overlayfs package provides a userspace overlay storage driver, otherwise users need to use
+the vfs storage driver, which can be disk space expensive and less performant
+than other drivers.
+
+To enable VPN on the container, pasta networking is used by default;
+otherwise, containers need to be run with the --network=host flag.
+
+## ENVIRONMENT
+
+Environment variables within containers can be set using multiple different options:  This section describes the precedence.
+
+Precedence order (later entries override earlier entries):
+
+- **--env-host** : Host environment of the process executing Podman is added.
+- **--http-proxy**: By default, several environment variables are passed in from the host, such as **http_proxy** and **no_proxy**. See **--http-proxy** for details.
+- Container image : Any environment variables specified in the container image.
+- **--env-file** : Any environment variables specified via env-files. If multiple files specified, then they override each other in order of entry.
+- **--env** : Any environment variables specified overrides previous settings.
+
+Create containers and set the environment ending with a __*__.
+The trailing __*__ glob functionality is only active when no value is specified:
+
+```
+$ export ENV1=a
+$ podman create --name ctr1 --env 'ENV*' alpine env
+$ podman start --attach ctr1 | grep ENV
+ENV1=a
+$ podman create --name ctr2 --env 'ENV*=b' alpine env
+$ podman start --attach ctr2 | grep ENV
+ENV*=b
+```
+
+## CONMON
+
+When Podman starts a container it actually executes the conmon program, which
+then executes the OCI Runtime.  Conmon is the container monitor.  It is a small
+program whose job is to watch the primary process of the container, and if the
+container dies, save the exit code.  It also holds open the tty of the
+container, so that it can be attached to later. This is what allows Podman to
+run in detached mode (backgrounded), so Podman can exit but conmon continues to
+run.  Each container has their own instance of conmon. Conmon waits for the
+container to exit, gathers and saves the exit code, and then launches a Podman
+process to complete the container cleanup, by shutting down the network and
+storage.   For more information about conmon, see the conmon(8) man
+page.
+
+## FILES
+
+**/etc/subuid**
+**/etc/subgid**
+
+NOTE: Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to use `/var/tmp`.
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-save(1)](podman-save.1.md)**, **[podman-ps(1)](podman-ps.1.md)**, **[podman-attach(1)](podman-attach.1.md)**, **[podman-pod-create(1)](podman-pod-create.1.md)**, **[podman-port(1)](podman-port.1.md)**, **[podman-start(1)](podman-start.1.md)**, **[podman-kill(1)](podman-kill.1.md)**, **[podman-stop(1)](podman-stop.1.md)**, **[podman-generate-systemd(1)](podman-generate-systemd.1.md)**, **[podman-rm(1)](podman-rm.1.md)**, **[subgid(5)](https://www.unix.com/man-page/linux/5/subgid)**, **[subuid(5)](https://www.unix.com/man-page/linux/5/subuid)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**, **[podman-systemd.unit(5)](podman-systemd.unit.5.md)**, **[setsebool(8)](https://man7.org/linux/man-pages/man8/setsebool.8.html)**, **[pasta(1)](https://passt.top/builds/latest/web/passt.1.html)**, **[fuse-overlayfs(1)](https://github.com/containers/fuse-overlayfs/blob/main/fuse-overlayfs.1.md)**, **proc(5)**, **[conmon(8)](https://github.com/containers/conmon/blob/main/docs/conmon.8.md)**, **personality(2)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.
+
+See [podman-rootless(7)](https://github.com/containers/podman/blob/main/rootless.md)
+for rootless issues.
+
+## HISTORY
+October 2017, converted from Docker documentation to Podman by Dan Walsh for Podman `<dwalsh@redhat.com>`
+
+November 2014, updated by Sven Dowideit `<SvenDowideit@home.org.au>`
+
+September 2014, updated by Sven Dowideit `<SvenDowideit@home.org.au>`
+
+August 2014, updated by Sven Dowideit `<SvenDowideit@home.org.au>`
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a core value of open source. The `master` and `slave` mount propagation terminology used here is problematic and divisive, and needs to be changed. However, these terms are currently used within the Linux kernel and must be used as-is at this time. When the kernel maintainers rectify this usage, Podman will follow suit immediately.

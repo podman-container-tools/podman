@@ -1,0 +1,786 @@
+% podman-build 1
+
+## NAME
+podman\-build - Build a container image using a Containerfile
+
+## SYNOPSIS
+**podman build** [*options*] [*context*]
+
+**podman image build** [*options*] [*context*]
+
+## DESCRIPTION
+**podman build** Builds an image using instructions from one or more
+Containerfiles or Dockerfiles and a specified build context directory. A
+Containerfile uses the same syntax as a Dockerfile internally. For this
+document, a file referred to as a Containerfile can be a file named
+either 'Containerfile' or 'Dockerfile' exclusively. Any file that has additional
+extension attached will not be recognized by `podman build .` unless a `-f` flag is
+used to specify the file.
+
+The build context directory can be specified as the http(s) URL of an archive,
+git repository or Containerfile.
+
+When invoked with `-f` and a path to a Containerfile, with no explicit CONTEXT
+directory, Podman uses the Containerfile's parent directory as its build context.
+
+Containerfiles ending with a ".in" suffix are preprocessed via CPP(1).  This
+can be useful to decompose Containerfiles into several reusable parts that can
+be used via CPP's **#include** directive. Containerfiles ending in .in are
+restricted to no comment lines unless they are CPP commands.
+Note, a Containerfile.in file can still be used by other tools when manually
+preprocessing them via `cpp -E`.
+
+When the URL is an archive, the contents of the URL is downloaded to a temporary
+location and extracted before execution.
+
+When the URL is a Containerfile, the Containerfile is downloaded to a temporary
+location.
+
+When a Git repository is set as the URL, the repository is cloned locally and
+then set as the context.  A URL is treated as a Git repository if it
+has a `git://` prefix or a `.git` suffix.
+
+NOTE: `podman build` uses code sourced from the `Buildah` project to build
+container images.  This `Buildah` code creates `Buildah` containers for the
+`RUN` options in container storage. In certain situations, when the
+`podman build` crashes or users kill the `podman build` process, these external
+containers can be left in container storage. Use the `podman ps --all --external`
+command to see these containers.
+
+`podman buildx build` command is an alias of `podman build`.  Not all `buildx build` features are available in Podman. The `buildx build` option is provided for scripting compatibility.
+
+## OPTIONS
+
+@@option add-host
+
+#### **--all-platforms**
+
+Instead of building for a set of platforms specified using the **--platform** option, inspect the build's base images, and build for all of the platforms for which they are all available.  Stages that use *scratch* as a starting point can not be inspected, so at least one non-*scratch* stage must be present for detection to work usefully.
+
+@@option annotation.image
+
+#### **--arch**=*arch*
+
+Set the architecture of the image to be built, and that of the base image to be
+pulled, if the build uses one, to the provided value instead of using the
+architecture of the build host. Unless overridden, subsequent lookups of the
+same image in the local storage matches this architecture, regardless of the
+host. (Examples: arm, arm64, 386, amd64, ppc64le, s390x)
+
+@@option authfile
+
+@@option build-arg
+
+@@option build-arg-file
+
+@@option build-context
+
+@@option cache-from
+
+@@option cache-to
+
+@@option cache-ttl
+
+@@option cap-add.image
+
+@@option cap-drop.image
+
+@@option cert-dir
+
+@@option cgroup-parent
+
+@@option cgroupns.image
+
+@@option compat-volumes
+
+#### **--compress**
+
+This option is added to be aligned with other containers CLIs.
+Podman doesn't communicate with a daemon or a remote server.
+Thus, compressing the data before sending it is irrelevant to Podman. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option compression-format
+
+@@option compression-level
+
+@@option cpp-flag
+
+@@option cpu-period
+
+@@option cpu-quota
+
+@@option cpu-shares
+
+@@option cpuset-cpus
+
+@@option cpuset-mems
+
+@@option created-annotation
+
+@@option creds
+
+#### **--cw**=*options*
+
+Produce an image suitable for use as a confidential workload running in a
+trusted execution environment (TEE) using krun (i.e., *crun* built with the
+libkrun feature enabled and invoked as *krun*).  Instead of the conventional
+contents, the root filesystem of the image will contain an encrypted disk image
+and configuration information for krun.
+
+The value for *options* is a comma-separated list of key=value pairs, supplying
+configuration information which is needed for producing the additional data
+which will be included in the container image.
+
+Recognized _keys_ are:
+
+*attestation_url*: The location of a key broker / attestation server.
+If a value is specified, the new image's workload ID, along with the passphrase
+used to encrypt the disk image, will be registered with the server, and the
+server's location will be stored in the container image.
+At run-time, krun is expected to contact the server to retrieve the passphrase
+using the workload ID, which is also stored in the container image.
+If no value is specified, a *passphrase* value *must* be specified.
+
+*cpus*: The number of virtual CPUs which the image expects to be run with at
+run-time.  If not specified, a default value will be supplied.
+
+*firmware_library*: The location of the libkrunfw-sev shared library.  If not
+specified, `buildah` checks for its presence in a number of hard-coded
+locations.
+
+*memory*: The amount of memory which the image expects to be run with at
+run-time, as a number of megabytes.  If not specified, a default value will be
+supplied.
+
+*passphrase*: The passphrase to use to encrypt the disk image which will be
+included in the container image.
+If no value is specified, but an *attestation_url* value is specified, a
+randomly-generated passphrase will be used.
+The authors recommend setting an *attestation_url* but not a *passphrase*.
+
+*slop*: Extra space to allocate for the disk image compared to the size of the
+container image's contents, expressed either as a percentage (..%) or a size
+value (bytes, or larger units if suffixes like KB or MB are present), or a sum
+of two or more such specifications.  If not specified, `buildah` guesses that
+25% more space than the contents will be enough, but this option is provided in
+case its guess is wrong.
+
+*type*: The type of trusted execution environment (TEE) which the image should
+be marked for use with.  Accepted values are "SEV" (AMD Secure Encrypted
+Virtualization - Encrypted State) and "SNP" (AMD Secure Encrypted
+Virtualization - Secure Nested Paging).  If not specified, defaults to "SNP".
+
+*workload_id*: A workload identifier which will be recorded in the container
+image, to be used at run-time for retrieving the passphrase which was used to
+encrypt the disk image.  If not specified, a semi-random value will be derived
+from the base image's image ID.
+
+This option is not supported on the remote client, including Mac and Windows
+(excluding WSL2) machines.
+
+@@option decryption-key
+
+@@option device
+
+Note: if the user only has access rights via a group, accessing the device
+from inside a rootless container fails. The **[crun(1)](https://github.com/containers/crun/tree/main/crun.1.md)** runtime offers a
+workaround for this by adding the option
+**--annotation run.oci.keep_original_groups=1**.
+
+@@option disable-compression
+
+@@option disable-content-trust
+
+@@option dns
+
+This option cannot be combined with **--network** that is set to **none**.
+
+Note: this option takes effect only during *RUN* instructions in the build.
+It does not affect _/etc/resolv.conf_ in the final image.
+
+@@option dns-option.image
+
+@@option dns-search.image
+
+@@option env.image
+
+@@option file
+
+@@option force-compression
+
+@@option force-rm
+
+@@option format
+
+@@option from
+
+@@option group-add
+
+@@option help
+
+@@option hooks-dir
+
+@@option http-proxy
+
+@@option identity-label
+
+@@option ignorefile
+
+@@option iidfile
+
+@@option iidfile-raw
+
+@@option inherit-annotations
+
+@@option inherit-labels
+
+@@option ipc.image
+
+@@option isolation
+
+@@option jobs
+
+@@option label.image
+
+@@option layer-label
+
+@@option layers
+
+@@option logfile
+
+#### **--logsplit**=*bool-value*
+
+If `--logfile` and `--platform` are specified, the `--logsplit` option allows
+end-users to split the log file for each platform into different files in the
+following format: `${logfile}_${platform-os}_${platform-arch}`.
+This option is not supported on the remote client, including Mac and Windows
+(excluding WSL2) machines.
+
+@@option manifest
+
+@@option memory
+
+@@option memory-swap
+
+@@option metadata-file
+
+#### **--mount**=*mount-specification*
+
+Adds this mount to each `RUN` command in a Containerfile before executing.  For example:
+
+`podman build --mount=type=secret,id=mysecret …`
+
+and a Containerfile entry of:
+
+`RUN cat /run/secrets/mysecret`
+
+Has the same effect as:
+
+`RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret`
+
+@@option network.image
+
+@@option no-cache
+
+@@option no-hostname
+
+@@option no-hosts
+
+This option conflicts with **--add-host**.
+
+@@option omit-history
+
+@@option os
+
+@@option os-feature
+
+@@option os-version.image
+
+#### **--output**, **-o**=*output-opts*
+
+Output destination (format: type=local,dest=path)
+
+The --output (or -o) option extends the default behavior of building a container image by allowing users to export the contents of the image as files on the local filesystem, which can be useful for generating local binaries, code generation, etc. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+The value for --output is a comma-separated sequence of key=value pairs, defining the output type and options.
+
+Supported _keys_ are:
+- **dest**: Destination path for exported output. Valid value is absolute or relative path, `-` means the standard output.
+- **type**: Defines the type of output to be used. Valid values is documented below.
+
+Valid _type_ values are:
+- **local**: write the resulting build files to a directory on the client-side.
+- **tar**: write the resulting files as a single tarball (.tar).
+
+If no type is specified, the value defaults to **local**.
+Alternatively, instead of a comma-separated sequence, the value of **--output** can be just a destination (in the **dest** format) (e.g. `--output some-path`, `--output -`) where `--output some-path` is treated as if **type=local** and `--output -` is treated as if **type=tar**.
+
+@@option pid.image
+
+#### **--platform**=*os/arch[/variant][,...]*
+
+Set the *os/arch* of the built image (and its base image, when using one)
+to the provided value instead of using the current operating system and
+architecture of the host (for example `linux/arm`).  Unless overridden,
+subsequent lookups of the same image in the local storage matches this
+platform, regardless of the host.
+
+If `--platform` is set, then the values of the `--arch`, `--os`, and
+`--variant` options is overridden.
+
+The `--platform` option can be specified more than once, or given a
+comma-separated list of values as its argument.  When more than one platform is
+specified, the `--manifest` option is used instead of the `--tag`
+option.
+
+Os/arch pairs are those used by the Go Programming Language.  In several cases
+the *arch* value for a platform differs from one produced by other tools such as
+the `arch` command.  Valid OS and architecture name combinations are listed as
+values for $GOOS and $GOARCH at https://golang.org/doc/install/source#environment,
+and can also be found by running `go tool dist list`.
+
+While `podman build` is happy to use base images and build images for any
+platform that exists, `RUN` instructions are unable to succeed without
+the help of emulation provided by packages like `qemu-user-static`.
+
+@@option pull.image
+
+@@option quiet
+
+@@option retry
+
+@@option retry-delay
+
+@@option rewrite-timestamp
+
+@@option rm
+
+@@option runtime
+
+@@option runtime-flag
+
+@@option save-stages
+
+#### **--sbom**=*preset*
+
+Generate SBOMs (Software Bills Of Materials) for the output image by scanning
+the working container and build contexts using the named combination of scanner
+image, scanner commands, and merge strategy.  Must be specified with one or
+more of **--sbom-image-output**, **--sbom-image-purl-output**, **--sbom-output**,
+and **--sbom-purl-output**.  Recognized presets, and the set of options which
+they equate to:
+
+ - "syft", "syft-cyclonedx":
+     --sbom-scanner-image=ghcr.io/anchore/syft
+     --sbom-scanner-command="/syft scan -q dir:{ROOTFS} --output cyclonedx-json={OUTPUT}"
+     --sbom-scanner-command="/syft scan -q dir:{CONTEXT} --output cyclonedx-json={OUTPUT}"
+     --sbom-merge-strategy=merge-cyclonedx-by-component-name-and-version
+ - "syft-spdx":
+     --sbom-scanner-image=ghcr.io/anchore/syft
+     --sbom-scanner-command="/syft scan -q dir:{ROOTFS} --output spdx-json={OUTPUT}"
+     --sbom-scanner-command="/syft scan -q dir:{CONTEXT} --output spdx-json={OUTPUT}"
+     --sbom-merge-strategy=merge-spdx-by-package-name-and-versioninfo
+ - "trivy", "trivy-cyclonedx":
+     --sbom-scanner-image=ghcr.io/aquasecurity/trivy
+     --sbom-scanner-command="trivy filesystem -q {ROOTFS} --format cyclonedx --output {OUTPUT}"
+     --sbom-scanner-command="trivy filesystem -q {CONTEXT} --format cyclonedx --output {OUTPUT}"
+     --sbom-merge-strategy=merge-cyclonedx-by-component-name-and-version
+ - "trivy-spdx":
+     --sbom-scanner-image=ghcr.io/aquasecurity/trivy
+     --sbom-scanner-command="trivy filesystem -q {ROOTFS} --format spdx-json --output {OUTPUT}"
+     --sbom-scanner-command="trivy filesystem -q {CONTEXT} --format spdx-json --output {OUTPUT}"
+     --sbom-merge-strategy=merge-spdx-by-package-name-and-versioninfo
+
+#### **--sbom-image-output**=*path*
+
+When generating SBOMs, store the generated SBOM in the specified path in the
+output image.  There is no default.
+
+#### **--sbom-image-purl-output**=*path*
+
+When generating SBOMs, scan them for PURL ([package
+URL](https://github.com/package-url/purl-spec/blob/master/PURL-SPECIFICATION.rst))
+information, and save a list of found PURLs to the specified path in the output
+image.  There is no default.
+
+#### **--sbom-merge-strategy**=*method*
+
+If more than one **--sbom-scanner-command** value is being used, use the
+specified method to merge the output from later commands with output from
+earlier commands.  Recognized values include:
+
+ - cat
+     Concatenate the files.
+ - merge-cyclonedx-by-component-name-and-version
+     Merge the "component" fields of JSON documents, ignoring values from
+     documents when the combination of their "name" and "version" values is
+     already present.  Documents are processed in the order in which they are
+     generated, which is the order in which the commands that generate them
+     were specified.
+ - merge-spdx-by-package-name-and-versioninfo
+     Merge the "package" fields of JSON documents, ignoring values from
+     documents when the combination of their "name" and "versionInfo" values is
+     already present.  Documents are processed in the order in which they are
+     generated, which is the order in which the commands that generate them
+     were specified.
+
+#### **--sbom-output**=*file*
+
+When generating SBOMs, store the generated SBOM in the named file on the local
+filesystem.  There is no default.
+
+#### **--sbom-purl-output**=*file*
+
+When generating SBOMs, scan them for PURL ([package
+URL](https://github.com/package-url/purl-spec/blob/master/PURL-SPECIFICATION.rst))
+information, and save a list of found PURLs to the named file in the local
+filesystem.  There is no default.
+
+#### **--sbom-scanner-command**=*image*
+
+Generate SBOMs by running the specified command from the scanner image.  If
+multiple commands are specified, they are run in the order in which they are
+specified.  These text substitutions are performed:
+  - {ROOTFS}
+      The root of the built image's filesystem, bind mounted.
+  - {CONTEXT}
+      The build context and additional build contexts, bind mounted.
+  - {OUTPUT}
+      The name of a temporary output file, to be read and merged with others or copied elsewhere.
+
+#### **--sbom-scanner-image**=*image*
+
+Generate SBOMs using the specified scanner image.
+
+@@option secret.image
+
+@@option security-opt.image
+
+@@option shm-size
+
+#### **--sign-by**=*fingerprint*
+
+Sign the image using a GPG key with the specified FINGERPRINT. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines,)
+
+@@option skip-unused-stages
+
+@@option source-date-epoch
+
+@@option source-policy-file
+
+@@option squash
+
+@@option squash-all
+
+@@option ssh
+
+@@option stage-labels
+
+#### **--stdin**
+
+Pass stdin into the RUN containers. Sometime commands being RUN within a Containerfile
+want to request information from the user. For example apt asking for a confirmation for install.
+Use --stdin to be able to interact from the terminal during the build.
+
+@@option tag
+
+@@option target
+
+@@option timestamp
+
+@@option tls-verify
+
+@@option ulimit.image
+
+@@option unsetannotation
+
+@@option unsetenv.image
+
+@@option unsetlabel
+
+@@option userns.image
+
+@@option userns-gid-map
+
+@@option userns-gid-map-group
+
+@@option userns-uid-map
+
+@@option userns-uid-map-user
+
+@@option uts
+
+@@option variant.build
+
+@@option volume.image
+
+## EXAMPLES
+
+### Build an image using local Containerfiles
+
+Build image using Containerfile with content from current directory:
+```
+$ podman build .
+```
+
+Build image using specified Containerfile with content from current directory:
+```
+$ podman build -f Containerfile.simple .
+```
+
+Build image using Containerfile from stdin with content from current directory:
+```
+$ cat $HOME/Containerfile | podman build -f - .
+```
+
+Build image using multiple Containerfiles with content from current directory:
+```
+$ podman build -f Containerfile.simple -f Containerfile.notsosimple .
+```
+
+Build image with specified Containerfile with content from $HOME directory. Note `cpp` is applied to Containerfile.in before processing as Containerfile:
+```
+$ podman build -f Containerfile.in $HOME
+```
+
+Build image with the specified tag with Containerfile and content from current directory:
+```
+$ podman build -t imageName .
+```
+
+Build image ignoring registry verification for any images pulled via the Containerfile:
+```
+$ podman build --tls-verify=false -t imageName .
+```
+
+Build image with the specified logging format:
+```
+$ podman build --runtime-flag log-format=json .
+```
+
+Build image using debug mode for logging:
+```
+$ podman build --runtime-flag debug .
+```
+
+Build image using specified registry attributes when pulling images from the selected Containerfile:
+```
+$ podman build --authfile /tmp/auths/myauths.json --cert-dir $HOME/auth --tls-verify=true --creds=username:password -t imageName -f Containerfile.simple .
+```
+
+Build image using specified resource controls when running containers during the build:
+```
+$ podman build --memory 40m --cpu-period 10000 --cpu-quota 50000 --ulimit nofile=1024:1028 -t imageName .
+```
+
+Build image using specified SELinux labels and cgroup config running containers during the build:
+```
+$ podman build --security-opt label=level:s0:c100,c200 --cgroup-parent /path/to/cgroup/parent -t imageName .
+```
+
+Build image with read-only and SELinux relabeled volume mounted from the host into running containers during the build:
+```
+$ podman build --volume /home/test:/myvol:ro,Z -t imageName .
+```
+
+Build image with overlay volume mounted from the host into running containers during the build:
+```
+$ podman build -v /var/lib/yum:/var/lib/yum:O -t imageName .
+```
+
+Build image using layers and then removing intermediate containers even if the build fails.
+```
+$ podman build --layers --force-rm -t imageName .
+```
+
+Build image ignoring cache and not removing intermediate containers even if the build succeeds:
+```
+$ podman build --no-cache --rm=false -t imageName .
+```
+
+Build image using the specified network when running containers during the build:
+```
+$ podman build --network mynet .
+```
+
+Build an image using a secret stored in an environment variable or file named `mysecret` to be used with the instruction `RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret`:
+```
+$ podman build --secret=id=mysecret .
+```
+
+Build an image using a secret stored in an environment variable named `MYSECRET` to be used with the instruction `RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret`:
+```
+$ podman build --secret=id=mysecret,env=MYSECRET .
+$ podman build --secret=id=mysecret,src=MYSECRET,type=env .
+```
+
+Build an image using a secret stored in a file named `.mysecret` to be used with the instruction `RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret`:
+```
+$ podman build --secret=id=mysecret,src=.mysecret .
+$ podman build --secret=id=mysecret,src=.mysecret,type=file .
+```
+
+### Building a multi-architecture image using the --manifest option (requires emulation software)
+
+Build image using the specified architectures and link to a single manifest on successful completion:
+```
+$ podman build --arch arm --manifest myimage /tmp/mysrc
+$ podman build --arch amd64 --manifest myimage /tmp/mysrc
+$ podman build --arch s390x --manifest myimage /tmp/mysrc
+```
+
+Similarly build using a single command
+```
+$ podman build --platform linux/s390x,linux/ppc64le,linux/amd64 --manifest myimage /tmp/mysrc
+```
+
+Build image using multiple specified architectures and link to single manifest on successful completion:
+```
+$ podman build --platform linux/arm64 --platform linux/amd64 --manifest myimage /tmp/mysrc
+```
+
+### Building an image using a URL, Git repo, or archive
+
+  The build context directory can be specified as a URL to a Containerfile, a
+Git repository, or URL to an archive. If the URL is a Containerfile, it is
+downloaded to a temporary location and used as the context. When a Git
+repository is set as the URL, the repository is cloned locally to a temporary
+location and then used as the context. Lastly, if the URL is an archive, it is
+downloaded to a temporary location and extracted before being used as the
+context.
+
+#### Building an image using a URL to a Containerfile
+
+Build image from Containerfile downloaded into temporary location used as the build context:
+```
+$ podman build https://10.10.10.1/podman/Containerfile
+```
+
+#### Building an image using a Git repository
+
+  Podman clones the specified GitHub repository to a temporary location and
+uses it as the context. The Containerfile at the root of the repository is used
+and it only works if the GitHub repository is a dedicated repository.
+
+Build image from specified git repository downloaded into temporary location used as the build context:
+```
+$ podman build -t hello  https://github.com/containers/PodmanHello.git
+$ podman run hello
+```
+
+  Note: GitHub does not support using `git://` for performing `clone` operation due to recent changes in their security guidance (https://github.blog/2021-09-01-improving-git-protocol-security-github/). Use an `https://` URL if the source repository is hosted on GitHub.
+
+#### Building an image using a URL to an archive
+
+  Podman fetches the archive file, decompresses it, and uses its contents as the
+build context. The Containerfile at the root of the archive and the rest of the
+archive are used as the context of the build. Passing the
+`-f PATH/Containerfile` option as well tells the system to look for that file
+inside the contents of the archive.
+
+```
+$ podman build -f dev/Containerfile https://10.10.10.1/podman/context.tar.gz
+```
+
+  Note: supported compression formats are 'xz', 'bzip2', 'gzip' and 'identity'
+(no compression).
+
+## Files
+
+### .containerignore/.dockerignore
+
+If the file *.containerignore* or *.dockerignore* exists in the context directory,
+`podman build` reads its contents. Use the `--ignorefile` option to override the
+.containerignore path location.
+Podman uses the content to exclude files and directories from the context
+directory, when executing COPY and ADD directives in the
+Containerfile/Dockerfile
+
+The .containerignore and .dockerignore files use the same syntax; if both
+are in the context directory, podman build only uses .containerignore.
+
+Users can specify a series of Unix shell globs in a .containerignore file to
+identify files/directories to exclude.
+
+Podman supports a special wildcard string `**` which matches any number of
+directories (including zero). For example, **/*.go excludes all files that
+end with .go that are found in all directories.
+
+Example .containerignore file:
+
+```
+# exclude this content for image
+*/*.c
+**/output*
+src
+```
+
+`*/*.c`
+Excludes files and directories whose names ends with .c in any top level
+subdirectory. For example, the source file include/rootless.c.
+
+`**/output*`
+Excludes files and directories starting with `output` from any directory.
+
+`src`
+Excludes files named src and the directory src as well as any content in it.
+
+Lines starting with ! (exclamation mark) can be used to make exceptions to
+exclusions. The following is an example .containerignore file that uses this
+mechanism:
+```
+*.doc
+!Help.doc
+```
+
+Exclude all doc files except Help.doc from the image.
+
+This functionality is compatible with the handling of .containerignore files
+described here: **[containerignore(5)](https://github.com/containers/container-libs/blob/main/common/docs/containerignore.5.md)**
+
+### registries.conf (`/etc/containers/registries.conf`)
+
+registries.conf is the configuration file which specifies which container
+registries is consulted when completing image names which do not include
+a registry or domain portion.
+See **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**
+
+
+## Troubleshooting
+
+### lastlog sparse file
+
+Using a useradd command within a Containerfile with a large UID/GID creates
+a large sparse file `/var/log/lastlog`.  This can cause the
+build to hang forever.  Go language does not support sparse files correctly,
+which can lead to some huge files being created in the container image.
+
+When using the `useradd` command within the build script, pass the
+`--no-log-init or -l` option to the `useradd` command.  This option tells
+useradd to stop creating the lastlog file.
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[buildah(1)](https://github.com/containers/buildah/blob/main/docs/buildah.1.md)**, **[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**, **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**, **[crun(1)](https://github.com/containers/crun/blob/main/crun.1.md)**, **[runc(8)](https://github.com/opencontainers/runc/blob/main/man/runc.8.md)**, **[useradd(8)](https://www.unix.com/man-page/redhat/8/useradd)**, **[podman-ps(1)](podman-ps.1.md)**, **[podman-rm(1)](podman-rm.1.md)**, **[Containerfile(5)](https://github.com/containers/container-libs/blob/main/common/docs/Containerfile.5.md)**, **[containerignore(5)](https://github.com/containers/container-libs/blob/main/common/docs/containerignore.5.md)**
+
+### Troubleshooting
+
+See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
+for solutions to common issues.
+
+See [podman-rootless(7)](https://github.com/containers/podman/blob/main/rootless.md)
+for rootless issues.
+
+## HISTORY
+Aug 2020, Additional options and .containerignore added by Dan Walsh `<dwalsh@redhat.com>`
+
+May 2018, Minor revisions added by Joe Doss `<joe@solidadmin.com>`
+
+December 2017, Originally compiled by Tom Sweeney `<tsweeney@redhat.com>`
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a
+core value of open source. The `master` and `slave` mount propagation
+terminology used here is problematic and divisive, and needs to be changed.
+However, these terms are currently used within the Linux kernel and must be
+used as-is at this time. When the kernel maintainers rectify this usage,
+Podman will follow suit immediately.

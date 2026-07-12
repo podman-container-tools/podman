@@ -1,0 +1,8 @@
+# -*- sh -*-
+
+podman pull $IMAGE &>/dev/null
+t POST containers/create Image=$IMAGE HostConfig='{"annotations":{"foo":"bar","zoo":"boo"}}' 201 .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+    .HostConfig.Annotations.foo=bar \
+    .HostConfig.Annotations.zoo=boo \

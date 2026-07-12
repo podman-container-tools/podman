@@ -1,0 +1,86 @@
+---
+
+# WARNING ALERT DANGER CAUTION ATTENTION: This file is reused from the
+# `main` branch, by workflows in (at least) the Buildah and Skopeo repos.
+# Please think twice before making large changes, renaming, or moving the file.
+
+# Format ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+
+name: "Lock closed issues and PRs"
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  # Allow reuse of this workflow by other repositories
+  # Ref: https://docs.github.com/en/actions/using-workflows/reusing-workflows
+  workflow_call:
+    secrets:
+      STALE_LOCKING_APP_PRIVATE_KEY:
+        required: true
+      ACTION_MAIL_SERVER:
+        required: true
+      ACTION_MAIL_USERNAME:
+        required: true
+      ACTION_MAIL_PASSWORD:
+        required: true
+      ACTION_MAIL_SENDER:
+        required: true
+  # Debug: Allow triggering job manually in github-actions WebUI
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lock
+
+env:
+  # Number of days before a closed issue/PR is be comment-locked.
+  # Note: dessant/lock-threads will only process a max. of
+  # 50 issues/PRs at a time.
+  CLOSED_DAYS: 90
+  # Pre-created issue/PR label to add (preferably a bright color).
+  # This is intended to direct a would-be commenter's actions.
+  LOCKED_LABEL: 'locked - please file new issue/PR'
+
+jobs:
+  manage_locking:
+    if: github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      # Use dedicated github app to workaround API rate limiting
+      # Ref: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/making-authenticated-api-requests-with-a-github-app-in-a-github-actions-workflow
+      - name: Obtain Stale Locking App token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # N/B: These are both defined at the containers-org level
+          app-id: ${{ vars.STALE_LOCKING_APP_ID }}
+          private-key: ${{ secrets.STALE_LOCKING_APP_PRIVATE_KEY }}
+
+      # Ref: https://github.com/dessant/lock-threads#usage
+      - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7 # v6.0.0
+        with:
+          github-token: '${{ steps.generate-token.outputs.token }}'
+          process-only: 'issues, prs'
+          issue-inactive-days: '${{env.CLOSED_DAYS}}'
+          pr-inactive-days: '${{env.CLOSED_DAYS}}'
+          add-issue-labels: '${{env.LOCKED_LABEL}}'
+          add-pr-labels: '${{env.LOCKED_LABEL}}'
+          pr-lock-reason: 'resolved'
+          log-output: true
+      - if: failure()
+        name: Send job failure notification e-mail
+        uses: dawidd6/action-send-mail@94de994a9f6fffee200243214e17002e2920bb59 # v18
+        with:
+          server_address: ${{secrets.ACTION_MAIL_SERVER}}
+          server_port: 465
+          username: ${{secrets.ACTION_MAIL_USERNAME}}
+          password: ${{secrets.ACTION_MAIL_PASSWORD}}
+          subject: Github workflow error on ${{github.repository}}
+          to: podman-monitor@lists.podman.io
+          from: ${{secrets.ACTION_MAIL_SENDER}}
+          body: "Job failed: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"

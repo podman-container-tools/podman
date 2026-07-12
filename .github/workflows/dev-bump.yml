@@ -1,0 +1,174 @@
+name: Bump to -dev version
+on:
+  push:
+    tags:
+      - '*'
+
+permissions: {}
+
+jobs:
+  bump:
+    if: github.repository == 'podman-container-tools/podman'
+    name: Bump to -dev
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create and push to a branch
+      pull-requests: write # to read and create pull requests
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.PODMANBOT_TOKEN }}
+          persist-credentials: true
+      - name: Bump
+        id: bump
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          if [[ $version == *-rc* ]]; then
+              devbump="${version%-*}-dev"
+              echo "::notice:: is a rc - bumping z down to $devbump"
+          else
+              arr=($(echo "$version" | tr . '\n'))
+              arr[2]=$((${arr[2]}+1))
+              devbump="$(IFS=. ; echo "${arr[*]}")-dev"
+              echo "::notice:: bumping z up to $devbump"
+          fi
+
+          sed --sandbox -i -e "s/const RawVersion = \".*\"/const RawVersion = \"${devbump}\"/g" version/rawversion/version.go
+
+          echo "devbump=$devbump" >> $GITHUB_OUTPUT
+      - name: Push
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+        run: |
+          # Make committer the user who triggered the action, either through cutting a release or manual trigger
+          # GitHub gives everyone a noreply email associated with their account, use that email for the sign-off
+          git config --local user.name "${GITHUB_ACTOR}"
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          bumpbranch="bump-${DEVBUMP}"
+          git checkout -b $bumpbranch
+          git add version/rawversion/version.go
+          git commit --signoff -m "Bump Podman to v${DEVBUMP}"
+          git remote add podmanbot https://github.com/podmanbot/podman
+          git push -f podmanbot "$bumpbranch"
+      - name: Check open PRs
+        id: checkpr
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          prs=$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --head "bump-${DEVBUMP}" \
+            --state open \
+            --json title \
+            --jq 'length')
+          if ((prs > 0)); then
+            echo "SKIPPING: PR already exists to update from ${GITHUB_REF_NAME}."
+          else
+            echo "prexists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open PR
+        if: steps.checkpr.outputs.prexists == 'false'
+        id: pr
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          bumpbranch="bump-${DEVBUMP}"
+          base=${GITHUB_REF_NAME%.*}
+          body=$(printf '```release-note\nNone\n```\n')
+          gh pr create \
+            --title "Bump Podman to v${DEVBUMP}" \
+            --body  "$body" \
+            --head "podmanbot:$bumpbranch" \
+            --base "$base" \
+            --repo "${GITHUB_REPOSITORY}"
+  mainbump:
+    name: Bump on main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create and push to a branch
+      pull-requests: write # to read and create pull requests
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+          token: ${{ secrets.PODMANBOT_TOKEN }}
+          persist-credentials: true
+      - name: Check version on main
+        id: check
+        run: |
+          mainvers=`grep -P '(?<=const RawVersion = ")(\d.\d)' -o version/rawversion/version.go`
+          releasevers=${GITHUB_REF_NAME#v}
+          if echo "${mainvers},${releasevers}" | tr ',' '\n' | sort -V -C
+          then
+              echo "bump=true" >> $GITHUB_OUTPUT
+              echo "Main is lower than release, so we need to bump main"
+          else
+              echo "::notice:: SKIPPING: Main is higher than release, no need to bump"
+          fi
+      - name: Bump main
+        id: bump
+        if: steps.check.outputs.bump == 'true'
+        run: |
+          releasevers=${GITHUB_REF_NAME#v}
+
+          arr=($(echo "$releasevers" | tr . '\n'))
+          arr[1]=$((${arr[1]}+1))
+          arr[2]=0
+          devbump="$(IFS=. ; echo "${arr[*]}")-dev"
+          echo "::notice:: Bumping main to: $devbump"
+
+          sed --sandbox -i -e "s/const RawVersion = \".*\"/const RawVersion = \"${devbump}\"/g" version/rawversion/version.go
+
+          echo "devbump=$devbump" >> $GITHUB_OUTPUT
+      - name: Push
+        if: steps.check.outputs.bump == 'true'
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+        run: |
+          # Make committer the user who triggered the action, either through cutting a release or manual trigger
+          # GitHub gives everyone a noreply email associated with their account, use that email for the sign-off
+          git config --local user.name "${GITHUB_ACTOR}"
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          bumpbranch="bump-main-${DEVBUMP}"
+          git checkout -b $bumpbranch
+          git add version/rawversion/version.go
+          git commit --signoff -m "Bump main to v${DEVBUMP}"
+          git remote add podmanbot https://github.com/podmanbot/podman
+          git push -f podmanbot "$bumpbranch"
+      - name: Check open PRs
+        id: checkpr
+        if: steps.check.outputs.bump == 'true'
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          prs=$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --head "bump-main-${DEVBUMP}" \
+            --state open \
+            --json title \
+            --jq 'length')
+          if ((prs > 0)); then
+            echo "SKIPPING: PR already exists to update to ${DEVBUMP}."
+          else
+            echo "prexists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open PR
+        if: steps.check.outputs.bump == 'true' &&  steps.checkpr.outputs.prexists == 'false'
+        env:
+          DEVBUMP: ${{ steps.bump.outputs.devbump }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          bumpbranch="bump-main-${DEVBUMP}"
+          body=$(printf '```release-note\nNone\n```\n')
+          gh pr create \
+            --title "Bump main to v${DEVBUMP}" \
+            --body  "$body" \
+            --head "podmanbot:$bumpbranch" \
+            --base "main" \
+            --repo "${GITHUB_REPOSITORY}"

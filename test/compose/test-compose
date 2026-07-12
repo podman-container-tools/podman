@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+#
+# Usage: test-compose [testname]
+#
+set -Eu
+ME=$(basename $0)
+
+###############################################################################
+# BEGIN stuff you can but probably shouldn't customize
+
+# Directory where this script and all subtests live
+TEST_ROOTDIR=$(realpath $(dirname $0))
+
+# Podman executable
+PODMAN_BIN=$(realpath $TEST_ROOTDIR/../../bin)/podman
+
+# Local path to docker socket with unix prefix
+# The path will be changed for rootless users
+DOCKER_SOCK=/var/run/docker.sock
+
+# END   stuff you can but probably shouldn't customize
+###############################################################################
+# BEGIN setup
+
+export TMPDIR=${TMPDIR:-/var/tmp}
+WORKDIR=$(mktemp --tmpdir -d $ME.tmp.XXXXXX)
+
+# Log of all HTTP requests and responses; always make '.log' point to latest
+LOGBASE=${TMPDIR}/$ME.log
+LOG=${LOGBASE}.$(date +'%Y%m%dT%H%M%S')
+ln -sf $LOG $LOGBASE
+
+# Keep track of test count and failures in files, not variables, because
+# variables don't carry back up from subshells.
+testcounter_file=$WORKDIR/.testcounter
+failures_file=$WORKDIR/.failures
+
+echo 0 >$testcounter_file
+echo 0 >$failures_file
+
+# END   setup
+###############################################################################
+# BEGIN infrastructure code - the helper functions used in tests themselves
+
+#################
+#  is_rootless  #  Check if we run as normal user
+#################
+function is_rootless() {
+    [ "$(id -u)" -ne 0 ]
+}
+
+#########
+#  die  #  Exit error with a message to stderr
+#########
+function die() {
+    echo "$ME: $*" >&2
+    exit 1
+}
+
+########
+#  is  #  Simple comparison
+########
+function is() {
+    local actual=$1
+    local expect=$2
+    local testname=$3
+
+    if [[ "$actual" = "$expect" ]]; then
+        # On success, include expected value; this helps readers understand
+        _show_ok 1 "$testname=$expect"
+        return
+    fi
+    _show_ok 0 "$testname" "$expect" "$actual"
+}
+
+##########
+#  like  #  Compare, but allowing patterns
+##########
+function like() {
+    local actual=$1
+    local expect=$2
+    local testname=$3
+
+    # "is" (equality) is a subset of "like", but one that expr fails on if
+    # the expected result has shell-special characters like '['. Treat it
+    # as a special case.
+
+    if [[ "$actual" = "$expect" ]]; then
+        _show_ok 1 "$testname=$expect"
+        return
+    fi
+
+    if expr "$actual" : ".*$expect" &>/dev/null; then
+        # On success, include expected value; this helps readers understand
+        _show_ok 1 "$testname ('$actual') ~ $expect"
+        return
+    fi
+    _show_ok 0 "$testname" "~ $expect" "$actual"
+}
+
+##############
+#  _show_ok  #  Helper for is() and like(): displays 'ok' or 'not ok'
+##############
+function _show_ok() {
+    local ok=$1
+    local testname=$2
+
+    # If output is a tty, colorize pass/fail
+    local red=
+    local green=
+    local reset=
+    local bold=
+    if [ -t 1 ]; then
+        red='\e[31m'
+        green='\e[32m'
+        reset='\e[0m'
+        bold='\e[1m'
+    fi
+
+    _bump $testcounter_file
+    count=$(<$testcounter_file)
+
+    # "skip" is a special case of "ok". Assume that our caller has included
+    # the magical '# skip - reason" comment string.
+    if [[ $ok == "skip" ]]; then
+        # colon-plus: replace green with yellow, but only if green is non-null
+        green="${green:+\e[33m}"
+        ok=1
+    fi
+    if [ $ok -eq 1 ]; then
+        echo -e "${green}ok $count $testname${reset}"
+        echo    "ok $count $testname" >>$LOG
+        return
+    fi
+
+    # Failed
+    local expect=$3
+    local actual=$4
+    printf "${red}not ok $count $testname${reset}\n"
+    # Not all errors include actual/expect
+    if [[ -n "$expect" || -n "$actual" ]]; then
+        printf "${red}#  expected: %s${reset}\n" "$expect"
+        printf "${red}#    actual: ${bold}%s${reset}\n" "$actual"
+    fi
+
+    echo    "not ok $count $testname" >>$LOG
+    echo    "  expected: $expect"                     >>$LOG
+
+    _bump $failures_file
+}
+
+###########
+#  _bump  #  Increment a counter in a file
+###########
+function _bump() {
+    local file=$1
+
+    count=$(<$file)
+    echo $(( $count + 1 )) >| $file
+}
+
+###############
+#  test_port  #  Run curl against a port, check results against expectation
+###############
+function test_port() {
+    local port="$1"              # e.g. 5000
+    local op="$2"                # '=' or '~'
+    local expect="$3"            # what to expect from curl output
+
+    # -s -S means "silent, but show errors"
+    local actual
+    actual=$(curl --retry 3 --retry-all-errors -s -S http://127.0.0.1:$port/)
+    local curl_rc=$?
+
+    if [ $curl_rc -ne 0 ]; then
+        _show_ok 0 "$testname - curl (port $port) failed with status $curl_rc"
+        echo "# cat $WORKDIR/server.log:"
+        cat $WORKDIR/server.log
+        echo "# cat $logfile:"
+        cat $logfile
+        return
+    fi
+
+    case "$op" in
+        '=')   is   "$actual" "$expect" "$testname : port $port" ;;
+        '~')   like "$actual" "$expect" "$testname : port $port" ;;
+        *)     die "Invalid operator '$op'" ;;
+    esac
+}
+
+
+###################
+#  start_service  #  Run the socket listener
+###################
+service_pid=
+function start_service() {
+    test -x $PODMAN_BIN || die "Not found: $PODMAN_BIN"
+
+    # FIXME: use ${testname} subdir but we can't: 50-char limit in runroot
+    if ! is_rootless; then
+        rm -rf $WORKDIR/{root,runroot,networks,cdi}
+    else
+        $PODMAN_BIN unshare rm -rf $WORKDIR/{root,runroot,networks,cdi}
+    fi
+    rm -f $DOCKER_SOCK
+    mkdir --mode 0755 $WORKDIR/{root,runroot,networks,cdi}
+    chcon --reference=/var/lib/containers $WORKDIR/root
+
+    $PODMAN_BIN \
+        --log-level debug \
+        --storage-driver=vfs \
+        --root $WORKDIR/root \
+        --runroot $WORKDIR/runroot \
+        --cgroup-manager=systemd \
+        --network-config-dir $WORKDIR/networks \
+        --cdi-spec-dir $WORKDIR/cdi \
+        system service \
+        --time 0 unix://$DOCKER_SOCK \
+        &> $WORKDIR/server.log &
+    service_pid=$!
+
+    # Wait (FIXME: how do we test the socket?)
+    local _timeout=5
+    while [ $_timeout -gt 0 ]; do
+        # FIXME: should we actually try a read or write?
+        test -S $DOCKER_SOCK && return
+        sleep 1
+        _timeout=$(( $_timeout - 1 ))
+    done
+    cat $WORKDIR/server.log
+    die "Timed out waiting for service"
+}
+
+############
+#  podman  #  Needed by some test scripts to invoke the actual podman binary
+############
+function podman() {
+    echo "\$ podman $*"           >>$WORKDIR/output.log
+    output=$($PODMAN_BIN \
+        --storage-driver=vfs \
+        --root    $WORKDIR/root    \
+        --runroot $WORKDIR/runroot \
+        --network-config-dir $WORKDIR/networks \
+        --cdi-spec-dir $WORKDIR/cdi \
+        "$@")
+    rc=$?
+
+    echo -n "$output" >>$WORKDIR/output.log
+    return $rc
+}
+
+# as rootless we want to test the remote connection so we add --connection
+function podman_compose() {
+    if is_rootless; then
+        $PODMAN_BIN --connection compose-sock compose "$@"
+    else
+        podman compose "$@"
+    fi
+}
+
+###################
+#  random_string  #  Returns a pseudorandom human-readable string
+###################
+function random_string() {
+    # Numeric argument, if present, is desired length of string
+    local length=${1:-10}
+
+    head /dev/urandom | tr -dc a-zA-Z0-9 | head -c$length
+}
+
+# END   infrastructure code
+###############################################################################
+# BEGIN sanity checks
+
+for tool in curl docker-compose; do
+    type $tool &>/dev/null || die "$ME: Required tool '$tool' not found"
+done
+
+# END   sanity checks
+###############################################################################
+# BEGIN entry handler (subtest invoker)
+
+# When rootless use a socket path accessible by the rootless user
+if is_rootless; then
+    # lets test two cases here, for rootless we try to connect to the connection as this should be respected
+    DOCKER_SOCK="$WORKDIR/docker.sock"
+    # use PODMAN_CONNECTIONS_CONF so we do not overwrite user settings
+    PODMAN_CONNECTIONS_CONF="$WORKDIR/connections.json"
+    export PODMAN_CONNECTIONS_CONF
+    $PODMAN_BIN system connection add --default notexists "unix:///I/do/not/exist"
+    $PODMAN_BIN system connection add compose-sock "unix://$DOCKER_SOCK"
+
+else
+    # export DOCKER_HOST docker-compose will use it
+    DOCKER_HOST="unix://$DOCKER_SOCK"
+    export DOCKER_HOST
+fi
+
+# hide annoying podman compose warnings, some tests want to check compose stderr and this breaks it.
+export PODMAN_COMPOSE_WARNING_LOGS=false
+
+# Identify the tests to run. If called with args, use those as globs.
+tests_to_run=()
+if [ -n "$*" ]; then
+    shopt -s nullglob
+    for i; do
+        match=(${TEST_ROOTDIR}/*${i}*/docker-compose.yml)
+        if [ ${#match} -eq 0 ]; then
+            die "No match for $TEST_ROOTDIR/*$i*.curl"
+        fi
+        tests_to_run+=("${match[@]}")
+    done
+    shopt -u nullglob
+else
+    tests_to_run=(${TEST_ROOTDIR}/*/docker-compose.yml)
+fi
+
+# Too hard to precompute the number of tests; just spit it out at the end.
+n_tests=0
+
+# We aren't really TAP 13; this helps logformatter recognize our output as BATS
+echo "TAP version 13"
+
+for t in "${tests_to_run[@]}"; do
+    testdir="$(dirname $t)"
+    testname="$(basename $testdir)"
+
+    if [ -e $testdir/SKIP ]; then
+        reason="$(<$testdir/SKIP)"
+        if [ -n "$reason" ]; then
+            reason=" - $reason"
+        fi
+        _show_ok skip "$testname # skip$reason"
+        continue
+    fi
+
+    if ! is_rootless && [ -e $testdir/SKIP_ROOT ]; then
+        reason="$(<$testdir/SKIP_ROOT)"
+        if [ -n "$reason" ]; then
+            reason=" - $reason"
+        fi
+        _show_ok skip "$testname # skip$reason"
+        continue
+    fi
+
+    start_service
+
+    logfile=$WORKDIR/$testname.log
+    (
+        cd $testdir || die "Cannot cd $testdir"
+
+        if [ -e teardown.sh ]; then
+            trap 'teardown' EXIT
+            function teardown() {
+                trap '_show_ok 0 "$testname - teardown" "[ok]" "[error]"' ERR
+                . teardown.sh
+                trap - ERR
+            }
+        fi
+
+        # setup file may be used for creating temporary directories/files.
+        # We source it so that envariables defined in it will get back to us.
+        if [ -e setup.sh ]; then
+            trap '_show_ok 0 "$testname - setup" "[ok]" "[error]"' ERR
+            . setup.sh
+            trap - ERR
+        fi
+
+        podman_compose up -d     &> $logfile
+        docker_compose_rc=$?
+        if [[ $docker_compose_rc -ne 0 ]]; then
+            _show_ok 0 "$testname - up" "[ok]" "status=$docker_compose_rc"
+            sed -e 's/^/#  /' <$logfile
+            podman_compose down >>$logfile 2>&1      # No status check here
+            exit 1
+        fi
+        _show_ok 1 "$testname - up"
+
+        # Run tests. This is likely to be a series of 'test_port' checks
+        # but may also include podman commands to inspect labels, state
+        if [ -e tests.sh ]; then
+            trap '_show_ok 0 "$testname - tests" "[ok]" "[error]"' ERR
+            . tests.sh
+            trap - ERR
+        fi
+        # FIXME: if any tests fail, try 'podman logs' on container?
+
+        if [ -n "${COMPOSE_WAIT:-}" ]; then
+            echo -n "Pausing due to \$COMPOSE_WAIT. Press ENTER to continue: "
+            read keepgoing
+        fi
+
+        # Done. Clean up.
+        podman_compose down     &>> $logfile
+        rc=$?
+        if [[ $rc -eq 0 ]]; then
+            _show_ok 1 "$testname - down"
+        else
+            _show_ok 0 "$testname - down" "[ok]" "rc=$rc"
+            # FIXME: show error
+        fi
+    )
+
+    kill $service_pid
+    wait $service_pid
+
+    # FIXME: otherwise we get EBUSY
+    if ! is_rootless; then
+        umount $WORKDIR/root/overlay  &>/dev/null
+    else
+        $PODMAN_BIN unshare umount $WORKDIR/root/overlay  &>/dev/null
+    fi
+
+    # FIXME: run 'podman ps'?
+    #    rm -rf $WORKDIR/${testname}
+done
+
+# END   entry handler
+###############################################################################
+
+# Clean up
+
+test_count=$(<$testcounter_file)
+failure_count=$(<$failures_file)
+
+if [ -z "${PODMAN_TESTS_KEEP_WORKDIR:-}" ]; then
+    if ! is_rootless; then
+        rm -rf $WORKDIR
+    else
+        $PODMAN_BIN unshare rm -rf $WORKDIR
+    fi
+fi
+
+echo "1..${test_count}"
+
+exit $failure_count

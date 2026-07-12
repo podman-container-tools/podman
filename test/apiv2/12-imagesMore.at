@@ -1,0 +1,140 @@
+# -*- sh -*-
+#
+# Tests for more image-related endpoints
+#
+
+start_registry
+
+podman pull -q $IMAGE
+
+t GET libpod/images/json 200 \
+  .[0].Id~[0-9a-f]\\{64\\}
+iid=$(jq -r '.[0].Id' <<<"$output")
+
+# Retrieve the image tree
+t GET libpod/images/$IMAGE/tree 200 \
+  .Tree~^Image
+
+# Tag nonesuch image
+t POST "libpod/images/nonesuch/tag?repo=myrepo&tag=mytag" 404
+
+# Tag the image
+t POST "libpod/images/$IMAGE/tag?repo=localhost:$REGISTRY_PORT/myrepo&tag=mytag" 201
+
+t GET libpod/images/$IMAGE/json 200 \
+  .RepoTags[0]=localhost:$REGISTRY_PORT/myrepo:mytag
+
+# Push to local registry...
+t POST "/v1.40/images/localhost:$REGISTRY_PORT/myrepo/push?tag=mytag" 500 \
+  .message~".*x509: certificate signed by unknown authority"
+t POST "images/localhost:$REGISTRY_PORT/myrepo/push?tlsVerify=false&tag=mytag" 200 \
+  .error~null
+
+# ...and check output. We can't use our built-in checks because this output
+# is a sequence of JSON objects, i.e., individual ones, not in a JSON array.
+# The lines themselves are valid JSON, but taken together they are not.
+readarray lines <<<"$output"
+s0=$(jq -r .status <<<"${lines[0]}")
+is "$s0" "The push refers to repository [localhost:$REGISTRY_PORT/myrepo:mytag]" \
+   "Push to local registry: first status line"
+
+# FIXME: is there a way to test the actual digest?
+s1=$(jq -r .status <<<"${lines[1]}")
+like "$s1" "mytag: digest: sha256:[0-9a-f]\{64\} size: [0-9]\+" \
+     "Push to local registry: second status line"
+
+# Verify the `aux` trailer is emitted alongside the legacy status line,
+# matching Docker's behaviour. Clients (e.g. the Docker SDK) read
+# `aux.Digest` to recover the registry-side manifest digest.
+aux_tag=$(jq -r '.aux.Tag // empty' <<<"${lines[1]}")
+aux_digest=$(jq -r '.aux.Digest // empty' <<<"${lines[1]}")
+aux_size=$(jq -r '.aux.Size // empty' <<<"${lines[1]}")
+is   "$aux_tag"    "mytag"                       "Push to local registry: aux.Tag"
+like "$aux_digest" "sha256:[0-9a-f]\{64\}"       "Push to local registry: aux.Digest"
+like "$aux_size"   "[0-9]\+"                     "Push to local registry: aux.Size"
+
+# Push to local registry using the libpod endpoint with quiet=false...
+# First create a new tag for the image to push
+t POST "libpod/images/$IMAGE/tag?repo=localhost:$REGISTRY_PORT/myrepo&tag=quiet-false" 201
+
+t POST "libpod/images/localhost:$REGISTRY_PORT/myrepo:quiet-false/push?tlsVerify=false&quiet=false" 200
+
+# ...and check output. We can't use our built-in checks because this output
+# is a sequence of JSON objects, i.e., individual ones, not in a JSON array.
+# The lines themselves are valid JSON, but taken together they are not.
+readarray lines <<<"$output"
+s0=$(jq -r .manifestdigest <<<"${lines[-1]}")
+like "$s0" "sha256:[0-9a-f]\{64\}" \
+   "Push to local registry: last line in push report"
+
+# Untag the image
+t POST "libpod/images/$iid/untag?repo=localhost:$REGISTRY_PORT/myrepo&tag=mytag" 201
+t POST "libpod/images/$iid/untag?repo=localhost:$REGISTRY_PORT/myrepo&tag=quiet-false" 201
+
+# Try to push non-existing image
+t POST "images/localhost:$REGISTRY_PORT/idonotexist/push?tlsVerify=false" 404
+
+t GET libpod/images/$IMAGE/json 200 \
+  .RepoTags[-1]=$IMAGE
+
+# Remove image
+t DELETE libpod/images/$IMAGE 200 \
+  .ExitCode=0
+
+podman pull -q $IMAGE
+
+# test podman image SCP
+# ssh needs to work so we can validate that the failure is past argument parsing
+conn=apiv2test-temp-connection
+podman system connection add --default $conn \
+       ssh://$USER@localhost/run/user/$UID/podman/podman.sock
+# should fail but need to check the output...
+# status 125 here means that the save/load fails due to
+# cirrus weirdness with exec.Command. All of the args have been parsed successfully.
+t POST "libpod/images/scp/$IMAGE?destination=QA::" 500 \
+    .cause="exit status 125"
+t DELETE libpod/images/$IMAGE 200 \
+  .ExitCode=0
+
+# Clean up
+podman system connection rm $conn
+
+stop_registry
+
+# if an image is a manifest list, it should not have
+# anything for arch or os
+podman manifest create foobar
+t GET libpod/images/json 200  \ .[0].IsManifestList=true \
+                                .[0].Arch=null \
+                                .[0].Os=null
+
+
+# list images through the libpod endpoint should return
+# IsManifestList (bool), Arch (string), and Os (string)
+podman pull -q $IMAGE
+t GET libpod/images/json 200  \ .[0].IsManifestList=true\
+                                .[0].Arch=null \
+                                .[0].Os=null \
+                                '.[0].RepoDigests | length=1' \
+                                .[1].IsManifestList=false \
+                                .[1].Arch=amd64 \
+                                .[1].Os=linux
+
+# if a manifest list and an image are returned with libpod images
+# endpoint, then one should be a manifest with IsManifest only; and
+# the other image should have IsManifestList, Arch, and Os.
+podman manifest add --arch amd64 foobar $IMAGE
+t GET libpod/images/json 200    .[0].IsManifestList=true\
+                                .[0].Arch=null \
+                                .[0].Os=null \
+                                '.[0].RepoDigests | length=2' \
+                                .[1].IsManifestList=false \
+                                .[1].Arch=amd64 \
+                                .[1].Os=linux
+
+t GET images/json 200    .[0].IsManifestList=null \
+                                .[0].Arch=null \
+                                .[0].Os=null \
+                                .[1].IsManifestList=null \
+                                .[1].Arch=null \
+                                .[1].Os=null \

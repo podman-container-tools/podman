@@ -1,0 +1,22 @@
+name: "Issue Labeler"
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  triage:
+    if: github.repository == 'podman-container-tools/podman'
+    permissions:
+      contents: read  # for github/issue-labeler to get repo contents
+      issues: write  # for github/issue-labeler to create or remove labels
+    runs-on: ubuntu-latest
+    steps:
+    - uses: github/issue-labeler@c1b0f9f52a63158c4adc09425e858e87b32e9685 # v3.4
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+        configuration-path: .github/issue-labeler.yml
+        not-before: 2022-01-27T00:00:00Z
+        enable-versioned-regex: 0

@@ -1,0 +1,1232 @@
+{{ define "primitivefieldcontextvalidator" }}
+  {{- if .ReadOnly }}
+    if err := validate.ReadOnly(ctx, {{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil{
+      return err
+    }
+  {{- end }}
+{{ end }}
+{{ define "primitivefieldvalidator" }}
+  {{ if .Required }}
+    {{- /* NOTE(fredbi): we have introduced a type conversion here a long time ago, and I can't remember why we did so.
+
+           In all known cases this type conversion was superfluous.
+
+           If there is a valid case when we need to coerce the .ValueExpression to the .GoType,
+           I've failed so far to produce a test for it. Removed the type conversion until we find when it could be
+           useful.
+    */}}
+    {{- if and (eq .GoType "string") (not .IsNullable) }}
+  if err := validate.RequiredString({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    {{- else }}
+  if err := validate.Required({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    {{- end }}
+    return err
+  }
+  {{- end }}
+  {{ if .MinLength }}
+    if err := validate.MinLength({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, {{.MinLength }}); err != nil {
+    return err
+  }
+  {{- end }}
+  {{ if .MaxLength }}
+  if err := validate.MaxLength({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, {{.MaxLength }}); err != nil {
+    return err
+  }
+  {{ end }}
+  {{ if .Pattern }}
+  if err := validate.Pattern({{ path . }}, {{ printf "%q" .Location }}, {{ .ToString }}, `{{ escapeBackticks .Pattern }}`); err != nil {
+    return err
+  }
+  {{- end }}
+  {{ if .Minimum }}
+    {{ template "validationMinimum" . }}
+  {{ end }}
+  {{ if .Maximum }}
+    {{ template "validationMaximum" . }}
+  {{ end }}
+  {{ if .MultipleOf }}
+    {{ template "validationMultipleOf" . }}
+  {{ end }}
+  {{ if .Enum }}
+  // value enum
+  if err := {{.ReceiverName }}.validate{{ pascalize .Name }}{{ .Suffix }}Enum({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}); err != nil {
+    return err
+  }
+  {{- end }}
+  {{ if and .IsCustomFormatter (not .IsStream) (not .IsBase64) }}
+    {{ template "validationCustomformat" . }}
+  {{- end }}
+{{ end }}
+
+{{ define "slicecontextvalidator" }}
+  {{ if .ReadOnly }}
+    if err := validate.ReadOnly(ctx, {{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil{
+      return err
+    }
+  {{ end }}
+  {{ if .Items }}
+    {{- if and (or .Items.ReadOnly .Items.HasContextValidations) (not .Items.IsInterface) (not .Items.IsStream) }}
+      for {{.IndexVar }} := 0; {{.IndexVar }} < len({{.ValueExpression }}); {{.IndexVar }}++ {
+      {{- with .Items }}
+        {{ template "propertycontextvalidator" . }}
+      {{- end }}
+      }
+    {{- end }}
+  {{- else }}
+    {{- if or .IsAliased (ne .ValueExpression .ReceiverName) }}{{/* prevents generated code to call itself: this is reserved for aliased types */}}
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+    if {{ .ValueExpression }} != nil {
+      {{- end }}
+      if err := {{.ValueExpression }}.ContextValidate(ctx, formats); err != nil {
+        ve := new(errors.Validation)
+        if stderrors.As(err, &ve) {
+          return ve.ValidateName({{ path . }})
+        }
+        ce := new(errors.CompositeError)
+        if stderrors.As(err, &ce) {
+          return ce.ValidateName({{ path . }})
+        }
+
+        return err
+      }
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+    }
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{ end }}
+
+{{define "slicevalidator" }}
+  {{ if .Required }}
+    if err := validate.Required({{ path . }}, {{ printf "%q" .Location }}, {{ .ValueExpression }}); err != nil {
+      return err
+    }
+  {{ end }}
+  {{ if or .MinItems .MaxItems }}
+    {{ .IndexVar }}{{ pascalize .Name }}Size := int64(len({{.ValueExpression }}))
+  {{ end }}
+  {{ if .MinItems }}
+    if err := validate.MinItems({{ path . }}, {{ printf "%q" .Location }}, {{ .IndexVar }}{{ pascalize .Name }}Size, {{.MinItems }}); err != nil {
+      return err
+    }
+  {{ end }}
+  {{ if .MaxItems }}
+    if err := validate.MaxItems({{ path . }}, {{ printf "%q" .Location }}, {{ .IndexVar }}{{ pascalize .Name }}Size, {{.MaxItems }}); err != nil {
+      return err
+    }
+  {{ end }}
+  {{ if .UniqueItems }}
+    if err := validate.UniqueItems({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+      return err
+    }
+  {{ end }}
+  {{ if .Enum }}
+    // for slice
+    if err := {{.ReceiverName }}.validate{{ pascalize .Name }}Enum({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+      return err
+    }
+  {{ end }}
+  {{ if .Items }}
+    {{- if and (or .Items.Required .Items.HasValidations .Items.IsBaseType .Items.IsAliased) (not .Items.IsInterface) (not .Items.IsStream) (not .Items.SkipExternalValidation) }}
+      for {{.IndexVar }} := 0; {{.IndexVar }} < len({{.ValueExpression }}); {{.IndexVar }}++ {
+      {{- with .Items }}
+        {{- if and .IsNullable (not .Required) (not .IsMapNullOverride) }}
+          {{- if .IsInterface }}
+          if {{ .ValueExpression }} == nil { // not required
+          {{- else }}
+          if swag.IsZero({{ .ValueExpression }}) { // not required
+          {{- end }}
+            continue
+          }
+        {{- end }}
+        {{ template "propertyvalidator" . }}
+      {{- end }}
+      }
+    {{- end }}
+  {{- else }}
+    {{- if and (or .IsAliased (ne .ValueExpression .ReceiverName) (not .SkipExternalValidation)) }}{{/* prevents generated code to call itself: this is reserved for aliased types */}}
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+    if {{ .ValueExpression }} != nil {
+      {{- end }}
+      if err := {{.ValueExpression }}.Validate(formats); err != nil {
+        ve := new(errors.Validation)
+        if stderrors.As(err, &ve) {
+          return ve.ValidateName({{ path . }})
+        }
+        ce := new(errors.CompositeError)
+        if stderrors.As(err, &ce) {
+          return ce.ValidateName({{ path . }})
+        }
+
+        return err
+      }
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+    }
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{ end }}
+{{ define "mapcontextvalidator" }}
+  {{- if and .Required }}
+    {{- if or .IsNullable .IsInterface }}
+    if {{ .ReceiverName }}.{{ pascalize .Name }} == nil {
+      return errors.Required({{ path . }}, {{ printf "%q" .Location }}, nil)
+    }
+    {{- else }}
+    if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{ if not (or .IsAnonymous .IsNullable) }}{{ .GoType }}({{ end }}{{ .ValueExpression }}{{ if not (or .IsAnonymous .IsNullable) }}){{ end }}); err != nil {
+      return err
+    }
+    {{- end }}
+  {{- end }}
+  {{ if .HasAdditionalProperties }}
+    {{- if  .AdditionalProperties.HasContextValidations }}
+    {{- $validatedValues := .ValueExpression }}{{ $keyVar := .AdditionalProperties.KeyVar }}
+    for {{ .AdditionalProperties.KeyVar }} := range {{ .ValueExpression }} {
+      {{ with .AdditionalProperties }}
+        {{/*Don't need to add context validate directly here since we are recursing*/}}
+        {{- if .IsPrimitive }}
+          {{- if .IsAliased }}
+            {{- if not .IsAnonymous }}
+      if val, ok := {{ $validatedValues }}[{{ $keyVar }}]; ok {
+              {{- if and .IsNullable (not .IsMapNullOverride) }}
+        if val != nil {
+              {{- end }}
+          if err := val.ContextValidate(ctx, formats); err != nil {
+              return err
+          }
+              {{- if and .IsNullable (not .IsMapNullOverride) }}
+        }
+              {{- end }}
+      }
+            {{- else }}{{/* validation of anonymous objects */}}
+              {{ range .AllOf }}
+                {{ range .Properties }}
+                  {{ template "propertycontextvalidator" . }}
+                {{ end }}
+              {{- end }}
+              {{ range .Properties }}
+                {{ template "propertycontextvalidator" . }}
+              {{ end }}
+            {{- end }}
+            {{ if and .IsTuple .AdditionalItems }}
+      // TODO: context validating additional items should go here, if you see this raise an issue{{/* TODO(fred): investigate the case to remove that comment: AdditionalItems shouldn't come in maps. Upstream validation is needed to guard against this */}}
+      // at https://github.com/go-swagger/go-swagger/issues
+            {{ end }}
+          {{ else }}
+            {{ template "primitivefieldcontextvalidator" . }}
+          {{ end }}
+        {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+          {{- if and (not .IsStream) (not .IsBase64) }}{{/* TODO: IsStream and CustomFormattershould be mutually exclusive in type resolver */}}
+      // TODO: context validating custom formatter items should go here, if you see this raise an issue
+      // at https://github.com/go-swagger/go-swagger/issues
+            {{/*
+            {{ template "validationCustomformat" . }}
+            */}}
+          {{- end }}
+        {{- else if .IsArray }}
+          {{ template "slicecontextvalidator" . }}
+        {{- else if and .IsMap (not .IsInterface) }}
+          {{ template "mapcontextvalidator" . }}
+        {{- else if and .IsMap .IsInterface }}
+          {{ if .Enum }}
+      if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}ValueEnum({{ path . }}, {{ printf "%q" .Location }}, {{ $validatedValues }}[{{ $keyVar }}]); err != nil {
+        return err
+      }
+          {{- end }}
+        {{- else if or .IsComplexObject .IsTuple .IsAdditionalProperties .IsAliased }}
+          {{- if not .IsAnonymous }}
+      if val, ok := {{ $validatedValues }}[{{ $keyVar }}]; ok {
+            {{- if and .IsNullable (not .IsMapNullOverride) }}
+        if val != nil {
+            {{- end }}
+          if err := val.ContextValidate(ctx, formats); err != nil {
+              return err
+          }
+            {{- if and .IsNullable (not .IsMapNullOverride) }}
+        }
+            {{- end }}
+      }
+          {{- else }}
+            {{ range .AllOf }}
+              {{ range .Properties }}
+                {{ template "propertycontextvalidator" . }}
+              {{ end }}
+            {{- end }}
+            {{ range .Properties }}
+              {{ template "propertycontextvalidator" . }}
+            {{- end }}
+          {{- end }}
+          {{ if and .IsTuple .AdditionalItems }}
+      // TODO: context validating additional items should go here, if you see this raise an issue
+      // at https://github.com/go-swagger/go-swagger/issues
+          {{ end }}
+        {{- end }}
+    }
+      {{ end }}
+    {{ end }}
+  {{- else if .IsAliased }}
+    {{- if and .IsMap .HasValidations }}{{/* validation of aliased maps but does not know about AdditionalProperties: e.g. it comes from a $ref */}}
+      {{- if not .IsAnonymous }}
+        {{- if $.IsMap }}{{/* we come from a map range */}}
+      if val, ok := {{ .ValueExpression }}; ok {
+        {{- end }}
+        {{- if and .IsNullable (not .IsMapNullOverride) }}
+          {{- if $.IsMap }}
+        if val != nil {
+          {{- else }}
+        if {{ .ValueExpression }} != nil {
+          {{- end }}
+        {{- end }}
+          if err := {{ if $.IsMap }}val{{ else }}{{ .ValueExpression }}{{ end }}.ContextValidate(ctx, formats); err != nil {
+              return err
+          }
+        {{- if and .IsNullable (not .IsMapNullOverride) }}
+        }
+        {{- end }}
+        {{- if or $.IsMap }}
+     }
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{ end }} {{/*mapcontextvalidator*/}}
+{{ define "mapvalidator" }}{{/* validates additionalProperties */}}
+  {{- if and .Required }}
+    {{- if or .IsNullable .IsInterface }}
+    if {{ .ReceiverName }}.{{ pascalize .Name }} == nil {
+      return errors.Required({{ path . }}, {{ printf "%q" .Location }}, nil)
+    }
+    {{- else }}
+    if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{ if not (or .IsAnonymous .IsNullable) }}{{ .GoType }}({{ end }}{{ .ValueExpression }}{{ if not (or .IsAnonymous .IsNullable) }}){{ end }}); err != nil {
+      return err
+    }
+    {{- end }}
+  {{- end }}
+  {{ if .HasAdditionalProperties }}
+    {{- if  and .AdditionalProperties.HasValidations (not .AdditionalProperties.SkipExternalValidation) }}
+    {{- $validatedValues := .ValueExpression }}{{ $keyVar := .AdditionalProperties.KeyVar }}
+    for {{ .AdditionalProperties.KeyVar }} := range {{ .ValueExpression }} {
+      {{ with .AdditionalProperties }}
+        {{- if and (not .Required) .IsNullable }}{{/* skip when nul type is accepted */}}
+          {{- if .IsInterface }}
+      if {{ $validatedValues }}[{{ $keyVar }}] == nil { // not required
+          {{- else }}
+      if swag.IsZero({{ .ValueExpression }}) { // not required
+          {{- end }}
+        continue
+      }
+        {{- else if and (.Required) (not .IsArray) }}{{/* Required slice is processed below */}}
+      if err := validate.Required({{ path . }}, {{ printf "%q" .Location }}, {{ $validatedValues }}[{{ $keyVar }}]); err != nil {
+        return err
+      }
+        {{- end }}
+        {{- if and  .IsPrimitive (not .SkipExternalValidation ) }}
+          {{- if .IsAliased }}
+            {{- if not .IsAnonymous }}
+      if val, ok := {{ $validatedValues }}[{{ $keyVar }}]; ok {
+              {{- if and .IsNullable (not .IsMapNullOverride) }}
+        if val != nil {
+              {{- end }}
+          if err := val.Validate(formats); err != nil {
+              ve := new(errors.Validation)
+              if stderrors.As(err, &ve) {
+                return ve.ValidateName({{ path . }})
+              }
+              ce := new(errors.CompositeError)
+              if stderrors.As(err, &ce) {
+                return ce.ValidateName({{ path . }})
+              }
+
+              return err
+          }
+              {{- if and .IsNullable (not .IsMapNullOverride) }}
+        }
+              {{- end }}
+      }
+            {{- else }}{{/* validation of anonymous objects */}}
+              {{ range .AllOf }}
+                {{ range .Properties }}
+                  {{ template "propertyvalidator" . }}
+                {{ end }}
+              {{- end }}
+              {{ range .Properties }}
+                {{ template "propertyvalidator" . }}
+              {{ end }}
+            {{- end }}
+            {{ if and .IsTuple .AdditionalItems }}
+      // TODO: validating additional items should go here, if you see this raise an issue{{/* TODO(fred): investigate the case to remove that comment: AdditionalItems shouldn't come in maps. Upstream validation is needed to guard against this */}}
+      // at https://github.com/go-swagger/go-swagger/issues
+            {{ end }}
+          {{- else }}
+            {{ template "primitivefieldvalidator" . }}
+          {{- end }}
+        {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+          {{- if .Required }}
+      if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{ if not (or .IsAnonymous .IsNullable) }}{{ .GoType }}({{ end }}{{.ValueExpression }}{{ if not (or .IsAnonymous .IsNullable) }}){{ end }}); err != nil {
+        return err
+      }
+          {{- end }}
+          {{- if and (not .IsStream) (not .IsBase64) (not .SkipExternalValidation) }}{{/* TODO: IsStream and CustomFormattershould be mutually exclusive in type resolver */}}
+            {{ template "validationCustomformat" . }}
+          {{- end }}
+        {{- else if .IsArray }}
+          {{ template "slicevalidator" . }}
+        {{- else if and .IsMap (not .IsInterface) }}
+          {{ template "minmaxProperties" .}}
+          {{ template "mapvalidator" . }}
+          {{ if .Enum }}
+      if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}ValueEnum({{ path . }}, {{ printf "%q" .Location }}, {{ $validatedValues }}[{{ $keyVar }}]); err != nil {
+        return err
+      }
+          {{- end }}
+        {{- else if and .IsMap .IsInterface }}
+          {{ if .Enum }}
+      if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}ValueEnum({{ path . }}, {{ printf "%q" .Location }}, {{ $validatedValues }}[{{ $keyVar }}]); err != nil {
+        return err
+      }
+          {{- end }}
+        {{- else if or .IsComplexObject .IsTuple .IsAdditionalProperties .IsAliased }}
+          {{- if and (not .IsAnonymous) (not .SkipExternalValidation) }}
+    if val, ok := {{ $validatedValues }}[{{ $keyVar }}]; ok {
+            {{- if and .IsNullable (not .IsMapNullOverride) }}
+      if val != nil {
+            {{- end }}
+          if err := val.Validate(formats); err != nil {
+              ve := new(errors.Validation)
+              if stderrors.As(err, &ve) {
+                return ve.ValidateName({{ path . }})
+              }
+              ce := new(errors.CompositeError)
+              if stderrors.As(err, &ce) {
+                return ce.ValidateName({{ path . }})
+              }
+
+              return err
+          }
+            {{- if and .IsNullable (not .IsMapNullOverride) }}
+      }
+            {{- end }}
+    }
+          {{- else }}
+            {{ range .AllOf }}
+              {{ range .Properties }}
+                {{ template "propertyvalidator" . }}
+              {{ end }}
+            {{- end }}
+            {{ range .Properties }}
+              {{ template "propertyvalidator" . }}
+            {{- end }}
+          {{- end }}
+          {{ if and .IsTuple .AdditionalItems }}
+      // TODO: validating additional items should go here, if you see this raise an issue
+      // at https://github.com/go-swagger/go-swagger/issues
+          {{ end }}
+        {{ end }}
+    }
+      {{- end }}
+    {{ end }}
+    {{ if .Enum }}
+    // from map
+    if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Enum({{ path . }}, {{ printf "%q" .Location }}, {{ .ValueExpression }}); err != nil {
+      return err
+    }
+    {{ end }}
+  {{- else if .IsAliased }}
+    {{- if and .IsMap .HasValidations (not .SkipExternalValidation) }}{{/* validation of aliased maps but does not know about AdditionalProperties: e.g. it comes from a $ref */}}
+      {{- if not .IsAnonymous }}
+        {{- if $.IsMap }}{{/* we come from a map range */}}
+      if val, ok := {{ .ValueExpression }}; ok {
+        {{- end }}
+        {{- if and .IsNullable (not .IsMapNullOverride) }}
+          {{- if $.IsMap }}
+        if val != nil {
+          {{- else }}
+        if {{ .ValueExpression }} != nil {
+          {{- end }}
+        {{- end }}
+          if err := {{ if $.IsMap }}val{{ else }}{{ .ValueExpression }}{{ end }}.Validate(formats); err != nil {
+              return err
+          }
+        {{- if and .IsNullable (not .IsMapNullOverride) }}
+        }
+        {{- end }}
+        {{- if or $.IsMap }}
+     }
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- else if .Enum }}
+    // from map without additionalProperties
+    if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Enum({{ if .Path }}{{ .Path }}{{ else }}""{{ end }}, {{ printf "%q" .Location }}, {{ .ValueExpression }}); err != nil {
+      return err
+    }
+  {{- end }}
+{{ end }}
+
+{{define "objectcontextvalidator" }}
+  {{/* Debug
+  // .Name: {{ .Name }}
+  // .IsAliased: {{ .IsAliased }}
+  // .IsAnonymous: {{ .IsAnonymous }}
+  // .IsNullable: {{ .IsNullable }}
+  // .Required: {{ .Required }}
+  // .ReadOnly: {{ .ReadOnly }}
+  // .HasContextValidations {{ .HasContextValidations }}
+  // .IsBaseType: {{ .IsBaseType }}
+  // .ValueExpression: {{ .ValueExpression }}
+  // .ReceiverName: {{ .ReceiverName }}
+  */}}
+  {{- if not .IsAnonymous }}
+    {{- if or .IsAliased (ne .ValueExpression .ReceiverName) }}{{/* prevents generated code to call itself: case of aliased types */}}
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+      if {{ .ValueExpression }} != nil {
+      {{- end }}
+      {{ if not .Required }}
+              {{- if .IsInterface }}
+      if {{ .ValueExpression }} == nil { // not required
+              {{- else }}
+      if swag.IsZero({{ .ValueExpression }}) { // not required
+              {{- end }}
+        return nil
+      }
+      {{ end }}
+      if err := {{.ValueExpression }}.ContextValidate(ctx, formats); err != nil {
+        ve := new(errors.Validation)
+        if stderrors.As(err, &ve) {
+          return ve.ValidateName({{ path . }})
+        }
+        ce := new(errors.CompositeError)
+        if stderrors.As(err, &ce) {
+          return ce.ValidateName({{ path . }})
+        }
+
+        return err
+      }
+      {{- if and .IsNullable (not .IsMapNullOverride) }}
+    }
+      {{- end }}
+    {{- end }}
+  {{- else }}
+    {{ range .AllOf }}
+      {{ range .Properties }}
+        {{ template "propertycontextvalidator" . }}
+      {{ end }}
+    {{ end }}
+    {{ range .Properties }}
+      {{ template "propertycontextvalidator" . }}
+    {{ end }}
+  {{- end }}
+  {{- if and .IsTuple .AdditionalItems }}
+    // TODO: context validating additional items should go here, if you see this raise an issue
+    // at https://github.com/go-swagger/go-swagger/issues
+  {{- end }}
+{{ end }}
+{{ define "minmaxProperties" }}
+  {{- if and (or .IsMap (and .IsAdditionalProperties .HasAdditionalProperties)) (or .MinProperties .MaxProperties) }}
+    {{- if and (not .IsAdditionalProperties) (not .IsInterface) (eq (len .Properties) 0) }}{{/* map only */}}
+    nprops := len({{ if and .IsMap (not .IsAliased) .HasAdditionalProperties (not .IsElem) (not .IsProperty) }}{{ .ReceiverName }}{{ else }}{{ .ValueExpression }}{{ end }})
+    {{- else }}{{/* object with properties */}}
+      {{- if and .IsNullable .MinProperties }}
+        {{- if gt0 .MinProperties }}
+
+    // short circuits minProperties > 0
+    if {{ .ReceiverName }} == nil {
+      return errors.TooFewProperties({{ path . }}, {{ printf "%q" .Location }}, {{ .MinProperties }})
+    }
+        {{- end }}
+      {{- end }}
+
+    props := make(map[string]json.RawMessage, {{ len .Properties }}{{ if .HasAdditionalProperties }}+ 10{{ end }})
+    j, err := swag.WriteJSON({{ .ReceiverName }})
+    if err != nil {
+      return err
+    }
+
+    if err = swag.ReadJSON(j, &props) ; err != nil {
+      return err
+    }
+
+    nprops := len(props)
+    {{- end }}
+    {{ if .MinProperties }}
+    // minProperties: {{ .MinProperties }}
+    if nprops < {{ .MinProperties }} {
+      return errors.TooFewProperties({{ path . }}, {{ printf "%q" .Location }}, {{ .MinProperties }})
+    }
+    {{- end }}
+    {{ if .MaxProperties }}
+    // maxProperties: {{ .MaxProperties }}
+    if nprops > {{ .MaxProperties }} {
+      return errors.TooManyProperties({{ path . }}, {{ printf "%q" .Location }}, {{ .MaxProperties }})
+    }
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{define "objectvalidator" }}{{/* // DEBUG
+  // .Name: {{ .Name }}
+  // .IsAliased: {{ .IsAliased }}
+  // .IsAnonymous: {{ .IsAnonymous }}
+  // .IsNullable: {{ .IsNullable }}
+  // .Required: {{ .Required }}
+  // .ReadOnly: {{ .ReadOnly }}
+  // .HasValidations {{ .HasValidations }}
+  // .HasContextValidations {{ .HasContextValidations }}
+  // .IsBaseType: {{ .IsBaseType }}
+  // .ValueExpression: {{ .ValueExpression }}
+  // .ReceiverName: {{ .ReceiverName }}
+  // .IsAdditionalProperties: {{ .IsAdditionalProperties }}
+  // .IsInterface: {{ .IsInterface }}
+  // .IsMap: {{ .IsMap }}
+  // .IsArray: {{ .IsArray }}
+  // .IsMapNullOverride: {{ .IsMapNullOverride }}
+  */}}
+  {{- if not .IsAnonymous }}
+    {{- if and .Required (or .IsNullable .IsBaseType .IsMap) (not .IsPrimitive) }}
+      if err := validate.Required({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+        return err
+      }
+      {{- if and (not .Required) .IsBaseType }}
+      if {{ .ValueExpression }} == nil {
+        return nil
+      }
+      {{- end }}
+    {{ end }}
+    {{- if and (or .IsAliased (ne .ValueExpression .ReceiverName)) (not .SkipExternalValidation) }}{{/* prevents generated code to call itself: case of aliased types */}}
+      {{- if or (and (or .IsNullable) (not .IsMapNullOverride)) .IsMap .IsArray }}
+      if {{ .ValueExpression }} != nil {
+      {{- end }}
+      if err := {{.ValueExpression }}.Validate(formats); err != nil {
+        ve := new(errors.Validation)
+        if stderrors.As(err, &ve) {
+          return ve.ValidateName({{ path . }})
+        }
+        ce := new(errors.CompositeError)
+        if stderrors.As(err, &ce) {
+          return ce.ValidateName({{ path . }})
+        }
+
+        return err
+      }
+      {{- if or (and (or .IsNullable) (not .IsMapNullOverride)) .IsMap .IsArray }}
+    }
+      {{- end }}
+    {{- end }}
+  {{- else }}
+    {{ template "minmaxProperties" .}}
+    {{ range .AllOf }}
+      {{ range .Properties }}
+        {{ template "propertyvalidator" . }}
+      {{ end }}
+    {{ end }}
+    {{ range .Properties }}
+      {{ template "propertyvalidator" . }}
+    {{ end }}
+  {{- end }}
+  {{- if and .IsTuple .AdditionalItems }}
+    // TODO: validating additional items should go here, if you see this raise an issue
+    // at https://github.com/go-swagger/go-swagger/issues
+  {{- end }}
+{{ end }}
+
+{{define "propertycontextvalidator"}}
+  {{- if .IsPrimitive }}
+    {{- if .IsAliased }}
+      {{ template "objectcontextvalidator" . }}
+    {{- else }}
+      {{ template "primitivefieldcontextvalidator" . }}
+    {{- end }}
+    {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+    // TODO: context validating primitive with custom formatter should go here, if you see this raise an issue
+    // at https://github.com/go-swagger/go-swagger/issues
+    {{- if .ReadOnly }}
+
+  if err := validate.ReadOnly{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    return err
+  }
+    {{- end }}
+    {{- if and (not .IsStream) (not .IsBase64) }}
+  // TODO: context validating properties with custom formatter should go here, if you see this raise an issue
+  // at https://github.com/go-swagger/go-swagger/issues
+    {{/*{{ template "validationCustomformat" . }}*/}}
+    {{- end }}
+  {{- else if .IsArray }}
+    {{ template "slicecontextvalidator" . }}
+  {{- else if and .IsMap (or (not .IsAliased) (and .IsAliased .IsInterface)) }}{{/* except for interface, the rendering for aliased maps is performed by objectvalidator */}}
+    {{ template "mapcontextvalidator" . }}
+  {{- else if or .IsComplexObject .IsTuple .IsAdditionalProperties .IsAliased }}
+    {{ template "objectcontextvalidator" . }}
+  {{- end }}
+
+{{end}}
+
+{{define "propertyvalidator" }}
+  {{- if .IsPrimitive }}
+    {{- if .IsAliased }}
+      {{- if and .Required (not .IsAnonymous) }}
+  if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    return err
+  }
+      {{- end }}
+      {{ template "objectvalidator" . }}
+    {{- else }}
+      {{ template "primitivefieldvalidator" . }}
+    {{- end }}
+  {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+    {{- if .Required }}
+  if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    return err
+  }
+    {{- end }}
+    {{- if and (not .IsStream) (not .IsBase64) }}
+      {{ template "validationCustomformat" . }}
+    {{- end }}
+   {{- else if .IsArray }}
+    {{ template "slicevalidator" . }}
+  {{- else if and .IsMap (or (not .IsAliased) (and .IsAliased .IsInterface)) }}
+    {{ template "minmaxProperties" . }}
+    {{ template "mapvalidator" . }}
+  {{- else if or .IsComplexObject .IsTuple .IsAdditionalProperties .IsAliased }}
+    {{- if and .IsAdditionalProperties .Required (not .IsAliased) }}
+      {{- if or .IsNullable .IsInterface }}
+      if {{ .ValueExpression }} == nil {
+        return errors.Required({{ path . }}, {{ printf "%q" .Location }}, {{ .ValueExpression }})
+      }
+      {{- else }}
+      if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+        return err
+      }
+      {{- end }}
+    {{- end }}
+    {{ template "objectvalidator" . }}
+  {{- else if and .IsExternal .Required }}
+    {{- if or .IsNullable .IsInterface }}
+      if {{ .ValueExpression }} == nil {
+        return errors.Required({{ path . }}, {{ printf "%q" .Location }}, {{ .ValueExpression }})
+      }
+    {{- else }}
+      if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+        return err
+      }
+    {{- end }}
+  {{- end }}
+{{ end }}
+
+{{define "fieldcontextvalidator" }}
+  {{- if .IsPrimitive }}
+    {{ template "primitivefieldcontextvalidator" . }}
+  {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+    {{- if and (not .IsStream) (not .IsBase64) }}
+      // TODO: context validating properties with custom formatter should go here, if you see this raise an issue
+      // at https://github.com/go-swagger/go-swagger/issues
+      {{/*
+      {{ template "validationCustomformat" . }}
+      */}}
+    {{- end }}
+  {{- else if .IsArray }}
+    {{ template "slicecontextvalidator" . }}
+  {{- else if .IsMap }}
+    {{ template "mapcontextvalidator" . }}
+  {{- end }}
+
+{{ end }}
+
+{{ define "fieldvalidator"}}
+  {{- if .IsPrimitive }}
+    {{ template "primitivefieldvalidator" . }}
+  {{- else if and .IsCustomFormatter (or .HasValidations .Required) }}{{/* custom format not captured as primitive */}}
+    {{- if .Required }}
+  if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}({{ path . }}, {{ printf "%q" .Location }}, {{.ValueExpression }}); err != nil {
+    return err
+  }
+    {{- end }}
+    {{- if and (not .IsStream) (not .IsBase64) }}
+      {{ template "validationCustomformat" . }}
+    {{- end }}
+  {{- else if .IsArray }}
+    {{ template "slicevalidator" . }}
+  {{- else if .IsMap }}
+    {{ template "mapvalidator" . }}
+  {{- end }}
+{{ end }}
+
+{{define "schemacontextvalidator" }}
+// ContextValidate validate this {{ humanize .Name }} based on the context it is used
+func ({{.ReceiverName }} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if .Discriminates }}{{ camelize .Name }}{{ else if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+  var res []error
+  {{ range .AllOf }}
+    {{- if not .Properties }}
+      // validation for a type composition with {{ .GoType }}
+    {{- end }}
+    {{- if and (or .IsInterface .IsAnonymous .IsBaseType) (or .HasContextValidations) }}
+      {{ template "fieldcontextvalidator" . }}
+      {{ range .Properties }}
+        {{ if and (ne $.DiscriminatorField .Name) (or .HasContextValidations) }}
+          if err := {{.ReceiverName }}.contextValidate{{ pascalize .Name }}(ctx, formats); err != nil {
+            res = append(res, err)
+          }
+        {{- end }}
+      {{- end }}
+      {{- if and .HasAdditionalProperties (not .IsMap) }}{{/* validates additionalProperties in an object which is not itself a map */}}
+        {{ template "mapcontextvalidator" . }}
+      {{- end }}
+      {{ if and .IsTuple .AdditionalItems }}
+      // TODO: context validating additional items should go here, if you see this raise an issue
+      // at https://github.com/go-swagger/go-swagger/issues
+      {{/*
+      if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Items(formats); err != nil {
+        res = append(res, err)
+      }
+      */}}
+      {{ end }}
+    {{- else if (or .HasContextValidations) }}
+      if err := {{ .ReceiverName }}.{{ pascalize (dropPackage .GoType) }}.ContextValidate(ctx, formats); err != nil {
+        res = append(res, err)
+      }
+    {{- end }}
+  {{- end }} {{/*end AllOf*/}}
+  {{ template "fieldcontextvalidator" . }}
+  {{ range .Properties }}
+    {{ if .HasContextValidations }} {{/* complex obj always has cv*/}}
+      if err := {{.ReceiverName }}.contextValidate{{ pascalize .Name }}(ctx, formats); err != nil {
+        res = append(res, err)
+      }
+    {{ end }}
+  {{ end }}
+  {{- if and .HasAdditionalProperties (not .IsMap) }}{{/* validates additionalProperties in an object which is not itself a map */}}
+    {{ template "mapcontextvalidator" . }}
+  {{- end }}
+  if len(res) > 0 {
+    return errors.CompositeValidationError(res...)
+  }
+  return nil
+}
+
+
+  {{ range .Properties }}
+    {{ if .HasContextValidations }}
+func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) contextValidate{{ pascalize .Name }}(ctx context.Context, formats strfmt.Registry) error {
+       {{template "propertycontextvalidator" . }}
+  return nil
+}
+    {{ end }}
+  {{ end }} {{/*Properties*/}}
+  {{ range .AllOf }}
+    {{ range .Properties }}
+      {{ if .HasContextValidations }}
+func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) contextValidate{{ pascalize .Name }}(ctx context.Context, formats strfmt.Registry) error {
+       {{template "propertycontextvalidator" . }}
+  return nil
+}
+      {{ end }}
+    {{ end }}
+  {{ end }} {{/*AllOf*/}}
+{{end}} {{/*schemacontextvalidator*/}}
+
+{{define "schemavalidator" }}
+  {{ if .Enum }}
+    {{ if (eq .SwaggerType "string") }}
+      {{ $gotype := .GoType }}
+const (
+      {{ range .Enum }}
+      {{- $variant := print $gotype (pascalize (cleanupEnumVariant .)) }}
+  // {{ $variant }} captures enum value {{ printf "%q" . }}
+	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+      {{ end }}
+)
+    {{ end }}
+
+// for schema
+var {{ camelize .Name }}Enum []any
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize .Name }}Enum = append({{ camelize .Name }}Enum, v)
+  }
+}
+
+func ({{ .ReceiverName }} {{ if not .IsPrimitive }}*{{ end }}{{ if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) validate{{ pascalize .Name }}Enum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize .Name }}Enum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+  {{ end }}
+  {{ if .ItemsEnum }}
+var {{ camelize .Name }}ItemsEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" .Items }}
+  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize .Name }}ItemsEnum = append({{ camelize .Name }}ItemsEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{  $.Name }}{{ end }}) validate{{ pascalize .Name }}ItemsEnum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .Items }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize .Name }}ItemsEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+  {{ end }}
+  {{ with .AdditionalProperties }}
+    {{ if .Enum }}
+// for additional props
+var {{ camelize .Name }}ValueEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize .Name }}ValueEnum = append({{ camelize .Name }}ValueEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) validate{{ pascalize .Name }}ValueEnum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize .Name }}ValueEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+    {{- end }}
+  {{ end }}
+// Validate validates this {{ humanize .Name }}
+func ({{.ReceiverName }} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if .Discriminates }}{{ camelize .Name }}{{ else if .IsExported }}{{ pascalize .Name }}{{ else }}{{ .Name }}{{ end }}) Validate(formats strfmt.Registry) error {
+  var res []error
+  {{ template "minmaxProperties" .}}
+  {{ range .AllOf }}
+    {{- if not .Properties }}
+      // validation for a type composition with {{ .GoType }}
+    {{- end }}
+    {{- if and (or .IsInterface .IsAnonymous .IsBaseType) (or .Required .HasValidations) }}
+      {{ template "fieldvalidator" . }}
+
+      {{ range .Properties }}
+        {{ if and (ne $.DiscriminatorField .Name) (or .Required .HasValidations) }}
+          if err := {{.ReceiverName }}.validate{{ pascalize .Name }}(formats); err != nil {
+            res = append(res, err)
+          }
+        {{- end }}
+      {{- end }}
+      {{- if and .HasAdditionalProperties (not .IsMap) }}{{/* validates additionalProperties in an object which is not itself a map */}}
+        {{ template "mapvalidator" . }}
+      {{- end }}
+      {{ if and .IsTuple .AdditionalItems }}
+      if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Items(formats); err != nil {
+        res = append(res, err)
+      }
+      {{ end }}
+    {{- else if (or .Required .HasValidations) }}
+      if err := {{ .ReceiverName }}.{{ pascalize (dropPackage .GoType) }}.Validate(formats); err != nil {
+        res = append(res, err)
+      }
+    {{- end }}
+  {{- end }}
+  {{ template "fieldvalidator" . }}
+  {{ range .Properties }}
+    {{ if and (ne $.DiscriminatorField .Name) (or .Required .HasValidations) }}
+      if err := {{.ReceiverName }}.validate{{ pascalize .Name }}(formats); err != nil {
+        res = append(res, err)
+      }
+    {{ end }}
+  {{ end }}
+  {{- if and .HasAdditionalProperties (not .IsMap) }}{{/* validates additionalProperties in an object which is not itself a map */}}
+    {{ template "mapvalidator" . }}
+  {{- end }}
+  {{ if and .IsTuple .AdditionalItems }}{{/* validates additionalItems in a tuple */}}
+    if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Items(formats); err != nil {
+      res = append(res, err)
+    }
+  {{ end }}
+  {{ if and .Enum (not .IsPrimitive) (not .IsMap) }}
+    // value enum
+    if err := {{ .ReceiverName }}.validate{{ pascalize .Name }}Enum("", "body", {{ .ReceiverName }}); err != nil {
+      res = append(res, err)
+    }
+  {{ end }}
+
+  if len(res) > 0 {
+    return errors.CompositeValidationError(res...)
+  }
+  return nil
+}
+
+  {{ range .Properties }}
+    {{ if or .Required .HasValidations }}
+      {{ if .Enum }}
+var {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum = append({{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, v)
+  }
+}
+
+        {{ if (eq .SwaggerType "string") }}
+          {{ $gotype := .GoType }}
+          {{ $propname := .Name }}
+const (
+          {{ range .Enum }}
+          {{- $variant := print (pascalize $.Name) (pascalize $propname) (pascalize (cleanupEnumVariant .)) }}
+  // {{ $variant }} captures enum value {{ printf "%q" . }}
+	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+          {{ end }}
+)
+        {{ end }}
+
+// prop value enum
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}Enum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+      {{ end }}
+      {{ if .ItemsEnum }}
+var {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum []any
+func init() {
+  var res []{{ template "dereffedSchemaType" .Items }}
+  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum = append({{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}ItemsEnum(path, location string, value {{ if or .Items.IsTuple .Items.IsComplexObject .Items.IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .Items }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+      {{ end }}
+      {{ if .AdditionalItems }}
+        {{ if .AdditionalItems.Enum }}
+var {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" .AdditionalItems }}
+  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum = append({{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}Enum(path, location string, value {{ if or .AdditionalItems.IsTuple .AdditionalItems.IsComplexObject .AdditionalItems.IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .AdditionalItems }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+        {{ end }}
+      {{ end }}
+      {{ with .AdditionalProperties }}
+        {{ if .Enum }}
+// additional properties value enum
+var {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum = append({{ camelize $.Name }}{{ pascalize .Name }}ValueEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}ValueEnum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+        {{ end }}
+      {{ end }}
+
+      {{ if and (ne $.DiscriminatorField .Name) (or .Required .HasValidations) }}
+func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}(formats strfmt.Registry) error {
+        {{- if not .Required }}
+          {{- if .IsInterface }}
+  if .ValueExpression == nil { // not required
+          {{- else }}
+  if swag.IsZero({{ .ValueExpression }}) { // not required
+          {{- end }}
+    return nil
+  }
+        {{- end }}
+        {{- if and $.IsTuple .IsMap .Required }}
+          {{- if .IsInterface }}
+  if {{ .ValueExpression }} == nil {
+    return errors.Required({{ path . }}, {{ printf "%q" .Location }}, {{ .ValueExpression }})
+  }
+          {{- else }}
+  if err := validate.Required{{ if and (eq .GoType "string") (not .IsNullable) }}String{{ end }}(
+            {{ path . }}, {{ printf "%q" .Location }},
+            {{- if and (eq .GoType "string") (not (or .IsAnonymous .IsNullable)) }}{{ .GoType }}({{ end }}
+            {{- .ValueExpression }}
+            {{- if and (eq .GoType "string") (not (or .IsAnonymous .IsNullable)) }}){{ end }}); err != nil {
+    return err
+  }
+          {{- end }}
+        {{- end }}
+        {{template "propertyvalidator" . }}
+
+  return nil
+}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+  {{ range .AllOf }}
+    {{ range .Properties }}
+      {{ if and (ne $.DiscriminatorField .Name) (or .Required .HasValidations) }}
+        {{ if .Enum }}
+var {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum = append({{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, v)
+  }
+}
+
+// property enum
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}Enum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+        {{ end }}
+        {{ if .ItemsEnum }}
+var {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" .Items }}
+  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum = append({{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}ItemsEnum(path, location string, value {{ if or .Items.IsTuple .Items.IsComplexObject .Items.IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .Items }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}{{ pascalize .Name }}ItemsEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+        {{ end }}
+        {{ if .AdditionalItems }}
+          {{ if .AdditionalItems.Enum }}
+var {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" .AdditionalItems }}
+  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum = append({{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}Enum(path, location string, value {{ if or .AdditionalItems.IsTuple .AdditionalItems.IsComplexObject .AdditionalItems.IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .AdditionalItems }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}Type{{ pascalize .Name }}PropEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+          {{ end }}
+        {{ end }}
+        {{ with .AdditionalProperties }}
+          {{ if .Enum }}
+var {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum []any
+func init() {
+  var res []{{ template "dereffedSchemaType" . }}
+  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum = append({{ camelize $.Name }}{{ pascalize .Name }}ValueEnum, v)
+  }
+}
+
+// additional properties value enum
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}ValueEnum(path, location string, value {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" . }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize $.Name }}{{ pascalize .Name }}ValueEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+          {{ end }}
+        {{ end }}
+
+
+func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}(formats strfmt.Registry) error {
+        {{ if not .Required }}
+          {{- if .IsInterface }}
+  if {{ .ValueExpression }} == nil { // not required
+          {{- else }}
+  if swag.IsZero({{ .ValueExpression }}) { // not required
+          {{- end }}
+    return nil
+  }
+        {{ end }}
+        {{template "propertyvalidator" . }}
+
+  return nil
+}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+
+  {{ if .HasAdditionalItems }}
+    {{ if .AdditionalItems.Enum }}
+var {{ camelize .Name }}ItemsEnum []any
+
+func init() {
+  var res []{{ template "dereffedSchemaType" .AdditionalItems }}
+  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+    panic(err)
+  }
+  for _, v := range res {
+    {{ camelize .Name }}ItemsEnum = append({{ camelize .Name }}ItemsEnum, v)
+  }
+}
+
+func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else if $.IsExported }}{{ pascalize $.Name }}{{ else }}{{ $.Name }}{{ end }}) validate{{ pascalize .Name }}ItemsEnum(path, location string, value {{ if or .AdditionalItems.IsTuple .AdditionalItems.IsComplexObject .AdditionalItems.IsAdditionalProperties }}*{{ end }}{{ template "dereffedSchemaType" .AdditionalItems }}) error {
+  if err := validate.EnumCase(path, location, value, {{ camelize .Name }}ItemsEnum, {{ if .IsEnumCI }}false{{ else }}true{{ end }}); err != nil {
+    return err
+  }
+  return nil
+}
+    {{ end }}
+func ({{.ReceiverName }} *{{ pascalize .Name }}) validate{{ pascalize .Name }}Items(formats strfmt.Registry) error {
+    {{ if and (or .AdditionalItems.Required .AdditionalItems.HasValidations) (not .AdditionalItems.SkipExternalValidation) }}
+  for {{ .IndexVar }} := range {{ .ValueExpression }}.{{ pascalize .Name }}Items {
+      {{template "propertyvalidator" .AdditionalItems }}
+  }
+    {{ end }}
+  return nil
+}
+  {{ end }}
+{{ end }}

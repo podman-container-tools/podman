@@ -1,0 +1,92 @@
+% podman-wait 1
+
+## NAME
+podman\-wait - Wait on one or more containers to stop and print their exit codes
+
+## SYNOPSIS
+**podman wait** [*options*] *container* [...]
+
+**podman container wait** [*options*] *container* [...]
+
+## DESCRIPTION
+Waits on one or more containers to stop.  The container can be referred to by its
+name or ID.  In the case of multiple containers, Podman waits on each consecutively.
+After all conditions are satisfied, the containers' return codes are printed
+separated by newline in the same order as they were given to the command.  An
+exit code of -1 is emitted for all conditions other than "stopped" and
+"exited".
+
+When waiting for containers with a restart policy of `always` or `on-failure`,
+such as those created by `podman kube play`, the containers may be repeatedly
+exiting and restarting, possibly with different exit codes. `podman wait` will
+only display and detect the first exit after the wait command was started.
+
+When running a container with podman run --rm wait does not wait for the
+container to be fully removed. To wait for the removal of a container use
+`--condition=removing`.
+
+## OPTIONS
+
+#### **--condition**=*state*
+Container state or condition to wait for.  Can be specified multiple times where at least one condition must match for the command to return.  Supported values are "configured", "created", "exited", "healthy", "initialized", "paused", "removing", "running", "stopped",  "stopping", "unhealthy".  The default condition is "stopped".
+
+#### **--exit-first-match**
+Wait for exit of first container which matches conditions, ignore other ones.
+
+#### **--help**, **-h**
+
+ Print usage statement
+
+
+#### **--ignore**
+Ignore errors when a specified container is missing and mark its return code as -1.
+
+#### **--interval**, **-i**=*duration*
+  Time interval to wait before polling for completion. A duration string is a sequence of decimal numbers, each with optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". Time unit defaults to "ms".
+
+@@option latest
+
+## EXAMPLES
+
+Wait for the specified container to exit.
+```
+$ podman wait mywebserver
+0
+```
+
+Wait for the latest container to exit. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+```
+$ podman wait --latest
+0
+```
+
+Wait for the container to exit, checking every two seconds.
+```
+$ podman wait --interval 2s mywebserver
+0
+```
+
+Wait for the container by ID. This container exits with error status 1:
+```
+$ podman wait 860a4b23
+1
+```
+
+Wait for both specified containers to exit.
+```
+$ podman wait mywebserver myftpserver
+0
+125
+```
+
+Wait for the named container to exit, but do not fail if the container does not exist.
+```
+$ podman wait --ignore does-not-exist
+-1
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**
+
+## HISTORY
+September 2017, Originally compiled by Brent Baude<bbaude@redhat.com>

@@ -1,0 +1,5 @@
+## assert-podman-args "--shm-size" "5g"
+
+[Container]
+Image=localhost/imagename
+ShmSize=5g

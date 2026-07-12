@@ -1,0 +1,191 @@
+{{/*util functions to generate register and retrieve functions for a model*/}}
+
+{{ define "modelschemacli" }}
+    {{/*some guards to prevent rendering unsupported models types. TODO: remove this guard*/}}
+    {{if or .IsPrimitive .IsComplexObject }}
+        {{ template "modelschemacliinternal" . }}
+    {{ else }}
+        // Name: [{{.Name}}], Type:[{{ .GoType }}], register and retrieve functions are not rendered by go-swagger cli
+    {{ end }}
+{{ end }}
+
+{{/*since register and retrieve are the same for properties and all of, share them here*/}}
+{{ define "propertyregistor" }}
+        {{- if .IsPrimitive }}
+            {{ template "primitiveregistrator" . }}
+        {{- else if .IsArray }}
+    // warning: {{.Name}} {{ .GoType }} array type is not supported by go-swagger cli yet
+        {{- else if .IsMap }}
+    // warning: {{.Name}} {{ .GoType }} map type is not supported by go-swagger cli yet
+        {{- else if .IsComplexObject }} {{/* struct case */}}
+    {{ template "flagnamevar" . }}
+    if err := registerModel{{pascalize (dropPackage .GoType) }}Flags(depth + 1, {{ flagNameVar .Name }}, cmd); err != nil{
+        return err
+    }
+        {{- else }}
+    // warning: {{.Name}} {{ .GoType }} unkown type is not supported by go-swagger cli yet
+        {{- end }}
+{{ end }}
+
+{{ define "propertyretriever" }}
+    {{ flagNameVar .Name }} := fmt.Sprintf("%v.{{ .Name }}", cmdPrefix)
+    if cmd.Flags().Changed({{ flagNameVar .Name }}) {
+        {{- if .IsPrimitive }}
+            {{ template "primitiveretriever" . }}
+            retAdded = true
+        {{- else if .IsArray }}
+        // warning: {{ .Name }} array type {{ .GoType }} is not supported by go-swagger cli yet
+        {{- else if .IsMap }}
+        // warning: {{ .Name }} map type {{ .GoType }} is not supported by go-swagger cli yet
+        {{- else if .IsComplexObject }}
+        // info: complex object {{.Name}} {{.GoType}} is retrieved outside this Changed() block
+        {{- else }}
+        // warning: {{.Name}} {{ .GoType }} unkown type is not supported by go-swagger cli yet
+        {{- end }}
+	}
+    {{- if and  .IsComplexObject (not .IsArray) (not .IsMap) (not .IsStream) }}
+    {{ flagValueVar .Name }} := m.{{pascalize .Name}}
+    if swag.IsZero({{ flagValueVar .Name }}){
+        {{ flagValueVar .Name }} = {{if .IsNullable }}&{{end}}{{if containsPkgStr .GoType}}{{ .GoType }}{{else}}{{ .Pkg }}.{{.GoType}}{{ end }}{}
+    }
+    {{/* always lift the payload to pointer and pass to model retrieve function. If .GoType has pkg str, use it, else use .Pkg+.GoType */}}
+    err, {{pascalize .Name }}Added := retrieveModel{{pascalize (dropPackage .GoType) }}Flags(depth + 1, {{if not .IsNullable }}&{{end}}{{ flagValueVar .Name }}, {{ flagNameVar .Name }}, cmd)
+    if err != nil{
+        return err, false
+    }
+    retAdded = retAdded || {{pascalize .Name }}Added
+    if {{pascalize .Name }}Added {
+        m.{{pascalize .Name}} = {{ flagValueVar .Name }}
+    }
+	{{- end }}
+{{ end }}
+
+{{ define "modelschemacliinternal" }} {{/*used by model definition and in params model*/}}
+{{- $modelName := .Name }}
+{{/*model package is filled by generator*/}}
+{{ $modelPkg := toPackageName .Pkg}}
+{{ $modelType := .GoType }}
+
+// register flags to command
+func registerModel{{pascalize .Name}}Flags(depth int, cmdPrefix string, cmd *cobra.Command) error {
+	{{ range .AllOf }}
+        {{- if not .IsAnonymous }}{{/* named type composition */}}
+            {{ if or  .IsPrimitive .IsComplexObject }}
+    // register embedded {{ .GoType }} flags
+        {{/*defer all of registration to the model's regristor method. embed should not lift cmdPrefix */}}
+    if err := registerModel{{ pascalize (dropPackage .GoType) }}Flags(depth, cmdPrefix, cmd); err != nil{
+        return err
+    }
+            {{ else }}
+                // {{ .Name }} {{ .GoType }} register is skipped
+            {{ end }}
+        {{ else }}{{/*inline definition. assume only properties are used*/}}
+    // register anonymous fields for {{.Name}}
+            {{ $anonName := .Name }}
+            {{ range .Properties }}
+    if err := register{{ pascalize $modelName }}PropAnon{{pascalize $anonName }}{{ pascalize .Name }}(depth, cmdPrefix, cmd); err != nil{
+        return err
+    }
+            {{ end }}
+        {{ end }}
+    {{ end }}
+    {{ range .Properties }}
+    if err := register{{ pascalize $modelName }}Prop{{ pascalize .Name }}(depth, cmdPrefix, cmd); err != nil{
+        return err
+    }
+    {{ end }}
+    return nil
+}
+
+{{ range .AllOf }}
+    {{- if .IsAnonymous }}{{/* inline definition. schema case is defered. */}}
+// inline definition name {{ .Name }}, type {{.GoType}}
+        {{ $anonName := .Name }}
+        {{ range .Properties }}
+func register{{ pascalize $modelName }}PropAnon{{pascalize $anonName }}{{ pascalize .Name }}(depth int, cmdPrefix string, cmd *cobra.Command) error {
+    if depth > maxDepth {
+        return nil
+    }
+    {{ template "propertyregistor" . }}
+    return nil
+}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{/*register functions for each fields in this model */}}
+{{ range .Properties }}
+func register{{ pascalize $modelName }}Prop{{ pascalize .Name }}(depth int, cmdPrefix string, cmd *cobra.Command) error{
+    if depth > maxDepth {
+        return nil
+    }
+    {{ template "propertyregistor" .}}
+    return nil
+}
+{{ end }} {{/*Properties*/}}
+
+// retrieve flags from commands, and set value in model. Return true if any flag is passed by user to fill model field.
+func retrieveModel{{pascalize $modelName }}Flags(depth int, m *{{if containsPkgStr .GoType}}{{ .GoType }}{{else}}{{ .Pkg }}.{{.GoType}}{{ end }}, cmdPrefix string, cmd *cobra.Command) (error, bool) {
+    retAdded := false
+	{{ range .AllOf }}
+        {{- if not .IsAnonymous }}{{/* named type composition */}}
+            {{ if or  .IsPrimitive .IsComplexObject }}
+    // retrieve model {{.GoType}}
+    err, {{pascalize .Name }}Added := retrieveModel{{ pascalize (dropPackage .GoType) }}Flags(depth, &m.{{pascalize (dropPackage .GoType) }}, cmdPrefix, cmd)
+    if err != nil{
+        return err, false
+    }
+    retAdded = retAdded || {{pascalize .Name }}Added
+            {{ else }} {{/*inline anonymous case*/}}
+
+            {{ end }}
+        {{- else }}
+    // retrieve allOf {{.Name}} fields
+            {{ $anonName := .Name }}
+            {{ range .Properties }}
+    err, {{pascalize .Name}}Added := retrieve{{ pascalize $modelName }}PropAnon{{pascalize $anonName }}{{ pascalize .Name }}Flags(depth, m, cmdPrefix, cmd)
+    if err != nil{
+        return err, false
+    }
+    retAdded = retAdded || {{ pascalize .Name }}Added
+            {{ end }}
+        {{- end }}
+    {{ end }}
+    {{ range .Properties }}
+        err, {{ pascalize .Name }}Added := retrieve{{pascalize $modelName }}Prop{{pascalize .Name }}Flags(depth, m, cmdPrefix, cmd)
+        if err != nil{
+            return err, false
+        }
+        retAdded = retAdded || {{ pascalize .Name }}Added
+    {{ end }}
+    return nil, retAdded
+}
+
+{{ range .AllOf }}
+    {{- if .IsAnonymous }}{{/* inline definition. schema case is defered. */}}
+// define retrieve functions for fields for inline definition name {{ .Name }}
+        {{ $anonName := .Name }}
+        {{ range .Properties }} {{/*anonymous fields will be registered directly on parent model*/}}
+func retrieve{{ pascalize $modelName }}PropAnon{{pascalize $anonName }}{{ pascalize .Name }}Flags(depth int, m *{{if containsPkgStr $modelType}}{{ $modelType }}{{else}}{{ $modelPkg }}.{{$modelType}}{{ end }},cmdPrefix string, cmd *cobra.Command) (error,bool) {
+    if depth > maxDepth {
+        return nil, false
+    }
+    retAdded := false
+    {{ template "propertyretriever" . }}
+    return nil, retAdded
+}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{ range .Properties }}
+func retrieve{{pascalize $modelName }}Prop{{pascalize .Name }}Flags(depth int, m *{{if $modelPkg}}{{$modelPkg}}.{{ dropPackage $modelType }}{{else}}{{ $modelType }}{{end}}, cmdPrefix string, cmd *cobra.Command) (error, bool) {
+    if depth > maxDepth {
+        return nil, false
+    }
+    retAdded := false
+    {{ template "propertyretriever" . }}
+    return nil, retAdded
+}
+{{ end }} {{/*properties*/}}
+{{ end }} {{/*define*/}}

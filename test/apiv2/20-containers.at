@@ -1,0 +1,1009 @@
+# -*- sh -*-
+#
+# test container-related endpoints
+#
+
+# WORKDIR=/data
+MultiTagName=localhost/test/testformultitag:tag
+
+podman pull $IMAGE &>/dev/null
+podman tag $IMAGE $MultiTagName
+# Unimplemented
+#t POST libpod/containers/create '' 201 'sdf'
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+t GET "libpod/containers/json (at start: clean slate)" 200 \
+  "[]" \
+  length=0
+# check content type: https://github.com/containers/podman/issues/14647
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/json.*" "header does not contain application/json"
+
+# Regression test for #12904 (race condition in logging code)
+mytext="hi-there-$(random_string 15)"
+podman run --rm -d --replace --name foo $IMAGE sh -c "echo $mytext;sleep 42"
+# Logs output is prepended by ^A^Y (stdout = 1, length = 25 (with newline))
+# Looks like it is missing the required 0 bytes from the message, why?
+t POST "containers/foo/attach?logs=true&stream=false" 200 \
+  $'\001\031'$mytext
+
+# check old docker header
+t POST "/v1.40/containers/foo/attach?logs=true&stream=false" 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/vnd\.docker\.raw-stream.*" "vnd.docker.raw-stream docker v1.40"
+# check new vnd.docker.multiplexed-stream header
+t POST "/v1.42/containers/foo/attach?logs=true&stream=false" 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/vnd\.docker\.multiplexed-stream.*" "vnd.docker.multiplexed-stream docker v1.42"
+t POST "/v4.6.0/libpod/containers/foo/attach?logs=true&stream=false" 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/vnd\.docker\.raw-stream.*" "vnd.docker.raw-stream libpod v4.6.0"
+t POST "/v4.7.0/libpod/containers/foo/attach?logs=true&stream=false" 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/vnd\.docker\.multiplexed-stream.*" "vnd.docker.multiplexed-stream libpod v4.7.0"
+
+t POST "containers/foo/attach?logs=true&stream=false" 101
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*Content-Type: application/vnd\.docker\.multiplexed-stream.*" "hijacked connection header: Content-type: application/vnd.docker.multiplexed-stream"
+like "$response_headers" ".*Upgrade: tcp.*" "hijacked connection header: Upgrade: tcp"
+
+t POST "containers/foo/kill" 204
+
+podman run --replace --name=foo -v /tmp:/tmp $IMAGE true
+# cannot kill non-running container
+t POST "containers/foo/kill" 409
+t POST "libpod/containers/foo/kill" 409
+
+t GET libpod/containers/json 200 length=0
+
+# bad all input
+t GET libpod/containers/json?all='garb1age' 500 \
+    .cause="schema: error converting value for \"all\""
+
+t GET libpod/containers/json?all=true 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Image=$IMAGE \
+  .[0].Command[0]="true" \
+  .[0].State~\\\(exited\\\|stopped\\\) \
+  .[0].ExitCode=0 \
+  .[0].Mounts~.*/tmp \
+  .[0].IsInfra=false
+
+# Test compat API for Network Settings (.Network is N/A when rootless)
+network_expect="Networks.pasta.NetworkID=pasta"
+network_mode_expect="pasta"
+if root; then
+    network_expect="Networks.podman.NetworkID=2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9"
+    network_mode_expect="bridge"
+fi
+t GET /containers/json?all=true 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Image=$IMAGE \
+  .[0].State="exited" \
+  .[0].Mounts~.*/tmp \
+  .[0].NetworkSettings.$network_expect \
+  .[0].HostConfig.NetworkMode=$network_mode_expect
+
+# compat API imageid with sha256: prefix
+t GET containers/json?limit=1 200 \
+  .[0].ImageID~sha256:[0-9a-f]\\{64\\}
+
+# Make sure `limit` works.
+t GET libpod/containers/json?limit=1 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Image=$IMAGE \
+  .[0].Command[0]="true" \
+  .[0].State~\\\(exited\\\|stopped\\\) \
+  .[0].ExitCode=0 \
+  .[0].IsInfra=false
+
+# Make sure `last` works, which is an alias for `limit`.
+# See https://github.com/containers/podman/issues/6413.
+t GET libpod/containers/json?last=1 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Image=$IMAGE \
+  .[0].Command[0]="true" \
+  .[0].State~\\\(exited\\\|stopped\\\) \
+  .[0].ExitCode=0 \
+  .[0].IsInfra=false
+
+cid=$(jq -r '.[0].Id' <<<"$output")
+
+t GET "libpod/containers/stats?containers=$cid&stream=false" 200 \
+  .memory_stats.max_usage=null
+
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+# Issue #14676: make sure the stats show the memory limit specified for the container
+if root; then
+    CTRNAME=ctr-with-limit
+    podman run --name $CTRNAME -d -m 512m -v /tmp:/tmp $IMAGE top
+
+    t GET libpod/containers/$CTRNAME/stats?stream=false 200 \
+    .memory_stats.limit=536870912 \
+    .Id~[0-9a-f]\\{64\\}
+
+    # Make sure docker compat endpoint shows "id" lowercase
+    t GET containers/$CTRNAME/stats?stream=false 200 \
+    .memory_stats.limit=536870912 \
+    .id~[0-9a-f]\\{64\\}
+
+    t GET containers/$CTRNAME/top?stream=false 200 \
+      .Titles='[
+  "UID",
+  "PID",
+  "PPID",
+  "C",
+  "STIME",
+  "TTY",
+  "TIME",
+  "CMD"
+]'
+
+    podman rm -f $CTRNAME
+fi
+
+# Verify that compat top endpoint combines multi-entry COMMAND lines
+CTRNAME=testtopproc
+podman run --name $CTRNAME -d $IMAGE sleep 25
+t GET containers/$CTRNAME/top?stream=false 200 \
+  .Processes.[0].[6]="00:00:00" \
+  .Processes.[0].[7]="sleep 25"
+
+# check logs output, IMPORTANT the container should write no logs to reproduce #23712
+APIV2_TEST_EXPECT_TIMEOUT=1 t GET "containers/${CTRNAME}/logs?follow=true&stdout=true&stderr=true" 999
+is "" "$(<$WORKDIR/curl.result.out)" "Container MUST NOT log output"
+like "$(<$WORKDIR/curl.headers.out)" ".*HTTP.* 200 OK.*" \
+     "Received headers from /container/<id>/logs"
+
+podman rm -f -t0 $CTRNAME
+
+# verify API logs return timestamps with nanosecond precision
+CTRNAME=timestamp-test
+podman run --name $CTRNAME -d $IMAGE sh -c "echo test message"
+podman wait $CTRNAME
+t GET "containers/${CTRNAME}/logs?timestamps=true&stdout=true" 200
+# /logs returns application/octet-stream with binary headers. Strip null bytes.
+# Verify timestamp format includes nanoseconds (LogTimeFormat with 9 zero-padded digits)
+# Timezone can be 'Z' (UTC) or '+/-HH:MM'
+like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".*[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}\\.[0-9]\\{9\\}\\(Z\\|[+-][0-9]\\{2\\}:[0-9]\\{2\\}\\).*test message.*" \
+     "logs timestamps should include nanosecond precision"
+podman rm -f $CTRNAME
+
+CTRNAME=test123
+podman run --name $CTRNAME -d $IMAGE top
+t GET libpod/containers/$CTRNAME/top?ps_args=--invalid 500 \
+  .cause~".*unknown gnu long option.*"
+t GET containers/$CTRNAME/top?ps_args=--invalid 500 \
+  .cause~".*unknown gnu long option.*"
+
+podman rm -f $CTRNAME
+
+# Issue #15765: make sure the memory limit is capped
+if root; then
+    CTRNAME=ctr-with-limit
+    podman run --name $CTRNAME -d -m 512m -v /tmp:/tmp $IMAGE top
+
+    t GET libpod/containers/$CTRNAME/stats?stream=false 200 \
+    .memory_stats.limit!=18446744073709552000
+
+    podman rm -f $CTRNAME
+fi
+
+# Container create without existing image should return 404
+t POST libpod/containers/create Image="foo" 404 \
+  .cause="image not known"
+
+# Issue #6799: it should be possible to start a container, even w/o args.
+t POST libpod/containers/create?name=test_noargs Image=${IMAGE} 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+# Prior to the fix in #6835, this would fail 500 "args must not be empty"
+t POST   libpod/containers/${cid}/start 204
+# Container should exit almost immediately. Wait for it, confirm successful run
+t POST   "libpod/containers/${cid}/wait?condition=stopped&condition=exited"  200 '0'
+
+# Regression check for #15036 (Umask) and #25026 (CreateCommand)
+t GET    libpod/containers/${cid}/json 200 \
+  .Id=$cid \
+  .State.Status~\\\(exited\\\|stopped\\\) \
+  .State.Running=false \
+  .State.ExitCode=0 \
+  .Config.Umask=0022 \
+  .Config.CreateCommand=null \
+  .Config.HealthLogDestination=local \
+  .Config.HealthcheckMaxLogCount=5 \
+  .Config.HealthcheckMaxLogSize=500
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+CNAME=myfoo
+podman run -d --name $CNAME $IMAGE top
+t GET libpod/containers/json?all=true 200 \
+  .[0].Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.[0].Id' <<<"$output")
+
+# No such container
+t POST "libpod/commit?container=nonesuch" 404
+
+# Comment can only be used with docker format, not OCI
+cparam="repo=newrepo&comment=foo&author=bob"
+t POST "libpod/commit?container=$CNAME&$cparam"  500 \
+  .cause="messages are only compatible with the docker image format (-f docker)"
+
+# Commit a new image from the container
+t POST "libpod/commit?container=$CNAME" 200 \
+  .Id~[0-9a-f]\\{64\\}
+iid=$(jq -r '.Id' <<<"$output")
+t GET libpod/images/$iid/json 200 \
+  .RepoTags[0]=null \
+  .Author="" \
+  .Comment~"FROM docker\.io/.*"
+
+# Commit a new image w/o tag
+cparam="repo=newrepo&comment=foo&author=bob&format=docker"
+t POST "libpod/commit?container=$CNAME&$cparam" 200
+t GET libpod/images/newrepo:latest/json 200 \
+  .RepoTags[0]=localhost/newrepo:latest	\
+  .Author=bob \
+  .Comment=foo
+
+# Commit a new image w/ specified tag and author
+cparam="repo=newrepo&tag=v1&author=alice"
+t POST "libpod/commit?container=$cid&$cparam&pause=false" 200
+t GET libpod/images/newrepo:v1/json 200 \
+  .RepoTags[0]=localhost/newrepo:v1     \
+  .Author=alice
+
+# Commit a new image w/ full parameters
+cparam="repo=newrepo&tag=v2&comment=bar&author=eric"
+cparam="$cparam&format=docker&changes=CMD=/bin/foo"
+
+t POST "libpod/commit?container=${cid:0:12}&$cparam&pause=true" 200
+t GET libpod/images/newrepo:v2/json 200 \
+  .RepoTags[0]=localhost/newrepo:v2	\
+  .Author=eric \
+  .Comment=bar \
+  .Config.Cmd[-1]="/bin/foo"
+t DELETE images/localhost/newrepo:v2?force=true 200
+
+# Create a container for testing the container initializing later
+podman create -t -i --name myctr $IMAGE ls
+
+# Check configuration before initializing
+t GET libpod/containers/myctr/json 200 \
+  .Id~[0-9a-f]\\{64\\} \
+  .State.Status="created" \
+  .State.Pid=0 \
+  .ResolvConfPath="" \
+  .HostnamePath="" \
+  .HostsPath="" \
+  .NetworkSettings.SandboxKey=""
+
+cpid_file=$(jq -r '.ConmonPidFile' <<<"$output")
+userdata_path=$(dirname $cpid_file)
+
+# Initializing the container
+t POST libpod/containers/myctr/init 204
+
+# Check configuration after initializing
+t GET libpod/containers/myctr/json 200 \
+  .Id~[0-9a-f]\\{64\\} \
+  .State.Status="initialized" \
+  .State.Pid~[0-9]\\{1\,8\\} \
+  .ResolvConfPath=$userdata_path/resolv.conf \
+  .HostnamePath=$userdata_path/hostname \
+  .HostsPath=$userdata_path/hosts \
+  .NetworkSettings.SandboxKey~.*/netns/netns- \
+  .OCIConfigPath~.*config\.json \
+  .GraphDriver.Data.MergedDir~.*merged
+
+# Test TS are in UTC
+t GET containers/myctr/json 200 \
+  .Created~.*Z \
+  .State.StartedAt~.*Z \
+  .State.FinishedAt~.*Z
+
+t DELETE images/localhost/newrepo:latest?force=true 200
+t DELETE images/localhost/newrepo:v1?force=true 200
+t DELETE libpod/containers/$cid?force=true 200 .[0].Id=$cid
+t DELETE libpod/containers/myctr 200
+t DELETE libpod/containers/bogus 404
+
+
+# test apiv2 create container with correct entrypoint and cmd
+# --data '{"Image":"quay.io/libpod/some:thing","Entrypoint":["echo"],"Cmd":["param1","param2"]}'
+t POST containers/create \
+  Image=$IMAGE \
+  Entrypoint='["echo"]' \
+  Cmd='["param1","param2"]' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Entrypoint[0]="echo" \
+  .Config.Cmd[0]="param1" \
+  .Config.Cmd[1]="param2" \
+  .Path="echo" \
+  .Args[0]="param1" \
+  .Args[1]="param2"
+# Regression check for #25026 (CreateCommand)
+t GET    libpod/containers/${cid}/json 200 \
+  .Id=$cid \
+  .Config.CreateCommand=null
+
+t DELETE containers/$cid 204
+
+# test only set the entrypoint, Cmd should be []
+t POST containers/create \
+  Image=$IMAGE \
+  Entrypoint='["echo","param1"]' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Entrypoint[0]="echo" \
+  .Config.Entrypoint[1]="param1" \
+  .Config.Cmd='[]' \
+  .Path="echo" \
+  .Args[0]="param1"
+
+# create a running container for after
+t POST containers/create Image=$IMAGE Entrypoint='["top"]' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid_top=$(jq -r '.Id' <<<"$output")
+
+t GET containers/${cid_top}/json 200 \
+  .Config.Entrypoint[0]="top" \
+  .Config.Cmd='[]' \
+  .Config.StopTimeout="10" \
+  .Path="top" \
+  .NetworkSettings.Networks.podman.NetworkID=2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9
+t POST  containers/${cid_top}/start 204
+# make sure the container is running
+t GET containers/${cid_top}/json 200 \
+  .State.Status="running"
+
+# check that gateway is empty not "<nil>", https://github.com/containers/podman/issues/28705
+podman network create testnet --ipv6 --internal --disable-dns
+podman run --name testcon --network testnet -d $IMAGE top
+
+t GET containers/testcon/json 200 \
+  .NetworkSettings.Networks.testnet.Gateway="" \
+  .NetworkSettings.Networks.testnet.IPAddress~10\..* \
+  .NetworkSettings.Networks.testnet.IPPrefixLen=24 \
+  .NetworkSettings.Networks.testnet.IPv6Gateway="" \
+  .NetworkSettings.Networks.testnet.GlobalIPv6Address~fd.* \
+  .NetworkSettings.Networks.testnet.GlobalIPv6PrefixLen=64
+
+podman rm -f -t0 testcon
+podman network rm testnet
+
+# 0 means unlimited, need same with docker
+t GET containers/json?limit=0 200 \
+  .[0].Id~[0-9a-f]\\{64\\}
+
+t GET 'containers/json?limit=0&all=1' 200 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[1].Id~[0-9a-f]\\{64\\}
+
+t GET containers/json?limit=2 200 length=2
+
+# Filter with two ids should return both container
+t GET containers/json?filters='{"id":["'${cid}'","'${cid_top}'"]}&all=1' 200 length=2
+# Filter with two ids and status running should return only 1 container
+t GET containers/json?filters='{"id":["'${cid}'","'${cid_top}'"],"status":["running"]}&all=1' 200 \
+  length=1 \
+  .[0].Id=${cid_top}
+
+t POST containers/${cid_top}/stop 204
+
+t DELETE containers/$cid 204
+t DELETE containers/$cid_top 204
+
+# test the WORKDIR and StopSignal
+t POST containers/create \
+  Image=$IMAGE \
+  WorkingDir=/dataDir \
+  StopSignal=\"9\" \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.WorkingDir="/dataDir" \
+  .Config.StopSignal="9"
+
+t DELETE containers/$cid 204
+
+# when the image had multi tags, the container's Image should be correct
+# Fixes https://github.com/containers/podman/issues/8547
+t POST containers/create Image=${MultiTagName} 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Image=${MultiTagName} \
+  .Image~sha256:[0-9a-f]\\{64\\}
+
+t DELETE containers/$cid 204
+t DELETE images/${MultiTagName} 200
+# vim: filetype=sh
+
+# Test Volumes field adds an anonymous volume
+t POST containers/create Image=$IMAGE Volumes='{"/test":{}}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Mounts[0].Destination="/test"
+
+t DELETE containers/$cid?v=true 204
+
+# Test Volumes with bind mount, for some reason docker-py sets this #18454
+t POST containers/create Image=$IMAGE Volumes='{"/test/":{}}'  HostConfig='{"Binds":["/tmp:/test/:ro"]}'  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Mounts[0].Destination="/test/"
+
+t DELETE containers/$cid?v=true 204
+
+
+# test compact API in rootless mode ignores ulimits https://github.com/containers/podman/issues/25881
+t POST containers/create \
+  Image=$IMAGE           \
+  HostConfig='{"Ulimits":[{"Name":"cpu","Soft":1,"Hard":2}]}' \
+  201                    \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.Ulimits[0].Name="RLIMIT_CPU" \
+  .HostConfig.Ulimits[0].Hard=2            \
+  .HostConfig.Ulimits[0].Soft=1            \
+
+t DELETE containers/$cid 204
+
+# test port mapping
+podman run -d --rm --name bar -p 8080:9090 $IMAGE top
+
+t GET containers/json 200 \
+  .[0].Ports[0].PrivatePort=9090 \
+  .[0].Ports[0].PublicPort=8080 \
+  .[0].Ports[0].Type="tcp"
+
+podman rm -f bar
+
+# confirm exposed port 8080 shows up in /containers/json
+
+podman run -d --rm --name bar --expose 8080 $IMAGE top
+
+t GET containers/json 200 \
+  .[0].Ports[0].PrivatePort=8080 \
+  .[0].Ports[0].Type="tcp"
+
+podman rm -f bar
+
+#compat api list containers sanity checks
+podman run -d --rm --name labelcontainer_with --label slartibart=fast $IMAGE top
+podman run -d --rm --name labelcontainer_without $IMAGE top
+
+t GET containers/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET containers/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+
+#libpod api list containers sanity checks
+t GET libpod/containers/json?filters='{"status":["removing"]}' 200 length=0
+t GET libpod/containers/json?filters='{"status":["bogus"]}' 500 \
+    .cause="invalid argument"
+t GET libpod/containers/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET libpod/containers/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+# Prune containers - bad filter input
+t POST containers/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t POST libpod/containers/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+
+# Prune containers with illformed label
+t POST containers/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+t POST libpod/containers/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+
+t GET libpod/containers/json?filters='{"label":["slartibart"]}' 200 \
+  length=1 \
+  .[0].Names[0]="labelcontainer_with"
+t GET libpod/containers/json?filters='{"label!":["slartibart"]}' 200 \
+  length=1 \
+  .[0].Names[0]="labelcontainer_without"
+t GET libpod/containers/json?filters='{"label!":["testlabel"]}' 200 length=2
+
+podman stop -t0 labelcontainer_with labelcontainer_without
+
+# libpod api: do not use list filters for prune
+t POST libpod/containers/prune?filters='{"name":["anyname"]}' 500 \
+    .cause="name is an invalid filter"
+t POST libpod/containers/prune?filters='{"id":["anyid"]}' 500 \
+    .cause="id is an invalid filter"
+t POST libpod/containers/prune?filters='{"network":["anynetwork"]}' 500 \
+    .cause="network is an invalid filter"
+
+# compat api: do not use list filters for prune
+t POST containers/prune?filters='{"name":["anyname"]}' 500 \
+    .cause="name is an invalid filter"
+t POST containers/prune?filters='{"id":["anyid"]}' 500 \
+    .cause="id is an invalid filter"
+t POST containers/prune?filters='{"network":["anynetwork"]}' 500 \
+    .cause="network is an invalid filter"
+
+# Test CPU limit (NanoCPUs)
+nanoCpu=500000
+t POST containers/create Image=$IMAGE HostConfig='{"NanoCpus":500000}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.NanoCpus=$nanoCpu
+
+t DELETE containers/$cid?v=true 204
+
+# Test Compat Create with default network mode (#10569)
+t POST containers/create Image=$IMAGE HostConfig='{"NetworkMode":"default"}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.NetworkMode="bridge"
+
+t DELETE containers/$cid?v=true 204
+
+# test create with default netns="host"
+stop_service
+CONTAINERS_CONF=$TESTS_DIR/containers.host-netns.conf start_service
+
+# check that the default docker netns "default" is rewritten to "host"
+# when the containers.conf explicitly uses "host"
+t POST containers/create Image=$IMAGE HostConfig='{"NetworkMode":"default"}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.NetworkMode="host"
+
+t DELETE containers/$cid?v=true 204
+
+# test create container like Docker >= 25 cli: NetworkMode="default" but EndpointsConfig struct is explicitly set and netns="host"
+t POST containers/create \
+  Image=$IMAGE \
+  HostConfig='{"NetworkMode":"default"}' \
+  NetworkingConfig='{"EndpointsConfig":{"default":{"IPAMConfig":null,"Links":null,"Aliases":null,"MacAddress":"","NetworkID":"","EndpointID":"","Gateway":"","IPAddress":"","IPPrefixLen":0,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DriverOpts":null,"DNSNames":null}}}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.NetworkMode="host"
+
+t DELETE containers/$cid?v=true 204
+
+# test creating a container fails with netns="hosts" on podman side but keep using the default network mode
+# on docker CLI side and trying to use --ip 1.2.3.4 which is only valid for the bridge network mode (docker CLI
+# will assume the default is the bridge mode, so it's valid from docker CLI point of view).
+# Static IP must be set via IPAMConfig.IPv4Address, not the operational IPAddress field.
+t POST containers/create \
+  Image=$IMAGE \
+  HostConfig='{"NetworkMode":"default"}' \
+  NetworkingConfig='{"EndpointsConfig":{"default":{"IPAMConfig":{"IPv4Address":"1.2.3.4"},"Links":null,"Aliases":null,"MacAddress":"","NetworkID":"","EndpointID":"","Gateway":"","IPAddress":"","IPPrefixLen":0,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DriverOpts":null,"DNSNames":null}}}' \
+  500 \
+    .cause="networks and static ip/mac address can only be used with Bridge mode networking"
+
+# Restart with the default containers.conf for next tests.
+stop_service
+start_service
+
+# Test Compat Create with healthcheck, check default values
+t POST containers/create Image=$IMAGE Cmd='["top"]' Healthcheck='{"Test":["true"]}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Healthcheck.Interval=30000000000 \
+  .Config.Healthcheck.Timeout=30000000000 \
+  .Config.Healthcheck.Retries=3
+
+t DELETE containers/$cid?v=true 204
+
+# Test Compat Create with healthcheck preserving arguments with spaces
+HEALTHCHECK_TMPD=$(mktemp -d podman-apiv2-test.healthcheck.XXXXXXXX)
+cat >$HEALTHCHECK_TMPD/create.json <<EOF
+{
+  "Image": "$IMAGE",
+  "Cmd": ["top"],
+  "Healthcheck": {
+    "Test": ["CMD", "/usr/bin/test", "--arg=value with spaces", "another arg"]
+  }
+}
+EOF
+t POST containers/create $HEALTHCHECK_TMPD/create.json 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Healthcheck.Test[0]="CMD" \
+  .Config.Healthcheck.Test[1]="/usr/bin/test" \
+  .Config.Healthcheck.Test[2]="--arg=value with spaces" \
+  .Config.Healthcheck.Test[3]="another arg"
+
+t DELETE containers/$cid?v=true 204
+rm -rf $HEALTHCHECK_TMPD
+
+# compat api: Test for mount options support
+# Sigh, JSON can't handle octal. 0755(octal) = 493(decimal)
+payload='{"Mounts":[{"Type":"tmpfs","Target":"/mnt/scratch","TmpfsOptions":{"SizeBytes":1024,"Mode":493}}]}'
+t POST containers/create Image=$IMAGE HostConfig="$payload" 201 .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+    .HostConfig.Tmpfs['"/mnt/scratch"']~.*size=1024.* \
+    .HostConfig.Tmpfs['"/mnt/scratch"']~.*mode=755.*
+
+t DELETE containers/$cid?v=true 204
+
+# compat api: tmpfs without mount options
+payload='{"Mounts":[{"Type":"tmpfs","Target":"/mnt/scratch"}]}'
+t POST containers/create Image=$IMAGE HostConfig="$payload" 201 .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+    .HostConfig.Tmpfs['"/mnt/scratch"']~.*tmpcopyup.* \
+
+t DELETE containers/$cid?v=true 204
+
+# compat api: bind mount without mount options
+payload='{"Mounts":[{"Type":"bind","Source":"/tmp","Target":"/mnt"}]}'
+t POST containers/create Image=$IMAGE HostConfig="$payload" 201 .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+    .HostConfig.Binds[0]~/tmp:/mnt:.* \
+
+t DELETE containers/$cid?v=true 204
+
+# test apiv2 create/commit
+t POST containers/create \
+  Image=$IMAGE \
+  Entrypoint='["echo"]' \
+  Cmd='["param1","param2"]' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+# No such container
+t POST "commit?container=nonesuch" 404
+
+cparam="repo=newrepo&tag=v3&comment=abcd&author=eric"
+cparam="$cparam&format=docker&changes=CMD%20/bin/bar%0aEXPOSE%209090"
+t POST "commit?container=${cid:0:12}&$cparam" 201 \
+  .Id~[0-9a-f]\\{64\\}
+iid=$(jq -r '.Id' <<<"$output")
+t GET images/$iid/json 200 \
+  .RepoTags[0]=docker.io/library/newrepo:v3 \
+  .Config.ExposedPorts~.*"9090/tcp" \
+  .Config.Cmd~.*"/bin/bar" \
+  .Comment="abcd"
+
+t DELETE containers/$cid 204
+t DELETE images/docker.io/library/newrepo:v3?force=false 200
+
+# test create without default no_hosts
+t POST containers/create \
+  Image=$IMAGE \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST libpod/containers/$cid/init 204
+
+t GET libpod/containers/$cid/json 200
+
+cpid_file=$(jq -r '.ConmonPidFile' <<<"$output")
+userdata_path=$(dirname $cpid_file)
+
+t GET libpod/containers/$cid/json 200 \
+  .HostsPath=$userdata_path/hosts
+
+t DELETE containers/$cid 204
+
+# test create with default no_hosts=true
+stop_service
+
+CONTAINERS_CONF=$TESTS_DIR/containers.no_hosts.conf start_service
+
+# check docker and libpod endpoint
+for endpoint in containers/create libpod/containers/create; do
+  t POST $endpoint \
+    Image=$IMAGE \
+    201 \
+    .Id~[0-9a-f]\\{64\\}
+  cid=$(jq -r '.Id' <<<"$output")
+
+  t POST libpod/containers/$cid/init 204
+
+  t GET libpod/containers/$cid/json 200 \
+    .HostsPath=""
+
+  t DELETE containers/$cid 204
+done
+
+stop_service
+# Create a temporary containers.conf with custom base_hosts_file set
+testdir=$(mktemp -d)
+cat > $testdir/containers.base_hosts_file.conf <<EOF
+[containers]
+base_hosts_file = "$testdir/hosts"
+EOF
+
+cat > $testdir/hosts <<EOF
+10.0.0.2 testname
+192.168.1.1 abc
+EOF
+
+CONTAINERS_CONF_OVERRIDE=$testdir/containers.base_hosts_file.conf start_service
+
+t POST containers/create \
+  Image=$IMAGE \
+  Cmd='["cat","/etc/hosts"]' \
+  Tty=true \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST  containers/${cid}/start 204
+
+t GET "containers/${cid}/logs?follow=true&stdout=true&stderr=true" 200
+like "$(<$WORKDIR/curl.result.out)" ".*10.0.0.2[[:space:]]testname.*192.168.1.1[[:space:]]abc.*" "contains containers.conf base_hosts_file hosts"
+
+stop_service
+rm -rf "$testdir"
+start_service
+
+# Our states are different from Docker's.
+# Regression test for #14700 (Docker compat returning unknown "initialized" for status.status) to ensure the stay compatible
+podman create --name status-test $IMAGE sh -c "sleep 3"
+t GET containers/status-test/json 200 .State.Status="created"
+
+podman init status-test
+t GET containers/status-test/json 200 .State.Status="created"
+
+podman start status-test
+t GET containers/status-test/json 200 .State.Status="running"
+
+podman pause status-test
+t GET containers/status-test/json 200 .State.Status="paused"
+
+podman unpause status-test
+t GET containers/status-test/json 200 .State.Status="running"
+
+podman stop status-test &
+sleep 1
+t GET containers/status-test/json 200 .State.Status="running"
+
+sleep 3
+t GET containers/status-test/json 200 .State.Status="exited"
+
+# test podman generate spec as input for the api
+cname=specgen$(random_string 10)
+podman create --name=$cname $IMAGE
+
+TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+
+podman generate spec -f ${TMPD}/myspec.json -c $cname
+
+# Create a container based on that spec
+t POST libpod/containers/create ${TMPD}/myspec.json 201 \
+  .Id~[0-9a-f]\\{64\\}
+
+# Verify
+t GET libpod/containers/$cname/json 200 \
+  .ImageName=$IMAGE \
+  .Name=$cname
+
+if root && test -e /dev/nullb0; then
+  podman run -dt --name=updateCtr alpine
+  echo '{
+    "Memory":{"Limit":500000},
+    "CPU":{"Shares":123},
+    "DeviceReadBPs": [{ "Path": "/dev/nullb0", "Rate": 10485760 }],
+    "DeviceWriteBPs": [{ "Path": "/dev/nullb0", "Rate": 31457280 }],
+    "DeviceReadIOPs": [{ "Path": "/dev/nullb0", "Rate": 2000 }],
+    "DeviceWriteIOPs": [{ "Path": "/dev/nullb0", "Rate": 4000 }]
+    }' >${TMPD}/update.json
+  t POST libpod/containers/updateCtr/update ${TMPD}/update.json 201
+
+  cgroupPath=/sys/fs/cgroup/cpu.weight
+
+  # Verify CPU weight
+  echo '{ "AttachStdout":true,"Cmd":["cat", "'$cgroupPath'"]}' >${TMPD}/exec.json
+  t POST containers/updateCtr/exec ${TMPD}/exec.json 201 .Id~[0-9a-f]\\{64\\}
+  eid=$(jq -r '.Id' <<<"$output")
+  t POST exec/$eid/start 200
+  like "$(<$WORKDIR/curl.result.out)" $'^\x01.\(20\|5\)$' "cpu.weight is 5 or 20"
+
+  BlkioDeviceReadBps_expected='[
+  {
+    "Path": "/dev/nullb0",
+    "Rate": 10485760
+  }
+]'
+  BlkioDeviceWriteBPs_expected='[
+  {
+    "Path": "/dev/nullb0",
+    "Rate": 31457280
+  }
+]'
+  BlkioDeviceReadIOPs_expected='[
+  {
+    "Path": "/dev/nullb0",
+    "Rate": 2000
+  }
+]'
+  BlkioDeviceWriteIOPs_expected='[
+  {
+    "Path": "/dev/nullb0",
+    "Rate": 4000
+  }
+]'
+  # Verify Device limits
+  t GET containers/updateCtr/json 200 \
+  .HostConfig.BlkioDeviceReadBps="$BlkioDeviceReadBps_expected"     \
+  .HostConfig.BlkioDeviceWriteBps="$BlkioDeviceWriteBPs_expected"   \
+  .HostConfig.BlkioDeviceReadIOps="$BlkioDeviceReadIOPs_expected"   \
+  .HostConfig.BlkioDeviceWriteIOps="$BlkioDeviceWriteIOPs_expected" \
+
+  # Now use the compat API
+  echo '{ "Memory": 536870912 }' >${TMPD}/compatupdate.json
+  t POST containers/updateCtr/update ${TMPD}/compatupdate.json 200
+  t GET libpod/containers/updateCtr/json 200 \
+    .HostConfig.Memory=536870912
+
+  podman rm -f updateCtr
+fi
+
+# test apiv2 create container with empty entrypoint
+# --data '{"Image":"quay.io/libpod/some:thing","Entrypoint": []}'
+# Fixes #26078
+podman image build -t test1:latest -<<EOF
+from alpine
+ENTRYPOINT ["echo", "test"]
+EOF
+
+t POST containers/create \
+  Image=test1:latest \
+  Entrypoint=[] \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Entrypoint[0]=null
+
+t DELETE containers/$cid 204
+podman rmi test1
+
+# test MemorySwappiness
+podman run -d --rm --name swappiness_with_mem_limit --memory 200M $IMAGE top
+podman run -d --rm --name swappiness_without_mem_limit $IMAGE top
+
+t GET containers/swappiness_with_mem_limit/json 200 \
+  .HostConfig.MemorySwappiness=null
+t GET containers/swappiness_without_mem_limit/json 200 \
+  .HostConfig.MemorySwappiness=null
+
+t GET libpod/containers/swappiness_with_mem_limit/json 200 \
+  .HostConfig.MemorySwappiness=null
+t GET libpod/containers/swappiness_without_mem_limit/json 200 \
+  .HostConfig.MemorySwappiness=null
+
+podman stop -t0 swappiness_with_mem_limit swappiness_without_mem_limit
+
+# test if API support -1 for ulimits https://github.com/containers/podman/issues/24886
+
+# Compat API
+t POST containers/create \
+  Image=$IMAGE           \
+  HostConfig='{"Ulimits":[{"Name":"memlock","Soft":-1,"Hard":-1}]}' \
+  201                    \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST containers/$cid/update \
+  Ulimits='[{"Name":"memlock","Soft":-1,"Hard":-1}]' \
+  200
+
+t DELETE containers/$cid 204
+
+# Libpod API
+t POST libpod/containers/create \
+  Image=$IMAGE           \
+  r_limits='[{"type":"memlock","soft":-1,"hard":-1}]' \
+  201                    \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST libpod/containers/$cid/update \
+  r_limits='[{"type":"memlock","soft":-1,"hard":-1}]' \
+  201
+
+t DELETE containers/$cid 204
+
+rm -rf $TMPD
+
+podman container rm -fa
+
+# 18951: Make sure container create supports the platform parameter.  Force an
+# initial architecture to make sure the test runs on all platforms.
+podman pull --platform=linux/amd64 $IMAGE
+t POST containers/create?platform=linux/amd64 \
+  Image=$IMAGE \
+  201
+t POST containers/create?platform=linux/aarch64 \
+  Image=$IMAGE \
+  404
+
+# test apiv2 create container with oci_runtime option :- https://github.com/containers/podman/issues/28429
+oci_runtimes=('runc' 'crun')
+
+# Create, Check and Delete for provided runtime container
+for runtime in "${oci_runtimes[@]}"; do
+    t POST libpod/containers/create \
+            Image=$IMAGE \
+            "oci_runtime"="$runtime" \
+            201 \
+            .Id~[0-9a-f]\\{64\\}
+
+    cid=$(jq -r '.Id' <<<"$output")
+    t GET libpod/containers/$cid/json 200 \
+    .OCIRuntime="$runtime"
+
+    t DELETE containers/$cid 204
+done
+
+podman rmi -f $IMAGE
+
+# Test health status in /containers/json (GH #27786)
+podman create --name healthcheck-test-created --health-cmd "true" $IMAGE top
+t GET /v1.52/containers/json?all=true\&filters='{"name":["healthcheck-test-created"]}' 200 \
+  .[0].Health.Status="starting"
+podman rm -f healthcheck-test-created
+
+# Test health status is 'none' for containers without a healthcheck
+podman create --name no-healthcheck $IMAGE top
+t GET /v1.52/containers/json?all=true\&filters='{"name":["no-healthcheck"]}' 200 \
+  .[0].Health.Status="none"
+podman rm -f no-healthcheck
+
+# Test health status with explicit v1.52 API
+podman create --name healthcheck-v152 --health-cmd "true" $IMAGE top
+t GET /v1.52/containers/json?all=true\&filters='{"name":["healthcheck-v152"]}' 200 \
+  .[0].Health.Status="starting"
+podman rm -f healthcheck-v152
+
+# Test health status is HIDDEN for API versions < 1.52
+podman create --name healthcheck-v144 --health-cmd "true" $IMAGE top
+t GET /v1.44/containers/json?all=true\&filters='{"name":["healthcheck-v144"]}' 200 \
+  .[0].Health=null
+podman rm -f healthcheck-v144
+
+podman run -d --name healthcheck-test-running --health-cmd "true" --health-interval 1s $IMAGE top
+podman healthcheck run healthcheck-test-running
+t GET /v1.52/containers/json?filters='{"name":["healthcheck-test-running"]}' 200 \
+  .[0].Health.Status="healthy"
+t GET containers/healthcheck-test-running/json 200 \
+  .State.Health.Status="healthy"
+
+# Verify that health status is 'none' when container is stopped
+podman stop -t0 healthcheck-test-running
+t GET "/v1.52/containers/json?all=true&filters={\"name\":[\"healthcheck-test-running\"]}" 200 \
+  .[0].Health.Status="none"
+t GET containers/healthcheck-test-running/json 200 \
+  .State.Health.Status="healthy"
+
+podman rm -f healthcheck-test-running

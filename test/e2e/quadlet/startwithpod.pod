@@ -1,0 +1,13 @@
+## assert-key-contains "Unit" "Before" "startwithpod_yes.service"
+## assert-key-contains "Unit" "Wants" "startwithpod_yes.service"
+
+## assert-key-not-contains "Unit" "Wants" "startwithpod_no.service"
+## assert-key-not-contains "Unit" "Before" "startwithpod_no.service"
+
+## assert-key-not-contains "Unit" "Wants" "startwithpod@.service"
+## assert-key-not-contains "Unit" "Before" "startwithpod@.service"
+
+## assert-key-contains "Unit" "Wants" "startwithpod@foo.service"
+## assert-key-contains "Unit" "Before" "startwithpod@foo.service"
+
+[Pod]

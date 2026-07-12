@@ -1,0 +1,29 @@
+{{ define "schemaType" }}
+  {{- if and (or (gt (len .AllOf) 0) .IsAnonymous) ( not .IsMap) }}
+    {{- template "schemaBody" . }}
+  {{- else }}
+    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) }}*{{ end }}
+    {{- if .IsSuperAlias }} = {{ end }}
+    {{- .GoType }}
+  {{- end}}
+{{- end }}
+
+{{ define "dereffedSchemaType" }}
+  {{- if and (or (gt (len .AllOf) 0) .IsAnonymous) ( not .IsMap) }}
+    {{- template "schemaBody" . }}
+  {{- else }}
+    {{- .GoType }}
+  {{- end}}
+{{- end }}
+
+{{ define "typeSchemaType" }}
+  {{- if and (or (gt (len .AllOf) 0) .IsAnonymous) ( not .IsMap) ( not .IsSuperAlias ) }}
+    {{- template "schemaBody" . }}
+  {{- else if and .IsSubType ( not .IsSuperAlias ) }}
+    {{- template "subTypeBody" . }}
+  {{- else }}
+    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) }}*{{ end }}
+    {{- if .IsSuperAlias }} = {{ end }}
+    {{- if .AliasedType }}{{ .AliasedType }}{{ else }}{{ .GoType }}{{ end }}
+  {{- end}}
+{{- end }}

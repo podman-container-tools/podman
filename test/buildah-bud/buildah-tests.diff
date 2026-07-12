@@ -1,0 +1,236 @@
+From 53c97f858285ff043b4121988433f2312482eba9 Mon Sep 17 00:00:00 2001
+From: Ed Santiago <santiago@redhat.com>
+Date: Thu, 6 Oct 2022 17:32:59 -0600
+Subject: [PATCH] tweaks for running buildah tests under podman
+
+Signed-off-by: Ed Santiago <santiago@redhat.com>
+Signed-off-by: Paul Holzinger <pholzing@redhat.com>
+Signed-off-by: Danish Prakash <contact@danishpraka.sh>
+Signed-off-by: Lokesh Mandvekar <lsm5@redhat.com>
+---
+ tests/helpers.bash | 166 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 162 insertions(+), 4 deletions(-)
+
+diff --git a/tests/helpers.bash b/tests/helpers.bash
+index 5ba4f5a..6a41f10 100644
+--- a/tests/helpers.bash
++++ b/tests/helpers.bash
+@@ -86,6 +86,42 @@ EOF
+     BUILDAH_REGISTRY_OPTS="${regconfopt} ${regconfdir} --short-name-alias-conf ${TEST_SCRATCH_DIR}/cache/shortnames.conf"
+     COPY_REGISTRY_OPTS="${BUILDAH_REGISTRY_OPTS}"
+     PODMAN_REGISTRY_OPTS="${regconfopt}"
++    PODMAN_REMOTE_OPTS=
++
++    PODMAN_SERVER_PID=
++    PODMAN_NATIVE="${PODMAN_BINARY} ${ROOTDIR_OPTS} ${PODMAN_REGISTRY_OPTS}"
++    if [[ -n "$REMOTE" ]]; then
++        PODMAN_NATIVE="${PODMAN_BINARY%%-remote} ${ROOTDIR_OPTS} ${PODMAN_REGISTRY_OPTS}"
++        if [[ -n "$PODMAN_SERVER_LOG" ]]; then
++            (
++                echo "---------------------------------"
++                echo "- bats test ${BATS_TEST_NUMBER} : ${BATS_TEST_NAME}"
++            ) >> $PODMAN_SERVER_LOG
++        fi
++
++        # Path to podman socket file
++        local sockdir=/run
++        if is_rootless; then
++            sockdir=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
++            mkdir -p ${sockdir}/podman
++        fi
++        PODMAN_SOCK_FILE=$sockdir/podman/podman-${BATS_SUITE_TEST_NUMBER}.sock
++        PODMAN_REMOTE_OPTS="--url unix://${PODMAN_SOCK_FILE}"
++        # static CONTAINERS_CONF needed for capabilities test. As of 2021-07-01
++        # no tests in bud.bats override this; if at some point any test does
++        # so, it will probably need to be skip_if_remote()d.
++        echo "$_LOG_PROMPT $PODMAN_NATIVE system service [...] unix://${PODMAN_SOCK_FILE}" >&2
++        env CONTAINERS_CONF_OVERRIDE=${CONTAINERS_CONF_OVERRIDE:-$(dirname ${BASH_SOURCE})/containers.conf} $PODMAN_NATIVE system service --log-level=info --timeout=0 unix://${PODMAN_SOCK_FILE} &>>${PODMAN_SERVER_LOG:-/dev/stderr} &
++        PODMAN_SERVER_PID=$!
++        echo ">> pid=$PODMAN_SERVER_PID" >>${PODMAN_SERVER_LOG:-/dev/stderr}
++        local timeout=30
++        while ((timeout > 0)); do
++            test -S $PODMAN_SOCK_FILE && return
++            sleep 0.2
++            timeout=$((timeout - 1))
++        done
++        die "podman server never came up: $PODMAN_SOCK_FILE"
++    fi
+ }
+
+ function starthttpd() { # directoryspecs [working-directory-or-"" [certfile, keyfile]]
+@@ -155,6 +191,22 @@ function teardown_tests() {
+     stop_git_daemon
+     stop_registry
+
++    if [[ -n "$PODMAN_SERVER_PID" ]]; then
++        echo "teardown: stopping podman server $PODMAN_SERVER_PID"
++        kill $PODMAN_SERVER_PID
++        wait $PODMAN_SERVER_PID
++        # Socket file should go away once server exits
++        local timeout=10
++        while [[ -S $PODMAN_SOCK_FILE ]]; do
++            timeout=$((timeout - 1))
++            if [[ $timeout -eq 0 ]]; then
++                echo "# WARNING! $PODMAN_SOCK_FILE did not go away" >&3
++                rm -f $PODMAN_SOCK_FILE
++            fi
++            sleep 0.5
++        done
++    fi
++
+     # Workaround for #1991 - buildah + overlayfs leaks mount points.
+     # Many tests leave behind /var/tmp/.../root/overlay and sub-mounts;
+     # let's find those and clean them up, otherwise 'rm -rf' fails.
+@@ -276,7 +328,12 @@ function copy() {
+ }
+
+ function podman() {
+-    command ${PODMAN_BINARY:-podman} ${PODMAN_REGISTRY_OPTS} ${ROOTDIR_OPTS} "$@"
++    local cmd=${PODMAN_BINARY:-podman}
++    local opts="${PODMAN_REGISTRY_OPTS} ${ROOTDIR_OPTS}"
++    if [[ $cmd =~ remote ]]; then
++        opts="${PODMAN_REMOTE_OPTS}"
++    fi
++    command $cmd $opts "$@"
+ }
+
+ # There are various scenarios where we would like to execute `tests` as rootless user, however certain commands like `buildah mount`
+@@ -383,8 +440,86 @@ function run_buildah() {
+         --retry)         retry=3;        shift;;  # retry network flakes
+     esac
+
++    local podman_or_buildah=${BUILDAH_BINARY}
++    local _opts="${ROOTDIR_OPTS} ${BUILDAH_REGISTRY_OPTS}"
++    local copydown=:
++    if [[ $1 == "build" || $1 == "build-using-dockerfile" || $1 == "bud" ]]; then
++        shift
++        # podman defaults to --layers=true; buildah to --false.
++        # If command line includes explicit --layers, leave it untouched,
++        # but otherwise update command line so podman mimics buildah default.
++        if [[ "$*" =~ --layers || "$*" =~ --squash ]]; then
++            set "build" "--force-rm=false" "$@"
++        else
++            set "build" "--force-rm=false" "--layers=false" "$@"
++        fi
++        # buildah --squash equals podman --squash-all so we need to replace that as well
++        new_args=()
++        for arg in "$@"; do
++            new_arg="${arg/#--squash/--squash-all}"
++            new_args+=("$new_arg")
++        done
++        set "${new_args[@]}"
++
++        # Figure out an archive format that will match the --format flag, if one was used.
++        local nativearchive=oci-archive
++        local formatpattern="((--format( |=))(oci|docker))"
++        if [[ "$*" =~ ${formatpattern} ]]; then
++            case "${BASH_REMATCH[4]}" in
++            oci)    nativearchive=oci-archive;;
++            docker) nativearchive=docker-archive;;
++            esac
++        fi
++        local iidpattern="(--iidfile( |=))([^[:blank:]]+)"
++        local iidfile=
++        if [[ "$*" =~ ${iidpattern} ]]; then
++            iidfile=${BASH_REMATCH[3]}
++        else
++            shift
++            iidfile=$(mktemp ${BATS_TMPDIR:-${TMPDIR:-/tmp}}/iidfileXXXXXX)
++            set "build" "--iidfile=${iidfile}" "${@}"
++        fi
++        local tagpattern="(-t |--tag( |=))(oci|oci-archive|docker-archive|dir):([^[:blank:]]+)"
++        if [[ -n "$REMOTE" ]] && [[ "$*" =~ ${tagpattern} ]]; then
++            # We're attempting to commit directly to something other than default storage, and we don't want remote clients doing that,
++            # so tweak the build command to instead tag the image with a more or less random name if it succeeds...
++            local tmpImageName=localhost/$(basename $(mktemp -u | tr '[A-Z]' '[a-z]')):$(basename $(mktemp -u | tr '[A-Z]' '[a-z]'))
++            local format=--format=docker-archive
++            local location=${BASH_REMATCH[4]}
++            local location2=
++            case "${BASH_REMATCH[3]}" in
++            oci)            format=--format=oci-dir;;
++            oci-archive)    format=--format=oci-archive;;
++            docker-archive) format=--format=docker-archive;;
++            dir)            format=--format=$nativearchive ; location2=dir:${location}; location=${location}archive;;
++            esac
++            set "${@/${BASH_REMATCH[3]}:${BASH_REMATCH[4]}/${tmpImageName}}"
++            set "${@/--tag=${BASH_REMATCH[3]}:${BASH_REMATCH[4]}/--tag=${tmpImageName}}"
++            # ... and then set up to copy that image to local disk for examination, if the build succeeds.
++            copydown="echo copying image \$(cat ${iidfile}) to ${BASH_REMATCH[3]}:${BASH_REMATCH[4]}; rm -fr ${location} && mkdir -p $(dirname ${location}) && echo saving to ${location} && podman save --uncompressed ${format} -o ${location} \$(cat ${iidfile}) && podman rmi ${tmpImageName}"
++            # If the target might be compressed, copy to a temporary location first, then to the destination.
++            if [[ -n "${location2}" ]] ; then
++                copydown="$copydown && mkdir -p $(dirname ${location2##*:}) && echo copying to ${location2} && ${COPY_BINARY} --dest-decompress ${nativearchive}:${location} ${location2} && rm -fr ${location}"
++            fi
++            copydown="$copydown && echo copied image ${tmpImageName} to ${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
++        fi
++        podman_or_buildah=${PODMAN_BINARY}
++        _opts="${ROOTDIR_OPTS} ${PODMAN_REGISTRY_OPTS}"
++        if [[ -n "$REMOTE" ]]; then
++            _opts="${PODMAN_REMOTE_OPTS}"
++        fi
++
++        # Special case: there's one test that invokes git in such
++        # a way that it exits 128 (which IMO is a bug in git).
++        # podman exits 125 in that case.
++        case $expected_rc in
++            128)   expected_rc=125 ;;
++        esac
++    fi
++    local cmd_basename=$(basename ${podman_or_buildah})
++
+     # Remember command args, for possible use in later diagnostic messages
+-    MOST_RECENT_BUILDAH_COMMAND="buildah $*"
++    MOST_RECENT_BUILDAH_COMMAND="$cmd_basename $*"
+
+     # If session is rootless and `buildah mount` is invoked, perform unshare,
+     # since normal user cannot mount a filesystem unless they're in a user namespace along with its own mount namespace.
+@@ -398,8 +533,8 @@ function run_buildah() {
+         retry=$(( retry - 1 ))
+
+         # stdout is only emitted upon error; this echo is to help a debugger
+-        echo "${_LOG_PROMPT} ${BUILDAH_BINARY} $*"
+-        run env CONTAINERS_CONF=${CONTAINERS_CONF:-$(dirname ${BASH_SOURCE})/containers.conf} timeout --foreground --kill=10 $BUILDAH_TIMEOUT ${BUILDAH_BINARY} ${BUILDAH_REGISTRY_OPTS} ${ROOTDIR_OPTS} "$@"
++        echo "${_LOG_PROMPT} $cmd_basename $*"
++        run env CONTAINERS_CONF=${CONTAINERS_CONF:-$(dirname ${BASH_SOURCE})/containers.conf} timeout --foreground --kill=10 $BUILDAH_TIMEOUT ${podman_or_buildah} ${_opts} "$@"
+         # without "quotes", multiple lines are glommed together into one
+         if [ -n "$output" ]; then
+             echo "$output"
+@@ -426,6 +561,9 @@ function run_buildah() {
+             false
+         fi
+
++        if [[ "$status" -eq 0 ]] ; then
++            eval ${copydown}
++        fi
+         if [ -n "$expected_rc" ]; then
+             if [ "$status" -eq "$expected_rc" ]; then
+                 return
+@@ -772,6 +910,26 @@ function skip_unless_arch() {
+   skip "test requires one of these architectures: $* (current: $goarch)"
+ }
+
++####################
++#  skip_if_remote  #  (only applicable for podman)
++####################
++function skip_if_remote() {
++    if [[ -n "$REMOTE" ]]; then
++        skip "${1:-test does not work with podman-remote}"
++    fi
++}
++
++#############################
++#  skip_if_rootless_remote  #  (only applicable for podman)
++#############################
++function skip_if_rootless_remote() {
++    if [[ -n "$REMOTE" ]]; then
++        if is_rootless; then
++            skip "${1:-test does not work with rootless podman-remote}"
++        fi
++    fi
++}
++
+ ######################
+ #  start_git_daemon  #
+ ######################
+-- 
+2.53.0
+

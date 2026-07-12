@@ -1,0 +1,85 @@
+# -*- sh -*-
+#
+# test more container-related endpoints
+#
+
+podman pull $IMAGE &>/dev/null
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+CTR="ArchiveTestingCtr$(random_string 5)"
+
+TMPD=$(mktemp -d podman-apiv2-test.archive.XXXXXXXX)
+HELLO_TAR="${TMPD}/hello.tar"
+HELLO_S="Hello_$(random_string 8)"
+echo "$HELLO_S" > $TMPD/hello.txt
+tar --owner=1042 --group=1043 --format=posix -C $TMPD -cvf ${HELLO_TAR} hello.txt &> /dev/null
+
+# Start a container, and wait for it. (I know we don't actually do anything
+# if we time out. If we do, subsequent tests will fail. I just want to avoid
+# a race between container-start and tests-start)
+podman run -d --name "${CTR}" "${IMAGE}" top
+timeout=10
+while [[ $timeout -gt 0 ]]; do
+    if podman container exists "${CTR}"; then
+        break
+    fi
+    timeout=$((timeout - 1))
+    sleep 1
+done
+
+function cleanUpArchiveTest() {
+    podman container stop "${CTR}" &> /dev/null
+    podman container rm "${CTR}" &> /dev/null
+    rm -fr "${TMPD}" &> /dev/null
+}
+
+t HEAD "containers/nonExistentCtr/archive?path=%2F" 404
+t HEAD "containers/${CTR}/archive?path=%2Fnon%2Fexistent%2Fpath" 404
+t HEAD "containers/${CTR}/archive?path=%2Fetc%2Fpasswd" 200
+
+# Send tarfile to container...
+t PUT "/containers/${CTR}/archive?path=%2Ftmp%2F" ${HELLO_TAR} 200 ''
+
+# ...and 'exec cat file' to confirm that it got extracted into place.
+cat >$TMPD/exec.json <<EOF
+{ "AttachStdout":true,"Cmd":["cat","/tmp/hello.txt"]}
+EOF
+t POST containers/${CTR}/exec $TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+# The 017 is the byte length
+t POST exec/$eid/start 200 $'\001\017'$HELLO_S
+
+# Now fetch hello.txt back as a tarfile
+t HEAD "containers/${CTR}/archive?path=%2Ftmp%2Fhello.txt" 200
+t GET  "containers/${CTR}/archive?path=%2Ftmp%2Fhello.txt" 200
+
+# Check important-looking header
+PATH_STAT="$(grep X-Docker-Container-Path-Stat "$WORKDIR/curl.headers.out" | cut -d " " -f 2 | base64 -d --ignore-garbage)"
+
+is "$(jq -r .name <<<$PATH_STAT)" "hello.txt" "Docker-Path-Stat .name"
+is "$(jq -r .size <<<$PATH_STAT)" "15"        "Docker-Path-Stat .size"
+
+# Check filename and its contents
+tar_tf=$(tar tf $WORKDIR/curl.result.out)
+is "$tar_tf" "hello.txt" "fetched tarball: file name"
+
+tar_contents=$(tar xf $WORKDIR/curl.result.out --to-stdout)
+is "$tar_contents" "$HELLO_S" "fetched tarball: file contents"
+
+# TODO: uid/gid should be also preserved on way back (GET request)
+# right now it ends up as 0/0 instead of 1042/1043
+tar_uidgid=$(tar tvf $WORKDIR/curl.result.out | awk '{print $2}')
+is "$tar_uidgid" "0/0" "fetched tarball: file uid/gid"
+
+# test if uid/gid was set correctly in the server. Again, via exec.
+cat >$TMPD/exec.json <<EOF
+{ "AttachStdout":true,"Cmd":["stat","-c","%u:%g","/tmp/hello.txt"]}
+EOF
+
+t POST containers/${CTR}/exec $TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t POST exec/$eid/start 200 $'\001\012'1042:1043
+
+cleanUpArchiveTest

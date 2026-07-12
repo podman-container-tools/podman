@@ -1,0 +1,339 @@
+name: Cherry Pick to Release Branch
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [closed]
+
+jobs:
+  cherry-pick:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/cherry-pick ') &&
+      github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Get PR details
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_API_URL: ${{ github.event.issue.pull_request.url }}
+        run: |
+          pr_url="$PR_API_URL"
+          pr_data=$(gh api "$pr_url")
+          merged=$(echo "$pr_data" | jq -r '.merged')
+          merge_sha=$(echo "$pr_data" | jq -r '.merge_commit_sha')
+
+          if [ "$merged" == "true" ]; then
+            echo "PR is merged"
+            echo "pr_state=merged" >> $GITHUB_OUTPUT
+            echo "merge_sha=$merge_sha" >> $GITHUB_OUTPUT
+          else
+            echo "PR is open"
+            echo "pr_state=open" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check user authorization
+        id: auth
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_STATE: ${{ steps.pr.outputs.pr_state }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Check if user has write permission to the repository
+          permission=$(gh api "repos/${REPO}/collaborators/${COMMENT_AUTHOR}/permission" -q '.permission' 2>/dev/null || echo "none")
+
+          if [ "$permission" == "admin" ] || [ "$permission" == "write" ]; then
+            echo "User $COMMENT_AUTHOR has $permission permission, authorized"
+            echo "authorized=true" >> $GITHUB_OUTPUT
+          else
+            echo "User $COMMENT_AUTHOR has $permission permission, not authorized"
+            echo "authorized=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Parse cherry-pick command
+        id: parse
+        if: steps.auth.outputs.authorized == 'true'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          # Extract branch name from /cherry-pick <branch> command
+          branch=$(echo "$COMMENT_BODY" | grep -oP '/cherry-pick\s+\K\S+' | head -1)
+
+          if [ -z "$branch" ]; then
+            echo "Could not parse branch from comment"
+            echo "branch=" >> $GITHUB_OUTPUT
+          else
+            echo "Target branch: $branch"
+            echo "branch=$branch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.auth.outputs.authorized == 'true' && steps.parse.outputs.branch != ''
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure git
+        if: steps.auth.outputs.authorized == 'true' && steps.parse.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Configure git to use token for push (avoids credential persistence in checkout)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+
+      - name: Handle open PR - queue acknowledgment
+        if: steps.auth.outputs.authorized == 'true' && steps.parse.outputs.branch != '' && steps.pr.outputs.pr_state == 'open'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          TARGET_BRANCH: ${{ steps.parse.outputs.branch }}
+        run: |
+          # Check if branch exists
+          if ! git ls-remote --exit-code origin "$TARGET_BRANCH" > /dev/null 2>&1; then
+            echo "Branch $TARGET_BRANCH does not exist"
+            exit 1
+          fi
+
+          gh pr comment "$PR_NUMBER" --body "Queued cherry-pick to \`$TARGET_BRANCH\` - will run when PR merges."
+
+      - name: Cherry-pick to release branch
+        if: steps.auth.outputs.authorized == 'true' && steps.parse.outputs.branch != '' && steps.pr.outputs.pr_state == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
+          TARGET_BRANCH: ${{ steps.parse.outputs.branch }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Processing cherry-pick to $TARGET_BRANCH"
+
+          # Check if branch exists
+          if ! git ls-remote --exit-code origin "$TARGET_BRANCH" > /dev/null 2>&1; then
+            echo "Branch $TARGET_BRANCH does not exist"
+            exit 1
+          fi
+
+          # Get original PR title for the cherry-pick PR
+          original_title=$(gh api "repos/${REPO}/pulls/$PR_NUMBER" -q '.title')
+
+          # Get the original commits from the PR
+          commits=$(gh api "repos/${REPO}/pulls/$PR_NUMBER/commits" -q '.[].sha')
+
+          # Checkout target branch
+          git checkout "$TARGET_BRANCH"
+          git pull origin "$TARGET_BRANCH"
+
+          # Verify we have commits to cherry-pick
+          if [ -z "$commits" ]; then
+            echo "No commits found for PR $PR_NUMBER"
+            exit 1
+          fi
+
+          # Create a new branch for the cherry-pick PR
+          cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${TARGET_BRANCH}"
+
+          # Delete existing branch if it exists (from a previous failed run)
+          git branch -D "$cherry_pick_branch" 2>/dev/null || true
+          git push origin --delete "$cherry_pick_branch" 2>/dev/null || true
+
+          git checkout -b "$cherry_pick_branch"
+
+          # Attempt cherry-pick of each commit
+          if echo "$commits" | xargs -r git cherry-pick -x; then
+            echo "Cherry-pick to $TARGET_BRANCH successful"
+            git push origin "$cherry_pick_branch"
+            echo "cherry_pick_branch=$cherry_pick_branch" >> $GITHUB_OUTPUT
+            echo "original_title=$original_title" >> $GITHUB_OUTPUT
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "Cherry-pick to $TARGET_BRANCH failed"
+            git cherry-pick --abort || true
+            exit 1
+          fi
+
+      - name: Create cherry-pick PR
+        if: steps.auth.outputs.authorized == 'true' && steps.parse.outputs.branch != '' && steps.pr.outputs.pr_state == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.CHERRY_PICK_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
+          TARGET_BRANCH: ${{ steps.parse.outputs.branch }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${TARGET_BRANCH}"
+          original_title=$(gh api "repos/${REPO}/pulls/$PR_NUMBER" -q '.title')
+
+          printf -v body 'Cherry-pick of #%s to `%s`.\n\nRequested by @%s\n\nOriginal merge commit: %s' \
+            "$PR_NUMBER" "$TARGET_BRANCH" "$COMMENT_AUTHOR" "$MERGE_SHA"
+
+          gh api repos/${REPO}/pulls \
+            --method POST \
+            -f base="$TARGET_BRANCH" \
+            -f head="$cherry_pick_branch" \
+            -f title="[${TARGET_BRANCH}] ${original_title}" \
+            -f body="$body"
+
+      - name: Clear git credentials
+        if: always()
+        run: |
+          git remote set-url origin "https://github.com/${{ github.repository }}.git" || true
+
+  cherry-pick-on-merge:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch comments and find cherry-pick requests
+        id: find-requests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Fetch all comments on the PR
+          comments=$(gh api "repos/${REPO}/issues/$PR_NUMBER/comments" --paginate)
+
+          # Extract branches from bot's queued comments (authorization was already validated when queued)
+          branches=$(echo "$comments" | jq -r '.[] | select(.user.login == "github-actions[bot]") | .body' | \
+            grep -oP "Queued cherry-pick to \`\K[^\`]+" | sort -u | paste -sd,)
+
+          echo "Found branches: $branches"
+          echo "branches=$branches" >> $GITHUB_OUTPUT
+
+          if [ -z "$branches" ]; then
+            echo "No cherry-pick requests found"
+            echo "has_requests=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_requests=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.find-requests.outputs.has_requests == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure git
+        if: steps.find-requests.outputs.has_requests == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Configure git to use token for push (avoids credential persistence in checkout)
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+
+      - name: Process cherry-picks
+        id: cherry-pick
+        if: steps.find-requests.outputs.has_requests == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BRANCHES: ${{ steps.find-requests.outputs.branches }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Get original PR title for cherry-pick PRs
+          original_title=$(gh api "repos/${REPO}/pulls/$PR_NUMBER" -q '.title')
+
+          # Get the original commits from the PR
+          commits=$(gh api "repos/${REPO}/pulls/$PR_NUMBER/commits" -q '.[].sha')
+
+          # Verify we have commits to cherry-pick
+          if [ -z "$commits" ]; then
+            echo "No commits found for PR $PR_NUMBER"
+            exit 1
+          fi
+
+          successful_branches=""
+          IFS=',' read -ra branch_array <<< "$BRANCHES"
+          for branch in "${branch_array[@]}"; do
+            echo "Processing cherry-pick to $branch"
+
+            # Check if branch exists
+            if ! git ls-remote --exit-code origin "$branch" > /dev/null 2>&1; then
+              echo "Branch $branch does not exist, skipping"
+              continue
+            fi
+
+            # Reset to main branch before each cherry-pick
+            git checkout main
+            git checkout "$branch"
+            git pull origin "$branch"
+
+            # Create a new branch for the cherry-pick PR
+            cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${branch}"
+
+            # Delete existing branch if it exists (from a previous failed run)
+            git branch -D "$cherry_pick_branch" 2>/dev/null || true
+            git push origin --delete "$cherry_pick_branch" 2>/dev/null || true
+
+            git checkout -b "$cherry_pick_branch"
+
+            # Attempt cherry-pick of each commit
+            if echo "$commits" | xargs -r git cherry-pick -x; then
+              echo "Cherry-pick to $branch successful"
+              git push origin "$cherry_pick_branch"
+              successful_branches="${successful_branches}${branch},"
+            else
+              echo "Cherry-pick to $branch failed due to conflicts"
+              git cherry-pick --abort || true
+              # Clean up the failed branch
+              git checkout main
+              git branch -D "$cherry_pick_branch" || true
+            fi
+          done
+
+          echo "successful_branches=${successful_branches%,}" >> $GITHUB_OUTPUT
+          echo "original_title=$original_title" >> $GITHUB_OUTPUT
+
+      - name: Create cherry-pick PRs
+        if: steps.find-requests.outputs.has_requests == 'true' && steps.cherry-pick.outputs.successful_branches != ''
+        env:
+          GH_TOKEN: ${{ secrets.CHERRY_PICK_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          BRANCHES: ${{ steps.cherry-pick.outputs.successful_branches }}
+          ORIGINAL_TITLE: ${{ steps.cherry-pick.outputs.original_title }}
+          REPO: ${{ github.repository }}
+        run: |
+          IFS=',' read -ra branch_array <<< "$BRANCHES"
+          for branch in "${branch_array[@]}"; do
+            cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${branch}"
+            echo "Creating PR for $cherry_pick_branch"
+
+            printf -v body 'Cherry-pick of #%s to `%s`.\n\nOriginal merge commit: %s' \
+              "$PR_NUMBER" "$branch" "$MERGE_SHA"
+
+            gh api repos/${REPO}/pulls \
+              --method POST \
+              -f base="$branch" \
+              -f head="$cherry_pick_branch" \
+              -f title="[${branch}] ${ORIGINAL_TITLE}" \
+              -f body="$body"
+          done
+
+      - name: Clear git credentials
+        if: always()
+        run: |
+          git remote set-url origin "https://github.com/${{ github.repository }}.git" || true

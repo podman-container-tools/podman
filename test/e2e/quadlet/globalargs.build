@@ -1,0 +1,9 @@
+## assert-podman-global-args "build" "--identity=path=/etc/identity"
+## assert-podman-global-args "build" "--syslog"
+## assert-podman-global-args "build" "--log-level=debug"
+
+[Build]
+ImageTag=image:latest
+SetWorkingDirectory=unit
+GlobalArgs=--identity=path=/etc/identity
+GlobalArgs=--syslog --log-level=debug

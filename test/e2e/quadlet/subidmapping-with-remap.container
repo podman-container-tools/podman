@@ -1,0 +1,8 @@
+## assert-failed
+## assert-stderr-contains "deprecated Remap keys are set along with explicit mapping keys"
+
+[Container]
+Image=localhost/imagename
+SubUIDMap=utest
+SubGIDMap=gtest
+RemapUsers=auto

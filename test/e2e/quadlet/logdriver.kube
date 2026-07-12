@@ -1,0 +1,5 @@
+## assert-podman-args "--log-driver" "journald"
+
+[Kube]
+Yaml=deployment.yml
+LogDriver=journald

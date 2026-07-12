@@ -1,0 +1,10 @@
+## assert-podman-final-args localhost/imagename
+## assert-key-is "Unit" "Foo" "bar1" "bar2"
+## assert-key-is "X-Container" "Image" "localhost/imagename"
+
+[Unit]
+Foo=bar1
+Foo=bar2
+
+[Container]
+Image=localhost/imagename

@@ -1,0 +1,145 @@
+name: Update Podman version on Podman.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to bump on podman.io'
+        required: true
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version to bump on podman.io'
+        type: string
+        required: true
+    secrets:
+      PODMANBOT_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  bump:
+    if: github.repository == 'podman-container-tools/podman'
+    name: Bump
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # to push to a branch
+      pull-requests: write # to read and create PRs
+    steps:
+      - name: Get version
+        id: getversion
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ -z "${INPUT_VERSION}" ]]
+          then
+                VERSION=${TAG_NAME}
+          else
+                VERSION=${INPUT_VERSION}
+          fi
+
+          # strip out the prefix v if it's there
+          if [[ $VERSION == v* ]]; then
+            VERSION="${VERSION:1}"
+          fi
+          echo "Bump to ${VERSION}"
+
+          if [[ $VERSION != *-rc* ]] && [[ $VERSION != *-dev ]]; then
+            echo "notRC=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "SKIPPING: Version is a RC or a dev, no need to update."
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check open PRs
+        if: steps.getversion.outputs.notRC == 'true'
+        id: checkpr
+        env:
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          prs=$(gh pr list \
+            --repo containers/podman.io \
+            --head "bump-podmanv${VERSION}" \
+            --state open \
+            --json title \
+            --jq 'length')
+          if ((prs > 0)); then
+            echo "SKIPPING: PR already exists to update to v${VERSION}."
+          else
+            echo "prexists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: >-
+            steps.getversion.outputs.notRC == 'true' &&
+            steps.checkpr.outputs.prexists == 'false'
+        with:
+          repository: containers/podman.io
+          ref: refs/heads/main
+          token: ${{ secrets.PODMANBOT_TOKEN }}
+          persist-credentials: true
+
+      - name: Check version
+        if: >-
+            steps.getversion.outputs.notRC == 'true' &&
+            steps.checkpr.outputs.prexists == 'false'
+        id: checkversion
+        env:
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          # Check if version is actually higher than one on podman.io
+          prevversion=`grep -P "(?<=export const LATEST_VERSION = ')(\d.\d.\d)" -o static/data/global.ts`
+          echo "Version currently on site: ${prevversion}"
+          echo "Version to update to: ${VERSION}"
+          # sort -V -C returns 0 if args are ascending version order
+          if echo "${prevversion},${VERSION}" | tr ',' '\n' | sort -V -C && [[ "${prevversion}" != "${version}" ]]
+          then
+            echo "needsUpdate=true" >> $GITHUB_OUTPUT
+            echo "This release is a higher version, so we need to update podman.io"
+          else
+            echo "SKIPPING: This release is not a higher version, no need to update."
+          fi
+
+      - name: Bump version
+        if: >-
+          steps.getversion.outputs.notRC == 'true' &&
+          steps.checkversion.outputs.needsUpdate == 'true' &&
+          steps.checkpr.outputs.prexists == 'false'
+        env:
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          # Replace the version in static/data/global.ts file
+          sed --sandbox -i -e "s/export const LATEST_VERSION = '.*';/export const LATEST_VERSION = '${VERSION}';/g" static/data/global.ts
+          echo "Updated file:"
+          cat static/data/global.ts
+
+      - name: Open PR
+        if: >-
+            steps.getversion.outputs.notRC == 'true' &&
+            steps.checkversion.outputs.needsUpdate == 'true' &&
+            steps.checkpr.outputs.prexists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          # Make committer the user who triggered the action, either through cutting a release or manual trigger
+          # GitHub gives everyone a noreply email associated with their account, use that email for the sign-off
+          git config --local user.name "${GITHUB_ACTOR}"
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          bumpbranch="bump-podmanv${VERSION}"
+          git checkout -b $bumpbranch
+          git add static/data/global.ts
+          git commit --signoff -m "Bump Podman to v${VERSION}"
+          git remote -v
+          git remote add podmanbot https://github.com/podmanbot/podman.io
+          git push podmanbot "+$bumpbranch"
+          gh pr create \
+            --title "Bump Podman to v${VERSION}" \
+            --body  "Bump Podman to v${VERSION}" \
+            --head "podmanbot:$bumpbranch" \
+            --base "main" -R "containers/podman.io"

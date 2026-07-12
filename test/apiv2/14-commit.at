@@ -1,0 +1,30 @@
+# Create a container for testing the container initializing later
+podman create -t -i --name myctr $IMAGE ls
+
+config=$(mktemp -t config.XXXXXXXXXX.json)
+cat > "$config" <<- EOF
+{
+  "Entrypoint": ["/bin/crash"],
+  "Cmd": ["and", "burn"],
+  "Labels": {"for": "ever", "and": "ever"}
+}
+EOF
+
+# Create a new image based on the container
+t POST 'libpod/commit?container=myctr&repo=nativeimage&tag=1' $config 200
+
+# Check some things
+t GET libpod/images/nativeimage:1/json 200 ".Config.Cmd=$(jq .Cmd $config)" ".Config.Entrypoint=$(jq .Entrypoint $config)"
+
+# Create a new image based on the container
+t POST 'commit?container=myctr&repo=compatimage&tag=1' $config 201
+
+# Check some things
+t GET images/compatimage:1/json 200 ".Config.Cmd=$(jq .Cmd $config)" ".Config.Entrypoint=$(jq .Entrypoint $config)"
+
+# Clean up
+t DELETE containers/myctr 204
+t DELETE images/nativeimage:1 200
+t DELETE images/compatimage:1 200
+rm -f "$config"
+unset config

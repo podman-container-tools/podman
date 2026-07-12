@@ -1,0 +1,148 @@
+% podman-pod-clone 1
+
+## NAME
+podman\-pod\-clone - Create a copy of an existing pod
+
+## SYNOPSIS
+**podman pod clone** [*options*] *pod* *name*
+
+## DESCRIPTION
+**podman pod clone** creates a copy of a pod, recreating the identical config for the pod and for all of its containers. Users can modify the pods new name and select pod details within the infra container
+
+## OPTIONS
+
+@@option blkio-weight
+
+@@option blkio-weight-device
+
+@@option cgroup-parent
+
+@@option cpu-shares
+
+#### **--cpus**
+
+Set a number of CPUs for the pod that overrides the original pods CPU limits. If none are specified, the original pod's Nano CPUs are used.
+
+@@option cpuset-cpus
+
+If none are specified, the original pod's CPUset is used.
+
+@@option cpuset-mems
+
+@@option destroy
+
+@@option device
+
+Note: the pod implements devices by storing the initial configuration passed by the user and recreating the device on each container added to the pod.
+
+@@option device-read-bps
+
+@@option device-write-bps
+
+@@option gidmap.pod
+
+@@option gpus
+
+#### **--help**, **-h**
+
+Print usage statement.
+
+@@option hostname.pod
+
+@@option infra-command
+
+@@option infra-conmon-pidfile
+
+@@option infra-name
+
+@@option label
+
+@@option label-file
+
+@@option memory
+
+@@option memory-swap
+
+#### **--name**, **-n**
+
+Set a custom name for the cloned pod. The default if not specified is of the syntax: **\<ORIGINAL_NAME\>-clone**
+
+@@option pid.pod
+
+@@option restart
+
+Default restart policy for all the containers in a pod.
+
+@@option security-opt
+
+@@option shm-size
+
+@@option shm-size-systemd
+
+#### **--start**
+
+When set to true, this flag starts the newly created pod after the
+clone process has completed. All containers within the pod are started.
+
+@@option subgidname
+
+@@option subuidname
+
+@@option sysctl
+
+@@option uidmap.pod
+
+@@option userns.pod
+
+@@option uts.pod
+
+@@option volume
+
+@@option volumes-from
+
+## EXAMPLES
+
+Clone the specified pod to a new pod.
+```
+# podman pod clone pod-name
+6b2c73ff8a1982828c9ae2092954bcd59836a131960f7e05221af9df5939c584
+```
+
+Clone the specified pod to a new pod with a new name.
+```
+# podman pod clone pod-name --name=cloned-pod
+d0cf1f782e2ed67e8c0050ff92df865a039186237a4df24d7acba5b1fa8cc6e7
+6b2c73ff8a1982828c9ae2092954bcd59836a131960f7e05221af9df5939c584
+```
+
+Clone and remove the specified pod to a new pod, modifying its cpus.
+```
+# podman pod clone --destroy --cpus=5 d0cf1
+6b2c73ff8a1982828c9ae2092954bcd59836a131960f7e05221af9df5939c584
+```
+
+Clone the specified pod to a new named pod.
+```
+# podman pod clone 2d4d4fca7219b4437e0d74fcdc272c4f031426a6eacd207372691207079551de new_name
+5a9b7851013d326aa4ac4565726765901b3ecc01fcbc0f237bc7fd95588a24f9
+```
+
+Clone a pod with memory limits.
+```
+# podman pod clone --memory=1g --memory-swap=2g pod-name
+6b2c73ff8a1982828c9ae2092954bcd59836a131960f7e05221af9df5939c584
+```
+
+Clone a pod with CPU limits.
+```
+# podman pod clone --cpus=2.5 --cpu-shares=1024 pod-name
+6b2c73ff8a1982828c9ae2092954bcd59836a131960f7e05221af9df5939c584
+```
+## SEE ALSO
+**[podman-pod-create(1)](podman-pod-create.1.md)**
+
+## HISTORY
+May 2022, Originally written by Charlie Doern <cdoern@redhat.com>
+
+## FOOTNOTES
+<a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a core value of open source. The `master` and `slave` mount propagation terminology used here is problematic and divisive, and needs to be changed. However, these terms are currently used within the Linux kernel and must be used as-is at this time. When the kernel maintainers rectify this usage, Podman will follow suit immediately.

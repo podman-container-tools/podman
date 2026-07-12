@@ -1,0 +1,5 @@
+## assert-podman-final-args systemd-internal
+## assert-podman-args "--internal"
+
+[Network]
+Internal=yes

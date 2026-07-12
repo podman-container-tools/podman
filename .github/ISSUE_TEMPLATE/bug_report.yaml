@@ -1,0 +1,104 @@
+name: Bug Report
+description: File a bug report
+labels: ["kind/bug", "triage-needed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!  For extended guidelines on reporting issues, please consult the [issue reporting](https://github.com/containers/podman/blob/main/ISSUE.md) documentation. You should also familiarize yourself with our [support](https://github.com/containers/podman/blob/main/SUPPORT.md) documentation.
+
+        **NOTE** A large number of issues reported against Podman are often found to already be fixed in more current versions of the project.  Before reporting an issue, please verify the version you are running with `podman version` and compare it to the latest release on our [GitHub Releases page](https://github.com/podman-container-tools/podman/releases/latest). If they differ, please update your version of Podman to the latest possible and retry your command before creating an issue.
+
+        Also, there is a running list of known issues in the [Podman Troubleshooting Guide](https://github.com/containers/podman/blob/main/troubleshooting.md), please reference that page before opening a new issue.
+
+        Commands you might need to run to create the issue
+          $ podman version
+          $ podman info
+          $ rpm -q podman
+
+        If running on Mac or Windows, please be sure to report information about the operating system.  In the case of Mac, knowing about the hardware in more detail can be helpful.  Consider running the following utilities and redact any personal information:
+          $ sw_vers
+          $ system_profiler SPHardwareDataType
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue Description
+      description: Please explain your issue
+      value: "Describe your issue"
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Steps to reproduce the issue
+      description: Please explain the steps to reproduce the issue
+      value: "Steps to reproduce the issue\n1.\n2.\n3.\n"
+    validations:
+      required: true
+  - type: textarea
+    id: received_results
+    attributes:
+      label: Describe the results you received
+      description: Please explain the results you are noticing
+      value: "Describe the results you received"
+    validations:
+      required: true
+  - type: textarea
+    id: expected_results
+    attributes:
+      label: Describe the results you expected
+      description: Please explain the results you are expecting
+      value: "Describe the results you expected"
+    validations:
+      required: true
+  - type: textarea
+    id: podman_info
+    attributes:
+      label: podman info output
+      description: Please copy and paste podman info output.
+      value: If you are unable to run podman info for any reason, please provide the podman version, operating system and its version and the architecture you are running.
+      render: yaml
+    validations:
+      required: true
+  - type: dropdown
+    id: podman_in_a_container
+    attributes:
+      label: Podman in a container
+      description: Please select Yes if you are running podman in a container
+      options:
+        - 'No'
+        - 'Yes'
+    validations:
+      required: true
+  - type: dropdown
+    id: privileged_rootless
+    attributes:
+      label: Privileged Or Rootless
+      description: Are you running the containers as privileged or non-root user?  Note that using `su` or `sudo` does not establish a proper login session required for running Podman as a non-root user.  Please refer to the [troubleshooting guide](https://github.com/containers/podman/blob/main/troubleshooting.md#solution-28) for alternatives.
+      options:
+        - Privileged
+        - Rootless
+  - type: dropdown
+    id: upstream_latest
+    attributes:
+      label: Upstream Latest Release
+      description: Have you tried running the [latest upstream release](https://github.com/containers/podman/releases/latest)
+      options:
+        - 'Yes'
+        - 'No'
+    validations:
+      required: true
+  - type: textarea
+    id: additional_environment
+    attributes:
+      label: Additional environment details
+      description: Please describe any additional environment details like (AWS, VirtualBox,...)
+      value: "Additional environment details"
+  - type: textarea
+    id: additional_info
+    attributes:
+      label: Additional information
+      description: Please explain the additional information you deem important
+      value: "Additional information like issue happens only occasionally or issue happens with a particular architecture or on a particular setting"
+    validations:
+      required: false

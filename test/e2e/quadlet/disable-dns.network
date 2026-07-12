@@ -1,0 +1,5 @@
+## assert-podman-final-args systemd-disable-dns
+## assert-podman-args "--disable-dns"
+
+[Network]
+DisableDNS=yes

@@ -1,0 +1,5 @@
+## assert-failed
+## assert-stderr-contains "neither SetWorkingDirectory, nor File key specified"
+
+[Build]
+ImageTag=localhost/imagename

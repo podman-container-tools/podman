@@ -1,0 +1,53 @@
+{{ define "schemaPolymorphic" }}
+  type {{ pascalize .Name }} interface {
+  {{- if not (or .IsInterface .IsStream) }}{{/*
+        A base type is always Validatable.
+        Under normal conditions, we can't have a base type rendered a .IsStream or .IsInterface: this check is just for sanity check).
+
+        In the definition of the base type itself, this means that the unexported struct holding
+        the definition of the base type has a Validate() func and a ContextValitate() func.
+    */}}
+        runtime.Validatable
+        runtime.ContextValidatable
+  {{- end }}
+  {{ range .AllOf }}
+    {{- if .IsAnonymous }}
+      {{ range .Properties }}
+        {{ if $.IsTuple }}{{ template "tuplefieldIface" . }}{{ else }}{{template "structfieldIface" . }}{{ end }}
+      {{- end }}
+      {{ template "mapOrSliceGetter" . }}
+    {{- else }}
+      {{ .GoType }}
+    {{- end }}
+  {{- end }}
+  {{ range .Properties }}
+    {{- if $.IsTuple }}
+      {{ template "tuplefieldIface" . }}
+    {{- else }}
+      {{ template "structfieldIface" . }}
+    {{- end }}
+  {{- end }}
+  {{ template "mapOrSliceGetter" . }}
+  }
+
+  type {{ camelize .Name }} {{ template "schemaBody" . }}{{/* unexported implementation of the interface (TODO(fred): atm, this is not used, issue #232) */}}
+  {{- range .Properties }}
+
+    // {{ pascalize .Name}} gets the {{ humanize .Name }} of this polymorphic type
+    func ({{ $.ReceiverName}} *{{ camelize $.Name}}) {{ pascalize .Name}}() {{ template "schemaType" . }}{
+      {{- if eq $.DiscriminatorField .Name }}
+        return {{ printf "%q" $.DiscriminatorValue }}
+      {{- else }}
+        return {{ $.ReceiverName }}.{{camelize .Name}}Field
+      {{- end }}
+    }
+
+    // Set{{ pascalize .Name}} sets the {{ humanize .Name }} of this polymorphic type
+    func ({{ $.ReceiverName}} *{{ camelize $.Name}}) Set{{ pascalize .Name}}(val {{ template "schemaType" . }}) {
+      {{- if ne $.DiscriminatorField .Name }}
+        {{ $.ReceiverName }}.{{camelize .Name}}Field = val
+      {{- end }}
+    }
+  {{- end }}{{/* TODO(fred): AdditionalProperties */}}
+  {{ template "polymorphicSerializer" . }}
+{{- end }}

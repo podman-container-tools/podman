@@ -1,0 +1,29 @@
+# -*- sh -*-
+#
+# test 'stats' endpoints
+#
+
+if root; then
+    podman run -dt --name container1 --cpuset-cpus=0 $IMAGE top &>/dev/null
+
+    # regression for https://github.com/containers/podman/issues/15754
+    t GET libpod/containers/container1/stats?stream=false 200 .cpu_stats.online_cpus=1
+fi
+
+podman run -dt --name testctr1 $IMAGE top &>/dev/null
+
+t GET libpod/containers/testctr1/stats?stream=false 200 '.networks | length'=1
+
+podman rm -f testctr1
+
+podman network create testnet1
+podman network create testnet2
+
+podman run -dt --name testctr2 --net testnet1,testnet2 $IMAGE top &>/dev/null
+
+t GET libpod/containers/testctr2/stats?stream=false 200 '.networks | length'=2
+
+podman rm -f testctr2
+
+podman network rm testnet1
+podman network rm testnet2

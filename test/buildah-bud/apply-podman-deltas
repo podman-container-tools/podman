@@ -1,0 +1,372 @@
+#!/bin/bash
+#
+# *** NOTE TO READER: Please skip down to "user-customizable section" below!
+#
+# Not all tests in buildah/tests/bud.bats work under podman.
+# Some work, but emit different error messages.
+#
+# This script is used to skip the former, and munge expect_output messages
+# for the latter.
+#
+ME=$(basename $0)
+
+BUD=tests/bud.bats
+
+if [[ ! -e $BUD ]]; then
+    echo "$ME: $BUD not found: please run me from buildah subdir" >&2
+    exit 1
+fi
+
+###############################################################################
+# BEGIN handlers
+#
+# *** NOTE TO READER (again): Please skip down to "user-customizable section"
+#
+# You almost certainly don't care about anything in this section.
+#
+set -e
+
+RC=0
+
+ECHO=':'
+if [[ -n $DEBUG_PODMAN_DELTAS ]]; then
+    ECHO='echo'
+fi
+
+# Issue a warning, and set exit status (but do not exit now)
+function warn() {
+    echo "$ME: ERROR: $*" >&2
+    RC=1
+}
+
+# errmsg: used to change the text of a message, probably in expect_output()
+function errmsg() {
+    local msg_orig=${1//\//\\/}; shift
+    local msg_new=${1//\//\\/};  shift
+
+    for t in "$@"; do
+        if grep -F -qx "@test \"$t\" {" $BUD; then
+            $ECHO "@test \"$t\" : updating to \"$msg_new\""
+            t=${t//\//\\/}
+            # FIXME: emit error if msg_orig not found
+            sed -i -e "/^\@test \"$t\" {/,/^}/s/\"$msg_orig\"/\"$msg_new\"/" $BUD
+        else
+            warn "[errmsg] Did not find test \"$t\" in $BUD"
+        fi
+    done
+}
+
+# _skip: used to add a 'skip' or 'skip_if_remote' to one specific test
+function _skip() {
+    local skip=$1;   shift
+    local reason=$1; shift
+
+    # All further arguments are test names. Make sure we're invoked with some!
+    if [[ -z "$*" ]]; then
+        echo "$ME: FATAL: Invalid use of '${FUNCNAME[1]}' at line ${BASH_LINENO[1]}: missing test-name argument(s)." >&2
+        exit 1
+    fi
+
+    for t in "$@"; do
+        if grep -F -qx "@test \"$t\" {" $BUD; then
+            $ECHO "@test \"$t\" : $skip \"$reason\""
+            # Escape slash in test name, 'custom files in /run/'
+            t=${t//\//\\/}
+            # Escape star in test name, 'bud with --dns* flags'
+            t=${t//\*/\\\*}
+            sed -i -e "/^\@test \"$t\" {/ a \ \ $skip \"$reason\"" $BUD
+        else
+            warn "[$skip] Did not find test \"$t\" in $BUD"
+        fi
+    done
+}
+
+function skip() {
+    _skip "skip" "$@"
+}
+
+function skip_if_remote() {
+    _skip "skip_if_remote" "$@"
+}
+
+function skip_if_rootless() {
+    _skip "skip_if_rootless_environment" "$@"
+}
+
+function skip_if_rootless_remote() {
+    _skip "skip_if_rootless_remote" "$@"
+}
+
+# END   handlers
+###############################################################################
+# BEGIN user-customizable section
+#
+# These are the hand-maintained exceptions. This is what you want to edit
+# or update as needed.
+#
+# There are three directives you can use below:
+#
+#    errmsg "old-message" "new-message" "test name" ["test name"...]
+#
+# This replaced "old-message" with "new-message" in @test "test name".
+# It is used when a podman error message differs from buildah's.
+#
+#    [skip | skip_if_remote] "reason" "test name" ["test name"...]
+#
+# This adds a 'skip' statement as the first line of @test "test name".
+# It is used when a test does not work in podman, either for permanent
+# design-related reasons or for hopefully-temporary bug-in-podman reasons.
+# (If the latter, please file an issue before adding the skip, and include
+# the issue number in your skip message. This makes it possible to remove
+# the skip once the issue is fixed).
+#
+# For both cases, you can list multiple "test names" at the end. This
+# is not used much right now, but will be once I file my podman-remote PR
+# because there are some cases where the same issue affects up to fifty
+# different bud.bats tests.
+#
+
+###############################################################################
+# BEGIN differences in error messages between buildah and podman
+
+errmsg "non-directory/Dockerfile: not a directory" \
+       "Error: context must be a directory:" \
+       "bud with a path to a Dockerfile (-f) containing a non-directory entry"
+
+errmsg "no such file or directory" \
+       "Error: context must be a directory:"
+
+errmsg "no such file or directory" \
+       "Error: no context directory and no Containerfile specified" \
+       "bud without any arguments should fail when no Dockerfile exists"
+
+errmsg "is not a file" \
+       "Error: no Containerfile or Dockerfile specified or found in context directory" \
+       "bud with specified context should fail if Dockerfile in context directory is actually a file"
+
+errmsg "no such file or directory" \
+       "context must be a directory" \
+       "bud with specified context should fail if context directory does not exist"
+
+# 2022-04-26 after buildah PR 3926 (where Ed added error-message checks"
+errmsg "no FROM statement found" \
+       "Error: no FROM statement found" \
+       "bud with Dockerfile from invalid URL"
+
+errmsg "no contents in .*" \
+       "Error: context must be a directory: .*" \
+       "bud with specified context should fail if context contains empty Dockerfile"
+
+errmsg "credential file is not accessible: faccessat /tmp/nonexistent: no such file or directory" \
+       "Error: credential file is not accessible: faccessat /tmp/nonexistent: no such file or directory" \
+       "bud with Containerfile should fail with nonexistent authfile"
+
+errmsg "cannot find Containerfile or Dockerfile" \
+       "no such file or directory" \
+       "bud-github-context-from-commit"
+
+###############################################################################
+# BEGIN tests that don't make sense under podman due to fundamental differences
+
+# Fails with "Error: no context directory and no Containerfile specified"
+skip "does not work under podman" \
+     "bud without any arguments should succeed"
+
+# ...or due to a fundamental arg-parsing difference between buildah and podman
+# which we could and perhaps should fix in the buildah repo via:
+#    - ... ${TESTSDIR}/bud/layers-squash/Dockerfile.hardlinks
+#    + ... -f Dockerfile.hardlinks ${TESTSDIR}/bud/layers-squash
+skip "argument-order incompatible with podman" \
+     "bud-squash-hardlinks"
+
+# Fails with "Error: context must be a directory: /path/to/Dockerfile"
+skip "podman-build fails with 'context must be a directory'" \
+     "bud with specified context should succeed if context contains existing Dockerfile"
+
+# See https://github.com/containers/podman/pull/20483#issuecomment-1782683979
+skip "does not pass in Podman CI: needs investigation" \
+     "bud with --no-hostname"
+
+# 2024-11-22 not really a useful test of podman (the push/pull uses buildah binary)
+#            and it flakes when run in parallel. We choose to go with CI speed.
+skip "not a useful podman test, and it breaks when run parallel" \
+     "bud: build push with --force-compression"
+
+###############################################################################
+# BEGIN tests which are skipped because they make no sense under podman-remote
+
+skip_if_remote "--runtime-flags does not work with podman-remote" \
+               "bud - invalid runtime flags test"
+
+skip_if_remote "--target does not work with podman-remote" \
+               "bud-target"
+
+skip_if_remote "--runtime not meaningful under podman-remote" \
+               "bud with --runtime and --runtime-flag"
+
+skip_if_remote "secret files not implemented under podman-remote" \
+               "bud with containerfile secret" \
+               "bud with containerfile secret accessed on second RUN" \
+               "bud with containerfile secret options" \
+               "bud with containerfile env secret" \
+               "bud with containerfile env secret priority"
+
+skip_if_remote "--signature-policy does not work with podman-remote" \
+               "buildah-bud-policy"
+
+skip_if_remote "env-variable for Containerfile.in pre-processing is not propagated on remote" \
+               "bud with Containerfile.in, via envariable" \
+
+# Requires a local file outside context dir
+skip_if_remote "local keyfile not sent to podman-remote" \
+               "bud with encrypted FROM image"
+
+# See podman #9890 for discussion
+skip_if_remote "--stdin option will not be implemented in podman-remote" \
+               "bud test no --stdin"
+
+# https://github.com/containers/buildah/pull/3823
+# If this is possible with podman-remote, it'll take way more Go skills
+# to implement than what Ed can do.
+skip_if_remote "--output option not implemented in podman-remote" \
+               "build with custom build output and output rootfs to directory" \
+               "build with custom build output and output rootfs to tar" \
+               "build with custom build output and output rootfs to tar by pipe" \
+               "build with custom build output must fail for bad input" \
+               "build with custom build output and output rootfs to tar with no additional step" \
+               "build with custom build output for single-stage-cached and output rootfs to directory" \
+               "build with custom build output for multi-stage-cached and output rootfs to directory" \
+               "build with custom build output for multi-stage and output rootfs to directory" \
+               "build-with-two-outputs" \
+               "bud-with-source-date-epoch-env"
+
+# https://github.com/containers/podman/issues/14544
+skip_if_remote "logfile not implemented on remote" "bud-logfile-with-split-logfile-by-platform"
+
+skip_if_remote "envariables do not automatically work with -remote." \
+               "build proxy" \
+               "build-test --mount=type=secret test from env with chroot isolation"
+
+# 2022-07-04 this is a new test in buildah; it's failing in treadmill
+skip_if_remote "FIXME FIXME FIXME: does this test make sense in remote?" \
+               "build-test with OCI prestart hook"
+
+# 2022-08-17 buildah PR 4190
+skip_if_remote "Explicit request in buildah PR 4190 to skip this on remote" \
+               "build: test race in updating image name while performing parallel commits"
+# 2023-04-20 flakes on rootless, too.
+skip_if_rootless "Flakes when run rootless, too. See Buildah PR 4190" \
+                 "build: test race in updating image name while performing parallel commits"
+
+skip_if_remote "--events-backend does not work with podman-remote" \
+	       "build test default ulimits"
+
+skip_if_remote "--cert-dir option not working via remote and retry warnings are printed on the server" \
+            "build add https retry ca"
+
+skip_if_remote "Weird. This used to work remote, until Ed set TMPDIR in #5804" \
+               "bud-with-mount-cache-like-buildkit with buildah prune should clear the cache"
+
+# https://github.com/containers/podman/issues/25414
+skip_if_remote "This test needs unique TMPDIR for the test and podman-remote does not propagates ENV from client-side to server-end" \
+            "bud-with-mount-cache-like-buildkit"
+
+# 2025-04-01 skip test as it is incompatible with compat API in podman-remote
+skip_if_remote "compat API does not support oci-archive tags" \
+               "build-with-timestamp-applies-to-oci-archive"
+
+# 2025-10-212 "'build proxy' environment is not sent over the API, comment in https://github.com/containers/podman/pull/27343"
+skip_if_remote "http_proxy env is not sent via remote API" \
+               "build proxy - ADD URL"
+
+skip_if_remote "--metadata-file not supported in remote mode" \
+               "bud cache by format"
+
+skip_if_remote "BUILDAH_ISOLATION env var not propagated via podman-remote" \
+               "build-conflicting-isolation-chroot-and-network"
+
+###############################################################################
+# BEGIN tests which are skipped due to actual podman or podman-remote bugs.
+
+skip_if_remote "different error messages between podman & podman-remote" \
+               "bud with .dockerignore #2" \
+               "bud with .dockerignore #4"
+
+# 2025-01-27: https://github.com/containers/podman/issues/25138
+skip_if_remote "FIXME #25138: mount cache not working one remote" \
+               "bud --layers with --mount type bind should burst cache if content is changed" \
+               "bud --layers with --mount type bind should burst and multiple mounts cache if content is changed"
+
+# END   tests which are skipped due to actual podman or podman-remote bugs.
+###############################################################################
+# BEGIN temporary workarounds that must be reevaluated periodically
+
+# 2023-06-27 confirmed this is still broken, main @ 3794d067e
+skip_if_remote "FIXME: can this test be made to work under podman-remote?" \
+               "bud-with-mount-cache-like-buildkit-verify-default-selinux-option"
+
+# 2023-06-27 confirmed these are still broken, main @ 3794d067e
+skip_if_rootless_remote "FIXME: #17788 tar + namespaces over http" \
+                        "bud-http-context-with-Dockerfile" \
+                        "bud-http-context-dir-with-Dockerfile" \
+                        "bud-http-context-with-Containerfile"
+
+# 2023-06-27 confirmed these are still broken, main @ 3794d067e
+skip_if_rootless_remote "FIXME: not sure if 17788 or some other bug" \
+                        "bud-github-context" \
+                        "bud with Dockerfile from stdin tar" \
+                        "build-with-network-test"
+
+# 2023-06-27 confirmed this is still broken, main @ 3794d067e
+# 2023-06-13 buildah 4746 changed exit code & expected error message
+skip "FIXME: 2023-06-13 buildah PR 4746 broke this test" \
+     "bud with encrypted FROM image"
+
+# 2024-04-16 test needs to be fixed in buildah repo, to use another registry
+skip "FIXME: 2024-04-16 nixery is down" \
+     "bud-implicit-no-history"
+
+# 2024-05-28 FIXME FIXME FIXME new VMs barf on all git tests, can't connect
+skip "FIXME: 2024-05-28 new VMs from #338" \
+     "bud-git-context" \
+     "bud-git-context-subdirectory" \
+     "bud using gitrepo and branch"
+
+# 2025-04-01 FIXME wrong exit code from git related failures from #25756
+skip_if_remote "FIXME: 2025-04-01 git related errors returning wrong exit code" \
+               "bud with ADD with git repository source"
+#
+
+# 2026-05-08 FIXME: Tests that specifically requires bit-identical tar outputs and uses process substitution
+# Podman creates random temp dirs (/tmp/podman-build-context-*)
+# for /dev/fd context, which causes different build outputs each time.
+# FIXME: Don't use process substitution for Containerfile in buildah tests
+
+skip "Requires bit-identical tar outputs when using process substitution" \
+     "build-with-timestamp-applies-to-oci-archive" \
+     "build-with-timestamp-applies-to-oci-archive-with-base" \
+     "build-with-run-mount" \
+     "use-secret-to-env-variable" \
+     "use-secret-to-env-variable-and-file-path"
+
+skip_if_remote "remote builds only commit to local storage, and this test isn't worth working around that" \
+               "build --compression-format zstd to dir and oci-archive"
+
+# 2026-05-28 FIXME: The following tests failed with vendoring Buildah v1.44 into Podman in
+# preparation for Podman 6.0.  I suspect at least some of them will need to be adjusted due
+# configuration file changes. https://github.com/containers/podman/issues/28810
+
+skip "bud-source-date-epoch-arg" \
+     "bud-with-source-date-epoch-env" \
+     "bud-with-timestamp-config-effects" \
+     "bud --layers should not include pulled up parent directories of mount points" \
+     "bud should include excluded pulled up parent directories in squashed images" \
+     "bud-windows-host-process-container" \
+     "bud-windows-with-timestamp-reproducible" \
+     "bud-windows-with-source-date-epoch-reproducible" \
+     "bud-source-date-epoch-arg"
+
+# END   temporary workarounds that must be reevaluated periodically
+###############################################################################
+
+exit $RC

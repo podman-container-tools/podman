@@ -1,0 +1,53 @@
+% podman-network-reload 1
+
+## NAME
+podman\-network\-reload - Reload network configuration for containers
+
+## SYNOPSIS
+**podman network reload** [*options*] [*container...*]
+
+## DESCRIPTION
+Reload one or more container network configurations.
+
+Rootful Podman relies on the firewall rules in order to provide network connectivity. If the firewall rules are deleted,
+this happens for example with `firewall-cmd --reload`, the container loses network connectivity. This command restores
+the network connectivity.
+
+## OPTIONS
+#### **--all**, **-a**
+
+Reload network configuration of all containers.
+
+@@option latest
+
+## EXAMPLE
+
+Reload the network configuration after a firewall reload:
+```
+# podman run -p 80:80 -d nginx
+b1b538e8bc4078fc3ee1c95b666ebc7449b9a97bacd15bcbe464a29e1be59c1c
+# curl 127.0.0.1
+works
+# sudo firewall-cmd --reload
+success
+# curl 127.0.0.1
+hangs
+# podman network reload b1b538e8bc40
+b1b538e8bc4078fc3ee1c95b666ebc7449b9a97bacd15bcbe464a29e1be59c1c
+# curl 127.0.0.1
+works
+```
+
+Reload the network configuration for all containers:
+```
+# podman network reload --all
+b1b538e8bc4078fc3ee1c95b666ebc7449b9a97bacd15bcbe464a29e1be59c1c
+fe7e8eca56f844ec33af10f0aa3b31b44a172776e3277b9550a623ed5d96e72b
+```
+
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-network(1)](podman-network.1.md)**
+
+## HISTORY
+December 2020, Originally compiled by Paul Holzinger <paul.holzinger@web.de>

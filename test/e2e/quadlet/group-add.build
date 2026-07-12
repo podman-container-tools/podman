@@ -1,0 +1,8 @@
+## assert-podman-args "--group-add" "keep-groups"
+## assert-podman-args "--group-add" "users"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+GroupAdd=keep-groups
+GroupAdd=users

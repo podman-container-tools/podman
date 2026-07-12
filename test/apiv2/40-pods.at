@@ -1,0 +1,182 @@
+# -*- sh -*-
+#
+# test pod-related endpoints
+#
+
+# Need to make 1 container
+podman pull $IMAGE &>/dev/null
+
+t GET  "libpod/pods/json (clean slate at start)"   200 '[]'
+
+t POST libpod/pods/create name=foo 201 .Id~[0-9a-f]\\{64\\}
+pod_id=$(jq -r .Id <<<"$output")
+t GET  libpod/pods/foo/exists      204
+t GET  libpod/pods/$pod_id/exists  204
+t GET  libpod/pods/notfoo/exists   404
+t GET  libpod/pods/foo/json        200 \
+  .Name=foo  \
+  .Id=$pod_id \
+  .Containers\|length=1
+t GET  libpod/pods/json            200 \
+  .[0].Name=foo \
+  .[0].Id=$pod_id \
+  .[0].Containers\|length=1
+
+t GET libpod/pods/json?filters='{"until":["500000"]}' 200 length=0
+t GET libpod/pods/json?filters='{"until":["5000000000"]}' 200 length=1
+
+# Cannot create a dup pod with the same name
+t POST "libpod/pods/create (dup pod)" name=foo 409 \
+  .cause="pod already exists"
+
+#t POST libpod/pods/create a=b 400 .cause='bad parameter'  # FIXME: unimplemented
+
+# Some tests require a single running container.
+# Don't bother saving CID, it will be removed as part of the pod.
+t POST libpod/containers/create?name=testctr Image=${IMAGE} Pod=foo Entrypoint='["top"]' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST libpod/pods/foo/start 200 \
+  .Errs=null \
+  .Id=$pod_id
+
+t POST libpod/pods/foo/start 304
+
+t POST libpod/pods/fakename/start 404 \
+  .cause="no such pod" \
+  .message="no pod with name or ID fakename found: no such pod"
+
+if root || have_cgroupsv2; then
+    t POST libpod/pods/foo/pause 200
+else
+    # Rootless cgroupsv1 : unsupported
+    t POST "libpod/pods/foo/pause (rootless cgroups v1)" 500 \
+      .cause="this container does not have a cgroup" \
+      .message~".*pause pods containing rootless containers with cgroup V1"
+fi
+t POST  libpod/pods/foo/unpause 200
+t POST "libpod/pods/foo/unpause (2nd unpause in a row)" 200
+t POST "libpod/pods/fakename/unpause" 404\
+  .cause="no such pod" \
+  .message="no pod with name or ID fakename found: no such pod"
+
+t DELETE libpod/pods/foo?force=false 500 \
+  .cause="removing pod containers" \
+  .message~".*cannot remove container .* as it is running.*"
+
+t POST libpod/pods/foo/stop 200 \
+  .Errs=null \
+  .Id=$pod_id
+
+# Remove container as it is no longer required
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+t POST "libpod/pods/foo/stop (pod is already stopped)" 304
+t POST "libpod/pods/fakename/stop" 404\
+  .cause="no such pod" \
+  .message="no pod with name or ID fakename found: no such pod"
+
+t POST  libpod/pods/foo/restart 200 \
+  .Errs=null \
+  .Id=$pod_id
+
+t POST  "libpod/pods/bar/restart (restart on nonexistent pod)" 404
+t POST libpod/pods/create name=bar 201 .Id~[0-9a-f]\\{64\\}
+pod_bar_id=$(jq -r .Id <<<"$output")
+
+t POST  libpod/pods/bar/restart 200 \
+  .Errs=null \
+  .Id=$pod_bar_id
+
+t GET  libpod/pods/bar/json     200 \
+  .State=Running
+
+t POST  libpod/pods/bar/restart 200 \
+  .Errs=null \
+  .Id=$pod_bar_id
+
+t POST "libpod/pods/bar/stop?t=invalid" 400 \
+  .cause="schema: error converting value for \"t\"" \
+  .message~"failed to parse parameters for"
+
+podman run -d --pod bar busybox top
+
+t POST libpod/pods/bar/stop?t=1 200 \
+  .Errs=null \
+  .Id=$pod_bar_id
+
+t POST libpod/pods/bar/start 200
+
+if root || have_cgroupsv2; then
+    t GET libpod/pods/stats?all=true 200
+    is $(jq '. | length' <<<"$output") 3 "stats?all=true: number of records found"
+
+    t GET libpod/pods/stats?namesOrIDs=foo 200
+    is $(jq '. | length' <<<"$output") 1 "stats?namesOrIDs=foo: number of records found"
+
+    t GET libpod/pods/stats?namesOrIDs=fakename 404 \
+      .cause="no such pod" \
+      .message="unable to get list of pods: no pod with name or ID fakename found: no such pod"
+
+    t GET "libpod/pods/stats?all=true&namesOrIDs=foo" 500 \
+      .cause="--all, --latest and arguments cannot be used together" \
+      .message="--all, --latest and arguments cannot be used together"
+
+    t DELETE  libpod/pods/bar?force=true 200
+else
+    # Rootless cgroupsv1 : libpod/pods/stats is unsupported
+    t GET libpod/pods/stats?all=true 500 \
+      .cause="pod stats is not supported in rootless mode without cgroups v2" \
+      .message~"pod stats is not supported in rootless mode without cgroups v2"
+fi
+
+# test the fake name
+t GET libpod/pods/fakename/top 404 \
+  .cause="no such pod"
+
+t GET libpod/pods/foo/top 200 \
+  .Processes[0][-1]="/catatonit -P" \
+  .Titles[-1]="COMMAND"
+
+t GET libpod/pods/foo/top?ps_args=args,pid 200 \
+  .Processes[0][0]="/catatonit -P" \
+  .Processes[0][1]="1" \
+  .Titles[0]="COMMAND" \
+  .Titles[1]="PID" \
+
+#api list pods sanity checks
+t GET libpod/pods/json?filters='garb1age}' 400 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET libpod/pods/json?filters='{"label":["testl' 400 \
+    .cause="unexpected end of JSON input"
+
+# FIXME: I'm not sure what 'prune' is supposed to do; as of 20200224 it
+# just returns 200 (ok) with empty result list.
+#t POST libpod/pods/prune       200     # FIXME: 2020-02-24 returns 200 {}
+#t POST libpod/pods/prune 'a=b' 400     # FIXME: 2020-02-24 returns 200
+
+# Clean up; and try twice, making sure that the second time fails
+t DELETE  libpod/pods/foo 200
+t DELETE "libpod/pods/foo (pod has already been deleted)" 404
+
+# Expect this to time out
+if root || have_cgroupsv2; then
+    # Rootless cgroupsv1 : libpod/pods/stats is unsupported
+    APIV2_TEST_EXPECT_TIMEOUT=5 t GET "libpod/pods/stats?stream=true&delay=1" 999
+fi
+
+podman pod create --name=specgen
+
+TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+
+podman generate spec -f ${TMPD}/myspec.json -c specgen
+
+t POST libpod/pods/create ${TMPD}/myspec.json 201 \
+  .Id~[0-9a-f]\\{64\\}
+
+rm -rf $TMPD
+
+podman pod rm -fa
+
+# vim: filetype=sh

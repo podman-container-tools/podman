@@ -1,0 +1,60 @@
+.TH How to use libpod for custom/derivative projects
+.PP
+libpod today is a Golang library and a CLI.  The choice of interface you make has advantages and disadvantages.
+
+.SH Running as a subprocess
+.PP
+Advantages:
+
+.RS
+.IP \(bu 2
+Many commands output JSON
+.IP \(bu 2
+Works with languages other than Golang
+.IP \(bu 2
+Easy to get started
+
+.RE
+
+.PP
+Disadvantages:
+
+.RS
+.IP \(bu 2
+Error handling is harder
+.IP \(bu 2
+May be slower
+.IP \(bu 2
+Can't hook into or control low\-level things like how images are pulled
+
+.RE
+
+.SH Vendoring into a Go project
+.PP
+Advantages:
+
+.RS
+.IP \(bu 2
+Significant power and control
+
+.RE
+
+.PP
+Disadvantages:
+
+.RS
+.IP \(bu 2
+You are now on the hook for container runtime security updates (partially, \fB\fCrunc\fR/\fB\fCcrun\fR are separate)
+.IP \(bu 2
+Binary size
+.IP \(bu 2
+Potential skew between multiple libpod versions operating on the same storage can cause problems
+
+.RE
+
+.SH Making the choice
+.PP
+A good question to ask first is: Do you want users to be able to use \fB\fCpodman\fR to manipulate the containers created by your project?
+If so, that makes it more likely that you want to run \fB\fCpodman\fR as a subprocess.  If you want a separate image store and a fundamentally
+different experience; if what you're doing with containers is quite different from those created by the \fB\fCpodman\fR CLI,
+that may drive you towards vendoring.

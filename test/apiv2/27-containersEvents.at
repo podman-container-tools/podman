@@ -1,0 +1,46 @@
+# -*- sh -*-
+#
+# test container-related events
+#
+
+podman pull $IMAGE &>/dev/null
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+START=$(date +%s.%N)
+
+podman run --rm $IMAGE false || true
+
+# libpod api
+t GET "libpod/events?stream=false&since=$START"  200  \
+  'select(.status | contains("start")).Action=start' \
+  'select(.status | contains("died")).Action=died' \
+  'select(.status | contains("died")).Actor.Attributes.containerExitCode=1'
+
+t GET "libpod/events?stream=false&since=$START" 200 \
+    'select(.status | contains("start")).Action=start' \
+    'select(.status | contains("start")).HealthStatus=null'\
+
+# compat api, uses status=die (#12643)
+t GET "events?stream=false&since=$START"  200  \
+  'select(.status | contains("start")).Action=start' \
+  'select(.status | contains("die")).Action=die' \
+  'select(.status | contains("die")).Actor.Attributes.exitCode=1'
+
+t GET "events?stream=false&since=$START&type=remove"  200  \
+  'select(.status | contains("remove")).Action=remove' \
+  'select(.status | contains("remove")).Actor.Attributes.containerExitCode=1'
+
+# compat api does not contain .status for v1.52 and newer
+t GET "/v1.52/events?stream=false&since=$START" 200 \
+  'select(has("status"))|.status='
+
+t GET "/v1.52/events?stream=false&since=$START&type=remove" 200 \
+  'select(has("status"))|.status='
+
+APIV2_TEST_EXPECT_TIMEOUT=1 t GET "events?stream=true" 999
+like "$(<$WORKDIR/curl.headers.out)" ".*HTTP.* 200 OK.*" \
+     "Received headers from /events"
+
+# vim: filetype=sh

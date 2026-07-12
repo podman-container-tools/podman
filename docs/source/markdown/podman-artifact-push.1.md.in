@@ -1,0 +1,65 @@
+% podman-artifact-push 1
+
+## NAME
+podman\-artifact\-push - Push an OCI artifact from local storage to an image registry
+
+## SYNOPSIS
+**podman artifact push** [*options*] *image*
+
+## DESCRIPTION
+Pushes an artifact from the local artifact store to an image registry.
+
+```
+# Push artifact to a container registry
+$ podman artifact push quay.io/artifact/foobar1:latest
+```
+
+## OPTIONS
+
+@@option authfile
+
+@@option cert-dir
+
+@@option creds
+
+@@option digestfile
+
+@@option quiet
+
+@@option retry
+
+@@option retry-delay
+
+#### **--sign-by**=*key*
+
+Add a “simple signing” signature at the destination using the specified key. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sigstore
+
+#### **--sign-by-sigstore-private-key**=*path*
+
+Add a sigstore signature at the destination using a private key at the specified path. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
+
+@@option sign-by-sq-fingerprint
+
+@@option sign-passphrase-file
+
+@@option tls-verify
+
+## EXAMPLE
+
+Push the specified image to a container registry:
+```
+$ podman artifact push quay.io/baude/artifact:single
+Getting image source signatures
+Copying blob 3ddc0a3cdb61 done   |
+Copying config 44136fa355 done   |
+Writing manifest to image destination
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-artifact(1)](podman-artifact.1.md)**, **[podman-pull(1)](podman-pull.1.md)**, **[podman-login(1)](podman-login.1.md)**, **[containers-certs.d(5)](https://github.com/containers/image/blob/main/docs/containers-certs.d.5.md)**
+
+
+## HISTORY
+Jan 2025, Originally compiled by Brent Baude <bbaude@redhat.com>

@@ -1,0 +1,10 @@
+version: "3.7"
+services:
+  noHc:
+    image: alpine
+    container_name: noHc
+    ports:
+      - "4000:80"
+    restart: unless-stopped
+    healthcheck:
+      disable: true

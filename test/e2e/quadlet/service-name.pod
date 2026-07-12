@@ -1,0 +1,5 @@
+## assert-podman-pre-args "--name" "test-pod"
+
+[Pod]
+ServiceName=basic
+PodName=test-pod

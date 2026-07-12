@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--security-opt" "apparmor=someprofilename"
+
+[Container]
+Image=localhost/imagename
+AppArmor=someprofilename

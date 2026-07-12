@@ -1,0 +1,25 @@
+{{ define "docstring" }}
+  {{- if .Title }}
+    {{- comment .Title }}
+    {{- if .Description }}
+//
+// {{ comment .Description }}
+    {{- end }}
+  {{- else if .Description}}
+    {{- comment .Description }}
+  {{- else }}
+    {{- humanize .Name }}
+  {{- end }}
+  {{- if or .MinProperties .MaxProperties }}
+//
+    {{- if .MinProperties }}
+// MinProperties: {{ .MinProperties }}
+    {{- end }}
+    {{- if .MaxProperties }}
+// MaxProperties: {{ .MaxProperties }}
+    {{- end }}
+  {{- end }}
+  {{- if .Example }}
+// Example: {{ print .Example }}
+  {{- end }}
+{{- end }}

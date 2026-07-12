@@ -1,0 +1,128 @@
+% podman-pod-inspect 1
+
+## NAME
+podman\-pod\-inspect - Display information describing a pod
+
+## SYNOPSIS
+**podman pod inspect** [*options*] *pod* ...
+
+## DESCRIPTION
+Displays configuration and state information about a given pod.  It also displays information about containers
+that belong to the pod.
+
+## OPTIONS
+
+#### **--format**, **-f**=*format*
+
+Change the default output format.  This can be of a supported type like 'json'
+or a Go template.
+Valid placeholders for the Go template are listed below:
+
+| **Placeholder**      | **Description**                             |
+|----------------------|---------------------------------------------|
+| .BlkioDeviceReadBps  | Block I/O Device Read, in bytes/sec         |
+| .BlkioDeviceWriteBps | Block I/O Device Read, in bytes/sec         |
+| .BlkioWeight         | Block I/O Weight                            |
+| .BlkioWeightDevice   | Block I/O Device Weight                     |
+| .CgroupParent        | Pod cgroup parent                           |
+| .CgroupPath          | Pod cgroup path                             |
+| .Containers          | Pod containers                              |
+| .CPUPeriod           | CPU period                                  |
+| .CPUQuota            | CPU quota                                   |
+| .CPUSetCPUs          | CPU Set CPUs                                |
+| .CPUSetMems          | CPU Set Mems                                |
+| .CPUShares           | CPU Shares                                  |
+| .CreateCgroup        | Whether cgroup was created                  |
+| .CreateCommand       | Create command                              |
+| .Created ...         | Time when the pod was created               |
+| .CreateInfra         | Whether infrastructure created              |
+| .Devices             | Devices                                     |
+| .ExitPolicy          | Exit policy                                 |
+| .Hostname            | Pod hostname                                |
+| .ID                  | Pod ID                                      |
+| .InfraConfig ...     | Infra config (contains further fields)      |
+| .InfraContainerID    | Pod infrastructure ID                       |
+| .InspectPodData ...  | Nested structure, for experts only          |
+| .Labels ...          | Pod labels                                  |
+| .LockNumber          | Number of the pod's Libpod lock             |
+| .MemoryLimit         | Memory limit, bytes                         |
+| .MemorySwap          | Memory swap limit, in bytes                 |
+| .Mounts              | Mounts                                      |
+| .Name                | Pod name                                    |
+| .Namespace           | Namespace                                   |
+| .NumContainers       | Number of containers in the pod             |
+| .RestartPolicy       | Restart policy of the pod                   |
+| .SecurityOpts        | Security options                            |
+| .SharedNamespaces    | Pod shared namespaces                       |
+| .State               | Pod state                                   |
+| .VolumesFrom         | Volumes from                                |
+
+@@option latest
+
+## EXAMPLE
+
+Inspect specified pod:
+```
+$ podman pod inspect foobar
+[
+     {
+         "Id": "3513ca70583dd7ef2bac83331350f6b6c47d7b4e526c908e49d89ebf720e4693",
+         "Name": "foobar",
+         "Labels": {},
+         "CgroupParent": "/libpod_parent",
+         "CreateCgroup": true,
+         "Created": "2018-08-08T11:15:18.823115347-05:00"
+         "State": "created",
+         "Hostname": "",
+         "SharedNamespaces": [
+              "uts",
+              "ipc",
+              "net"
+         ]
+         "CreateInfra": false,
+         "InfraContainerID": "1020dd70583dd7ff2bac83331350f6b6e007de0d026c908e49d89ebf891d4699"
+         "CgroupPath": ""
+         "Containers": [
+              {
+                   "id": "d53f8bf1e9730281264aac6e6586e327429f62c704abea4b6afb5d8a2b2c9f2c",
+                   "state": "configured"
+              }
+         ]
+     }
+]
+```
+Show only pod name and state:
+```
+$ podman pod inspect --format "{{.Name}}\t{{.State}}" mypod
+mypod	Running
+```
+
+Show pod ID and number of containers:
+```
+$ podman pod inspect mypod --format "Pod {{.Name}} ({{.ID}}) has {{.NumContainers}} containers"
+Pod mypod (605f5f776e101a6e0ad11ea802cae25eabf299da77122f2963fa65dc6ccf6717) has 2 containers
+```
+Show pod creation time and shared namespaces:
+```
+$ podman pod inspect mypod --format "Created: {{.Created}}\nShared: {{.SharedNamespaces}}"
+Created: 2025-08-14 21:16:05.861363099 +0000 UTC
+Shared: [net uts ipc]
+```
+
+Show pod resource limits:
+```
+$ podman pod inspect --format "Memory: {{.MemoryLimit}}, CPU Period: {{.CPUPeriod}}, CPU Quota: {{.CPUQuota}}" mypod
+Memory: 1073741824, CPU Period: 100000, CPU Quota: 50000
+```
+
+Show container IDs within the pod:
+```
+$ podman pod inspect --format "{{range .Containers}}{{.Id}}: {{.State}} {{end}}" mypod
+e907f7902decca9d6b600b4d3cca9541d9b89dd726b2af7ad2eba05d2a97083f: running c5a53050a31aed71c55cb6a31b9564c69a1009f77750f3f0e8093bd98fcd8918: running
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-inspect(1)](podman-inspect.1.md)**
+
+## HISTORY
+August 2018, Originally compiled by Brent Baude <bbaude@redhat.com>

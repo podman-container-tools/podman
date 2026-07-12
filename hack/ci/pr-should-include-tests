@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# Intended for use in CI: check git commits, barf if no tests added.
+#
+ME=$(basename $0)
+
+# Github label which allows overriding this check
+OVERRIDE_LABEL="No New Tests"
+
+# PR head commit; defaults to HEAD when not running in CI.
+head=${PR_HEAD:-HEAD}
+# Base of this PR.
+base=$(git merge-base ${DEST_BRANCH:-main} $head)
+
+# This gives us a list of files touched in all commits, e.g.
+#    A    foo.c
+#    M    bar.c
+# We look for Added or Modified (not Deleted!) files under 'test'.
+# --no-renames ensures that renamed tests (#9420) show up as 'A'dded.
+if git diff --name-status --no-renames $base $head | grep -E -q '^[AM]\s+(test/|.*_test\.go)'; then
+    exit 0
+fi
+
+# Nothing changed under test subdirectory.
+#
+# This is OK if no source code files were changed.
+# Also we allow vendor updated without tests so exclude the vendor files
+# and also the version files so release PRs do not need tests.
+filtered_changes=$(git diff --name-only $base $head |
+    grep -E -v '^(test/tools/)?vendor/' |
+    grep -E -v '^version/' |
+    grep -E -x '.*\.(go|c|h)')
+if [[ -z "$filtered_changes" ]]; then
+    exit 0
+fi
+
+# This PR touches non-test files but adds no tests. Only allow it if the
+# '$OVERRIDE_LABEL' github label is set.
+if [[ -n "$PR_NUMBER" ]]; then
+    for var in GITHUB_TOKEN GITHUB_REPOSITORY; do
+        if [[ -z "${!var}" ]]; then
+            echo "$ME: cannot query github: \$$var is undefined" >&2
+            return 1
+        fi
+    done
+
+    labels=$(curl --fail -s \
+        -H "Authorization: bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/$PR_NUMBER" |
+        jq -r '.labels[].name')
+
+    if grep -F -x -q "$OVERRIDE_LABEL" <<< "$labels"; then
+        echo "$ME: \"$OVERRIDE_LABEL\" label found, ignoring test requirements"
+        exit 0
+    fi
+fi
+
+# This PR touches non-test files but adds no tests, and
+# the '$OVERRIDE_LABEL' is not set. Fail loudly.
+cat << EOF
+$ME: PR does not include changes in the 'tests' directory
+
+Please write a regression test for what you're fixing. Even if it
+seems trivial or obvious, try to add a test that will prevent
+regressions.
+
+If your change is minor, feel free to piggyback on already-written
+tests, possibly just adding a small step to a similar existing test.
+Every second counts in CI.
+
+If your commit really, truly does not need tests, you can proceed
+by asking a repo maintainer to set the '$OVERRIDE_LABEL' github label.
+This will only be done when there's no reasonable alternative.
+EOF
+
+exit 1

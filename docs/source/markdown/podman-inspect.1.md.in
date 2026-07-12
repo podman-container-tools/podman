@@ -1,0 +1,192 @@
+% podman-inspect 1
+
+## NAME
+podman\-inspect - Display artifact, container, image, volume, network, or pod's configuration
+
+## SYNOPSIS
+**podman inspect** [*options*] *name* [...]
+
+## DESCRIPTION
+
+This displays the low-level information on artifacts, containers, and images identified by name or ID. By default, this renders
+all results in a JSON array. If the inspect type is all, the order of inspection is: containers, images, volumes, network, pods, artifacts.
+ If a container has the same name as an image, then the container JSON is returned, and so on.
+ If a format is specified, the given template is executed for each result.
+
+For more inspection options, see also
+[podman-artifact-inspect(1)](podman-artifact-inspect.1.md),
+[podman-container-inspect(1)](podman-container-inspect.1.md),
+[podman-image-inspect(1)](podman-image-inspect.1.md),
+[podman-network-inspect(1)](podman-network-inspect.1.md),
+[podman-pod-inspect(1)](podman-pod-inspect.1.md), and
+[podman-volume-inspect(1)](podman-volume-inspect.1.md).
+
+## OPTIONS
+
+#### **--format**, **-f**=*format*
+
+Format the output using the given Go template.
+The keys of the returned JSON can be used as the values for the --format flag (see examples below).
+
+@@option latest
+
+#### **--size**, **-s**
+
+In addition to normal output, display the total file size if the type is a container.
+
+#### **--type**, **-t**=*type*
+
+Return JSON for the specified type. Type can be 'artifact', 'container', 'image', 'volume', 'network', 'pod', or 'all' (default: all)
+(Only meaningful when invoked as *podman inspect*)
+
+## EXAMPLES
+
+Inspect the fedora image:
+```
+# podman inspect fedora
+[
+    {
+        "Id": "f0858ad3febdf45bb2e5501cb459affffacef081f79eaa436085c3b6d9bd46ca",
+        "Digest": "sha256:d4f7df6b691d61af6cee7328f82f1d8afdef63bc38f58516858ae3045083924a",
+        "RepoTags": [
+            "docker.io/library/fedora:latest"
+        ],
+        "RepoDigests": [
+            "docker.io/library/fedora@sha256:8fa60b88e2a7eac8460b9c0104b877f1aa0cea7fbc03c701b7e545dacccfb433",
+            "docker.io/library/fedora@sha256:d4f7df6b691d61af6cee7328f82f1d8afdef63bc38f58516858ae3045083924a"
+        ],
+        "Parent": "",
+        "Comment": "",
+        "Created": "2019-10-29T03:23:37.695123423Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "DISTTAG=f31-updates-candidatecontainer",
+                "FGC=f31-updates-candidate",
+                "FBR=f31-updates-candidate"
+            ],
+            "Cmd": [
+                "/bin/bash"
+            ],
+            "Labels": {
+                "maintainer": "Clement Verna \u003ccverna@fedoraproject.org\u003e"
+            }
+        },
+        "Version": "18.06.1-ce",
+        "Author": "",
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 201096840,
+        "VirtualSize": 201096840,
+        "GraphDriver": {
+            "Name": "overlay",
+            "Data": {
+                "UpperDir": "/home/user/.local/share/containers/storage/overlay/2ae3cee18c8ef9e0d448649747dab81c4f1ca2714a8c4550eff49574cab262c9/diff",
+                "WorkDir": "/home/user/.local/share/containers/storage/overlay/2ae3cee18c8ef9e0d448649747dab81c4f1ca2714a8c4550eff49574cab262c9/work"
+            }
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:2ae3cee18c8ef9e0d448649747dab81c4f1ca2714a8c4550eff49574cab262c9"
+            ]
+        },
+        "Labels": {
+            "maintainer": "Clement Verna \u003ccverna@fedoraproject.org\u003e"
+        },
+        "Annotations": {},
+        "ManifestType": "application/vnd.docker.distribution.manifest.v2+json",
+        "User": "",
+        "History": [
+            {
+                "created": "2019-01-16T21:21:55.569693599Z",
+                "created_by": "/bin/sh -c #(nop)  LABEL maintainer=Clement Verna \u003ccverna@fedoraproject.org\u003e",
+                "empty_layer": true
+            },
+            {
+                "created": "2019-09-27T21:21:07.784469821Z",
+                "created_by": "/bin/sh -c #(nop)  ENV DISTTAG=f31-updates-candidatecontainer FGC=f31-updates-candidate FBR=f31-updates-candidate",
+                "empty_layer": true
+            },
+            {
+                "created": "2019-10-29T03:23:37.355187998Z",
+                "created_by": "/bin/sh -c #(nop) ADD file:298f828afc880ccde9205fc4418435d5e696ad165e283f0530d0b1a74326d6dc in / "
+            },
+            {
+                "created": "2019-10-29T03:23:37.695123423Z",
+                "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/bash\"]",
+                "empty_layer": true
+            }
+        ],
+        "NamesHistory": []
+    }
+]
+```
+
+Inspect the specified image with the `ImageName` format specifier:
+```
+# podman inspect a04 --format "{{.ImageName}}"
+fedora
+```
+
+Inspect the specified image for `GraphDriver` format specifier:
+```
+# podman inspect a04 --format "{{.GraphDriver.Name}}"
+overlay
+```
+
+Inspect the specified image for its `Size` format specifier:
+```
+# podman image inspect --format "size: {{.Size}}" alpine
+size:   4405240
+```
+
+Inspect the latest container created for `EffectiveCaps` format specifier. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
+```
+podman container inspect --latest --format {{.EffectiveCaps}}
+[CAP_CHOWN CAP_DAC_OVERRIDE CAP_FSETID CAP_FOWNER CAP_SETGID CAP_SETUID CAP_SETFCAP CAP_SETPCAP CAP_NET_BIND_SERVICE CAP_KILL]
+```
+
+Inspect the specified container for the `OOMKilled` format specifier
+```
+podman container inspect myContainer --format {{.State.OOMKilled}}
+false
+```
+
+Inspect the specified pod for the `Name` format specifier:
+```
+# podman inspect myPod --type pod --format "{{.Name}}"
+myPod
+```
+
+Inspect the specified volume for the `Name` format specifier:
+```
+# podman inspect myVolume --type volume --format "{{.Name}}"
+myVolume
+```
+
+Inspect the specified network for the `Name` format specifier:
+```
+# podman inspect nyNetwork --type network --format "{{.name}}"
+myNetwork
+```
+
+Inspect the specified artifact:
+```
+# podman inspect quay.io/myimage/myartifact:latest --type artifact
+{
+    "Manifest": {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        ...
+    },
+    "Name": "quay.io/myimage/myartifact:latest",
+    "Digest": "sha256:..."
+}
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-artifact-inspect(1)](podman-artifact-inspect.1.md)**, **[podman-container-inspect(1)](podman-container-inspect.1.md)**, **[podman-image-inspect(1)](podman-image-inspect.1.md)**, **[podman-network-inspect(1)](podman-network-inspect.1.md)**, **[podman-pod-inspect(1)](podman-pod-inspect.1.md)**, **[podman-volume-inspect(1)](podman-volume-inspect.1.md)**
+
+## HISTORY
+July 2017, Originally compiled by Dan Walsh <dwalsh@redhat.com>

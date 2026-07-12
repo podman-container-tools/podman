@@ -1,0 +1,4 @@
+[Container]
+Image=localhost/imagename
+## assert-podman-args "--health-cmd" "/bin/sh -c \"echo 'hello world!'\""
+HealthCmd=/bin/sh -c "echo 'hello world!'"

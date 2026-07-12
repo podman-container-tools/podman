@@ -1,0 +1,102 @@
+# -*- sh -*-
+#
+# test more container-related endpoints
+#
+
+podman pull $IMAGE &>/dev/null
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+podman run -d --name foo --entrypoint='["sh","-c"]' $IMAGE top
+
+# Check exists for none such
+t GET libpod/containers/nonesuch/exists 404
+
+# Check container foo exists
+t GET libpod/containers/foo/exists 204
+
+# Pause and Unpause the container
+if root || have_cgroupsv2; then
+    t POST libpod/containers/foo/pause 204
+
+    t GET libpod/containers/foo/json 200 \
+      .Id~[0-9a-f]\\{64\\} \
+      .State.Status=paused \
+      .ImageName=$IMAGE \
+      .Config.Cmd[0]=top \
+      .Name=foo
+
+    t POST libpod/containers/foo/unpause 204
+else
+    # cgroupsv1 rootless : pause and unpause are not supported in cgroups v1 rootless
+    t POST libpod/containers/foo/pause 500 \
+      .cause="this container does not have a cgroup" \
+      .message~".*pause containers on rootless containers with cgroup V1"
+
+    t POST libpod/containers/foo/unpause 500 \
+      .cause="container state improper" \
+      .message~".*is not paused, can't unpause: container state improper"
+fi
+
+t GET libpod/containers/foo/json 200 \
+  .Id~[0-9a-f]\\{64\\} \
+  .State.Status=running \
+  .ImageName=$IMAGE \
+  .Config.Cmd[0]=top \
+  .Name=foo \
+  .Config.StopSignal="SIGTERM" \
+  .Config.Entrypoint[0]="sh" \
+  .Config.Entrypoint[1]="-c"
+
+# now check v4 request return old compatible output
+t GET /v4.0.0/libpod/containers/foo/json 200 \
+  .Config.StopSignal=15 \
+  .Config.Entrypoint="sh -c"
+
+# List processes of the container
+t GET libpod/containers/foo/top 200 \
+  length=2 \
+  .Processes[0][7]="top"
+
+# List processes of none such
+t GET libpod/containers/nonesuch/top 404
+
+# Mount the container to host filesystem
+t POST libpod/containers/foo/mount 200
+like "$output" ".*merged" "Check container mount"
+
+# Unmount the container
+t POST libpod/containers/foo/unmount 204
+
+# export the container fs to tarball
+
+t GET libpod/containers/foo/export 200
+like "$(<$WORKDIR/curl.headers.out)" ".*"Content-Type\: application/x-tar".*"
+tar_tf=$(tar tf $WORKDIR/curl.result.out)
+like "$tar_tf" ".*bin/cat.*" "fetched tarball: contains bin/cat path"
+
+t DELETE libpod/containers/foo?force=true 200
+
+# Create 3 stopped containers to test containers prune
+podman run $IMAGE true
+podman run $IMAGE true
+podman run $IMAGE true
+
+t POST libpod/containers/prune 200
+t GET libpod/containers/json 200 \
+  length=0
+
+# check the config options are not overwritten by acceident
+t POST libpod/containers/create name=test1 image=$IMAGE privileged=true 201
+t GET libpod/containers/test1/json 200 \
+  .HostConfig.Annotations.'"io.podman.annotations.privileged"'="TRUE"
+
+# now the same without privileged it should not inherit the privileged from before
+t POST libpod/containers/create name=test2 image=$IMAGE 201
+t GET libpod/containers/test2/json 200 \
+  .HostConfig.Annotations=null
+
+podman rm test1 test2
+
+# vim: filetype=sh

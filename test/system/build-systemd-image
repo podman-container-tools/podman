@@ -1,0 +1,76 @@
+#!/bin/bash
+#
+# build-systemd-image - script for producing a test image with systemd
+#
+# Based on the build-testimage script. This script builds a fedora-based
+# image with systemd in it, for use in systemd-based tests.
+#
+
+# Podman binary to use
+PODMAN=${PODMAN:-$(pwd)/bin/podman}
+
+# Tag for this new image
+YMD=$(date +%Y%m%d)
+
+# git-relative path to this script
+create_script=$(cd $(dirname $0) && git ls-files --full-name $(basename $0))
+if [ -z "$create_script" ]; then
+    create_script=$0
+fi
+create_script_rev=$(git describe --tags)
+
+# Creation timestamp, Zulu time
+create_time_t=$(date +%s)
+create_time_z=$(env TZ=UTC date --date=@$create_time_t +'%Y-%m-%dT%H:%M:%SZ')
+
+set -e
+
+# We'll need to create a Containerfile plus various other files to add in
+tmpdir=$(mktemp -t -d $(basename $0).tmp.XXXXXXX)
+cd $tmpdir
+echo $YMD >testimage-id
+
+cat >Containerfile <<EOF
+FROM registry.fedoraproject.org/fedora-minimal:39
+LABEL created_by="$create_script @ $create_script_rev"
+LABEL created_at=$create_time_z
+RUN microdnf install -y systemd tzdata && microdnf clean all && sed -i -e 's/.*LogColor.*/LogColor=no/' /etc/systemd/system.conf
+ADD testimage-id /home/podman/
+WORKDIR /home/podman
+CMD ["/bin/echo", "This image is intended for podman CI testing"]
+EOF
+
+# Start from scratch
+testimg_base=quay.io/libpod/systemd-image
+testimg=${testimg_base}:$YMD
+$PODMAN manifest rm $testimg &> /dev/null || true
+$PODMAN rmi -f $testimg &> /dev/null || true
+
+# Arch emulation on Fedora requires the qemu-user-static package.
+declare -a arches=(amd64 arm64 ppc64le s390x)
+n_arches=${#arches[*]}
+i=0
+while [[ $i -lt $n_arches ]]; do
+    arch=${arches[$i]}
+    i=$((i+1))
+    echo
+    echo "Building: $arch ($i of $n_arches)"
+    $PODMAN build \
+            --arch=$arch \
+            --squash-all \
+            --timestamp=$create_time_t \
+            --manifest=$testimg \
+            .
+done
+
+# Clean up
+cd /tmp
+rm -rf $tmpdir
+
+# Tag image and push (all arches) to quay.
+cat <<EOF
+
+If you're happy with this image, run:
+
+   podman manifest push --all  ${testimg} docker://${testimg}
+EOF

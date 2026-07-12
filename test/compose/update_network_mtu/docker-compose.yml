@@ -1,0 +1,26 @@
+version: '3.7'
+
+services:
+  nginx:
+    image: alpine
+    ports:
+      - 8000:5000
+    networks:
+      - default
+      - macvlan_net
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: docker0
+      com.docker.network.driver.mtu: 9000
+  macvlan_net:
+    driver: macvlan
+    driver_opts:
+      mode: bridge
+    ipam:
+      config:
+        -
+          subnet: 192.168.20.0/24
+          gateway: 192.168.20.1

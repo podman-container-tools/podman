@@ -1,0 +1,210 @@
+#!/bin/bash
+#
+# build-testimage - script for producing a test image for podman CI
+#
+# The idea is to have a small multi-purpose image that can be pulled once
+# by system tests and used for as many tests as possible. This image
+# should live on quay.io, should be small in size, and should include
+# as many components as needed by system tests so they don't have to
+# pull other images.
+#
+# Unfortunately, "small" is incompatible with "systemd" so tests
+# still need a fedora image for that.
+#
+
+# Podman binary to use
+PODMAN=${PODMAN:-$(pwd)/bin/podman}
+
+# Tag for this new image
+YMD=$(date +%Y%m%d)
+
+# git-relative path to this script
+create_script=$(cd $(dirname $0) && git ls-files --full-name $(basename $0))
+if [ -z "$create_script" ]; then
+    create_script=$0
+fi
+
+# Creation timestamp, Zulu time
+create_time_t=$(date +%s)
+create_time_z=$(env TZ=UTC date --date=@$create_time_t +'%Y-%m-%dT%H:%M:%SZ')
+
+set -ex
+
+# We'll need to create a Containerfile plus various other files to add in
+#
+# Please document the reason for all flags, apk's, and anything non-obvious
+tmpdir=$(mktemp -t -d $(basename $0).tmp.XXXXXXX)
+cd $tmpdir
+
+# 'image mount' test will confirm that this file exists and has our YMD tag
+echo $YMD >testimage-id
+
+# ...but set the timestamp on the file itself to a constant well-known
+# value, for use by the 'run --tz' test. Date value chosen for nerdiness
+# and because it's in the past. (Much as I'd love FFFFFFFF, we can't
+# use any future date because of unpredictable leap second adjustments).
+touch --date=@1600000000 testimage-id
+
+# 'pod' test will use this for --infra-command
+cat >pause <<EOF
+#!/bin/sh
+#
+# Trivial little pause script, used in one of the pod tests
+#
+trap 'exit 0' SIGTERM
+echo Confirmed: testimage pause invoked as \$0
+while :; do
+    sleep 0.1
+done
+EOF
+chmod 755 pause
+
+# Add a health check
+cat >healthcheck <<EOF
+#!/bin/sh
+
+if test -e /uh-oh || test -e /uh-oh-only-once; then
+    echo "Uh-oh on stdout!"
+    echo "Uh-oh on stderr!" >&2
+
+    # Special file causes us to fail healthcheck only once
+    rm -f /uh-oh-only-once
+
+    exit 1
+else
+    echo "Life is Good on stdout"
+    echo "Life is Good on stderr" >&2
+    exit 0
+fi
+EOF
+chmod 755 healthcheck
+
+# Another helper; used in pasta tests for comparing bytestream data
+cat >bytecheck <<'EOF'
+#!/bin/sh
+#
+# Helper script for comparing bytestream data. Shows data size,
+# md5sum, and first/last eight bytes. Because plain md5sum is
+# not very helpful in identifying where things went wrong.
+#
+# Reads stream from stdin, writes summary to stdout
+#
+tmpfile=`mktemp bytecheck.XXXXXXX`
+
+cat >$tmpfile
+
+size=`stat -c %s $tmpfile`
+hash=`md5sum <$tmpfile`
+odl=`head -c8 $tmpfile | od -An -tx1`
+odr=`tail -c8 $tmpfile | od -An -tx1`
+
+rm -f $tmpfile
+
+echo size=$size hash=$hash head=$odl tail=$odr
+EOF
+chmod 755 bytecheck
+
+# alpine because it's small and light and reliable
+#    - check for updates @ https://hub.docker.com/_/alpine
+# busybox-extras provides httpd needed in 500-networking.bats
+# iproute2 provides JSON output (not in busybox) for 505-networking-pasta.bats
+# socat offers convenient UDP test termination in 505-networking-pasta.bats
+#
+# Two Containerfiles, because we have to do the image build in two parts,
+# which I think are easier to describe in reverse order:
+#    2) The second build has to be run with --timestamp=CONSTANT, otherwise
+#       the Created test in 110-history.bats may fail (#14456); but
+#    1) the timestamp of the testimage-id file must be preserved (see above),
+#       and 'build --timestamp' clobbers all file timestamps.
+#
+cat >Containerfile1 <<EOF
+ARG REPO=please-override-repo
+FROM docker.io/\${REPO}/alpine:3.20.3
+RUN apk add busybox-extras iproute2 socat
+ADD testimage-id healthcheck pause bytecheck /home/podman/
+RUN rm -f /var/cache/apk/*
+EOF
+
+cat >Containerfile2 <<EOF
+FROM localhost/interim-image:latest
+LABEL created_by=$create_script
+LABEL created_at=$create_time_z
+WORKDIR /home/podman
+CMD ["/bin/echo", "This container is intended for podman CI testing"]
+EOF
+
+# Start from scratch
+testimg_base=quay.io/libpod/testimage
+testimg=${testimg_base}:$YMD
+$PODMAN rmi -f $testimg &> /dev/null || true
+
+# There should always be a testimage tagged ':0000000<X>' (eight digits,
+# zero-padded sequence ID) in the same location; this is used by tests
+# which need to pull a non-locally-cached image. This image will rarely
+# if ever need to change, nor in fact does it even have to be a copy of
+# this testimage since all we use it for is 'true'.
+# However, it does need to be multiarch :-(
+zerotag_latest=$(skopeo list-tags docker://${testimg_base} |\
+                     jq -r '.Tags[]' |\
+                     sort --version-sort |\
+                     grep '^000' |\
+                     tail -n 1)
+zerotag_next=$(printf "%08d" $((zerotag_latest + 1)))
+
+# We don't always need to push the :00xx image, but build it anyway.
+zeroimg=${testimg_base}:${zerotag_next}
+$PODMAN manifest create $zeroimg
+
+# Arch emulation on Fedora requires the qemu-user-static package.
+for arch in amd64 arm64 ppc64le s390x;do
+    # docker.io repo is usually the same name as the desired arch; except
+    # for arm64, where podman needs to have the arch be 'arm64' but the
+    # image lives in 'arm64v8'.
+    repo=$arch
+    if [[ $repo = "arm64" ]]; then
+        repo="${repo}v8"
+    fi
+
+    # First build defines REPO, but does not have --timestamp
+    $PODMAN build \
+            --arch=$arch \
+            --build-arg REPO=$repo \
+            --squash-all \
+            --file Containerfile1 \
+            -t interim-image \
+            .
+
+    # Second build forces --timestamp, and adds to manifest. Unfortunately
+    # we can't use --squash-all with --timestamp: *all* timestamps get
+    # clobbered. This is not fixable (#14536).
+    $PODMAN build \
+            --arch=$arch \
+            --timestamp=$create_time_t \
+            --manifest=$testimg \
+            --squash \
+            --file Containerfile2 \
+            .
+
+    # No longer need the interim image
+    $PODMAN rmi interim-image
+
+    # The zero-tag image
+    $PODMAN pull --arch $arch     docker.io/$repo/busybox:1.34.1
+    $PODMAN manifest add $zeroimg docker.io/$repo/busybox:1.34.1
+done
+
+# Clean up
+cd /tmp
+rm -rf $tmpdir
+
+# Tag image and push (all arches) to quay.
+cat <<EOF
+
+If you're happy with these images, run:
+
+   podman manifest push --all  ${testimg} docker://${testimg}
+   podman manifest push --all  ${zeroimg} docker://${zeroimg}
+
+(You do not always need to push the :0000 image)
+
+EOF

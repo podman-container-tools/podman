@@ -1,0 +1,196 @@
+// This file is safe to edit. Once it exists it will not be overwritten
+
+{{ if .Copyright -}}// {{ comment .Copyright -}}{{ end }}
+
+
+package {{ .APIPackage }}
+
+import (
+  "context"
+  "crypto/tls"
+  "io"
+  "log"
+  "net/http"
+
+  "github.com/go-openapi/errors"
+  "github.com/go-openapi/runtime"
+  "github.com/go-openapi/runtime/middleware"
+  "github.com/go-openapi/runtime/security"
+
+  {{ imports .DefaultImports }}
+  {{ imports .Imports }}
+)
+
+{{ with .GenOpts }}
+//go:generate swagger generate server --target {{ .TargetPath }} --name {{ .Name }} --spec {{ .SpecPath }}
+{{- if .APIPackage }}{{ if ne .APIPackage "operations" }} --api-package {{ .APIPackage }}{{ end }}{{ end }}
+{{- if .ModelPackage }}{{ if ne .ModelPackage "models" }} --model-package {{ .ModelPackage }}{{ end }}{{ end }}
+{{- if .ServerPackage }}{{ if ne .ServerPackage "restapi"}} --server-package {{ .ServerPackage }}{{ end }}{{ end }}
+{{- if .ClientPackage }}{{ if ne .ClientPackage "client" }} --client-package {{ .ClientPackage }}{{ end }}{{ end }}
+{{- if .TemplateDir }} --template-dir {{ .TemplateDir }}{{ end }}
+{{- range .Operations }} --operation {{ . }}{{ end }}
+{{- range .Tags }} --tags {{ . }}{{ end }}
+{{- if .Principal }} --principal {{ .Principal }}{{ end }}
+{{- if .DefaultScheme }}{{ if ne .DefaultScheme "http" }} --default-scheme {{ .DefaultScheme }}{{ end }}{{ end }}
+{{- range .Models }} --model {{ . }}{{ end }}
+{{- if or (not .IncludeModel) (not .IncludeValidator) }} --skip-models{{ end }}
+{{- if or (not .IncludeHandler) (not .IncludeParameters ) (not .IncludeResponses) }} --skip-operations{{ end }}
+{{- if not .IncludeSupport }} --skip-support{{ end }}
+{{- if not .IncludeMain }} --exclude-main{{ end }}
+{{- if .ExcludeSpec }} --exclude-spec{{ end }}
+{{- if .DumpData }} --dump-data{{ end }}
+{{- if .StrictResponders }} --strict-responders{{ end }}
+{{- if .ReturnErrors }} --return-errors{{ end }}
+{{ end }}
+func configureFlags(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) {
+  // api.CommandLineOptionsGroups = []swag.CommandLineOptionsGroup{ ... }
+  _ = api
+}
+
+func configureAPI(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) http.Handler {
+  // configure the api here
+  api.ServeError = errors.ServeError
+
+  // Set your custom logger if needed. Default one is log.Printf
+  // Expected interface func(string, ...any)
+  //
+  // Example:
+  // api.Logger = log.Printf
+
+  api.UseSwaggerUI()
+  // To continue using redoc as your UI, uncomment the following line
+  // api.UseRedoc()
+
+  {{ range .Consumes }}
+    {{- if .Implementation }}
+  api.{{ pascalize .Name }}Consumer = {{ .Implementation }}
+    {{- else }}
+  api.{{ pascalize .Name }}Consumer = runtime.ConsumerFunc(func(r io.Reader, target any) error {
+    _ = r
+    _ = target
+
+    return errors.NotImplemented("{{.Name}} consumer has not yet been implemented")
+  })
+    {{- end }}
+  {{- end }}
+  {{ range .Produces }}
+    {{- if .Implementation }}
+  api.{{ pascalize .Name }}Producer = {{ .Implementation }}
+    {{- else }}
+  api.{{ pascalize .Name }}Producer = runtime.ProducerFunc(func(w io.Writer, data any) error {
+    _ = w
+    _ = data
+
+    return errors.NotImplemented("{{.Name}} producer has not yet been implemented")
+  })
+    {{- end }}
+  {{- end}}
+  {{ range .SecurityDefinitions }}
+    {{- if .IsBasicAuth }}
+  // Applies when the Authorization header is set with the Basic scheme
+  if api.{{ pascalize .ID }}Auth == nil {
+  api.{{ pascalize .ID }}Auth = func(user string, password string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
+      _ = user
+      _ = password
+
+      return nil, errors.NotImplemented("basic auth  ({{ .ID }}) has not yet been implemented")
+    }
+  }
+    {{- else if .IsAPIKeyAuth }}
+  // Applies when the "{{ .Name }}" {{ .Source }} is set
+  if api.{{ pascalize .ID }}Auth == nil {
+  api.{{ pascalize .ID }}Auth = func(token string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
+      _ = token
+
+      return nil, errors.NotImplemented("api key auth ({{ .ID }}) {{.Name}} from {{.Source}} param [{{ .Name }}] has not yet been implemented")
+    }
+  }
+    {{- else if .IsOAuth2 }}
+    if api.{{ pascalize .ID }}Auth == nil {
+    api.{{ pascalize .ID }}Auth = func(token string, scopes []string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
+      _ = token
+      _ = scopes
+
+      return nil, errors.NotImplemented("oauth2 bearer auth ({{ .ID }}) has not yet been implemented")
+    }
+  }
+    {{- end }}
+  {{- end }}
+  {{- if .SecurityDefinitions }}
+
+  // Set your custom authorizer if needed. Default one is security.Authorized()
+  // Expected interface runtime.Authorizer
+  //
+  // Example:
+  // api.APIAuthorizer = security.Authorized()
+  {{- end }}
+  {{- $package := .Package }}
+  {{- $apipackagealias := .APIPackageAlias }}
+  {{- range .Operations }}
+    {{- if .HasFormParams }}
+  // You may change here the memory limit for this multipart form parser. Below is the default (32 MB).
+  // {{ if ne .Package $package }}{{ .PackageAlias }}{{ else }}{{ $apipackagealias }}{{ end }}.{{ pascalize .Name }}MaxParseMemory = 32 << 20
+    {{- end }}
+  {{- end }}
+  {{ range .Operations }}
+  if api.{{ if ne .Package $package }}{{ pascalize .Package }}{{ end }}{{ pascalize .Name }}Handler == nil {
+    api.{{ if ne .Package $package }}{{pascalize .Package}}{{ end }}{{ pascalize .Name }}Handler =
+    {{- if ne .Package $package }}
+      {{- .PackageAlias }}.{{- pascalize .Name }}HandlerFunc(func(params {{ .PackageAlias }}.{{- pascalize .Name }}Params
+    {{- else }}
+      {{- $apipackagealias }}.{{- pascalize .Name }}HandlerFunc(func(params {{ $apipackagealias }}.{{- pascalize .Name }}Params
+    {{- end }}
+    {{- if .Authorized}}, principal {{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}{{end}})
+      {{- if $.GenOpts.ReturnErrors }}
+          {{- if $.GenOpts.StrictResponders }} ({{.Package}}.{{ pascalize .Name }}Responder, error) { {{ else }} (middleware.Responder, error) { {{ end }}
+      {{ else }}
+          {{- if $.GenOpts.StrictResponders }} {{.Package}}.{{ pascalize .Name }}Responder { {{ else }} middleware.Responder { {{ end }}
+      {{ end -}}
+    _ = params
+    {{- if .Authorized }}
+    _ = principal
+    {{- end }}
+
+    {{ if $.GenOpts.StrictResponders }}
+      return {{.Package}}.{{ pascalize .Name }}NotImplemented(){{ if $.GenOpts.ReturnErrors }}, nil {{- end -}}
+    {{ else }}
+      return middleware.NotImplemented("operation {{ .Package}}.{{pascalize .Name}} has not yet been implemented"){{ if $.GenOpts.ReturnErrors }}, nil {{- end -}}
+  {{- end }}
+    })
+  }
+  {{- end }}
+
+  api.PreServerShutdown = func() {  }
+
+  api.ServerShutdown = func() {  }
+
+  return setupGlobalMiddleware(api.Serve(setupMiddlewares))
+}
+
+// The TLS configuration before HTTPS server starts.
+func configureTLS(tlsConfig *tls.Config) {
+  // Make all necessary changes to the TLS configuration here.
+  _ = tlsConfig
+}
+
+// As soon as server is initialized but not run yet, this function will be called.
+// If you need to modify a config, store server instance to stop it individually later, this is the place.
+// This function can be called multiple times, depending on the number of serving schemes.
+// scheme value will be set accordingly: "http", "https" or "unix".
+func configureServer(server *http.Server, scheme, addr string) {
+  _ = server
+  _ = scheme
+  _ = addr
+}
+
+// The middleware configuration is for the handler executors. These do not apply to the swagger.json document.
+// The middleware executes after routing but before authentication, binding and validation.
+func setupMiddlewares(handler http.Handler) http.Handler {
+	return handler
+}
+
+// The middleware configuration happens before anything, this middleware also applies to serving the swagger.json document.
+// So this is a good place to plug in a panic handling middleware, logging and metrics.
+func setupGlobalMiddleware(handler http.Handler) http.Handler {
+	return handler
+}

@@ -1,0 +1,60 @@
+# -*- sh -*-
+
+podman pull $IMAGE &>/dev/null
+
+# Test various HostConfig options
+tmpfs_name="/mytmpfs"
+t POST containers/create?name=hostconfig_test \
+  Image=$IMAGE \
+  Cmd='["df","-P","'$tmpfs_name'"]' \
+  HostConfig='{"Binds":["/tmp/doesnotexist:/test1"]' \
+  TmpFs="{\"$tmpfs_name\":\"rw,noatime\"}}" \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+# Prior to #9512, the tmpfs would be called '/mytmpfs=rw', with the '=rw'
+t GET containers/${cid}/json 200 \
+  .HostConfig.Tmpfs[\"${tmpfs_name}\"]~rw,
+
+# Run the container, verify output
+t POST containers/${cid}/start 204
+t POST containers/${cid}/wait  200
+t GET  containers/${cid}/logs?stdout=true  200
+
+# /logs returns application/octet-stream, which our test helper saves in
+# an outfile rather than returning in $output. That's why we can't test
+# this directly in the /logs test above; instead, we rely on knowing the
+# path to the stored results. The 'tr' is needed because there may be
+# null bytes in the outfile.
+like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".* ${tmpfs_name}" \
+     "'df' output includes tmpfs name"
+
+# Reject 'noatime' for bind mount
+t POST libpod/containers/create \
+  Image=$IMAGE \
+  Mounts='[{"type":"bind","source":"/nosuchdir","destination":"/data","options":["noatime"]}]' \
+  500 \
+  .cause="invalid mount option" \
+  .message~"the 'noatime' option is only allowed with tmpfs mounts"
+
+# Compat API: HostConfig.Mounts.VolumeOptions.Subpath mounts only the selected volume subdirectory
+subpath_vol="apiv2-subpath-vol"
+podman volume create "$subpath_vol"
+podman run --rm -v "$subpath_vol":/mnt "$IMAGE" sh -c "mkdir -p /mnt/test1 /mnt/test2; touch /mnt/test1/hello1; touch /mnt/test2/hello2"
+
+t POST containers/create?name=compat_mount_subpath_test \
+  Image=$IMAGE \
+  Cmd='["ls","-1","/test1"]' \
+  HostConfig='{"Mounts":[{"Type":"volume","Source":"'$subpath_vol'","Target":"/test1","VolumeOptions":{"Subpath":"test1"}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST containers/${cid}/start 204
+t POST containers/${cid}/wait 200
+t GET  containers/${cid}/logs?stdout=true 200
+like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".*hello1$" "compat mount subpath returns only selected subdir"
+
+t DELETE containers/${cid}?v=true 204
+podman volume rm "$subpath_vol"

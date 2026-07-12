@@ -1,0 +1,6 @@
+## assert-failed
+## assert-stderr-contains "relative path in File key requires SetWorkingDirectory key to be set"
+
+[Build]
+ImageTag=localhost/imagename
+File=Containerfile

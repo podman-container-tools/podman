@@ -1,0 +1,7 @@
+h2,h3,h4,h5,h6{
+    /*  Sphinx doesn't respect using a h4 header without using h1,h2,h3.
+        The flag names will be rendered as h2 and by default way to big
+        so make the font size for all headers except h1 smaller.
+    */
+    font-size: 120% !important;
+}

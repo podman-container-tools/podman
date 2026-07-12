@@ -1,0 +1,12 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--label" "org.foo.Arg0=arg0"
+## assert-podman-args "--label" "org.foo.Arg1=arg1"
+## assert-podman-args "--label" "org.foo.Arg2=arg 2"
+## assert-podman-args "--label" "org.foo.Arg3=arg3"
+
+[Container]
+Image=localhost/imagename
+Label=org.foo.Arg1=arg1 "org.foo.Arg2=arg 2" \
+  org.foo.Arg3=arg3
+
+Label=org.foo.Arg0=arg0

@@ -1,0 +1,7 @@
+## assert-podman-final-args systemd-subnets
+## assert-podman-args "--subnet" "192.168.0.0/24"
+## assert-podman-args "--subnet" "192.168.1.0/24"
+
+[Network]
+Subnet=192.168.0.0/24
+Subnet=192.168.1.0/24

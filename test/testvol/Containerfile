@@ -1,0 +1,9 @@
+FROM docker.io/library/golang:1.26-alpine AS build-img
+COPY ./ /go/src/github.com/containers/podman/
+WORKDIR /go/src/github.com/containers/podman
+RUN GO111MODULE=off go build -o /testvol ./test/testvol
+
+FROM alpine
+COPY --from=build-img /testvol /usr/local/bin
+WORKDIR /
+ENTRYPOINT ["/usr/local/bin/testvol", "serve"]

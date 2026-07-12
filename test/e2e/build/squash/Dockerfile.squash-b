@@ -1,0 +1,2 @@
+FROM test-squash-a:latest
+RUN rm -rf /data

@@ -1,0 +1,1106 @@
+#!/usr/bin/perl
+#
+# xref-helpmsgs-manpages - cross-reference --help options against man pages
+#
+package LibPod::CI::XrefHelpmsgsManpages;
+
+use v5.14;
+use utf8;
+
+use strict;
+use warnings;
+use Clone                       qw(clone);
+use FindBin;
+
+(our $ME = $0) =~ s|.*/||;
+our $VERSION = '0.1';
+
+# For debugging, show data structures using DumpTree($var)
+#use Data::TreeDumper; $Data::TreeDumper::Displayaddress = 0;
+
+# unbuffer output
+$| = 1;
+
+###############################################################################
+# BEGIN user-customizable section
+
+# Path to podman executable
+my $Default_Podman = "$FindBin::Bin/../bin/podman";
+my $PODMAN = $ENV{PODMAN} || $Default_Podman;
+
+# Path to all doc files, including .rst and (down one level) markdown
+our $Docs_Path = 'docs/source';
+
+# Path to podman markdown source files (of the form podman-*.1.md)
+our $Markdown_Path = "$Docs_Path/markdown";
+
+# Global error count
+our $Errs = 0;
+
+# Table of exceptions for documenting fields in '--format {{.Foo}}'
+#
+# Autocomplete is wonderful, and it's even better when we document the
+# existing options. Unfortunately, sometimes internal structures get
+# exposed that are of no use to anyone and cannot be guaranteed. Avoid
+# documenting those. This table lists those exceptions. Format is:
+#
+#      foo       .Bar
+#
+# ...such that "podman foo --format '{{.Bar}}'" will not be documented.
+#
+my $Format_Exceptions = <<'END_EXCEPTIONS';
+# Deep internal structs; pretty sure these are permanent exceptions
+events       .Details
+history      .ImageHistoryLayer
+images       .Arch .ImageSummary .Os .IsManifestList
+network-ls   .Network
+
+# FIXME: this one, maybe? But someone needs to write the text
+machine-list    .Starting
+
+# No clue what these are. Some are just different-case dups of others.
+pod-ps  .Containers .Id .InfraId .ListPodsReport .Namespace
+ps      .Cgroup .CGROUPNS .IPC .ListContainer .MNT .Namespaces .NET .PIDNS .User .USERNS .UTS
+
+# I think .Destination is an internal struct, but .IsMachine maybe needs doc?
+system-connection-list .Destination .IsMachine
+END_EXCEPTIONS
+
+my %Format_Exceptions;
+for my $line (split "\n", $Format_Exceptions) {
+    $line =~ s/#.*$//;                  # strip comments
+    next unless $line;                  # skip empty lines
+    my ($subcommand, @fields) = split(' ', $line);
+    $Format_Exceptions{"podman-$subcommand"} = \@fields;
+}
+
+# Hardcoded list of podman commands for which '--format' does NOT mean
+# a Go format.
+#
+# I realize that it looks stupid to hardcode these: I could instead
+# check "--format ''" and look for completion strings, 'oci', 'json',
+# doesn't matter: if anything shows up, we excuse the missing '{{.'.
+# (We'd still have to make a special exception for 'podman inspect').
+#
+# My reason for hardcoding is that these should be rare exceptions
+# and we want to account for every single one. If a new command gets
+# added, with a --format option that does not autocomplete '{{.',
+# let's make sure it gets extra eyeballs.
+my %Format_Option_Is_Special = map { $_ => 1 } (
+    'build',  'farm build', 'image build',      # oci | docker
+    'commit', 'container commit',               #  "  "  " "
+    'diff',   'container diff', 'image diff',   # only supports "json"
+    'generate systemd',                         #  "    "  "      "
+    'mount',  'container mount', 'image mount', #  "    "  "      "
+    'machine os upgrade',                       #  "    "  "      "
+    'push',   'image push', 'manifest push',    # oci | v2s*
+    'save',   'image save',                     # image formats (oci-*, ...)
+    'image scp',                                # image archive formats only
+    'inspect',                                  # ambiguous (container/image)
+ );
+
+# Hardcoded list of existing duplicate-except-for-case format codes,
+# with their associated subcommands. Let's not add any more.
+my %Format_Option_Dup_Allowed = (
+    'podman-images' => { '.id'     => 1 },
+    'podman-stats'  => { '.avgcpu' => 1, '.pids' => 1 },
+);
+
+# Do not cross-reference these.
+my %Skip_Subcommand = map { $_ => 1 } (
+    "help",                     # has no man page
+    "completion",               # internal (hidden) subcommand
+    "compose",                  # external tool, outside of our control
+);
+
+# END   user-customizable section
+###############################################################################
+# BEGIN boilerplate args checking, usage messages
+
+sub usage {
+    print  <<"END_USAGE";
+Usage: $ME [OPTIONS]
+
+$ME recursively runs 'podman --help' against
+all subcommands; and recursively reads podman-*.1.md files
+in $Markdown_Path, then cross-references that each --help
+option is listed in the appropriate man page and vice-versa.
+
+$ME invokes '\$PODMAN' (default: $Default_Podman).
+
+In the spirit of shoehorning functionality where it wasn't intended,
+$ME also checks the SEE ALSO section of each man page
+to ensure that references and links are properly formatted
+and valid.
+
+Exit status is zero if no inconsistencies found, one otherwise
+
+OPTIONS:
+
+  -v, --verbose  show verbose progress indicators
+  -n, --dry-run  make no actual changes
+
+  --help         display this message
+  --version      display program name and version
+END_USAGE
+
+    exit;
+}
+
+# Command-line options.  Note that this operates directly on @ARGV !
+our $debug   = 0;
+our $verbose = 0;
+sub handle_opts {
+    use Getopt::Long;
+    GetOptions(
+        'debug!'     => \$debug,
+        'verbose|v'  => \$verbose,
+
+        help         => \&usage,
+        version      => sub { print "$ME version $VERSION\n"; exit 0 },
+    ) or die "Try `$ME --help' for help\n";
+}
+
+# END   boilerplate args checking, usage messages
+###############################################################################
+
+############################## CODE BEGINS HERE ###############################
+
+# The term is "modulino".
+__PACKAGE__->main()                                     unless caller();
+
+# Main code.
+sub main {
+    # Note that we operate directly on @ARGV, not on function parameters.
+    # This is deliberate: it's because Getopt::Long only operates on @ARGV
+    # and there's no clean way to make it use @_.
+    handle_opts();                      # will set package globals
+
+    # Fetch command-line arguments.  Barf if too many.
+    die "$ME: Too many arguments; try $ME --help\n"                 if @ARGV;
+
+    chdir "$FindBin::Bin/.."
+        or die "$ME: FATAL: Cannot cd $FindBin::Bin/..: $!";
+
+    my $help = podman_help();
+    my $man  = podman_man('podman');
+    my $rst  = podman_rst();
+
+    xref_by_help($help, $man);
+    xref_by_man($help, $man);
+
+    xref_rst($help, $rst);
+
+    exit !!$Errs;
+}
+
+###############################################################################
+# BEGIN cross-referencing
+
+##################
+#  xref_by_help  #  Find keys in '--help' but not in man
+##################
+sub xref_by_help {
+    my ($help, $man, @subcommand) = @_;
+
+  OPTION:
+    for my $k (sort keys %$help) {
+        next if $k =~ /^_/;             # metadata ("_desc"). Ignore.
+
+        if (! ref($man)) {
+            # Super-unlikely but I've seen it
+            warn "$ME: 'podman @subcommand' is not documented in man pages!\n";
+            ++$Errs;
+            next OPTION;
+        }
+
+        if (exists $man->{$k}) {
+            if (ref $help->{$k}) {
+                # This happens when 'podman foo --format' offers
+                # autocompletion that looks like a Go template, but those
+                # template options aren't documented in the man pages.
+                if ($k eq '--format' && ! ref($man->{$k})) {
+                    # "podman inspect" tries to autodetect if it's being run
+                    # on an image or container. It cannot sanely be documented.
+                    unless ("@subcommand" eq "inspect") {
+                        warn "$ME: 'podman @subcommand': --format options are available through autocomplete, but are not documented in $man->{_path}\n";
+                        ++$Errs;
+                    }
+                    next OPTION;
+                }
+
+                xref_by_help($help->{$k}, $man->{$k}, @subcommand, $k);
+            }
+
+            # Documenting --format fields is tricky! They can be scalars, structs,
+            # or functions. This is a complicated block because if help & man don't
+            # match, we want to give the most user-friendly message possible.
+            elsif (@subcommand && $subcommand[-1] eq '--format') {
+                # '!' is one of the Format_Exceptions defined at top
+                if (($man->{$k} ne '!') && ($man->{$k} ne $help->{$k})) {
+                    # Fallback message
+                    my $msg = "TELL ED TO HANDLE THIS: man='$man->{$k}' help='$help->{$k}'";
+
+                    # Many different permutations of mismatches.
+                    my $combo = "$man->{$k}-$help->{$k}";
+                    if ($combo eq '0-...') {
+                        $msg = "is a nested structure. Please add '...' to man page.";
+                    }
+                    elsif ($combo =~ /^\d+-\.\.\.$/) {
+                        $msg = "is a nested structure, but the man page documents it as a function?!?";
+                    }
+                    elsif ($combo eq '...-0') {
+                        $msg = "is a simple value, not a nested structure. Please remove '...' from man page.";
+                    }
+                    elsif ($combo =~ /^0-[1-9]\d*$/) {
+                        $msg = "is a function that calls for $help->{$k} args. Please investigate what those are, then add them to the man page. E.g., '$k *bool*' or '$k *path* *bool*'";
+                    }
+                    elsif ($combo =~ /^\d+-[1-9]\d*$/) {
+                        $msg = "is a function that calls for $help->{$k} args; the man page lists $man->{$k}. Please fix the man page.";
+                    }
+
+                    warn "$ME: 'podman @subcommand {{$k' $msg\n";
+                    ++$Errs;
+                }
+            }
+        }
+        else {
+            # Not documented in man. However, handle '...' as a special case
+            # in formatting strings. E.g., 'podman info .Host' is documented
+            # in the man page as '.Host ...' to indicate that the subfields
+            # are way too many to list individually.
+            my $k_copy = $k;
+            while ($k_copy =~ s/\.[^.]+$//) {
+                my $parent_man = $man->{$k_copy} // '';
+                if (($parent_man eq '...') || ($parent_man eq '!')) {
+                    next OPTION;
+                }
+            }
+
+            # Nope, it's not that case.
+            my $man = $man->{_path} || 'man';
+            # The usual case is "podman ... --help"...
+            my $what = '--help';
+            # ...but for *options* (e.g. --filter), we're checking command completion
+            $what = '<TAB>' if @subcommand && $subcommand[-1] =~ /^--/;
+            warn "$ME: 'podman @subcommand $what' lists '$k', which is not in $man\n";
+            ++$Errs;
+        }
+    }
+}
+
+#################
+#  xref_by_man  #  Find keys in man pages but not in --help
+#################
+#
+# In an ideal world we could share the functionality in one function; but
+# there are just too many special cases in man pages.
+#
+sub xref_by_man {
+    my ($help, $man, @subcommand) = @_;
+
+    # FIXME: this generates way too much output
+  KEYWORD:
+    for my $k (grep { $_ ne '_path' } sort keys %$man) {
+        if ($k eq '--format' && ref($man->{$k}) && ! ref($help->{$k})) {
+            warn "$ME: 'podman @subcommand': --format options documented in man page, but not available via autocomplete\n";
+            next KEYWORD;
+        }
+
+        if (exists $help->{$k}) {
+            if (ref $man->{$k}) {
+                xref_by_man($help->{$k}, $man->{$k}, @subcommand, $k);
+            }
+            elsif ($k =~ /^-/) {
+                # This is OK: we don't recurse into options
+            }
+            else {
+                # FIXME: should never get here, but we do. Figure it out later.
+            }
+        }
+        elsif ($k ne '--help' && $k ne '-h') {
+            my $man = $man->{_path} || 'man';
+
+            # Special case: podman-inspect serves dual purpose (image, ctr)
+            my %ignore = map { $_ => 1 } qw(-l -s -t --latest --size --type);
+            next if $man =~ /-inspect/ && $ignore{$k};
+
+            # Special case: podman-diff serves dual purpose (image, ctr)
+            my %diffignore = map { $_ => 1 } qw(-l --latest );
+            next if $man =~ /-diff/ && $diffignore{$k};
+
+            # Special case: the 'trust' man page is a mess
+            next if $man =~ /-trust/;
+
+            # Special case: '--net' is an undocumented shortcut
+            next if $k eq '--net' && $help->{'--network'};
+
+            # Special case: these are actually global options
+            next if $k =~ /^--(cni-config-dir|runtime)$/ && $man =~ /-build/;
+
+            # Special case: weirdness with Cobra and global/local options
+            next if $k eq '--namespace' && $man =~ /-ps/;
+
+            next if "@subcommand" eq 'system' && $k eq 'service';
+
+            # Special case for hidden or external commands
+            next if $Skip_Subcommand{$k};
+
+            # It's not always --help, sometimes we check <TAB> completion
+            my $what = '--help';
+            $what = 'command completion' if @subcommand && $subcommand[-1] =~ /^--/;
+            warn "$ME: 'podman @subcommand': '$k' in $man, but not in $what\n";
+            ++$Errs;
+        }
+    }
+}
+
+##############
+#  xref_rst  #  Cross-check *.rst files against help
+##############
+#
+# This makes a pass over top-level commands only. There is no rst
+# documentation for any podman subcommands.
+#
+sub xref_rst {
+    my ($help, $rst) = @_;
+
+
+    # We key on $help because that is Absolute Truth: anything in podman --help
+    # must be referenced in an rst (the converse is not necessarily true)
+    for my $k (sort grep { $_ !~ /^[_-]/ } keys %$help) {
+        if (exists $rst->{$k}) {
+            # Descriptions must match
+            if ($rst->{$k}{_desc} ne $help->{$k}{_desc}) {
+                warn "$ME: podman $k: inconsistent description in $rst->{$k}{_source}:\n";
+                warn "   help: '$help->{$k}{_desc}'\n";
+                warn "   rst:  '$rst->{$k}{_desc}'\n";
+                ++$Errs;
+            }
+        }
+        else {
+            warn "$ME: Not found in rst: $k\n";
+            ++$Errs;
+         }
+    }
+
+    # Now the other way around: look for anything in Commands.rst that is
+    # not in podman --help
+    for my $k (sort grep { $rst->{$_}{_source} =~ /Commands.rst/ } keys %$rst) {
+        if ($k ne 'Podman' && ! exists $help->{$k}) {
+            warn "$ME: 'podman $k' found in $rst->{$k}{_source} but not 'podman help'\n";
+            ++$Errs;
+        }
+    }
+}
+
+# END   cross-referencing
+###############################################################################
+# BEGIN data gathering
+
+#################
+#  podman_help  #  Parse output of 'podman [subcommand] --help'
+#################
+sub podman_help {
+    my %help;
+    open my $fh, '-|', $PODMAN, @_, '--help'
+        or die "$ME: Cannot fork: $!\n";
+    my $section = '';
+    while (my $line = <$fh>) {
+        chomp $line;
+
+        # First line of --help is a short command description. We compare it
+        # (in a later step) against the blurb in Commands.rst.
+        # FIXME: we should crossref against man pages, but as of 2024-03-18
+        # it would be way too much work to get those aligned.
+        $help{_desc} //= $line;
+
+        # Cobra is blessedly consistent in its output:
+        #    [command blurb]
+        #    Description: ...
+        #    Usage: ...
+        #    Available Commands:
+        #       ....
+        #    Options:
+        #       ....
+        #
+        # Start by identifying the section we're in...
+        if ($line =~ /^Available\s+(Commands):/) {
+            $section = lc $1;
+        }
+        elsif ($line =~ /^(Options):/) {
+            $section = lc $1;
+        }
+
+        # ...then track commands and options. For subcommands, recurse.
+        elsif ($section eq 'commands') {
+            if ($line =~ /^\s{1,4}(\S+)\s/) {
+                my $subcommand = $1;
+                print "> podman @_ $subcommand\n"               if $debug;
+
+                # check that the same subcommand is not listed twice (#12356)
+                if (exists $help{$subcommand}) {
+                    warn "$ME: 'podman @_ help' lists '$subcommand' twice\n";
+                    ++$Errs;
+                }
+
+                $help{$subcommand} = podman_help(@_, $subcommand)
+                    unless $Skip_Subcommand{$subcommand};
+            }
+        }
+        elsif ($section eq 'options') {
+            my $opt = '';
+
+            # Handle '--foo' or '-f, --foo'
+            if ($line =~ /^\s{1,10}(--\S+)\s/) {
+                print "> podman @_ $1\n"                        if $debug;
+                $opt = $1;
+                $help{$opt} = 1;
+            }
+            elsif ($line =~ /^\s{1,10}(-\S),\s+(--\S+)\s/) {
+                print "> podman @_ $1, $2\n"                    if $debug;
+                $opt = $2;
+                $help{$1} = $help{$opt} = 1;
+            }
+
+            # Special case for --format: run podman with autocomplete.
+            # If that lists one or more '{{.Foo<something>' entries,
+            # convert our option data structure from scalar (indicating
+            # that we just cross-check for existence in the man page)
+            # to hashref (indicating that we recurse down and cross-check
+            # each individual param).
+            #
+            # There are three possibilities for <something>:
+            #    {{.Foo}}  (end braces)       | terminal node. Usual case.
+            #    {{.Foo.   (dot)              | deeper struct. Hard to handle.
+            #    {{.Foo This is a function... | function. Rare, and " " " "
+            #
+            if ($opt eq '--format') {
+                my @completions = _completions(@_, '--format', '{{.');
+                for my $c (@completions) {
+                    if ($c =~ /^\{\{(\.\S+)(\s+This.*\s(\d+)\s+arg.*)?$/) {
+                        my ($fmt, $n_args) = ($1, $3 || 0);
+                        # Strip off braces/dot, leaving just the name
+                        $fmt =~ s/(\.|\}\})$//;
+                        my $stripped = $1;
+
+                        # First time through: convert to a hashref
+                        $help{$opt} = {}   if ! ref($help{$opt});
+
+                        # Remember this param
+                        if ($stripped eq '}}') {
+                            $n_args = 0;
+                        }
+                        elsif ($stripped eq '.') {
+                            $n_args = '...';
+                        }
+                        $help{$opt}{$fmt} = $n_args;
+                    }
+                }
+
+                # If subcommand supports '--format {{.x', it should also
+                # support '--format json'
+                if (ref $help{$opt}) {
+                    my @json = _completions(@_, '--format', 'json');
+                    if (! grep { $_ eq 'json' } @json) {
+                        warn "$ME: podman @_ --format json is unimplemented\n";
+                        ++$Errs;
+                    }
+                }
+
+                else {
+                    # --format option for this subcommand does not support
+                    # completion for Go templates. This is OK for an
+                    # existing set of commands (see table at top of script)
+                    # but is a fatal error for any others, presumably a
+                    # new subcommand. Either the subcommand must be fixed
+                    # to support autocompletion, or the subcommand must be
+                    # added to our exclusion list at top.
+                    unless ($Format_Option_Is_Special{"@_"}) {
+                        warn "$ME: podman @_ --format '{{.' does not offer autocompletion\n";
+                        ++$Errs;
+                    }
+                }
+            }
+            # Same thing, for --filter
+            elsif ($opt eq '--filter') {
+                my @completions = _completions(@_, '--filter=');
+                for my $c (@completions) {
+                    if ($c =~ /^(\S+)=/) {
+                        $help{$opt} = {} if ! ref($help{$opt});
+                        $help{$opt}{$1} = 1;
+                    }
+                }
+            }
+        }
+    }
+    close $fh
+        or die "$ME: Error running 'podman @_ --help'\n";
+
+    return \%help;
+}
+
+
+################
+#  podman_man  #  Parse contents of podman-*.1.md
+################
+our %Man_Seen;
+sub podman_man {
+    my $command = shift;
+    my $subpath = "$Markdown_Path/$command.1.md";
+    print "** $subpath \n"                              if $debug;
+
+    my %man = (_path => $subpath);
+
+    # We often get called multiple times on the same man page,
+    # because (e.g.) podman-container-list == podman-ps. It's the
+    # same man page text, though, and we don't know which subcommand
+    # we're being called for, so there's nothing to be gained by
+    # rereading the man page or by dumping yet more warnings
+    # at the user. So, keep a cache of what we've done.
+    if (my $seen = $Man_Seen{$subpath}) {
+        return clone($seen);
+    }
+    $Man_Seen{$subpath} = \%man;
+
+    open my $fh, '<', $subpath
+        or die "$ME: Cannot read $subpath: $!\n";
+    my $section = '';
+    my @most_recent_flags;
+    my $previous_subcmd = '';
+    my $previous_flag = '';
+    my $previous_format = '';
+    my $previous_filter = '';
+  LINE:
+    while (my $line = <$fh>) {
+        chomp $line;
+        next LINE unless $line;		# skip empty lines
+
+        # First line (page title) must match the command name.
+        if ($line =~ /^%\s+/) {
+            my $expect = "% $command 1";
+            if ($line ne $expect) {
+                warn "$ME: $subpath:$.: wrong title line '$line'; should be '$expect'\n";
+                ++$Errs;
+            }
+        }
+
+        # .md files designate sections with leading double hash
+        if ($line =~ /^##\s*(GLOBAL\s+)?OPTIONS/) {
+            $section = 'flags';
+            $previous_flag = '';
+        }
+        elsif ($line =~ /^###\s+\w+\s+OPTIONS/) {
+            # podman image trust has sections for set & show
+            $section = 'flags';
+            $previous_flag = '';
+        }
+        elsif ($line =~ /^\#\#\s+(SUB)?COMMANDS/) {
+            $section = 'commands';
+        }
+        elsif ($line =~ /^\#\#\s+SEE\s+ALSO/) {
+            $section = 'see-also';
+        }
+        # New section or subsection within SEE ALSO: disable the '**' rules.
+        elsif ($line =~ /^\#\#+/ && $section eq 'see-also') {
+            $section = '';
+        }
+        elsif ($line =~ /^\#\#[^#]/) {
+            $section = '';
+        }
+
+        # This will be a table containing subcommand names, links to man pages.
+        # The format is slightly different between podman.1.md and subcommands.
+        elsif ($section eq 'commands') {
+            # In podman.1.md
+            if ($line =~ /^\|\s*\[podman-(\S+?)\(\d\)\]/) {
+                # $1 will be changed by recursion _*BEFORE*_ left-hand assignment
+                my $subcmd = $1;
+                $man{$subcmd} = podman_man("podman-$subcmd");
+            }
+
+            # In podman-<subcommand>.1.md
+            #                      1   1        2  3   3    4   4         2
+            elsif ($line =~ /^\|\s+(\S+)\s+\|\s+(\[(\S+)\]\((\S+)\.1\.md\))/) {
+                my ($subcmd, $blob, $shown_name, $link_name) = ($1, $2, $3, $4);
+                if ($previous_subcmd gt $subcmd) {
+                    warn "$ME: $subpath:$.: '$previous_subcmd' and '$subcmd' are out of order\n";
+                    ++$Errs;
+                }
+                if ($previous_subcmd eq $subcmd) {
+                    warn "$ME: $subpath:$.: duplicate subcommand '$subcmd'\n";
+                    ++$Errs;
+                }
+                $previous_subcmd = $subcmd;
+                $man{$subcmd} = podman_man($link_name);
+
+                # Check for inconsistencies between the displayed man page name
+                # and the actual man page name, e.g.
+                #  '[podman-bar(1)](podman-baz.1.md)
+                $shown_name =~ s/\(\d\)$//;
+                $shown_name =~ s/\\//g;         # backslashed hyphens
+                (my $should_be = $link_name) =~ s/\.1\.md$//;
+                if ($shown_name ne $should_be) {
+                    warn "$ME: $subpath:$.: '$shown_name' should be '$should_be' in '$blob'\n";
+                    ++$Errs;
+                }
+            }
+        }
+
+        # Options should always be of the form '**-f**' or '**\-\-flag**',
+        # possibly separated by comma-space.
+        elsif ($section eq 'flags') {
+            # e.g. 'podman run --ip6', documented in man page, but nonexistent
+            if ($line =~ /^not\s+implemented/i) {
+                delete $man{$_} for @most_recent_flags;
+            }
+
+            @most_recent_flags = ();
+            # As of PR #8292, all options are <h4> and anchored
+            if ($line =~ s/^\#{4}\s+//) {
+                # If option has long and short form, long must come first.
+                # This is a while-loop because there may be multiple long
+                # option names, e.g. --net/--network
+                my $is_first = 1;
+                while ($line =~ s/^\*\*(--[a-z0-9-]+)\*\*(,\s+)?//g) {
+                    my $flag = $1;
+                    $man{$flag} = 1;
+                    if ($flag lt $previous_flag && $is_first) {
+                        warn "$ME: $subpath:$.: $flag should precede $previous_flag\n";
+                        ++$Errs;
+                    }
+                    if ($flag eq $previous_flag) {
+                        warn "$ME: $subpath:$.: flag '$flag' is a dup\n";
+                        ++$Errs;
+                    }
+                    $previous_flag = $flag if $is_first;
+                    push @most_recent_flags, $flag;
+
+                    # Further iterations of /g are allowed to be out of order,
+                    # e.g., it's OK for "--namespace, -ns" to precede --nohead
+                    $is_first = 0;
+                }
+                # Short form
+                if ($line =~ s/^\*\*(-[a-zA-Z0-9])\*\*//) {
+                    my $flag = $1;
+                    $man{$flag} = 1;
+
+                    # Keep track of them, in case we see 'Not implemented' below
+                    push @most_recent_flags, $flag;
+                }
+
+                # Options with no '=whatever'
+                next LINE if !$line;
+
+                # Anything remaining *must* be of the form '=<possibilities>'
+                if ($line !~ /^=/) {
+                    warn "$ME: $subpath:$.: could not parse '$line' in option description\n";
+                    ++$Errs;
+                }
+
+                # For some years it was traditional, albeit wrong, to write
+                #     **--foo**=*bar*, **-f**
+                # The correct way is to add =*bar* at the end.
+                if ($line =~ s/,\s\*\*(-[a-zA-Z])\*\*//) {
+                    $man{$1} = 1;
+                    warn "$ME: $subpath:$.: please rewrite as ', **$1**$line'\n";
+                    ++$Errs;
+                }
+
+                # List of possibilities ('=*a* | *b*') must be space-separated
+                if ($line =~ /\|/) {
+                    if ($line =~ /[^\s]\|[^\s]/) {
+                        # Sigh, except for this one special case
+                        if ($line !~ /SOURCE-VOLUME.*HOST-DIR.*CONTAINER-DIR/) {
+                            warn "$ME: $subpath:$.: values must be space-separated: '$line'\n";
+                            ++$Errs;
+                        }
+                    }
+                    my $copy = $line;
+                    if ($copy =~ s/\**true\**//) {
+                        if ($copy =~ s/\**false\**//) {
+                            if ($copy !~ /[a-z]/) {
+                                warn "$ME: $subpath:$.: Do not enumerate true/false for boolean-only options\n";
+                                ++$Errs;
+                            }
+                        }
+                    }
+                }
+            }
+
+            # --format does not always mean a Go format! E.g., push --format=oci
+            if ($previous_flag eq '--format') {
+                # ...but if there's a table like '| .Foo | blah blah |'
+                # then it's definitely a Go template. There are three cases:
+                #     .Foo        - Scalar field. The usual case.
+                #     .Foo ...    - Structure with subfields, e.g. .Foo.Xyz
+                #     .Foo ARG(s) - Function requiring one or more arguments
+                #
+                #                   1     12   3        32
+                if ($line =~ /^\|\s+(\.\S+)(\s+([^\|]+\S))?\s+\|/) {
+                    my ($format, $etc) = ($1, $3);
+
+                    # Confirmed: we have a table with '.Foo' strings, so
+                    # this is a Go template. Override previous (scalar)
+                    # setting of the --format flag with a hash, indicating
+                    # that we will recursively cross-check each param.
+                    if (! ref($man{$previous_flag})) {
+                        $man{$previous_flag} = { _path => $subpath };
+                    }
+
+                    # ...and document this format option. $etc, if set,
+                    # will indicate if this is a struct ("...") or a
+                    # function.
+                    if ($etc) {
+                        if ($etc eq '...') {    # ok
+                            ;
+                        }
+                        elsif ($etc =~ /^\*[a-z]+\*(\s+\*[a-z]+\*)*$/) {
+                            # a function. Preserve only the arg COUNT, not
+                            # their names. (command completion has no way
+                            # to give us arg names or types).
+                            $etc = scalar(split(' ', $etc));
+                        }
+                        else {
+                            warn "$ME: $subpath:$.: unknown args '$etc' for '$format'. Valid args are '...' for nested structs or, for functions, one or more asterisk-wrapped argument names.\n";
+                            ++$Errs;
+                        }
+                    }
+
+                    $man{$previous_flag}{$format} = $etc || 0;
+
+                    # Sort order check, case-insensitive
+                    if (lc($format) lt lc($previous_format)) {
+                        warn "$ME: $subpath:$.: format specifier '$format' should precede '$previous_format'\n";
+                        ++$Errs;
+                    }
+
+                    # Dup check, would've caught #19462.
+                    if (lc($format) eq lc($previous_format)) {
+                        # Sigh. Allow preexisting exceptions, but no new ones.
+                        unless ($Format_Option_Dup_Allowed{$command}{lc $format}) {
+                            warn "$ME: $subpath:$.: format specifier '$format' is a dup\n";
+                            ++$Errs;
+                        }
+                    }
+                    $previous_format = $format;
+                }
+            }
+            # Same as above, but with --filter
+            elsif ($previous_flag eq '--filter') {
+                if ($line =~ /^\|\s+(\S+)\s+\|/) {
+                    my $filter = $1;
+
+                    # (Garbage: these are just table column titles & dividers)
+                    next LINE if $filter =~ /^\**Filter\**$/;
+                    next LINE if $filter =~ /---+/;
+
+                    # Special case: treat slash-separated options
+                    # ("after/since") as identical, and require that
+                    # each be documented.
+                    for my $f (split '/', $filter) {
+                        # Special case for negated options ("label!="): allow,
+                        # but only immediately after the positive case.
+                        if ($f =~ s/!$//) {
+                            if ($f ne $previous_filter) {
+                                warn "$ME: $subpath:$.: filter '$f!' only allowed immediately after its positive\n";
+                                ++$Errs;
+                            }
+                            next LINE;
+                        }
+
+                        if (! ref($man{$previous_flag})) {
+                            $man{$previous_flag} = { _path => $subpath };
+                        }
+                        $man{$previous_flag}{$f} = 1;
+                    }
+
+                    # Sort order check, case-insensitive
+                    # FIXME FIXME! Disabled for now because it would make
+                    # this PR completely impossible to review (as opposed to
+                    # only mostly-impossible)
+                    #if (lc($filter) lt lc($previous_filter)) {
+                    #  warn "$ME: $subpath:$.: filter specifier '$filter' should precede '$previous_filter'\n";
+                    #  ++$Errs;
+                    #}
+
+                    # Dup check. Yes, it happens.
+                    if (lc($filter) eq lc($previous_filter)) {
+                        warn "$ME: $subpath:$.: filter specifier '$filter' is a dup\n";
+                        ++$Errs;
+                    }
+                    $previous_filter = $filter;
+                }
+            }
+        }
+
+        # It's easy to make mistakes in the SEE ALSO elements.
+        elsif ($section eq 'see-also') {
+            _check_seealso_links( "$subpath:$.", $line );
+        }
+    }
+    close $fh;
+
+    # Done reading man page. If there are any '--format' exceptions defined
+    # for this command, flag them as seen, and as '...' so we don't
+    # complain about any sub-fields.
+    if (my $fields = $Format_Exceptions{$command}) {
+        $man{"--format"}{$_} = '!' for @$fields;
+    }
+
+    # Special case: the 'image trust' man page tries hard to cover both set
+    # and show, which means it ends up not being machine-readable.
+    if ($command eq 'podman-image-trust') {
+        my %set  = %man;
+        my %show = %man;
+        $show{$_} = 1 for qw(--raw -j --json);
+        return +{ set => \%set, show => \%show }
+    }
+
+    return \%man;
+}
+
+
+################
+#  podman_rst  #  Parse contents of docs/source/*.rst
+################
+sub podman_rst {
+    my %rst;
+
+    # Read all .rst files, looking for ":doc:`subcmd <target>` description"
+    for my $rst (glob "$Docs_Path/*.rst") {
+        open my $fh, '<', $rst
+            or die "$ME: Cannot read $rst: $!\n";
+
+        # The basename of foo.rst is usually, but not always, the name of
+        # a podman subcommand. There are a few special cases:
+        (my $command = $rst) =~ s!^.*/(.*)\.rst!$1!;
+
+        my $subcommand_href = \%rst;
+        if ($command eq 'Commands') {
+            ;
+        }
+        else {
+            $subcommand_href = $rst{$command} //= { _source => $rst };
+        }
+
+        my $previous_subcommand = '';
+        while (my $line = <$fh>) {
+            if ($line =~ /^:doc:`(\S+)\s+<(.*?)>`\s+(.*)/) {
+                my ($subcommand, $target, $desc) = ($1, $2, $3);
+
+                # Check that entries are in alphabetical order, and not dups
+                if ($subcommand lt $previous_subcommand) {
+                    warn "$ME: $rst:$.: '$previous_subcommand' and '$subcommand' are out of order\n";
+                    ++$Errs;
+                }
+                if ($subcommand eq $previous_subcommand) {
+                    warn "$ME: $rst:$.: duplicate '$subcommand'\n";
+                    ++$Errs;
+                }
+                $previous_subcommand = $subcommand;
+
+                # Mark this subcommand as documented.
+                $subcommand_href->{$subcommand}{_desc} = $desc;
+                $subcommand_href->{$subcommand}{_source} = $rst;
+
+                # Check for invalid links. These will be one of two forms:
+                #    <markdown/foo.1>     -> markdown/foo.1.md
+                #    <foo>                -> foo.rst
+                if ($target =~ m!^markdown/!) {
+                    if (! -e "$Docs_Path/$target.md") {
+                        warn "$ME: $rst:$.: '$subcommand' links to nonexistent $target\n";
+                        ++$Errs;
+                    }
+
+                    my $expect = "markdown/podman-$subcommand.1";
+                    if ($subcommand eq 'Podman') {
+                        $expect = "markdown/podman.1";
+                    }
+                    if ($target ne $expect) {
+                        warn "$ME: $rst:$.: '$subcommand' links to $target (expected '$expect')\n";
+                        ++$Errs;
+                    }
+                }
+                else {
+                    if (! -e "$Docs_Path/$target.rst") {
+                        warn "$ME: $rst:$.: '$subcommand' links to nonexistent $target.rst\n";
+                        ++$Errs;
+                    }
+                }
+            }
+        }
+        close $fh;
+    }
+
+    # Special case: 'image trust set/show' are documented in image-trust.1
+    $rst{image}{trust}{$_} = { _desc => 'ok' } for (qw(set show));
+
+    return \%rst;
+}
+
+##################
+#  _completions  #  run podman __complete, return list of completions
+##################
+sub _completions {
+    my $kidpid = open my $podman_fh, '-|';
+    if (! defined $kidpid) {
+        die "$ME: Could not fork: $!\n";
+    }
+
+    if ($kidpid == 0) {
+        # We are the child
+        close STDERR;
+        exec $PODMAN, '__complete', @_;
+        die "$ME: Could not exec: $!\n";
+    }
+
+    # We are the parent
+    my @completions;
+    while (my $line = <$podman_fh>) {
+        chomp $line;
+        push @completions, $line;
+
+        # Recursively expand Go templates, like '{{.Server.Os}}'
+        if ($line =~ /^\{\{\..*\.$/) {
+            my @cmd_copy = @_;          # clone of podman subcommands...
+            pop @cmd_copy;              # ...so we can recurse with new format
+            my @subcompletions = _completions(@cmd_copy, $line);
+
+            # A huge number of deep fields are time-related. Don't document them.
+            my @is_time = grep { /Nanosecond|UnixNano|YearDay/ } @subcompletions;
+            push @completions, @subcompletions
+                unless @is_time >= 3;
+        }
+    }
+    close $podman_fh
+        or warn "$ME: Error running podman __complete @_\n";
+    return @completions;
+}
+
+# END   data gathering
+###############################################################################
+# BEGIN sanity checking of SEE ALSO links
+
+##########################
+#  _check_seealso_links  #  Check formatting and link validity.
+##########################
+sub _check_seealso_links {
+    my $path = shift;
+    my $line = shift;
+
+    return if ! $line;
+
+    # Line must be a comma-separated list of man page references, e.g.
+    #    **foo(1)**, **[podman-bar(1)](podman-bar.1.md)**, **[xxx(8)](http...)**
+  TOKEN:
+    for my $token (split /,\s+/, $line) {
+        # Elements must be separated by comma and space. (We don't do further
+        # checks here, so it's possible for the dev to add the space and then
+        # have us fail on the next iteration. I choose not to address that.)
+        if ($token =~ /,/) {
+            warn "$ME: $path: please add space after comma: '$token'\n";
+            ++$Errs;
+            next TOKEN;
+        }
+
+        # Each token must be of the form '**something**'
+        if ($token !~ s/^\*\*(.*)\*\*$/$1/) {
+            if ($token =~ /\*\*/) {
+                warn "$ME: $path: '$token' has asterisks in the wrong place\n";
+            }
+            else {
+                warn "$ME: $path: '$token' should be bracketed by '**'\n";
+            }
+            ++$Errs;
+            next TOKEN;
+        }
+
+        # Is it a markdown link?
+        if ($token =~ /^\[(\S+)\]\((\S+)\)$/) {
+            my ($name, $link) = ($1, $2);
+            if ($name =~ /^(.*)\((\d)\)$/) {
+                my ($base, $section) = ($1, $2);
+                if (-e "$Markdown_Path/$base.$section.md") {
+                    if ($link ne "$base.$section.md") {
+                        warn "$ME: $path: inconsistent link $name -> $link, expected $base.$section.md\n";
+                        ++$Errs;
+                    }
+                }
+                else {
+                    if (! _is_valid_external_link($base, $section, $link)) {
+                        warn "$ME: $path: invalid link $name -> $link\n";
+                        ++$Errs;
+                    }
+                }
+            }
+            else {
+                warn "$ME: $path: could not parse '$name' as 'manpage(N)'\n";
+                ++$Errs;
+            }
+        }
+
+        # Not a markdown link; it must be a plain man reference, e.g. 'foo(5)'
+        elsif ($token =~ m!^(\S+)\((\d+)\)$!) {
+            my ($base, $section) = ($1, $2);
+
+            # Unadorned 'podman-foo(1)' must be a link.
+            if (-e "$Markdown_Path/$base.$section.md") {
+                warn "$ME: $path: '$token' should be '[$token]($base.$section.md)'\n";
+                ++$Errs;
+            }
+
+            # Aliases (non-canonical command names): never link to these
+            if (-e "$Markdown_Path/links/$base.$section") {
+                warn "$ME: $path: '$token' refers to a command alias; please use the canonical command name instead\n";
+                ++$Errs;
+            }
+
+            # Link to man page foo(5) but without a link. This is not an error
+            # but Ed may sometimes want to see those on a manual test run.
+            warn "$ME: $path: plain '$token' would be so much nicer as a link\n"
+                if $verbose;
+        }
+        else {
+            warn "$ME: $path: invalid token '$token'\n";
+            ++$Errs;
+        }
+    }
+}
+
+#############################
+#  _is_valid_external_link  #  Tries to validate links to external man pages
+#############################
+#
+# This performs no actual fetches, so we can't actually check for 404.
+# All we do is ensure that links conform to standard patterns. This is
+# good for catching things like 'conmon(8)' pointing to a .5 URL, or
+# linking to .md instead of .html.
+#
+# FIXME: we could actually rewrite this so as to offer hints on what to fix.
+# That's a lot of work, and a lot of convoluted code, for questionable ROI.
+#
+sub _is_valid_external_link {
+    my ($base, $section, $link) = @_;
+
+    return 1 if $link =~ m!^https://github\.com/\S+/blob/(main|master)(/.*)?/\Q$base\E\.$section\.md!;
+
+    return 1 if $link =~ m!^https://.*unix\.com/man-page/(linux|redhat)/$section/$base$!;
+    return 1 if $link eq "https://man7\.org/linux/man-pages/man$section/$base\.$section\.html";
+
+    if ($base =~ /systemd/) {
+        return 1 if $link eq "https://www.freedesktop.org/software/systemd/man/$base.html";
+    }
+
+    return 1 if $link eq "https://passt.top/builds/latest/web/passt.1.html";
+
+    return;
+}
+
+
+
+
+# END   sanity checking of SEE ALSO links
+###############################################################################
+
+1;

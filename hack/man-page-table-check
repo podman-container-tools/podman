@@ -1,0 +1,176 @@
+#!/usr/bin/perl
+#
+# man-page-table-check - workaround for go-md2man bug that screws up tables
+#
+package Podman::ManPage::TableCheck;
+
+use v5.14;
+use utf8;
+
+use strict;
+use warnings;
+
+(our $ME = $0) =~ s|.*/||;
+
+###############################################################################
+# BEGIN boilerplate args checking, usage messages
+
+sub usage {
+    print  <<"END_USAGE";
+Usage: $ME [OPTIONS]
+
+$ME checks man pages (the *roff files produced
+by go-md2man) for empty table cells. Reason: go-md2man cannot handle
+markdown characters (e.g. asterisk) in tables. It produces horribly
+broken *roff which in turn makes unreadable man pages.
+
+If $ME finds broken tables, it will highlight them
+and display hints on how to resolve the problem.
+
+OPTIONS:
+  --help         display this message
+END_USAGE
+
+    exit;
+}
+
+# Command-line options.  Note that this operates directly on @ARGV !
+our $debug   = 0;
+our $force   = 0;
+our $verbose = 0;
+our $NOT     = '';              # print "blahing the blah$NOT\n" if $debug
+sub handle_opts {
+    use Getopt::Long;
+    GetOptions(
+        'debug!'     => \$debug,
+
+        help         => \&usage,
+    ) or die "Try `$ME --help' for help\n";
+}
+
+# END   boilerplate args checking, usage messages
+###############################################################################
+
+############################## CODE BEGINS HERE ###############################
+
+# The term is "modulino".
+__PACKAGE__->main()                                     unless caller();
+
+# Main code.
+sub main {
+    # Note that we operate directly on @ARGV, not on function parameters.
+    # This is deliberate: it's because Getopt::Long only operates on @ARGV
+    # and there's no clean way to make it use @_.
+    handle_opts();                      # will set package globals
+
+    die "$ME: Too many arguments; try $ME --help\n"                 if @ARGV;
+
+    my $manpage_dir = 'docs/build/man';         # FIXME-hardcoding
+    opendir my $dir_fh, $manpage_dir
+        or die "$ME: Cannot opendir $manpage_dir: $!\n";
+    my @manpages;
+    for my $ent (sort readdir $dir_fh) {
+        next unless $ent =~ /^[a-z].*\.[1-8][a-z]?$/;   # groff files only
+        next if -l "$manpage_dir/$ent";                 # skip links
+        push @manpages, $ent;
+    }
+    closedir $dir_fh;
+
+    @manpages
+        or die "$ME: did not find any .[1-8] files under $manpage_dir\n";
+
+    my $errs = 0;
+    for my $file (@manpages) {
+        $errs += check_tables("$manpage_dir/$file");
+    }
+    exit 0 if !$errs;
+
+    die "\n$ME: found empty cells in the above man page(s)
+
+This is a bug in go-md2man: it gets really confused when it sees
+misaligned vertical-bar signs ('|') in tables, or a left-hand
+column with more than 31 characters.
+
+WORKAROUND: find the above line(s) in the docs/source/markdown file,
+then fix the issue (left as exercise for the reader). Keep regenerating
+docs until it passes:
+
+    \$ make -C docs clean;make docs;$0
+"
+}
+
+
+sub check_tables {
+    my $path = shift;
+
+    my $status = 0;
+
+    my @cmd = ('man', '-l', '--no-hyphenation', '-Tlatin1', '-');
+    pipe my $fh_read, my $fh_write;
+    my $kidpid = fork;
+    if ($kidpid) {                      # we are the parent
+        close $fh_write;
+    }
+    elsif (defined $kidpid) {           # we are the child
+        close $fh_read;
+
+        open my $fh_in, '<:utf8', $path
+            or die "$ME: Could not read $path: $!\n";
+        # groff spits out nasty useless warnings
+        close STDERR;
+        open STDOUT, '>&', $fh_write;
+        open my $fh_man, '|-', @cmd
+            or die "$ME: Could not fork: $! (message will never be seen)\n";
+
+        while (my $line = <$fh_in>) {
+            $line =~ s/✅/OK/g;
+            print { $fh_man } $line;
+        }
+        close $fh_in or die;
+        close $fh_man or die;
+        exit 0;
+    }
+    else {                              # fork failed
+        die "$ME: could not fork: $!";
+    }
+
+    my $linecount = 0;
+    my $want = 0;
+    while (my $line = <$fh_read>) {
+        ++$linecount;
+
+        chomp $line;
+        # Table borders (+----------+------------+)
+        if ($line =~ /^\s*\+-+\+-+/) {
+            $want = 1;
+            next;
+        }
+
+        # Row immediately after table borders
+        elsif ($want) {
+#            print $line, "\n";
+            # *Two* blank cells is OK, go-md2man always does this
+            # on the last row of each table.
+            if ($line !~ /^\s*\|\s+\|\s+\|/) {
+                if ($line =~ /\|\s+\|/) {
+                    warn "\n$ME: $path:\n"         if $status == 0;
+                    warn "   $line\n";
+                    $status = 1;
+                }
+            }
+        }
+        $want = 0;
+    }
+    close $fh_read;
+    die "$ME: $path: command failed: @cmd\n"    if $?;
+    waitpid $kidpid, 0;
+
+    if ($linecount < 10) {
+        die "$ME: $path: nothing seen!\n";
+    }
+
+    return $status;
+}
+
+
+1;

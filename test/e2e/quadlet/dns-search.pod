@@ -1,0 +1,6 @@
+## assert-podman-pre-args "--dns-search" "foo.com"
+## assert-podman-pre-args "--dns-search" "bar.com"
+
+[Pod]
+DNSSearch=foo.com
+DNSSearch=bar.com

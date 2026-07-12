@@ -1,0 +1,44 @@
+name: Assign Command
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assign:
+    # Only run on issue comments (not PR comments)
+    if: |
+      !github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/assign') &&
+      github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Self-assign if unassigned
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          # Check if issue has any assignees
+          ASSIGNEES=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json assignees -q '.assignees | length')
+
+          if [ "$ASSIGNEES" -eq 0 ]; then
+            # Use API directly to assign (works for any GitHub user, not just collaborators)
+            if gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/assignees" -X POST -f "assignees[]=${COMMENTER}" --silent; then
+              echo "Successfully assigned @${COMMENTER} to issue #${ISSUE_NUMBER}"
+            else
+              echo "Failed to assign @${COMMENTER} to issue #${ISSUE_NUMBER}"
+              exit 1
+            fi
+          else
+            # Add commenter as an additional assignee
+            if gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/assignees" -X POST -f "assignees[]=${COMMENTER}" --silent; then
+              echo "Successfully added @${COMMENTER} as an additional assignee to issue #${ISSUE_NUMBER}"
+            else
+              echo "Failed to add @${COMMENTER} as an additional assignee to issue #${ISSUE_NUMBER}"
+              exit 1
+            fi
+          fi

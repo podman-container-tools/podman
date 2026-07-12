@@ -1,0 +1,193 @@
+#!/usr/bin/perl
+#
+# pr-removes-fixed-skips - if PR says "Fixes: #123", no skips should mention 123
+#
+package Podman::CI::PrRemovesFixedSkips;
+
+use v5.14;
+use utf8;
+
+# Grumble. CI system doesn't have 'open'
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+
+use strict;
+use warnings;
+
+(our $ME = $0) =~ s|.*/||;
+our $VERSION = '0.1';
+
+###############################################################################
+# BEGIN boilerplate args checking, usage messages
+
+sub usage {
+    print  <<"END_USAGE";
+Usage: $ME [OPTIONS]
+
+$ME reads a GitHub PR message, looks for
+Fixed/Resolved/Closed issue IDs, then greps for test files
+containing 'Skip' instructions or FIXME comments referencing
+those IDs. If we find any, we abort with a loud and hopefully
+useful message.
+
+$ME is intended to run from CI.
+
+OPTIONS:
+
+  --help         display this message
+  --version      display program name and version
+END_USAGE
+
+    exit;
+}
+
+# Command-line options.  Note that this operates directly on @ARGV !
+our $debug   = 0;
+sub handle_opts {
+    use Getopt::Long;
+    GetOptions(
+        'debug!'     => \$debug,
+
+        help         => \&usage,
+        version      => sub { print "$ME version $VERSION\n"; exit 0 },
+    ) or die "Try `$ME --help' for help\n";
+}
+
+# END   boilerplate args checking, usage messages
+###############################################################################
+
+############################## CODE BEGINS HERE ###############################
+
+# The term is "modulino".
+__PACKAGE__->main()                                     unless caller();
+
+# Main code.
+sub main {
+    # Note that we operate directly on @ARGV, not on function parameters.
+    # This is deliberate: it's because Getopt::Long only operates on @ARGV
+    # and there's no clean way to make it use @_.
+    handle_opts();                      # will set package globals
+
+    die "$ME: This script takes no arguments; try $ME --help\n"  if @ARGV;
+
+    # Check commit messages from both github and git; they often differ
+    my @issues = fixed_issues(pr_change_message(), git_commit_messages())
+        or exit 0;
+
+    my @found = unremoved_skips(@issues)
+        or exit 0;
+
+    # Found unremoved skips. Fail loudly.
+    my $issues = "issue #$issues[0]";
+    if (@issues > 1) {
+        $issues = "issues #" . join ", #", @issues;
+    }
+
+    warn "$ME: Your PR claims to resolve $issues\n";
+    warn "    ...but does not remove associated Skips/FIXMEs:\n";
+    warn "\n";
+    warn "   $_\n" for @found;
+    warn "\n";
+    warn <<"END_ADVICE";
+Please do not leave Skips or FIXMEs for closed issues.
+
+If an issue is truly fixed, please remove all Skips referencing it.
+
+If an issue is only PARTIALLY fixed, please file a new issue for the
+remaining problem, and update remaining Skips to point to that issue.
+
+And if the issue is fixed but the Skip needs to remain for other
+reasons, again, please update the Skip message accordingly.
+END_ADVICE
+    exit 1;
+}
+
+#####################
+#  unremoved_skips  #  Returns list of <path>:<lineno>:<skip string> matches
+#####################
+sub unremoved_skips {
+    my $issues = join('|', @_);
+
+    my $re = "(^\\s\+skip|fixme).*#($issues)[^0-9]";
+    # FIXME FIXME FIXME: use File::Find instead of enumerating directories
+    # (the important thing here is to exclude vendor)
+    my @grep = ('grep', '-E', '-rin', $re, "test", "cmd", "libpod", "pkg");
+
+    my @skips;
+    open my $grep_fh, '-|', @grep
+        or die "$ME: Could not fork: $!\n";
+    while (my $line = <$grep_fh>) {
+        chomp $line;
+
+        # e.g., test/system/030-run.bats:809:   skip "FIXME: #12345 ..."
+        $line =~ m!^(\S+):\d+:\s!
+            or die "$ME: Internal error: output from grep does not match <path>:<lineno>:<space>: '$line'";
+        my $path = $1;
+
+        # Any .go or .bats file, or the apply-podman-deltas script
+        if ($path =~ /\.(go|bats)$/ || $path =~ m!/apply-podman-deltas$!) {
+            push @skips, $line;
+        }
+
+        # Anything else is probably a backup file, or something else
+        # we don't care about. (We won't see these in CI, but might
+        # in a user devel environment)
+        elsif ($debug) {
+            print "[ ignoring: $line ]\n";
+        }
+    }
+    close $grep_fh;
+
+    return sort @skips;
+}
+
+##################
+#  fixed_issues  #  Parses change message, looks for Fixes/Closes/Resolves
+##################
+sub fixed_issues {
+    my @issues;
+
+    for my $msg (@_) {
+        # https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword
+        #
+        #                 1               1              2   2
+        while ($msg =~ /\b(Fix|Clos|Resolv)[esd]*[:\s]+\#(\d+)/gis) {
+            # Skip dups: we're probably checking both github and git messages
+            push @issues, $2
+                unless grep { $_ eq $2 } @issues;
+        }
+    }
+
+    return @issues;
+}
+
+#######################
+#  pr_change_message  #  the PR description (from *GitHub*, not *git*)
+#######################
+sub pr_change_message {
+    my $change_message = $ENV{PR_BODY}
+        or do {
+            # OK for it to be unset if we're not running CI on a PR
+            return if ! $ENV{PR_NUMBER};
+            # But if we _are_ running on a PR, something went badly wrong.
+            die "$ME: \$PR_BODY is undefined\n";
+        };
+
+    return $change_message;
+}
+
+#########################
+#  git_commit_messages  #  the ones from the *git history*
+#########################
+sub git_commit_messages {
+    # Probably the same as HEAD, but use the CI-defined value if available
+    my $head = $ENV{PR_HEAD} || 'HEAD';
+
+    # Base of this PR.
+    return if ! $ENV{DEST_BRANCH};
+    chomp(my $base = qx{git merge-base $ENV{DEST_BRANCH} $head});
+
+    qx{git log --format=%B $base..$head};
+}
+
+1;

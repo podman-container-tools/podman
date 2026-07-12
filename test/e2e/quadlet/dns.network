@@ -1,0 +1,7 @@
+## assert-podman-final-args systemd-dns
+## assert-podman-args "--dns" "8.7.7.7"
+## assert-podman-args "--dns" "8.8.8.8"
+
+[Network]
+DNS=8.7.7.7
+DNS=8.8.8.8

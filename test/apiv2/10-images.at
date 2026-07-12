@@ -1,0 +1,553 @@
+# -*- sh -*-
+#
+# Tests for image-related endpoints
+#
+
+# FIXME: API doesn't support pull yet, so use podman
+podman pull -q $IMAGE
+
+t GET libpod/images/json 200 \
+  length=1 \
+  .[0].Id~[0-9a-f]\\{64\\} \
+  .[0].Names[0]="$IMAGE"
+iid=$(jq -r '.[0].Id' <<<"$output")
+
+# Create an empty manifest and make sure it is not listed
+# in the compat endpoint.
+t GET images/json 200 length=1
+podman manifest create foo
+t GET images/json 200 length=1
+t GET libpod/images/json 200 length=2
+
+t GET libpod/images/$iid/exists                     204
+t GET libpod/images/$PODMAN_TEST_IMAGE_NAME:$PODMAN_TEST_IMAGE_TAG/exists  204
+t GET libpod/images/${iid}abcdef/exists  404 \
+  .cause="failed to find image ${iid}abcdef"
+
+# FIXME: compare to actual podman info
+t GET libpod/images/json 200  \
+  .[0].Id=${iid}
+
+t GET libpod/images/$iid/json 200 \
+  .Id=$iid \
+  .RepoTags[0]=$IMAGE
+
+# Same thing, but with abbreviated image id
+t GET libpod/images/${iid:0:12}/json 200 \
+  .Id=$iid \
+  .RepoTags[0]=$IMAGE
+
+# Docker API V1.24 filter parameter compatibility
+t GET images/json?filter=$IMAGE 200 \
+  length=1 \
+  .[0].Names[0]=$IMAGE
+
+# Test VirtualSize field is present in API v1.43 (backward compatibility)
+t GET /v1.43/images/json 200 \
+  .[0].VirtualSize~[0-9]\\+
+
+# Test VirtualSize field is no longer present in API v1.44+ (deprecated since API v1.43)
+t GET /v1.44/images/json 200 \
+  .[0].VirtualSize=null
+
+# Negative test case
+t GET images/json?filter=nonesuch 200 length=0
+
+# FIXME: docker API incompatibility: libpod returns 'id', docker 'sha256:id'
+t GET images/$iid/json 200 \
+  .Id=sha256:$iid \
+  .RepoTags[0]=$IMAGE
+
+# Test VirtualSize field is present in API v1.43 for single image inspect (backward compatibility)
+t GET /v1.43/images/$iid/json 200 \
+  .VirtualSize~[0-9]\\+
+
+# Test VirtualSize field is no longer present in API v1.44+ for single image inspect (deprecated since API v1.43)
+t GET /v1.44/images/$iid/json 200 \
+  .VirtualSize=null
+
+# Test ContainerConfig fields are present in API v1.44 (backward compatibility)
+t GET /v1.44/images/$iid/json 200 \
+  .ContainerConfig.Hostname~[0-9a-f]
+
+# Test ContainerConfig fields are no longer present in API >= v1.45 (deprecated since API v1.44, omitted since API v1.45)
+t GET /v1.45/images/$iid/json 200 \
+  .ContainerConfig=null
+
+t POST "images/create?fromImage=alpine" 200 .error~null .status~".*Download complete.*"
+t POST "libpod/images/pull?reference=alpine&compatMode=true" 200 .error~null .status~".*Download complete.*"
+
+t POST "images/create?fromImage=alpine&tag=latest" 200 \
+  .status~"Already exists"
+
+# 10977 - handle platform parameter correctly
+# THIS IMAGE MUST NOT BE THE SAME AS $IMAGE
+t POST "images/create?fromImage=quay.io/libpod/testimage:20221018&platform=linux/arm64" 200
+t GET  "images/testimage:20221018/json" 200 \
+  .Architecture=arm64
+
+# Make sure that new images are pulled
+old_iid=$(podman image inspect --format "{{.ID}}" docker.io/library/alpine:latest)
+podman rmi -f docker.io/library/alpine:latest
+podman tag $IMAGE docker.io/library/alpine:latest
+t POST "images/create?fromImage=alpine" 200 .error~null .status~".*$old_iid.*"
+podman untag docker.io/library/alpine:latest
+
+t POST "images/create?fromImage=quay.io/libpod/alpine&tag=sha256:fa93b01658e3a5a1686dc3ae55f170d8de487006fb53a28efcd12ab0710a2e5f" 200
+
+# create image from source with tag
+# Note the "-" is used to use an empty body and not "{}" which is the default.
+t POST "images/create?fromSrc=-&repo=myimage&tag=mytag" - 200
+t GET "images/myimage:mytag/json" 200 \
+  .Id~'^sha256:[0-9a-f]\{64\}$' \
+  .RepoTags[0]="docker.io/library/myimage:mytag"
+t POST /images/create?fromImage=busybox:invalidtag123 404
+
+# Display the image history
+t GET libpod/images/nonesuch/history 404
+
+for i in $iid ${iid:0:12} $PODMAN_TEST_IMAGE_NAME:$PODMAN_TEST_IMAGE_TAG; do
+  t GET libpod/images/$i/history 200 \
+    .[0].Id=$iid \
+    .[1].Id="<missing>" \
+    .[2].Id="<missing>" \
+    .[3].Id="<missing>" \
+    .[0].Created~[0-9]\\{10\\} \
+    .[0].Tags[0]="$IMAGE" \
+    .[0].Size=1024 \
+    .[1].Size=0 \
+    .[2].Size=0 \
+    .[3].Size=0 \
+    .[0].Comment="" \
+    .[1].Comment="" \
+    .[2].Comment="" \
+    .[3].Comment="FROM localhost/interim-image:latest" \
+    .[0].CreatedBy~".*/echo.*This container is intended for podman CI testing.*" \
+    .[1].CreatedBy~".* WORKDIR /home/podman" \
+    .[2].CreatedBy~".* LABEL created_at=.*" \
+    .[3].CreatedBy~".* LABEL created_by=test/system/build-testimage"
+done
+
+for i in $iid ${iid:0:12} $PODMAN_TEST_IMAGE_NAME:$PODMAN_TEST_IMAGE_TAG; do
+  t GET images/$i/history 200 \
+    .[0].Id="sha256:$iid" \
+    .[1].Id="sha256:<missing>" \
+    .[2].Id="sha256:<missing>" \
+    .[3].Id="sha256:<missing>" \
+    .[0].Created~[0-9]\\{10\\} \
+    .[0].Tags[0]="$IMAGE" \
+    .[0].Size=1024 \
+    .[1].Size=0 \
+    .[2].Size=0 \
+    .[3].Size=0 \
+    .[0].Comment="" \
+    .[1].Comment="" \
+    .[2].Comment="" \
+    .[3].Comment="FROM localhost/interim-image:latest" \
+    .[0].CreatedBy~".*/echo.*This container is intended for podman CI testing.*" \
+    .[1].CreatedBy~".* WORKDIR /home/podman" \
+    .[2].CreatedBy~".* LABEL created_at=.*" \
+    .[3].CreatedBy~".* LABEL created_by=test/system/build-testimage"
+done
+
+# compat api pull image unauthorized message error
+# This depends on whether we're using local cache registry or real quay
+expect_code=401
+expect_msg="unauthorized: access to the requested resource is not authorized"
+if [[ -n "$CI_USE_REGISTRY_CACHE" ]]; then
+    # local registry has no auth, so it can return 404
+    expect_code=404
+    expect_msg="manifest unknown: manifest unknown"
+fi
+t POST "/images/create?fromImage=quay.io/idonotexist/idonotexist:dummy" $expect_code \
+  .message="$expect_msg"
+
+# Export an image on the local
+t GET libpod/images/nonesuch/get 404
+t GET libpod/images/$iid/get?format=foo 500
+t GET libpod/images/$PODMAN_TEST_IMAGE_NAME/get?compress=bar 400
+
+for i in $iid ${iid:0:12} $PODMAN_TEST_IMAGE_NAME:$PODMAN_TEST_IMAGE_TAG; do
+  t GET "libpod/images/$i/get"                200 '[POSIX tar archive]'
+  t GET "libpod/images/$i/get?compress=true"  200 '[POSIX tar archive]'
+  t GET "libpod/images/$i/get?compress=false" 200 '[POSIX tar archive]'
+done
+
+#compat api list images sanity checks
+t GET images/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET images/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+#libpod api list images sanity checks
+t GET libpod/images/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET libpod/images/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+# Prune images - bad all input
+t POST libpod/images/prune?all='garb1age' 500 \
+    .cause="schema: error converting value for \"all\""
+
+# Prune images - bad filter input
+t POST images/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t POST libpod/images/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+
+## Prune images with illformed label
+t POST images/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+t POST libpod/images/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+
+
+#create, list and remove dangling image
+podman image build -t test:test -<<EOF
+from alpine
+RUN >file1
+EOF
+
+podman image build -t test:test --label xyz --label abc -<<EOF
+from alpine
+RUN >file2
+EOF
+
+t GET images/json?filters='{"dangling":["true"]}' 200 length=1
+t POST images/prune?filters='{"dangling":["true"]}' 200
+t GET images/json?filters='{"dangling":["true"]}' 200 length=0
+
+#label filter check in libpod and compat
+t GET images/json?filters='{"label":["xyz","abc"]}' 200 length=1
+t GET libpod/images/json?filters='{"label":["xyz"]}' 200 length=1
+
+t DELETE libpod/images/test:test 200
+
+t GET images/json?filters='{"label":["xyz"]}' 200 length=0
+t GET libpod/images/json?filters='{"label":["xyz"]}' 200 length=0
+
+# Must not error out: #20469
+t POST images/prune?filters='{"dangling":["false"]}' 200
+
+# to be used in prune until filter tests
+podman image build -t test1:latest -<<EOF
+from alpine
+RUN >file3
+EOF
+
+# image should not be deleted
+t GET images/json?filters='{"reference":["test1"]}' 200 length=1
+t POST images/prune?filters='{"until":["500000"]}' 200
+t GET images/json?filters='{"reference":["test1"]}' 200 length=1
+
+t DELETE libpod/images/test1:latest 200
+
+# to be used in prune until filter tests
+podman image build -t docker.io/library/test1:latest -<<EOF
+from alpine
+RUN >file4
+EOF
+podman create --name test1 test1 echo hi
+
+t DELETE images/test1:latest 409
+podman rm test1
+t DELETE images/test1:latest 200
+
+t GET "images/get?names=alpine" 200 '[POSIX tar archive]'
+
+# START: Testing variance between Docker API and Podman API
+# regarding force deleting images.
+# Podman: Force deleting an image will force remove any
+#         container using the image.
+# Docker: Force deleting an image will only remove non
+#         running containers using the image.
+
+# Create new image
+podman image build -t docker.io/library/test1:latest - <<EOF
+from alpine
+RUN >file4
+EOF
+
+# Create running container
+podman run --rm -d --name test_container docker.io/library/test1:latest top
+
+# When using the Docker Compat API, force deleting an image
+# shouldn't force delete any container using the image, only
+# containers in a non running state should be removed.
+# https://github.com/containers/podman/issues/25871
+t DELETE images/test1:latest?force=true 409
+
+# When using the Podman Libpod API, deleting an image
+# with a running container will fail.
+t DELETE libpod/images/test1:latest 409
+
+# When using the Podman Libpod API, force deleting an
+# image will also force delete all containers using the image.
+
+# Verify container exists.
+t GET libpod/containers/test_container/exists 204
+
+# Delete image with force.
+t DELETE libpod/images/test1:latest?force=true 200
+
+# Verify container also removed.
+t GET libpod/containers/test_container/exists 404
+
+# END: Testing variance between Docker API and Podman API
+# regarding force deleting images.
+
+podman pull busybox
+t GET "images/get?names=alpine&names=busybox" 200 '[POSIX tar archive]'
+img_cnt=$(tar xf "$WORKDIR/curl.result.out" manifest.json -O | jq "length")
+is "$img_cnt" 2 "number of images in tar archive"
+
+# check build works when uploading container file as a tar, see issue #10660
+TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+function cleanBuildTest() {
+    podman rmi -a -f
+    rm -rf "${TMPD}" &> /dev/null
+}
+CONTAINERFILE_TAR="${TMPD}/containerfile.tar"
+cat > $TMPD/containerfile << EOF
+FROM $IMAGE
+EOF
+tar --format=posix -C $TMPD -cvf ${CONTAINERFILE_TAR} containerfile &> /dev/null
+
+t POST "libpod/build?dockerfile=containerfile" $CONTAINERFILE_TAR 200 \
+  .stream~"STEP 1/1: FROM $IMAGE"
+
+# Newer Docker client sets empty cacheFrom for every build command even if it is not used,
+# following commit makes sure we test such use-case. See https://github.com/containers/podman/pull/16380
+#TODO: This test should be extended when buildah's cache-from and cache-to functionally supports
+# multiple remote-repos
+t POST "libpod/build?dockerfile=containerfile&cachefrom=[]" $CONTAINERFILE_TAR 200 \
+  .stream~"STEP 1/1: FROM $IMAGE"
+
+# With -q, all we should get is image ID. Test both libpod & compat endpoints.
+t POST "libpod/build?dockerfile=containerfile&q=true" $CONTAINERFILE_TAR 200 \
+  .stream~'^[0-9a-f]\{64\}$'
+t POST "build?dockerfile=containerfile&q=true" $CONTAINERFILE_TAR 200 \
+  .stream~'^[0-9a-f]\{64\}$'
+
+# Override content-type and confirm that libpod rejects, but compat accepts
+t POST "libpod/build?dockerfile=containerfile" $CONTAINERFILE_TAR application/json 400 \
+  .cause='Content-Type: application/json is not supported. Should be "application/x-tar"'
+t POST "build?dockerfile=containerfile" $CONTAINERFILE_TAR application/json 200 \
+  .stream~"STEP 1/1: FROM $IMAGE"
+
+# Libpod: allow building from url: https://github.com/alpinelinux/docker-alpine.git and must ignore any provided tar
+t POST "libpod/build?remote=https%3A%2F%2Fgithub.com%2Falpinelinux%2Fdocker-alpine.git" $CONTAINERFILE_TAR 200 \
+  .stream~"STEP 1/5: FROM alpine:"
+
+# Build api response header must contain Content-type: application/json
+t POST "build?dockerfile=containerfile" $CONTAINERFILE_TAR application/json 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*application/json.*" "header does not contain application/json"
+
+# Build api response header must contain Content-type: application/json
+t POST "build?dockerfile=containerfile&pull=1" $CONTAINERFILE_TAR application/json 200
+response_headers=$(cat "$WORKDIR/curl.headers.out")
+like "$response_headers" ".*application/json.*" "header does not contain application/json"
+
+# PR #12091: output from compat API must now include {"aux":{"ID":"sha..."}}
+t POST "build?dockerfile=containerfile" $CONTAINERFILE_TAR 200 \
+  '.aux|select(has("ID")).ID~^sha256:[0-9a-f]\{64\}$'
+
+t POST libpod/images/prune 200
+t POST libpod/images/prune 200 length=0 []
+
+# compat api must allow loading tar which contain multiple images
+podman pull quay.io/libpod/alpine:latest quay.io/libpod/busybox:latest
+podman save -o ${TMPD}/test.tar quay.io/libpod/alpine:latest quay.io/libpod/busybox:latest
+t POST "images/load" ${TMPD}/test.tar 200 \
+  .stream="Loaded image: quay.io/libpod/busybox:latest,quay.io/libpod/alpine:latest"
+t GET libpod/images/quay.io/libpod/alpine:latest/exists  204
+t GET libpod/images/quay.io/libpod/busybox:latest/exists  204
+
+CONTAINERFILE_WITH_ERR_TAR="${TMPD}/containerfile.tar"
+cat > $TMPD/containerfile << EOF
+FROM $IMAGE
+RUN echo 'some error' >&2
+EOF
+tar --format=posix -C $TMPD -cvf ${CONTAINERFILE_WITH_ERR_TAR} containerfile &> /dev/null
+t POST "/build?q=1&dockerfile=containerfile" $CONTAINERFILE_WITH_ERR_TAR 200
+if [[ $output == *"some error"* ]];then
+    _show_ok 0 "compat quiet build" "[should not contain 'some error']" "$output"
+else
+    _show_ok 1 "compat quiet build"
+fi
+
+# Do not try a real build here to tests the comma separated syntax as emulation
+# is slow and may not work everywhere, checking the error is good enough to know
+# we parsed it correctly on the server I would say
+t POST "/build?q=1&dockerfile=containerfile&platform=linux/amd64,test" $CONTAINERFILE_WITH_ERR_TAR 400 \
+  .message="failed to parse query parameter 'platform': \"test\": invalid platform syntax for --platform=\"test\": \"test\": unknown operating system or architecture: invalid argument"
+
+cleanBuildTest
+
+# compat API vs libpod API event differences:
+# on image removal, libpod produces 'remove' events.
+# compat produces 'delete' events.
+podman image build -t test:test -<<EOF
+from $IMAGE
+EOF
+
+START=$(date +%s)
+
+t DELETE libpod/images/test:test 200
+# HACK HACK HACK There is a race around events being added to the journal
+# This sleep seems to avoid the race.
+# If it fails and begins to flake, investigate a retry loop.
+sleep 1
+# FIXME 2024-05-30 #22726: when running with a local cache registry, DELETE
+# sometimes produces 5-6 events instead of the desired only-one.
+t GET "libpod/events?stream=false&since=$START"  200  \
+  'select(.status | contains("remove")).Actor.Attributes.name~.*localhost/test:test'
+t GET "events?stream=false&since=$START"  200  \
+  'select(.status | contains("delete")).Actor.Attributes.name~.*localhost/test:test'
+
+# Test image removal with `noprune={true,false}`
+podman create --name c_test1 $IMAGE true
+podman commit -q c_test1 i_test1
+podman create --name c_test2 i_test1 true
+podman commit -q c_test2 i_test2
+podman create --name c_test3 i_test2 true
+podman commit -q c_test3 i_test3
+
+t GET libpod/images/i_test1/json 200
+iid_test1=$(jq -r '.Id' <<<"$output")
+t GET libpod/images/i_test2/json 200
+iid_test2=$(jq -r '.Id' <<<"$output")
+t GET libpod/images/i_test3/json 200
+iid_test3=$(jq -r '.Id' <<<"$output")
+
+podman untag $iid_test1
+podman untag $iid_test2
+
+podman rm -af
+
+# Deleting i_test3 with --no-prune must not remove _2 and _1.
+t DELETE images/$iid_test3?noprune=true  200
+t GET libpod/images/i_test3/exists    404
+t GET libpod/images/$iid_test1/exists 204
+t GET libpod/images/$iid_test2/exists 204
+
+t DELETE images/$iid_test2?noprune=false 200
+t GET libpod/images/$iid_test1/exists 404
+t GET libpod/images/$iid_test2/exists 404
+
+# If the /resolve tests fail, make sure to use ../registries.conf for the
+# podman-service.
+
+# With an alias, we only get one item back.
+t GET libpod/images/podman-desktop-test123:this/resolve 200 \
+  .Names[0]="florent.fr/will/like:this"
+
+# If no alias matches, we will get a candidate for each unqualified-search
+# registry.
+t GET libpod/images/no-alias-for-sure/resolve 200 \
+  .Names[0]="docker.io/library/no-alias-for-sure:latest" \
+  .Names[1]="quay.io/no-alias-for-sure:latest" \
+  .Names[2]="registry.fedoraproject.org/no-alias-for-sure:latest"
+
+# Test invalid input.
+t GET libpod/images/noCAPITALcharAllowed/resolve 400 \
+  .cause="repository name must be lowercase"
+
+
+START=$(date +%s.%N)
+# test pull-error API response
+podman pull --retry 0 localhost:5000/idonotexist || true
+t GET "libpod/events?stream=false&since=$START"  200  \
+  .status=pull-error \
+  .Action=pull-error \
+  .Actor.Attributes.name="localhost:5000/idonotexist" \
+  .Actor.Attributes.error~".*connection refused"
+
+# test empty RepoTags and RepoDigests is an empty array
+IIDFILE=$(mktemp)
+podman image build --iidfile $IIDFILE -<<EOF
+FROM $IMAGE
+RUN :
+EOF
+
+t GET images/json 200 \
+  .[1].RepoTags=[] \
+  .[1].RepoDigests=[] \
+  .[1].Id=$(< $IIDFILE)
+
+podman rmi -f $(< $IIDFILE)
+rm -f $IIDFILE
+
+# check that SharedSize returns -1 for compat api if not set
+# and 0 (or the correct shared size) if set
+t GET images/json 200 \
+    .[0].SharedSize=-1
+t GET images/json?shared-size=true 200 \
+    .[0].SharedSize=0
+
+TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+function cleanLoad() {
+    podman rmi -a -f
+    rm -rf "${TMPD}" &> /dev/null
+}
+
+podman pull quay.io/libpod/alpine:latest quay.io/libpod/busybox:latest
+podman save -o ${TMPD}/test.tar quay.io/libpod/alpine:latest quay.io/libpod/busybox:latest
+podman rmi quay.io/libpod/alpine:latest quay.io/libpod/busybox:latest
+ABS_PATH=$( realpath "${TMPD}/test.tar" )
+t POST libpod/local/images/load?path="${ABS_PATH}" 200
+t GET libpod/images/quay.io/libpod/alpine:latest/exists  204
+t GET libpod/images/quay.io/libpod/busybox:latest/exists  204
+
+# Test with directory instead of file
+mkdir -p ${TMPD}/testdir
+t POST libpod/local/images/load?path="${TMPD}/testdir" 400
+
+cleanLoad
+
+t POST libpod/local/images/load?path="/tmp/notexisting.tar" 404
+
+t POST libpod/local/images/load?invalid=arg 400
+
+t POST libpod/local/images/load?path="" 400
+
+t POST libpod/local/images/load?path="../../../etc/passwd" 400
+
+# Test pullProgress parameter on /libpod/images/pull endpoint
+# Remove the image first to ensure we actually pull it
+podman rmi -f quay.io/libpod/alpine:latest >/dev/null 2>&1 || true
+
+# Test pullProgress=true - should return ImagePullReport format with progress info
+t POST "libpod/images/pull?reference=quay.io/libpod/alpine:latest&pullProgress=true" 200 \
+  .status~".*success.*" \
+  .stream~".*Artifact pulled successfully.*"
+
+
+# Test pullProgress=true with invalid image - should return error status
+t POST "libpod/images/pull?reference=localhost:5000/idonotexist:latest&pullProgress=true" 500 \
+  .cause~".\\+" \
+  .message~".\\+" \
+  .response="500"
+
+# Test pullProgress=true shows layer IDs during pull
+# Remove the image first to ensure we actually pull it
+podman rmi -f quay.io/libpod/alpine:latest >/dev/null 2>&1 || true
+
+# Get layer digests using skopeo inspect
+layer_digests=$(skopeo inspect -n docker://quay.io/libpod/alpine:latest | jq -r '.Layers[]' | sed 's/sha256://')
+
+# Pull image with pullProgress=true and verify layer IDs are in the stream
+t POST "libpod/images/pull?reference=quay.io/libpod/alpine:latest&pullProgress=true" 200 \
+  .status~".*success.*" \
+  .stream~".*Artifact pulled successfully.*"
+
+# Verify each layer digest appears in the stream output
+for layer_id in $layer_digests; do
+    like "$output" ".*$layer_id.*" "pullProgress shows layer ID $layer_id"
+done
+
+# Clean up
+podman rmi -f quay.io/libpod/alpine:latest >/dev/null 2>&1 || true
+
+# vim: filetype=sh

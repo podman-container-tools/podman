@@ -1,0 +1,5 @@
+## assert-podman-final-args /etc/containers/systemd
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=/etc/containers/systemd

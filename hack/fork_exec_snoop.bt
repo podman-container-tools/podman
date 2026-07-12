@@ -1,0 +1,172 @@
+#!/usr/bin/env bpftrace
+
+//   Copyright 2022 Nicolas Hillegeer <nicolas@hillegeer.com>
+//   Modifications Copyright 2023 Paul Wallrabe <pwallrab@redhat.com>
+//
+//   Licensed under the Apache License, Version 2.0 (the "License");
+//   you may not use this file except in compliance with the License.
+//   You may obtain a copy of the License at
+//
+//       http://www.apache.org/licenses/LICENSE-2.0
+//
+//   Unless required by applicable law or agreed to in writing, software
+//   distributed under the License is distributed on an "AS IS" BASIS,
+//   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//   See the License for the specific language governing permissions and
+//   limitations under the License.
+//
+//   This file is based on the work of Nicolas Hillegeer <nicolas@hillegeer.com>
+//   and has been modified by Paul Wallrabe <pwallrab@redhat.com> to add support
+//   for normalized timestamps and implemented a trigger to start printing to
+//   console once a certain condition is reached specific to Podman.
+//
+// Traces processes that are created using the fork/exec model.
+// Output is printed after the first command containing "podman" is executed.
+//
+// Usage: sudo ./fork_exec_snoop.bt
+//
+// TRACEPOINT: This field represents the name of the tracepoint.
+// T: This field denotes the timestamp in μs when the tracepoint was triggered.
+// DT: This field shows the delta time between enter and exit tracepoints in μs.
+// PID: This field represents the Process ID.
+// PPID: This field stands for the Parent Process ID.
+// TGID: This field indicates the Thread Group ID.
+// PTGID: This field denotes the Parent Thread Group ID.
+// CMD: This field represents the command name (executable name) and args.
+//
+// Limitations: The output contains entries from all processes using fork/exec.
+
+BEGIN {
+    printf("%-25s %-12s %-12s %-8s %-8s %-8s %-8s %s\n",
+        "TRACEPOINT",
+        "T",
+        "DT",
+        "PID",
+        "PPID",
+        "TGID",
+        "PTGID",
+        "CMD"
+    );
+
+    @time_divisor = (uint64) 1000;
+}
+
+tracepoint:syscalls:sys_enter_clone
+{
+    $time = nsecs;
+    @time_start_fork_parent[tid] = $time;
+    @time_start_fork_child[tid] = $time;
+
+    if (@time_normalized)
+    {
+        printf("%-25s %-12u %-12s %-8d %-8d %-8d %-8d %s\n",
+            "syscalls:sys_enter_clone",
+            ($time - @time_normalized) / @time_divisor,
+            "",
+            curtask->pid,
+            curtask->parent->pid,
+            curtask->tgid,
+            curtask->parent->tgid,
+            comm
+        );
+    }
+}
+
+tracepoint:syscalls:sys_exit_clone
+/args->ret == 0 && @time_start_fork_child[curtask->parent->pid]/
+{
+    $time = nsecs;
+    $ptid = curtask->parent->pid;
+
+    if (@time_normalized)
+    {
+        printf("%-25s %-12u %-12u %-8d %-8d %-8d %-8d %s\n",
+            "syscalls:sys_exit_clone",
+            ($time - @time_normalized) / @time_divisor,
+            ($time - @time_start_fork_child[$ptid]) / @time_divisor,
+            curtask->pid,
+            curtask->parent->pid,
+            curtask->tgid,
+            $ptid,
+            comm
+        );
+    }
+
+    delete(@time_start_fork_child[$ptid]);
+}
+
+tracepoint:syscalls:sys_exit_clone
+/args->ret > 0 && @time_start_fork_parent[tid]/
+{
+    $time = nsecs;
+
+    if (@time_normalized)
+    {
+        printf("%-25s %-12u %-12u %-8d %-8d %-8d %-8d %s\n",
+            "syscalls:sys_exit_clone",
+            ($time - @time_normalized) / @time_divisor,
+            ($time - @time_start_fork_parent[tid]) / @time_divisor,
+            curtask->pid,
+            curtask->parent->pid,
+            curtask->tgid,
+            curtask->parent->tgid,
+            comm
+        );
+    }
+
+    delete(@time_start_fork_parent[tid]);
+}
+
+tracepoint:syscalls:sys_enter_exec*
+{
+    $time = nsecs;
+    @time_start_exec[tid] = $time;
+
+    if (@time_normalized)
+    {
+        printf("%-25s %-12u %-12s %-8d %-8d %-8d %-8d %s",
+            "syscalls:sys_enter_exec*",
+            ($time - @time_normalized) / @time_divisor,
+            "",
+            curtask->pid,
+            curtask->parent->pid,
+            curtask->tgid,
+            curtask->parent->tgid,
+            ""
+        );
+        join(args->argv);
+    }
+}
+
+tracepoint:syscalls:sys_exit_exec*
+/@time_start_exec[pid]/
+{
+    $time = nsecs;
+
+    if (!@time_normalized && strncmp("podman", comm, 6) == 0)
+    {
+        @time_normalized = $time;
+    }
+
+    if (@time_normalized)
+    {
+        printf("%-25s %-12u %-12u %-8d %-8d %-8d %-8d %s\n",
+            "syscalls:sys_exit_exec*",
+            ($time - @time_normalized) / @time_divisor,
+            ($time - @time_start_exec[tid]) / @time_divisor,
+            curtask->pid,
+            curtask->parent->pid,
+            curtask->tgid,
+            curtask->parent->tgid,
+            comm
+        );
+    }
+
+    delete(@time_start_exec[tid]);
+}
+
+END
+{
+    delete(@time_divisor);
+    delete(@time_normalized);
+}

@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest an idea for this project
+labels: ["kind/feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request!
+  - type: textarea
+    id: feature_description
+    attributes:
+      label: Feature request description
+      description: Please explain your feature request and if it is related to a problem
+      value: "A clear and concise description of what the feature request is about."
+    validations:
+      required: true
+  - type: textarea
+    id: potential_solution
+    attributes:
+      label: Suggest potential solution
+      description: Please explain if you can suggest any potential solution
+      value: "A clear and concise description of what you want to happen."
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Have you considered any alternatives?
+      description: Please explain what alternatives you have tried.
+      value: "A clear and concise description of any alternative solutions or features you've considered."
+    validations:
+      required: false
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Please add any context to this feature request
+      value: "Add any other context or screenshots about the feature request here."
+    validations:
+      required: false

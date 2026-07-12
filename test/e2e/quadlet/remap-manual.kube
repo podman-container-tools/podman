@@ -1,0 +1,10 @@
+## assert-failed
+## assert-stderr-contains "RemapUsers=manual is not supported"
+
+[Kube]
+Yaml=/opt/k8s/deployment.yml
+RemapUsers=manual
+RemapUid=0:10000:10
+RemapUid=10:20000:10
+RemapGid=0:10000:10
+RemapGid=10:20000:10

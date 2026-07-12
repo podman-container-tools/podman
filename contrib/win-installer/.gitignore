@@ -1,0 +1,13 @@
+artifacts/
+current/
+docs/
+en-US/
+fetch/
+podman-*setup.exe
+engine.exe
+obj/
+shasums
+*.wixobj
+*.wixpdb
+*.log
+*.msi

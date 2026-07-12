@@ -1,0 +1,180 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:PanelSW="http://schemas.panel-sw.co.il/wix/WixExtension" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+	<?ifndef VERSION?>
+	<?error VERSION must be defined via command line argument?>
+	<?endif?>
+
+	<?ifdef env.UseGVProxy?>
+	<?define UseGVProxy = "$(env.UseGVProxy)"?>
+	<?else?>
+	<?define UseGVProxy = ""?>
+	<?endif?>
+
+	<Package Name="Podman CLI" Manufacturer="Podman" Version="$(VERSION)" UpgradeCode="a6a9dd9c-0732-44ba-9279-ffe22ea50671" Scope="perUserOrMachine">
+		<Media Id="1" Cabinet="Podman.cab" EmbedCab="yes" />
+		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." Schedule="afterInstallExecute" />
+		<Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+			<RegistrySearch Id="BuildNumberSearch" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
+		</Property>
+		<Launch Condition="Installed OR (WINDOWSBUILDNUMBER &gt;= 19041)"
+				Message="Windows 10 (19041) or later is required to run this application." />
+		<!--
+			The installer fails during installation if the legacy Podman
+			registry key is found. Otherwise the user would end up with two
+			installations of Podman. This is because it's not possible to
+			do an update from a machine scope bundle (the legacy installer) to a
+			dual scope package (this MSI).
+		-->
+		<Property Id="LEGACY_PODMAN_REGISTRY_KEY_FOUND">
+			<RegistrySearch Id="LegacyPodmanRegistryKeySearch"
+							Root="HKLM"
+							Key="SOFTWARE\Red Hat\Podman"
+							Name="InstallDir"
+							Type="raw" />
+		</Property>
+		<Launch Condition="Installed OR (NOT LEGACY_PODMAN_REGISTRY_KEY_FOUND)"
+		Message="Found an older version of Podman that is not compatible with
+this installer.&#13;&#10;&#13;&#10;Uninstall it using 'Add or Remove
+Programs' and retry. During uninstallation, all containers, images, machines,
+and other data will be preserved." />
+		<util:QueryNativeMachine />
+		<Launch Condition='"$(sys.BUILDARCH)" ~= "x64" IMP WIX_NATIVE_MACHINE = 34404'
+				Message="This version of the [ProductName] installer can only run on $(sys.BUILDARCH) machines." />
+		<Property Id="DiskPrompt" Value="Podman $(VERSION) Installation" />
+		<Property Id="MACHINE_PROVIDER" Value="wsl" />
+
+		<Property Id="MACHINE_PROVIDER_CONFIG_FILE_PATH">
+			<DirectorySearch Id="CONFDIRFolderSearch" Path="[CONFDIR]">
+				<FileSearch Name="99-podman-machine-provider.conf" />
+			</DirectorySearch>
+		</Property>
+
+		<!--
+			ProgramFiles6432Folder corresponds to %ProgramFiles% when the scope
+			is machine and to %LocalAppData%\Programs when the scope is user.
+			https://learn.microsoft.com/en-us/windows/win32/msi/single-package-authoring
+		-->
+		<Property Id="MAIN_EXECUTABLE_FILE_PATH">
+			<DirectorySearch Id="ProgramFiles64FolderSearch" Path="[ProgramFiles64Folder]">
+				<DirectorySearch Id="PodmanFolderSearch" Path="Podman">
+					<FileSearch Name="podman.exe" />
+				</DirectorySearch>
+			</DirectorySearch>
+		</Property>
+
+		<SetProperty Id="CONFDIR"
+				Action="SetCONFDIR_User"
+				Value="[AppDataFolder]containers\containers.conf.d"
+				Before="AppSearch"
+				Condition="MSIINSTALLPERUSER=1 AND NOT IS_UPGRADE"
+				Sequence="first" />
+
+		<SetProperty Id="CONFDIR"
+				Action="SetCONFDIR_Machine"
+				Value="[CommonAppDataFolder]containers\containers.conf.d"
+				Before="AppSearch"
+				Condition="ALLUSERS=1 AND NOT MSIINSTALLPERUSER=1 AND NOT IS_UPGRADE"
+				Sequence="first" />
+
+		<!--
+			Property CREATE_MACHINE_PROVIDER_CONFIG_FILE is set at runtime and used as the condition to run the `MachineProviderConfigFile` Component:
+			The machine provider config file is created (or is not deleted if it already exist) if these conditions are met:
+				- The user hasn't set property `SKIP_CONFIG_FILE_CREATION` to 1
+				- The main executable file (<PFILESDIR>/Podman/podman.exe) doesn't exist or, if it exists, the machine provider config file exists
+		-->
+		<SetProperty Id="CREATE_MACHINE_PROVIDER_CONFIG_FILE"
+			After="AppSearch"
+			Value="1"
+			Sequence="first"
+			Condition="(NOT (SKIP_CONFIG_FILE_CREATION = 1)) AND ((NOT MAIN_EXECUTABLE_FILE_PATH) OR (MACHINE_PROVIDER_CONFIG_FILE_PATH))" />
+
+		<!--
+			Property HIDE_PROVIDER_CHOICE is set at runtime and used as the condition to hide the Machine Provider
+			choice from the MSI GUI (the Radio Button Group and other related controls):
+			The machine provider choice isn't shown to the user if one of these conditions are met:
+				- The user has set the property `SKIP_CONFIG_FILE_CREATION` to 1
+				- The machine provider config file (<CONFDIR>/containers/containers.conf.d/99-podman-machine-provider.conf) exists
+				- The main executable file (<PFILESDIR>/Podman/podman.exe) exists
+		-->
+		<SetProperty Id="HIDE_PROVIDER_CHOICE"
+			After="AppSearch"
+			Value="1"
+			Sequence="first"
+			Condition="(SKIP_CONFIG_FILE_CREATION = 1) OR (MACHINE_PROVIDER_CONFIG_FILE_PATH) OR (MAIN_EXECUTABLE_FILE_PATH)" />
+
+		<CustomAction Id="OpenGuide" DllEntry="WixShellExec" Impersonate="yes" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" />
+		<util:BroadcastEnvironmentChange />
+		<Feature Id="Complete" Level="1">
+			<ComponentRef Id="INSTALLDIR_Component" />
+			<ComponentRef Id="EnvEntriesComponent" />
+			<ComponentRef Id="MainExecutable" />
+			<ComponentRef Id="WinSshProxyExecutable" />
+			<?if $(var.UseGVProxy) != Skip?>
+			<ComponentRef Id="GvProxyExecutable" />
+			<?endif?>
+			<ComponentRef Id="GuideHTMLComponent" />
+			<ComponentGroupRef Id="ManFiles" />
+		</Feature>
+		<Feature Id="MachineProviderConfig" Level="1">
+			<ComponentRef Id="MachineProviderConfigFile" />
+		</Feature>
+
+		<Icon Id="podman.ico" SourceFile="resources/podman-logo.ico" />
+		<Property Id="ARPPRODUCTICON" Value="podman.ico" />
+		<Property Id="WixShellExecTarget" Value="[#GuideHTMLFile]" />
+		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Show Getting Started Guide" />
+		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+		<WixVariable Id="WixUIBannerBmp" Value="resources\podman-banner.png" />
+		<WixVariable Id="WixUIDialogBmp" Value="resources\podman-dialog.png" />
+		<UIRef Id="PodmanUI" />
+		<UI>
+			<Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="OpenGuide" Condition="(WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1) AND (NOT Installed) AND (NOT UpdateStarted)" />
+		</UI>
+
+		<!--
+			ProgramFiles6432Folder corresponds to %ProgramFiles% when the scope
+			is machine and to %LocalAppData%\Programs when the scope is user.
+			https://learn.microsoft.com/en-us/windows/win32/msi/single-package-authoring
+		-->
+		<StandardDirectory Id="ProgramFiles6432Folder">
+			<Directory Id="INSTALLDIR" Name="Podman">
+				<Component Id="INSTALLDIR_Component" Guid="14B310C4-9B5D-4DA5-ADF9-B9D008E4CD82" Bitness="always64">
+					<CreateFolder />
+					<RegistryKey Root="HKMU" Key="SOFTWARE\Podman">
+						<RegistryValue Name="InstallDir" Value="[INSTALLDIR]" Type="string" />
+					</RegistryKey>
+				</Component>
+				<Component Id="MainExecutable" Guid="73752F94-6589-4C7B-ABED-39D655A19714" Bitness="always64">
+					<File Id="MainExecutableFile" Name="podman.exe" Source="..\artifacts\podman.exe" KeyPath="yes" />
+				</Component>
+				<Component Id="WinSshProxyExecutable" Guid="0DA730AB-2F97-40E8-A8FC-356E88EAA4D2" Bitness="always64">
+					<File Id="WinSshProxyExecutableFile" Name="win-sshproxy.exe" Source="..\artifacts\win-sshproxy.exe" KeyPath="yes" />
+				</Component>
+				<?if $(var.UseGVProxy) != Skip?>
+				<Component Id="GvProxyExecutable" Guid="1A4A2975-AD2D-44AA-974B-9B343C098333" Bitness="always64">
+					<File Id="GvProxyExecutableFile" Name="gvproxy.exe" Source="..\artifacts\gvproxy.exe" KeyPath="yes" />
+				</Component>
+				<?endif?>
+				<Component Id="GuideHTMLComponent" Guid="8B23C76B-F7D4-4030-8C46-1B5729E616B5" Bitness="always64">
+					<File Id="GuideHTMLFile" Name="welcome-podman.html" Source="..\docs\podman-for-windows.html" KeyPath="yes" />
+				</Component>
+			</Directory>
+		</StandardDirectory>
+		<!--
+			The following code creates the `<CONFDIR>/containers/containers.conf.d` directory
+			CONFDIR is the logical target directory whose path will be set by the CONFDIR property.
+		-->
+		<Directory Id="CONFDIR">
+			<Component Id="MachineProviderConfigFile" Guid="C32C0040-D9AF-4155-AC7E-465B63B6BE3B" Condition="CREATE_MACHINE_PROVIDER_CONFIG_FILE" Transitive="true">
+				<CreateFolder />
+				<IniFile Id="MachineProviderConfigFile" Action="createLine" Directory="CONFDIR" Section="machine" Name="99-podman-machine-provider.conf" Key="provider" Value="&quot;[MACHINE_PROVIDER]&quot;"/>
+			</Component>
+		</Directory>
+		<Directory Id="EnvEntries">
+			<Component Id="EnvEntriesComponent" Guid="b662ec43-0e0e-4018-8bf3-061904bb8f5b" Bitness="always64">
+				<CreateFolder />
+				<Environment Id="UpdatePath" Name="PATH" Action="set" Permanent="no" Part="last" Value="[INSTALLDIR]" />
+			</Component>
+		</Directory>
+  </Package>
+</Wix>

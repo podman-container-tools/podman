@@ -1,0 +1,4 @@
+## assert-podman-final-args "test-network"
+
+[Network]
+NetworkName=test-network

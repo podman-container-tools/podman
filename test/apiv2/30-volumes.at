@@ -1,0 +1,196 @@
+# -*- sh -*-
+#
+# volume-related tests
+#
+
+## create volume
+t GET libpod/info 200
+volumepath=$(jq -r ".store.volumePath" <<<"$output")
+t POST libpod/volumes/create name=foo1  201 \
+    .Name=foo1 \
+    .Driver=local \
+    .Mountpoint=$volumepath/foo1/_data \
+    .CreatedAt~[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}.* \
+    .Labels={} \
+    .Options={}
+# TODO(mwhahaha): there might be a bug here since options is null and not {}
+t POST volumes/create 201 \
+    .Name~[0-9a-f]\\{64\\} \
+    .Driver=local \
+    .Mountpoint~$volumepath/[0-9a-f]\\{64\\}/_data \
+    .CreatedAt~[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}.* \
+    .Labels={} \
+    .Options=null
+t POST libpod/volumes/create 201
+t POST libpod/volumes/create \
+  Name=foo2 \
+  Label='{"testlabel":"testonly"}' \
+  Options='{"type":"tmpfs","o":"nodev,noexec"}}' \
+  201 \
+  .Name=foo2 \
+  .Labels.testlabel=testonly \
+  .Options.type=tmpfs \
+  .Options.o=nodev,noexec
+t POST libpod/volumes/create \
+  Name=foo3 \
+  Label='{"testlabel":""}' \
+  Options='{"type":"tmpfs","o":"nodev,noexec"}}' \
+  201 \
+  .Name=foo3 \
+  .Labels.testlabel="" \
+  .Options.type=tmpfs \
+  .Options.o=nodev,noexec
+t POST libpod/volumes/create \
+  Name=foo4 \
+  Label='{"testlabel1":"testonly"}' \
+  Options='{"type":"tmpfs","o":"nodev,noexec"}}' \
+  201 \
+  .Name=foo4 \
+  .Labels.testlabel1=testonly \
+  .Options.type=tmpfs \
+  .Options.o=nodev,noexec
+
+# Negative test
+# We have created a volume named "foo1"
+t POST libpod/volumes/create name=foo1 500 \
+    .cause="volume already exists" \
+    .message~.* \
+    .response=500
+
+## list volume
+t GET libpod/volumes/json 200 \
+    .[0].Name~.* \
+    .[0].Mountpoint~.* \
+    .[0].CreatedAt~[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}.*
+t GET libpod/volumes/json?filters='{"name":["foo1"]}' 200 \
+  length=1 \
+  .[0].Name=foo1
+t GET libpod/volumes/json?filters='{"name":%20["foo1",%20"foo2"]}' 200 \
+  length=2 \
+  .[0].Name=foo1 \
+  .[1].Name=foo2
+t GET libpod/volumes/json?filters='{"name":["nonexistent"]}' 200 length=0
+t GET libpod/volumes/json?filters='{"label":["testlabel"]}' 200 length=2
+t GET libpod/volumes/json?filters='{"label":["testlabel=testonly"]}' 200 length=1
+t GET libpod/volumes/json?filters='{"label":["testlabel1=testonly"]}' 200 length=1
+
+## inspect volume
+t GET libpod/volumes/foo1/json 200 \
+    .Name=foo1 \
+    .Mountpoint=$volumepath/foo1/_data \
+    .CreatedAt~[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}.*
+t GET libpod/volumes/nonexistent/json 404 \
+    .cause="no such volume" \
+    .message~.* \
+    .response=404
+
+## rename volume
+t POST libpod/volumes/foo2/rename?newName=foo2-renamed 204
+t GET libpod/volumes/foo2/json 404
+t GET libpod/volumes/foo2-renamed/json 200 \
+    .Name=foo2-renamed \
+    .Mountpoint=$volumepath/foo2-renamed/_data
+
+## Remove volumes
+t DELETE libpod/volumes/foo1 204
+#After remove foo1 volume, this volume should not exist
+t GET libpod/volumes/foo1/json 404
+# Negative test
+t DELETE libpod/volumes/foo1 404 \
+    .cause="no such volume" \
+    .message~.* \
+    .response=404
+
+#compat api list volumes sanity checks
+t GET volumes?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET volumes?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+#libpod api list volumes sanity checks
+t GET libpod/volumes/json?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t GET libpod/volumes/json?filters='{"label":["testl' 500 \
+    .cause="unexpected end of JSON input"
+
+# Prune volumes - bad filter input
+t POST volumes/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+t POST libpod/volumes/prune?filters='garb1age}' 500 \
+    .cause="invalid character 'g' looking for beginning of value"
+
+## Prune volumes with label matching 'testlabel1=testonly'
+t POST libpod/volumes/prune?filters='{"label":["testlabel1=testonly"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testlabel1=testonly"]}' 200 length=0
+
+## Prune volumes with label illformed label
+t POST volumes/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+t POST libpod/volumes/prune?filters='{"label":["tes' 500 \
+    .cause="unexpected end of JSON input"
+
+## Prune volumes with label matching 'testlabel'
+t POST libpod/volumes/prune?filters='{"label":["testlabel"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testlabel"]}' 200 length=0
+
+# libpod api: do not use list filters for prune
+t POST libpod/volumes/prune?filters='{"name":["anyname"]}' 500 \
+    .cause="\"name\" is an invalid volume filter"
+t POST libpod/volumes/prune?filters='{"driver":["anydriver"]}' 500 \
+    .cause="\"driver\" is an invalid volume filter"
+t POST libpod/volumes/prune?filters='{"scope":["anyscope"]}' 500 \
+    .cause="\"scope\" is an invalid volume filter"
+
+# compat api: do not use list filters for prune
+t POST volumes/prune?filters='{"name":["anyname"]}' 500 \
+    .cause="\"name\" is an invalid volume filter"
+t POST volumes/prune?filters='{"driver":["anydriver"]}' 500 \
+    .cause="\"driver\" is an invalid volume filter"
+t POST volumes/prune?filters='{"scope":["anyscope"]}' 500 \
+    .cause="\"scope\" is an invalid volume filter"
+
+## Prune volumes using until filter
+t POST libpod/volumes/create \
+  Name=foo5 \
+  Label='{"testuntil":""}' \
+  Options='{"type":"tmpfs","o":"nodev,noexec"}}' \
+  201 \
+  .Name=foo5 \
+  .Labels.testuntil="" \
+  .Options.type=tmpfs \
+  .Options.o=nodev,noexec
+
+# with date way back in the past, volume should not be deleted
+t POST libpod/volumes/prune?filters='{"until":["500000"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testuntil"]}' 200 length=1
+
+# with date far in the future, volume should be deleted
+t POST libpod/volumes/prune?filters='{"until":["5000000000"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testuntil"]}' 200 length=0
+
+t POST libpod/volumes/create \
+  Name=foo6 \
+  Label='{"testuntilcompat":""}' \
+  Options='{"type":"tmpfs","o":"nodev,noexec"}}' \
+  201 \
+  .Name=foo6 \
+  .Labels.testuntilcompat="" \
+  .Options.type=tmpfs \
+  .Options.o=nodev,noexec
+
+# with date way back in the past, volume should not be deleted (compat api)
+t POST volumes/prune?filters='{"until":["500000"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testuntilcompat"]}' 200 length=1
+t GET libpod/volumes/json?filters='{"until":["500000"]}' 200 length=0
+t GET libpod/volumes/json?filters='{"until":["5000000000"]}' 200 length=1
+
+# with date far in the future, volume should be deleted (compat api)
+t POST volumes/prune?filters='{"until":["5000000000"]}' 200
+t GET libpod/volumes/json?filters='{"label":["testuntilcompat"]}' 200 length=0
+
+## Prune volumes
+t POST libpod/volumes/prune 200
+#After prune volumes, there should be no volume existing
+t GET libpod/volumes/json 200 length=0
+
+# vim: filetype=sh

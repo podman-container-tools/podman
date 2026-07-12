@@ -1,0 +1,7 @@
+## assert-podman-args "--network" "container:systemd-basic"
+## assert-key-is "Unit" "Requires" "basic.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+
+[Container]
+Image=localhost/imagename
+Network=basic.container

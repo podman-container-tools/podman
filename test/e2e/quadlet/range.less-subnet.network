@@ -1,0 +1,7 @@
+## assert-failed
+## assert-stderr-contains "cannot set more ranges than subnets"
+
+[Network]
+Subnet=192.168.1.0/24
+IPRange=192.168.1.0/32
+IPRange=192.168.1.127/32

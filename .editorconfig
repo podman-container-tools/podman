@@ -1,0 +1,22 @@
+# See https://EditorConfig.org
+
+# This is a top-most EditorConfig file.
+root = true
+
+# Ignore any "vendor" directories.
+[**/vendor/**]
+ignore = true
+
+# Bash, bats, and sh files use 4 spaces for indentation.
+[*.{bash,bats,sh}]
+indent_style = space
+indent_size = 4
+space_redirects = true
+
+# This is for shell scripts with shebang but no extensions.
+# Not yes supported by editorconfig[1], only by shfmt.
+# https://github.com/editorconfig/editorconfig/issues/404
+[[shell]]
+indent_style = space
+indent_size = 4
+space_redirects = true

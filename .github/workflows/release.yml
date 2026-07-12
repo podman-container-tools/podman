@@ -1,0 +1,225 @@
+name: Release
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to build and upload (e.g. "v9.8.7")'
+        required: true
+      buildonly:
+        description: 'Build only: Do not create release'
+        default: "true"  # 'choice' type requires string value
+        type: choice
+        options:
+          - "true"  # Must be quoted string, boolean value not supported.
+          - "false"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.repository == 'podman-container-tools/podman'
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Determine Version
+      id: getversion
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        if [[ -z "${INPUT_VERSION}" ]]
+        then
+              VERSION=${GITHUB_REF_NAME}
+        else
+              VERSION=${INPUT_VERSION}
+        fi
+        if ! grep -Eq 'v[0-9]+(\.[0-9]+(\.[0-9]+(-.+)?)?)?$' <<<"$VERSION"
+          then
+            echo "Unable to parse release version '$VERSION' from github event JSON, or workflow 'version' input."
+            exit 1
+          fi
+
+          if grep -Eq '.+-dev$' <<<"$VERSION"
+          then
+            echo "Refusing to process a "-dev" version '$VERSION'"
+            exit 1
+          fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "::notice::Building $VERSION"
+    - name: Determine release
+      id: buildonly
+      env:
+        INPUT_BUILDONLY: ${{ inputs.buildonly }}
+      run: |
+        # The 'tag' trigger will not have a 'buildonly' input set. Handle
+        # this case in a readable/maintainable way.
+        if [[ -z "${INPUT_BUILDONLY}" ]]
+        then
+          BUILDONLY=false
+        else
+          BUILDONLY=${INPUT_BUILDONLY}
+        fi
+        echo "buildonly=$BUILDONLY" >> $GITHUB_OUTPUT
+        echo "::notice::This will be build-only: $BUILDONLY"
+    outputs:
+      version: ${{ steps.getversion.outputs.version }}
+      buildonly: ${{ steps.buildonly.outputs.buildonly }}
+
+  build-artifacts:
+    name: Build Artifacts
+    uses: ./.github/workflows/release-build-artifacts.yml
+    needs: check
+    with:
+      version: ${{ needs.check.outputs.version }}
+    secrets:
+      MACOS_APPLICATION_CERT: ${{ secrets.MACOS_APPLICATION_CERT }}
+      MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+      MACOS_INSTALLER_CERT: ${{ secrets.MACOS_INSTALLER_CERT }}
+      MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+      MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+      MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+      MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+      AZ_CERT_NAME: ${{ secrets.AZ_CERT_NAME }}
+      AZ_VAULT_ID: ${{ secrets.AZ_VAULT_ID }}
+      AZ_APP_ID: ${{ secrets.AZ_APP_ID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_CLIENT_SECRET: ${{ secrets.AZ_CLIENT_SECRET }}
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: needs.check.outputs.buildonly == 'false'
+    needs: [check, build-artifacts]
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{needs.check.outputs.version}}
+    steps:
+    - name: Checkout Version
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        ref: ${{needs.check.outputs.version}}
+        persist-credentials: false
+    - name: Get release notes
+      run: |
+        ver="$(echo "$VERSION" | sed -e "s/^v//" -e "s/-rc.*//")"
+        releasenotes="$VERSION-release-notes.md"
+        awk -v ver=$ver '/^## / { if (p) { exit }; if ($2 == ver) { p=1; next } } p' RELEASE_NOTES.md > $releasenotes
+        if [[ -z $(grep '[^[:space:]]' $releasenotes) ]]; then
+          if [[ $VERSION != *-rc* ]]; then
+              echo "::notice:: Release does not have release notes"
+              exit 1
+          else
+          echo "This is a release candidate of Podman v$ver. Full release notes will be available with a later RC." > $releasenotes
+          fi
+        fi
+    - name: Display release notes
+      run: cat $VERSION-release-notes.md
+    - name: Download all artifacts
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+    - name: Show artifacts
+      env:
+        VERSION: ${{ needs.check.outputs.version }}
+      run: |
+        mkdir -p release-artifacts
+        mv "mac-installers-$VERSION"/* release-artifacts/
+        mv "win-msi-amd64-$VERSION"/* release-artifacts/
+        mv "win-msi-arm64-$VERSION"/* release-artifacts/
+        mv "release-artifacts-$VERSION"/* release-artifacts/
+        pushd release-artifacts
+        sha256sum * > shasums
+        popd
+    - name: Create release
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        title=$VERSION
+        if [[ $VERSION == *-rc* ]]; then
+          RC="--prerelease"
+          title="${title/rc/"RC"}"
+        else
+          # check if this version should not be marked latest
+          prevrelease=$(curl --fail --retry 3 --silent -m 10 --connect-timeout 5 "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest")
+          prevvers=$(echo "$prevrelease" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed -e "s/^v//")
+          vers=${VERSION#"v"}
+          echo "${prevvers},${vers}"
+          # sort -V -C returns 0 if args are ascending version order
+          if !(echo "${prevvers},${vers}" | tr ',' '\n' | sort -V -C)
+          then
+            LATEST="--latest=false"
+          fi
+        fi
+
+        gh release create $VERSION \
+            -t $title \
+            --notes-file $VERSION-release-notes.md \
+            --verify-tag \
+            $RC \
+            $LATEST \
+            release-artifacts/*
+
+  notification:
+    name: Email notification
+    runs-on: ubuntu-latest
+    needs: [check, release]
+    if: needs.check.outputs.buildonly == 'false'
+    steps:
+      - name: Format release email
+        id: format
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          if grep -Eq '.+-rc' <<<"$VERSION"
+          then
+            RC_PREFIX="candidate "
+          fi
+
+          echo "mail_subj=Podman ${RC_PREFIX}${VERSION} Released" >> $GITHUB_OUTPUT
+
+          cat <<EOF>email_body.txt
+          Hi all,
+
+          Podman ${RC_PREFIX}${VERSION} is now available.  You may view the full details at
+          https://github.com/${GITHUB_REPOSITORY}/releases/tag/$VERSION
+
+          Release ${RC_PREFIX}Notes:
+          --------------
+          EOF
+
+          gh release view "$VERSION" \
+            --repo "${GITHUB_REPOSITORY}" --json=body --jq '.body' >> email_body.txt
+
+      # If job fails, permit operator to observe contents in case helpful.
+      - name: Provide release e-mail contents for examination
+        run: cat email_body.txt
+      - name: Send release notification e-mail
+        # Ref: https://github.com/dawidd6/action-send-mail
+        uses: dawidd6/action-send-mail@94de994a9f6fffee200243214e17002e2920bb59 # v18
+        with:
+          server_address: ${{secrets.ACTION_MAIL_SERVER}}
+          server_port: 465
+          username: ${{secrets.ACTION_MAIL_USERNAME}}
+          password: ${{secrets.ACTION_MAIL_PASSWORD}}
+          subject: ${{ steps.format.outputs.mail_subj }}
+          to: Podman List <podman@lists.podman.io>
+          from: ${{secrets.ACTION_MAIL_SENDER}}
+          body: file://./email_body.txt
+
+  updatepodmanio:
+    name: Update podman.io
+    uses: ./.github/workflows/update-podmanio.yml
+    needs: [check, release]
+    permissions:
+      contents: write # to push to a branch
+      pull-requests: write # to read and create PRs
+    if: needs.check.outputs.buildonly == 'false'
+    secrets:
+      PODMANBOT_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+    with:
+      version: ${{ needs.check.outputs.version }}

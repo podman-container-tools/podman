@@ -1,0 +1,5 @@
+## assert-podman-args "--sdnotify=healthy"
+
+[Container]
+Image=localhost/imagename
+Notify=healthy

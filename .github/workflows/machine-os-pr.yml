@@ -1,0 +1,163 @@
+name: "Machine OS PR"
+
+on:
+  pull_request_target:
+    paths:
+      - 'version/rawversion/version.go'
+
+permissions: {}
+
+concurrency:
+  # Cancel other in-progress runs on re-pushes
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  podman-image-build-pr:
+    if: github.repository == 'podman-container-tools/podman'
+    name: Open PR on podman-machine-os
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      SHA: ${{github.event.pull_request.head.sha}}
+      UPSTREAM_MACHINE_OS: "podman-container-tools/podman-machine-os"
+      PODMAN_REPO: "podman-container-tools/podman"
+    steps:
+
+      - name: Get version
+        id: getversion
+        run: |
+          VERSION=$(curl --fail "https://raw.githubusercontent.com/$PODMAN_REPO/$SHA/version/rawversion/version.go" | sed -n 's/^const RawVersion = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\(-rc[0-9]\+\|-dev\)\?\)"$/\1/p')
+          # ignore -dev version bumps unless on main
+          if [[ -z "$VERSION" ]] ; then
+            echo "::error:: Invalid version string"
+            exit 1
+          elif [[ $VERSION == *-dev ]] ; then
+            echo "::warning:: SKIPPING: dev bump"
+          elif [[ "${GITHUB_BASE_REF}" == "main" ]] ; then
+            echo "::warning:: SKIPPING: main branch"
+          elif [[ "${GITHUB_BASE_REF}" == *-rhel ]] ; then
+            echo "::warning:: SKIPPING: rhel branch"
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check machine-os-branch
+        if: steps.getversion.outputs.update == 'true'
+        run: |
+          if ! curl --fail -s "https://api.github.com/repos/$UPSTREAM_MACHINE_OS/branches" | jq -e --arg branch "${GITHUB_BASE_REF}" '.[] | select(.name==$branch)'; then
+            echo "::error:: Release branch does not exist."
+            echo "::error:: Please push $branch to $UPSTREAM_MACHINE_OS, then re-run this task."
+            exit 1
+          fi
+
+      - name: Label
+        if: steps.getversion.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          gh pr edit --add-label do-not-merge/wait-machine-os-build "${EVENT_NUMBER}"
+
+      - name: Install wait-for-copr
+        if: steps.getversion.outputs.update == 'true'
+        run: |
+          pip3 install git+https://github.com/packit/wait-for-copr.git@main
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: steps.getversion.outputs.update == 'true'
+        id: checkout
+        with:
+          repository: podman-container-tools/podman-machine-os
+          ref: ${{github.base_ref}}
+          token: ${{secrets.PODMANBOT_TOKEN}}
+          persist-credentials: true
+
+      - name: Bump version
+        if: steps.getversion.outputs.update == 'true'
+        env:
+          EVENT_NUMBER: ${{ github.event.number }}
+          VERS: ${{steps.getversion.outputs.version}}
+        run: |
+          update=$(printf 's/export PODMAN_VERSION=".*"/export PODMAN_VERSION="%s"/g\n' "$VERS")
+          sed --sandbox -i -e "$update" podman-rpm-info-vars.sh
+          sed --sandbox -i -e "s/export PODMAN_PR_NUM=\".*\"/export PODMAN_PR_NUM=\"${EVENT_NUMBER}\"/g" podman-rpm-info-vars.sh
+          echo "Updated file:"
+          cat podman-rpm-info-vars.sh
+
+      - name: Wait for COPR build
+        if: steps.getversion.outputs.update == 'true'
+        env:
+          EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          wait-for-copr \
+          --owner packit \
+          --project "podman-container-tools-podman-${EVENT_NUMBER}" \
+          podman \
+          ${SHA::9}
+
+      - name: Push
+        if: steps.getversion.outputs.update == 'true'
+        env:
+          EVENT_NUMBER: ${{ github.event.number }}
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          # Make committer the user who triggered the action, either through cutting a release or manual trigger
+          # GitHub gives everyone a noreply email associated with their account, use that email for the sign-off
+          git config --local user.name "${GITHUB_ACTOR}"
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          bumpbranch="pr${EVENT_NUMBER}"
+          git checkout -b "$bumpbranch"
+          git add podman-rpm-info-vars.sh
+          git commit --signoff -m "Bump Podman to v${VERSION}"
+          git remote add podmanbot https://github.com/podmanbot/podman-machine-os
+          git push -f podmanbot "$bumpbranch"
+
+      - name: Check open PRs
+        id: checkpr
+        if: steps.getversion.outputs.update == 'true'
+        env:
+          EVENT_NUMBER: ${{ github.event.number }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          prs=$(gh pr list \
+            --repo "$UPSTREAM_MACHINE_OS" \
+            --head "pr${EVENT_NUMBER}" \
+            --state open \
+            --json title \
+            --jq 'length')
+          if ((prs > 0)); then
+            echo "::notice:: SKIPPING: PR already exists. Re-pushed to re-trigger build."
+          else
+            echo "openpr=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR
+        if: steps.getversion.outputs.update == 'true' && steps.checkpr.outputs.openpr == 'true'
+        id: pr
+        env:
+          EVENT_NUMBER: ${{ github.event.number }}
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+          VERSION: ${{ steps.getversion.outputs.version }}
+        run: |
+          bumpbranch="pr${EVENT_NUMBER}"
+          body=$(printf 'Triggered by https://github.com/%s/pull/%s\n\n```release-note\nRelease v%s\n```\n' \
+          "$PODMAN_REPO" "${EVENT_NUMBER}" "${VERSION}")
+          uri=`gh pr create \
+            --title "Bump Podman to v${VERSION}" \
+            --body  "$body" \
+            --head "podmanbot:$bumpbranch" \
+            --base "${GITHUB_BASE_REF}" \
+            --repo "$UPSTREAM_MACHINE_OS"`
+          echo "uri=$uri" >> "$GITHUB_OUTPUT"
+
+      - name: Comment PR link
+        if: steps.getversion.outputs.update == 'true' && steps.checkpr.outputs.openpr == 'true'
+        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+        with:
+          message: "Building images at: ${{ steps.pr.outputs.uri }}"
