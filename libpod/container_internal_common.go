@@ -230,6 +230,20 @@ func (c *Container) prepareCatatonitMount() (spec.Mount, error) {
 	return newMount, nil
 }
 
+// hasSELinuxContextOption returns true if any option in the slice is a
+// SELinux context mount option (context=, fscontext=, defcontext=, rootcontext=).
+func hasSELinuxContextOption(options []string) bool {
+	for _, o := range options {
+		if strings.HasPrefix(o, "context=") ||
+			strings.HasPrefix(o, "fscontext=") ||
+			strings.HasPrefix(o, "defcontext=") ||
+			strings.HasPrefix(o, "rootcontext=") {
+			return true
+		}
+	}
+	return false
+}
+
 // Generate spec for a container
 // Accepts a map of the container's dependencies
 func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFuncRet func(), err error) {
@@ -430,13 +444,15 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			}
 		}
 		m.Options = options
-		// For tmpfs mounts, add SELinux context mount options so that
-		// security.selinux extended attributes can be set on the tmpfs
-		// filesystem (e.g., via setfattr).  Without these options the
-		// kernel does not support xattr ops on tmpfs at all.
-		// Follow the same pattern as the /dev/shm tmpfs mount.
-		if m.Type == define.TypeTmpfs && filepath.Clean(m.Destination) != "/dev" {
-			contextType := "context"
+		// For tmpfs mounts without existing SELinux context options,
+		// add fscontext= or rootcontext= so that security.selinux
+		// extended attributes can be set via setfattr.  The tmpfs
+		// kernel driver only enables the security.* xattr handler
+		// when a SELinux context mount option is present.  Using
+		// fscontext over context allows container processes to
+		// change labels of individual files after mount.
+		if m.Type == define.TypeTmpfs && filepath.Clean(m.Destination) != "/dev" && !hasSELinuxContextOption(m.Options) {
+			contextType := "fscontext"
 			if c.config.LabelNested {
 				contextType = "rootcontext"
 			}
