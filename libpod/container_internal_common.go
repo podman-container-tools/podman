@@ -430,6 +430,20 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			}
 		}
 		m.Options = options
+		// For tmpfs mounts, add SELinux context mount options so that
+		// security.selinux extended attributes can be set on the tmpfs
+		// filesystem (e.g., via setfattr).  Without these options the
+		// kernel does not support xattr ops on tmpfs at all.
+		// Follow the same pattern as the /dev/shm tmpfs mount.
+		if m.Type == define.TypeTmpfs && filepath.Clean(m.Destination) != "/dev" {
+			contextType := "context"
+			if c.config.LabelNested {
+				contextType = "rootcontext"
+			}
+			if labelOpt := label.FormatMountLabelByType("", c.MountLabel(), contextType); labelOpt != "" {
+				m.Options = append(m.Options, labelOpt)
+			}
+		}
 	}
 
 	c.setProcessLabel(&g)
