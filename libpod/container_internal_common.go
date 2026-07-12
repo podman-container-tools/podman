@@ -451,6 +451,14 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		// when a SELinux context mount option is present.  Using
 		// fscontext over context allows container processes to
 		// change labels of individual files after mount.
+		//
+		// LIMITATION: this is a best-effort fix for the common case
+		// of a user --tmpfs mount where processes call setfattr.
+		// OCI runtimes may still add a global context= on top of
+		// fscontext=, which relocks the label.  For full control
+		// over SELinux labeling, users should explicitly pass the
+		// desired context option via --tmpfs mount options, e.g.:
+		//   --tmpfs /mnt:fscontext="system_u:object_r:...:s0"
 		if m.Type == define.TypeTmpfs && filepath.Clean(m.Destination) != "/dev" && !hasSELinuxContextOption(m.Options) {
 			contextType := "fscontext"
 			if c.config.LabelNested {
@@ -466,12 +474,10 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	c.setMountLabel(&g)
 	// Per-mount fscontext=/rootcontext= was already added above for
 	// tmpfs mounts without explicit SELinux options.  The global
-	// mountLabel (set above) is still necessary: systemd tmpfs mounts
-	// and hooks/runtime-created mounts are added after this point and
-	// rely on the OCI runtime applying the global mountLabel.  The
-	// global mountLabel only adds context= to mounts that lack any
-	// SELinux context option; tmpfs mounts that already carry
-	// fscontext= or rootcontext= are left untouched by the runtime.
+	// mountLabel (set above) provides the default context= for all
+	// other mounts.  Note: the OCI runtime may layer context= onto
+	// tmpfs mounts that already carry fscontext=; this is a known
+	// limitation of the best-effort fix above.
 
 	if c.IsDefaultInfra() || c.IsService() {
 		newMount, err := c.prepareCatatonitMount()
