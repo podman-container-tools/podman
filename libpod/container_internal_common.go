@@ -463,23 +463,15 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	}
 
 	c.setProcessLabel(&g)
-	// Apply the mount label explicitly to tmpfs mounts that do not
-	// already have an explicit SELinux context option (e.g., /dev).
-	// For all other tmpfs mounts, fscontext= or rootcontext= was
-	// already added above.  We must NOT set linux.mountLabel
-	// globally because that would cause the OCI runtime (crun/runc)
-	// to also add context= to every tmpfs mount, which would
-	// conflict with the per-mount fscontext=/rootcontext= options
-	// and prevent security.selinux xattr changes (setfattr).
-	mountLabel := c.MountLabel()
-	for i := range g.Config.Mounts {
-		m := &g.Config.Mounts[i]
-		if m.Type == define.TypeTmpfs && !hasSELinuxContextOption(m.Options) {
-			if labelOpt := label.FormatMountLabel("", mountLabel); labelOpt != "" {
-				m.Options = append(m.Options, labelOpt)
-			}
-		}
-	}
+	c.setMountLabel(&g)
+	// Per-mount fscontext=/rootcontext= was already added above for
+	// tmpfs mounts without explicit SELinux options.  The global
+	// mountLabel (set above) is still necessary: systemd tmpfs mounts
+	// and hooks/runtime-created mounts are added after this point and
+	// rely on the OCI runtime applying the global mountLabel.  The
+	// global mountLabel only adds context= to mounts that lack any
+	// SELinux context option; tmpfs mounts that already carry
+	// fscontext= or rootcontext= are left untouched by the runtime.
 
 	if c.IsDefaultInfra() || c.IsService() {
 		newMount, err := c.prepareCatatonitMount()
