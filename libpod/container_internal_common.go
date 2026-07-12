@@ -252,6 +252,11 @@ func hasSELinuxContextOption(options []string) bool {
 //
 // To prevent this, the global Linux.MountLabel is cleared and context=
 // is added explicitly to non-tmpfs mounts that lack SELinux context.
+//
+// Caller MUST invoke this after ALL mounts (including runtime-added
+// cataonit, bind, overlay, systemd, CDI, hook, and masked-path mounts)
+// have been added to the generator, so that every non-tmpfs mount
+// receives its context= label.
 func addSELinuxMountOptionsNonTmpfs(g *generate.Generator, mountLabel string) {
 	for _, mount := range g.Config.Mounts {
 		if mount.Type == define.TypeTmpfs && filepath.Clean(mount.Destination) != "/dev" && hasSELinuxContextOption(mount.Options) {
@@ -485,9 +490,9 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		// To prevent the OCI runtime (runc/crun) from layering the
 		// global Linux.MountLabel as an additional context= option
 		// on top of our fscontext= (which would re-impose mount-point
-		// labeling), the global MountLabel is cleared below for tmpfs
-		// mounts with per-mount SELinux context, and context= is
-		// added explicitly to non-tmpfs mounts.
+		// labeling), the global MountLabel is cleared at the end of
+		// generateSpec (after ALL mounts have been added), and context=
+		// is added explicitly to every non-tmpfs mount.
 		if m.Type == define.TypeTmpfs && filepath.Clean(m.Destination) != "/dev" && !hasSELinuxContextOption(m.Options) {
 			if labelOpt := label.FormatMountLabelByType("", c.MountLabel(), "fscontext"); labelOpt != "" {
 				m.Options = append(m.Options, labelOpt)
@@ -497,13 +502,6 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 
 	c.setProcessLabel(&g)
 	c.setMountLabel(&g)
-	// For tmpfs mounts with per-mount SELinux context, clear the
-	// global Linux.MountLabel so the OCI runtime does not layer
-	// context=<label> on top of our fscontext=<label>.  Adding
-	// context= would put the tmpfs in mount-point labeling mode
-	// and block per-file security.selinux changes.
-	// Non-tmpfs mounts receive context=<label> explicitly below.
-	addSELinuxMountOptionsNonTmpfs(&g, c.MountLabel())
 
 	if c.IsDefaultInfra() || c.IsService() {
 		newMount, err := c.prepareCatatonitMount()
@@ -915,6 +913,17 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	}
 
 	c.addMaskedPaths(&g)
+
+	// For tmpfs mounts with per-mount SELinux context (fscontext=),
+	// clear the global Linux.MountLabel so the OCI runtime does not
+	// layer context=<label> on top of our fscontext=<label>. Adding
+	// context= would put the tmpfs in mount-point labeling mode and
+	// block per-file security.selinux changes. Non-tmpfs mounts
+	// receive context=<label> explicitly.
+	// This MUST run after ALL mounts have been added (catatonit, bind,
+	// overlay, systemd, CDI, hooks, masked paths) so that every mount
+	// is present when context= is applied.
+	addSELinuxMountOptionsNonTmpfs(&g, c.MountLabel())
 
 	return g.Config, cleanupFunc, nil
 }
