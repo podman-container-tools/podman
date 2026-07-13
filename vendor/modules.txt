@@ -342,7 +342,7 @@ github.com/manifoldco/promptui/screenbuf
 # github.com/mattn/go-runewidth v0.0.24
 ## explicit; go 1.20
 github.com/mattn/go-runewidth
-# github.com/mattn/go-shellwords v1.0.13
+# github.com/mattn/go-shellwords v1.0.14
 ## explicit; go 1.13
 github.com/mattn/go-shellwords
 # github.com/mattn/go-sqlite3 v1.14.47
