@@ -161,11 +161,12 @@ spelled with complete minutiae.
          GitHub release in the `podman-machine-os` repository. Wait for this
          workflow to complete successfully.
    1. Return to the Podman repo.
-   1. The Podman [release workflow](https://github.com/podman-container-tools/podman/actions/workflows/release.yml)
-      checks for a matching GitHub release in `podman-machine-os` before it runs the
-      artifact build or release jobs. Build-only dispatches skip this check. If the
-      `do-not-merge/wait-machine-os-build` label is still present after the
-      `podman-machine-os` release completes, remove it before merging.
+   1. Once the `podman-machine-os` release completes, remove the
+      `do-not-merge/wait-machine-os-build` label before merging the Podman bump PR.
+      The Podman [release workflow](https://github.com/podman-container-tools/podman/actions/workflows/release.yml)
+      runs only after the Podman tag is pushed, so this matching-release check is a
+      secondary failsafe before the artifact build or release jobs start.
+      Build-only dispatches skip this check.
    1. Wait for all other PR checks to pass.
    1. Wait for other maintainers to merge the PR.
    1. Tag the `Bump to vX.Y.Z` commit as a release by running

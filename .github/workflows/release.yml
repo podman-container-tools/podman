@@ -75,7 +75,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILDONLY: ${{ needs.check.outputs.buildonly }}
       VERSION: ${{ needs.check.outputs.version }}
       MACHINE_OS_REPO: podman-container-tools/podman-machine-os
@@ -123,7 +123,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     if: needs.check.outputs.buildonly == 'false'
-    needs: [check, build-artifacts]
+    needs: [check, gate-machine-os-release, build-artifacts]
     permissions:
       contents: write
     env:
