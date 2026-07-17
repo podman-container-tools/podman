@@ -45,45 +45,40 @@ func TestIsUnambiguousName(t *testing.T) {
 
 func TestShouldLogToStderr(t *testing.T) {
 	tests := []struct {
-		name             string
-		kmsgOK           bool
-		dryRun           bool
-		stderrIsTerminal bool
-		want             bool
+		name   string
+		kmsgOK bool
+		dryRun bool
+		want   bool
 	}{
 		{
-			name:             "kmsg failed",
-			kmsgOK:           false,
-			dryRun:           false,
-			stderrIsTerminal: false,
-			want:             true,
+			name:   "kmsg succeeded",
+			kmsgOK: true,
+			dryRun: false,
+			want:   false,
 		},
 		{
-			name:             "dry run",
-			kmsgOK:           true,
-			dryRun:           true,
-			stderrIsTerminal: false,
-			want:             true,
+			name:   "kmsg failed",
+			kmsgOK: false,
+			dryRun: false,
+			want:   true,
 		},
 		{
-			name:             "terminal stderr",
-			kmsgOK:           true,
-			dryRun:           false,
-			stderrIsTerminal: true,
-			want:             true,
+			name:   "dry run with successful kmsg",
+			kmsgOK: true,
+			dryRun: true,
+			want:   true,
 		},
 		{
-			name:             "kmsg succeeded and non-terminal stderr",
-			kmsgOK:           true,
-			dryRun:           false,
-			stderrIsTerminal: false,
-			want:             false,
+			name:   "dry run with failed kmsg",
+			kmsgOK: false,
+			dryRun: true,
+			want:   true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := shouldLogToStderr(test.kmsgOK, test.dryRun, test.stderrIsTerminal)
+			got := shouldLogToStderr(test.kmsgOK, test.dryRun)
 			assert.Equal(t, test.want, got)
 		})
 	}
