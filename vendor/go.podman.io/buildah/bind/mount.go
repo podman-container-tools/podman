@@ -254,6 +254,9 @@ func UnmountMountpoints(mountpoint string, mountpointsToRemove []string) error {
 	// find the top of the tree we're unmounting
 	top := getMountByPoint(mountpoint)
 	if top == nil {
+		if err != nil {
+			return fmt.Errorf("%q is not mounted: %w", mountpoint, err)
+		}
 		return nil
 	}
 	// add all of the mounts that are hanging off of it

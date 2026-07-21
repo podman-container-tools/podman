@@ -1,3 +1,14 @@
+- Changelog for v1.44.1 (2026-07-21)
+
+  * Commit: add an EmptyLayerIfEmptyDiff flag (#6873)
+  * build: commit an empty layer instead of a layer with nothing in it (#6873)
+  * imagebuildah: default RUN --mount type to bind for cache checksums (#6957)
+  * parse: honor containers.conf seccomp_profile (#6908)
+  * internal/mkcw.GenerateMeasurement(): just glob for libkrunfw-sev.so.* (#6934)
+  * seccomp: fix --security-opt seccomp=profile silently ignored (#6960)
+  * Add support for symbolic chmod options (#6778)
+  * build: accept "FROM containers-storage:" prefixes again (#6982)
+
 - Changelog for v1.44.0 (2026-05-27)
   * TEMPORARY: Skip a newly-added test
   * Restore the previous TempDirForURL API

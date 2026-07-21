@@ -103,7 +103,7 @@ type AddAndCopyOptions struct {
 	// the source paths for source locations which include such a
 	// component.
 	Parents bool
-	// Timestamp, if set, overrides timestamps on all added or copied content.
+	// Timestamp is a timestamp to override on all content as it is being read.
 	Timestamp *time.Time
 	// Link, when set to true, creates an independent layer containing the copied content
 	// that sits on top of existing layers. This layer can be cached and reused
@@ -123,9 +123,6 @@ type AddAndCopyOptions struct {
 	// AllowEmptyWildcard controls whether the operation succeeds when all
 	// glob patterns match nothing. Defaults to false.
 	AllowEmptyWildcard types.OptionalBool
-	// FollowSymlink controls whether symlinks should be followed when copying content.
-	// When set to false, symlinks are not dereferenced.
-	FollowSymlink types.OptionalBool
 }
 
 // getURL writes a tar archive containing the named content
@@ -598,12 +595,12 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 				go func() {
 					defer wg.Done()
 					defer pipeWriter.Close()
+					// TODO: the returned cloneDir is never cleaned up, leaking disk space.
 					var cloneDir, subdir string
 					cloneDir, subdir, getErr = define.TempDirForURL(tmpdir.GetTempDir(), "", src)
 					if getErr != nil {
 						return
 					}
-					defer os.RemoveAll(cloneDir)
 					getOptions := copier.GetOptions{
 						UIDMap:             srcUIDMap,
 						GIDMap:             srcGIDMap,
@@ -613,7 +610,6 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						ChownDirs:          chownDirs,
 						ChownFiles:         chownFiles,
 						KeepDirectoryNames: options.DirCopyContents == types.OptionalBoolFalse,
-						NoDerefSymlinks:    options.FollowSymlink == types.OptionalBoolFalse,
 						StripSetuidBit:     options.StripSetuidBit,
 						StripSetgidBit:     options.StripSetgidBit,
 						StripStickyBit:     options.StripStickyBit,
@@ -636,7 +632,8 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 				}()
 			}
 
-			wg.Go(func() {
+			wg.Add(1)
+			go func() {
 				b.ContentDigester.Start("")
 				hashCloser := b.ContentDigester.Hash()
 				hasher := io.Writer(hashCloser)
@@ -654,13 +651,13 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						ChownFiles:    nil,
 						ChmodFiles:    nil,
 						IgnoreDevices: userns.RunningInUserNS(),
-						Timestamp:     options.Timestamp,
 					}
 					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()
-			})
+				wg.Done()
+			}()
 			wg.Wait()
 			if getErr != nil {
 				getErr = fmt.Errorf("reading %q: %w", src, getErr)
@@ -737,7 +734,8 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 				latestTimestamp = st.ModTime
 			}
 			pipeReader, pipeWriter := io.Pipe()
-			wg.Go(func() {
+			wg.Add(1)
+			go func() {
 				renamedItems := 0
 				writer := io.WriteCloser(pipeWriter)
 				if renameTarget != "" {
@@ -786,15 +784,16 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					Timestamp:          options.Timestamp,
 					DisallowWildcard:   options.AllowWildcard == types.OptionalBoolFalse,
 					AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
-					NoDerefSymlinks:    options.FollowSymlink == types.OptionalBoolFalse,
 				}
 				getErr = copier.Get(contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
 				closeErr = writer.Close()
 				if renameTarget != "" && renamedItems > 1 {
 					renameErr = fmt.Errorf("internal error: renamed %d items when we expected to only rename 1", renamedItems)
 				}
-			})
-			wg.Go(func() {
+				wg.Done()
+			}()
+			wg.Add(1)
+			go func() {
 				if st.IsDir {
 					b.ContentDigester.Start("dir")
 				} else {
@@ -818,13 +817,13 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						ChownFiles:      nil,
 						ChmodFiles:      nil,
 						IgnoreDevices:   userns.RunningInUserNS(),
-						Timestamp:       options.Timestamp,
 					}
 					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()
-			})
+				wg.Done()
+			}()
 
 			wg.Wait()
 			if getErr != nil {

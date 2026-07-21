@@ -461,7 +461,6 @@ type PutOptions struct {
 	NoOverwriteDirNonDir bool              // instead of quietly overwriting directories with non-directories, return an error
 	NoOverwriteNonDirDir bool              // instead of quietly overwriting non-directories with directories, return an error
 	Rename               map[string]string // rename items with the specified names, or under the specified names
-	Timestamp            *time.Time        // override timestamps on all extracted content
 }
 
 // Put extracts an archive from the bulkReader at the specified directory.
@@ -837,16 +836,20 @@ func copierWithSubprocess(bulkReader io.Reader, bulkWriter io.Writer, req reques
 	stdoutRead = nil
 	var wg sync.WaitGroup
 	var readError, writeError error
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
 		_, writeError = io.Copy(bulkWriter, bulkWriterRead)
 		bulkWriterRead.Close()
 		bulkWriterRead = nil
-	})
-	wg.Go(func() {
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
 		_, readError = io.Copy(bulkReaderWrite, bulkReader)
 		bulkReaderWrite.Close()
 		bulkReaderWrite = nil
-	})
+		wg.Done()
+	}()
 	wg.Wait()
 	cmdToWaitFor = nil
 	if err = cmd.Wait(); err != nil {
@@ -1355,6 +1358,8 @@ func checkLinks(item string, req request, info os.FileInfo) (string, os.FileInfo
 }
 
 func copierHandlerGet(bulkWriter io.Writer, req request, pm *fileutils.PatternMatcher, idMappings *idtools.IDMappings) (*response, func() error, error) {
+	statRequest := req
+	statRequest.Request = requestStat
 	statResponse := copierHandlerStat(req, pm, idMappings)
 	errorResponse := func(fmtspec string, args ...any) (*response, func() error, error) {
 		return &response{Error: fmt.Sprintf(fmtspec, args...), Stat: statResponse.Stat, Get: getResponse{}}, nil, nil
@@ -1933,14 +1938,6 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 		}
 	}
 	directoryModes := make(map[string]os.FileMode)
-	type directoryTimestamp struct {
-		directory    string
-		atime, mtime time.Time
-	}
-	// track directory timestamps so we can restore them after extraction
-	// because creating entries under a directory updates its mtime.
-	var directoryTimestamps []directoryTimestamp
-	timestamp := req.PutOptions.Timestamp
 	ensureDirectoryUnderRoot := func(directory string) error {
 		rel, err := convertToRelSubdirectory(req.Root, directory)
 		if err != nil {
@@ -1958,13 +1955,6 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 				// later, but not if we already had an explicitly-provided mode
 				if _, ok := directoryModes[path]; !ok {
 					directoryModes[path] = defaultDirMode
-				}
-				if timestamp != nil {
-					directoryTimestamps = append(directoryTimestamps, directoryTimestamp{
-						directory: path,
-						atime:     timestamp.UTC(),
-						mtime:     timestamp.UTC(),
-					})
 				}
 			} else {
 				// FreeBSD can return EISDIR for "mkdir /":
@@ -2045,11 +2035,16 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 		}
 	}
 	cb := func() error {
+		type directoryAndTimes struct {
+			directory    string
+			atime, mtime time.Time
+		}
+		var directoriesAndTimes []directoryAndTimes
 		defer func() {
-			for i := range directoryTimestamps {
-				timestamps := directoryTimestamps[len(directoryTimestamps)-i-1]
-				if err := lutimes(false, timestamps.directory, timestamps.atime, timestamps.mtime); err != nil {
-					logrus.Debugf("error setting access and modify timestamps on %q to %s and %s: %v", timestamps.directory, timestamps.atime, timestamps.mtime, err)
+			for i := range directoriesAndTimes {
+				directoryAndTimes := directoriesAndTimes[len(directoriesAndTimes)-i-1]
+				if err := lutimes(false, directoryAndTimes.directory, directoryAndTimes.atime, directoryAndTimes.mtime); err != nil {
+					logrus.Debugf("error setting access and modify timestamps on %q to %s and %s: %v", directoryAndTimes.directory, directoryAndTimes.atime, directoryAndTimes.mtime, err)
 				}
 			}
 			for directory, mode := range directoryModes {
@@ -2220,12 +2215,15 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 					// either we removed it and retried, or it was a directory,
 					// in which case we want to just add the new stuff under it
 				}
-				dt := directoryTimestamp{directory: path, atime: hdr.AccessTime, mtime: hdr.ModTime}
-				if timestamp != nil {
-					dt.atime = timestamp.UTC()
-					dt.mtime = dt.atime
-				}
-				directoryTimestamps = append(directoryTimestamps, dt)
+				// make a note of the directory's times.  we
+				// might create items under it, which will
+				// cause the mtime to change after we correct
+				// it, so we'll need to correct it again later
+				directoriesAndTimes = append(directoriesAndTimes, directoryAndTimes{
+					directory: path,
+					atime:     hdr.AccessTime,
+					mtime:     hdr.ModTime,
+				})
 				// set the mode here unconditionally, in case the directory is in
 				// the archive more than once for whatever reason
 				directoryModes[path] = mode
@@ -2296,10 +2294,7 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 				}
 			}
 			// set time
-			if timestamp != nil {
-				hdr.AccessTime = timestamp.UTC()
-				hdr.ModTime = hdr.AccessTime
-			} else if hdr.AccessTime.IsZero() || hdr.AccessTime.Before(hdr.ModTime) {
+			if hdr.AccessTime.IsZero() || hdr.AccessTime.Before(hdr.ModTime) {
 				hdr.AccessTime = hdr.ModTime
 			}
 			if err = lutimes(hdr.Typeflag == tar.TypeSymlink, path, hdr.AccessTime, hdr.ModTime); err != nil {

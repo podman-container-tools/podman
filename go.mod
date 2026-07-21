@@ -64,7 +64,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.13.0
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
-	go.podman.io/buildah v1.44.1-0.20260710171501-e4b285a365f3
+	go.podman.io/buildah v1.44.1
 	go.podman.io/common v0.68.2-0.20260717163110-b3642f3cf650
 	go.podman.io/image/v5 v5.40.1-0.20260717163110-b3642f3cf650
 	go.podman.io/storage v1.63.1-0.20260717163110-b3642f3cf650

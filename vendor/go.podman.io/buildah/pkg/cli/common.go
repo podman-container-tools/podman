@@ -594,8 +594,8 @@ func LookupEnvVarReferences(specs, environ []string) []string {
 			result = append(result, environ...)
 		} else {
 			prefix := key + "="
-			if before, ok := strings.CutSuffix(key, "*"); ok {
-				prefix = before
+			if strings.HasSuffix(key, "*") {
+				prefix = strings.TrimSuffix(key, "*")
 			}
 
 			for _, spec := range environ {

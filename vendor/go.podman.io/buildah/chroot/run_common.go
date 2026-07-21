@@ -146,10 +146,12 @@ func RunUsingChroot(spec *specs.Spec, bundlePath, homeDir string, stdin io.Reade
 	}
 
 	logrus.Debugf("Running %#v in %#v", cmd.Cmd, cmd)
-	confwg.Go(func() {
+	confwg.Add(1)
+	go func() {
 		_, conferr = io.Copy(pwriter, bytes.NewReader(config))
 		pwriter.Close()
-	})
+		confwg.Done()
+	}()
 	cmd.ExtraFiles = append([]*os.File{preader}, cmd.ExtraFiles...)
 	err = cmd.Run()
 	confwg.Wait()
@@ -539,10 +541,12 @@ func runUsingChroot(spec *specs.Spec, bundlePath string, ctty *os.File, stdin io
 	}
 
 	logrus.Debugf("Running %#v in %#v", cmd.Cmd, cmd)
-	confwg.Go(func() {
+	confwg.Add(1)
+	go func() {
 		_, conferr = io.Copy(pwriter, bytes.NewReader(config))
 		pwriter.Close()
-	})
+		confwg.Done()
+	}()
 	err = cmd.Run()
 	confwg.Wait()
 	signal.Stop(interrupted)

@@ -427,8 +427,8 @@ go.opentelemetry.io/otel/sdk/metric v1.44.0 h1:3LlKgI+VjbVsjNRFZJZAJ30WjXC5VkNRk
 go.opentelemetry.io/otel/sdk/metric v1.44.0/go.mod h1:5B5pMARnXxKhltooO4xUuCBorl65a4EpnTalObqOigA=
 go.opentelemetry.io/otel/trace v1.44.0 h1:jxF5CsGYCe74MCRx2X4g7WsY/VBKRqqpNvXlX/6gtIk=
 go.opentelemetry.io/otel/trace v1.44.0/go.mod h1:oLl1jrMQAVo6v3GAggN+1VH9VIz9iUSvW53sW1Q8PIE=
-go.podman.io/buildah v1.44.1-0.20260710171501-e4b285a365f3 h1:ZAY9h3tE+3LIc2wYXi1QXOYkXkObz87llId3iFJAQVc=
-go.podman.io/buildah v1.44.1-0.20260710171501-e4b285a365f3/go.mod h1:iYHOGrAIShcPz3/on7A7p+oQP2i7+F2PocMnLQ0aGzs=
+go.podman.io/buildah v1.44.1 h1:WQhr/LK3do8ENLHYTls+wUIx6XWZPghZ4VH232WbL0U=
+go.podman.io/buildah v1.44.1/go.mod h1:hi+WSERjv19PU2CJ+AKbgwCO3IKuvtDXEUA8eXNkpqk=
 go.podman.io/common v0.68.2-0.20260717163110-b3642f3cf650 h1:rdx7fBNGc2dK3doS3+c9F/hCfJ5exKOEiPJGRt+f7Rk=
 go.podman.io/common v0.68.2-0.20260717163110-b3642f3cf650/go.mod h1:xjy9Waf/FlW1bO+3WJQJgaNlQGLXsZpPA6ChP8cC6c0=
 go.podman.io/image/v5 v5.40.1-0.20260717163110-b3642f3cf650 h1:NbK2uomTKf+6XjiwZI/RVURjoN7AqyZSbIN3zHYlShg=

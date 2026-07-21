@@ -107,9 +107,9 @@ func convertToOverlay(m specs.Mount, store storage.Store, mountLabel, tmpDir str
 		}
 		if mountedOverlay.Type != define.TypeBind {
 			if err2 := overlay.RemoveTemp(overlayDir); err2 != nil {
-				return specs.Mount{}, "", fmt.Errorf("cleaning up after failing to set up overlay for %q: %w", destination, err2)
+				return specs.Mount{}, "", fmt.Errorf("cleaning up after failing to set up overlay: %v, while setting up overlay for %q: %w", err2, destination, err)
 			}
-			return specs.Mount{}, "", fmt.Errorf("setting up overlay for %q at %q, incorrect mount type: %q (expected \"bind\")", mountedOverlay.Source, destination, mountedOverlay.Type)
+			return specs.Mount{}, "", fmt.Errorf("setting up overlay for %q at %q: %w", mountedOverlay.Source, destination, err)
 		}
 		mountThisInstead = mountedOverlay
 		mountThisInstead.Source = filepath.Join(mountedOverlay.Source, sourceBase)

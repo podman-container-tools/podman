@@ -14,7 +14,7 @@ const (
 	BuildOutputTar      BuildOutputType = 3
 )
 
-// BuildOutputOptions contains the outcome of parsing the value of a build --output flag
+// BuildOutputOptions contains the the outcome of parsing the value of a build --output flag
 type BuildOutputOption struct {
 	Type BuildOutputType
 	Path string // Only valid if Type is local dir or tar

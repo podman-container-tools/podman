@@ -1,25 +1,30 @@
+//go:build linux
+
 package buildah
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/opencontainers/runtime-tools/generate"
 	selinux "github.com/opencontainers/selinux/go-selinux"
 )
 
+func selinuxGetEnabled() bool {
+	return selinux.GetEnabled()
+}
+
 func setupSelinux(g *generate.Generator, processLabel, mountLabel string) {
-	if runtime.GOOS == "linux" && processLabel != "" && selinux.GetEnabled() {
+	if processLabel != "" && selinux.GetEnabled() {
 		g.SetProcessSelinuxLabel(processLabel)
 		g.SetLinuxMountLabel(mountLabel)
 	}
 }
 
 func runLabelStdioPipes(stdioPipe [][]int, processLabel, mountLabel string) error {
-	if runtime.GOOS != "linux" || !selinux.GetEnabled() || processLabel == "" || mountLabel == "" {
-		// Not on Linux, or SELinux is disabled, or empty labels.
+	if !selinuxGetEnabled() || processLabel == "" || mountLabel == "" {
+		// SELinux is completely disabled, or we're not doing anything at all with labeling
 		return nil
 	}
 	pipeContext, err := selinux.ComputeCreateContext(processLabel, mountLabel, "fifo_file")

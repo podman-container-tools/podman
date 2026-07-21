@@ -140,6 +140,9 @@ func CWConvertImage(ctx context.Context, systemContext *types.SystemContext, sto
 		}
 	}()
 	sourceInfo := GetBuildInfo(source)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("retrieving info about source image: %w", err)
+	}
 	sourceImageID := sourceInfo.FromImageID
 	sourceSize, err := store.ImageSize(sourceImageID)
 	if err != nil {

@@ -40,16 +40,8 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/archive"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
-
-type additionalBuildContext struct {
-	define.AdditionalBuildContext
-	// downloadedTempDir is the temporary directory created for the additional build context.
-	// It should be removed when the build ends.
-	downloadedTempDir string
-}
 
 // builtinAllowedBuildArgs is list of built-in allowed build args.  Normally we
 // complain if we're given values for arguments which have no corresponding ARG
@@ -169,7 +161,7 @@ type executor struct {
 	imageInfoLock                           sync.Mutex
 	imageInfoCache                          map[string]imageTypeAndHistoryAndDiffIDs
 	fromOverride                            string
-	additionalBuildContexts                 map[string]*additionalBuildContext
+	additionalBuildContexts                 map[string]*define.AdditionalBuildContext
 	manifest                                string
 	secrets                                 map[string]define.Secret
 	sshsources                              map[string]*sshagent.Source
@@ -276,11 +268,6 @@ func newExecutor(logger *logrus.Logger, logPrefix string, store storage.Store, o
 		buildOutputs = append(buildOutputs, options.BuildOutput) //nolint:staticcheck
 	}
 
-	wrappedAdditionalBuildContexts := make(map[string]*additionalBuildContext, len(options.AdditionalBuildContexts))
-	for name, ctx := range options.AdditionalBuildContexts {
-		wrappedAdditionalBuildContexts[name] = &additionalBuildContext{AdditionalBuildContext: *ctx}
-	}
-
 	exec := executor{
 		args:                                    options.Args,
 		cacheFrom:                               options.CacheFrom,
@@ -371,7 +358,7 @@ func newExecutor(logger *logrus.Logger, logPrefix string, store storage.Store, o
 		rusageLogFile:                           rusageLogFile,
 		imageInfoCache:                          make(map[string]imageTypeAndHistoryAndDiffIDs),
 		fromOverride:                            options.From,
-		additionalBuildContexts:                 wrappedAdditionalBuildContexts,
+		additionalBuildContexts:                 options.AdditionalBuildContexts,
 		manifest:                                options.Manifest,
 		secrets:                                 secrets,
 		sshsources:                              sshsources,
@@ -600,16 +587,15 @@ func (b *executor) buildStage(ctx context.Context, cleanupStages map[int]*stageE
 		// processed like regular steps, and if no modification is done to
 		// layers, its easier to reuse cached layers.
 		if len(b.labels) > 0 {
-			var labelLine strings.Builder
-			labelLine.WriteString("LABEL")
+			labelLine := "LABEL"
 			for _, labelSpec := range b.labels {
 				key, value, _ := strings.Cut(labelSpec, "=")
 				// check only for an empty key since docker allows empty values
 				if key != "" {
-					fmt.Fprintf(&labelLine, " %q=%q", key, value)
+					labelLine += fmt.Sprintf(" %q=%q", key, value)
 				}
 			}
-			appendInstructions = slices.Concat(appendInstructions, []string{labelLine.String()})
+			appendInstructions = slices.Concat(appendInstructions, []string{labelLine})
 		}
 	}
 
@@ -617,17 +603,16 @@ func (b *executor) buildStage(ctx context.Context, cleanupStages map[int]*stageE
 	// at the beginning of the stage so that they affect subsequent RUN instructions and
 	// factor into the image history.
 	if len(b.envs) > 0 {
-		var envLine strings.Builder
-		envLine.WriteString("ENV")
+		envLine := "ENV"
 		for _, envSpec := range b.envs {
 			key, value, hasValue := strings.Cut(envSpec, "=")
 			if hasValue {
-				fmt.Fprintf(&envLine, " %q=%q", key, value)
+				envLine += fmt.Sprintf(" %q=%q", key, value)
 			} else {
 				return "", nil, false, fmt.Errorf("BUG: unresolved environment variable: %q", key)
 			}
 		}
-		prependInstructions = slices.Concat([]string{envLine.String()}, prependInstructions)
+		prependInstructions = slices.Concat([]string{envLine}, prependInstructions)
 	}
 
 	// Create stage labels for all stage images including final stage
@@ -871,21 +856,6 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 			}
 		}
 		cleanupImages = nil
-
-		var g errgroup.Group
-		for _, additionalBuildContext := range b.additionalBuildContexts {
-			if additionalBuildContext.downloadedTempDir != "" {
-				dir := additionalBuildContext.downloadedTempDir
-				g.Go(func() error {
-					logrus.Debugf("Removing additional build context temp dir %q", dir)
-					return os.RemoveAll(dir)
-				})
-			}
-		}
-		if err := g.Wait(); err != nil {
-			logrus.Debugf("Failed to cleanup additional build context temp dir: %v", err)
-			lastErr = err
-		}
 
 		if b.rusageLogFile != nil && b.rusageLogFile != b.out {
 			// we deliberately ignore the error here, as this

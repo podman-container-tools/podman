@@ -18,6 +18,8 @@ import (
 	ociLayoutTransport "go.podman.io/image/v5/oci/layout"
 	openshiftTransport "go.podman.io/image/v5/openshift"
 	"go.podman.io/image/v5/pkg/compression"
+	storageTransport "go.podman.io/image/v5/storage"
+	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chrootarchive"
 )
@@ -183,7 +185,7 @@ func writeToDirectory(root string, hdr *tar.Header, content io.Reader) error {
 // relative to "contextDir", it will create a copy of the original image, under
 // "tmpdir", which contains no symbolic links.  It it returns a parseable
 // reference to the image which should be used.
-func ImageName(transportName, restOfImageName, contextDir, tmpdir string) (newFrom string, err error) {
+func ImageName(store storage.Store, transportName, restOfImageName, contextDir, tmpdir string) (newFrom string, err error) {
 	seenEntries := make(map[string]struct{})
 	// we're going to try to create a temporary directory or file, but if
 	// we fail, make sure that they get removed immediately
@@ -208,6 +210,11 @@ func ImageName(transportName, restOfImageName, contextDir, tmpdir string) (newFr
 	switch transportName {
 	case dockerTransport.Transport.Name(), "docker-daemon", openshiftTransport.Transport.Name(): // ok, these are all remote
 		return transportName + ":" + restOfImageName, nil
+	case storageTransport.Transport.Name(): // local, expected to already be there, but might not be in this store, so check on that
+		if _, err := storageTransport.Transport.ParseStoreReference(store, restOfImageName); err != nil {
+			return "", fmt.Errorf("looking for image %q in local storage: %w", restOfImageName, err)
+		}
+		return restOfImageName, nil
 	case dockerArchiveTransport.Transport.Name(), ociArchiveTransport.Transport.Name(): // these are, basically, tarballs
 		// these take the form path[:stuff]
 		transportRef := restOfImageName

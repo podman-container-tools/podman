@@ -699,8 +699,8 @@ go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
-# go.podman.io/buildah v1.44.1-0.20260710171501-e4b285a365f3
-## explicit; go 1.25.9
+# go.podman.io/buildah v1.44.1
+## explicit; go 1.25.6
 go.podman.io/buildah
 go.podman.io/buildah/bind
 go.podman.io/buildah/chroot

@@ -361,7 +361,8 @@ func joinExcludePatternWithCopySource(srcNorm, excl string) string {
 	if srcNorm == "." {
 		return excl
 	}
-	if rest, ok := strings.CutPrefix(excl, "!"); ok {
+	if strings.HasPrefix(excl, "!") {
+		rest := strings.TrimPrefix(excl, "!")
 		if rest == "" {
 			return excl
 		}
@@ -483,7 +484,7 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 			if fromErr != nil {
 				return fmt.Errorf("unable to resolve argument %q: %w", copy.From, fromErr)
 			}
-			var additionalBuildContext *additionalBuildContext
+			var additionalBuildContext *define.AdditionalBuildContext
 			if foundContext, ok := s.executor.additionalBuildContexts[from]; ok {
 				additionalBuildContext = foundContext
 			} else {
@@ -511,14 +512,18 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 							// additional context contains a tar file
 							// so download and explode tar to buildah
 							// temp and point context to that.
+							// TODO: the returned path is never cleaned up, leaking disk space.
 							path, subdir, err := define.TempDirForURL(tmpdir.GetTempDir(), internal.BuildahExternalArtifactsDir, additionalBuildContext.Value)
 							if err != nil {
 								return fmt.Errorf("unable to download context from external source %q: %w", additionalBuildContext.Value, err)
 							}
-							additionalBuildContext.downloadedTempDir = path
-							additionalBuildContext.DownloadedCache = filepath.Join(path, subdir)
+							// point context dir to the extracted path
+							contextDir = filepath.Join(path, subdir)
+							// populate cache for next RUN step
+							additionalBuildContext.DownloadedCache = contextDir
+						} else {
+							contextDir = additionalBuildContext.DownloadedCache
 						}
-						contextDir = additionalBuildContext.DownloadedCache
 					} else {
 						// This points to a path on the filesystem
 						// Check to see if there's a .containerignore
@@ -728,14 +733,18 @@ func (s *stageExecutor) runStageMountPoints(mountList []string) (map[string]inte
 								// additional context contains a tar file
 								// so download and explode tar to buildah
 								// temp and point context to that.
+								// TODO: the returned path is never cleaned up, leaking disk space.
 								path, subdir, err := define.TempDirForURL(tmpdir.GetTempDir(), internal.BuildahExternalArtifactsDir, additionalBuildContext.Value)
 								if err != nil {
 									return nil, fmt.Errorf("unable to download context from external source %q: %w", additionalBuildContext.Value, err)
 								}
-								additionalBuildContext.downloadedTempDir = path
-								additionalBuildContext.DownloadedCache = filepath.Join(path, subdir)
+								// point context dir to the extracted path
+								mountPoint = filepath.Join(path, subdir)
+								// populate cache for next RUN step
+								additionalBuildContext.DownloadedCache = mountPoint
+							} else {
+								mountPoint = additionalBuildContext.DownloadedCache
 							}
-							mountPoint = additionalBuildContext.DownloadedCache
 						}
 						stageMountPoints[from] = internal.StageMountDetails{
 							IsAdditionalBuildContext: true,
@@ -839,12 +848,11 @@ func (s *stageExecutor) Run(run imagebuilder.Run, config docker.Config) error {
 				args = []string{run.Files[0].Data}
 			}
 		} else {
-			var full strings.Builder
-			full.WriteString(args[0])
+			full := args[0]
 			for _, file := range run.Files {
-				full.WriteString(file.Data + "\n" + file.Name)
+				full += file.Data + "\n" + file.Name
 			}
-			args = []string{full.String()}
+			args = []string{full}
 		}
 	}
 	stageMountPoints, err := s.runStageMountPoints(slices.Concat(run.Mounts, s.executor.transientRunMounts))
@@ -997,7 +1005,7 @@ func (s *stageExecutor) sanitizeFrom(from, tmpdir string) (newFrom string, err e
 		return "", fmt.Errorf("parsing image name %q: %w", from, err)
 	}
 	// TODO: drop this part and just return an error... someday
-	return sanitize.ImageName(transportName, restOfImageName, s.executor.contextDir, tmpdir)
+	return sanitize.ImageName(s.executor.store, transportName, restOfImageName, s.executor.contextDir, tmpdir)
 }
 
 // prepare creates a working container based on the specified image, or if one
@@ -2023,7 +2031,7 @@ func (s *stageExecutor) historyAndDiffIDsMatch(baseHistory []v1.History, baseDif
 }
 
 // getCreatedBy returns the value to store in the history entry for the node.
-// If the passed-in addedContentSummary is not an empty string, it is
+// If the the passed-in addedContentSummary is not an empty string, it is
 // assumed to have the digest information for the content if the node is ADD or
 // COPY.
 //
@@ -2055,7 +2063,7 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 	case "RUN":
 		shArg := ""
 		buildArgs := s.getBuildArgsResolvedForRun()
-		var appendCheckSum strings.Builder
+		appendCheckSum := ""
 		for _, flag := range node.Flags {
 			var err error
 			mountOptionSource := ""
@@ -2118,7 +2126,7 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 			}
 			if mountCheckSum != "" {
 				// add a separator to appendCheckSum
-				appendCheckSum.WriteString(":" + mountCheckSum)
+				appendCheckSum += ":" + mountCheckSum
 			}
 		}
 		if len(node.Original) > 4 {
@@ -2136,7 +2144,7 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 		if buildArgs != "" {
 			result = result + "|" + strconv.Itoa(len(strings.Split(buildArgs, " "))) + " " + buildArgs + " "
 		}
-		result = result + "/bin/sh -c " + shArg + heredoc + appendCheckSum.String() + labelsAndAnnotations
+		result = result + "/bin/sh -c " + shArg + heredoc + appendCheckSum + labelsAndAnnotations
 		return result, nil
 	case "ADD", "COPY":
 		destination := node
@@ -2815,9 +2823,9 @@ func (s *stageExecutor) EnsureContainerPathAs(path, user string, mode *os.FileMo
 // flag set differently should be reflected in its result.  Some build settings
 // only take affect at the final step, so only note those when they're applied.
 func (s *stageExecutor) buildMetadata(isLastStep bool, isAddOrCopy bool) string {
-	var unsetLabels strings.Builder
+	unsetLabels := ""
 	inheritLabels := ""
-	var unsetAnnotations strings.Builder
+	unsetAnnotations := ""
 	inheritAnnotations := ""
 	newAnnotations := ""
 	layerMutations := ""
@@ -2828,12 +2836,12 @@ func (s *stageExecutor) buildMetadata(isLastStep bool, isAddOrCopy bool) string 
 	}
 	// If --unsetlabel was used to clear a label, make a note of it.
 	for _, label := range s.executor.unsetLabels {
-		unsetLabels.WriteString("|unsetLabel=" + label)
+		unsetLabels += "|unsetLabel=" + label
 	}
 	if isLastStep {
 		// If --unsetannotation was used to clear an annotation, make a note of it.
 		for _, annotation := range s.executor.unsetAnnotations {
-			unsetAnnotations.WriteString("|unsetAnnotation=" + annotation)
+			unsetAnnotations += "|unsetAnnotation=" + annotation
 		}
 		// If --inherit-annotation was manually set to false then we cleared the inherited annotations.
 		if s.executor.inheritAnnotations == types.OptionalBoolFalse {
@@ -2866,7 +2874,7 @@ func (s *stageExecutor) buildMetadata(isLastStep bool, isAddOrCopy bool) string 
 	}
 
 	if isAddOrCopy {
-		return unsetLabels.String() + " " + inheritLabels + " " + unsetAnnotations.String() + " " + inheritAnnotations + " " + layerMutations + " " + newAnnotations
+		return unsetLabels + " " + inheritLabels + " " + unsetAnnotations + " " + inheritAnnotations + " " + layerMutations + " " + newAnnotations
 	}
-	return unsetLabels.String() + inheritLabels + unsetAnnotations.String() + inheritAnnotations + layerMutations + newAnnotations
+	return unsetLabels + inheritLabels + unsetAnnotations + inheritAnnotations + layerMutations + newAnnotations
 }

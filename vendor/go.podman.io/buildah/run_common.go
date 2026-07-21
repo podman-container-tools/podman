@@ -591,17 +591,19 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 	if err != nil {
 		return 1, fmt.Errorf("parsing pid %s as a number: %w", string(pidValue), err)
 	}
-	var stopped atomic.Uint32
+	var stopped uint32
 	var reaping sync.WaitGroup
-	reaping.Go(func() {
+	reaping.Add(1)
+	go func() {
+		defer reaping.Done()
 		var err error
 		_, err = unix.Wait4(pid, &wstatus, 0, nil)
 		if err != nil {
 			wstatus = 0
 			options.Logger.Errorf("error waiting for container child process %d: %v\n", pid, err)
 		}
-		stopped.Store(1)
-	})
+		atomic.StoreUint32(&stopped, 1)
+	}()
 
 	if configureNetwork {
 		if _, err := containerCreateW.Write([]byte{1}); err != nil {
@@ -636,11 +638,11 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 		return 1, fmt.Errorf("from %s starting container: %w", runtime, err)
 	}
 	defer func() {
-		if stopped.Load() == 0 {
+		if atomic.LoadUint32(&stopped) == 0 {
 			if err := kill("").Run(); err != nil {
 				options.Logger.Infof("error from %s stopping container: %v", runtime, err)
 			}
-			stopped.Store(1)
+			atomic.StoreUint32(&stopped, 1)
 		}
 	}()
 
@@ -663,7 +665,7 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 		stat.Stderr = os.Stderr
 		stateOutput, err := stat.Output()
 		if err != nil {
-			if stopped.Load() != 0 {
+			if atomic.LoadUint32(&stopped) != 0 {
 				// container exited
 				break
 			}
@@ -676,20 +678,20 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 		case specs.StateCreating, specs.StateCreated, specs.StateRunning:
 			// all fine
 		case specs.StateStopped:
-			stopped.Store(1)
+			atomic.StoreUint32(&stopped, 1)
 		default:
 			return 1, fmt.Errorf("container status unexpectedly changed to %q", state.Status)
 		}
-		if stopped.Load() != 0 {
+		if atomic.LoadUint32(&stopped) != 0 {
 			break
 		}
 		select {
 		case <-finishedCopy:
-			stopped.Store(1)
+			atomic.StoreUint32(&stopped, 1)
 		case <-time.After(time.Until(now.Add(100 * time.Millisecond))):
 			continue
 		}
-		if stopped.Load() != 0 {
+		if atomic.LoadUint32(&stopped) != 0 {
 			break
 		}
 	}
@@ -1188,12 +1190,14 @@ func (b *Builder) runUsingRuntimeSubproc(isolation define.Isolation, options Run
 	if err != nil {
 		return fmt.Errorf("creating configuration pipe: %w", err)
 	}
-	confwg.Go(func() {
+	confwg.Add(1)
+	go func() {
 		_, conferr = io.Copy(pwriter, bytes.NewReader(config))
 		if conferr != nil {
 			conferr = fmt.Errorf("while copying configuration down pipe to child process: %w", conferr)
 		}
-	})
+		confwg.Done()
+	}()
 
 	// create network configuration pipes
 	var containerCreateR, containerCreateW fileCloser
