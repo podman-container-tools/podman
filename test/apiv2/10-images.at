@@ -50,6 +50,11 @@ t GET /v1.43/images/json 200 \
 t GET /v1.44/images/json 200 \
   .[0].VirtualSize=null
 
+# Test digests parameter is accepted and returns valid response with RepoDigests
+t GET images/json?digests=true 200 \
+  length=1 \
+  .[0].RepoDigests[0]~sha256:
+
 # Negative test case
 t GET images/json?filter=nonesuch 200 length=0
 
