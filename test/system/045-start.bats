@@ -72,6 +72,15 @@ load helpers
     run_podman rm -f $c1 $c2 $c3
 }
 
+@test "podman start --filter with nonexistent container name" {
+    bogus="nonexistent-start-filter-$(random_string 15)"
+    run_podman create --name=startfiltertest $IMAGE sleep 3600
+    run_podman 125 start --filter name=startfiltertest "$bogus"
+    is "$output" 'Error: no container with name or ID "'"$bogus"'" found: no such container' \
+       "nonexistent name with --filter must fail"
+    run_podman rm -f startfiltertest
+}
+
 @test "podman start --filter invalid-restart-policy - return error" {
     run_podman run -d $IMAGE /bin/true
     cid="$output"
