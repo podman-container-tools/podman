@@ -441,10 +441,7 @@ func GetImages(w http.ResponseWriter, r *http.Request) {
 			fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
 		return
 	}
-	if _, found := r.URL.Query()["digests"]; found && query.Digests {
-		utils.UnSupportedParameter("digests")
-		return
-	}
+
 
 	var filterList []string
 	var err error
