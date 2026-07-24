@@ -240,6 +240,16 @@ var _ = Describe("Podman start", func() {
 		Expect(session1.OutputToString()).To(BeEquivalentTo(cid2))
 	})
 
+	It("podman start --filter with nonexistent container name", func() {
+		session := podmanTest.Podman([]string{"container", "create", "--name", "startfiltertest", ALPINE, "top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		session = podmanTest.Podman([]string{"start", "--filter", "name=startfiltertest", "nonexistent-start-filter-bogus"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, `no container with name or ID "nonexistent-start-filter-bogus" found: no such container`))
+	})
+
 	It("podman start container does not set HOME to home of caller", func() {
 		home, err := os.UserHomeDir()
 		Expect(err).ToNot(HaveOccurred())
