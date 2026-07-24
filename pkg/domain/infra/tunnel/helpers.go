@@ -81,8 +81,8 @@ func getContainersAndInputByContext(contextWithConnection context.Context, all, 
 			}
 		}
 
-		if !found && !ignore {
-			return nil, nil, fmt.Errorf("unable to find container %q: %w", nameOrID, define.ErrNoSuchCtr)
+		if !found {
+			continue
 		}
 	}
 	return filtered, rawInputs, nil
