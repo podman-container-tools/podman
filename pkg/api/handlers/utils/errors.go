@@ -102,11 +102,6 @@ func BadRequest(w http.ResponseWriter, key string, value string, err error) {
 	Error(w, http.StatusBadRequest, e)
 }
 
-// UnsupportedParameter logs a given param by its string name as not supported.
-func UnSupportedParameter(param string) {
-	log.Infof("API parameter %q: not supported", param)
-}
-
 type BuildError struct {
 	err  error
 	code int
