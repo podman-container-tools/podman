@@ -46,13 +46,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # TODO: figure out how to cache the binaries from the build job to the actual test tasks
-      # - name: Download binaries
-      #   if: ${{ inputs.test != 'build' }} # Download build binaries for tests to not compile them again.
-      #   uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-      #   with:
-      #     name: "binaries-${{ inputs.distro }}"
-      #     path: bin/
+      - name: Cache Go modules and build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .gocache
+            .gomodcache
+          key: go-cache-${{ inputs.distro }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-cache-${{ inputs.distro }}-
+
+      - name: Download binaries
+        if: ${{ inputs.test != 'build' }} # Download build binaries for tests to not compile them again.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: "binaries-${{ inputs.distro }}"
+          path: bin/
 
       - uses: lima-vm/lima-actions/setup@55627e31b78637bf254a8b2a14da8ea7d12564e5 # v1.1.0
         id: lima
@@ -67,17 +76,17 @@ jobs:
       # stored by github somewhere else.
 
       - name: Run test on lima
-        run: | # zizmor: ignore[template-injection]
+         # zizmor: ignore[template-injection]
+        run: |
           ./hack/ci/ci.sh ${{ inputs.test }} ${{ inputs.mode }} ${{ inputs.priv }} ${{ inputs.distro }}
 
-      # TODO: figure out how to cache the binaries from the build job to the actual test tasks
-      # - name: Upload binaries as artifact
-      #   if: ${{ inputs.test == 'build' }}
-      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
-      #   with:
-      #     name: "binaries-${{ inputs.distro }}"
-      #     path: "bin/"
-      #     if-no-files-found: error
+      - name: Upload binaries as artifact
+        if: ${{ inputs.test == 'build' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: "binaries-${{ inputs.distro }}"
+          path: "bin/"
+          if-no-files-found: error
 
       - name: Upload journal as artifact
         if: always() # always collect the log

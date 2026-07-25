@@ -58,3 +58,7 @@ contrib/win-installer/*.wixobj
 contrib/win-installer/*.wixpdb
 contrib/win-installer/*.log
 podman-cleanup-tracer.log*
+
+# Go cache directories for VM/CI builds
+/.gocache/
+/.gomodcache/
