@@ -749,7 +749,7 @@ func (c *Container) hostname(network bool) string {
 	}
 
 	// Otherwise use the container's short ID as the hostname.
-	if len(c.ID()) < 11 {
+	if len(c.ID()) < 12 {
 		return c.ID()
 	}
 	return c.ID()[:12]

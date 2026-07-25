@@ -7,7 +7,54 @@ import (
 
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"go.podman.io/common/pkg/config"
 )
+
+func TestHostnameShortIDTruncation(t *testing.T) {
+	// Test the boundary at len(ID) == 12.
+	// Before the fix, len(ID) == 11 would fall through to ID[:12] and panic.
+	for _, tc := range []struct {
+		name string
+		id   string
+	}{
+		{
+			name: "11-char ID does not panic and returns full ID",
+			id:   "abcdefghijklmnopqrstu",
+		},
+		{
+			name: "12-char ID truncates to 12 chars",
+			id:   "abcdefghijklmnopqrstuv",
+		},
+		{
+			name: "short ID returned as-is",
+			id:   "abc",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Container{
+				config: &ContainerConfig{
+					ID: tc.id,
+					Spec: &spec.Spec{
+						Linux: &spec.Linux{
+							Namespaces: []spec.LinuxNamespace{
+								{Type: spec.UTSNamespace},
+							},
+						},
+					},
+				},
+				runtime: &Runtime{
+					config: &config.Config{},
+				},
+			}
+			got := c.Hostname()
+			if len(tc.id) < 12 {
+				assert.Equal(t, tc.id, got)
+			} else {
+				assert.Equal(t, tc.id[:12], got)
+			}
+		})
+	}
+}
 
 func TestGenerateUserPasswdEntry(t *testing.T) {
 	c := Container{
