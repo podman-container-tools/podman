@@ -81,12 +81,12 @@ func GetContainerGroups(groups []string, containerMount string, override *Overri
 		err       error
 	)
 
-	groupPath := etcgroup
+	// An override is an already resolved path on the host (e.g. the file that
+	// is bind mounted onto /etc/group in the container), so it must be used
+	// as-is, exactly like GetUserGroupInfo does.
 	if override != nil && override.ContainerEtcGroupPath != "" {
-		groupPath = override.ContainerEtcGroupPath
-	}
-
-	if groupDest, err = securejoin.SecureJoin(containerMount, groupPath); err != nil {
+		groupDest = override.ContainerEtcGroupPath
+	} else if groupDest, err = securejoin.SecureJoin(containerMount, etcgroup); err != nil {
 		logrus.Debug(err)
 		return nil, err
 	}
