@@ -22,7 +22,7 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           # Find a line that starts with /retrigger (on its own line, with optional command arguments)
-          trigger_line=$(echo "$COMMENT_BODY" | grep -m 1 -E '^/retrigger(\s+|$)')
+          trigger_line=$(echo "$COMMENT_BODY" | grep -m 1 -E '^/retrigger(\s+|$)' || true)
 
           if [ -z "$trigger_line" ]; then
             echo "No valid /retrigger command found on its own line."
