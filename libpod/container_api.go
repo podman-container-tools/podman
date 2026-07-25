@@ -162,11 +162,14 @@ func (c *Container) Update(updateOptions *entities.ContainerUpdateOptions) error
 		return err
 	}
 
-	if err := c.update(updateOptions); err != nil {
-		return err
-	}
-	c.newContainerEvent(events.Update)
-	return nil
+	var updateErr error
+	defer func() {
+		if updateErr == nil {
+			c.newContainerEvent(events.Update)
+		}
+	}()
+	updateErr = c.update(updateOptions)
+	return updateErr
 }
 
 // Attach to a container.
