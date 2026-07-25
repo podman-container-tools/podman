@@ -135,6 +135,8 @@ A Maintainer must meet the responsibilities and requirements of a Reviewer, plus
 If a Maintainer needs or wants to work on the CI/CD pipelines and requires elevated access to manage things like secrets or the github runners they
 can petition a Core Maintainer to be granted these additional privileges in GitHub. Depending on what kind of access is required they can be given
 the 'CI/CD Admin' *Organization* role which enables them access to organization-wide runner and secret configuration, or they can ask for the 'CI/CD Admin' *Repository* role (must be granted per repository) to access the repository level runners or secrets.
+Additionally, Maintainers and Core Maintainers are authorized to trigger and re-run failed CI/CD workflow jobs directly within a pull request by using the `/retrigger` comment command.
+
 
 #### Process of becoming a maintainer:
 1. A current reviewer must be sponsored by a Maintainer of the repository in question or a Core Maintainer. The Maintainer or Core Maintainer will open a PR against the repository and add the nominee as a Maintainer in the [MAINTAINERS.md](./MAINTAINERS.md) file. The need for a sponsor is removed for Emeritus Maintainers, who may open this pull request themselves.

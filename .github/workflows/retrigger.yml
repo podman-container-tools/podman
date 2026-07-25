@@ -9,15 +9,38 @@ jobs:
     name: Retrigger
     if: |
       github.event.issue.pull_request &&
-      (github.event.comment.body == '/retrigger' || startsWith(github.event.comment.body, '/retrigger ')) &&
+      contains(github.event.comment.body, '/retrigger') &&
       github.repository == 'podman-container-tools/podman'
     runs-on: ubuntu-latest
     permissions:
       actions: write
       pull-requests: write
     steps:
+      - name: Parse comment trigger
+        id: parse_trigger
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          # Find a line that starts with /retrigger (on its own line, with optional command arguments)
+          trigger_line=$(echo "$COMMENT_BODY" | grep -m 1 -E '^/retrigger(\s+|$)')
+
+          if [ -z "$trigger_line" ]; then
+            echo "No valid /retrigger command found on its own line."
+            echo "triggered=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "triggered=true" >> $GITHUB_OUTPUT
+
+          # Extract arguments (e.g. "all" or specific job name)
+          # Strip the leading '/retrigger' and any leading/trailing spaces
+          args=$(echo "$trigger_line" | sed -E 's/^\/retrigger//' | sed -E 's/^\s+|\s+$//g')
+          echo "args=$args" >> $GITHUB_OUTPUT
+          echo "Parsed trigger line: '$trigger_line' with args: '$args'"
+
       - name: Check user authorization
         id: auth
+        if: steps.parse_trigger.outputs.triggered == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
@@ -34,8 +57,17 @@ jobs:
             echo "authorized=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Comment on unauthorized attempt
+        if: steps.parse_trigger.outputs.triggered == 'true' && steps.auth.outputs.authorized == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Sorry @${COMMENT_AUTHOR}, only users with write permission can retrigger CI workflows."
+
       - name: React to comment
-        if: steps.auth.outputs.authorized == 'true'
+        if: steps.parse_trigger.outputs.triggered == 'true' && steps.auth.outputs.authorized == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -45,12 +77,13 @@ jobs:
           gh api "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" -X POST -F "content=rocket" --silent || true
 
       - name: Retrigger workflows
-        if: steps.auth.outputs.authorized == 'true'
+        if: steps.parse_trigger.outputs.triggered == 'true' && steps.auth.outputs.authorized == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
           PR_API_URL: ${{ github.event.issue.pull_request.url }}
+          ARGS: ${{ steps.parse_trigger.outputs.args }}
         run: |
           pr_data=$(gh api "$PR_API_URL")
           PR_HEAD_SHA=$(echo "$pr_data" | jq -r '.head.sha')
@@ -65,7 +98,13 @@ jobs:
           fi
 
           # Inform the user in the PR thread
-          gh pr comment "$PR_NUMBER" --body "Retriggering workflow runs for commit \`$PR_HEAD_SHA\`..."
+          if [ -z "$ARGS" ]; then
+            gh pr comment "$PR_NUMBER" --body "Retriggering failed jobs for commit \`$PR_HEAD_SHA\`..."
+          elif [ "$ARGS" = "all" ]; then
+            gh pr comment "$PR_NUMBER" --body "Retriggering all jobs for commit \`$PR_HEAD_SHA\`..."
+          else
+            gh pr comment "$PR_NUMBER" --body "Retriggering job \`$ARGS\` for commit \`$PR_HEAD_SHA\`..."
+          fi
 
           # Iterate through runs and restart them
           echo "$runs_json" | jq -c '.' | while read -r run; do
@@ -78,11 +117,9 @@ jobs:
               continue
             fi
 
-            if [ "$run_status" = "completed" ] || [ "$run_status" = "failure" ] || [ "$run_status" = "success" ] || [ "$run_status" = "cancelled" ]; then
-              echo "Rerunning completed workflow: $run_name ($run_id)"
-              gh run rerun "$run_id"
-            else
-              echo "Cancelling and rerunning active workflow: $run_name ($run_id)"
+            # Cancel active run if needed
+            if [ "$run_status" != "completed" ] && [ "$run_status" != "failure" ] && [ "$run_status" != "success" ] && [ "$run_status" != "cancelled" ]; then
+              echo "Cancelling active workflow: $run_name ($run_id)"
               gh run cancel "$run_id"
 
               # Wait for the run to transition to completed/cancelled
@@ -93,7 +130,25 @@ jobs:
                   break
                 fi
               done
+            fi
 
+            # Now perform the rerun based on the arguments
+            if [ -z "$ARGS" ]; then
+              echo "Rerunning failed jobs for workflow: $run_name ($run_id)"
+              gh run rerun "$run_id" --failed
+            elif [ "$ARGS" = "all" ]; then
+              echo "Rerunning all jobs for workflow: $run_name ($run_id)"
               gh run rerun "$run_id"
+            else
+              echo "Searching for job '$ARGS' in workflow: $run_name ($run_id)"
+              jobs_json=$(gh api "repos/${REPO}/actions/runs/${run_id}/jobs" -q '.jobs[] | {id: .id, name: .name}')
+              job_id=$(echo "$jobs_json" | jq -r --arg name "$ARGS" 'select(.name | contains($name)) | .id' | head -n 1)
+
+              if [ -n "$job_id" ] && [ "$job_id" != "null" ]; then
+                echo "Rerunning specific job ID $job_id ($ARGS) in workflow $run_name"
+                gh api -X POST "repos/${REPO}/actions/jobs/${job_id}/rerun"
+              else
+                echo "Job '$ARGS' not found in workflow $run_name"
+              fi
             fi
           done
