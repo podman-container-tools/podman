@@ -4,13 +4,13 @@ package netavark
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"go.podman.io/common/libnetwork/internal/util"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
 )
@@ -25,6 +25,49 @@ func (n *netavarkNetwork) execUpdate(networkName string, networkDNSServers []str
 	return retErr
 }
 
+func (n *netavarkNetwork) validateSetupOptions(namespacePath string, options types.SetupOptions) error {
+	if namespacePath == "" {
+		return errors.New("namespacePath is empty")
+	}
+	if options.ContainerID == "" {
+		return errors.New("ContainerID is empty")
+	}
+	if len(options.Networks) == 0 {
+		return errors.New("must specify at least one network")
+	}
+	for _, net := range options.Networks {
+		network, ok := n.networks[net.Name]
+		if !ok {
+			return fmt.Errorf("unable to find network with name %s: %w", net.Name, types.ErrNoSuchNetwork)
+		}
+
+		err := validatePerNetworkOpts(network, &net.PerNetworkOptions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validatePerNetworkOpts checks that all given static ips are in a subnet on this network.
+func validatePerNetworkOpts(network *types.Network, netOpts *types.PerNetworkOptions) error {
+	if netOpts.InterfaceName == "" {
+		return fmt.Errorf("interface name on network %s is empty", network.Name)
+	}
+	if network.IPAMOptions[types.Driver] == types.HostLocalIPAMDriver {
+	outer:
+		for _, ip := range netOpts.StaticIPs {
+			for _, s := range network.Subnets {
+				if s.Subnet.Contains(ip) {
+					continue outer
+				}
+			}
+			return fmt.Errorf("requested static ip %s not in any subnet on network %s", ip.String(), network.Name)
+		}
+	}
+	return nil
+}
+
 // Setup will setup the container network namespace. It returns
 // a map of StatusBlocks, the key is the network name.
 func (n *netavarkNetwork) Setup(namespacePath string, options types.SetupOptions) (_ map[string]types.StatusBlock, retErr error) {
@@ -35,7 +78,7 @@ func (n *netavarkNetwork) Setup(namespacePath string, options types.SetupOptions
 		return nil, err
 	}
 
-	err = util.ValidateSetupOptions(n, namespacePath, options)
+	err = n.validateSetupOptions(namespacePath, options)
 	if err != nil {
 		return nil, err
 	}

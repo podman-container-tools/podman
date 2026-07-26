@@ -28,10 +28,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/containers/ocicrypt/config"
 	"github.com/containers/ocicrypt/keywrap"
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 type gpgKeyWrapper struct {

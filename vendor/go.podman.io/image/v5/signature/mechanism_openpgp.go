@@ -10,22 +10,13 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"go.podman.io/image/v5/signature/internal"
 	"go.podman.io/storage/pkg/homedir"
-
-	// This is a fallback code; the primary recommendation is to use the gpgme mechanism
-	// implementation, which is out-of-process and more appropriate for handling long-term private key material
-	// than any Go implementation.
-	// For this verify-only fallback, we haven't reviewed any of the
-	// existing alternatives to choose; so, for now, continue to
-	// use this frozen deprecated implementation.
-	//lint:ignore SA1019 See above
-	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 )
 
-// A GPG/OpenPGP signing mechanism, implemented using x/crypto/openpgp.
+// A GPG/OpenPGP signing mechanism, implemented using github.com/ProtonMail/go-crypto/openpgp.
 type openpgpSigningMechanism struct {
 	keyring openpgp.EntityList
 }
@@ -154,18 +145,6 @@ func (m *openpgpSigningMechanism) Verify(unverifiedSignature []byte) (contents [
 	}
 	if md.SignedBy == nil {
 		return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Key not found for key ID %x in signature", md.SignedByKeyId))
-	}
-	if md.Signature != nil {
-		if md.Signature.SigLifetimeSecs != nil {
-			expiry := md.Signature.CreationTime.Add(time.Duration(*md.Signature.SigLifetimeSecs) * time.Second)
-			if time.Now().After(expiry) {
-				return nil, "", internal.NewInvalidSignatureError(fmt.Sprintf("Signature expired on %s", expiry))
-			}
-		}
-	} else if md.SignatureV3 == nil {
-		// Coverage: If md.SignedBy != nil, the final md.UnverifiedBody.Read() either sets one of md.Signature or md.SignatureV3,
-		// or sets md.SignatureError.
-		return nil, "", internal.NewInvalidSignatureError("Unexpected openpgp.MessageDetails: neither Signature nor SignatureV3 is set")
 	}
 
 	// Uppercase the fingerprint to be compatible with gpgme

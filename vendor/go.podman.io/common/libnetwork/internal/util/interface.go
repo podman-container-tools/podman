@@ -13,7 +13,4 @@ type NetUtil interface {
 	Len() int
 	// DefaultInterfaceName return the default interface name, this will be suffixed by a number
 	DefaultInterfaceName() string
-	// Network returns the network with the given name or ID.
-	// It returns an error if the network is not found
-	Network(nameOrID string) (*types.Network, error)
 }
