@@ -174,7 +174,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		imageVolumeFlagName := "image-volume"
 		createFlags.String(
 			imageVolumeFlagName, cf.ImageVolume,
-			`Tells podman how to handle the builtin image volumes ("bind"|"tmpfs"|"ignore")`,
+			`Tells podman how to handle the builtin image volumes ("anonymous"|"tmpfs"|"ignore")`,
 		)
 		_ = cmd.RegisterFlagCompletionFunc(imageVolumeFlagName, AutocompleteImageVolume)
 

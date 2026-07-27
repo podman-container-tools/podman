@@ -9067,18 +9067,18 @@ msgstr ""
 
 #: ../../source/markdown/podman-create.1.md:810
 #: ../../source/markdown/podman-run.1.md:852
-msgid "**--image-volume**=**bind** | *tmpfs* | *ignore*"
+msgid "**--image-volume**=**anonymous** | *tmpfs* | *ignore*"
 msgstr ""
 
 #: ../../source/markdown/podman-create.1.md:812
 #: ../../source/markdown/podman-run.1.md:854
-msgid "Tells Podman how to handle the builtin image volumes. Default is **bind**."
+msgid "Tells Podman how to handle the builtin image volumes. Default is **anonymous**."
 msgstr ""
 
 #: ../../source/markdown/podman-create.1.md:814
 #: ../../source/markdown/podman-run.1.md:856
 msgid ""
-"**bind**: An anonymous named volume is created and mounted into the "
+"**anonymous**: An anonymous named volume is created and mounted into the "
 "container."
 msgstr ""
 
