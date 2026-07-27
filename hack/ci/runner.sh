@@ -31,10 +31,6 @@ fedora-rawhide)
     CI_DESIRED_COMPOSEFS="composefs"
     # Enable sequoia testing
     TEST_BUILD_TAGS="containers_image_sequoia"
-
-    # mount a tmpfs for the container storage. This is a work around for the staging pull composefs flake.
-    # FIXME: https://github.com/containers/podman/issues/28813
-    sudo mount -t tmpfs -o size=75%,mode=0700 none /var/lib/containers
     ;;
 debian-sid)
     ;;
