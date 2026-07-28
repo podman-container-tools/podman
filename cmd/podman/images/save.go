@@ -104,6 +104,9 @@ func save(cmd *cobra.Command, args []string) (finalErr error) {
 		tags      []string
 		succeeded = false
 	)
+	if strings.HasPrefix(args[0], "docker://") {
+		return fmt.Errorf("image %q is not in local storage; remove the docker:// prefix", args[0])
+	}
 	if cmd.Flag("compress").Changed && saveOpts.Format != define.V2s2ManifestDir {
 		return errors.New("--compress can only be set when --format is 'docker-dir'")
 	}

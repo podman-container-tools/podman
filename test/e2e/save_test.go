@@ -67,6 +67,12 @@ var _ = Describe("Podman save", func() {
 		Expect(save).To(ExitWithError(125, "repository name must be lowercase"))
 	})
 
+	It("podman save rejects docker transport", func() {
+		save := podmanTest.Podman([]string{"save", "-q", "docker://" + ALPINE})
+		save.WaitWithDefaultTimeout()
+		Expect(save).To(ExitWithError(125, "is not in local storage; remove the docker:// prefix"))
+	})
+
 	It("podman save to directory with oci format", func() {
 		outdir := filepath.Join(podmanTest.TempDir, "save")
 
