@@ -5,13 +5,18 @@
 
 set -eo pipefail
 
+# Clean up TMPDIR/BATS_TMPDIR so they do not point to a shared host directory (e.g. from GitHub Actions)
+# which has mismatched UID permissions in the VM.
+export TMPDIR=/tmp
+export BATS_TMPDIR=/tmp
+
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 source "$SCRIPT_DIR/lib.sh"
 
 parse_args "$@"
 
-PRESERVE_ENVS="CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_FS,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM"
+PRESERVE_ENVS="CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_FS,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM,TMPDIR,BATS_TMPDIR"
 # run as root or or not
 SUDO=""
 if [[ "$PRIV" == "root" ]]; then
