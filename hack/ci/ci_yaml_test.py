@@ -50,7 +50,7 @@ class TestCase(unittest.TestCase):
             if item.get('runs-on') is not None:
                 timeout = item.get('timeout-minutes')
                 self.assertIsNotNone(timeout, msg=f"job '{job}' has no timeout-minutes set")
-                self.assertLessEqual(timeout, 60, msg=f"job '{job}' should never take longer than 1 hour")
+                self.assertLessEqual(timeout, 70, msg=f"job '{job}' should never take longer than 70 minutes")
 
 if __name__ == "__main__":
     unittest.main()

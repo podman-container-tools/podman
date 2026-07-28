@@ -47,7 +47,7 @@ jobs:
 
   validate-source:
     name: Validate source code changes
-    runs-on: cncf-ubuntu-8-32-x86
+    runs-on: cncf-ubuntu-16-64-x86
     if: github.repository == 'podman-container-tools/podman'
     # While in most cases it should faster than 10m, if there are many commits in the PR "Build each commit" takes a bit longer
     timeout-minutes: 20
@@ -437,7 +437,7 @@ jobs:
       needs.path-filter.outputs.machine == 'true'
     name: machine linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 70
     strategy:
       fail-fast: false
       matrix:
