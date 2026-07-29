@@ -94,16 +94,16 @@ func configureAPI(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) http.Handl
       _ = user
       _ = password
 
-      return nil, errors.NotImplemented("basic auth  ({{ .ID }}) has not yet been implemented")
+      return nil, errors.NotImplemented("basic auth  ({{ escapeDoubleQuoted .ID }}) has not yet been implemented")
     }
   }
     {{- else if .IsAPIKeyAuth }}
-  // Applies when the "{{ .Name }}" {{ .Source }} is set
+  // Applies when the "{{ escapeDoubleQuoted .Name }}" {{ escapeDoubleQuoted .Source }} is set
   if api.{{ pascalize .ID }}Auth == nil {
   api.{{ pascalize .ID }}Auth = func(token string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
       _ = token
 
-      return nil, errors.NotImplemented("api key auth ({{ .ID }}) {{.Name}} from {{.Source}} param [{{ .Name }}] has not yet been implemented")
+      return nil, errors.NotImplemented("api key auth ({{ escapeDoubleQuoted .ID }}) {{ escapeDoubleQuoted .Name }} from {{ escapeDoubleQuoted .Source }} param [{{ escapeDoubleQuoted .Name }}] has not yet been implemented")
     }
   }
     {{- else if .IsOAuth2 }}
@@ -112,7 +112,7 @@ func configureAPI(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) http.Handl
       _ = token
       _ = scopes
 
-      return nil, errors.NotImplemented("oauth2 bearer auth ({{ .ID }}) has not yet been implemented")
+      return nil, errors.NotImplemented("oauth2 bearer auth ({{ escapeDoubleQuoted .ID }}) has not yet been implemented")
     }
   }
     {{- end }}

@@ -1100,6 +1100,15 @@ func SkipIfNotRootless(reason string) {
 	}
 }
 
+func SkipIfNoIPv6Route(reason string) {
+	GinkgoHelper()
+	checkReason(reason)
+	out, err := exec.Command("ip", "-6", "route", "show", "default").Output()
+	if err != nil || len(strings.TrimSpace(string(out))) == 0 {
+		Skip("[noIPv6Route]: " + reason)
+	}
+}
+
 func SkipIfNotExist(reason, path string) {
 	checkReason(reason)
 	if _, err := os.Stat(path); err != nil {

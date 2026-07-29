@@ -80,7 +80,7 @@ func (c *Container) newContainerEventWithInspectData(status events.Status, healt
 			return nil
 		}()
 		if err != nil {
-			return fmt.Errorf("adding inspect data to container-create event: %v", err)
+			return fmt.Errorf("adding inspect data to container-create event: %w", err)
 		}
 	}
 

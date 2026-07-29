@@ -1707,7 +1707,7 @@ VOLUME %s`, ALPINE, volPath, volPath)
 		}
 
 		scopeOptions := PodmanExecOptions{
-			Wrapper: []string{"systemd-run", "--scope"},
+			Wrapper: []string{"systemd-run", "--scope", "--property=Delegate=yes"},
 		}
 		if isRootless() {
 			scopeOptions.Wrapper = append(scopeOptions.Wrapper, "--user")

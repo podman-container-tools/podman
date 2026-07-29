@@ -362,7 +362,7 @@ func (ir *ImageEngine) ManifestAddArtifact(ctx context.Context, name string, fil
 		Config:        opts.Config,
 		LayerType:     opts.LayerType,
 		ExcludeTitles: opts.ExcludeTitles,
-		Annotations:   opts.Annotations,
+		Annotations:   opts.ArtifactAnnotations,
 		Subject:       opts.Subject,
 	}
 

@@ -680,14 +680,14 @@ func ManifestModify(w http.ResponseWriter, r *http.Request) {
 			// We waited until after the extraction goroutine finished to ensure
 			// that we'd pick up its changes to the ArtifactFiles list.
 			manifestAddArtifactOptions := entities.ManifestAddArtifactOptions{
-				Type:          body.ArtifactType,
-				LayerType:     body.ArtifactLayerType,
-				ConfigType:    body.ArtifactConfigType,
-				Config:        body.ArtifactConfig,
-				ExcludeTitles: body.ArtifactExcludeTitles,
-				Annotations:   body.ArtifactAnnotations,
-				Subject:       body.ArtifactSubject,
-				Files:         body.ArtifactFiles,
+				Type:                body.ArtifactType,
+				LayerType:           body.ArtifactLayerType,
+				ConfigType:          body.ArtifactConfigType,
+				Config:              body.ArtifactConfig,
+				ExcludeTitles:       body.ArtifactExcludeTitles,
+				ArtifactAnnotations: body.ArtifactAnnotations,
+				Subject:             body.ArtifactSubject,
+				Files:               body.ArtifactFiles,
 			}
 			id, err := imageEngine.ManifestAddArtifact(r.Context(), name, body.ArtifactFiles, manifestAddArtifactOptions)
 			if err != nil {

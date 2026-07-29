@@ -39,22 +39,20 @@ func (s *Builder) inferNames() {
 	s.GoName = goName
 	s.Name = goName
 
-	// Read the model annotation directly off the cached parsed
-	// Blocks. findAnnotation walks every annotation in the comment
-	// group, so multi-annotation comments (e.g. `swagger:type` +
-	// `swagger:model objectStruct`) still surface the model
-	// override regardless of source order. AnnotationArg() carries
-	// the IDENT_NAME when one was given; bare `swagger:model`
-	// keeps the Go identifier as the schema name.
+	// Read the model annotation directly off the cached parsed Blocks. findAnnotation walks every
+	// annotation in the comment group, so multi-annotation comments (e.g. `swagger:type` +
+	// `swagger:model objectStruct`) still surface the model override regardless of source order.
+	//
+	// AnnotationArg() carries the IDENT_NAME when one was given; bare `swagger:model` keeps the Go
+	// identifier as the schema name.
 	model := s.findAnnotation(s.Decl.Comments, grammar.AnnModel)
 	if model == nil {
 		return
 	}
 
 	s.annotated = true
-	// A same-package duplicate has its override suppressed (D-4): keep
-	// the Go name so the x-go-name extension and definition key stay
-	// consistent with EntityDecl.Names/DefKey.
+	// A same-package duplicate has its override suppressed (D-4): keep the Go name so the x-go-name
+	// extension and definition key stay consistent with EntityDecl.Names/DefKey.
 	if override, ok := model.AnnotationArg(); ok && !s.Decl.ModelOverrideSuppressed() {
 		s.Name = override
 	}

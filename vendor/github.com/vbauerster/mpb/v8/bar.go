@@ -44,7 +44,7 @@ type bState struct {
 	ewmaDecorators  []decor.EwmaDecorator
 	filler          BarFiller
 	extender        extenderFunc
-	waitBar         *Bar // key for (*pState).queueBars
+	waitFor         *Bar // key for (*pState).queueBars
 	trimSpace       bool
 	aborted         bool
 	triggerComplete bool
@@ -502,13 +502,14 @@ func (s *bState) wSyncTable() (table decorSyncTable) {
 }
 
 func (b *Bar) done() {
-	if b.container.autoRefresh {
+	if b.container.refreshEnabled {
 		// Technically this call isn't required, but if refresh rate is set to
 		// one hour for example and bar completes within a few minutes p.Wait()
 		// will wait for one hour. This call helps to avoid unnecessary waiting.
 		go b.tryEarlyRefresh()
 	} else {
 		b.cancel()
+		go b.container.runQueuetBar(b)
 	}
 }
 

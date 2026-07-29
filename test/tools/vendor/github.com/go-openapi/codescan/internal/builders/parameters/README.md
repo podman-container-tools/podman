@@ -32,11 +32,47 @@ diagnostic sink, ParseBlocks cache, MakeRef). See
 
 ## <a id="builder"></a>§builder — the build chain
 
-`Build(operations)` iterates over the declaration's `swagger:parameters
-<opid>` arguments — one struct can attach to many operations — and
-calls `buildFromType` for each. The chain unwraps pointers, dispatches
-named types and aliases, and ultimately reaches `buildFromStruct`
-which walks the struct fields.
+`Build(operations)` iterates the declaration's `swagger:parameters`
+markers (parsed by the grammar into `grammar.ParametersBlock`s) and
+dispatches per target:
+
+- **operations** (`swagger:parameters opid …`) — `buildIntoOperations`
+  inlines the struct's fields into each named operation (one struct can
+  attach to many). The historical behaviour.
+- **shared** (`swagger:parameters *`) — `buildShared` builds the fields as
+  a free-standing set and harvests them into `shared`, keyed by the
+  resolved parameter name (so `name:` / `NameFromTags` overrides are the
+  key — C3). Exposed via `SharedParameters()`; the spec builder
+  (`registerSharedParameters`) merges them into the top-level
+  `#/parameters` map with **keep-first** conflict handling (shared
+  parameters are never renamed — they are referenced only by short name —
+  so a duplicate short name keeps the first and drops the later with a
+  `scan.shared-parameter-conflict` warning; resolution order is
+  package-path then position, so it is load-order independent).
+- **path** (`swagger:parameters /path`) — `buildPathItem` inlines the
+  struct's fields into the named path-item, harvested into `pathItems`
+  (keyed by exact path) and exposed via `PathItemParameters()`. The spec
+  builder (`applyPathItemParameters`) appends them to `PathItem.Parameters`
+  after all paths exist, alongside any `swagger:parameters /path name`
+  $refs. Application is exact-path (OAS2 has no path hierarchy); a target
+  naming a path with no operations is dropped with a warning. Path-item and
+  operation parameters co-exist — the operation one wins at resolution
+  (co-presence, not removal).
+
+A `swagger:parameters * opid …` marker also *references* the struct's
+shared parameters into the listed operations; the target ops are exposed
+via `SharedRefOperations()` and the spec builder
+(`applyParameterRefs`) emits the `#/parameters/{name}` $refs once the
+shared map is complete (alongside the standalone reference markers the
+scanner collects into `ScanCtx.ParameterRefs`). A reference to an
+unregistered shared parameter is dropped with a
+`scan.dangling-parameter-ref` warning. Duplicate target / reference tokens
+the grammar drops raise `scan.duplicate-target` (C1) / `scan.duplicate-ref`
+(C2) warnings.
+
+Each target ultimately reaches `buildFromType` → `buildFromStruct`, which
+walks the struct fields (unwrapping pointers, dispatching named types and
+aliases).
 
 For each non-embedded exported field, `processParamField` runs the
 following ordered steps:

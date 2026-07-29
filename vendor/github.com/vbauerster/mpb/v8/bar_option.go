@@ -55,12 +55,13 @@ func BarWidth(width int) BarOption {
 // When argument bar completes or aborts queued bar replaces its place.
 func BarQueueAfter(bar *Bar) BarOption {
 	return func(s *bState) {
-		s.waitBar = bar
+		s.waitFor = bar
 	}
 }
 
-// BarRemoveOnComplete removes both bar's filler and its decorators
-// on complete event.
+// BarRemoveOnComplete removes both bar's filler and its decorators on
+// complete event. This one is ineffective if PopCompletedMode ContainerOption
+// is enabled.
 func BarRemoveOnComplete() BarOption {
 	return func(s *bState) {
 		s.rmOnComplete = true

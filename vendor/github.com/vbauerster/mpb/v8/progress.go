@@ -2,21 +2,24 @@ package mpb
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"iter"
 	"math"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/vbauerster/mpb/v8/cwriter"
+	"github.com/vbauerster/cupwriter"
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
 const defaultRefreshRate = 150 * time.Millisecond
 const defaultHmQueueLength = 64
+const defaultWidth = 80
 
 // ErrDone represents use after `(*Progress).Wait()` error.
 var ErrDone = fmt.Errorf("%T instance can't be reused after %[1]T.Wait()", (*Progress)(nil))
@@ -26,14 +29,14 @@ type Progress struct {
 	// Render error if any, to be inspected after (*Progress).Wait call only.
 	Error error
 
-	ctx          context.Context
-	cancel       func()
-	pwg, bwg     *sync.WaitGroup
-	operateState chan func(*pState)
-	interceptIO  chan func(io.Writer)
-	renderReq    chan time.Time
-	done         chan struct{}
-	autoRefresh  bool
+	ctx            context.Context
+	cancel         func()
+	pwg, bwg       *sync.WaitGroup
+	operateState   chan func(*pState)
+	interceptIO    chan func(io.Writer)
+	renderReq      chan time.Time
+	done           chan struct{}
+	refreshEnabled bool
 }
 
 type queueBar struct {
@@ -48,6 +51,7 @@ type pState struct {
 	popPriority int
 
 	// following are provided/overrode by user
+	uwg              *sync.WaitGroup
 	hmQueueLen       int
 	reqWidth         int
 	refreshRate      time.Duration
@@ -58,11 +62,11 @@ type pState struct {
 	queueBars        map[*Bar]*queueBar
 	output           io.Writer
 	debugOut         io.Writer
-	uwg              *sync.WaitGroup
+	cwriter          ConsoleWriter
 	popCompleted     bool
 	autoRefresh      bool
-	rmOnComplete     bool
 	forceTTY         bool
+	hasUnrendered    bool
 }
 
 // New creates new Progress container instance. It's not possible to
@@ -82,8 +86,6 @@ func NewWithContext(ctx context.Context, options ...ContainerOption) *Progress {
 
 	s := &pState{
 		popPriority: math.MinInt32,
-		hmQueueLen:  defaultHmQueueLength,
-		refreshRate: defaultRefreshRate,
 		queueBars:   make(map[*Bar]*queueBar),
 		output:      os.Stdout,
 		debugOut:    io.Discard,
@@ -99,7 +101,9 @@ func NewWithContext(ctx context.Context, options ...ContainerOption) *Progress {
 		s.shutdownNotifier = make(chan any)
 	}
 
-	s.hm = make(heapManager, s.hmQueueLen)
+	if s.cwriter == nil {
+		s.cwriter = cupwriter.New(s.output, s.forceTTY)
+	}
 
 	p := &Progress{
 		ctx:          ctx,
@@ -112,13 +116,13 @@ func NewWithContext(ctx context.Context, options ...ContainerOption) *Progress {
 	}
 
 	var refreshStrategy func(*Progress, *pState)
-	cw := cwriter.New(s.output, s.reqWidth, s.forceTTY)
 	switch {
 	case s.manualRC != nil:
+		p.refreshEnabled = true
 		p.renderReq = make(chan time.Time)
 		refreshStrategy = (*Progress).manualRefreshListener
-	case s.autoRefresh || s.forceTTY || cw.IsTerminal():
-		p.autoRefresh = true
+	case s.autoRefresh || s.cwriter.IsTerminal():
+		p.refreshEnabled = true
 		p.renderReq = make(chan time.Time)
 		refreshStrategy = (*Progress).autoRefreshListener
 	default:
@@ -126,8 +130,9 @@ func NewWithContext(ctx context.Context, options ...ContainerOption) *Progress {
 	}
 
 	p.pwg.Add(3)
+	s.hm = make(heapManager, cmp.Or(s.hmQueueLen, defaultHmQueueLength))
 	go s.hm.run(p.pwg, s.shutdownNotifier, s.handOverBarHeap)
-	go p.serve(s, cw)
+	go p.serve(s)
 	go refreshStrategy(p, s)
 	return p
 }
@@ -173,16 +178,10 @@ func (p *Progress) Add(total int64, filler BarFiller, options ...BarOption) (*Ba
 	}
 	ch := make(chan *Bar, 1)
 	select {
-	case p.operateState <- func(ps *pState) {
-		p.bwg.Add(1)
-		bs := ps.makeBarState(total, filler, options...)
+	case p.operateState <- func(s *pState) {
+		bs := s.makeBarState(total, filler, options...)
 		bar := p.makeBar(bs.priority)
-		if bs.waitBar != nil {
-			ps.queueBars[bs.waitBar] = &queueBar{bs, bar}
-		} else {
-			go bar.serve(bs)
-			ps.hm.push(bar, true)
-		}
+		s.runOrQueue(bs, bar, p.refreshEnabled)
 		ch <- bar
 	}:
 		return <-ch, nil
@@ -193,7 +192,7 @@ func (p *Progress) Add(total int64, filler BarFiller, options ...BarOption) (*Ba
 
 func (p *Progress) makeBar(priority int) *Bar {
 	ctx, cancel := context.WithCancel(p.ctx)
-
+	p.bwg.Add(1)
 	return &Bar{
 		ctx:          ctx,
 		cancel:       cancel,
@@ -218,6 +217,19 @@ func (p *Progress) iterateBars(yield func(*Bar) bool) error {
 		return nil
 	case <-p.done:
 		return ErrDone
+	}
+}
+
+// runQueuetBar must be called on p.refreshEnabled = false only
+func (p *Progress) runQueuetBar(b *Bar) {
+	select {
+	case p.operateState <- func(s *pState) {
+		if qb, ok := s.queueBars[b]; ok {
+			delete(s.queueBars, b)
+			go qb.bar.serve(qb.state)
+		}
+	}:
+	case <-p.done:
 	}
 }
 
@@ -271,7 +283,7 @@ func (p *Progress) Shutdown() {
 	p.pwg.Wait()
 }
 
-func (p *Progress) serve(s *pState, cw *cwriter.Writer) {
+func (p *Progress) serve(s *pState) {
 	defer func() {
 		if s.uwg != nil {
 			s.uwg.Wait() // wait for user wg
@@ -282,24 +294,23 @@ func (p *Progress) serve(s *pState, cw *cwriter.Writer) {
 		p.pwg.Done()
 	}()
 
-	var dw *cwriter.Writer
+	var cw ConsoleWriter
 	if s.delayRC != nil {
-		dw = cwriter.New(io.Discard, 0, false)
-	} else {
-		dw = cw
+		cw, s.cwriter = s.cwriter, cupwriter.New(io.Discard, false)
 	}
 
 	for {
 		select {
 		case <-s.delayRC:
-			dw = cw
+			s.cwriter = cw
 			s.delayRC = nil
 		case op := <-p.operateState:
 			op(s)
 		case fn := <-p.interceptIO:
-			fn(cw)
+			fn(s.cwriter)
 		case <-p.renderReq:
-			err := s.render(dw)
+			s.hasUnrendered = false
+			err := s.render()
 			if err != nil {
 				p.cancel()
 				// refreshStrategy goroutine is sending to p.renderReq unbuffered chan
@@ -316,8 +327,8 @@ func (p *Progress) serve(s *pState, cw *cwriter.Writer) {
 				}
 			}
 		case <-p.done:
-			if p.autoRefresh && s.rmOnComplete {
-				err := s.render(cw)
+			if p.refreshEnabled && s.hasUnrendered {
+				err := s.render()
 				if err != nil {
 					_, _ = fmt.Fprintln(s.debugOut, err.Error())
 					p.Error = err
@@ -330,7 +341,7 @@ func (p *Progress) serve(s *pState, cw *cwriter.Writer) {
 
 func (p *Progress) autoRefreshListener(s *pState) {
 	defer p.pwg.Done()
-	ticker := time.NewTicker(s.refreshRate)
+	ticker := time.NewTicker(cmp.Or(s.refreshRate, defaultRefreshRate))
 	defer ticker.Stop()
 	for {
 		select {
@@ -366,24 +377,24 @@ func (p *Progress) nopRefreshListener(_ *pState) {
 	close(p.done)
 }
 
-func (s *pState) render(cw *cwriter.Writer) error {
+func (s *pState) render() (err error) {
 	s.hm.sync()
 
-	width, height, err := cw.GetTermSize()
-	if err != nil {
-		return err
+	var width, height int
+	if s.cwriter.IsTerminal() {
+		width, height, err = s.cwriter.GetTermSize()
+		if err != nil {
+			return err
+		}
+	} else {
+		width = cmp.Or(s.reqWidth, defaultWidth)
+		height = width*3/2 + 1
 	}
 
-	return s.flush(cw, height, s.hm.render(width))
-}
-
-func (s *pState) flush(cw *cwriter.Writer, height int, seq iter.Seq[*Bar]) error {
 	var total, popCount int
 	var rows [][]io.Reader
 
-	s.rmOnComplete = false
-
-	for b := range seq {
+	for b := range s.hm.render(width) {
 		frame := <-b.frameCh
 		if frame.err != nil {
 			b.cancel()
@@ -391,11 +402,11 @@ func (s *pState) flush(cw *cwriter.Writer, height int, seq iter.Seq[*Bar]) error
 			return frame.err // b.frameCh is buffered it's ok to return here
 		}
 		var discarded int
-		for i := len(frame.rows) - 1; i >= 0; i-- {
+		for _, row := range slices.Backward(frame.rows) {
 			if total < height {
 				total++
 			} else {
-				_, _ = io.Copy(io.Discard, frame.rows[i]) // Found IsInBounds
+				_, _ = io.Copy(io.Discard, row)
 				discarded++
 			}
 		}
@@ -403,23 +414,8 @@ func (s *pState) flush(cw *cwriter.Writer, height int, seq iter.Seq[*Bar]) error
 
 		switch frame.shutdown {
 		case 1:
-			if qb, ok := s.queueBars[b]; ok {
-				delete(s.queueBars, b)
-				qb.bar.priority = b.priority
-				go qb.bar.serve(qb.state)
-				s.hm.push(qb.bar, true)
-			} else {
-				switch {
-				case s.popCompleted && !frame.noPop:
-					b.priority = s.popPriority
-					s.popPriority++
-					fallthrough
-				case !frame.rmOnComplete:
-					s.hm.push(b, false)
-				}
-				s.rmOnComplete = s.rmOnComplete || frame.rmOnComplete
-			}
 			b.cancel()
+			s.onShutdown(b, frame)
 		case 2:
 			if s.popCompleted && !frame.noPop {
 				popCount += len(frame.rows) - discarded
@@ -431,16 +427,53 @@ func (s *pState) flush(cw *cwriter.Writer, height int, seq iter.Seq[*Bar]) error
 		}
 	}
 
-	for i := len(rows) - 1; i >= 0; i-- {
-		for _, r := range rows[i] {
-			_, err := cw.ReadFrom(r)
+	for _, row := range slices.Backward(rows) {
+		for _, r := range row {
+			_, err := s.cwriter.ReadFrom(r)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	return cw.Flush(total - popCount)
+	return s.cwriter.Flush(total - popCount)
+}
+
+func (s *pState) onShutdown(b *Bar, frame *renderFrame) {
+	if qb, ok := s.queueBars[b]; ok {
+		delete(s.queueBars, b)
+		qb.bar.priority = b.priority
+		s.hm.push(qb.bar, true)
+		go qb.bar.serve(qb.state)
+		return
+	}
+	if s.popCompleted && !frame.noPop {
+		b.priority = s.popPriority
+		s.popPriority++
+		frame.rmOnComplete = false
+	}
+	if !frame.rmOnComplete {
+		s.hm.push(b, false)
+	} else {
+		s.hasUnrendered = true
+	}
+}
+
+func (s *pState) runOrQueue(bs *bState, bar *Bar, refreshEnabled bool) {
+	if bs.waitFor == nil {
+		if refreshEnabled {
+			s.hm.push(bar, true)
+		}
+		go bar.serve(bs)
+		return
+	}
+	select {
+	case <-bs.waitFor.ctx.Done():
+		bs.waitFor = nil
+		s.runOrQueue(bs, bar, refreshEnabled)
+	default:
+		s.queueBars[bs.waitFor] = &queueBar{bs, bar}
+	}
 }
 
 func (s *pState) makeBarState(total int64, filler BarFiller, options ...BarOption) *bState {

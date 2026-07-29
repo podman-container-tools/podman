@@ -58,6 +58,8 @@ func (c *Container) getNetworkOptions(networkOpts []types.NamedPerNetworkOptions
 		ContainerName:     getNetworkPodName(c),
 		DNSServers:        nameservers,
 		ContainerHostname: c.NetworkHostname(),
+		NetworkStatus:     c.getNetworkStatus(),
+		NetworkOrder:      networkNamesFromOpts(networkOpts),
 	}
 	opts.PortMappings = c.convertPortMappings()
 
@@ -69,6 +71,16 @@ func (c *Container) getNetworkOptions(networkOpts []types.NamedPerNetworkOptions
 		opts.Networks = networkOpts
 	}
 	return opts
+}
+
+// networkNamesFromOpts extracts an ordered list of network names from
+// the given NamedPerNetworkOptions slice.
+func networkNamesFromOpts(nets []types.NamedPerNetworkOptions) []string {
+	names := make([]string, 0, len(nets))
+	for _, n := range nets {
+		names = append(names, n.Name)
+	}
+	return names
 }
 
 // setUpNetwork will set up the networks, on error it will also tear down the
@@ -119,15 +131,8 @@ func (r *Runtime) teardownNetwork(ctr *Container) error {
 		return nil
 	}
 
-	// Pasta forwarding mode: remove port forwarding rules (via pesto) before
-	// netavark tears down bridge/nftables so pasta stops forwarding first.
-	// Rootlessport mode: no explicit teardown needed (exits with conmon).
-	if rootless.IsRootless() && ctr.config.NetMode.IsBridge() && len(ctr.config.PortMappings) > 0 &&
-		r.config.Network.RootlessPortForwarder == config.RootlessPortForwarderPasta {
-		if err := r.teardownRootlessPortMappingViaPesto(ctr); err != nil {
-			logrus.Warnf("pesto port cleanup failed for container %s: %v", ctr.ID(), err)
-		}
-	}
+	// Note: pasta/pesto port teardown is handled inside container-libs
+	// netavark Teardown(), so no explicit pesto cleanup is needed here.
 
 	netOpts := ctr.getNetworkOptions(networks)
 	return r.teardownNetworkBackend(ctr.state.NetNS, netOpts)
@@ -157,9 +162,19 @@ func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.Statu
 	}
 	logrus.Infof("Going to reload container %s network", ctr.ID())
 
+	// store the old status before unsetting it
+	netStatus := ctr.getNetworkStatus()
 	err := r.teardownNetwork(ctr)
 	if err != nil {
 		logrus.Error(err)
+	}
+	// We must unset the network status here so
+	ctr.state.NetworkStatus = nil
+
+	// always save even when there was an error
+	err = ctr.save()
+	if err != nil {
+		return nil, fmt.Errorf("failed to save container status after network teardown: %w", err)
 	}
 
 	networkOpts, err := ctr.networks()
@@ -168,7 +183,6 @@ func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.Statu
 	}
 
 	// Set the same network settings as before..
-	netStatus := ctr.getNetworkStatus()
 	newNetworkOpts := make([]types.NamedPerNetworkOptions, 0, len(networkOpts))
 	for _, network := range networkOpts {
 		for name, netInt := range netStatus[network.Name].Interfaces {
@@ -185,7 +199,7 @@ func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.Statu
 	}
 	ctr.perNetworkOpts = newNetworkOpts
 
-	return r.configureNetNS(ctr, ctr.state.NetNS)
+	return r.configureNetNS(ctr, ctr.state.NetNS, true)
 }
 
 // Produce an InspectNetworkSettings containing information on the container
@@ -434,6 +448,8 @@ func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
 	opts := types.NetworkOptions{
 		ContainerID:   c.config.ID,
 		ContainerName: getNetworkPodName(c),
+		NetworkStatus: networkStatus,
+		NetworkOrder:  networkNamesFromOpts(networks),
 	}
 	opts.PortMappings = c.convertPortMappings()
 
@@ -577,6 +593,8 @@ func (c *Container) NetworkConnect(nameOrID, netName string, netOpts types.PerNe
 	opts := types.NetworkOptions{
 		ContainerID:   c.config.ID,
 		ContainerName: getNetworkPodName(c),
+		NetworkStatus: networkStatus,
+		NetworkOrder:  append(networkNamesFromOpts(networks), netName),
 	}
 	opts.PortMappings = c.convertPortMappings()
 	opts.Networks = []types.NamedPerNetworkOptions{namedOpts}

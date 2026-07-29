@@ -14,20 +14,19 @@ import (
 	"github.com/go-openapi/codescan/internal/parsers/grammar"
 )
 
-// errInvalidValue is the sentinel wrapped by buildProperty when a
-// validation property's raw value fails to parse against the keyword's
-// declared shape. The caller (applyParamLine) catches it and forwards
-// the wrapping message as a CodeInvalidAnnotation diagnostic.
+// errInvalidValue is the sentinel wrapped by buildProperty when a validation property's raw value
+// fails to parse against the keyword's declared shape.
+//
+// The caller (applyParamLine) catches it and forwards the wrapping message as a
+// CodeInvalidAnnotation diagnostic.
 var errInvalidValue = errors.New("invalid value")
 
-// ParamDecl is one parsed `+ name:`-delimited chunk from a
-// swagger:route `Parameters:` body.
+// ParamDecl is one parsed `+ name:`-delimited chunk from a swagger:route `Parameters:` body.
 //
-// Head fields are routebody-owned (the orchestrator reads them
-// directly to populate the *spec.Parameter shell). Validation fields
-// land on Block as grammar.Property entries that the orchestrator
-// dispatches via the standard handlers seam — see package godoc for
-// the field split.
+// Head fields are routebody-owned (the orchestrator reads them directly to populate the
+// *spec.Parameter shell).
+// Validation fields land on Block as grammar.Property entries that the orchestrator dispatches via
+// the standard handlers seam — see package godoc for the field split.
 type ParamDecl struct {
 	Name        string
 	In          string
@@ -40,22 +39,22 @@ type ParamDecl struct {
 	Pos         token.Position
 }
 
-// chunkParseState tracks the in-flight param chunk while iterating
-// lines. The state machine: a `+` or `-` line opens a new chunk,
-// subsequent lines fill its fields, the next `+`/`-` (or end-of-body)
-// commits the current chunk.
+// chunkParseState tracks the in-flight param chunk while iterating lines.
+//
+// The state machine: a `+` or `-` line opens a new chunk, subsequent lines fill its fields, the
+// next `+`/`-` (or end-of-body) commits the current chunk.
 type chunkParseState struct {
 	cur     *ParamDecl
 	props   []grammar.Property
 	basePos token.Position
 }
 
-// ParseParameters lowers a Parameters: raw block body into typed
-// param chunks. See package godoc for the grammar spec.
+// ParseParameters lowers a Parameters: raw block body into typed param chunks.
 //
-// basePos is the source position of the `parameters:` keyword head;
-// each chunk's Pos is offset by the chunk's line number within body
-// (1-indexed) so diagnostics point at the offending line in the
+// See package godoc for the grammar spec.
+//
+// basePos is the source position of the `parameters:` keyword head; each chunk's Pos is offset by
+// the chunk's line number within body (1-indexed) so diagnostics point at the offending line in the
 // original source.
 //
 // diag may be nil; when nil, diagnostics are dropped.
@@ -76,9 +75,9 @@ func ParseParameters(body string, basePos token.Position, diag func(grammar.Diag
 		}
 		pos := offsetPos(basePos, lineNo)
 
-		// Chunk-start sigil: `+ ` or `- ` (alias). The sigil itself may
-		// be the entire line (bare `+` / `-`) or be followed by a
-		// `key: value` on the same line.
+		// Chunk-start sigil: `+ ` or `- ` (alias).
+		// The sigil itself may be the entire line (bare `+` / `-`) or be followed by a `key: value` on
+		// the same line.
 		if isChunkSigil(line) {
 			commitChunk(&state, &out, diag)
 			state.cur = &ParamDecl{Pos: pos}
@@ -89,8 +88,7 @@ func ParseParameters(body string, basePos token.Position, diag func(grammar.Diag
 			}
 		}
 
-		// Lines without a `:` are silently ignored, as are lines
-		// whose key trims to empty.
+		// Lines without a `:` are silently ignored, as are lines whose key trims to empty.
 		key, value, ok := splitKeyValue(line)
 		if !ok {
 			continue
@@ -109,9 +107,10 @@ func ParseParameters(body string, basePos token.Position, diag func(grammar.Diag
 	return out
 }
 
-// isChunkSigil reports whether line begins with the `+ ` (canonical)
-// or `- ` (alias) chunk-start sigil. The sigil is the very first
-// character — leading whitespace was trimmed by the caller.
+// isChunkSigil reports whether line begins with the `+ ` (canonical) or `- ` (alias) chunk-start
+// sigil.
+//
+// The sigil is the very first character — leading whitespace was trimmed by the caller.
 func isChunkSigil(line string) bool {
 	if line == "" {
 		return false
@@ -120,8 +119,9 @@ func isChunkSigil(line string) bool {
 }
 
 // splitKeyValue splits one `key: value` line on the first colon.
-// Returns (key, value, true) when both halves are non-empty after
-// trimming; (_, _, false) otherwise.
+//
+// Returns (key, value, true) when both halves are non-empty after trimming; (_, _, false)
+// otherwise.
 func splitKeyValue(line string) (key, value string, ok bool) {
 	before, after, ok := strings.Cut(line, ":")
 	if !ok {
@@ -135,9 +135,10 @@ func splitKeyValue(line string) (key, value string, ok bool) {
 	return key, value, true
 }
 
-// applyParamLine dispatches one `key: value` line onto the current
-// chunk. Head keys land directly on cur; validation keys are lowered
-// to grammar.Property entries on props (the eventual ParamDecl.Block).
+// applyParamLine dispatches one `key: value` line onto the current chunk.
+//
+// Head keys land directly on cur; validation keys are lowered to grammar.Property entries on props
+// (the eventual ParamDecl.Block).
 func applyParamLine(cur *ParamDecl, props *[]grammar.Property, key, value string, pos token.Position, diag func(grammar.Diagnostic)) {
 	switch strings.ToLower(key) {
 	case "name":
@@ -149,10 +150,9 @@ func applyParamLine(cur *ParamDecl, props *[]grammar.Property, key, value string
 				"in: %q is not one of path/query/header/body/formData", value)
 			return
 		}
-		// allowFormAlias=true accepts the v1 routes affordance
-		// `form` and canonicalises to `formData`. See Q27 — the
-		// alias is contained to this parser; no other capture site
-		// passes allowFormAlias=true.
+		// allowFormAlias=true accepts the v1 routes affordance `form` and canonicalises to `formData`.
+		// See Q27 — the alias is contained to this parser; no other capture site passes
+		// allowFormAlias=true.
 		cur.In = canonical
 	case "type":
 		cur.TypeRef = value
@@ -178,8 +178,7 @@ func applyParamLine(cur *ParamDecl, props *[]grammar.Property, key, value string
 		cur.AllowEmpty = v
 	default:
 		// Validation property: look up in the grammar keyword table.
-		// Unknown keys emit CodeInvalidAnnotation rather than being
-		// dropped silently.
+		// Unknown keys emit CodeInvalidAnnotation rather than being dropped silently.
 		kw, ok := grammar.Lookup(key)
 		if !ok {
 			emitDiagf(diag, pos,
@@ -195,11 +194,11 @@ func applyParamLine(cur *ParamDecl, props *[]grammar.Property, key, value string
 	}
 }
 
-// commitChunk finalises the in-flight chunk (if any), builds its
-// validation Block, and appends to out. A bare `+`/`-` sigil with
-// no key:value follow-up (no name, no other head fields, no
-// properties) emits CodeInvalidAnnotation and is dropped rather
-// than being committed as an empty parameter.
+// commitChunk finalises the in-flight chunk (if any), builds its validation Block, and appends to
+// out.
+//
+// A bare `+`/`-` sigil with no key:value follow-up (no name, no other head fields, no properties)
+// emits CodeInvalidAnnotation and is dropped rather than being committed as an empty parameter.
 func commitChunk(state *chunkParseState, out *[]ParamDecl, diag func(grammar.Diagnostic)) {
 	if state.cur == nil {
 		return
@@ -218,19 +217,21 @@ func commitChunk(state *chunkParseState, out *[]ParamDecl, diag func(grammar.Dia
 	state.props = nil
 }
 
-// isEmptyChunk reports whether the in-flight chunk has nothing the
-// orchestrator could use — no name, no in, no type, no description,
-// no validations. A chunk with just `required: true` and nothing else
-// is still considered empty (no name → no usable param).
+// isEmptyChunk reports whether the in-flight chunk has nothing the orchestrator could use — no
+// name, no in, no type, no description, no validations.
+//
+// A chunk with just `required: true` and nothing else is still considered empty (no name → no
+// usable param).
 func isEmptyChunk(cur *ParamDecl, props []grammar.Property) bool {
 	return cur.Name == "" && cur.In == "" && cur.TypeRef == "" &&
 		cur.Format == "" && cur.Description == "" && len(props) == 0
 }
 
-// buildProperty constructs a grammar.Property from one validation
-// key/value pair, populating Typed when the keyword's Shape demands
-// it. Returns an error when typing fails (caller surfaces it as a
-// diagnostic with the keyword name attached).
+// buildProperty constructs a grammar.Property from one validation key/value pair, populating Typed
+// when the keyword's Shape demands it.
+//
+// Returns an error when typing fails (caller surfaces it as a diagnostic with the keyword name
+// attached).
 func buildProperty(kw grammar.Keyword, raw string, pos token.Position) (grammar.Property, error) {
 	p := grammar.Property{
 		Keyword: kw,
@@ -257,24 +258,21 @@ func buildProperty(kw grammar.Keyword, raw string, pos token.Position) (grammar.
 		}
 		p.Typed = grammar.TypedValue{Type: grammar.ShapeBool, Boolean: v}
 	case grammar.ShapeEnumOption:
-		// Closed-vocab string-enum (e.g. collectionFormat). Set Typed
-		// only when raw is in the allowed set; otherwise leave
-		// ShapeNone so the dispatcher's IsTyped() check drops the
-		// write while the handler-side string fallback recovers the
-		// raw value where supported (handlers.CollectionFormatString
-		// reads pr.Value when Typed is empty).
+		// Closed-vocab string-enum (e.g. collectionFormat).
+		// Set Typed only when raw is in the allowed set; otherwise leave ShapeNone so the dispatcher's
+		// IsTyped() check drops the write while the handler-side string fallback recovers the raw value
+		// where supported (handlers.CollectionFormatString reads pr.Value when Typed is empty).
 		if slices.Contains(kw.Values, raw) {
 			p.Typed = grammar.TypedValue{Type: grammar.ShapeEnumOption, String: raw}
 		}
 	case grammar.ShapeNone, grammar.ShapeString, grammar.ShapeCommaList,
 		grammar.ShapeRawBlock, grammar.ShapeRawValue:
-		// Raw / string / comma-list keywords carry their value
-		// through Property.Value unchanged; the dispatcher's Raw and
-		// String callbacks read it from there and coerce per the
-		// resolved schema type at write time.
+		// Raw / string / comma-list keywords carry their value through Property.Value unchanged; the
+		// dispatcher's Raw and String callbacks read it from there and coerce per the resolved schema
+		// type at write time.
 	default:
-		// Unknown shape — future grammar additions. Keep the raw value
-		// on Property.Value; the dispatcher will treat it as untyped.
+		// Unknown shape — future grammar additions.
+		// Keep the raw value on Property.Value; the dispatcher will treat it as untyped.
 	}
 	return p, nil
 }

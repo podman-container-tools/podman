@@ -838,3 +838,16 @@ func setPdeathsig(cmd *exec.Cmd) {
 	}
 	cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
 }
+
+// setgroupsDenied reports whether this process's user namespace denies
+// setgroups(). Returns false on read error, so callers still attempt it.
+func setgroupsDenied() bool {
+	setgroupState, err := os.ReadFile("/proc/self/setgroups")
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			logrus.Warnf("error reading /proc/self/setgroups: %v", err)
+		}
+		return false
+	}
+	return strings.TrimSpace(string(setgroupState)) == "deny"
+}

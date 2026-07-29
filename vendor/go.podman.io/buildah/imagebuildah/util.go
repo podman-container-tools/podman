@@ -10,6 +10,7 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"go.podman.io/buildah"
+	"go.podman.io/buildah/define"
 )
 
 type mountInfo struct {
@@ -19,12 +20,14 @@ type mountInfo struct {
 }
 
 // Consumes mount flag in format of `--mount=type=bind,src=/path,from=image` and
-// return mountInfo with values, otherwise values are empty if keys are not present in the option.
+// return mountInfo with values. Source and From are empty if not present in the
+// option; Type defaults to "bind" if not present, matching the default used
+// when the mount is actually set up (see internal/volumes.getMounts).
 func getFromAndSourceKeysFromMountFlag(mount string) mountInfo {
 	tokens := strings.Split(strings.TrimPrefix(mount, "--mount="), ",")
 	source := ""
 	from := ""
-	mountType := ""
+	mountType := define.TypeBind
 	for _, option := range tokens {
 		if optionSplit := strings.Split(option, "="); len(optionSplit) == 2 {
 			if optionSplit[0] == "src" || optionSplit[0] == "source" {

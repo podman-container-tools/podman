@@ -25,11 +25,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/containers/ocicrypt/config/pkcs11config"
 	"github.com/containers/ocicrypt/crypto/pkcs11"
 	"github.com/go-jose/go-jose/v4"
 	"go.yaml.in/yaml/v3"
-	"golang.org/x/crypto/openpgp"
 )
 
 // parseJWKPrivateKey parses the input byte array as a JWK and makes sure it's a private key

@@ -9,29 +9,27 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// applyBlockToOperation parses path.Remaining through grammar and
-// writes Summary / Description / YAML body content onto op.
+// applyBlockToOperation parses path.Remaining through grammar and writes Summary / Description /
+// YAML body content onto op.
 //
 // # Details
 //
-// See [§walker](./README.md#walker) for the three-step bridge from
-// the lexer-classified Block onto op and the single-fenced-body
-// contract.
+// See [§walker](./README.md#walker) for the three-step bridge from the lexer-classified Block onto
+// op and the single-fenced-body contract.
 func (o *Builder) applyBlockToOperation(op *oaispec.Operation) error {
 	block := grammar.NewParser(o.Ctx.FileSet(),
 		grammar.WithSingleLineCommentAsDescription(o.Ctx.SingleLineCommentAsDescription())).Parse(o.path.Remaining)
 
-	op.Summary = block.Title()
-	op.Description = block.Description()
+	op.Summary = o.CleanGoDoc(block.Title())
+	op.Description = o.CleanGoDoc(block.Description())
 
 	for y := range block.YAMLBlocks() {
-		// Parameters already bound to this operation by a
-		// swagger:parameters struct must survive the inline YAML
-		// unmarshal as distinct entries. encoding/json reuses the
-		// existing slice elements when decoding the inline `parameters:`
-		// array, which would weld a bound body's $ref schema onto an
-		// inline parameter (go-swagger#2651). Decode the inline body into
-		// a fresh slice, then merge the bound parameters back.
+		// Parameters already bound to this operation by a swagger:parameters struct must survive the
+		// inline YAML unmarshal as distinct entries. encoding/json reuses the existing slice elements
+		// when decoding the inline `parameters:` array, which would weld a bound body's $ref schema onto
+		// an inline parameter (go-swagger#2651).
+		//
+		// Decode the inline body into a fresh slice, then merge the bound parameters back.
 		bound := op.Parameters
 		op.Parameters = nil
 		if err := yaml.UnmarshalBody(y.Text, op.UnmarshalJSON); err != nil {
@@ -43,11 +41,12 @@ func (o *Builder) applyBlockToOperation(op *oaispec.Operation) error {
 	return nil
 }
 
-// mergeBoundParameters appends parameters bound by a swagger:parameters
-// struct to the inline swagger:operation parameters, skipping any bound
-// parameter already declared inline. Collisions are matched on
-// (name, location); body parameters collide on location alone (an
-// operation has at most one body). Inline declarations win on conflict.
+// mergeBoundParameters appends parameters bound by a swagger:parameters struct to the inline
+// swagger:operation parameters, skipping any bound parameter already declared inline.
+//
+// Collisions are matched on (name, location); body parameters collide on location alone (an
+// operation has at most one body).
+// Inline declarations win on conflict.
 func mergeBoundParameters(inline, bound []oaispec.Parameter) []oaispec.Parameter {
 	if len(bound) == 0 {
 		return inline
@@ -69,8 +68,8 @@ func mergeBoundParameters(inline, bound []oaispec.Parameter) []oaispec.Parameter
 	return out
 }
 
-// parametersCollide reports whether two parameters occupy the same OAS v2
-// slot: same name and location, or both the (singleton) body parameter.
+// parametersCollide reports whether two parameters occupy the same OAS v2 slot: same name and
+// location, or both the (singleton) body parameter.
 func parametersCollide(a, b oaispec.Parameter) bool {
 	if a.In == "body" || b.In == "body" {
 		return a.In == "body" && b.In == "body"

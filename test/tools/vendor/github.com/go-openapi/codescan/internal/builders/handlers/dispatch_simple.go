@@ -16,9 +16,8 @@ var (
 	_ ifaces.ValidationBuilder          = &headerValidations{}
 )
 
-// paramValidations adapts [oaispec.Parameter] to
-// [ifaces.OperationValidationBuilder] so the SimpleSchema handler family
-// can write level-0 parameter validations through a uniform target.
+// paramValidations adapts [oaispec.Parameter] to [ifaces.OperationValidationBuilder] so the
+// SimpleSchema handler family can write level-0 parameter validations through a uniform target.
 //
 // The adapter is unexported — DispatchParamLevel0 is the entry point.
 type paramValidations struct {
@@ -48,8 +47,8 @@ func (sv paramValidations) SetEnum(val string) {
 func (sv paramValidations) SetDefault(val any) { sv.current.Default = val }
 func (sv paramValidations) SetExample(val any) { sv.current.Example = val }
 
-// headerValidations adapts *oaispec.Header to ifaces.ValidationBuilder
-// for the response-header SimpleSchema dispatch.
+// headerValidations adapts *oaispec.Header to ifaces.ValidationBuilder for the response-header
+// SimpleSchema dispatch.
 type headerValidations struct {
 	current *oaispec.Header
 }
@@ -77,10 +76,11 @@ func (sv headerValidations) SetEnum(val string) {
 func (sv headerValidations) SetDefault(val any) { sv.current.Default = val }
 func (sv headerValidations) SetExample(val any) { sv.current.Example = val }
 
-// paramRequiredBool returns a Walker.Bool callback that writes the
-// `required:` keyword straight onto a parameter target. Parameter-
-// specific — schema writes required onto the enclosing schema keyed
-// by name, headers don't carry `required:` at all.
+// paramRequiredBool returns a Walker.Bool callback that writes the `required:` keyword straight
+// onto a parameter target.
+//
+// Parameter- specific — schema writes required onto the enclosing schema keyed by name, headers
+// don't carry `required:` at all.
 func paramRequiredBool(param *oaispec.Parameter) func(grammar.Property, bool) {
 	return func(pr grammar.Property, val bool) {
 		if !pr.IsTyped() {
@@ -92,14 +92,13 @@ func paramRequiredBool(param *oaispec.Parameter) func(grammar.Property, bool) {
 	}
 }
 
-// DispatchParamLevel0 routes every level-0 Property in block onto
-// param via the grammar Walker. Handler wiring is the SimpleSchema
-// surface: Number/Integer/UniqueBool+RequiredBool/Pattern+CollectionFmt/
-// Raw-with-errSink/Extension.
+// DispatchParamLevel0 routes every level-0 Property in block onto param via the grammar Walker.
 //
-// firstErr captures the first parse error from default/example
-// coercion; callers surface it as a build error. diag may be nil
-// (parser diagnostics dropped when so).
+// Handler wiring is the SimpleSchema surface:
+// Number/Integer/UniqueBool+RequiredBool/Pattern+CollectionFmt/ Raw-with-errSink/Extension.
+//
+// firstErr captures the first parse error from default/example coercion; callers surface it as a
+// build error. diag may be nil (parser diagnostics dropped when so).
 func DispatchParamLevel0(block grammar.Block, param *oaispec.Parameter, diag func(grammar.Diagnostic)) error {
 	valid := paramValidations{param}
 	scheme := &param.SimpleSchema
@@ -129,11 +128,11 @@ func DispatchParamLevel0(block grammar.Block, param *oaispec.Parameter, diag fun
 	return firstErr
 }
 
-// DispatchHeaderLevel0 routes every level-0 Property in block onto
-// header via the grammar Walker. Mirrors DispatchParamLevel0 minus
-// `required:` (headers don't carry it) and wires errSink=nil so
-// malformed default/example values on a header don't fail the
-// build — see [§raw-errsink](./README.md#raw-errsink).
+// DispatchHeaderLevel0 routes every level-0 Property in block onto header via the grammar Walker.
+//
+// Mirrors DispatchParamLevel0 minus `required:` (headers don't carry it) and wires errSink=nil so
+// malformed default/example values on a header don't fail the build — see
+// [§raw-errsink](./README.md#raw-errsink).
 //
 // diag may be nil; when nil, parser diagnostics are dropped.
 func DispatchHeaderLevel0(block grammar.Block, header *oaispec.Header, diag func(grammar.Diagnostic)) {
@@ -156,11 +155,11 @@ func DispatchHeaderLevel0(block grammar.Block, header *oaispec.Header, diag func
 	})
 }
 
-// DispatchItemsLevel dispatches Property entries at the given items
-// depth onto target via the resolvers.ItemsValidations adapter. The
-// shape is identical between parameter and response-header items
-// chains — both write to *oaispec.Items via the items adapter — so a
-// single function serves both consumers.
+// DispatchItemsLevel dispatches Property entries at the given items depth onto target via the
+// resolvers.ItemsValidations adapter.
+//
+// The shape is identical between parameter and response-header items chains — both write to
+// *oaispec.Items via the items adapter — so a single function serves both consumers.
 func DispatchItemsLevel(block grammar.Block, target *oaispec.Items, depth int, diag func(grammar.Diagnostic)) {
 	valid := resolvers.NewItemsValidations(target)
 	scheme := &target.SimpleSchema

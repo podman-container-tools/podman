@@ -82,10 +82,20 @@ func WithOutput(w io.Writer) ContainerOption {
 	}
 }
 
-// WithDebugOutput sets debug output.
+// WithDebugOutput sets debug output. It's only used to write render error if any.
 func WithDebugOutput(w io.Writer) ContainerOption {
 	return func(s *pState) {
 		s.debugOut = cmp.Or(w, io.Discard)
+	}
+}
+
+// WithConsoleWriter overrides default implementation of ConsoleWriter interface.
+// This option makes following options ineffective:
+//   - WithOutput
+//   - ForceTTY
+func WithConsoleWriter(cw ConsoleWriter) ContainerOption {
+	return func(s *pState) {
+		s.cwriter = cw
 	}
 }
 

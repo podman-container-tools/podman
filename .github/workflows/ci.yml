@@ -437,7 +437,7 @@ jobs:
       needs.path-filter.outputs.machine == 'true'
     name: machine linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

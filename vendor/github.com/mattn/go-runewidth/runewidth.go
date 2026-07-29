@@ -18,6 +18,14 @@ var (
 	// StrictEmojiNeutral should be set false if handle broken fonts
 	StrictEmojiNeutral bool = true
 
+	// ZeroWidthJoiner is flag to set to use UTR#51 ZWJ.
+	//
+	// Deprecated: ZWJ sequences are always handled through Unicode
+	// grapheme cluster segmentation now, so this flag has no effect.
+	// It is kept only for compatibility with code written against
+	// v0.0.9 and earlier.
+	ZeroWidthJoiner bool
+
 	// DefaultCondition is a condition in current locale
 	DefaultCondition = &Condition{
 		EastAsianWidth:     false,
@@ -30,6 +38,7 @@ var (
 	widewidth       table // ambiguous + doublewidth merged for EA path
 	eastAsianWidth  widthTable
 	eastAsianWidth0 [0x300]byte
+	strictWidthLUT  [2][0x110000]byte
 )
 
 func init() {
@@ -37,8 +46,9 @@ func init() {
 	widewidth = mergeIntervals(ambiguous, doublewidth)
 	eastAsianWidth = makeWidthTable(zerowidth, widewidth)
 	for r := range eastAsianWidth0 {
-		eastAsianWidth0[r] = byte(runeWidthEastAsian(rune(r)))
+		eastAsianWidth0[r] = byte(runeWidthEastAsianNoCache(rune(r), true))
 	}
+	initStrictWidthLUT()
 	handleEnv()
 }
 
@@ -189,50 +199,8 @@ func inWidthTable(r rune, t widthTable) (int, bool) {
 	return 0, false
 }
 
-func runeWidthEastAsian(r rune) int {
-	if w, ok := inWidthTable(r, eastAsianWidth); ok {
-		return w
-	}
-	return 1
-}
-
-var private = table{
-	{0x00E000, 0x00F8FF}, {0x0F0000, 0x0FFFFD}, {0x100000, 0x10FFFD},
-}
-
-var nonprint = table{
-	{0x0000, 0x001F}, {0x007F, 0x009F}, {0x00AD, 0x00AD},
-	{0x070F, 0x070F}, {0x180B, 0x180E}, {0x200B, 0x200F},
-	{0x2028, 0x202E}, {0x206A, 0x206F}, {0xD800, 0xDFFF},
-	{0xFEFF, 0xFEFF}, {0xFFF9, 0xFFFB}, {0xFFFE, 0xFFFF},
-}
-
-// Condition have flag EastAsianWidth whether the current locale is CJK or not.
-type Condition struct {
-	combinedLut        []byte
-	EastAsianWidth     bool
-	StrictEmojiNeutral bool
-}
-
-// NewCondition return new instance of Condition which is current locale.
-func NewCondition() *Condition {
-	return &Condition{
-		EastAsianWidth:     EastAsianWidth,
-		StrictEmojiNeutral: StrictEmojiNeutral,
-	}
-}
-
-// RuneWidth returns the number of cells in r.
-// See http://www.unicode.org/reports/tr11/
-func (c *Condition) RuneWidth(r rune) int {
-	if r < 0 || r > 0x10FFFF {
-		return 0
-	}
-	if len(c.combinedLut) > 0 {
-		return int(c.combinedLut[r>>1]>>(uint(r&1)*4)) & 3
-	}
-	// optimized version, verified by TestRuneWidthChecksums()
-	if !c.EastAsianWidth {
+func runeWidthNoLUT(r rune, eastAsian, strictEmojiNeutral bool) int {
+	if !eastAsian {
 		if r < 0x20 {
 			return 0
 		}
@@ -258,10 +226,79 @@ func (c *Condition) RuneWidth(r rune) int {
 	if w, ok := inWidthTable(r, eastAsianWidth); ok {
 		return w
 	}
-	if !c.StrictEmojiNeutral && inTable(r, emoji) {
+	if !strictEmojiNeutral && inTable(r, emoji) {
 		return 2
 	}
 	return 1
+}
+
+func runeWidthEastAsianNoCache(r rune, strictEmojiNeutral bool) int {
+	if w, ok := inWidthTable(r, eastAsianWidth); ok {
+		return w
+	}
+	if !strictEmojiNeutral && inTable(r, emoji) {
+		return 2
+	}
+	return 1
+}
+
+func initStrictWidthLUT() {
+	for i := range strictWidthLUT[0] {
+		r := rune(i)
+		strictWidthLUT[0][i] = byte(runeWidthNoLUT(r, false, true))
+		strictWidthLUT[1][i] = byte(runeWidthNoLUT(r, true, true))
+	}
+}
+
+var private = table{
+	{0x00E000, 0x00F8FF}, {0x0F0000, 0x0FFFFD}, {0x100000, 0x10FFFD},
+}
+
+var nonprint = table{
+	{0x0000, 0x001F}, {0x007F, 0x009F}, {0x00AD, 0x00AD},
+	{0x070F, 0x070F}, {0x180B, 0x180E}, {0x200B, 0x200F},
+	{0x2028, 0x202E}, {0x206A, 0x206F}, {0xD800, 0xDFFF},
+	{0xFEFF, 0xFEFF}, {0xFFF9, 0xFFFB}, {0xFFFE, 0xFFFF},
+}
+
+// Condition have flag EastAsianWidth whether the current locale is CJK or not.
+type Condition struct {
+	combinedLut        []byte
+	EastAsianWidth     bool
+	StrictEmojiNeutral bool
+
+	// Deprecated: ZWJ sequences are always handled through Unicode
+	// grapheme cluster segmentation now, so this flag has no effect.
+	// It is kept only for compatibility with code written against
+	// v0.0.9 and earlier.
+	ZeroWidthJoiner bool
+}
+
+// NewCondition return new instance of Condition which is current locale.
+func NewCondition() *Condition {
+	return &Condition{
+		EastAsianWidth:     EastAsianWidth,
+		StrictEmojiNeutral: StrictEmojiNeutral,
+		ZeroWidthJoiner:    ZeroWidthJoiner,
+	}
+}
+
+// RuneWidth returns the number of cells in r.
+// See http://www.unicode.org/reports/tr11/
+func (c *Condition) RuneWidth(r rune) int {
+	if r < 0 || r > 0x10FFFF {
+		return 0
+	}
+	if len(c.combinedLut) > 0 {
+		return int(c.combinedLut[r>>1]>>(uint(r&1)*4)) & 3
+	}
+	if c.StrictEmojiNeutral {
+		if c.EastAsianWidth {
+			return int(strictWidthLUT[1][r])
+		}
+		return int(strictWidthLUT[0][r])
+	}
+	return runeWidthNoLUT(r, c.EastAsianWidth, c.StrictEmojiNeutral)
 }
 
 // CreateLUT will create an in-memory lookup table of 557056 bytes for faster operation.
@@ -283,6 +320,21 @@ func (c *Condition) CreateLUT() {
 		lut[i] = uint8(x0) | uint8(x1)<<4
 	}
 	c.combinedLut = lut
+}
+
+// graphemeWidth returns the width of a single grapheme cluster: the sum of
+// the widths of its runes, capped at 2 cells. The cap keeps multi-rune
+// sequences that render as a single glyph (ZWJ emoji, flags, Hangul jamo)
+// from being counted wider than the two cells terminals give them.
+func (c *Condition) graphemeWidth(cluster string) int {
+	width := 0
+	for _, r := range cluster {
+		width += c.RuneWidth(r)
+	}
+	if width > 2 {
+		width = 2
+	}
+	return width
 }
 
 // StringWidth return width as you can see
@@ -316,14 +368,7 @@ graphemes:
 	width = 0
 	g := graphemes.FromString(s)
 	for g.Next() {
-		var chWidth int
-		for _, r := range g.Value() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // Our best guess at this point is to use the width of the first non-zero-width rune.
-			}
-		}
-		width += chWidth
+		width += c.graphemeWidth(g.Value())
 	}
 	return
 }
@@ -338,13 +383,7 @@ func (c *Condition) Truncate(s string, w int, tail string) string {
 	pos := len(s)
 	g := graphemes.FromString(s)
 	for g.Next() {
-		var chWidth int
-		for _, r := range g.Value() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // See StringWidth() for details.
-			}
-		}
+		chWidth := c.graphemeWidth(g.Value())
 		if width+chWidth > w {
 			pos = g.Start()
 			break
@@ -365,13 +404,7 @@ func (c *Condition) TruncateLeft(s string, w int, prefix string) string {
 
 	g := graphemes.FromString(s)
 	for g.Next() {
-		var chWidth int
-		for _, r := range g.Value() {
-			chWidth = c.RuneWidth(r)
-			if chWidth > 0 {
-				break // See StringWidth() for details.
-			}
-		}
+		chWidth := c.graphemeWidth(g.Value())
 
 		if width+chWidth > w {
 			if width < w {
@@ -384,6 +417,32 @@ func (c *Condition) TruncateLeft(s string, w int, prefix string) string {
 			break
 		}
 
+		width += chWidth
+	}
+
+	return prefix + s[pos:]
+}
+
+// TruncatePrefix cuts the beginning of `s` so the result fits in w cells, with prefix prepended
+func (c *Condition) TruncatePrefix(s string, w int, prefix string) string {
+	if c.StringWidth(prefix) >= w {
+		return prefix
+	}
+
+	sw := c.StringWidth(s)
+	if sw <= w {
+		return s
+	}
+	w -= c.StringWidth(prefix)
+	var width int
+	var pos int
+	g := graphemes.FromString(s)
+	for g.Next() {
+		chWidth := c.graphemeWidth(g.Value())
+		if sw-(width+chWidth) <= w {
+			pos = g.End()
+			break
+		}
 		width += chWidth
 	}
 
@@ -419,11 +478,7 @@ func (c *Condition) FillLeft(s string, w int) string {
 	width := c.StringWidth(s)
 	count := w - width
 	if count > 0 {
-		b := make([]byte, count)
-		for i := range b {
-			b[i] = ' '
-		}
-		return string(b) + s
+		return strings.Repeat(" ", count) + s
 	}
 	return s
 }
@@ -433,11 +488,7 @@ func (c *Condition) FillRight(s string, w int) string {
 	width := c.StringWidth(s)
 	count := w - width
 	if count > 0 {
-		b := make([]byte, count)
-		for i := range b {
-			b[i] = ' '
-		}
-		return s + string(b)
+		return s + strings.Repeat(" ", count)
 	}
 	return s
 }
@@ -476,6 +527,11 @@ func Truncate(s string, w int, tail string) string {
 // TruncateLeft cuts w cells from the beginning of the `s`.
 func TruncateLeft(s string, w int, prefix string) string {
 	return DefaultCondition.TruncateLeft(s, w, prefix)
+}
+
+// TruncatePrefix cuts the beginning of `s` so the result fits in w cells, with prefix prepended
+func TruncatePrefix(s string, w int, prefix string) string {
+	return DefaultCondition.TruncatePrefix(s, w, prefix)
 }
 
 // Wrap return string wrapped with w cells

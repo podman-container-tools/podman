@@ -19,6 +19,7 @@ for more information.
 - [ ] [Documentation](https://github.com/containers/podman/blob/main/docs/README.md) has been updated (or no documentation changes are needed)
 - [ ] All commits pass `make validatepr` (format/lint checks)
 - [ ] [Release note](https://github.com/kubernetes/community/blob/master/contributors/guide/release-notes.md) entered in the section below (or `None` if no user-facing changes)
+- [ ] PR description, commit message, and GitHub comments are human-written, per [LLM Policy](https://github.com/podman-container-tools/community/blob/main/LLM_POLICY.md)
 
 #### Does this PR introduce a user-facing change?
 

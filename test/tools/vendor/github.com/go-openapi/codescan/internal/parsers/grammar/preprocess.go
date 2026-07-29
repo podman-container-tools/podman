@@ -13,15 +13,13 @@ import (
 
 // Line is one preprocessed comment line ready for the lexer.
 //
-// Text has the Go comment markers (// /* */) stripped along with the
-// godoc continuation decoration (leading whitespace, asterisks,
-// slashes, optional markdown table pipe). Used for keyword and
-// annotation classification.
+// Text has the Go comment markers (// /* */) stripped along with the godoc continuation decoration
+// (leading whitespace, asterisks, slashes, optional markdown table pipe).
+// Used for keyword and annotation classification.
 //
-// Raw is the same source line with only the comment marker removed —
-// content whitespace, indentation, and list markers are preserved.
-// Used by the body accumulator so YAML / nested-map indentation
-// survives intact.
+// Raw is the same source line with only the comment marker removed — content whitespace,
+// indentation, and list markers are preserved.
+// Used by the body accumulator so YAML / nested-map indentation survives intact.
 //
 // Pos points to the first character of Text in the source file.
 type Line struct {
@@ -34,10 +32,12 @@ type Line struct {
 var eolReplacer = strings.NewReplacer("\r\n", "\n", "\r", "\n")
 
 // Preprocess turns a Go comment group into a position-tagged []Line.
-// Returns nil for nil inputs. Pure: no syscalls, no side-effects.
 //
-// Line endings are normalised before line splitting (\r\n → \n,
-// lone \r → \n). See README §preprocess-contract.
+// Returns nil for nil inputs.
+// Pure: no syscalls, no side-effects.
+//
+// Line endings are normalised before line splitting (\r\n → \n, lone \r → \n).
+// See README §preprocess-contract.
 func Preprocess(cg *ast.CommentGroup, fset *token.FileSet) []Line {
 	if cg == nil || fset == nil {
 		return nil
@@ -51,8 +51,9 @@ func Preprocess(cg *ast.CommentGroup, fset *token.FileSet) []Line {
 	return out
 }
 
-// stripComment yields one Line per physical source line of one
-// *ast.Comment. Handles both the // and /* */ forms.
+// stripComment yields one Line per physical source line of one *ast.Comment.
+//
+// Handles both the // and /* */ forms.
 func stripComment(raw string, basePos token.Position) []Line {
 	const markerLen = 2 // "//" / "/*"
 	switch {
@@ -100,11 +101,11 @@ func stripComment(raw string, basePos token.Position) []Line {
 }
 
 func stripLine(s string, pos token.Position, rawStrip func(string) string) Line {
-	// Apply the comment-kind decoration strip (block-comment `* `
-	// continuation, or a no-op for `//`) BEFORE the content-prefix trim, so
-	// the only leading `*` trimContentPrefix can see is a markdown list
-	// bullet — never godoc decoration. This keeps `* item` bullets
-	// identifiable as lists without mangling block-comment framing
+	// Apply the comment-kind decoration strip (block-comment `* ` continuation, or a no-op for `//`)
+	// BEFORE the content-prefix trim, so the only leading `*` trimContentPrefix can see is a markdown
+	// list bullet — never godoc decoration.
+	//
+	// This keeps `* item` bullets identifiable as lists without mangling block-comment framing
 	// (go-swagger#1726).
 	raw := rawStrip(s)
 	stripped := trimContentPrefix(raw)
@@ -114,13 +115,14 @@ func stripLine(s string, pos token.Position, rawStrip func(string) string) Line 
 	return Line{Text: stripped, Raw: raw, Pos: pos}
 }
 
-// stripSingleGodocSpace is intentionally a no-op so Line.Raw preserves
-// every character after the comment marker. Kept named so a future
-// per-comment-kind raw-stripping strategy can slot in here.
+// stripSingleGodocSpace is intentionally a no-op so Line.Raw preserves every character after the
+// comment marker.
+//
+// Kept named so a future per-comment-kind raw-stripping strategy can slot in here.
 func stripSingleGodocSpace(s string) string { return s }
 
-// stripBlockContinuation removes the `\s*\*\s?` decoration godoc
-// /* */ continuation lines carry, preserving all indentation otherwise.
+// stripBlockContinuation removes the `\s*\*\s?` decoration godoc /* */ continuation lines carry,
+// preserving all indentation otherwise.
 func stripBlockContinuation(s string) string {
 	leading := -1
 	for i, r := range s {
@@ -143,19 +145,18 @@ func stripBlockContinuation(s string) string {
 	return s
 }
 
-// trimContentPrefix strips godoc-style leading decoration (indentation,
-// slashes, an optional markdown table pipe) and normalises a markdown list
-// bullet to the canonical YAML `- ` form.
+// trimContentPrefix strips godoc-style leading decoration (indentation, slashes, an optional
+// markdown table pipe) and normalises a markdown list bullet to the canonical YAML `- ` form.
 //
-// `*` is NOT in the strip set: block-comment `* ` continuation decoration is
-// already removed by stripLine before this runs, so a leading `*`/`+` here is
-// a markdown bullet, not decoration. Normalising `* item` / `+ item` to
-// `- item` makes every downstream consumer that already understands `- `
-// (prose descriptions, Property.AsList, enum bodies) treat markdown-style and
-// YAML-style lists identically, in one place (go-swagger#1726). gofmt performs
-// the same `*`→`-` rewrite on // doc-comment bullets, so this also matches the
-// gofmt-canonical source form. A leading `-` is preserved so the YAML fence
-// `---` survives intact.
+// `*` is NOT in the strip set: block-comment `* ` continuation decoration is already removed by
+// stripLine before this runs, so a leading `*`/`+` here is a markdown bullet, not decoration.
+//
+// Normalising `* item` / `+ item` to `- item` makes every downstream consumer that already
+// understands `- ` (prose descriptions, Property.AsList, enum bodies) treat markdown-style and
+// YAML-style lists identically, in one place (go-swagger#1726). gofmt performs the same `*`→`-`
+// rewrite on // doc-comment bullets, so this also matches the gofmt-canonical source form.
+//
+// A leading `-` is preserved so the YAML fence `---` survives intact.
 func trimContentPrefix(s string) string {
 	s = strings.TrimLeft(s, " \t/")
 	s = strings.TrimPrefix(s, "|")
@@ -163,9 +164,10 @@ func trimContentPrefix(s string) string {
 	return normalizeBullet(s)
 }
 
-// normalizeBullet rewrites a leading markdown bullet marker (`* ` or `+ `) to
-// the canonical `- `. The marker must be followed by a space (a CommonMark
-// bullet), so `*emphasis*` and `**bold**` prose are left untouched.
+// normalizeBullet rewrites a leading markdown bullet marker (`* ` or `+ `) to the canonical `- `.
+//
+// The marker must be followed by a space (a CommonMark bullet), so `*emphasis*` and `**bold**`
+// prose are left untouched.
 func normalizeBullet(s string) string {
 	if len(s) >= 2 && (s[0] == '*' || s[0] == '+') && s[1] == ' ' {
 		return "- " + s[2:]
@@ -173,9 +175,10 @@ func normalizeBullet(s string) string {
 	return s
 }
 
-// preprocessText handles raw text inputs (already stripped of
-// comment markers) for ParseText / ParseAs. Line endings are
-// normalised (\r\n → \n, lone \r → \n) before splitting.
+// preprocessText handles raw text inputs (already stripped of comment markers) for ParseText /
+// ParseAs.
+//
+// Line endings are normalised (\r\n → \n, lone \r → \n) before splitting.
 func preprocessText(text string, basePos token.Position) []Line {
 	text = normaliseLineEndings(text)
 	rows := strings.Split(text, "\n")

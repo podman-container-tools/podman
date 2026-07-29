@@ -28,7 +28,10 @@ TEXT ·buildDtable_asm(SB), $0-24
 init_main_loop:
 	ADD  R8<<1, R1, R15
 	MOVH (R15), R9
-	CMN  $1, R9
+	AND  $0xffff, R9, R15
+	MOVD $-1, R16
+	AND  $0xffff, R16, R16
+	CMP  R16, R15
 	BNE  do_not_update_high_threshold
 	ADD  R7<<3, R5, R15
 	MOVB R8, 1(R15)
@@ -126,9 +129,13 @@ build_table_main_table:
 	RET
 
 build_table_check1_ok:
-	TST  R1, R1
+	AND  $0xff, R1, R15
+	AND  $0xff, R1, R16
+	TST  R16, R15
 	BNE  build_table_check2_ok
-	CMP  R6, R7
+	AND  $0xffff, R7, R15
+	AND  $0xffff, R6, R16
+	CMP  R16, R15
 	BNE  build_table_check2_ok
 	MOVD ctx+8(FP), R0
 	MOVD R7, 24(R0)

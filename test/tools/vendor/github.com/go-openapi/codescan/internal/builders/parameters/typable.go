@@ -70,20 +70,23 @@ func (pt paramTypable) WithEnumDescription(desc string) {
 	pt.param.AddExtension(resolvers.ExtEnumDesc, desc)
 }
 
-// SimpleSchemaShape satisfies schema.SimpleSchemaProbe. See
-// [§typable](./README.md#typable).
+// SimpleSchemaShape satisfies schema.SimpleSchemaProbe.
+//
+// See [§typable](./README.md#typable).
 func (pt paramTypable) SimpleSchemaShape() *oaispec.SimpleSchema {
 	return &pt.param.SimpleSchema
 }
 
-// HasRef satisfies schema.SimpleSchemaProbe. SimpleSchema forbids
-// $ref; a non-empty Ref signals a violation.
+// HasRef satisfies schema.SimpleSchemaProbe.
+//
+// SimpleSchema forbids $ref; a non-empty Ref signals a violation.
 func (pt paramTypable) HasRef() bool {
 	return pt.param.Ref.String() != ""
 }
 
-// ResetForViolation satisfies schema.SimpleSchemaProbe. Wipes
-// SimpleSchema and Ref back to empty.
+// ResetForViolation satisfies schema.SimpleSchemaProbe.
+//
+// Wipes SimpleSchema and Ref back to empty.
 func (pt paramTypable) ResetForViolation() {
 	pt.param.SimpleSchema = oaispec.SimpleSchema{}
 	pt.param.Ref = oaispec.Ref{}

@@ -684,24 +684,33 @@ func runUsingChrootExecMain() {
 
 	// Drop privileges.
 	user := options.Spec.Process.User
+
+	// Check if /proc/self/setgroups is set to "deny" before attempting to set supplemental groups.
+	denied := setgroupsDenied()
+
 	if len(user.AdditionalGids) > 0 {
-		gids := make([]int, len(user.AdditionalGids))
-		for i := range user.AdditionalGids {
-			gids[i] = int(user.AdditionalGids[i])
-		}
-		logrus.Debugf("setting supplemental groups")
-		if err = syscall.Setgroups(gids); err != nil {
-			fmt.Fprintf(os.Stderr, "error setting supplemental groups list: %v\n", err)
-			os.Exit(1)
+		if denied {
+			logrus.Debugf("not setting supplemental groups %v: /proc/self/setgroups is \"deny\"", user.AdditionalGids)
+		} else {
+			gids := make([]int, len(user.AdditionalGids))
+			for i := range user.AdditionalGids {
+				gids[i] = int(user.AdditionalGids[i])
+			}
+			logrus.Debugf("setting supplemental groups")
+			if err = syscall.Setgroups(gids); err != nil {
+				fmt.Fprintf(os.Stderr, "error setting supplemental groups list: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	} else {
-		setgroups, _ := os.ReadFile("/proc/self/setgroups")
-		if strings.Trim(string(setgroups), "\n") != "deny" {
+		if !denied {
 			logrus.Debugf("clearing supplemental groups")
 			if err = syscall.Setgroups([]int{}); err != nil {
 				fmt.Fprintf(os.Stderr, "error clearing supplemental groups list: %v\n", err)
 				os.Exit(1)
 			}
+		} else {
+			logrus.Debugf("not clearing supplemental groups: /proc/self/setgroups is \"deny\"")
 		}
 	}
 

@@ -670,9 +670,9 @@ error_overread:
 	MOVD R16, ret+24(FP)
 	RET
 
-// skipped sequenceDecs_decode_bmi2 (BMI2 not available on arm64)
+// skipped sequenceDecs_decode_bmi2 (generic twin preferred on arm64)
 
-// skipped sequenceDecs_decode_56_bmi2 (BMI2 not available on arm64)
+// skipped sequenceDecs_decode_56_bmi2 (generic twin preferred on arm64)
 
 // func sequenceDecs_executeSimple_amd64(ctx *executeAsmContext) bool
 // Requires: SSE
@@ -1966,7 +1966,7 @@ error_not_enough_space:
 	MOVD R16, ret+24(FP)
 	RET
 
-// skipped sequenceDecs_decodeSync_bmi2 (BMI2 not available on arm64)
+// skipped sequenceDecs_decodeSync_bmi2 (generic twin preferred on arm64)
 
 // func sequenceDecs_decodeSync_safe_amd64(s *sequenceDecs, br *bitReader, ctx *decodeSyncAsmContext) int
 // Requires: CMOV, SSE
@@ -2702,4 +2702,4 @@ error_not_enough_space:
 	MOVD R16, ret+24(FP)
 	RET
 
-// skipped sequenceDecs_decodeSync_safe_bmi2 (BMI2 not available on arm64)
+// skipped sequenceDecs_decodeSync_safe_bmi2 (generic twin preferred on arm64)

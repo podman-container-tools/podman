@@ -9,7 +9,7 @@ suits you.
 
 ## Install
 
-```bash
+```
 go get github.com/fatih/color
 ```
 
@@ -28,6 +28,18 @@ color.Blue("Prints %s in blue.", "text")
 color.Red("We have red")
 color.Magenta("And many others ..")
 
+```
+
+### RGB colors
+
+If your terminal supports 24-bit colors, you can use RGB color codes.
+
+```go
+color.RGB(255, 128, 0).Println("foreground orange")
+color.RGB(230, 42, 42).Println("foreground red")
+
+color.BgRGB(255, 128, 0).Println("background orange")
+color.BgRGB(230, 42, 42).Println("background red")
 ```
 
 ### Mix and reuse colors
@@ -49,6 +61,11 @@ boldRed.Println("This will print text in bold red.")
 
 whiteBackground := red.Add(color.BgWhite)
 whiteBackground.Println("Red text with white background.")
+
+// Mix with RGB color codes
+color.RGB(255, 128, 0).AddBgRGB(0, 0, 0).Println("orange with black background")
+
+color.BgRGB(255, 128, 0).AddRGB(255, 255, 255).Println("orange background with white foreground")
 ```
 
 ### Use your own output (io.Writer)
@@ -161,10 +178,6 @@ c.Println("This prints again cyan...")
 
 To output color in GitHub Actions (or other CI systems that support ANSI colors), make sure to set `color.NoColor = false` so that it bypasses the check for non-tty output streams. 
 
-## Todo
-
-* Save/Return previous values
-* Evaluate fmt.Formatter interface
 
 ## Credits
 

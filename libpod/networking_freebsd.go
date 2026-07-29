@@ -47,14 +47,14 @@ type NetstatAddress struct {
 // started. We can use this to initialise the container's vnet when we don't
 // have a separate vnet jail (which is the case in FreeBSD 13.3 and later).
 func (r *Runtime) setupNetNS(ctr *Container) error {
-	networkStatus, err := r.configureNetNS(ctr, ctr.ID())
+	networkStatus, err := r.configureNetNS(ctr, ctr.ID(), false)
 	ctr.state.NetNS = ctr.ID()
 	ctr.state.NetworkStatus = networkStatus
 	return err
 }
 
 // Create and configure a new network namespace for a container
-func (r *Runtime) configureNetNS(ctr *Container, ctrNS string) (status map[string]types.StatusBlock, rerr error) {
+func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, _ bool) (status map[string]types.StatusBlock, rerr error) {
 	if err := r.exposeMachinePorts(ctr.config.PortMappings); err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.Stat
 	logrus.Debugf("Created vnet jail %s for container %s", netns, ctr.ID())
 
 	var networkStatus map[string]types.StatusBlock
-	networkStatus, err = r.configureNetNS(ctr, netns)
+	networkStatus, err = r.configureNetNS(ctr, netns, false)
 	if err != nil {
 		jconf := jail.NewConfig()
 		jconf.Set("persist", false)
@@ -223,8 +223,4 @@ func (c *Container) inspectJoinedNetworkNS(_ string) (q types.StatusBlock, retEr
 
 func (c *Container) reloadRootlessRLKPortMapping() error {
 	return errors.New("unsupported (*Container).reloadRootlessRLKPortMapping")
-}
-
-func (r *Runtime) teardownRootlessPortMappingViaPesto(_ *Container) error {
-	return errors.New("unsupported teardownRootlessPortMappingViaPesto on FreeBSD")
 }

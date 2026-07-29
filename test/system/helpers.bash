@@ -571,15 +571,6 @@ function run_podman() {
     # without "quotes", multiple lines are glommed together into one
     if [ -n "$output" ]; then
         echo "$(timestamp) $output"
-
-        # FIXME FIXME FIXME: instrumenting to track down #15488. Please
-        # remove once that's fixed. We include the args because, remember,
-        # bats only shows output on error; it's possible that the first
-        # instance of the metacopy warning happens in a test that doesn't
-        # check output, hence doesn't fail.
-        if [[ "$output" =~ Ignoring.global.metacopy.option ]]; then
-            echo "# YO! metacopy warning triggered by: podman $*" >&3
-        fi
     fi
     if [ "$status" -ne 0 ]; then
         echo -n "$(timestamp) [ rc=$status ";

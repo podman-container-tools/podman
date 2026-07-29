@@ -270,3 +270,8 @@ func setPdeathsig(cmd *exec.Cmd) {
 	}
 	cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
 }
+
+// setgroupsDenied always returns false on FreeBSD; no such mechanism exists.
+func setgroupsDenied() bool {
+	return false
+}

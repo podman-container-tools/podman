@@ -313,6 +313,19 @@ type NetworkOptions struct {
 	// Each NamedPerNetworkOptions must have a unique Name.
 	// The list should contain at least one element.
 	Networks []NamedPerNetworkOptions `json:"networks"`
+	// NetworkStatus contains the previously stored network results from the
+	// container's database, keyed by network name. Populated by the caller
+	// (e.g. podman) on network connect/disconnect so that pesto can determine
+	// which container IPs are already forwarded without maintaining a separate
+	// state file. Nil or empty on the very first Setup call.
+	// Not part of the netavark JSON format.
+	NetworkStatus map[string]StatusBlock `json:"-"`
+	// NetworkOrder lists network names in the order they were connected
+	// to the container (earliest first). Used by pesto to pick which
+	// container IP to forward traffic to: the first-connected network wins.
+	// Populated by the caller alongside NetworkStatus.
+	// Not part of the netavark JSON format.
+	NetworkOrder []string `json:"-"`
 	// List of custom DNS server for podman's DNS resolver.
 	// Priority order will be kept as defined by user in the configuration.
 	DNSServers []string `json:"dns_servers,omitempty"`

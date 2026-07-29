@@ -444,24 +444,25 @@ func Get(root string, directory string, options GetOptions, globs []string, bulk
 
 // PutOptions controls parts of Put()'s behavior.
 type PutOptions struct {
-	UIDMap, GIDMap       []idtools.IDMap   // map from containerIDs to hostIDs when writing contents to disk
-	DefaultDirOwner      *idtools.IDPair   // set ownership of implicitly-created directories, default is ChownDirs, or 0:0 if ChownDirs not set
-	DefaultDirMode       *os.FileMode      // set permissions on implicitly-created directories, default is Chmod or ChmodDirs, or 0755 if neither is set
-	Chmod                string            // set permissions in octal or symbolic notation. overrides ChmodDirs and ChmodFiles if set
-	ChownDirs            *idtools.IDPair   // set ownership of newly-created directories
-	ChmodDirs            *os.FileMode      // set permissions on newly-created directories
-	ChownFiles           *idtools.IDPair   // set ownership of newly-created files
-	ChmodFiles           *os.FileMode      // set permissions on newly-created files
-	StripSetuidBit       bool              // strip the setuid bit off of items being written
-	StripSetgidBit       bool              // strip the setgid bit off of items being written
-	StripStickyBit       bool              // strip the sticky bit off of items being written
-	StripXattrs          bool              // don't bother trying to set extended attributes of items being copied
-	IgnoreXattrErrors    bool              // ignore any errors encountered when attempting to set extended attributes
-	IgnoreDevices        bool              // ignore items which are character or block devices
-	NoOverwriteDirNonDir bool              // instead of quietly overwriting directories with non-directories, return an error
-	NoOverwriteNonDirDir bool              // instead of quietly overwriting non-directories with directories, return an error
-	Rename               map[string]string // rename items with the specified names, or under the specified names
-	Timestamp            *time.Time        // override timestamps on all extracted content
+	UIDMap, GIDMap       []idtools.IDMap    // map from containerIDs to hostIDs when writing contents to disk
+	DefaultDirOwner      *idtools.IDPair    // set ownership of implicitly-created directories, default is ChownDirs, or 0:0 if ChownDirs not set
+	DefaultDirMode       *os.FileMode       // set permissions on implicitly-created directories, default is Chmod or ChmodDirs, or 0755 if neither is set
+	Chmod                string             // set permissions in octal or symbolic notation. overrides ChmodDirs and ChmodFiles if set
+	ChownDirs            *idtools.IDPair    // set ownership of newly-created directories
+	ChmodDirs            *os.FileMode       // set permissions on newly-created directories
+	ChownFiles           *idtools.IDPair    // set ownership of newly-created files
+	ChmodFiles           *os.FileMode       // set permissions on newly-created files
+	StripSetuidBit       bool               // strip the setuid bit off of items being written
+	StripSetgidBit       bool               // strip the setgid bit off of items being written
+	StripStickyBit       bool               // strip the sticky bit off of items being written
+	StripXattrs          bool               // don't bother trying to set extended attributes of items being copied
+	IgnoreXattrErrors    bool               // ignore any errors encountered when attempting to set extended attributes
+	IgnoreDevices        bool               // ignore items which are character or block devices
+	NoOverwriteDirNonDir bool               // instead of quietly overwriting directories with non-directories, return an error
+	NoOverwriteNonDirDir bool               // instead of quietly overwriting non-directories with directories, return an error
+	Rename               map[string]string  // rename items with the specified names, or under the specified names
+	Timestamp            *time.Time         // override timestamps on all extracted content
+	CreateDestPath       types.OptionalBool // create the destination path if it doesn't already exist, default is true
 }
 
 // Put extracts an archive from the bulkReader at the specified directory.
@@ -2039,6 +2040,9 @@ func copierHandlerPut(bulkReader io.Reader, req request, idMappings *idtools.IDM
 	} else {
 		if !errors.Is(err, os.ErrNotExist) {
 			return errorResponse("copier: put: %s: %v", req.Directory, err)
+		}
+		if req.PutOptions.CreateDestPath == types.OptionalBoolFalse {
+			return errorResponse("copier: put: %s: does not exist and CreateDestPath is false", req.Directory)
 		}
 		if err := ensureDirectoryUnderRoot(req.Directory); err != nil {
 			return errorResponse("copier: put: %v", err)

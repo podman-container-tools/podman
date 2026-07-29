@@ -26,7 +26,7 @@ var composeCommand = &cobra.Command{
 
 The default compose providers are docker-compose and podman-compose.  If installed, docker-compose takes precedence since it is the original implementation of the Compose specification and is widely used on the supported platforms (i.e., Linux, Mac OS, Windows).
 
-If you want to change the default behavior or have a custom installation path for your provider of choice, please change the compose_providers field in containers.conf(5) to compose_providers = ["/path/to/provider"]. You may also set the PODMAN_COMPOSE_PROVIDER environment variable.`,
+If you want to change the default behavior or have a custom installation path for your provider of choice, please change the compose_providers field in the ` + "`[engine]`" + ` table of containers.conf(5) to compose_providers = ["/path/to/provider"]. You may also set the PODMAN_COMPOSE_PROVIDER environment variable.`,
 	RunE:              composeMain,
 	ValidArgsFunction: composeCompletion,
 	Example: `podman compose -f nginx.yaml up --detach

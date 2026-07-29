@@ -10,6 +10,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
+	"go.podman.io/podman/v6/pkg/api/handlers/utils/apiutil"
 	api "go.podman.io/podman/v6/pkg/api/types"
 	"go.podman.io/podman/v6/pkg/auth"
 	"go.podman.io/podman/v6/pkg/domain/entities"
@@ -49,6 +50,22 @@ func SearchImages(w http.ResponseWriter, r *http.Request) {
 		password = authconf.Password
 		idToken = authconf.IdentityToken
 	}
+	// compat v1.45 deprecation: searching for is-automated=true will yield no results, while is-automated=false will be a no-op.
+	isAutomatedDeprecated := false
+	if _, err := apiutil.SupportedVersion(r, ">=1.45.0"); err == nil {
+		if !utils.IsLibpodRequest(r) {
+			isAutomatedDeprecated = true
+			if vals, ok := query.Filters["is-automated"]; ok {
+				switch vals[0] {
+				case "true":
+					utils.WriteResponse(w, http.StatusOK, []registry.SearchResult{})
+					return
+				case "false":
+					delete(query.Filters, "is-automated")
+				}
+			}
+		}
+	}
 
 	filters := []string{}
 	for key, val := range query.Filters {
@@ -79,14 +96,19 @@ func SearchImages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		compatResults := make([]registry.SearchResult, len(reports))
-		for i, r := range reports {
-			compatResults[i] = registry.SearchResult{
-				Name:        r.Name,
-				Description: r.Description,
-				StarCount:   r.Stars,
-				IsOfficial:  toBool(r.Official),
-				IsAutomated: toBool(r.Automated),
+		for i, report := range reports {
+			result := registry.SearchResult{
+				Name:        report.Name,
+				Description: report.Description,
+				StarCount:   report.Stars,
+				IsOfficial:  toBool(report.Official),
+				IsAutomated: toBool(report.Automated),
 			}
+			if isAutomatedDeprecated {
+				//nolint:staticcheck
+				result.IsAutomated = false
+			}
+			compatResults[i] = result
 		}
 		utils.WriteResponse(w, http.StatusOK, compatResults)
 		return

@@ -60,7 +60,7 @@ function random_rfc1918_subnet() {
     while [ "$retries" -gt 0 ];do
         # 172.16.0.0 -> 172.31.255.255
         local n1=172
-        local n2=$(( 16 + $RANDOM & 15 ))
+        local n2=$(( 16 + ($RANDOM & 15) ))
         local n3=$(( $RANDOM & 255 ))
 
         if ! subnet_in_use $n1 $n2 $n3; then

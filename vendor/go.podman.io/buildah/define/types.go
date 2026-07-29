@@ -103,13 +103,15 @@ type IDMappingOptions struct {
 	AutoUserNsOpts types.AutoUserNsOptions
 }
 
-// Secret is a secret source that can be used in a RUN
+// Secret is a secret source that can be provided for a RUN instruction in a
+// build, or passed to Run(), and optionally mounted as type=secret.
 type Secret struct {
 	ID         string
 	Source     string
 	SourceType string
 }
 
+// ResolveValue returns the contents of the secret, whatever its source type.
 func (s Secret) ResolveValue() ([]byte, error) {
 	switch s.SourceType {
 	case "env":

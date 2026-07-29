@@ -125,7 +125,7 @@ if code <= 0 {
       {{ if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"")) }}{{ varname .ID}}Default.UnmarshalText([]byte({{ printf "%q" .Default }}))
       {{ else if .IsArray -}}
           {{ if or ( and .Child.IsPrimitive .Child.IsCustomFormatter ) .Child.IsArray -}}
-          if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+          if err := json.Unmarshal([]byte(`{{ escapeBackticks (printf "%s" (json .Default)) }}`), &{{ varname .ID }}Default); err != nil {
             // panics if specification is invalid
             msg := fmt.Sprintf("invalid default value for header {{ varname .ID }}: %v",err)
             panic(msg)

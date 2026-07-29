@@ -244,7 +244,7 @@ if err := validate.EnumCase(
   {{- end }}
   {{- if and .IsCustomFormatter (not .IsStream) (not .IsBase64) }}
 
-if err := validate.FormatOf({{.Path}}, "{{.Location}}", "{{.SwaggerFormat}}", {{ .ValueExpression}}.String(), formats); err != nil {
+if err := validate.FormatOf({{.Path}}, {{ printf "%q" .Location }}, {{ printf "%q" .SwaggerFormat }}, {{ .ValueExpression}}.String(), formats); err != nil {
   return err
 }
   {{- end }}
@@ -367,7 +367,7 @@ func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
       {{ if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"")) }}{{ varname .ID}}Default.UnmarshalText([]byte({{ printf "%q" .Default }}))
       {{ else if .IsArray -}}
           {{ if or ( and .Child.IsPrimitive .Child.IsCustomFormatter ) .Child.IsArray -}}
-          if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+          if err := json.Unmarshal([]byte(`{{ escapeBackticks (printf "%s" (json .Default)) }}`), &{{ varname .ID }}Default); err != nil {
             // panics if specification is invalid
             msg := fmt.Sprintf("invalid default value for parameter {{ varname .ID }}: %v",err)
             panic(msg)
