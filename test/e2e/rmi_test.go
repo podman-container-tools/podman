@@ -12,6 +12,12 @@ import (
 )
 
 var _ = Describe("Podman rmi", func() {
+	It("podman rmi rejects docker transport", func() {
+		session := podmanTest.Podman([]string{"rmi", "docker://" + ALPINE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "is not in local storage; remove the docker:// prefix"))
+	})
+
 	It("podman rmi bogus image", func() {
 		session := podmanTest.Podman([]string{"rmi", "debian:6.0.10"})
 		session.WaitWithDefaultTimeout()

@@ -3,6 +3,7 @@ package images
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -67,6 +68,11 @@ func rm(_ *cobra.Command, args []string) error {
 	}
 	if len(args) > 0 && imageOpts.All {
 		return errors.New("when using the --all switch, you may not pass any images names or IDs")
+	}
+	for _, image := range args {
+		if strings.HasPrefix(image, "docker://") {
+			return fmt.Errorf("image %q is not in local storage; remove the docker:// prefix", image)
+		}
 	}
 
 	if imageOpts.Force {
