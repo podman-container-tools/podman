@@ -85,6 +85,11 @@ func (i *inspector) inspect(namesOrIDs []string) error {
 			return errors.New("no names or ids specified")
 		}
 	}
+	for _, nameOrID := range namesOrIDs {
+		if strings.HasPrefix(nameOrID, "docker://") {
+			return fmt.Errorf("image %q is not in local storage; remove the docker:// prefix", nameOrID)
+		}
+	}
 
 	tmpType := i.options.Type
 	if i.options.Latest {

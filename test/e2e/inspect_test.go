@@ -12,6 +12,12 @@ import (
 )
 
 var _ = Describe("Podman inspect", func() {
+	It("podman inspect rejects docker transport", func() {
+		session := podmanTest.Podman([]string{"inspect", "docker://" + ALPINE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "is not in local storage; remove the docker:// prefix"))
+	})
+
 	It("podman inspect alpine image", func() {
 		session := podmanTest.Podman([]string{"inspect", "--format=json", ALPINE})
 		session.WaitWithDefaultTimeout()
