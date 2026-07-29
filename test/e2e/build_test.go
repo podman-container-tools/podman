@@ -723,6 +723,32 @@ subdir**`
 		Expect(output).NotTo(ContainSubstring("subdir"))
 	})
 
+	// This test verifies that remote podman does not forward the client's
+	// default seccomp profile from containers.conf to the server
+	// See https://github.com/podman-container-tools/podman/issues/24318
+	It("podman remote build uses the server seccomp default (#24318)", func() {
+		SkipIfNotRemote("Testing remote build seccomp defaults")
+		podmanTest.AddImageToRWStore(CITEST_IMAGE)
+
+		serverConfigPath := filepath.Join(podmanTest.TempDir, "server-containers.conf")
+		Expect(os.WriteFile(serverConfigPath, []byte("[containers]\n"), 0o644)).To(Succeed())
+		GinkgoT().Setenv("CONTAINERS_CONF", serverConfigPath)
+		podmanTest.RestartRemoteService()
+
+		clientConfigPath := filepath.Join(podmanTest.TempDir, "client-containers.conf")
+		Expect(os.WriteFile(clientConfigPath, []byte("[containers]\nseccomp_profile=\"unconfined\"\n"), 0o644)).To(Succeed())
+		// The service is already running, so this only changes the client config.
+		GinkgoT().Setenv("CONTAINERS_CONF", clientConfigPath)
+
+		contextDir := filepath.Join(podmanTest.TempDir, "seccomp-build")
+		Expect(os.Mkdir(contextDir, 0o755)).To(Succeed())
+
+		containerfile := fmt.Appendf(nil, "FROM %s\nRUN test \"$(awk '/^Seccomp:/ { print $2 }' /proc/self/status)\" = 2\n", CITEST_IMAGE)
+		Expect(os.WriteFile(filepath.Join(contextDir, "Containerfile"), containerfile, 0o644)).To(Succeed())
+
+		podmanTest.PodmanExitCleanly("build", "--pull-never", "--security-opt", "label=disable", contextDir)
+	})
+
 	It("podman remote test context dir contains empty dirs and symlinks", func() {
 		SkipIfNotRemote("Testing remote contextDir empty")
 		podmanTest.RestartRemoteService()
