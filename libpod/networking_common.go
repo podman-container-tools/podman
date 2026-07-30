@@ -701,6 +701,36 @@ func getExtraNetworkAliases(c *Container) []string {
 	return alias
 }
 
+// DNSNames returns a map of a network name to
+// a deduplicated list of all DNS names for the network.
+func (c *Container) DNSNames() (map[string][]string, error) {
+	networks, err := c.networks()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get networks: %w", err)
+	}
+
+	netPodName := getNetworkPodName(c)
+	result := make(map[string][]string, len(networks))
+	for _, net := range networks {
+		dedup := make(map[string]struct{})
+
+		// Common.
+		dnsNames := []string{netPodName}
+		// Per-network aliases.
+		// Note: aliases include short ID and hostname.
+		dnsNames = append(dnsNames, net.Aliases...)
+
+		// Add for each network deduplicated.
+		for _, dnsName := range dnsNames {
+			if _, seen := dedup[dnsName]; !seen {
+				dedup[dnsName] = struct{}{}
+				result[net.Name] = append(result[net.Name], dnsName)
+			}
+		}
+	}
+	return result, nil
+}
+
 // DisconnectContainerFromNetwork removes a container from its network
 func (r *Runtime) DisconnectContainerFromNetwork(nameOrID, netName string, force bool) error {
 	ctr, err := r.LookupContainer(nameOrID)

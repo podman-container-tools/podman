@@ -49,6 +49,8 @@ type ListContainer struct {
 	Namespaces ListContainerNamespaces
 	// The network names assigned to the container
 	Networks []string
+	// DNSNames maps the container's DNS names by a network name.
+	DNSNames map[string][]string
 	// The process id of the container
 	Pid int
 	// If the container is part of Pod, the Pod ID. Requires the pod

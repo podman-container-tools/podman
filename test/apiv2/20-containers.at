@@ -75,9 +75,11 @@ t GET libpod/containers/json?all=true 200 \
 # Test compat API for Network Settings (.Network is N/A when rootless)
 network_expect="Networks.pasta.NetworkID=pasta"
 network_mode_expect="pasta"
+default_network="pasta"
 if root; then
     network_expect="Networks.podman.NetworkID=2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9"
     network_mode_expect="bridge"
+    default_network="podman"
 fi
 t GET /containers/json?all=true 200 \
   length=1 \
@@ -86,6 +88,7 @@ t GET /containers/json?all=true 200 \
   .[0].State="exited" \
   .[0].Mounts~.*/tmp \
   .[0].NetworkSettings.$network_expect \
+  .[0].NetworkSettings.Networks.$default_network.DNSNames[0]="foo" \
   .[0].HostConfig.NetworkMode=$network_mode_expect
 
 # compat API imageid with sha256: prefix
@@ -100,7 +103,8 @@ t GET libpod/containers/json?limit=1 200 \
   .[0].Command[0]="true" \
   .[0].State~\\\(exited\\\|stopped\\\) \
   .[0].ExitCode=0 \
-  .[0].IsInfra=false
+  .[0].IsInfra=false \
+  .[0].DNSNames.$default_network[0]=foo
 
 # Make sure `last` works, which is an alias for `limit`.
 # See https://github.com/containers/podman/issues/6413.
@@ -379,7 +383,8 @@ t GET containers/testcon/json 200 \
   .NetworkSettings.Networks.testnet.IPPrefixLen=24 \
   .NetworkSettings.Networks.testnet.IPv6Gateway="" \
   .NetworkSettings.Networks.testnet.GlobalIPv6Address~fd.* \
-  .NetworkSettings.Networks.testnet.GlobalIPv6PrefixLen=64
+  .NetworkSettings.Networks.testnet.GlobalIPv6PrefixLen=64 \
+  .NetworkSettings.Networks.testnet.DNSNames[0]=testcon
 
 podman rm -f -t0 testcon
 podman network rm testnet

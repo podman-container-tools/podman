@@ -432,6 +432,14 @@ func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handl
 		return nil, err
 	}
 
+	dnsNames, err := l.DNSNames()
+	if err != nil {
+		return nil, err
+	}
+	for netName, ep := range networkSettings.Networks {
+		ep.DNSNames = dnsNames[netName]
+	}
+
 	m, err := json.Marshal(inspect.Mounts)
 	if err != nil {
 		return nil, err
@@ -718,6 +726,14 @@ func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageI
 	// do not report null instead use an empty map
 	if networkSettings.Networks == nil {
 		networkSettings.Networks = map[string]*network.EndpointSettings{}
+	}
+
+	dnsNames, err := l.DNSNames()
+	if err != nil {
+		return nil, err
+	}
+	for netName, ep := range networkSettings.Networks {
+		ep.DNSNames = dnsNames[netName]
 	}
 
 	cb.Mounts = mounts

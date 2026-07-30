@@ -66,6 +66,7 @@ Valid placeholders for the Go template are listed below:
 | .Labels            | All the labels assigned to the container     |
 | .Mounts            | Volumes mounted in the container             |
 | .Names             | Name of container                            |
+| .DNSNames          | DNS names of the container by network        |
 | .Networks          | Show all networks connected to the container |
 | .Pid               | Process ID on host system                    |
 | .Pod               | Pod the container is associated with (SHA)   |

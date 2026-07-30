@@ -181,6 +181,7 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 		cgroup, ipc, mnt, net, pidns, user, uts string
 		portMappings                            []libnetworkTypes.PortMapping
 		networks                                []string
+		dnsNames                                map[string][]string
 		healthStatus                            string
 		restartCount                            uint
 		podName                                 string
@@ -223,6 +224,11 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 		}
 
 		networks, err = c.Networks()
+		if err != nil {
+			return err
+		}
+
+		dnsNames, err = c.DNSNames()
 		if err != nil {
 			return err
 		}
@@ -298,6 +304,7 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 		Mounts:       ctr.UserVolumes(),
 		Names:        []string{conConfig.Name},
 		Networks:     networks,
+		DNSNames:     dnsNames,
 		Pid:          pid,
 		Pod:          conConfig.Pod,
 		PodName:      podName,
