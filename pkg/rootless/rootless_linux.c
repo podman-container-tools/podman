@@ -333,20 +333,25 @@ get_cmd_line_args (int *argc_out)
         }
     }
 
-  for (i = 0; i < used; i++)
+  /* Count the NUL separators between the arguments.  Do not assume the
+     file ends with a trailing NUL: mainline kernels always terminate
+     /proc/self/cmdline with a NUL, but some non-mainline kernels do
+     not, and counting the trailing NUL as an argument would make the
+     allocation below one slot too small for the terminating NULL.  */
+  for (i = 0; i + 1 < used; i++)
     if (buffer[i] == '\0')
       argc++;
-  if (argc == 0)
+  if (used == 0)
     return NULL;
 
-  argv = malloc (sizeof (char *) * (argc + 1));
+  argv = malloc (sizeof (char *) * (argc + 2));
   if (argv == NULL)
     return NULL;
 
   argc = 0;
 
   argv[argc++] = buffer;
-  for (i = 0; i < used - 1; i++)
+  for (i = 0; i + 1 < used; i++)
     if (buffer[i] == '\0')
       argv[argc++] = buffer + i + 1;
 
