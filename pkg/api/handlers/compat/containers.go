@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -126,6 +127,25 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 
 	filterFuncs := make([]libpod.ContainerFilter, 0, len(*filterMap))
 	all := query.All || query.Limit > 0
+	matchNothing := false
+	if statusValues, ok := (*filterMap)["status"]; ok {
+		// Docker thinks that if status is given as an input, then we should override
+		// the all setting and always deal with all containers.
+		all = true
+		// "dead" and "restarting" are valid status values for Docker but
+		// have no equivalent state in Podman, so no container can ever
+		// match them. Drop them instead of erroring so Docker clients can
+		// use them; a status filter left empty by this matches nothing.
+		statusValues = slices.DeleteFunc(statusValues, func(status string) bool {
+			return status == "dead" || status == "restarting"
+		})
+		if len(statusValues) == 0 {
+			matchNothing = true
+			delete(*filterMap, "status")
+		} else {
+			(*filterMap)["status"] = statusValues
+		}
+	}
 	if len(*filterMap) > 0 {
 		for k, v := range *filterMap {
 			generatedFunc, err := filters.GenerateContainerFilterFuncs(k, v, runtime)
@@ -136,11 +156,9 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 			filterFuncs = append(filterFuncs, generatedFunc)
 		}
 	}
-
-	// Docker thinks that if status is given as an input, then we should override
-	// the all setting and always deal with all containers.
-	if len((*filterMap)["status"]) > 0 {
-		all = true
+	if matchNothing {
+		utils.WriteResponse(w, http.StatusOK, []*handlers.Container{})
+		return
 	}
 	if !all {
 		runningOnly, err := filters.GenerateContainerFilterFuncs("status", []string{define.ContainerStateRunning.String()}, runtime)
