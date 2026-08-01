@@ -683,8 +683,15 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 	if err != nil {
 		return nil, err
 	}
+	ctrSpec, err := c.specFromState()
+	if err != nil {
+		return nil, err
+	}
+	if ctrSpec.Process == nil {
+		ctrSpec.Process = c.config.Spec.Process
+	}
 	pspec := new(spec.Process)
-	if err := JSONDeepCopy(c.config.Spec.Process, pspec); err != nil {
+	if err := JSONDeepCopy(ctrSpec.Process, pspec); err != nil {
 		return nil, err
 	}
 	pspec.SelinuxLabel = c.config.ProcessLabel
