@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 parse_args "$@"
 
-PRESERVE_ENVS="CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_FS,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM"
+PRESERVE_ENVS="CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,CI_DESIRED_RUNTIME,GITHUB_ACTIONS,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_FS,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM"
 # run as root or or not
 SUDO=""
 if [[ "$PRIV" == "root" ]]; then
@@ -19,6 +19,12 @@ if [[ "$PRIV" == "root" ]]; then
 fi
 
 STORAGE_FS=overlay
+
+# The tests assert the runtime podman actually reports is the one CI intends,
+# see #14912. As of 2024-05-28 there are no other supported runtimes.
+# Deliberately a literal: OCI_RUNTIME is the input that selects the runtime, so
+# deriving this from it would compare the value against itself and never fail.
+CI_DESIRED_RUNTIME=crun
 
 case "$DISTRO_NAME" in
 fedora-current)
@@ -58,6 +64,7 @@ fi
 ## Used in tests so we need to export them
 export STORAGE_FS
 export CI_DESIRED_COMPOSEFS
+export CI_DESIRED_RUNTIME
 
 ### SETUP HERE
 

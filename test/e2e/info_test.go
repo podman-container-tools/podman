@@ -124,13 +124,13 @@ var _ = Describe("Podman Info", func() {
 	})
 
 	It("Podman info: check desired runtime", func() {
-		// defined in .cirrus.yml
+		// defined in hack/ci/runner.sh
 		want := os.Getenv("CI_DESIRED_RUNTIME")
 		if want == "" {
-			if os.Getenv("CIRRUS_CI") == "" {
-				Skip("CI_DESIRED_RUNTIME is not set--this is OK because we're not running under Cirrus")
+			if os.Getenv("GITHUB_ACTIONS") == "" {
+				Skip("CI_DESIRED_RUNTIME is not set--this is OK because we're not running in GitHub Actions")
 			}
-			Fail("CIRRUS_CI is set, but CI_DESIRED_RUNTIME is not! See #14912")
+			Fail("GITHUB_ACTIONS is set, but CI_DESIRED_RUNTIME is not! See #14912")
 		}
 		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.OCIRuntime.Name}}")
 		Expect(session.OutputToString()).To(Equal(want))

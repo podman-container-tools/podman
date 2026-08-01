@@ -67,20 +67,20 @@ store.imageStore.number   | 1
 
 @test "podman info - confirm desired runtime" {
     if [[ -z "$CI_DESIRED_RUNTIME" ]]; then
-        # When running in Cirrus, CI_DESIRED_RUNTIME *must* be defined
-        # in .cirrus.yml so we can double-check that all CI VMs are
+        # When running in GitHub Actions, CI_DESIRED_RUNTIME *must* be defined
+        # in hack/ci/runner.sh so we can double-check that all CI VMs are
         # using crun/runc as desired.
-        if [[ -n "$CIRRUS_CI" ]]; then
-            die "CIRRUS_CI is set, but CI_DESIRED_RUNTIME is not! See #14912"
+        if [[ -n "$GITHUB_ACTIONS" ]]; then
+            die "GITHUB_ACTIONS is set, but CI_DESIRED_RUNTIME is not! See #14912"
         fi
 
-        # Not running under Cirrus (e.g., gating tests, or dev laptop).
+        # Not running in GitHub Actions (e.g., gating tests, or dev laptop).
         # Totally OK to skip this test.
-        skip "CI_DESIRED_RUNTIME is unset--OK, because we're not in Cirrus"
+        skip "CI_DESIRED_RUNTIME is unset--OK, because we're not in GitHub Actions"
     fi
 
     run_podman info --format '{{.Host.OCIRuntime.Name}}'
-    is "$output" "$CI_DESIRED_RUNTIME" "CI_DESIRED_RUNTIME (from .cirrus.yml)"
+    is "$output" "$CI_DESIRED_RUNTIME" "CI_DESIRED_RUNTIME (from hack/ci/runner.sh)"
 }
 
 @test "podman info - confirm desired network backend" {

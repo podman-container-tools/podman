@@ -28,7 +28,12 @@ limactl copy "$REPO_DIR" $LIMA_VM_NAME:/var/tmp/podman
 
 set +e
 
-limactl shell --workdir /var/tmp/podman $LIMA_VM_NAME ./hack/ci/runner.sh "${@}"
+# limactl shell does not forward the host environment, so pass GITHUB_ACTIONS
+# in explicitly. The tests use it to tell "running in CI" from "running on a
+# dev laptop", and must fail rather than skip when a CI_DESIRED_* variable is
+# missing in CI. See #14912.
+limactl shell --workdir /var/tmp/podman $LIMA_VM_NAME \
+    env GITHUB_ACTIONS="$GITHUB_ACTIONS" ./hack/ci/runner.sh "${@}"
 rc=$?
 
 limactl shell --workdir /var/tmp/podman $LIMA_VM_NAME sudo ./hack/ci/logcollector.sh journal &> "$SCRIPT_DIR/journal.log"
