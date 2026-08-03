@@ -191,4 +191,170 @@ for md in *.1.md; do
     compare_usage "$md_nodash" "$synopsis"
 done
 
+# Pass 4: validate rules from MANPAGE_SYNTAX.md
+#
+# Checks man pages against the syntax rules defined in docs/MANPAGE_SYNTAX.md.
+# This covers formatting rules that are not checked by earlier passes.
+check_manpage_syntax_rules() {
+    local md="$1"
+
+    # --- Rule 1: No blank lines after ## headers ---
+    # MANPAGE_SYNTAX.md states: "There should be no new line after H2-headers (##)."
+    # We check for "## HEADER\n\n" (blank line immediately after ##).
+    if grep -P -n -A1 '^## ' "$md" | grep -P -A1 '^\d+-' | grep -q '^\d+-$'; then
+        # More robust: use awk to detect blank line right after a ## line
+        if awk '/^## / { getline; if ($0 == "") print NR }' "$md" | head -1 | grep -q '[0-9]'; then
+            echo
+            printf "MANPAGE_SYNTAX violation in %s:\n" "$md"
+            printf "  Blank line found immediately after a ## header (line ~%s)\n" \
+                "$(awk '/^## / { getline; if ($0 == "") print NR-1 }' "$md" | head -1)"
+            printf "  Rule: There should be no new line after ## headers.\n"
+            rc=1
+        fi
+    fi
+
+    # --- Rule 2: OPTIONS section must use #### headings ---
+    # Each option should be introduced with #### (H4), not ### or ##.
+    # Only check within the OPTIONS section.
+    local in_options=0
+    local line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+        # Track when we enter/leave the OPTIONS section
+        if [[ "$line" == "## OPTIONS" ]]; then
+            in_options=1
+            continue
+        elif [[ "$line" =~ ^##\ [A-Z] ]] && [[ "$line" != "## OPTIONS" ]]; then
+            in_options=0
+            continue
+        fi
+        # Inside OPTIONS: check that option definitions use ####
+        if [[ $in_options -eq 1 ]] && [[ "$line" =~ ^###\ \*\*-- ]] || \
+           [[ $in_options -eq 1 ]] && [[ "$line" =~ ^###\ -[a-z] ]]; then
+            echo
+            printf "MANPAGE_SYNTAX violation in %s:\n" "$md"
+            printf "  Line %d: Option heading uses ### instead of ####\n" "$line_num"
+            printf "  Rule: OPTIONS must use H4 (####) headings.\n"
+            rc=1
+        fi
+    done < "$md"
+
+    # --- Rule 3: OPTIONS heading format ---
+    # Long option must come before short option.
+    # Format should be: #### **--long**, **-s**=*value*
+    # or: #### **--long**
+    # or: #### **--long**, **-s**
+    line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+        if [[ "$line" =~ ^####\ \*\*-- ]]; then
+            # Check if short option (-x) appears BEFORE long option (--xxx)
+            # This would be a violation: #### **-x**, **--long**
+            if echo "$line" | grep -qP '^####\ \*\*-[a-z]\*\*,\ \*\*--'; then
+                echo
+                printf "MANPAGE_SYNTAX violation in %s:\n" "$md"
+                printf "  Line %d: Short option appears before long option: %s\n" "$line_num" "$line"
+                printf "  Rule: Long option (--name) must always appear before short option (-n).\n"
+                rc=1
+            fi
+        fi
+    done < "$md"
+
+    # --- Rule 4: No pronouns (especially "you") ---
+    # MANPAGE_SYNTAX.md states: "Do not use pronouns in the man pages, especially the word 'you'."
+    # We do a case-insensitive search, but skip lines that are:
+    #   - Comments or preprocessor directives
+    #   - Inside code blocks (``` or indented)
+    #   - In HISTORY sections (often contain contributor names/email)
+    local in_history=0
+    local in_code_block=0
+    line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+
+        # Track code blocks (``` delimited)
+        if [[ "$line" =~ ^\`\`\` ]]; then
+            if [[ $in_code_block -eq 0 ]]; then
+                in_code_block=1
+            else
+                in_code_block=0
+            fi
+            continue
+        fi
+
+        # Skip if inside code block
+        if [[ $in_code_block -eq 1 ]]; then
+            continue
+        fi
+
+        # Track HISTORY section (skip pronoun checks there)
+        if [[ "$line" == "## HISTORY" ]]; then
+            in_history=1
+            continue
+        elif [[ "$line" =~ ^##\ [A-Z] ]] && [[ "$line" != "## HISTORY" ]]; then
+            in_history=0
+            continue
+        fi
+
+        # Skip HISTORY section
+        if [[ $in_history -eq 1 ]]; then
+            continue
+        fi
+
+        # Skip lines that are clearly not prose (headers, options, etc.)
+        if [[ "$line" =~ ^# ]] || [[ "$line" =~ ^#### ]]; then
+            continue
+        fi
+
+        # Check for pronouns (word boundary matching)
+        # Use grep -w for word-boundary matching, case insensitive
+        if echo "$line" | grep -wiq '\byou\b\|\byour\b\|\byours\b\|\byourself\b'; then
+            echo
+            printf "MANPAGE_SYNTAX violation in %s:\n" "$md"
+            printf "  Line %d: Pronoun found: '%s'\n" "$line_num" "$line"
+            printf "  Rule: Do not use pronouns in man pages, especially 'you'.\n"
+            rc=1
+            # Only report once per file to avoid flooding output
+            break
+        fi
+    done < "$md"
+
+    # --- Rule 5: OPTIONS should be in alphabetical order ---
+    # Extract all #### headings within OPTIONS and check sort order.
+    local in_options=0
+    local prev_option=""
+    line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+        if [[ "$line" == "## OPTIONS" ]]; then
+            in_options=1
+            continue
+        elif [[ "$line" =~ ^##\ [A-Z] ]] && [[ "$line" != "## OPTIONS" ]]; then
+            in_options=0
+            prev_option=""
+            continue
+        fi
+        if [[ $in_options -eq 1 ]] && [[ "$line" =~ ^####\ \*\*-- ]]; then
+            # Extract the long option name for comparison
+            local current_option
+            current_option=$(echo "$line" | sed -e 's/^#### \*\*--//' -e 's/\*\*.*//')
+            if [[ -n "$prev_option" ]] && [[ "$current_option" < "$prev_option" ]]; then
+                echo
+                printf "MANPAGE_SYNTAX violation in %s:\n" "$md"
+                printf "  Line %d: Options not in alphabetical order: '%s' should come before '%s'\n" \
+                    "$line_num" "$current_option" "$prev_option"
+                printf "  Rule: All OPTIONS must be sorted in alphabetical order.\n"
+                rc=1
+                break  # Report only the first violation per file
+            fi
+            prev_option="$current_option"
+        fi
+    done < "$md"
+}
+
+# Run the MANPAGE_SYNTAX checks on all man pages.
+for md in *.1.md; do
+    check_manpage_syntax_rules "$md"
+done
+
 exit $rc
