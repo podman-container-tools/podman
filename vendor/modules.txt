@@ -680,7 +680,7 @@ github.com/vbatts/tar-split/tar/storage
 # github.com/vbauerster/cupwriter v0.0.4
 ## explicit; go 1.25.0
 github.com/vbauerster/cupwriter
-# github.com/vbauerster/mpb/v8 v8.14.0
+# github.com/vbauerster/mpb/v8 v8.15.0
 ## explicit; go 1.25.0
 github.com/vbauerster/mpb/v8
 github.com/vbauerster/mpb/v8/decor

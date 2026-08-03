@@ -60,8 +60,8 @@ func (x ewmaProxyWriterTo) WriteTo(w io.Writer) (int64, error) {
 	return x.wt.WriteTo(ewmaProxyWriteCloser{w, x.bar})
 }
 
-func newProxyReader(r io.Reader, b *Bar, hasEwma bool) io.ReadCloser {
-	if hasEwma {
+func newProxyReader(r io.Reader, b *Bar) io.ReadCloser {
+	if len(b.ewmaDecorators) != 0 {
 		epr := ewmaProxyReadCloser{r, b}
 		if wt, ok := r.(io.WriterTo); ok {
 			return ewmaProxyWriterTo{epr, wt}

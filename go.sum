@@ -389,8 +389,8 @@ github.com/vbatts/tar-split v0.12.3 h1:Cd46rkGXI3Td4yrVNwU8ripbxFaQbmesqhjBUUYAJ
 github.com/vbatts/tar-split v0.12.3/go.mod h1:sQOc6OlqGCr7HkGx/IDBeKiTIvqhmj8KffNhEXG4Nq0=
 github.com/vbauerster/cupwriter v0.0.4 h1:9sBPe0uXWLZuWQU5lqVbhyFlxX6c09asST/YfatFAys=
 github.com/vbauerster/cupwriter v0.0.4/go.mod h1:IFyzS6Xis5dnBH/rdAhrnuzg3c+KkUqEN6yE8lhJlDw=
-github.com/vbauerster/mpb/v8 v8.14.0 h1:55SR80dptMfASxIG/oCEkBXgBhxeSu4GrVsjl16oKmA=
-github.com/vbauerster/mpb/v8 v8.14.0/go.mod h1:HgpQPKfcWe3kbuGGPmi+jatHreMase5C3Fp5dpdAy0Q=
+github.com/vbauerster/mpb/v8 v8.15.0 h1:9eBaGfU3oZmrDERLsFdZP8y9odcMCBwZazUMihViXzU=
+github.com/vbauerster/mpb/v8 v8.15.0/go.mod h1:HgpQPKfcWe3kbuGGPmi+jatHreMase5C3Fp5dpdAy0Q=
 github.com/vishvananda/netlink v1.3.1 h1:3AEMt62VKqz90r0tmNhog0r/PpWKmrEShJU0wJW6bV0=
 github.com/vishvananda/netlink v1.3.1/go.mod h1:ARtKouGSTGchR8aMwmkzC0qiNPrrWO5JS/XMVl45+b4=
 github.com/vishvananda/netns v0.0.5 h1:DfiHV+j8bA32MFM7bfEunvT8IAqQ/NzSJHtcmW5zdEY=
