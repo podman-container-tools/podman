@@ -41,7 +41,7 @@ Sign the busybox image with the identity of foo@bar.com with a user's keyring an
 ```bash
    $ sudo podman image sign --sign-by foo@bar.com --directory /tmp/signatures docker://privateregistry.example.com/foobar
 
-   $ sudo podman image sign --authfile=/tmp/foobar.json --sign-by foo@bar.com --directory /tmp/signatures docker://privateregistry.example.com/foobar
+   $ sudo podman image sign --auth-file=/tmp/foobar.json --sign-by foo@bar.com --directory /tmp/signatures docker://privateregistry.example.com/foobar
 ```
 
 ## RELATED CONFIGURATION

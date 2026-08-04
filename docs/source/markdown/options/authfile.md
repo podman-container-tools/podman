@@ -5,7 +5,7 @@
 << if is_quadlet >>
 ### `AuthFile=path`
 << else >>
-#### **--authfile**=*path*
+#### **--auth-file**=*path*
 << endif >>
 
 Path of the authentication file. Default is `${XDG_RUNTIME_DIR}/containers/auth.json` on Linux, and `$HOME/.config/containers/auth.json` on Windows/macOS.

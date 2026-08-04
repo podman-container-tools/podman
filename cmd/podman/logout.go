@@ -10,6 +10,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 )
 
 var (
@@ -22,7 +23,7 @@ var (
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: common.AutocompleteRegistries,
 		Example: `podman logout quay.io
-podman logout --authfile dir/auth.json quay.io
+podman logout --auth-file dir/auth.json quay.io
 podman logout --all`,
 	}
 )
@@ -35,6 +36,7 @@ func init() {
 		Command: logoutCommand,
 	})
 	flags := logoutCommand.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	// Flags from the auth package.
 	flags.AddFlagSet(auth.GetLogoutFlags(&logoutOptions))

@@ -302,7 +302,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		}
 	}
 
-	if c.Flags().Changed("authfile") {
+	if c.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(flags.Authfile); err != nil {
 			return nil, err
 		}

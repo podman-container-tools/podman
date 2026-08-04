@@ -11,6 +11,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
 
@@ -45,8 +46,9 @@ func init() {
 	})
 
 	flags := runlabelCommand.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
-	authfileflagName := "authfile"
+	authfileflagName := "auth-file"
 	flags.StringVar(&runlabelOptions.Authfile, authfileflagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = runlabelCommand.RegisterFlagCompletionFunc(authfileflagName, completion.AutocompleteDefault)
 
@@ -90,7 +92,7 @@ func runlabel(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("tls-verify") {
 		runlabelOptions.SkipTLSVerify = types.NewOptionalBool(!runlabelOptions.TLSVerifyCLI)
 	}
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(runlabelOptions.Authfile); err != nil {
 			return err
 		}

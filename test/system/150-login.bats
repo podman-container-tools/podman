@@ -53,7 +53,7 @@ function setup() {
 
     registry=localhost:${PODMAN_LOGIN_REGISTRY_PORT}
 
-    run_podman login --authfile=$authfile \
+    run_podman login --auth-file=$authfile \
         --tls-verify=false \
         --username ${PODMAN_LOGIN_USER} \
         --password ${PODMAN_LOGIN_PASS} \
@@ -73,11 +73,30 @@ function setup() {
 
 
     # Now log out and make sure credentials are removed
-    run_podman logout --authfile=$authfile $registry
+    run_podman logout --auth-file=$authfile $registry
 
     run jq -r '.auths' <$authfile
     is "$status" "0" "jq from $authfile"
     is "$output" "{}" "credentials removed from $authfile"
+}
+
+@test "podman login - --authfile is accepted as alias for --auth-file" {
+    authfile=${PODMAN_LOGIN_WORKDIR}/auth-$(random_string 10).json
+    rm -f $authfile
+
+    registry=localhost:${PODMAN_LOGIN_REGISTRY_PORT}
+
+    # Verify that the old --authfile form still works as a backwards-compatible alias
+    run_podman login --authfile=$authfile \
+        --tls-verify=false \
+        --username ${PODMAN_LOGIN_USER} \
+        --password ${PODMAN_LOGIN_PASS} \
+        $registry
+
+    test -e $authfile || \
+        die "podman login --authfile alias did not create authfile $authfile"
+
+    run_podman logout --authfile=$authfile $registry
 }
 
 @test "podman login inconsistent authfiles" {
