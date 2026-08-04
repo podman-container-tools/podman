@@ -1614,7 +1614,7 @@ EOF
 }
 
 # bats test_tags=ci:parallel
-@test "podman --authfile=nonexistent-path" {
+@test "podman --auth-file=nonexistent-path" {
     # List of commands to be tested. These all share a common authfile check.
     #
     # Table format is:
@@ -1653,9 +1653,9 @@ search               | $IMAGE           |
         # parse_table gives us '' (two single quotes) for empty columns
         if [[ "$args" = "''" ]]; then args=;fi
 
-        run_podman 125 $command --authfile=$bogus $args
+        run_podman 125 $command --auth-file=$bogus $args
         assert "$output" = "Error: credential file is not accessible: faccessat $bogus: no such file or directory" \
-           "$command --authfile=nonexistent-path"
+           "$command --auth-file=nonexistent-path"
 
         if [[ "$command" != "logout" ]]; then
            REGISTRY_AUTH_FILE=$bogus run_podman '?' $command $args

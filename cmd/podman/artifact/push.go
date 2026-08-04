@@ -11,6 +11,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/util"
 )
@@ -53,10 +54,11 @@ func init() {
 // pushFlags sets the flags for the push command.
 func pushFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	// For now default All flag to true, for pushing of manifest lists
 	pushOptions.All = true
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&pushOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = cmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -134,7 +136,7 @@ func artifactPush(cmd *cobra.Command, args []string) error {
 		pushOptions.SkipTLSVerify = types.NewOptionalBool(!pushOptions.TLSVerifyCLI)
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(pushOptions.Authfile); err != nil {
 			return err
 		}

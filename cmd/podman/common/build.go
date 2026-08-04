@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/imagebuilder"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	buildahDefine "go.podman.io/buildah/define"
 	buildahCLI "go.podman.io/buildah/pkg/cli"
 	"go.podman.io/buildah/pkg/parse"
@@ -117,8 +118,18 @@ func DefineBuildFlags(cmd *cobra.Command, buildOpts *BuildFlagsWrapper, isFarmBu
 	flags.AddFlagSet(&fromAndBudFlags)
 	// Add the completion functions
 	fromAndBudFlagsCompletions := buildahCLI.GetFromAndBudFlagsCompletions()
+	if comp, ok := fromAndBudFlagsCompletions["authfile"]; ok {
+		delete(fromAndBudFlagsCompletions, "authfile")
+		fromAndBudFlagsCompletions["auth-file"] = comp
+	}
 	completion.CompleteCommandFlags(cmd, fromAndBudFlagsCompletions)
-	flags.SetNormalizeFunc(buildahCLI.AliasFlags)
+	if authfileFlag := flags.Lookup("authfile"); authfileFlag != nil {
+		authfileFlag.Name = "auth-file"
+	}
+	flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
+		name = string(buildahCLI.AliasFlags(f, name))
+		return utils.AliasFlags(f, name)
+	})
 	if registry.IsRemote() {
 		// Unset the isolation default as we never want to send this over the API
 		// as it can be wrong (root vs rootless).
@@ -302,7 +313,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		}
 	}
 
-	if c.Flags().Changed("authfile") {
+	if c.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(flags.Authfile); err != nil {
 			return nil, err
 		}
