@@ -164,6 +164,8 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 		loadToRemoteOpts.URL = sshInfo.URI[0]
 		loadToRemoteOpts.Iden = sshInfo.Identities[0]
 		loadToRemoteOpts.SSHMode = opts.SSHMode
+		// Compress on the fly: only compressed bytes cross the network.
+		loadToRemoteOpts.ScpCompressionOptions = opts.ScpCompressionOptions
 		loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 		if err != nil {
 			return nil, err
@@ -278,7 +280,18 @@ func loadToRemote(run remoteRunner, opts entities.ScpLoadToRemoteOptions) (*enti
 	}
 	defer input.Close()
 
-	out, err := run.execWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, input)
+	var stream io.Reader = input
+	if opts.CompressionFormat != "" {
+		// The remote podman load detects the compression itself.
+		compressed, err := compressReader(input, opts.ScpCompressionOptions)
+		if err != nil {
+			return nil, err
+		}
+		defer compressed.Close()
+		stream = compressed
+	}
+
+	out, err := run.execWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, stream)
 	if err != nil {
 		return nil, err
 	}

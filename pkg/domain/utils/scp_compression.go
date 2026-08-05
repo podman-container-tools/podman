@@ -2,10 +2,12 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
 
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
@@ -72,4 +74,40 @@ func ValidateScpCompression(opts entities.ScpCompressionOptions) error {
 	}
 
 	return nil
+}
+
+// compressReader returns input compressed with the given format. Compression
+// runs in a goroutine feeding a pipe, so the archive is never held in memory in
+// full. The caller must close the returned reader.
+func compressReader(input io.Reader, opts entities.ScpCompressionOptions) (io.ReadCloser, error) {
+	// Not straight to c/image: it also compresses xz and zstd:chunked, which
+	// podman image scp does not offer.
+	if _, err := scpCompressionFormatByName(opts.CompressionFormat); err != nil {
+		return nil, err
+	}
+
+	algorithm, err := compression.AlgorithmByName(opts.CompressionFormat)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, writer := io.Pipe()
+	compressor, err := compression.CompressStream(writer, algorithm, opts.CompressionLevel)
+	if err != nil {
+		_ = writer.Close()
+		_ = reader.Close()
+		return nil, err
+	}
+
+	go func() {
+		_, err := io.Copy(compressor, input)
+		// Closing the compressor flushes the trailer, so its error matters too.
+		if closeErr := compressor.Close(); err == nil {
+			err = closeErr
+		}
+		// Always close so a reader blocked in Read() is released.
+		_ = writer.CloseWithError(err)
+	}()
+
+	return reader, nil
 }

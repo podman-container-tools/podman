@@ -83,6 +83,9 @@ type ScpLoadToRemoteOptions struct {
 	Iden string
 	// SSHMode is the specified ssh.EngineMode which should be used
 	SSHMode ssh.EngineMode
+	// ScpCompressionOptions compresses LocalFile as it is streamed. Must be empty
+	// when LocalFile is already compressed.
+	ScpCompressionOptions
 }
 
 type ScpLoadToRemoteReport struct {
