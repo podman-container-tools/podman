@@ -24,6 +24,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/pkg/domain/entities"
+	"go.podman.io/podman/v6/pkg/domain/utils"
 	"go.podman.io/podman/v6/pkg/inspect"
 	"go.podman.io/podman/v6/pkg/signal"
 	systemdDefine "go.podman.io/podman/v6/pkg/systemd/define"
@@ -1702,6 +1703,11 @@ func AutocompleteImageSaveFormat(_ *cobra.Command, _ []string, _ string) ([]stri
 // AutocompleteImageScpFormat - Autocomplete image scp format options (oci-archive, docker-archive).
 func AutocompleteImageScpFormat(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	return ValidScpFormats, cobra.ShellCompDirectiveNoFileComp
+}
+
+// AutocompleteImageScpCompressionFormat - Autocomplete image scp compression-format options.
+func AutocompleteImageScpCompressionFormat(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return utils.ScpCompressionFormats(), cobra.ShellCompDirectiveNoFileComp
 }
 
 // AutocompleteWaitCondition - Autocomplete wait condition options.
