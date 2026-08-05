@@ -349,9 +349,9 @@ var _ = Describe("Podman checkpoint", func() {
 		result = podmanTest.Podman([]string{"container", "restore", cid})
 		result.WaitWithDefaultTimeout()
 
-		// Some older versions print "CRIU restoring failed: -52" while others
-		// "Error: crun: (00.054135) Error (criu/cgroup.c:1998): cg: cgroupd: recv req error: No such file or directory: OCI runtime attempted to invoke a command that was not found"
-		expectStderr := "cg: cgroupd: recv req error|CRIU restoring failed: -52"
+		// Some older versions print "CRIU restoring failed: -52",
+		// for newer versions the error message is converted.
+		expectStderr := "checkpoint contains established TCP connections, restore requires --tcp-established or --tcp-close|CRIU restoring failed: -52"
 		if podmanTest.OCIRuntime == "runc" {
 			expectStderr = "runc: criu failed: type NOTIFY errno 0"
 		}
@@ -393,9 +393,9 @@ var _ = Describe("Podman checkpoint", func() {
 		result := podmanTest.Podman([]string{"container", "restore", cid})
 		result.WaitWithDefaultTimeout()
 
-		// Some older versions print "CRIU restoring failed: -52" while others
-		// "Error: crun: (00.054135) Error (criu/cgroup.c:1998): cg: cgroupd: recv req error: No such file or directory: OCI runtime attempted to invoke a command that was not found"
-		expectStderr := "cg: cgroupd: recv req error|CRIU restoring failed: -52"
+		// Some older versions print "CRIU restoring failed: -52",
+		// for newer versions the error message is converted.
+		expectStderr := "checkpoint contains established TCP connections, restore requires --tcp-established or --tcp-close|CRIU restoring failed: -52"
 		if podmanTest.OCIRuntime == "runc" {
 			expectStderr = "runc: criu failed: type NOTIFY errno 0"
 		}
