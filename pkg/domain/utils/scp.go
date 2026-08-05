@@ -95,19 +95,15 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 
 	switch {
 	case source.Remote: // if we want to load FROM the remote, dest can either be local or remote in this case
-		saveToRemoteOpts := entities.ScpSaveToRemoteOptions{}
-		saveToRemoteOpts.Image = source.Image
-		saveToRemoteOpts.LocalFile = source.File
-		saveToRemoteOpts.Tag = ""
-		saveToRemoteOpts.URL = sshInfo.URI[0]
-		saveToRemoteOpts.Iden = sshInfo.Identities[0]
-		saveToRemoteOpts.SSHMode = opts.SSHMode
-		saveToRemoteOpts.Format = opts.SaveFormat
+		// Compress on the source host: only compressed bytes are copied down.
+		saveToRemoteOpts := saveToRemoteOptions(source, sshInfo.URI[0], sshInfo.Identities[0], opts, opts.ScpCompressionOptions)
 		_, err = SaveToRemote(saveToRemoteOpts)
 		if err != nil {
 			return nil, err
 		}
 		if dest.Remote { // we want to load remote -> remote, both source and dest are remote
+			// No compression: SaveToRemote already compressed this on the source
+			// host, so stream it on as it is.
 			loadToRemoteOpts := loadToRemoteOptions(dest, dest.File, sshInfo.URI[1], sshInfo.Identities[1], opts, entities.ScpCompressionOptions{})
 			loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 			if err != nil {
@@ -205,6 +201,21 @@ func loadToRemoteOptions(dest entities.ScpTransferImageOptions, localFile string
 		URL:                   url,
 		Iden:                  iden,
 		SSHMode:               opts.SSHMode,
+		ScpCompressionOptions: compress,
+	}
+}
+
+// saveToRemoteOptions describes saving source's image on the remote host it lives
+// on and copying the archive down. compress is separate from opts as above.
+func saveToRemoteOptions(source entities.ScpTransferImageOptions, url *url.URL, iden string, opts entities.ScpExecuteTransferOptions, compress entities.ScpCompressionOptions) entities.ScpSaveToRemoteOptions {
+	return entities.ScpSaveToRemoteOptions{
+		Image:                 source.Image,
+		LocalFile:             source.File,
+		Tag:                   "",
+		URL:                   url,
+		Iden:                  iden,
+		SSHMode:               opts.SSHMode,
+		Format:                opts.SaveFormat,
 		ScpCompressionOptions: compress,
 	}
 }
@@ -368,6 +379,16 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 	_, err = ssh.Exec(&save, opts.SSHMode)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.CompressionFormat != "" {
+		// Compress it where it is, so only compressed bytes are copied over the
+		// network.
+		compressedFile, err := compressRemoteFile(ssh.Exec, execOpts, opts.SSHMode, remoteFile, opts.ScpCompressionOptions)
+		if err != nil {
+			return nil, err
+		}
+		remoteFile = compressedFile
 	}
 
 	scpConnOpts := ssh.ConnectionScpOptions{User: opts.URL.User, Identity: opts.Iden, Port: port, Source: "ssh://" + opts.URL.User.String() + "@" + opts.URL.Hostname() + ":" + remoteFile, Destination: opts.LocalFile}
