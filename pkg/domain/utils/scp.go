@@ -23,6 +23,10 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 	sshInfo := entities.ImageScpConnections{}
 	loadReport := entities.ScpLoadReport{Names: []string{}}
 
+	if err := ValidateScpCompression(opts.ScpCompressionOptions); err != nil {
+		return nil, err
+	}
+
 	podman, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -173,6 +177,10 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			return nil, err
 		}
 	default: // else native load, both source and dest are local and transferring between users
+		if opts.CompressionFormat != "" {
+			// Nothing crosses the network here, so compressing would only burn CPU.
+			logrus.Warnf("Ignoring compression format %q: it only applies to transfers over ssh", opts.CompressionFormat)
+		}
 		if source.User == "" { // source user has to be set, destination does not
 			source.User = os.Getenv("USER")
 			if source.User == "" {
