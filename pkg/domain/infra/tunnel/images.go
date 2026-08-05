@@ -466,6 +466,10 @@ func (ir *ImageEngine) Scp(_ context.Context, src, dst string, opts entities.Ima
 	}
 	options.Quiet = &opts.Quiet
 	options.Destination = destination
+	if opts.CompressionFormat != "" {
+		options.CompressionFormat = &opts.CompressionFormat
+	}
+	options.CompressionLevel = opts.CompressionLevel
 
 	rep, err := images.Scp(ir.ClientCtx, &src, destination, *options)
 	if err != nil {
