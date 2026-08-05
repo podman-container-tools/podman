@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"go.podman.io/common/pkg/completion"
 	"go.podman.io/common/pkg/ssh"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/validate"
 	"go.podman.io/podman/v6/pkg/domain/entities"
+	"go.podman.io/podman/v6/pkg/domain/utils"
 )
 
 var (
@@ -29,9 +31,11 @@ var (
 )
 
 var (
-	parentFlags []string
-	quiet       bool
-	format      string
+	parentFlags       []string
+	quiet             bool
+	format            string
+	scpCompressFormat string
+	scpCompressLevel  int
 )
 
 func init() {
@@ -49,10 +53,29 @@ func scpFlags(cmd *cobra.Command) {
 	formatChoice := validate.Value(&format, common.ValidScpFormats...)
 	flags.Var(formatChoice, "format", "Format for `podman save` when creating the transfer archive ("+formatChoice.Choices()+"). Default is docker-archive when omitted.")
 	_ = cmd.RegisterFlagCompletionFunc("format", common.AutocompleteImageScpFormat)
+
+	compFormatFlagName := "compression-format"
+	compFormatChoice := validate.Value(&scpCompressFormat, utils.ScpCompressionFormats()...)
+	flags.Var(compFormatChoice, compFormatFlagName, "Compress the transfer archive with the given algorithm ("+compFormatChoice.Choices()+"). Default is no compression.")
+	_ = cmd.RegisterFlagCompletionFunc(compFormatFlagName, common.AutocompleteImageScpCompressionFormat)
+
+	compLevelFlagName := "compression-level"
+	flags.IntVar(&scpCompressLevel, compLevelFlagName, 0, "Compression level to use")
+	_ = cmd.RegisterFlagCompletionFunc(compLevelFlagName, completion.AutocompleteNone)
 }
 
-func scp(_ *cobra.Command, args []string) (finalErr error) {
+func scp(cmd *cobra.Command, args []string) (finalErr error) {
 	var err error
+
+	compressOpts := entities.ScpCompressionOptions{CompressionFormat: scpCompressFormat}
+	if cmd.Flags().Changed("compression-level") {
+		compressOpts.CompressionLevel = &scpCompressLevel
+	}
+	// Report a bad combination before anything expensive happens. The transfer
+	// validates again for the sake of callers coming in over the API.
+	if err := utils.ValidateScpCompression(compressOpts); err != nil {
+		return err
+	}
 
 	containerConfig := registry.PodmanConfig()
 
@@ -83,6 +106,7 @@ func scp(_ *cobra.Command, args []string) (finalErr error) {
 	scpOpts.Quiet = quiet
 	scpOpts.SSHMode = sshEngine
 	scpOpts.SaveFormat = format
+	scpOpts.ScpCompressionOptions = compressOpts
 	_, err = registry.ImageEngine().Scp(registry.Context(), src, dst, scpOpts)
 	if err != nil {
 		return err

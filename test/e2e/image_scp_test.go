@@ -63,4 +63,35 @@ var _ = Describe("podman image scp", func() {
 		scp.WaitWithDefaultTimeout()
 		Expect(scp).Should(ExitWithError(125, "unknown user user@domain"))
 	})
+
+	It("podman image scp rejects an unsupported compression format", func() {
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "bzip2", ALPINE, "QA::"})
+		scp.WaitWithDefaultTimeout()
+		// Single space: ErrorToString collapses whitespace, the message has two.
+		Expect(scp).Should(ExitWithError(125, `"bzip2" is not a valid value. Choose from: "gzip, zstd"`))
+	})
+
+	It("podman image scp rejects a compression level without a format", func() {
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-level", "9", ALPINE, "QA::"})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, "a compression level requires a compression format: invalid argument"))
+	})
+
+	It("podman image scp rejects an out of range compression level", func() {
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "gzip", "--compression-level", "10", ALPINE, "QA::"})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, `compression level 10 is out of range for "gzip", must be between 1 and 9: invalid argument`))
+	})
+
+	It("podman image scp ignores compression for a local user to user transfer", func() {
+		SkipIfRootless("the local user lookup only happens during a rootful transfer")
+
+		// Asking for compression here is a no-op, not an error. The bogus user
+		// makes the transfer fail after the warning is emitted.
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "zstd", "user@domain@localhost::" + ALPINE})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, "unknown user user@domain"))
+		// Loose around the format name: logrus escapes the quotes it puts round it.
+		Expect(scp.ErrorToString()).To(MatchRegexp(`Ignoring compression format .*zstd.*: it only applies to transfers over ssh`))
+	})
 })
