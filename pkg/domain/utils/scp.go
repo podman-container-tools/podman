@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -249,6 +250,10 @@ func LoginUser(user string) (*exec.Cmd, error) {
 // and copies the saved image dir over to the remote host and then loads it onto the machine
 // returns a report containing ssh response string and the id of the loaded image, or an error
 func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemoteReport, error) {
+	return loadToRemote(sshRunner, opts)
+}
+
+func loadToRemote(run remoteRunner, opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemoteReport, error) {
 	port := 0
 	urlPort := opts.URL.Port()
 	if urlPort != "" {
@@ -265,7 +270,7 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 	}
 	defer input.Close()
 
-	out, err := ssh.ExecWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, input)
+	out, err := run.execWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, input)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +281,7 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 	outArr := strings.Split(rep, " ")
 	id := outArr[len(outArr)-1]
 	if len(opts.Dest.Tag) > 0 { // tag the remote image using the output ID
-		_, err := ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "tag", id, opts.Dest.Tag}}, opts.SSHMode)
+		_, err := run.exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "tag", id, opts.Dest.Tag}}, opts.SSHMode)
 		if err != nil {
 			return nil, err
 		}
@@ -284,10 +289,45 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 	return &entities.ScpLoadToRemoteReport{Response: rep, ID: id}, nil
 }
 
+// trimRemotePath drops the trailing newline ssh.Exec hands back with the rest of
+// a remote command's raw output.
+func trimRemotePath(out string) string {
+	return strings.TrimSpace(out)
+}
+
+// remoteExec is ssh.Exec, taken as an argument so the commands built for a remote
+// host can be exercised without one.
+type remoteExec func(opts *ssh.ConnectionExecOptions, mode ssh.EngineMode) (string, error)
+
+// remoteRunner is every ssh operation a transfer performs, in one value. The
+// exported entry points pass sshRunner; a test passes its own to assert the
+// command sequence, and what is streamed, without a host to run against.
+type remoteRunner struct {
+	exec          remoteExec
+	execWithInput func(opts *ssh.ConnectionExecOptions, mode ssh.EngineMode, input io.Reader) (string, error)
+	scp           func(opts *ssh.ConnectionScpOptions, mode ssh.EngineMode) (string, error)
+}
+
+var sshRunner = remoteRunner{exec: ssh.Exec, execWithInput: ssh.ExecWithInput, scp: ssh.Scp}
+
+// removeRemoteFiles deletes paths on the host described by execOpts. Best effort:
+// a failure is logged, not returned.
+func removeRemoteFiles(run remoteExec, execOpts ssh.ConnectionExecOptions, sshMode ssh.EngineMode, paths ...string) {
+	rm := execOpts
+	rm.Args = append([]string{"rm", "-f"}, paths...)
+	if _, err := run(&rm, sshMode); err != nil {
+		logrus.Errorf("Removing file on endpoint: %v", err)
+	}
+}
+
 // SaveToRemote takes image information and remote connection information. it connects to the specified client
 // and saves the specified image on the remote machine and then copies it to the specified local location
 // returns an error if one occurs.
 func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemoteReport, error) {
+	return saveToRemote(sshRunner, opts)
+}
+
+func saveToRemote(run remoteRunner, opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemoteReport, error) {
 	if opts.Tag != "" {
 		return nil, fmt.Errorf("renaming of an image is currently not supported: %w", define.ErrInvalidArg)
 	}
@@ -302,10 +342,15 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 		}
 	}
 
-	remoteFile, err := ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"mktemp"}}, opts.SSHMode)
+	execOpts := ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User}
+
+	mktemp := execOpts
+	mktemp.Args = []string{"mktemp"}
+	remoteFile, err := run.exec(&mktemp, opts.SSHMode)
 	if err != nil {
 		return nil, err
 	}
+	remoteFile = trimRemotePath(remoteFile)
 
 	saveArgs := []string{"podman", "image", "save", opts.Image}
 	if opts.Format != "" {
@@ -314,20 +359,19 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 
 	saveArgs = append(saveArgs, "--output", remoteFile)
 
-	_, err = ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: saveArgs}, opts.SSHMode)
+	save := execOpts
+	save.Args = saveArgs
+	_, err = run.exec(&save, opts.SSHMode)
 	if err != nil {
 		return nil, err
 	}
 
 	scpConnOpts := ssh.ConnectionScpOptions{User: opts.URL.User, Identity: opts.Iden, Port: port, Source: "ssh://" + opts.URL.User.String() + "@" + opts.URL.Hostname() + ":" + remoteFile, Destination: opts.LocalFile}
-	scpRep, err := ssh.Scp(&scpConnOpts, opts.SSHMode)
+	scpRep, err := run.scp(&scpConnOpts, opts.SSHMode)
 	if err != nil {
 		return nil, err
 	}
-	_, err = ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"rm", scpRep}}, opts.SSHMode)
-	if err != nil {
-		logrus.Errorf("Removing file on endpoint: %v", err)
-	}
+	removeRemoteFiles(run.exec, execOpts, opts.SSHMode, scpRep)
 
 	return &entities.ScpSaveToRemoteReport{}, nil
 }
