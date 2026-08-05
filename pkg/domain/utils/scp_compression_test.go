@@ -1,13 +1,21 @@
 package utils
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/common/pkg/ssh"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
+	"go.podman.io/storage/pkg/archive"
 )
 
 func TestValidateScpCompression(t *testing.T) {
@@ -130,4 +138,98 @@ func TestExecuteTransferRejectsBadCompressionBeforeDoingAnything(t *testing.T) {
 			assert.Empty(t, entries, "the transfer's temporary file was created before the options were rejected")
 		})
 	}
+}
+
+// The feature rests on podman load recognising the compression unaided, and the
+// two archive formats reach that through different detectors.
+func TestCompressReaderIsDetectedByBothLoadPaths(t *testing.T) {
+	payload := []byte(strings.Repeat("podman image scp compression payload\n", 512))
+
+	for _, format := range ScpCompressionFormats() {
+		t.Run(format, func(t *testing.T) {
+			reader, err := compressReader(bytes.NewReader(payload), entities.ScpCompressionOptions{CompressionFormat: format})
+			require.NoError(t, err)
+			defer reader.Close()
+			compressed, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			assert.Less(t, len(compressed), len(payload), "compressed output should be smaller than the input")
+
+			// docker-archive: c/image tarfile.Reader uses AutoDecompress.
+			viaCImage, isCompressed, err := compression.AutoDecompress(bytes.NewReader(compressed))
+			require.NoError(t, err)
+			require.True(t, isCompressed)
+			defer viaCImage.Close()
+			roundTripped, err := io.ReadAll(viaCImage)
+			require.NoError(t, err)
+			assert.Equal(t, payload, roundTripped)
+
+			// oci-archive: c/storage archive.Untar uses DecompressStream.
+			viaCStorage, err := archive.DecompressStream(bytes.NewReader(compressed))
+			require.NoError(t, err)
+			defer viaCStorage.Close()
+			roundTripped, err = io.ReadAll(viaCStorage)
+			require.NoError(t, err)
+			assert.Equal(t, payload, roundTripped)
+		})
+	}
+}
+
+func TestCompressReaderWithLevel(t *testing.T) {
+	payload := []byte(strings.Repeat("podman image scp compression payload\n", 512))
+
+	level := 1
+	reader, err := compressReader(bytes.NewReader(payload), entities.ScpCompressionOptions{
+		CompressionFormat: "gzip",
+		CompressionLevel:  &level,
+	})
+	require.NoError(t, err)
+	defer reader.Close()
+
+	compressed, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	assert.Less(t, len(compressed), len(payload))
+}
+
+// c/image can compress xz and zstd:chunked, so these catch compressReader going
+// straight to it. "lz4" would not: c/image does not know it either.
+func TestCompressReaderRejectsFormatsOutsideTheTable(t *testing.T) {
+	for _, format := range []string{"xz", "zstd:chunked", "lz4"} {
+		t.Run(format, func(t *testing.T) {
+			_, err := compressReader(bytes.NewReader(nil), entities.ScpCompressionOptions{CompressionFormat: format})
+			assert.ErrorContains(t, err, "unsupported compression format")
+			assert.ErrorIs(t, err, define.ErrInvalidArg)
+		})
+	}
+}
+
+func TestCompressReaderPropagatesReadError(t *testing.T) {
+	reader, err := compressReader(&failingReader{}, entities.ScpCompressionOptions{CompressionFormat: "gzip"})
+	require.NoError(t, err)
+	defer reader.Close()
+
+	_, err = io.ReadAll(reader)
+	assert.ErrorContains(t, err, "read failed")
+}
+
+// The path itself needs two hosts, so without this the flag could stop being
+// honoured and every other test would still pass.
+func TestCompressionOptionsReachTheTransfer(t *testing.T) {
+	level := 9
+	compress := entities.ScpCompressionOptions{CompressionFormat: "gzip", CompressionLevel: &level}
+	opts := entities.ScpExecuteTransferOptions{SSHMode: ssh.GolangMode, ScpCompressionOptions: compress}
+	dest := entities.ScpTransferImageOptions{File: "/tmp/podman123"}
+	url := &url.URL{Host: "example.test"}
+
+	t.Run("a local source compresses into the stream", func(t *testing.T) {
+		got := loadToRemoteOptions(dest, "/tmp/podman123", url, "iden", opts, opts.ScpCompressionOptions)
+		assert.Equal(t, compress, got.ScpCompressionOptions)
+	})
+}
+
+var errRead = errors.New("read failed")
+
+type failingReader struct{}
+
+func (*failingReader) Read([]byte) (int, error) {
+	return 0, errRead
 }

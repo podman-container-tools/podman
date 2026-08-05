@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -107,13 +108,7 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			return nil, err
 		}
 		if dest.Remote { // we want to load remote -> remote, both source and dest are remote
-			loadToRemoteOpts := entities.ScpLoadToRemoteOptions{}
-			loadToRemoteOpts.Dest = dest
-			loadToRemoteOpts.LocalFile = dest.File
-			loadToRemoteOpts.Tag = ""
-			loadToRemoteOpts.URL = sshInfo.URI[1]
-			loadToRemoteOpts.Iden = sshInfo.Identities[1]
-			loadToRemoteOpts.SSHMode = opts.SSHMode
+			loadToRemoteOpts := loadToRemoteOptions(dest, dest.File, sshInfo.URI[1], sshInfo.Identities[1], opts, entities.ScpCompressionOptions{})
 			loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 			if err != nil {
 				return nil, err
@@ -156,13 +151,8 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			return nil, err
 		}
 
-		loadToRemoteOpts := entities.ScpLoadToRemoteOptions{}
-		loadToRemoteOpts.Dest = dest
-		loadToRemoteOpts.LocalFile = source.File
-		loadToRemoteOpts.Tag = ""
-		loadToRemoteOpts.URL = sshInfo.URI[0]
-		loadToRemoteOpts.Iden = sshInfo.Identities[0]
-		loadToRemoteOpts.SSHMode = opts.SSHMode
+		// Compress on the fly: only compressed bytes cross the network.
+		loadToRemoteOpts := loadToRemoteOptions(dest, source.File, sshInfo.URI[0], sshInfo.Identities[0], opts, opts.ScpCompressionOptions)
 		loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 		if err != nil {
 			return nil, err
@@ -202,6 +192,21 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 	rep := entities.ScpExecuteTransferReport{}
 	rep.LoadReport = &loadReport
 	return &rep, nil
+}
+
+// loadToRemoteOptions describes streaming localFile to dest's host and loading it
+// there. compress is separate from opts so each caller states where it wants the
+// archive compressed.
+func loadToRemoteOptions(dest entities.ScpTransferImageOptions, localFile string, url *url.URL, iden string, opts entities.ScpExecuteTransferOptions, compress entities.ScpCompressionOptions) entities.ScpLoadToRemoteOptions {
+	return entities.ScpLoadToRemoteOptions{
+		Dest:                  dest,
+		LocalFile:             localFile,
+		Tag:                   "",
+		URL:                   url,
+		Iden:                  iden,
+		SSHMode:               opts.SSHMode,
+		ScpCompressionOptions: compress,
+	}
 }
 
 // CreateSCPCommand takes an existing command, appends the given arguments and returns a configured podman command for image scp
@@ -273,7 +278,18 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 	}
 	defer input.Close()
 
-	out, err := ssh.ExecWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, input)
+	var stream io.Reader = input
+	if opts.CompressionFormat != "" {
+		// The remote podman load detects the compression itself.
+		compressed, err := compressReader(input, opts.ScpCompressionOptions)
+		if err != nil {
+			return nil, err
+		}
+		defer compressed.Close()
+		stream = compressed
+	}
+
+	out, err := ssh.ExecWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, stream)
 	if err != nil {
 		return nil, err
 	}
