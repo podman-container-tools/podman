@@ -109,6 +109,9 @@ type ScpSaveToRemoteOptions struct {
 	SSHMode ssh.EngineMode
 	// Format is the save format (oci-archive or docker-archive). Empty means default of podman save (docker-archive).
 	Format string
+	// ScpCompressionOptions describes how to compress the archive on the remote
+	// host before it is copied over the network.
+	ScpCompressionOptions
 }
 
 type ScpSaveToRemoteReport struct{}

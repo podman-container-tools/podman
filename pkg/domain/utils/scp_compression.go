@@ -1,12 +1,15 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
+	"go.podman.io/common/pkg/ssh"
 	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
@@ -110,4 +113,71 @@ func compressReader(input io.Reader, opts entities.ScpCompressionOptions) (io.Re
 	}()
 
 	return reader, nil
+}
+
+// remoteCompressCommand returns the compressor binary, the argv compressing
+// remoteFile in place, and the path the compressed archive ends up at.
+func remoteCompressCommand(remoteFile string, opts entities.ScpCompressionOptions) (bin string, argv []string, compressedFile string, err error) {
+	format, err := scpCompressionFormatByName(opts.CompressionFormat)
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	argv = make([]string, 0, len(format.args)+3)
+	argv = append(argv, format.bin)
+	argv = append(argv, format.args...)
+	if opts.CompressionLevel != nil {
+		argv = append(argv, "-"+strconv.Itoa(*opts.CompressionLevel))
+	}
+	argv = append(argv, remoteFile)
+
+	return format.bin, argv, remoteFile + format.ext, nil
+}
+
+// cmdNotFoundStatus is what a POSIX shell exits with for an unknown command.
+const cmdNotFoundStatus = 127
+
+// compressRemoteFile compresses remoteFile in place on the host described by
+// execOpts and returns the compressed path. The compressor removes remoteFile, so
+// only the returned path needs cleaning up; a failure leaves nothing behind.
+func compressRemoteFile(run remoteExec, execOpts ssh.ConnectionExecOptions, sshMode ssh.EngineMode, remoteFile string, opts entities.ScpCompressionOptions) (string, error) {
+	bin, argv, compressedFile, err := remoteCompressCommand(remoteFile, opts)
+	if err != nil {
+		return "", err
+	}
+
+	compress := execOpts
+	compress.Args = argv
+	if _, err := run(&compress, sshMode); err != nil {
+		// Either path can exist: the input is only removed on success, and a
+		// partial output may already have been written.
+		removeRemoteFiles(run, execOpts, sshMode, remoteFile, compressedFile)
+
+		// Only 127 means the host lacks the compressor. Reporting anything else
+		// that way would mislabel a failure to connect.
+		if remoteExitStatus(err) == cmdNotFoundStatus {
+			return "", fmt.Errorf("compressing the transfer archive with %q requires the %q command on the remote host: %w",
+				opts.CompressionFormat, bin, err)
+		}
+		return "", fmt.Errorf("compressing %q on the remote host: %w", remoteFile, err)
+	}
+
+	return compressedFile, nil
+}
+
+// remoteExitStatus returns the status the remote command exited with, or -1 if
+// err is not a command that ran to completion. The two ssh engines return
+// different error types spelling the accessor differently. Matching the accessor
+// rather than the type also keeps this testable: crypto/ssh's status field is
+// unexported, so its ExitError cannot be built with a chosen status.
+func remoteExitStatus(err error) int {
+	var sshExit interface{ ExitStatus() int }
+	if errors.As(err, &sshExit) {
+		return sshExit.ExitStatus()
+	}
+	var cmdExit interface{ ExitCode() int }
+	if errors.As(err, &cmdExit) {
+		return cmdExit.ExitCode()
+	}
+	return -1
 }
