@@ -81,7 +81,8 @@ Options specific to type=**volume**:
 
 - *z*, *Z*: shorthand for *relabel=shared* and *relabel=private*, respectively.
 
-- *idmap*: If specified, create an idmapped mount to the target user namespace in the container.
+- *idmap*[=*true*|*false*|*uids=...*;gids=...*]: If specified (or set to *true*), create an idmapped mount to the target user namespace in the container.
+  Setting *idmap=false* explicitly disables idmapping for the mount.
   The idmap option is only supported by Podman in rootful mode. The Linux kernel does not allow the use of idmapped file systems for unprivileged users.
   The idmap option supports a custom mapping that can be different from the user namespace used by the container.
   The mapping can be specified after the idmap option like: `idmap=uids=0-1-10#10-11-10;gids=0-100-10`.  For each triplet, the first value is the
@@ -108,7 +109,8 @@ Options specific to **bind** and **glob**:
 
 - *z*, *Z*: shorthand for *relabel=shared* and *relabel=private*, respectively.
 
-- *idmap*: If specified, create an idmapped mount to the target user namespace in the container.
+- *idmap*[=*true*|*false*|*uids=...*;gids=...*]: If specified (or set to *true*), create an idmapped mount to the target user namespace in the container.
+  Setting *idmap=false* explicitly disables idmapping for the mount.
   The idmap option is only supported by Podman in rootful mode. The Linux kernel does not allow the use of idmapped file systems for unprivileged users.
   The idmap option supports a custom mapping that can be different from the user namespace used by the container.
   The mapping can be specified after the idmap option like: `idmap=uids=0-1-10#10-11-10;gids=0-100-10`.  For each triplet, the first value is the

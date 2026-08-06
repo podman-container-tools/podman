@@ -110,22 +110,28 @@ func parseIDMapMountOption(idMappings stypes.IDMappingOptions, option string) ([
 	uidMap := idMappings.UIDMap
 	gidMap := idMappings.GIDMap
 	if strings.HasPrefix(option, "idmap=") {
-		var err error
-		options := strings.SplitSeq(strings.SplitN(option, "=", 2)[1], ";")
-		for i := range options {
-			switch {
-			case strings.HasPrefix(i, "uids="):
-				uidMap, err = parseOptionIDs(idMappings.UIDMap, strings.Replace(i, "uids=", "", 1))
-				if err != nil {
-					return nil, nil, err
+		val := strings.SplitN(option, "=", 2)[1]
+		if val == "false" {
+			return nil, nil, nil
+		}
+		if val != "true" {
+			var err error
+			options := strings.SplitSeq(val, ";")
+			for i := range options {
+				switch {
+				case strings.HasPrefix(i, "uids="):
+					uidMap, err = parseOptionIDs(idMappings.UIDMap, strings.Replace(i, "uids=", "", 1))
+					if err != nil {
+						return nil, nil, err
+					}
+				case strings.HasPrefix(i, "gids="):
+					gidMap, err = parseOptionIDs(idMappings.GIDMap, strings.Replace(i, "gids=", "", 1))
+					if err != nil {
+						return nil, nil, err
+					}
+				default:
+					return nil, nil, fmt.Errorf("unknown option %q", i)
 				}
-			case strings.HasPrefix(i, "gids="):
-				gidMap, err = parseOptionIDs(idMappings.GIDMap, strings.Replace(i, "gids=", "", 1))
-				if err != nil {
-					return nil, nil, err
-				}
-			default:
-				return nil, nil, fmt.Errorf("unknown option %q", i)
 			}
 		}
 	}

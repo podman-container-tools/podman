@@ -140,6 +140,24 @@ func TestParseIDMapMountOption(t *testing.T) {
 
 	_, _, err = parseIDMapMountOption(options, "idmap=uids=0-1-10#10-11-10;gids=0-3-10#0--12-0")
 	assert.NotNil(t, err)
+
+	// idmap=true must be equivalent to bare idmap (use default container mappings).
+	uids, gids, err = parseIDMapMountOption(options, "idmap=true")
+	assert.NoError(t, err)
+	assert.Equal(t, len(uids), 1)
+	assert.Equal(t, len(gids), 1)
+	assert.Equal(t, uids[0].HostID, uint32(1000))
+	assert.Equal(t, uids[0].ContainerID, uint32(0))
+	assert.Equal(t, uids[0].Size, uint32(10000))
+	assert.Equal(t, gids[0].HostID, uint32(2000))
+	assert.Equal(t, gids[0].ContainerID, uint32(0))
+	assert.Equal(t, gids[0].Size, uint32(10000))
+
+	// idmap=false must return nil mappings (no idmapping).
+	uids, gids, err = parseIDMapMountOption(options, "idmap=false")
+	assert.NoError(t, err)
+	assert.Nil(t, uids)
+	assert.Nil(t, gids)
 }
 
 func TestPostDeleteHooks(t *testing.T) {

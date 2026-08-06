@@ -1738,22 +1738,24 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 			return "", err
 		}
 
-		pid, cleanupFunc, err := idmap.CreateUsernsProcess(util.RuntimeSpecToIDtools(uidMappings), util.RuntimeSpecToIDtools(gidMappings))
-		if err != nil {
-			return "", err
-		}
-		defer cleanupFunc()
-
-		if err := idmap.CreateIDMappedMount(c.config.Rootfs, c.config.Rootfs, pid); err != nil {
-			return "", fmt.Errorf("failed to create idmapped mount: %w", err)
-		}
-		defer func() {
-			if deferredErr != nil {
-				if err := unix.Unmount(c.config.Rootfs, 0); err != nil {
-					logrus.Errorf("Unmounting idmapped rootfs for container %s after mount error: %v", c.ID(), err)
-				}
+		if uidMappings != nil || gidMappings != nil {
+			pid, cleanupFunc, err := idmap.CreateUsernsProcess(util.RuntimeSpecToIDtools(uidMappings), util.RuntimeSpecToIDtools(gidMappings))
+			if err != nil {
+				return "", err
 			}
-		}()
+			defer cleanupFunc()
+
+			if err := idmap.CreateIDMappedMount(c.config.Rootfs, c.config.Rootfs, pid); err != nil {
+				return "", fmt.Errorf("failed to create idmapped mount: %w", err)
+			}
+			defer func() {
+				if deferredErr != nil {
+					if err := unix.Unmount(c.config.Rootfs, 0); err != nil {
+						logrus.Errorf("Unmounting idmapped rootfs for container %s after mount error: %v", c.ID(), err)
+					}
+				}
+			}()
+		}
 	}
 
 	// Check if overlay has to be created on top of Rootfs
