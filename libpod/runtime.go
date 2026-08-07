@@ -1324,7 +1324,8 @@ func (r *Runtime) PruneBuildContainers() ([]*reports.PruneReport, error) {
 	for _, container := range containers {
 		path, err := r.store.ContainerDirectory(container.ID)
 		if err != nil {
-			return stageContainersPruneReports, err
+			logrus.Debugf("Failed to get container directory for %s, skipping: %v", container.ID, err)
+			continue
 		}
 		if err := fileutils.Exists(filepath.Join(path, "buildah.json")); err != nil {
 			continue
@@ -1336,8 +1337,9 @@ func (r *Runtime) PruneBuildContainers() ([]*reports.PruneReport, error) {
 		size, err := r.store.ContainerSize(container.ID)
 		if err != nil {
 			report.Err = err
+		} else {
+			report.Size = uint64(size)
 		}
-		report.Size = uint64(size)
 
 		if err := r.store.DeleteContainer(container.ID); err != nil {
 			report.Err = errors.Join(report.Err, err)
