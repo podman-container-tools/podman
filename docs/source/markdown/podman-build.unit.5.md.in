@@ -136,7 +136,7 @@ also been provided.
 
 @@option quadlet:variant.build
 
-@@option quadlet:volume
+@@option quadlet:volume.image
 
 
 # EXAMPLES

@@ -9,12 +9,13 @@
 << endif >>
 
 Mount a host directory into containers when executing RUN instructions during
-the build.
+the build. Unlike container and pod mounts, only a host directory is supported
+here — named volumes and `.volume` Quadlet units are not accepted by
+`podman build`.
 
 << if is_quadlet >>
-Special case:
-
-* If `SOURCE-VOLUME` ends with `.volume`, Quadlet will look for the corresponding `.volume` Quadlet unit. If found, Quadlet will use the name of the Volume set in the Unit, otherwise, `systemd-$name` is used. The generated systemd service contains a dependency on the service unit generated for that `.volume` unit, or on `$name-volume.service` if the `.volume` unit is not found. Note: the corresponding `.volume` file must exist.
+If `HOST-DIR` starts with `.`, Quadlet resolves the path relative to the
+location of the unit file.
 << endif >>
 
 The `OPTIONS` are a comma-separated list and can be one or more of:
