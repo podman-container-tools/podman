@@ -134,55 +134,40 @@ func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir boo
 		}
 	}
 
-	resolvedRoot, resolvedPath, volume, err := c.resolveCopyTarget(mountPoint, path)
+	volCleanupFuncs, err := c.mountContainerVolumesAndMounts(mountPoint)
+	if err != nil {
+		unmount()
+		return nil, err
+	}
+	cleanupFuncs = append(cleanupFuncs, volCleanupFuncs...)
+
+	var resolvedVolume *Volume
+	resolvedRoot, resolvedPath, resolvedVolume, err = c.resolveCopyTarget(mountPoint, path)
+	_ = resolvedVolume // volume copy-up is now handled for all named volumes below
 	if err != nil {
 		unmount()
 		return nil, err
 	}
 
-	if volume != nil {
+	if len(c.config.NamedVolumes) > 0 {
 		// This must be the first cleanup function so it fires before volume unmounts happen.
 		cleanupFuncs = append([]func(){func() {
-			// This is a gross hack to ensure correct permissions
-			// on a volume that was copied into that needed, but did
-			// not receive, a copy-up.
-			// Why do we need this?
-			// Basically: fixVolumePermissions is needed to ensure
-			// the volume has the right permissions.
-			// However, fixVolumePermissions only fires on a volume
-			// that is not empty iff a copy-up occurred.
-			// In this case, the volume is not empty as we just
-			// copied into it, so in order to get
-			// fixVolumePermissions to actually run, we must
-			// convince it that a copy-up occurred - even if it did
-			// not.
-			// At the same time, clear NeedsCopyUp as we just
-			// populated the volume and that will block a future
-			// copy-up.
-			volume.lock.Lock()
-			defer volume.lock.Unlock()
-
-			if err := volume.update(); err != nil {
-				logrus.Errorf("Unable to update volume %s status: %v", volume.Name(), err)
-				return
-			}
-
-			if volume.state.NeedsCopyUp && volume.state.NeedsChown {
-				volume.state.NeedsCopyUp = false
-				volume.state.CopiedUp = true
-				if err := volume.save(); err != nil {
-					logrus.Errorf("Unable to save volume %s state: %v", volume.Name(), err)
-					return
+			for _, namedVol := range c.config.NamedVolumes {
+				vol, err := c.runtime.state.Volume(namedVol.Name)
+				if err != nil {
+					continue
 				}
-
-				for _, namedVol := range c.config.NamedVolumes {
-					if namedVol.Name == volume.Name() {
-						if err := c.fixVolumePermissionsUnlocked(namedVol, volume); err != nil {
-							logrus.Errorf("Unable to fix volume %s permissions: %v", volume.Name(), err)
+				vol.lock.Lock()
+				if err := vol.update(); err == nil {
+					if vol.state.NeedsCopyUp {
+						vol.state.NeedsCopyUp = false
+						vol.state.CopiedUp = true
+						if err := vol.save(); err != nil {
+							logrus.Errorf("Unable to save volume %s state: %v", vol.Name(), err)
 						}
-						return
 					}
 				}
+				vol.lock.Unlock()
 			}
 		}}, cleanupFuncs...)
 	}
@@ -231,9 +216,10 @@ func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir boo
 
 func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, error) {
 	var (
-		mountPoint string
-		unmount    func()
-		err        error
+		mountPoint   string
+		unmount      func()
+		cleanupFuncs []func()
+		err          error
 	)
 
 	// Optimization: only mount if the container is not already.
@@ -247,11 +233,65 @@ func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, 
 			return nil, err
 		}
 		unmount = func() {
+			for _, cleanupFunc := range cleanupFuncs {
+				cleanupFunc()
+			}
 			if err := c.unmount(false); err != nil {
 				logrus.Errorf("Failed to unmount container: %v", err)
 			}
 		}
 	}
+
+	// Mount all named volumes before calling mountContainerVolumesAndMounts.
+	// This is necessary for volumes that require an explicit mount (e.g.
+	// volume plugins, image volumes) so that vol.MountPoint() returns a
+	// valid storage path.  Without this, such volumes would be silently
+	// skipped and reads would see the container's empty rootfs directory
+	// instead of the actual volume data.
+	if !c.state.Mounted && len(c.config.NamedVolumes) > 0 {
+		for _, v := range c.config.NamedVolumes {
+			vol, err := c.mountNamedVolume(v, mountPoint)
+			if err != nil {
+				unmount()
+				return nil, err
+			}
+
+			volUnmountName := fmt.Sprintf("volume unmount %s %s", vol.Name(), stringid.GenerateNonCryptoID()[0:12])
+
+			volUnmountFunc := func() error {
+				vol.lock.Lock()
+				defer vol.lock.Unlock()
+
+				if err := vol.unmount(false); err != nil {
+					return err
+				}
+
+				return nil
+			}
+
+			cleanupFuncs = append(cleanupFuncs, func() {
+				_ = shutdown.Unregister(volUnmountName)
+
+				if err := volUnmountFunc(); err != nil {
+					logrus.Errorf("Unmounting container %s volume %s: %v", c.ID(), vol.Name(), err)
+				}
+			})
+
+			if err := shutdown.Register(volUnmountName, func(_ os.Signal) error {
+				return volUnmountFunc()
+			}); err != nil && !errors.Is(err, shutdown.ErrHandlerExists) {
+				unmount()
+				return nil, fmt.Errorf("adding shutdown handler for volume %s unmount: %w", vol.Name(), err)
+			}
+		}
+	}
+
+	volCleanupFuncs, err := c.mountContainerVolumesAndMounts(mountPoint)
+	if err != nil {
+		unmount()
+		return nil, err
+	}
+	cleanupFuncs = append(cleanupFuncs, volCleanupFuncs...)
 
 	statInfo, resolvedRoot, resolvedPath, err := c.stat(mountPoint, path)
 	if err != nil {
