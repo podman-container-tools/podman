@@ -232,6 +232,23 @@ type ContainerState struct {
 	Restored         bool      `json:"restored,omitempty"`
 }
 
+// copy returns a copy of the container state that can be modified without
+// affecting the original state.
+// The maps and slices it contains are cloned, so entries can be added and
+// removed independently of the original - the values they hold are shared and
+// must not be modified in place.
+func (s *ContainerState) copy() *ContainerState {
+	newState := *s
+	newState.ExecSessions = maps.Clone(s.ExecSessions)
+	newState.NetworkStatus = maps.Clone(s.NetworkStatus)
+	newState.BindMounts = maps.Clone(s.BindMounts)
+	newState.ExtensionStageHooks = maps.Clone(s.ExtensionStageHooks)
+	newState.NetInterfaceDescriptions = maps.Clone(s.NetInterfaceDescriptions)
+	newState.Service.Pods = slices.Clone(s.Service.Pods)
+
+	return &newState
+}
+
 // ContainerNamedVolume is a named volume that will be mounted into the
 // container. Each named volume is a libpod Volume present in the state.
 type ContainerNamedVolume struct {

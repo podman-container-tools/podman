@@ -901,13 +901,18 @@ func (c *Container) Cleanup(ctx context.Context, onlyStopped bool) error {
 // As Batch normally disables updating the current state of the container, the
 // Sync() function is provided to enable container state to be updated and
 // checked within Batch.
+// The container given to the batch function holds a copy of the state, so state
+// changes made during the batch operation are not reflected in the container
+// Batch was invoked on.
 func (c *Container) Batch(batchFunc func(*Container) error) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	newCtr := new(Container)
 	newCtr.config = c.config
-	newCtr.state = c.state
+	// Copy the state, so modifications made by the batch function do not leak
+	// back into the container Batch was called on.
+	newCtr.state = c.state.copy()
 	newCtr.runtime = c.runtime
 	newCtr.ociRuntime = c.ociRuntime
 	newCtr.lock = c.lock
