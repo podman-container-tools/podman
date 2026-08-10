@@ -205,3 +205,10 @@ func TestAutocompleteFormat(t *testing.T) {
 		assert.Equal(t, test.expected, completion, test.name)
 	}
 }
+
+func TestAutocompleteTimezone(t *testing.T) {
+	completions, directive := common.AutocompleteTimezone(nil, nil, "loc")
+	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+	assert.Contains(t, completions, "local")
+}
+

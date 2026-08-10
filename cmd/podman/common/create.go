@@ -430,7 +430,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 			timezoneFlagName, cf.Timezone,
 			"Set timezone in container",
 		)
-		_ = cmd.RegisterFlagCompletionFunc(timezoneFlagName, completion.AutocompleteNone) // TODO: add timezone completion
+		_ = cmd.RegisterFlagCompletionFunc(timezoneFlagName, AutocompleteTimezone)
 
 		umaskFlagName := "umask"
 		createFlags.StringVar(

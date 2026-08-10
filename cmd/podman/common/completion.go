@@ -2045,3 +2045,57 @@ func AutocompleteSysctl(_ *cobra.Command, _ []string, toComplete string) ([]stri
 
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
+
+// AutocompleteTimezone - autocomplete timezone names from system zoneinfo directories or "local".
+func AutocompleteTimezone(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	completions := []string{}
+	if strings.HasPrefix("local", toComplete) {
+		completions = append(completions, "local")
+	}
+
+	zoneDirs := []string{
+		"/usr/share/zoneinfo",
+		"/usr/lib/zoneinfo",
+		"/usr/share/lib/zoneinfo",
+	}
+
+	for _, zoneDir := range zoneDirs {
+		st, err := os.Stat(zoneDir)
+		if err != nil || !st.IsDir() {
+			continue
+		}
+
+		_ = filepath.WalkDir(zoneDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			if !d.IsDir() {
+				rel, err := filepath.Rel(zoneDir, path)
+				if err != nil {
+					return nil
+				}
+				tzName := filepath.ToSlash(rel)
+				if strings.HasPrefix(tzName, "posix/") || strings.HasPrefix(tzName, "right/") || strings.HasSuffix(tzName, ".tab") || strings.HasSuffix(tzName, ".list") {
+					return nil
+				}
+
+				if strings.HasPrefix(tzName, toComplete) {
+					completions = append(completions, tzName)
+				}
+			}
+
+			return nil
+		})
+
+		if len(completions) > 1 || (len(completions) == 1 && completions[0] != "local") {
+			break
+		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
