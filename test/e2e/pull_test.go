@@ -319,6 +319,8 @@ var _ = Describe("Podman pull", func() {
 
 	pullChunkedTests()
 
+	pullMirrorFallbackTests()
+
 	It("podman pull from docker-archive", func() {
 		SkipIfRemote("podman-remote does not support pulling from docker-archive")
 

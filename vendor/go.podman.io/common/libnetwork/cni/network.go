@@ -327,10 +327,9 @@ func (n *cniNetwork) NetworkInfo() types.NetworkInfo {
 	}
 
 	info := types.NetworkInfo{
-		Backend:        types.CNI,
-		Package:        packageVersion,
-		Path:           path,
-		DefaultNetwork: n.defaultNetwork,
+		Backend: types.CNI,
+		Package: packageVersion,
+		Path:    path,
 	}
 
 	dnsPath := filepath.Join(path, "dnsname")

@@ -369,11 +369,10 @@ func (n *netavarkNetwork) NetworkInfo() types.NetworkInfo {
 		logrus.Infof("Failed to get the netavark version: %v", err)
 	}
 	info := types.NetworkInfo{
-		Backend:        types.Netavark,
-		Version:        programVersion,
-		Package:        packageVersion,
-		Path:           path,
-		DefaultNetwork: n.defaultNetwork,
+		Backend: types.Netavark,
+		Version: programVersion,
+		Package: packageVersion,
+		Path:    path,
 	}
 
 	dnsPath := n.aardvarkBinary

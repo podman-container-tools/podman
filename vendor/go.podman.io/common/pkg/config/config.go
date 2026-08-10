@@ -1079,10 +1079,8 @@ func findBindir() string {
 	}
 	execPath, err := os.Executable()
 	if err == nil {
-		// Resolve symlinks for the binary path.
-		// On Windows, an additional symlink check is performed;
-		// on other platforms, this is equivalent to filepath.EvalSymlinks.
-		execPath, err = safeEvalSymlinks(execPath)
+		// Resolve symbolic links to find the actual binary file path.
+		execPath, err = filepath.EvalSymlinks(execPath)
 	}
 	if err != nil {
 		// If failed to find executable (unlikely to happen), warn about it.

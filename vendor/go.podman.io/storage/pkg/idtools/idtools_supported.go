@@ -20,12 +20,6 @@ struct subid_range get_range(struct subid_range *ranges, int i)
     return ranges[i];
 }
 
-// helper for stderr to avoid referencing C.stderr from Go code,
-// which breaks cgo on musl due to stderr being declared as FILE *const
-static FILE *subid_stderr(void) {
-    return stderr;
-}
-
 #if !defined(SUBID_ABI_MAJOR) || (SUBID_ABI_MAJOR < 4)
 # define subid_init libsubid_init
 # define subid_get_uid_ranges get_subuid_ranges
@@ -50,7 +44,7 @@ func readSubid(username string, isUser bool) (ranges, error) {
 	}
 
 	onceInit.Do(func() {
-		C.subid_init(C.CString("storage"), C.subid_stderr())
+		C.subid_init(C.CString("storage"), C.stderr)
 	})
 
 	cUsername := C.CString(username)

@@ -47,6 +47,7 @@ type CreateOpts struct {
 	MountLabel string
 	StorageOpt map[string]string
 	*idtools.IDMappings
+	ignoreChownErrors bool
 }
 
 // MountOpts contains optional arguments for Driver.Get() methods.
@@ -183,7 +184,7 @@ type DiffDriver interface {
 	// layer with the specified id and parent, returning the size of the
 	// new layer in bytes.
 	// The io.Reader must be an uncompressed stream.
-	ApplyDiff(id string, options ApplyDiffOpts) (size int64, err error)
+	ApplyDiff(id string, parent string, options ApplyDiffOpts) (size int64, err error)
 	// DiffSize calculates the changes between the specified id
 	// and its parent and returns the size in bytes of the changes
 	// relative to its base filesystem directory.
@@ -296,19 +297,6 @@ type DriverWithDiffer interface {
 	CleanupStagingDirectory(stagingDirectory string) error
 	// DifferTarget gets the location where files are stored for the layer.
 	DifferTarget(id string) (string, error)
-}
-
-// ApplyDiffStaging is an interface for driver who can apply the diff without holding the main storage lock.
-// This API is experimental and can be changed without bumping the major version number.
-type ApplyDiffStaging interface {
-	// StartStagingDiffToApply applies the new layer into a temporary directory.
-	// It returns a CleanupTempDirFunc which can be nil or set regardless if the function return an error or not.
-	// StagedAddition is only set when there is no error returned and the int64 value returns the size of the layer.
-	// This can be done without holding the storage lock, if a parent is given the caller must check for existence
-	// beforehand while holding a lock.
-	StartStagingDiffToApply(parent string, options ApplyDiffOpts) (tempdir.CleanupTempDirFunc, *tempdir.StagedAddition, int64, error)
-	// CommitStagedLayer commits the staged layer from StartStagingDiffToApply(). This must be done while holding the storage lock.
-	CommitStagedLayer(id string, commit *tempdir.StagedAddition) error
 }
 
 // Capabilities defines a list of capabilities a driver may implement.

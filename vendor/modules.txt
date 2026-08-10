@@ -752,7 +752,7 @@ go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
-# go.podman.io/common v0.67.1
+# go.podman.io/common v0.67.1 => github.com/QiWang19/container-libs/common v0.0.0-20260810180148-2b56c599cbff
 ## explicit; go 1.24.2
 go.podman.io/common/internal
 go.podman.io/common/internal/attributedstring
@@ -822,7 +822,7 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.39.2
+# go.podman.io/image/v5 v5.39.2 => github.com/QiWang19/container-libs/image/v5 v5.0.0-20260810180148-2b56c599cbff
 ## explicit; go 1.24.0
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
@@ -896,7 +896,7 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.62.0
+# go.podman.io/storage v1.62.0 => github.com/QiWang19/container-libs/storage v0.0.0-20260810180148-2b56c599cbff
 ## explicit; go 1.24.0
 go.podman.io/storage
 go.podman.io/storage/drivers
@@ -1195,3 +1195,6 @@ tags.cncf.io/container-device-interface/pkg/parser
 # tags.cncf.io/container-device-interface/specs-go v1.0.0
 ## explicit; go 1.19
 tags.cncf.io/container-device-interface/specs-go
+# go.podman.io/image/v5 => github.com/QiWang19/container-libs/image/v5 v5.0.0-20260810180148-2b56c599cbff
+# go.podman.io/common => github.com/QiWang19/container-libs/common v0.0.0-20260810180148-2b56c599cbff
+# go.podman.io/storage => github.com/QiWang19/container-libs/storage v0.0.0-20260810180148-2b56c599cbff

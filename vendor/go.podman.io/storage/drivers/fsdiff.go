@@ -151,7 +151,7 @@ func (gdw *NaiveDiffDriver) Changes(id string, idMappings *idtools.IDMappings, p
 // ApplyDiff extracts the changeset from the given diff into the
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
-func (gdw *NaiveDiffDriver) ApplyDiff(id string, options ApplyDiffOpts) (int64, error) {
+func (gdw *NaiveDiffDriver) ApplyDiff(id, parent string, options ApplyDiffOpts) (int64, error) {
 	driver := gdw.ProtoDriver
 
 	if options.Mappings == nil {

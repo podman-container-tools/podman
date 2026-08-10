@@ -50,8 +50,9 @@ func newImageDestination(sys *types.SystemContext, ref ociReference) (private.Im
 		}
 	} else {
 		index = &imgspecv1.Index{
-			Versioned:   imgspec.Versioned{SchemaVersion: 2},
-			MediaType:   imgspecv1.MediaTypeImageIndex,
+			Versioned: imgspec.Versioned{
+				SchemaVersion: 2,
+			},
 			Annotations: make(map[string]string),
 		}
 	}

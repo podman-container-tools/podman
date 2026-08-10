@@ -97,12 +97,11 @@ type NetworkUpdateOptions struct {
 
 // NetworkInfo contains the network information.
 type NetworkInfo struct {
-	Backend        NetworkBackend `json:"backend"`
-	Version        string         `json:"version,omitempty"`
-	Package        string         `json:"package,omitempty"`
-	Path           string         `json:"path,omitempty"`
-	DNS            DNSNetworkInfo `json:"dns,omitempty"`
-	DefaultNetwork string         `json:"defaultNetwork,omitempty"`
+	Backend NetworkBackend `json:"backend"`
+	Version string         `json:"version,omitempty"`
+	Package string         `json:"package,omitempty"`
+	Path    string         `json:"path,omitempty"`
+	DNS     DNSNetworkInfo `json:"dns,omitempty"`
 }
 
 // DNSNetworkInfo contains the DNS information.

@@ -132,11 +132,11 @@ func (d *Driver) CreateFromTemplate(id, template string, templateIDMappings *idt
 }
 
 // ApplyDiff applies the new layer into a root
-func (d *Driver) ApplyDiff(id string, options graphdriver.ApplyDiffOpts) (size int64, err error) {
+func (d *Driver) ApplyDiff(id, parent string, options graphdriver.ApplyDiffOpts) (size int64, err error) {
 	if d.ignoreChownErrors {
 		options.IgnoreChownErrors = d.ignoreChownErrors
 	}
-	return d.naiveDiff.ApplyDiff(id, options)
+	return d.naiveDiff.ApplyDiff(id, parent, options)
 }
 
 // CreateReadWrite creates a layer that is writable for use as a container
