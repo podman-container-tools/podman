@@ -604,6 +604,13 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//      Do not use the cache when building the image
 	//      (As of version 1.xx)
 	//  - in: query
+	//    name: nocachefilter
+	//    type: array
+	//    items:
+	//      type: string
+	//    description: |
+	//      Do not use the cache for the specified stage(s) when building the image
+	//  - in: query
 	//    name: cachefrom
 	//    type: string
 	//    default:

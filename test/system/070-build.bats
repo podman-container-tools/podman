@@ -1280,6 +1280,13 @@ EOF
     run_podman rmi -f $imgname
 }
 
+@test "podman build --no-cache --no-cache-filter conflict" {
+    echo FROM scratch > $PODMAN_TMPDIR/Dockerfile
+
+    run_podman 125 build -t "b-$(safename)" --no-cache --no-cache-filter stage1 $PODMAN_TMPDIR
+    is "$output" "Error: cannot specify --no-cache with --no-cache-filter" "--no-cache and --no-cache-filter should conflict"
+}
+
 function teardown() {
     # A timeout or other error in 'build' can leave behind stale images
     # that podman can't even see and which will cascade into subsequent

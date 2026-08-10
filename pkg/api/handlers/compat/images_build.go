@@ -100,6 +100,7 @@ type BuildQuery struct {
 	Memory                  int64              `schema:"memory"`
 	NamespaceOptions        string             `schema:"nsoptions"`
 	NoCache                 bool               `schema:"nocache"`
+	NoCacheFilter           []string           `schema:"nocachefilter"`
 	NoHosts                 bool               `schema:"nohosts"`
 	OmitHistory             bool               `schema:"omithistory"`
 	OSFeatures              []string           `schema:"osfeature"`
@@ -811,28 +812,30 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		MaxPullPushRetries:             query.Retry,
 		NamespaceOptions:               nsoptions,
 		NoCache:                        query.NoCache,
-		OSFeatures:                     query.OSFeatures,
-		OSVersion:                      query.OSVersion,
-		Output:                         output,
-		OutputFormat:                   format,
-		PullPolicy:                     pullPolicy,
-		PullPushRetryDelay:             retryDelay,
-		Quiet:                          query.Quiet,
-		Registry:                       registry,
-		RemoveIntermediateCtrs:         query.Rm,
-		RewriteTimestamp:               query.RewriteTimestamp,
-		RusageLogFile:                  query.RusageLogFile,
-		SkipUnusedStages:               skipUnusedStages,
-		SaveStages:                     query.SaveStages,
-		Squash:                         query.Squash,
-		StageLabels:                    query.StageLabels,
-		SystemContext:                  systemContext,
-		Target:                         query.Target,
-		TransientRunMounts:             query.TransientRunMounts,
-		UnsetEnvs:                      query.UnsetEnvs,
-		UnsetLabels:                    query.UnsetLabels,
-		UnsetAnnotations:               query.UnsetAnnotations,
-		SBOMScanOptions:                sbomScanOptions,
+		// TODO: Wire NoCacheFilter once buildah adds NoCacheFilter to define.BuildOptions:
+		// NoCacheFilter:                  query.NoCacheFilter,
+		OSFeatures:             query.OSFeatures,
+		OSVersion:              query.OSVersion,
+		Output:                 output,
+		OutputFormat:           format,
+		PullPolicy:             pullPolicy,
+		PullPushRetryDelay:     retryDelay,
+		Quiet:                  query.Quiet,
+		Registry:               registry,
+		RemoveIntermediateCtrs: query.Rm,
+		RewriteTimestamp:       query.RewriteTimestamp,
+		RusageLogFile:          query.RusageLogFile,
+		SkipUnusedStages:       skipUnusedStages,
+		SaveStages:             query.SaveStages,
+		Squash:                 query.Squash,
+		StageLabels:            query.StageLabels,
+		SystemContext:          systemContext,
+		Target:                 query.Target,
+		TransientRunMounts:     query.TransientRunMounts,
+		UnsetEnvs:              query.UnsetEnvs,
+		UnsetLabels:            query.UnsetLabels,
+		UnsetAnnotations:       query.UnsetAnnotations,
+		SBOMScanOptions:        sbomScanOptions,
 	}
 
 	// Process platforms

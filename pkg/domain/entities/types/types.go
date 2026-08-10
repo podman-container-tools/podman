@@ -68,6 +68,10 @@ type BuildOptions struct {
 	// so need to pass this to the main build functions
 	LogFileToClose *os.File
 	TmpDirToClose  string
+	// NoCacheFilter specifies a list of stage names for which the build cache
+	// should be ignored. This is a Podman-level field until buildah adds
+	// NoCacheFilter support to define.BuildOptions upstream.
+	NoCacheFilter []string
 }
 
 // BuildReport is the image-build report.

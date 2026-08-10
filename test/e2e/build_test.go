@@ -1441,7 +1441,13 @@ COPY --from=img2 /etc/alpine-release /prefix-test/container-prefix.txt`
 	It("podman build --output dest=./folder must fail", func() {
 		SkipIfRemote("--output is not supported in remote mode")
 		session := podmanTest.Podman([]string{"build", "-f", "build/basicalpine/Containerfile", "--output", fmt.Sprintf("dest=%v", podmanTest.TempDir)})
-		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitWithError(125, `missing required key "type"`))
+	})
+
+	// Should error when combining --no-cache and --no-cache-filter
+	It("podman build --no-cache and --no-cache-filter mutual exclusion", func() {
+		session := podmanTest.Podman([]string{"build", "--no-cache", "--no-cache-filter", "stage1", "build/basicalpine"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "cannot specify --no-cache with --no-cache-filter"))
 	})
 })

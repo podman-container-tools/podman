@@ -49,6 +49,12 @@ type BuildFlagsWrapper struct {
 	SquashAll bool
 	// Cleanup removes built images from remote connections on success
 	Cleanup bool
+	// NoCacheFilter specifies a list of stage names for which the build cache
+	// should be ignored. Unlike NoCache, which disables cache for the entire
+	// build, NoCacheFilter allows selectively disabling cache for specific stages.
+	// TODO: Remove this field once buildah adds NoCacheFilter to BudResults;
+	// it will then be inherited via the embedded buildahCLI.BudResults.
+	NoCacheFilter []string
 }
 
 // FarmBuildHiddenFlags are the flags hidden from the farm build command because they are either not
@@ -72,6 +78,7 @@ func DefineBuildFlags(cmd *cobra.Command, buildOpts *BuildFlagsWrapper, isFarmBu
 
 	// Podman flags
 	flags.BoolVarP(&buildOpts.SquashAll, "squash-all", "", false, "Squash all layers into a single layer")
+	flags.StringSliceVar(&buildOpts.NoCacheFilter, "no-cache-filter", []string{}, "Do not cache the specified stages. Comma-separated list of stage names.")
 
 	// Bud flags
 	budFlags := buildahCLI.GetBudFlags(&buildOpts.BudResults)
@@ -145,6 +152,10 @@ func DefineBuildFlags(cmd *cobra.Command, buildOpts *BuildFlagsWrapper, isFarmBu
 func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrapper) (*entities.BuildOptions, error) {
 	if cmd.Flags().Changed("squash-all") && cmd.Flags().Changed("squash") {
 		return nil, errors.New("cannot specify --squash-all with --squash")
+	}
+
+	if cmd.Flags().Changed("no-cache") && cmd.Flags().Changed("no-cache-filter") {
+		return nil, errors.New("cannot specify --no-cache with --no-cache-filter")
 	}
 
 	if cmd.Flag("output").Changed && registry.IsRemote() {
@@ -282,6 +293,7 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 	apiBuildOpts.BuildOptions = *buildahDefineOpts
 	apiBuildOpts.ContainerFiles = containerFiles
 	apiBuildOpts.Authfile = buildOpts.Authfile
+	apiBuildOpts.NoCacheFilter = buildOpts.NoCacheFilter
 
 	return &apiBuildOpts, err
 }
