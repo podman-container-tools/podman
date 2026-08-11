@@ -37,3 +37,26 @@ type (
 func getHostUID() int {
 	return 1000
 }
+import (
+	"os"
+	"time"
+)
+
+// renameWithRetry attempts os.Rename and retries on Windows if the target file
+// is temporarily locked by concurrent read operations (e.g., podman machine list).
+func renameWithRetry(src, dst string) error {
+	var err error
+	maxAttempts := 5
+	for i := 0; i < maxAttempts; i++ {
+		err = os.Rename(src, dst)
+		if err == nil {
+			return nil
+		}
+		// Windows throws "Access is denied" when a concurrent process holds an open handle.
+		if i < maxAttempts-1 {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+	}
+	return err
+}
