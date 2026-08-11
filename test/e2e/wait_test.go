@@ -88,6 +88,16 @@ var _ = Describe("Podman wait", func() {
 		Expect(session).Should(ExitWithError(125, `time: unknown unit "days" in duration "100days"`))
 	})
 
+	It("podman container wait on container with invalid condition", func() {
+		// The wait endpoint drops the per-container error and always
+		// reports an exit code, so the remote client cannot see this.
+		SkipIfRemote("wait condition errors are not returned by the API")
+		cid := podmanTest.PodmanExitCleanly("run", "-d", ALPINE, "sleep", "1").OutputToString()
+		session := podmanTest.Podman([]string{"container", "wait", "--condition", "invalidcondition", cid})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, `unknown container state: invalidcondition: invalid argument`))
+	})
+
 	It("podman wait on three containers", func() {
 		session := podmanTest.Podman([]string{"run", "-d", ALPINE, "sleep", "1"})
 		session.Wait(20)
