@@ -47,10 +47,6 @@ The `until` *filter* can be Unix timestamps, date formatted timestamps or Go dur
 
 Do not provide an interactive prompt for container removal.
 
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Remove all dangling images from local storage:

@@ -13,10 +13,6 @@ If no *tag* is provided, Podman defaults to `latest` for the *image*.
 Layers are indicated with image tags as `Top Layer of`, when the tag is known locally.
 ## OPTIONS
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--whatrequires**
 
 Show all child images and layers of the specified image

@@ -40,10 +40,6 @@ then the OS changes will be applied to `podman-machine-default`.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 #### **--restart**
 
 Restart VM after applying changes.

@@ -34,10 +34,6 @@ Specify driver specific options.
 
 Read secret data from environment variable.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--ignore**=*false*
 
 If a secret with the same name already exists, do not return an error and return the existing secret's ID instead of creating a new one.

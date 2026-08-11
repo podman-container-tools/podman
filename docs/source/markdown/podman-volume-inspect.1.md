@@ -46,10 +46,6 @@ Valid placeholders for the Go template are listed below:
 | .Timeout            | Timeout of the volume                                                       |
 | .UID                | UID the volume was created with                                             |
 
-#### **--help**
-
-Print usage statement
-
 
 ## EXAMPLES
 

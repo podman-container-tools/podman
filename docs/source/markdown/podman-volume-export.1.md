@@ -16,10 +16,6 @@ redirected to a file using the `--output` flag.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement
-
 #### **--output**, **-o**=*file*
 
 Write to a file, default is STDOUT

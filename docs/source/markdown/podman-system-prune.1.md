@@ -55,10 +55,6 @@ The `until` *filter* can be Unix timestamps, date formatted timestamps, or Go du
 
 Do not prompt for confirmation
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--volumes**
 
 Prune volumes currently unused by any container

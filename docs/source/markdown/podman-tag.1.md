@@ -14,12 +14,6 @@ image name, including the optional *tag* after the `:`.  If there is no *tag*
 provided, then Podman defaults to `latest` for both the *image* and the
 *target-name*.
 
-## OPTIONS
-
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Tag specified image with an image name defaulting to :latest.

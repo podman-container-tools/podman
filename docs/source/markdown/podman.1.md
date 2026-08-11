@@ -55,10 +55,6 @@ Backend to use for storing events. Allowed values are **file**, **journald**, an
 **none**. When *file* is specified, the events are stored under
 `<tmpdir>/events/events.log` (see **--tmpdir** below).
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--hooks-dir**=*path*
 
 Each `*.json` file in the path configures a hook for Podman containers.  For more details on the syntax of the JSON files and the semantics of hook injection, see `oci-hooks(5)`.  Podman and libpod currently support both the 1.0.0 and 0.1.0 hook schemas, although the 0.1.0 schema is deprecated.

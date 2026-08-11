@@ -44,9 +44,6 @@ Valid placeholders for the Go template are listed below:
 | .UID                      | UID of volume                                |
 | .VolumeConfigResponse ... | Don't use                                    |
 
-#### **--help**
-
-Print usage statement.
 
 @@option noheading
 

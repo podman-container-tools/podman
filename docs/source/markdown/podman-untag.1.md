@@ -11,12 +11,6 @@ podman\-untag - Remove one or more names from a locally-stored image
 ## DESCRIPTION
 Remove one or more names from an image in the local storage.  The image can be referred to by ID or reference.  If no name is specified, all names are removed from the image.  If a specified name is a short name and does not include a registry, `localhost/` is prefixed (e.g., `fedora` -> `localhost/fedora`). If a specified name does not include a tag, `:latest` is appended (e.g., `localhost/fedora` -> `localhost/fedora:latest`).
 
-## OPTIONS
-
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Remove all tags from the specified image.

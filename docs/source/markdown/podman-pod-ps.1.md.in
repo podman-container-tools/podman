@@ -65,10 +65,6 @@ Valid placeholders for the Go template are listed below:
 | .Restarts           | Show the total number of container restarts in a pod |
 | .Status             | Status of pod                                        |
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--latest**, **-l**
 
 Show the latest pod created (all states) (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)

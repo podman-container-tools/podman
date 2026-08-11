@@ -21,10 +21,6 @@ Note: `:` is a restricted character and cannot be part of the file name.
 
 ## OPTIONS
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--input**, **-i**=*input*
 
 Load the specified input file or URL instead of reading from stdin. The input can be one of:

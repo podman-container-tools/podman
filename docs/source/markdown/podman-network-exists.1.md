@@ -12,13 +12,6 @@ of the network may be used as input.  Podman returns an exit code
 of `0` when the network is found.  A `1` is returned otherwise. An exit code of
 `125` indicates there was another issue.
 
-
-## OPTIONS
-
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLE
 
 Check if specified network exists (the network does actually exist):

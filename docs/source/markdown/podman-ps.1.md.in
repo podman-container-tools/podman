@@ -78,10 +78,6 @@ Valid placeholders for the Go template are listed below:
 | .State             | Human-friendly description of ctr state      |
 | .Status            | Status of container                          |
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--last**, **-n**
 
 Print the n last created containers (all states)

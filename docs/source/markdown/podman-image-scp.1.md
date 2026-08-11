@@ -28,10 +28,6 @@ Format passed to **podman save** when creating the transfer archive. Allowed val
 
 Only the **oci-archive** and **docker-archive** archive (tar) formats are supported. Directory formats (**oci-dir**, **docker-dir**) are not supported because the transfer sends a single file; the remote path does not support directory layouts.
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--quiet**, **-q**
 
 Suppress the output

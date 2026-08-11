@@ -43,10 +43,6 @@ $ podman version --format '{{.Client.Version}}'
 2.0.0
 ```
 
-#### **--help**, **-h**
-
-Print usage statement
-
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
 

@@ -29,10 +29,6 @@ Remove the cached credentials for all registries in the auth file
 
 @@option compat-auth-file
 
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Remove login credentials for the docker.io registry from the authentication file:

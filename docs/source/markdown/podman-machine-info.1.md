@@ -28,10 +28,6 @@ Change output format to "json" or a Go template.
 | .Host ...           | Host information for local machine|
 | .Version ...        | Version of the machine            |
 
-#### **--help**
-
-Print usage statement.
-
 ## EXAMPLES
 
 Display default Podman machine info.

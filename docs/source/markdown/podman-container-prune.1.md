@@ -35,11 +35,6 @@ The `until` *filter* can be Unix timestamps, date formatted timestamps, or Go du
 Do not provide an interactive prompt for container removal.\
 The default is **false**.
 
-**-h**, **--help**
-
-Print usage statement.\
-The default is **false**.
-
 ## EXAMPLES
 Remove all stopped containers from local storage:
 ```

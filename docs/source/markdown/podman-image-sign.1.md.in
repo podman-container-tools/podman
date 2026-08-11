@@ -27,10 +27,6 @@ Sign all the manifests of the multi-architecture image (default false).
 
 Store the signatures in the specified directory.  Default: /var/lib/containers/sigstore
 
-#### **--help**, **-h**
-
-Print usage statement.
-
 #### **--sign-by**=*identity*
 
 Override the default identity of the signature.

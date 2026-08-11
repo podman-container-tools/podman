@@ -2853,9 +2853,6 @@ msgstr ""
 #: ../../source/markdown/podman-volume-exists.1.md:18
 #: ../../source/markdown/podman-wait.1.md:30
 #: ../../source/markdown/podman.1.md:50
-msgid "**--help**, **-h**"
-msgstr ""
-
 #: ../../source/markdown/podman-build.1.md:528
 #: ../../source/markdown/podman-container-runlabel.1.md:75
 #: ../../source/markdown/podman-create.1.md:766
@@ -2896,9 +2893,6 @@ msgstr ""
 #: ../../source/markdown/podman-volume-rm.1.md:30
 #: ../../source/markdown/podman-wait.1.md:32
 #: ../../source/markdown/podman.1.md:52
-msgid "Print usage statement"
-msgstr ""
-
 #: ../../source/markdown/podman-build.1.md:530
 #: ../../source/markdown/podman.1.md:54
 msgid "**--hooks-dir**=*path*"
@@ -6876,7 +6870,7 @@ msgid ""
 msgstr ""
 
 #: ../../source/markdown/podman-container-prune.1.md:38
-msgid "Print usage statement.\\ The default is **false**."
+msgid "The default is **false**."
 msgstr ""
 
 #: ../../source/markdown/podman-container-prune.1.md:42
@@ -9031,9 +9025,6 @@ msgstr ""
 #: ../../source/markdown/podman-volume-ls.1.md:66
 #: ../../source/markdown/podman-volume-prune.1.md:41
 #: ../../source/markdown/podman-volume-rm.1.md:28
-msgid "**--help**"
-msgstr ""
-
 #: ../../source/markdown/podman-create.1.md:770
 #: ../../source/markdown/podman-run.1.md:812
 msgid "**--hostname**, **-h**=*name*"
@@ -12717,9 +12708,6 @@ msgstr ""
 #: ../../source/markdown/podman-secret-rm.1.md:28
 #: ../../source/markdown/podman-system-service.1.md:87
 #: ../../source/markdown/podman-volume-ls.1.md:68
-msgid "Print usage statement."
-msgstr ""
-
 #: ../../source/markdown/podman-events.1.md:124
 #: ../../source/markdown/podman-history.1.md:48
 #: ../../source/markdown/podman-images.1.md:110

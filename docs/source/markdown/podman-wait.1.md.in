@@ -33,11 +33,6 @@ Container state or condition to wait for.  Can be specified multiple times where
 #### **--exit-first-match**
 Wait for exit of first container which matches conditions, ignore other ones.
 
-#### **--help**, **-h**
-
- Print usage statement
-
-
 #### **--ignore**
 Ignore errors when a specified container is missing and mark its return code as -1.
 

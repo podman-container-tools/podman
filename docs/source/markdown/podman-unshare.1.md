@@ -28,10 +28,6 @@ The unshare session defines two environment variables:
 
 ## OPTIONS
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--rootless-netns**
 
 Join the rootless network namespace used for netavark networking. It can be used to

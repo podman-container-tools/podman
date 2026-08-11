@@ -14,9 +14,6 @@ of `0` when the secret is found. A `1` is returned otherwise. An exit code of
 
 ## OPTIONS
 
-#### **--help**, **-h**
-
-Print usage statement
 
 ## EXAMPLE
 

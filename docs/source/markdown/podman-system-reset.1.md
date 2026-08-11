@@ -26,10 +26,6 @@ of the relevant configurations. If the administrator modified the configuration 
 
 Do not prompt for confirmation
 
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Reset all storage back to a clean initialized state.

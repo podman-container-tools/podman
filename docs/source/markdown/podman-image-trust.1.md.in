@@ -45,8 +45,6 @@ Require a sigstore signature ("sigstoreSigned").
 Trust may be updated using the command **podman image trust set** for an existing trust scope.
 
 ## OPTIONS
-#### **--help**, **-h**
-  Print usage statement.
 
 ### set OPTIONS
 

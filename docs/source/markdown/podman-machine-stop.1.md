@@ -24,10 +24,6 @@ but can be optionally used on Linux.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 ## EXAMPLES
 
 Stop a podman machine named myvm.

@@ -58,10 +58,6 @@ $ podman pull oci-archive:/tmp/myimage
 
 @@option disable-content-trust
 
-#### **--help**, **-h**
-
-Print the usage statement.
-
 @@option os.pull
 
 @@option platform
