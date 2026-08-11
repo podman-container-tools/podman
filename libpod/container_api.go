@@ -768,7 +768,7 @@ func (c *Container) WaitForConditionWithInterval(ctx context.Context, ready func
 	}
 
 	if len(conditions) == 0 {
-		panic("at least one condition should be passed")
+		return -1, fmt.Errorf("at least one condition should be passed: %w", define.ErrInvalidArg)
 	}
 
 	if waitInterval == 0 {
