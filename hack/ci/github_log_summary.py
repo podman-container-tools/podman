@@ -1,8 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from html.parser import HTMLParser
-import html
+import os
 import sys
+
+# The classes logformatter only ever emits for its ginkgo layout. Its bats
+# layout marks failures with 'bats-' classes instead.
+GINKGO_CLASS = 'log-failed'
+GINKGO_CLASS_PREFIX = 'ginkgo-'
 
 class GinkgoLogFilterParser(HTMLParser):
     def __init__(self):
@@ -11,6 +16,8 @@ class GinkgoLogFilterParser(HTMLParser):
         self.stack = []
         # Store the raw HTML strings of matching 'tt' elements
         self.results = []
+        # Set once a class only the ginkgo layout emits has been seen
+        self.is_ginkgo = False
 
     def _get_classes(self, attrs):
         """Helper to extract classes from an attribute list."""
@@ -19,10 +26,17 @@ class GinkgoLogFilterParser(HTMLParser):
                 return value.split()
         return []
 
+    def _detect_ginkgo(self, classes):
+        """Note the classes logformatter only emits for the ginkgo layout."""
+        if any(c == GINKGO_CLASS or c.startswith(GINKGO_CLASS_PREFIX)
+               for c in classes):
+            self.is_ginkgo = True
+
     def handle_starttag(self, tag, attrs):
         classes = self._get_classes(attrs)
         is_tt = 'tt' in classes
         is_failed = 'log-failed' in classes
+        self._detect_ginkgo(classes)
 
         # If we see a 'log-failed' class, flag all 'tt' ancestors in the stack
         if is_failed:
@@ -41,6 +55,7 @@ class GinkgoLogFilterParser(HTMLParser):
     def handle_startendtag(self, tag, attrs):
         # Handle self-closing tags just to check for the failure class
         classes = self._get_classes(attrs)
+        self._detect_ginkgo(classes)
         if 'log-failed' in classes:
             for node in self.stack:
                 if node['is_tt']:
@@ -105,24 +120,53 @@ class BatsLogFilterParser(HTMLParser):
 
 
 def filter_html_file(file_path):
-    # Read the HTML content
-    with open(file_path, 'r', encoding='utf-8') as f:
+    # Read the HTML content. logformatter passes its input through ':utf8',
+    # which does not validate, so a test that wrote raw bytes leaves us with a
+    # log we must not choke on.
+    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
         html_content = f.read()
 
-    if 'int-' in file_path:
-        parser = GinkgoLogFilterParser()
-        parser.feed(html_content)
-        return parser.results
+    # logformatter picks the ginkgo or bats layout from the log contents, so
+    # tell them apart the same way here. The file name is no guide: int is not
+    # the only ginkgo suite, bindings is one too.
+    ginkgo_parser = GinkgoLogFilterParser()
+    ginkgo_parser.feed(html_content)
+    if ginkgo_parser.is_ginkgo:
+        return ginkgo_parser.results
 
-    parser = BatsLogFilterParser()
-    parser.feed(html_content)
-    return [parser.data]
+    bats_parser = BatsLogFilterParser()
+    bats_parser.feed(html_content)
+    return [bats_parser.data]
 
 
-# Running the filter
-matching_elements = filter_html_file(sys.argv[1])
+def main(file_paths):
+    if not file_paths:
+        print(f"usage: {os.path.basename(sys.argv[0])} LOGFILE.html...", file=sys.stderr)
+        return 2
 
-for element in matching_elements:
-    print(f"```")
-    print(element)
-    print("```")
+    with_headings = len(file_paths) > 1
+
+    for file_path in file_paths:
+        try:
+            matching_elements = filter_html_file(file_path)
+        except OSError as e:
+            # The caller passes a glob, which the shell hands over unexpanded
+            # when a job produced no html log at all.
+            print(f"skipping {file_path}: {e}", file=sys.stderr)
+            continue
+
+        if with_headings:
+            print(f"### {os.path.basename(file_path)}")
+
+        for element in matching_elements:
+            if not element.strip():
+                continue
+            print("```")
+            print(element)
+            print("```")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -286,6 +286,7 @@ help: ## Print this help message
 	hack/ci/pr-removes-fixed-skips.t
 	hack/ci/pr-should-include-tests.t
 	hack/ci/logformatter.t
+	hack/ci/github_log_summary_test.py
 	test/system/helpers.t
 
 .PHONY: lint
