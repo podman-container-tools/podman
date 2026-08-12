@@ -6,11 +6,17 @@ import (
 )
 
 func pathsFromVolume(volume string) []string {
-	paths := strings.SplitN(volume, ":", 3)
+	paths := strings.Split(volume, ":")
 	driveLetterMatcher := regexp.MustCompile(`^(?:\\\\[.?]\\)?[a-zA-Z]$`)
 	if len(paths) > 1 && driveLetterMatcher.MatchString(paths[0]) {
-		paths = strings.SplitN(volume, ":", 4)
-		paths = append([]string{paths[0] + ":" + paths[1]}, paths[2:]...)
+		first := paths[0] + ":" + paths[1]
+		paths = paths[1:]
+		paths[0] = first
+		if len(paths) > 2 && driveLetterMatcher.MatchString(paths[1]) {
+			second := paths[1] + ":" + paths[2]
+			paths = append(paths[:1], paths[2:]...)
+			paths[1] = second
+		}
 	}
 	return paths
 }

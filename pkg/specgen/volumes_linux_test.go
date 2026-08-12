@@ -60,6 +60,22 @@ func TestSplitVolumeString(t *testing.T) {
 			volume: "a:/container:ro",
 			expect: []string{"a", "/container", "ro"},
 		},
+		// identical source and destination paths
+		{
+			name:   "identical source and dest absolute path",
+			volume: "/Users/foo/bar:/Users/foo/bar",
+			expect: []string{"/Users/foo/bar", "/Users/foo/bar"},
+		},
+		{
+			name:   "identical source and dest absolute path with ro",
+			volume: "/Users/foo/bar:/Users/foo/bar:ro",
+			expect: []string{"/Users/foo/bar", "/Users/foo/bar", "ro"},
+		},
+		{
+			name:   "identical source and dest absolute path with rw",
+			volume: "/Users/foo/bar:/Users/foo/bar:rw",
+			expect: []string{"/Users/foo/bar", "/Users/foo/bar", "rw"},
+		},
 	}
 
 	for _, tt := range tests {

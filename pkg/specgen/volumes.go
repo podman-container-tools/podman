@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -258,11 +259,16 @@ func SplitVolumeString(vol string) []string {
 		return parts
 	}
 
-	// Case: Windows absolute path (e.g., "C:/Users:/mnt:ro")
+	// Case: Windows absolute path (e.g., "C:/Users:/mnt:ro" or "C:/Users:D:/mnt:ro")
 	if hasWinDriveScheme(vol, n) {
 		first := parts[0] + ":" + parts[1]
 		parts = parts[1:]
 		parts[0] = first
+		if len(parts) > 2 && len(parts[1]) == 1 && unicode.IsLetter(rune(parts[1][0])) {
+			second := parts[1] + ":" + parts[2]
+			parts = append(parts[:1], parts[2:]...)
+			parts[1] = second
+		}
 	}
 
 	return parts

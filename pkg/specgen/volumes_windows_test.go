@@ -65,6 +65,21 @@ func TestSplitVolumeString(t *testing.T) {
 			volume: "a:/container:ro",
 			expect: []string{"a", "/container", "ro"},
 		},
+		{
+			name:   "windows source and destination drive letter with option",
+			volume: "C:\\hello:C:\\hello:ro",
+			expect: []string{"C:\\hello", "C:\\hello", "ro"},
+		},
+		{
+			name:   "windows source and different destination drive letter with option",
+			volume: "C:\\hello:D:\\container:ro",
+			expect: []string{"C:\\hello", "D:\\container", "ro"},
+		},
+		{
+			name:   "windows source and destination drive letter without option",
+			volume: "C:\\hello:C:\\hello",
+			expect: []string{"C:\\hello", "C:\\hello"},
+		},
 	}
 
 	t.Run("shouldResolveWinPaths() returns true", func(t *testing.T) {
