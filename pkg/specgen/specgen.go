@@ -576,6 +576,10 @@ type ContainerResourceConfig struct {
 	// Can only be set as root on cgroups v1 systems, but can be set as
 	// rootless as well for cgroups v2.
 	// Optional.
+	// This follows the OCI runtime-spec LinuxResources layout, e.g. set a
+	// CPU quota with "resource_limits": {"cpu": {"quota": 100000}}.
+	// The Docker-compatible /containers/create endpoint instead takes a
+	// flat "cpu_quota" field - the two are not interchangeable.
 	ResourceLimits *spec.LinuxResources `json:"resource_limits,omitempty"`
 	// Rlimits are POSIX rlimits to apply to the container.
 	// Optional.
