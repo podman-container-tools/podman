@@ -6,7 +6,10 @@ package util
 //  should work to take darwin from this
 
 import (
+	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 
 	"go.podman.io/podman/v6/pkg/rootless"
 	"go.podman.io/storage/pkg/homedir"
@@ -22,6 +25,13 @@ func GetRootlessRuntimeDir() (string, error) {
 
 // GetRootlessConfigHomeDir returns the config home directory when running as non root
 func GetRootlessConfigHomeDir() (string, error) {
+	if os.Getenv("XDG_CONFIG_HOME") == "" && os.Getenv("HOME") == string(os.PathSeparator) {
+		u, err := user.LookupId(strconv.Itoa(rootless.GetRootlessUID()))
+		if err == nil && u.HomeDir != "" {
+			return filepath.Join(u.HomeDir, ".config"), nil
+		}
+	}
+
 	return homedir.GetConfigHome()
 }
 

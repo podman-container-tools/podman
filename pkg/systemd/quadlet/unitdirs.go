@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"go.podman.io/podman/v6/pkg/logiface"
+	"go.podman.io/podman/v6/pkg/util"
 )
 
 // This returns whether a file has an extension recognized as a valid Quadlet unit type.
@@ -230,6 +231,12 @@ func getRootlessDirs(paths *searchPaths, nonNumericFilter, userLevelFilter func(
 	}
 
 	configDir, err := os.UserConfigDir()
+	if os.Getenv("XDG_CONFIG_HOME") == "" {
+		home, found := os.LookupEnv("HOME")
+		if !found || home == "" || home == string(os.PathSeparator) {
+			configDir, err = util.GetRootlessConfigHomeDir()
+		}
+	}
 	if err != nil {
 		logiface.Errorf("Warning: %v", err)
 		return

@@ -1,8 +1,30 @@
 package util
 
 import (
+	"os/user"
+	"path/filepath"
 	"testing"
 )
+
+func TestGetRootlessConfigHomeDirWithRootHome(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "/")
+
+	configDir, err := GetRootlessConfigHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := filepath.Join(u.HomeDir, ".config")
+	if configDir != expected {
+		t.Fatalf("expected %q, got %q", expected, configDir)
+	}
+}
 
 func TestIsVirtualConsoleDevice(t *testing.T) {
 	testcases := []struct {
