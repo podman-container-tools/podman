@@ -57,8 +57,41 @@ const (
 	UnlimitedServiceDuration = 0 * time.Second
 )
 
+// DefaultReadHeaderTimeout is how long a client may take to send the headers of
+// a request before the service closes the connection.  Unlike ReadTimeout it
+// only covers the headers, so it is safe for the endpoints that stream for an
+// unbounded amount of time: net/http drops the deadline as soon as the headers
+// have been read, and again when a handler hijacks the connection.
+const DefaultReadHeaderTimeout = 30 * time.Second
+
 // shutdownOnce ensures Shutdown() may safely be called from several go routines
 var shutdownOnce sync.Once
+
+// newHTTPServer configures the http.Server used to serve the API.
+//
+// Note that neither ReadTimeout nor WriteTimeout are set: attach, exec, events,
+// logs and image push/pull all stream for as long as the client wants them to,
+// and both of those deadlines cover the whole request.  readHeaderTimeout is the
+// one deadline that can be applied without breaking those endpoints.
+func newHTTPServer(handler http.Handler, tracker *idle.Tracker, readHeaderTimeout time.Duration) http.Server {
+	protocols := &http.Protocols{}
+	protocols.SetHTTP1(true)
+	protocols.SetHTTP2(true)
+
+	return http.Server{
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, types.ConnKey, c)
+		},
+		ConnState: tracker.ConnState,
+		ErrorLog:  log.New(logrus.StandardLogger().Out, "", 0),
+		Handler:   handler,
+		// The http idle connection timeout is 2x the API idle window, see
+		// idle.NewTracker().
+		IdleTimeout:       tracker.Duration * 2,
+		ReadHeaderTimeout: readHeaderTimeout,
+		Protocols:         protocols,
+	}
+}
 
 // NewServerWithSettings will create and configure a new API server using provided settings
 func NewServerWithSettings(runtime *libpod.Runtime, listener net.Listener, opts entities.ServiceOptions) (*APIServer, error) {
@@ -76,21 +109,8 @@ func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.Ser
 	router := mux.NewRouter().UseEncodedPath()
 	tracker := idle.NewTracker(opts.Timeout)
 
-	serverProtocols := &http.Protocols{}
-	serverProtocols.SetHTTP1(true)
-	serverProtocols.SetHTTP2(true)
-
 	server := APIServer{
-		Server: http.Server{
-			ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-				return context.WithValue(ctx, types.ConnKey, c)
-			},
-			ConnState:   tracker.ConnState,
-			ErrorLog:    log.New(logrus.StandardLogger().Out, "", 0),
-			Handler:     router,
-			IdleTimeout: opts.Timeout * 2,
-			Protocols:   serverProtocols,
-		},
+		Server:          newHTTPServer(router, tracker, DefaultReadHeaderTimeout),
 		grpc:            grpc.NewServer(),
 		CorsHeaders:     opts.CorsHeaders,
 		Listener:        listener,
