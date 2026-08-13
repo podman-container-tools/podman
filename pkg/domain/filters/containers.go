@@ -19,6 +19,31 @@ import (
 	"go.podman.io/storage"
 )
 
+// dockerOnlyContainerStatuses are status filter values that the Docker
+// Compat and libpod list-containers APIs document as valid (status=...) but
+// that have no corresponding define.ContainerStatus, because Podman does not
+// model these Docker-only states internally (see
+// https://github.com/containers/podman/issues/28904 /
+// https://github.com/podman-container-tools/podman/issues/28904). Filtering
+// on them must not error since the API docs list them as valid, but no
+// container will ever match since Podman never reports these states.
+var dockerOnlyContainerStatuses = map[string]struct{}{
+	"dead":       {},
+	"restarting": {},
+}
+
+// isValidContainerStatusFilter reports whether filterValue is a status the
+// list APIs should accept: either a real Podman container state, or one of
+// the Docker-only states we accept-but-never-match for API compatibility.
+func isValidContainerStatusFilter(filterValue string) error {
+	if _, err := define.StringToContainerStatus(filterValue); err != nil {
+		if _, ok := dockerOnlyContainerStatuses[filterValue]; !ok {
+			return err
+		}
+	}
+	return nil
+}
+
 // GenerateContainerFilterFuncs return ContainerFilter functions based of filter.
 func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpod.Runtime) (func(container *libpod.Container) bool, error) {
 	switch filter {
@@ -72,7 +97,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 		}, nil
 	case "status":
 		for _, filterValue := range filterValues {
-			if _, err := define.StringToContainerStatus(filterValue); err != nil {
+			if err := isValidContainerStatusFilter(filterValue); err != nil {
 				return nil, err
 			}
 		}
@@ -456,7 +481,7 @@ func GenerateExternalContainerFilterFuncs(filter string, filterValues []string, 
 		}, nil
 	case "status":
 		for _, filterValue := range filterValues {
-			if _, err := define.StringToContainerStatus(filterValue); err != nil {
+			if err := isValidContainerStatusFilter(filterValue); err != nil {
 				return nil, err
 			}
 		}
