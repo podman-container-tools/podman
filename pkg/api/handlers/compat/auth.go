@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/moby/moby/api/types/registry"
@@ -18,6 +19,37 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
 
+// isLocalhostServerAddress reports whether serverAddress refers to the
+// "localhost" host, either as a bare "host[:port]" address (e.g.
+// "localhost:5000") or as an "https://" URL (e.g. "https://localhost:5000").
+//
+// This intentionally parses the address as a URL instead of doing a plain
+// string-prefix check: a naive check like
+// strings.HasPrefix(serverAddress, "https://localhost:") can be bypassed
+// with userinfo syntax such as "https://localhost:password@evil.example",
+// which has that exact prefix but actually refers to "evil.example".
+// Parsing the address and inspecting only the Hostname() avoids that
+// confusion between userinfo and host.
+func isLocalhostServerAddress(serverAddress string) bool {
+	addr := serverAddress
+	hasScheme := strings.Contains(addr, "://")
+	if !hasScheme {
+		// No scheme was given, so this is a bare "host[:port]" address
+		// (e.g. "localhost:5000"). Give it a scheme so url.Parse()
+		// splits host/port (and any userinfo) the same way it would
+		// for a full URL.
+		addr = "https://" + addr
+	}
+	u, err := url.Parse(addr)
+	if err != nil {
+		return false
+	}
+	if hasScheme && u.Scheme != "https" {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), "localhost")
+}
+
 func Auth(w http.ResponseWriter, r *http.Request) {
 	var authConfig registry.AuthConfig
 	if err := utils.ReadJSONFromBody(r, &authConfig); err != nil {
@@ -26,7 +58,7 @@ func Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	skipTLS := types.NewOptionalBool(false)
-	if strings.HasPrefix(authConfig.ServerAddress, "https://localhost/") || strings.HasPrefix(authConfig.ServerAddress, "https://localhost:") || strings.HasPrefix(authConfig.ServerAddress, "localhost:") {
+	if isLocalhostServerAddress(authConfig.ServerAddress) {
 		// support for local testing
 		skipTLS = types.NewOptionalBool(true)
 	}
