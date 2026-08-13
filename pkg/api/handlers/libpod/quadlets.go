@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -135,31 +136,43 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read multipart: %w", err)
 		}
-		defer part.Close()
 
-		filename := part.FileName()
-		if filename == "" {
+		if part.FileName() == "" {
 			// Skip parts without filenames
+			part.Close()
 			continue
 		}
 
-		// Create file in temp directory
-		filePath := filepath.Join(quadletDir, filename)
-		file, err := os.Create(filePath)
+		filePath, err := writeQuadletPart(quadletDir, part)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create file %s: %w", filename, err)
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, part)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write file %s: %w", filename, err)
+			return nil, err
 		}
 
 		filePaths = append(filePaths, filePath)
 	}
 
 	return filePaths, nil
+}
+
+// writeQuadletPart writes part to a file named after it in dir and returns the
+// path it was written to. The part and the file are closed before returning so
+// that a request carrying many parts does not keep one descriptor open per part.
+func writeQuadletPart(dir string, part *multipart.Part) (string, error) {
+	defer part.Close()
+
+	filename := part.FileName()
+	filePath := filepath.Join(dir, filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, part); err != nil {
+		return "", fmt.Errorf("failed to write file %s: %w", filename, err)
+	}
+
+	return filePath, nil
 }
 
 func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
