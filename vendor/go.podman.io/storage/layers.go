@@ -31,7 +31,6 @@ import (
 	"go.podman.io/storage/pkg/ioutils"
 	"go.podman.io/storage/pkg/lockfile"
 	"go.podman.io/storage/pkg/mount"
-	"go.podman.io/storage/pkg/pools"
 	"go.podman.io/storage/pkg/stringid"
 	"go.podman.io/storage/pkg/system"
 	"go.podman.io/storage/pkg/tarlog"
@@ -196,53 +195,11 @@ type DiffOptions struct {
 	Compression *archive.Compression
 }
 
-// layerCreationContents are the options passed to .create to populate a staged
+// stagedLayerOptions are the options passed to .create to populate a staged
 // layer
-type layerCreationContents struct {
-	// These are used via the zstd:chunked pull paths
+type stagedLayerOptions struct {
 	DiffOutput  *drivers.DriverWithDifferOutput
 	DiffOptions *drivers.ApplyDiffWithDifferOpts
-
-	// stagedLayerExtraction is used by the normal tar layer extraction.
-	stagedLayerExtraction *maybeStagedLayerExtraction
-}
-
-// maybeStagedLayerExtraction is a helper to encapsulate details around extracting
-// a layer potentially before we even take a look if the driver implements the
-// ApplyDiffStaging interface.
-// This should be initialized with layerStore.newMaybeStagedLayerExtraction()
-type maybeStagedLayerExtraction struct {
-	// diff contains the tar archive, can be compressed, must be non nil, but can be at EOF when the content was already staged
-	diff io.Reader
-	// staging interface of the storage driver, set when the driver supports staging and nil otherwise
-	staging drivers.ApplyDiffStaging
-	// result is a placeholder for the applyDiff() result so we can pass that down the stack easily.
-	// If result is not nil the layer was staged successfully, if this is set stagedTarSplit and
-	// stagedLayer must be set as well.
-	result *applyDiffResult
-
-	// stagedTarSplit is the temp file where we staged the tar split file
-	stagedTarSplit *tempdir.StagedAddition
-	// stagedLayer is the temp directory where we staged the extracted layer content
-	stagedLayer *tempdir.StagedAddition
-
-	// cleanupFuncs contains the set of tempdir cleanup function that get executed in cleanup()
-	cleanupFuncs []tempdir.CleanupTempDirFunc
-}
-
-type applyDiffResult struct {
-	compressedDigest   digest.Digest
-	compressedSize     int64
-	compressionType    archive.Compression
-	uncompressedDigest digest.Digest
-	uncompressedSize   int64
-	// size of the data, including the full size of sparse files, and excluding all metadata
-	// It is neither compressedSize nor uncompressedSize.
-	// The use case for this seems unclear, it gets returned in PutLayer() but in the Podman
-	// stack at least that value is never used so maybe we can look into removing this.
-	size int64
-	uids []uint32
-	gids []uint32
 }
 
 // roLayerStore wraps a graph driver, adding the ability to refer to layers by
@@ -258,11 +215,6 @@ type roLayerStore interface {
 
 	// stopReading releases locks obtained by startReading.
 	stopReading()
-
-	// checkIdOrNameConflict checks if the id or names are already in use and returns an
-	// error in that case. As Special case if the layer already exists it returns it as
-	// well together with the error.
-	checkIdOrNameConflict(id string, names []string) (*Layer, error)
 
 	// Exists checks if a layer with the specified name or ID is known.
 	Exists(id string) bool
@@ -336,7 +288,7 @@ type rwLayerStore interface {
 	// underlying drivers do not themselves distinguish between writeable
 	// and read-only layers.  Returns the new layer structure and the size of the
 	// diff which was applied to its parent to initialize its contents.
-	create(id string, parent *Layer, names []string, mountLabel string, options map[string]string, moreOptions *LayerOptions, writeable bool, contents *layerCreationContents) (*Layer, int64, error)
+	create(id string, parent *Layer, names []string, mountLabel string, options map[string]string, moreOptions *LayerOptions, writeable bool, diff io.Reader, slo *stagedLayerOptions) (*Layer, int64, error)
 
 	// updateNames modifies names associated with a layer based on (op, names).
 	updateNames(id string, names []string, op updateNameOperation) error
@@ -402,14 +354,6 @@ type rwLayerStore interface {
 
 	// Dedup deduplicates layers in the store.
 	dedup(drivers.DedupArgs) (drivers.DedupResult, error)
-
-	// newMaybeStagedLayerExtraction initializes a new maybeStagedLayerExtraction. The caller
-	// must call maybeStagedLayerExtraction.cleanup() to remove any temporary files.
-	newMaybeStagedLayerExtraction(diff io.Reader) *maybeStagedLayerExtraction
-
-	// stageWithUnlockedStore stages the layer content without needing the store locked.
-	// If the driver does not support stage addition then this is a NOP and does nothing.
-	stageWithUnlockedStore(m *maybeStagedLayerExtraction, parent string, options *LayerOptions) error
 }
 
 type multipleLockFile struct {
@@ -1363,8 +1307,13 @@ func (r *layerStore) Status() ([][2]string, error) {
 
 // Requires startWriting.
 func (r *layerStore) PutAdditionalLayer(id string, parentLayer *Layer, names []string, aLayer drivers.AdditionalLayer) (layer *Layer, err error) {
-	if layer, err := r.checkIdOrNameConflict(id, names); err != nil {
-		return layer, err
+	if duplicateLayer, idInUse := r.byid[id]; idInUse {
+		return duplicateLayer, ErrDuplicateID
+	}
+	for _, name := range names {
+		if _, nameInUse := r.byname[name]; nameInUse {
+			return nil, ErrDuplicateName
+		}
 	}
 
 	parent := ""
@@ -1429,25 +1378,8 @@ func (r *layerStore) pickStoreLocation(volatile, writeable bool) layerLocations 
 	}
 }
 
-// checkIdOrNameConflict checks if the id or names are already in use and returns an
-// error in that case. As Special case if the layer already exists it returns it as
-// well together with the error.
-//
-// Requires startReading or startWriting.
-func (r *layerStore) checkIdOrNameConflict(id string, names []string) (*Layer, error) {
-	if duplicateLayer, idInUse := r.byid[id]; idInUse {
-		return duplicateLayer, ErrDuplicateID
-	}
-	for _, name := range names {
-		if _, nameInUse := r.byname[name]; nameInUse {
-			return nil, ErrDuplicateName
-		}
-	}
-	return nil, nil
-}
-
 // Requires startWriting.
-func (r *layerStore) create(id string, parentLayer *Layer, names []string, mountLabel string, options map[string]string, moreOptions *LayerOptions, writeable bool, contents *layerCreationContents) (layer *Layer, size int64, err error) {
+func (r *layerStore) create(id string, parentLayer *Layer, names []string, mountLabel string, options map[string]string, moreOptions *LayerOptions, writeable bool, diff io.Reader, slo *stagedLayerOptions) (layer *Layer, size int64, err error) {
 	if moreOptions == nil {
 		moreOptions = &LayerOptions{}
 	}
@@ -1468,8 +1400,14 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 			_, idInUse = r.byid[id]
 		}
 	}
-	if layer, err := r.checkIdOrNameConflict(id, names); err != nil {
-		return layer, -1, err
+	if duplicateLayer, idInUse := r.byid[id]; idInUse {
+		return duplicateLayer, -1, ErrDuplicateID
+	}
+	names = dedupeStrings(names)
+	for _, name := range names {
+		if _, nameInUse := r.byname[name]; nameInUse {
+			return nil, -1, ErrDuplicateName
+		}
 	}
 	parent := ""
 	if parentLayer != nil {
@@ -1630,31 +1568,18 @@ func (r *layerStore) create(id string, parentLayer *Layer, names []string, mount
 	}
 
 	size = -1
-	if contents != nil {
-		if contents.stagedLayerExtraction != nil {
-			if contents.stagedLayerExtraction.result != nil {
-				// The layer is staged, just commit it and update the metadata.
-				if err := contents.stagedLayerExtraction.commitLayer(r, layer.ID); err != nil {
-					cleanupFailureContext = "committing staged layer diff"
-					return nil, -1, err
-				}
-				r.applyDiffResultToLayer(layer, contents.stagedLayerExtraction.result)
-			} else {
-				// The diff was not staged, apply it now here instead.
-				if size, err = r.applyDiffWithOptions(layer.ID, moreOptions, contents.stagedLayerExtraction.diff); err != nil {
-					cleanupFailureContext = "applying layer diff"
-					return nil, -1, err
-				}
-			}
-		} else {
-			// staging logic for the chunked pull path
-			if err := r.applyDiffFromStagingDirectory(layer.ID, contents.DiffOutput, contents.DiffOptions); err != nil {
-				cleanupFailureContext = "applying staged directory diff"
-				return nil, -1, err
-			}
+	if diff != nil {
+		if size, err = r.applyDiffWithOptions(layer.ID, moreOptions, diff); err != nil {
+			cleanupFailureContext = "applying layer diff"
+			return nil, -1, err
+		}
+	} else if slo != nil {
+		if err := r.applyDiffFromStagingDirectory(layer.ID, slo.DiffOutput, slo.DiffOptions); err != nil {
+			cleanupFailureContext = "applying staged directory diff"
+			return nil, -1, err
 		}
 	} else {
-		// The layer creation content above would have updated r.bycompressedsum
+		// applyDiffWithOptions() would have updated r.bycompressedsum
 		// and r.byuncompressedsum for us, but if we used a template
 		// layer, we didn't call it, so add the new layer as candidates
 		// for searches for layers by checksum
@@ -2473,118 +2398,37 @@ func (r *layerStore) ApplyDiff(to string, diff io.Reader) (size int64, err error
 	return r.applyDiffWithOptions(to, nil, diff)
 }
 
-func createTarSplitFile(r *layerStore, layerID string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(r.tspath(layerID)), 0o700); err != nil {
-		return nil, err
-	}
-	return os.OpenFile(r.tspath(layerID), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-}
-
-// newMaybeStagedLayerExtraction initializes a new maybeStagedLayerExtraction. The caller
-// must call maybeStagedLayerExtraction.cleanup() to remove any temporary files.
-func (r *layerStore) newMaybeStagedLayerExtraction(diff io.Reader) *maybeStagedLayerExtraction {
-	m := &maybeStagedLayerExtraction{
-		diff: diff,
-	}
-	if d, ok := r.driver.(drivers.ApplyDiffStaging); ok {
-		m.staging = d
-	}
-	return m
-}
-
-func (sl *maybeStagedLayerExtraction) cleanup() error {
-	return tempdir.CleanupTemporaryDirectories(sl.cleanupFuncs...)
-}
-
-// stageWithUnlockedStore stages the layer content without needing the store locked.
-// If the driver does not support stage addition then this is a NOP and does nothing.
-// This should be done without holding the storage lock, if a parent is given the caller
-// must check for existence beforehand while holding a lock.
-func (r *layerStore) stageWithUnlockedStore(sl *maybeStagedLayerExtraction, parent string, layerOptions *LayerOptions) (retErr error) {
-	if sl.staging == nil {
-		return nil
-	}
-	td, err := tempdir.NewTempDir(filepath.Join(r.layerdir, tempDirPath))
-	if err != nil {
-		return err
-	}
-	sl.cleanupFuncs = append(sl.cleanupFuncs, td.Cleanup)
-
-	stagedTarSplit, err := td.StageAddition()
-	if err != nil {
-		return err
-	}
-	sl.stagedTarSplit = stagedTarSplit
-
-	f, err := os.OpenFile(stagedTarSplit.Path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	// make sure to check for errors on close and return that one.
-	defer func() {
-		closeErr := f.Close()
-		if retErr == nil {
-			retErr = closeErr
-		}
-	}()
-
-	result, err := applyDiff(layerOptions, sl.diff, f, func(payload io.Reader) (int64, error) {
-		cleanup, stagedLayer, size, err := sl.staging.StartStagingDiffToApply(parent, drivers.ApplyDiffOpts{
-			Diff:     payload,
-			Mappings: idtools.NewIDMappingsFromMaps(layerOptions.UIDMap, layerOptions.GIDMap),
-			// MountLabel is not supported for the unlocked extraction, see the comment in (*store).PutLayer()
-			MountLabel: "",
-		})
-		sl.cleanupFuncs = append(sl.cleanupFuncs, cleanup)
-		sl.stagedLayer = stagedLayer
-		return size, err
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := f.Sync(); err != nil {
-		return fmt.Errorf("sync staged tar-split file: %w", err)
-	}
-
-	sl.result = result
-	return nil
-}
-
-// commitLayer() commits the content that was staged in stageWithUnlockedStore()
-//
 // Requires startWriting.
-func (sl *maybeStagedLayerExtraction) commitLayer(r *layerStore, layerID string) error {
-	err := sl.stagedTarSplit.Commit(r.tspath(layerID))
-	if err != nil {
-		return err
+func (r *layerStore) applyDiffWithOptions(to string, layerOptions *LayerOptions, diff io.Reader) (size int64, err error) {
+	if !r.lockfile.IsReadWrite() {
+		return -1, fmt.Errorf("not allowed to modify layer contents at %q: %w", r.layerdir, ErrStoreIsReadOnly)
 	}
-	return sl.staging.CommitStagedLayer(layerID, sl.stagedLayer)
-}
 
-// applyDiff can be called without holding any store locks so if the supplied
-// applyDriverFunc requires locking the caller must ensure proper locking.
-func applyDiff(layerOptions *LayerOptions, diff io.Reader, tarSplitFile *os.File, applyDriverFunc func(io.Reader) (int64, error)) (*applyDiffResult, error) {
+	layer, ok := r.lookup(to)
+	if !ok {
+		return -1, ErrLayerUnknown
+	}
+
 	header := make([]byte, 10240)
 	n, err := diff.Read(header)
 	if err != nil && err != io.EOF {
-		return nil, err
+		return -1, err
 	}
 	compression := archive.DetectCompression(header[:n])
 	defragmented := io.MultiReader(bytes.NewReader(header[:n]), diff)
 
-	result := applyDiffResult{}
-
+	// Decide if we need to compute digests
+	var compressedDigest, uncompressedDigest digest.Digest       // = ""
 	var compressedDigester, uncompressedDigester digest.Digester // = nil
 	if layerOptions != nil && layerOptions.OriginalDigest != "" &&
 		layerOptions.OriginalDigest.Algorithm() == digest.Canonical {
-		result.compressedDigest = layerOptions.OriginalDigest
+		compressedDigest = layerOptions.OriginalDigest
 	} else {
 		compressedDigester = digest.Canonical.Digester()
 	}
 	if layerOptions != nil && layerOptions.UncompressedDigest != "" &&
 		layerOptions.UncompressedDigest.Algorithm() == digest.Canonical {
-		result.uncompressedDigest = layerOptions.UncompressedDigest
+		uncompressedDigest = layerOptions.UncompressedDigest
 	} else if compression != archive.Uncompressed {
 		uncompressedDigester = digest.Canonical.Digester()
 	}
@@ -2598,15 +2442,13 @@ func applyDiff(layerOptions *LayerOptions, diff io.Reader, tarSplitFile *os.File
 	compressedCounter := ioutils.NewWriteCounter(compressedWriter)
 	defragmented = io.TeeReader(defragmented, compressedCounter)
 
-	tarSplitWriter := pools.BufioWriter32KPool.Get(tarSplitFile)
-	defer pools.BufioWriter32KPool.Put(tarSplitWriter)
-
+	tsdata := bytes.Buffer{}
 	uidLog := make(map[uint32]struct{})
 	gidLog := make(map[uint32]struct{})
 	var uncompressedCounter *ioutils.WriteCounter
 
-	size, err := func() (int64, error) { // A scope for defer
-		compressor, err := pgzip.NewWriterLevel(tarSplitWriter, pgzip.BestSpeed)
+	size, err = func() (int64, error) { // A scope for defer
+		compressor, err := pgzip.NewWriterLevel(&tsdata, pgzip.BestSpeed)
 		if err != nil {
 			return -1, err
 		}
@@ -2639,108 +2481,62 @@ func applyDiff(layerOptions *LayerOptions, diff io.Reader, tarSplitFile *os.File
 		if err != nil {
 			return -1, err
 		}
-
-		return applyDriverFunc(payload)
-	}()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tarSplitWriter.Flush(); err != nil {
-		return nil, fmt.Errorf("failed to flush tar-split writer buffer: %w", err)
-	}
-
-	if compressedDigester != nil {
-		result.compressedDigest = compressedDigester.Digest()
-	}
-	if uncompressedDigester != nil {
-		result.uncompressedDigest = uncompressedDigester.Digest()
-	}
-	if result.uncompressedDigest == "" && compression == archive.Uncompressed {
-		result.uncompressedDigest = result.compressedDigest
-	}
-
-	if layerOptions != nil && layerOptions.OriginalDigest != "" && layerOptions.OriginalSize != nil {
-		result.compressedSize = *layerOptions.OriginalSize
-	} else {
-		result.compressedSize = compressedCounter.Count
-	}
-	result.uncompressedSize = uncompressedCounter.Count
-	result.compressionType = compression
-
-	result.uids = make([]uint32, 0, len(uidLog))
-	for uid := range uidLog {
-		result.uids = append(result.uids, uid)
-	}
-	slices.Sort(result.uids)
-	result.gids = make([]uint32, 0, len(gidLog))
-	for gid := range gidLog {
-		result.gids = append(result.gids, gid)
-	}
-	slices.Sort(result.gids)
-
-	result.size = size
-
-	return &result, err
-}
-
-// Requires startWriting.
-func (r *layerStore) applyDiffWithOptions(to string, layerOptions *LayerOptions, diff io.Reader) (_ int64, retErr error) {
-	if !r.lockfile.IsReadWrite() {
-		return -1, fmt.Errorf("not allowed to modify layer contents at %q: %w", r.layerdir, ErrStoreIsReadOnly)
-	}
-
-	layer, ok := r.lookup(to)
-	if !ok {
-		return -1, ErrLayerUnknown
-	}
-
-	tarSplitFile, err := createTarSplitFile(r, layer.ID)
-	if err != nil {
-		return -1, err
-	}
-	// make sure to check for errors on close and return that one.
-	defer func() {
-		closeErr := tarSplitFile.Close()
-		if retErr == nil {
-			retErr = closeErr
-		}
-	}()
-
-	result, err := applyDiff(layerOptions, diff, tarSplitFile, func(payload io.Reader) (int64, error) {
 		options := drivers.ApplyDiffOpts{
 			Diff:       payload,
 			Mappings:   r.layerMappings(layer),
 			MountLabel: layer.MountLabel,
 		}
-		return r.driver.ApplyDiff(layer.ID, options)
-	})
+		size, err := r.driver.ApplyDiff(layer.ID, layer.Parent, options)
+		if err != nil {
+			return -1, err
+		}
+		return size, err
+	}()
 	if err != nil {
 		return -1, err
 	}
 
-	if err := tarSplitFile.Sync(); err != nil {
-		return -1, fmt.Errorf("sync tar-split file: %w", err)
+	if err := os.MkdirAll(filepath.Dir(r.tspath(layer.ID)), 0o700); err != nil {
+		return -1, err
+	}
+	if err := ioutils.AtomicWriteFile(r.tspath(layer.ID), tsdata.Bytes(), 0o600); err != nil {
+		return -1, err
+	}
+	if compressedDigester != nil {
+		compressedDigest = compressedDigester.Digest()
+	}
+	if uncompressedDigester != nil {
+		uncompressedDigest = uncompressedDigester.Digest()
+	}
+	if uncompressedDigest == "" && compression == archive.Uncompressed {
+		uncompressedDigest = compressedDigest
 	}
 
-	r.applyDiffResultToLayer(layer, result)
+	updateDigestMap(&r.bycompressedsum, layer.CompressedDigest, compressedDigest, layer.ID)
+	layer.CompressedDigest = compressedDigest
+	if layerOptions != nil && layerOptions.OriginalDigest != "" && layerOptions.OriginalSize != nil {
+		layer.CompressedSize = *layerOptions.OriginalSize
+	} else {
+		layer.CompressedSize = compressedCounter.Count
+	}
+	updateDigestMap(&r.byuncompressedsum, layer.UncompressedDigest, uncompressedDigest, layer.ID)
+	layer.UncompressedDigest = uncompressedDigest
+	layer.UncompressedSize = uncompressedCounter.Count
+	layer.CompressionType = compression
+	layer.UIDs = make([]uint32, 0, len(uidLog))
+	for uid := range uidLog {
+		layer.UIDs = append(layer.UIDs, uid)
+	}
+	slices.Sort(layer.UIDs)
+	layer.GIDs = make([]uint32, 0, len(gidLog))
+	for gid := range gidLog {
+		layer.GIDs = append(layer.GIDs, gid)
+	}
+	slices.Sort(layer.GIDs)
 
 	err = r.saveFor(layer)
 
-	return result.size, err
-}
-
-// Requires startWriting.
-func (r *layerStore) applyDiffResultToLayer(layer *Layer, result *applyDiffResult) {
-	updateDigestMap(&r.bycompressedsum, layer.CompressedDigest, result.compressedDigest, layer.ID)
-	layer.CompressedDigest = result.compressedDigest
-	layer.CompressedSize = result.compressedSize
-	updateDigestMap(&r.byuncompressedsum, layer.UncompressedDigest, result.uncompressedDigest, layer.ID)
-	layer.UncompressedDigest = result.uncompressedDigest
-	layer.UncompressedSize = result.uncompressedSize
-	layer.CompressionType = result.compressionType
-	layer.UIDs = result.uids
-	layer.GIDs = result.gids
+	return size, err
 }
 
 // Requires (startReading or?) startWriting.
@@ -2757,7 +2553,7 @@ func (r *layerStore) DifferTarget(id string) (string, error) {
 }
 
 // Requires startWriting.
-func (r *layerStore) applyDiffFromStagingDirectory(id string, diffOutput *drivers.DriverWithDifferOutput, options *drivers.ApplyDiffWithDifferOpts) (retErr error) {
+func (r *layerStore) applyDiffFromStagingDirectory(id string, diffOutput *drivers.DriverWithDifferOutput, options *drivers.ApplyDiffWithDifferOpts) error {
 	ddriver, ok := r.driver.(drivers.DriverWithDiffer)
 	if !ok {
 		return ErrNotSupported
@@ -2801,23 +2597,10 @@ func (r *layerStore) applyDiffFromStagingDirectory(id string, diffOutput *driver
 	}
 
 	if diffOutput.TarSplit != nil {
-		tarSplitFile, err := createTarSplitFile(r, layer.ID)
+		tsdata := bytes.Buffer{}
+		compressor, err := pgzip.NewWriterLevel(&tsdata, pgzip.BestSpeed)
 		if err != nil {
-			return err
-		}
-		// make sure to check for errors on close and return that one.
-		defer func() {
-			closeErr := tarSplitFile.Close()
-			if retErr == nil {
-				retErr = closeErr
-			}
-		}()
-		tarSplitWriter := pools.BufioWriter32KPool.Get(tarSplitFile)
-		defer pools.BufioWriter32KPool.Put(tarSplitWriter)
-
-		compressor, err := pgzip.NewWriterLevel(tarSplitWriter, pgzip.BestSpeed)
-		if err != nil {
-			compressor = pgzip.NewWriter(tarSplitWriter)
+			compressor = pgzip.NewWriter(&tsdata)
 		}
 		if _, err := diffOutput.TarSplit.Seek(0, io.SeekStart); err != nil {
 			return err
@@ -2831,12 +2614,11 @@ func (r *layerStore) applyDiffFromStagingDirectory(id string, diffOutput *driver
 			return err
 		}
 		compressor.Close()
-
-		if err := tarSplitWriter.Flush(); err != nil {
-			return fmt.Errorf("failed to flush tar-split writer buffer: %w", err)
+		if err := os.MkdirAll(filepath.Dir(r.tspath(layer.ID)), 0o700); err != nil {
+			return err
 		}
-		if err := tarSplitFile.Sync(); err != nil {
-			return fmt.Errorf("sync tar-split file: %w", err)
+		if err := ioutils.AtomicWriteFile(r.tspath(layer.ID), tsdata.Bytes(), 0o600); err != nil {
+			return err
 		}
 	}
 	for k, v := range diffOutput.BigData {

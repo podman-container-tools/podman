@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -90,26 +89,6 @@ type TempDir struct {
 
 	// counter is used to generate unique filenames for added files.
 	counter uint64
-}
-
-// StagedAddition is a temporary object which holds the information of where to
-// put the data into and then use Commit() to move the data into the final location.
-type StagedAddition struct {
-	// Path is the temporary path. The path is not created so caller must create
-	// a file or directory on it in order to use Commit(). The path is only valid
-	// until Commit() is called or until the TempDir instance Cleanup() method is used.
-	Path string
-}
-
-// Commit the staged content into its final destination by using os.Rename().
-// That means the dest must be on the same on the same fs as the root directory
-// that was given to NewTempDir() and the dest must not exist yet.
-// Commit must only be called once per instance returned from the
-// StagedAddition() call.
-func (s *StagedAddition) Commit(destination string) error {
-	err := os.Rename(s.Path, destination)
-	s.Path = "" // invalidate Path to avoid reuse
-	return err
 }
 
 // CleanupTempDirFunc is a function type that can be returned by operations
@@ -209,23 +188,6 @@ func NewTempDir(rootDir string) (*TempDir, error) {
 	td.tempDirPath = actualTempDirPath
 	td.counter = 0
 	return td, nil
-}
-
-// StageAddition creates a new temporary path that is returned as field in the StagedAddition
-// struct. The returned type StagedAddition has a Commit() function to move the content from
-// the temporary location to the final one.
-//
-// The caller MUST call Commit() before Cleanup() is called on the TempDir, otherwise the
-// staged content will be deleted and the Commit() will fail.
-// If the TempDir has been cleaned up already, this method will return an error.
-func (td *TempDir) StageAddition() (*StagedAddition, error) {
-	if td.tempDirLock == nil {
-		return nil, fmt.Errorf("temp dir instance not initialized or already cleaned up")
-	}
-	fileName := strconv.FormatUint(td.counter, 10) + "-addition"
-	tmpAddPath := filepath.Join(td.tempDirPath, fileName)
-	td.counter++
-	return &StagedAddition{Path: tmpAddPath}, nil
 }
 
 // StageDeletion moves the specified file into the instance's temporary directory.

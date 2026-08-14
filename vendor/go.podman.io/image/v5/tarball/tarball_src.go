@@ -179,8 +179,9 @@ func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.System
 
 	// Populate a manifest with the configuration blob and the layers.
 	manifest := imgspecv1.Manifest{
-		Versioned: imgspecs.Versioned{SchemaVersion: 2},
-		MediaType: imgspecv1.MediaTypeImageManifest,
+		Versioned: imgspecs.Versioned{
+			SchemaVersion: 2,
+		},
 		Config: imgspecv1.Descriptor{
 			Digest:    configID,
 			Size:      int64(len(configBytes)),
