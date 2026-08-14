@@ -187,6 +187,41 @@ jobs:
           git rebase "$pr_base" -x "./make-and-check-size.sh $context_dir"
           rm -rf "$context_dir" ./make-and-check-size.sh
 
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    if: github.repository == 'podman-container-tools/podman'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Needed to build (and thus analyze) the cgo-enabled packages.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libassuan-dev \
+            libbtrfs-dev \
+            libgpgme-dev \
+            libseccomp-dev \
+            libsystemd-dev \
+            libsubid-dev
+
+      # Scan the same code that is actually built: files behind build tags
+      # are invisible to govulncheck otherwise. Keep in sync with BUILDTAGS
+      # in the Makefile.
+      - name: Compute build tags
+        run: |
+          tags="grpcnotrace seccomp $(hack/apparmor_tag.sh) $(hack/btrfs_installed_tag.sh) \
+                $(hack/sqlite_tag.sh) $(hack/systemd_tag.sh) $(hack/libsubid_tag.sh)"
+          echo "GOFLAGS=-tags=$(echo $tags | tr ' ' ',')" >> $GITHUB_ENV
+
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          repo-checkout: false
+
   build-alt:
     name: Cross Build (Linux, FreeBSD)
     runs-on: cncf-ubuntu-16-64-x86
@@ -723,6 +758,7 @@ jobs:
       - validate-source
       - build
       - build-alt
+      - govulncheck
       - big-tests
       - small-tests
       - machine-linux
