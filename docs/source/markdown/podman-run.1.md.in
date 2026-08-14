@@ -234,10 +234,6 @@ See [**Environment**](#environment) note below for precedence and examples.
 
 @@option health-timeout
 
-#### **--help**
-
-Print usage statement
-
 @@option hostname.container
 
 @@option hosts-file

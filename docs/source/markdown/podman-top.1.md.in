@@ -20,9 +20,6 @@ to display the PID and user of the processes in the host context.
 
 ## OPTIONS
 
-#### **--help**, **-h**
-
-Print usage statement
 
 @@option latest
 

@@ -29,10 +29,6 @@ Only supported for QEMU machines.
 Size of the disk for the guest VM in GB.
 Can only be increased. Only supported for QEMU machines.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--import-native-ca**
 
 Import the host's trusted CA certificates into the machine.

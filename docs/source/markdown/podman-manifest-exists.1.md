@@ -13,12 +13,6 @@ returned otherwise.
 An exit code of `125` indicates there was another issue.
 
 
-## OPTIONS
-
-#### **--help**, **-h**
-
-Print usage statement.
-
 ## EXAMPLE
 
 Check if a manifest list called `list1` exists (the manifest list does actually exist):

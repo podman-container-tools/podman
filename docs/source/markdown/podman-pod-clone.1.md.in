@@ -43,10 +43,6 @@ Note: the pod implements devices by storing the initial configuration passed by 
 
 @@option gpus
 
-#### **--help**, **-h**
-
-Print usage statement.
-
 @@option hostname.pod
 
 @@option infra-command

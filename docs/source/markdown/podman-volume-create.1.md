@@ -32,10 +32,6 @@ Such plugins must be defined in the **volume_plugins** section of the **[contain
 
 Set the GID that the volume will be created as. Differently than `--opt o=gid=*gid*`, the specified value is not passed to the mount operation. The specified GID will own the volume's mount point directory and affects the volume chown operation.
 
-#### **--help**
-
-Print usage statement
-
 #### **--ignore**
 
 Don't fail if the named volume already exists, instead just print the name. Note that the new options are not applied to the existing volume.
@@ -158,7 +154,6 @@ $ doas dnf install s3fs-fuse
 
 **Simple usage:**
 ```shell
-$ s3fs --help
 $ s3fs -o use_xattr,endpoint=aq-central-1 bucket:/prefix /mnt
 ```
 

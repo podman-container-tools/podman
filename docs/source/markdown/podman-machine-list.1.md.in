@@ -50,10 +50,6 @@ Valid placeholders for the Go template are listed below:
 | .UserModeNetworking | Whether machine uses user-mode networking |
 | .VMType             | VM type                                   |
 
-#### **--help**
-
-Print usage statement.
-
 @@option noheading
 
 #### **--quiet**, **-q**

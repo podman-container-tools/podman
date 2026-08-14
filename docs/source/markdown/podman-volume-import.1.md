@@ -14,10 +14,6 @@ The contents of the volume is merged with the content of the tarball with the la
 
 The given volume must already exist and is not created by podman volume import.
 
-#### **--help**
-
-Print usage statement
-
 ## EXAMPLES
 
 Import named volume content from the specified file.

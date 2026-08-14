@@ -141,10 +141,6 @@ Format the output to JSON Lines or using the given Go template.
 | .TimeNano             | Event timestamp with nanosecond precision (int64)                    |
 | .Type                 | Event type (e.g., image, container, pod, ...)                        |
 
-#### **--help**
-
-Print usage statement.
-
 #### **--no-trunc**
 
 Do not truncate the output (default *true*).

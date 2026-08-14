@@ -19,11 +19,6 @@ this command is run, all of your Podman machines will have been deleted.
 
 Reset without confirmation.
 
-#### **--help**
-
-Print usage statement.
-
-
 ## EXAMPLES
 
 ```

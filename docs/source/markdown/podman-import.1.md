@@ -33,10 +33,6 @@ Apply the following possible instructions to the created image:
 
 Can be set multiple times
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--message**, **-m**=*message*
 
 Set commit message for imported image

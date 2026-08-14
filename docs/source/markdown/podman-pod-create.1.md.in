@@ -82,10 +82,6 @@ Set the exit policy of the pod when the last container exits.  Supported policie
 
 @@option gpus
 
-#### **--help**, **-h**
-
-Print usage statement.
-
 @@option hostname.pod
 
 @@option hosts-file

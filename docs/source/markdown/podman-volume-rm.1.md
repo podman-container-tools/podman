@@ -24,10 +24,6 @@ Remove all volumes.
 Remove a volume by force.
 If it is being used by containers, the containers are removed first.
 
-#### **--help**
-
-Print usage statement
-
 #### **--time**, **-t**=*seconds*
 
 Seconds to wait before forcibly stopping running containers that are using the specified volume. The --force option must be specified to use the --time option. Use -1 for infinite wait.

@@ -27,10 +27,6 @@ Rootless only.
 
 Stop and delete without confirmation.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--save-ignition**
 
 Do not delete the generated ignition file.

@@ -63,10 +63,6 @@ Number of CPUs.
 
 Size of the disk for the guest VM in GiB.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--ignition-path**
 
 Fully qualified path of the ignition file.

@@ -23,10 +23,6 @@ Rootless only.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 #### **--username**=*name*
 
 Username to use when SSH-ing into the VM.

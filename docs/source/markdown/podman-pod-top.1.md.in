@@ -11,14 +11,6 @@ Display the running processes of containers in a pod. The *format-descriptors* a
 descriptors but extended to print additional information, such as the seccomp mode or the effective capabilities
 of a given process. The descriptors can either be passed as separate arguments or as a single comma-separated argument.
 
-## OPTIONS
-
-#### **--help**, **-h**
-
-  Print usage statement
-
-@@option latest
-
 ## FORMAT DESCRIPTORS
 
 For a full list of available descriptors, see podman-top(1)

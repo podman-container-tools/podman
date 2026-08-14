@@ -38,10 +38,6 @@ For more details about format and configurations of the auth.json file, see cont
 
 Return the logged-in user for the registry.  Return error if no login is found.
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--password**, **-p**=*password*
 
 Password for registry

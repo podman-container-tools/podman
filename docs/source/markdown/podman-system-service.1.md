@@ -82,10 +82,6 @@ If a *tcp* URL must be used without TLS, using the *--cors* option is recommende
 
 CORS headers to inject to the HTTP response. The default value is empty string which disables CORS headers.
 
-#### **--help**, **-h**
-
-Print usage statement.
-
 #### **--time**, **-t**
 
 The time until the session expires in _seconds_. The default is 5

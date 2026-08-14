@@ -16,11 +16,6 @@ of `0` when the container is found.  A `1` is returned otherwise. An exit code o
 Check for external *containers* as well as Podman *containers*. These external *containers* are generally created via other container technology such as `Buildah` or `CRI-O`.\
 The default is **false**.
 
-**-h**, **--help**
-
-Prints usage statement.\
-The default is **false**.
-
 ## EXAMPLES
 
 Check if a container called "webclient" exists in local storage. Here, the container does exist.

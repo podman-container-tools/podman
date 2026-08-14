@@ -40,9 +40,6 @@ Will be replaced with the current working directory.
 
 Display the label's value of the image having populated its environment variables.  The runlabel command is not executed if --display is specified.
 
-#### **--help**, **-h**
-Print usage statement
-
 #### **--name**, **-n**=*name*
 
 Use this name for creating content for the container.  If not specified, name defaults to the name of the image.

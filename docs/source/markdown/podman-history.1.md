@@ -36,10 +36,6 @@ Valid placeholders for the Go template are listed below:
 | .Size                  | Size of layer on disk                                                     |
 | .Tags                  | Image tags                                                                |
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--human**, **-H**
 
 Display sizes and dates in human readable format (default *true*).

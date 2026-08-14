@@ -20,10 +20,6 @@ virtual machine just starts it from a stopped state.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 #### **--no-info**
 
 Suppress informational tips.

@@ -19,10 +19,6 @@ files and directories.
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 #### **--quiet**, **-q**
 
 Suppress copy status output.

@@ -32,10 +32,6 @@ Format secret output using Go template.
 | .Spec.Name               | Name of secret                                                    |
 | .UpdatedAt ...           | When secret was last updated (relative timestamp, human-readable) |
 
-#### **--help**
-
-Print usage statement.
-
 #### **--pretty**
 
 Print inspect output in human-readable format. Ignores fields from **--format**.

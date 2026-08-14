@@ -22,10 +22,6 @@ the old secret value still remains.
 
 Remove all existing secrets.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--ignore**, **-i**
 Ignore errors when specified secrets are not present.
 

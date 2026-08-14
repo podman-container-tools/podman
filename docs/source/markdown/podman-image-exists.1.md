@@ -12,12 +12,6 @@ of the image may be used as input.  Podman returns an exit code
 of `0` when the image is found.  A `1` is returned otherwise. An exit code of `125` indicates there
 was an issue accessing the local storage.
 
-## OPTIONS
-
-#### **--help**, **-h**
-
-Print usage statement
-
 ## EXAMPLES
 
 Check if an image called `webclient` exists in local storage (the image does actually exist):

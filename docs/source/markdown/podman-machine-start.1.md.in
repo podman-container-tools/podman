@@ -27,10 +27,6 @@ Only one Podman managed VM can be active at a time. If a VM is already running,
 
 ## OPTIONS
 
-#### **--help**
-
-Print usage statement.
-
 #### **--no-info**
 
 Suppress informational tips.

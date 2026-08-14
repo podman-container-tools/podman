@@ -50,10 +50,6 @@ cannot be used with --restart
 Define a structured output format.  The only valid value for this is `json`.  Using this option
 imples a dry-run. This option cannot be used with --restart.
 
-#### **--help**
-
-Print usage statement.
-
 #### **--restart**
 
 Restart VM after applying changes.

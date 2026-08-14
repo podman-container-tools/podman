@@ -31,10 +31,6 @@ Remote connection name
 
 Overrides environment variable `CONTAINER_CONNECTION` if set.
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--identity**=*path*
 
 Path to ssh identity file. If the identity file has been encrypted, Podman prompts the user for the passphrase.

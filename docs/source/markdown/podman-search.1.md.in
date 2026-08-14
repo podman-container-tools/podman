@@ -61,10 +61,6 @@ Valid placeholders for the Go template are listed below:
 
 Note: use .Tag only if the --list-tags is set.
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--limit**=*limit*
 
 Limit the number of results (default 25).

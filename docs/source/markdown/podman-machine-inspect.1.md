@@ -37,10 +37,6 @@ Print results with a Go template.
 | .State              | Machine state                                                         |
 | .UserModeNetworking | Whether this machine uses user-mode networking                        |
 
-#### **--help**
-
-Print usage statement.
-
 ## EXAMPLES
 
 Inspect the specified Podman machine.

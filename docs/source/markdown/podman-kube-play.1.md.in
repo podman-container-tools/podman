@@ -225,10 +225,6 @@ Use *path* as the build context directory for each image. Requires --build optio
 
 Tear down the volumes linked to the PersistentVolumeClaims as part of --down
 
-#### **--help**, **-h**
-
-Print usage statement
-
 #### **--ip**=*IP address*
 
 Assign a static ip address to the pod. This option can be specified several times when kube play creates more than one pod.
