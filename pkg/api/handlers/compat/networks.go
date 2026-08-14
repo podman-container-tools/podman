@@ -71,6 +71,43 @@ func InspectNetwork(w http.ResponseWriter, r *http.Request) {
 	utils.WriteResponse(w, http.StatusOK, report)
 }
 
+// prefixFromRange returns the single CIDR whose first and last addresses are
+// exactly start and end, if such a CIDR exists. It is the inverse of how the
+// create path stores a Docker IPRange: net.ParseCIDR followed by
+// netutil.FirstIPInSubnet/LastIPInSubnet (see CreateNetwork). A lease
+// range that is not CIDR-aligned (e.g. a podman-native `--ip-range start-end`)
+// has no single Docker CIDR representation, so ok is false and the caller leaves
+// IPRange unset.
+func prefixFromRange(start, end net.IP) (netip.Prefix, bool) {
+	// Stored lease-range IPs are commonly unmarshaled in 16-byte form; normalize
+	// to the canonical width so the mask math and length check below are correct.
+	if v4 := start.To4(); v4 != nil {
+		start = v4
+	}
+	if v4 := end.To4(); v4 != nil {
+		end = v4
+	}
+	if start == nil || end == nil || len(start) != len(end) {
+		return netip.Prefix{}, false
+	}
+	bits := len(start) * 8
+	for pfxLen := bits; pfxLen >= 0; pfxLen-- {
+		mask := net.CIDRMask(pfxLen, bits)
+		ipnet := &net.IPNet{IP: start.Mask(mask), Mask: mask}
+		first, err1 := netutil.FirstIPInSubnet(ipnet)
+		last, err2 := netutil.LastIPInSubnet(ipnet)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		if first.Equal(start) && last.Equal(end) {
+			if p, err := netip.ParsePrefix(ipnet.String()); err == nil {
+				return p, true
+			}
+		}
+	}
+	return netip.Prefix{}, false
+}
+
 func convertLibpodNetworktoDockerNetwork(runtime *libpod.Runtime, statuses []abi.ContainerNetStatus, network *nettypes.Network, changeDefaultName bool) (*dockerNetwork.Inspect, error) {
 	containerEndpoints := make(map[string]dockerNetwork.EndpointResource, len(statuses))
 	for _, st := range statuses {
@@ -121,7 +158,11 @@ func convertLibpodNetworktoDockerNetwork(runtime *libpod.Runtime, statuses []abi
 		ipamConfig := dockerNetwork.IPAMConfig{
 			Subnet:  subnet,
 			Gateway: gateway,
-			// TODO add range
+		}
+		if lr := sub.LeaseRange; lr != nil && lr.StartIP != nil && lr.EndIP != nil {
+			if ipRange, ok := prefixFromRange(lr.StartIP, lr.EndIP); ok {
+				ipamConfig.IPRange = ipRange
+			}
 		}
 		ipamConfigs = append(ipamConfigs, ipamConfig)
 	}

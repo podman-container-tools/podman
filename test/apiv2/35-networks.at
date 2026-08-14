@@ -111,6 +111,14 @@ t POST networks/create Name=net3\ CheckDuplicate=false 409
 # network delete docker
 t DELETE networks/net3 204
 
+# create a network with an IP range and verify the compat inspect endpoint
+# round-trips the IPRange back into IPAM.Config (https://github.com/containers/podman/issues/28378)
+t POST networks/create Name=net_iprange\ IPAM='{"Config":[{"Subnet":"172.30.0.0/24","Gateway":"172.30.0.1","IPRange":"172.30.0.128/28"}]}' 201
+t GET networks/net_iprange 200 \
+  .IPAM.Config[0].Subnet=172.30.0.0/24 \
+  .IPAM.Config[0].IPRange=172.30.0.128/28
+t DELETE networks/net_iprange 204
+
 #compat api list networks sanity checks
 t GET networks?filters='garb1age}' 500 \
     .cause="invalid character 'g' looking for beginning of value"
