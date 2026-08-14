@@ -19,6 +19,9 @@ const (
 	// CheckpointAnnotationNamespace specifies the namespace of the pod associated with the checkpoint.
 	CheckpointAnnotationNamespace = "org.criu.checkpoint.pod.namespace"
 
+	// CheckpointAnnotationPodUID specifies the UID of the pod associated with the checkpoint.
+	CheckpointAnnotationPodUID = "org.criu.checkpoint.pod.uid"
+
 	// CheckpointAnnotationRootfsImageName specifies the name of the root filesystem image associated with the checkpoint.
 	CheckpointAnnotationRootfsImageName = "org.criu.checkpoint.rootfsImageName"
 

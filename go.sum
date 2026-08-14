@@ -28,8 +28,8 @@ github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM
 github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/checkpoint-restore/checkpointctl v1.5.0 h1:Uu+D2cOf/GUyCMk23Y8L69P6YoATTe6pH+Au64O3y28=
-github.com/checkpoint-restore/checkpointctl v1.5.0/go.mod h1:y5HRs1ZWQUZGyEuthlTHmTJN9PUMOjlaH6JvVaNq9kE=
+github.com/checkpoint-restore/checkpointctl v1.6.0 h1:e+hOhEFiUUYZRCbbfbceQ3lLGQXHt2+qKSAR2l9Mv5M=
+github.com/checkpoint-restore/checkpointctl v1.6.0/go.mod h1:LjfSgCtcTMbzwcA7d+vXJ7udJsWC/VRJpKUojTAGeCk=
 github.com/checkpoint-restore/go-criu/v8 v8.4.0 h1:w6WDxjde4pvXYTIBuj6dsWsaPorKwSWuCk/qSKTO3Jw=
 github.com/checkpoint-restore/go-criu/v8 v8.4.0/go.mod h1:SK5UexowK0P99gCcJJOavgVVlUWydGUfXSQUf1qDkHU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=

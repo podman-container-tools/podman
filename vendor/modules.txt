@@ -68,8 +68,8 @@ github.com/blang/semver/v4
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/checkpoint-restore/checkpointctl v1.5.0
-## explicit; go 1.24.6
+# github.com/checkpoint-restore/checkpointctl v1.6.0
+## explicit; go 1.25.0
 github.com/checkpoint-restore/checkpointctl/lib
 # github.com/checkpoint-restore/go-criu/v8 v8.4.0
 ## explicit; go 1.25.0

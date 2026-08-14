@@ -8,7 +8,7 @@ go 1.25.9
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/blang/semver/v4 v4.0.0
-	github.com/checkpoint-restore/checkpointctl v1.5.0
+	github.com/checkpoint-restore/checkpointctl v1.6.0
 	github.com/checkpoint-restore/go-criu/v8 v8.4.0
 	github.com/containers/gvisor-tap-vsock v0.8.9
 	github.com/containers/libhvee v0.11.0
