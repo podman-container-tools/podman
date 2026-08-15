@@ -104,12 +104,20 @@ class BatsLogFilterParser(HTMLParser):
 
 
 
+# logformatter decides how to mark up a log by looking at the log contents,
+# not at the test name, and only its ginkgo path emits the "log-failed" class.
+# Detect the format the same way, so that ginkgo suites which are not named
+# "int-" (the bindings suite, for example) are parsed as ginkgo rather than
+# falling through to the bats parser.
+GINKGO_MARKER = 'class="log-failed"'
+
+
 def filter_html_file(file_path):
     # Read the HTML content
     with open(file_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
-    if 'int-' in file_path:
+    if GINKGO_MARKER in html_content:
         parser = GinkgoLogFilterParser()
         parser.feed(html_content)
         return parser.results
@@ -119,10 +127,14 @@ def filter_html_file(file_path):
     return [parser.data]
 
 
-# Running the filter
-matching_elements = filter_html_file(sys.argv[1])
+def main(file_paths):
+    for file_path in file_paths:
+        for element in filter_html_file(file_path):
+            print("```")
+            print(element)
+            print("```")
 
-for element in matching_elements:
-    print(f"```")
-    print(element)
-    print("```")
+
+# Running the filter
+if __name__ == '__main__':
+    main(sys.argv[1:])
