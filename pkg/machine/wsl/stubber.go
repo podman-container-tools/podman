@@ -105,6 +105,7 @@ func (w WSLStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
+// ===================== CHANGED FUNCTION START =====================
 func (w WSLStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error, error) {
 	// Note: we could consider swapping the two conditionals
 	// below if we wanted to hard error on the wsl unregister
@@ -114,11 +115,25 @@ func (w WSLStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error,
 		if err := runCmdPassThrough(cmd); err != nil {
 			return err
 		}
+
+		// The podman-net-usermode WSL distribution is shared across all
+		// machines using --user-mode-networking, so it isn't removed
+		// automatically above. Clean it up here if this machine used it
+		// and no other configured machine still needs it.
+		// (see https://github.com/containers/podman/issues/29480)
+		if mc.WSLHypervisor != nil && mc.WSLHypervisor.UserModeNetworking {
+			if err := removeUserModeDistIfUnused(mc.Name); err != nil {
+				logrus.Warnf("could not clean up shared user-mode networking distribution: %v", err)
+			}
+		}
+
 		return nil
 	}
 
 	return []string{}, wslRemoveFunc, nil
 }
+
+// ====================== CHANGED FUNCTION END ======================
 
 func (w WSLStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil

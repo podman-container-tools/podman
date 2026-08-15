@@ -372,3 +372,32 @@ func appendDisableAutoResolve(dist string) error {
 
 	return nil
 }
+
+func removeUserModeDistIfUnused(removedName string) error {
+	exists, err := isWSLExist(userModeDist)
+	if err != nil || !exists {
+		return err
+	}
+
+	dirs, err := env.GetMachineDirs(vmtype)
+	if err != nil {
+		return err
+	}
+
+	machines, err := vmconfigs.LoadMachinesInDir(dirs)
+	if err != nil {
+		return err
+	}
+
+	for name, mc := range machines {
+		if name == removedName {
+			continue
+		}
+		if mc.WSLHypervisor != nil && mc.WSLHypervisor.UserModeNetworking {
+			return nil
+		}
+	}
+
+	_ = terminateDist(userModeDist)
+	return unregisterDist(userModeDist)
+}
