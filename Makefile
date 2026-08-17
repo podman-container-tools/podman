@@ -287,6 +287,7 @@ help: ## Print this help message
 	hack/ci/pr-should-include-tests.t
 	hack/ci/logformatter.t
 	hack/ci/ci_run_collector_test.py
+	hack/ci/ci_log_retriever_test.py
 	test/system/helpers.t
 
 .PHONY: lint
