@@ -286,12 +286,7 @@ help: ## Print this help message
 	hack/ci/pr-removes-fixed-skips.t
 	hack/ci/pr-should-include-tests.t
 	hack/ci/logformatter.t
-	hack/ci/ci_run_collector_test.py
-	hack/ci/ci_log_retriever_test.py
-	hack/ci/ci_failure_classifier_test.py
-	hack/ci/ci_flake_detector_test.py
-	hack/ci/ci_agentic_analyzer_test.py
-	hack/ci/ci_reporter_test.py
+	hack/ci/ci_flake_suite_test.py
 	test/system/helpers.t
 
 .PHONY: lint
