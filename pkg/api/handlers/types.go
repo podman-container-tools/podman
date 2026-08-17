@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+
 	build "github.com/moby/moby/api/types/build"
 	dockerContainer "github.com/moby/moby/api/types/container"
 	dockerImage "github.com/moby/moby/api/types/image"
@@ -237,6 +239,21 @@ type HistoryResponse struct {
 
 type ExecCreateConfig struct {
 	dockerContainer.ExecCreateRequest
+	DetachKeysSet bool `json:"-"`
+}
+
+func (e *ExecCreateConfig) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &e.ExecCreateRequest); err != nil {
+		return err
+	}
+	if _, ok := raw["DetachKeys"]; ok {
+		e.DetachKeysSet = true
+	}
+	return nil
 }
 
 type ExecStartConfig struct {

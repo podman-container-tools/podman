@@ -53,7 +53,7 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 	libpodConfig.AttachStdin = input.AttachStdin
 	libpodConfig.AttachStderr = input.AttachStderr
 	libpodConfig.AttachStdout = input.AttachStdout
-	if input.DetachKeys != "" {
+	if input.DetachKeysSet {
 		libpodConfig.DetachKeys = &input.DetachKeys
 	}
 	libpodConfig.Environment = make(map[string]string)
