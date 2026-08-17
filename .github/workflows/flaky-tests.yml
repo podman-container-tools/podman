@@ -16,14 +16,25 @@ jobs:
           uname -a
           git rev-parse HEAD
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgpgme-dev \
+            libassuan-dev \
+            libbtrfs-dev \
+            libseccomp-dev \
+            pkg-config
+
       - name: Build Podman
         run: |
           make BUILDTAGS="selinux seccomp" bin/podman
 
-      - name: Run test
-        run: |
-          echo "Test goes here"
       - name: Inspect test directory
         run: |
           echo "=== Test directory ==="
           find test -maxdepth 3 -type f | sort
+
+      - name: Run test
+        run: |
+          echo "Test goes here"
