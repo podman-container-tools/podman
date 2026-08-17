@@ -75,7 +75,7 @@ jobs:
 
       # 5. Upload the raw observations
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: flaky-test-results
           path: results/results.txt
