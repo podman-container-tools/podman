@@ -23,3 +23,7 @@ jobs:
       - name: Run test
         run: |
           echo "Test goes here"
+      - name: Inspect test directory
+        run: |
+          echo "=== Test directory ==="
+          find test -maxdepth 3 -type f | sort
