@@ -26,7 +26,7 @@ import (
 func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 
-	input := new(handlers.ExecCreateConfig)
+	input := new(handlers.ExecCreateConfigBody)
 	if err := utils.ReadJSONFromBody(r, &input); err != nil {
 		utils.Error(w, http.StatusBadRequest, err)
 		return
@@ -53,9 +53,7 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 	libpodConfig.AttachStdin = input.AttachStdin
 	libpodConfig.AttachStderr = input.AttachStderr
 	libpodConfig.AttachStdout = input.AttachStdout
-	if input.DetachKeys != "" {
-		libpodConfig.DetachKeys = &input.DetachKeys
-	}
+	libpodConfig.DetachKeys = input.DetachKeys
 	libpodConfig.Environment = make(map[string]string)
 	for _, envStr := range input.Env {
 		key, val, hasVal := strings.Cut(envStr, "=")
@@ -80,6 +78,11 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 		utils.InternalServerError(w, err)
 		return
 	}
+
+	if libpodConfig.DetachKeys == nil {
+		libpodConfig.DetachKeys = &runtimeConfig.Engine.DetachKeys
+	}
+
 	// Automatically log to syslog if the server has log-level=debug set
 	exitCommandArgs, err := specgenutil.CreateExitCommandArgs(storageConfig, runtimeConfig, logrus.IsLevelEnabled(logrus.DebugLevel), true, false, true)
 	if err != nil {
