@@ -291,6 +291,7 @@ help: ## Print this help message
 	hack/ci/ci_failure_classifier_test.py
 	hack/ci/ci_flake_detector_test.py
 	hack/ci/ci_agentic_analyzer_test.py
+	hack/ci/ci_reporter_test.py
 	test/system/helpers.t
 
 .PHONY: lint
