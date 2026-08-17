@@ -8,40 +8,74 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout Podman
       - name: Checkout
         uses: actions/checkout@v5
 
+      # 2. Show exactly what we're testing
       - name: Show environment
         run: |
+          echo "=== System ==="
           uname -a
+
+          echo
+          echo "=== Go version ==="
+          go version
+
+          echo
+          echo "=== Commit ==="
           git rev-parse HEAD
 
-      - name: Install build dependencies
+      # 3. Run the test 100 times
+      - name: Run TestCreated 100 times
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgpgme-dev \
-            libassuan-dev \
-            libbtrfs-dev \
-            libseccomp-dev \
-            pkg-config
+          mkdir -p results
+          : > results/results.txt
 
-      - name: Build Podman
-        run: |
-          make BUILDTAGS="selinux seccomp" bin/podman
+          echo "Running TestCreated 100 times..."
+          echo
 
-      - name: Inspect test directory
-        run: |
-          echo "=== Test directory ==="
-          find test -maxdepth 3 -type f | sort
+          for i in $(seq 1 100); do
+            echo "========================================"
+            echo "Test execution $i / 100"
+            echo "========================================"
 
-      - name: Run test
-        run: |
-          echo "Test goes here"
+            if go test ./pkg/ctime -run '^TestCreated$' -count=1; then
+              echo "PASS"
+              echo "PASS" >> results/results.txt
+            else
+              echo "FAIL"
+              echo "FAIL" >> results/results.txt
+            fi
 
-      - name: Find Go tests
+            echo
+          done
+
+      # 4. Calculate basic statistics
+      - name: Analyze results
+        shell: bash
         run: |
-          echo "=== Go test files ==="
-          find . -name '*_test.go' \
-            -not -path './vendor/*' \
-            | sort | head -100
+          PASS_COUNT=$(grep -c '^PASS$' results/results.txt || true)
+          FAIL_COUNT=$(grep -c '^FAIL$' results/results.txt || true)
+          TOTAL=$((PASS_COUNT + FAIL_COUNT))
+
+          echo "========================================"
+          echo "            TEST SUMMARY"
+          echo "========================================"
+
+          echo "Test: TestCreated"
+          echo "Total executions: $TOTAL"
+          echo "PASS: $PASS_COUNT"
+          echo "FAIL: $FAIL_COUNT"
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "Failure rate: $(awk "BEGIN {printf \"%.2f%%\", ($FAIL_COUNT/$TOTAL)*100}")"
+          fi
+
+      # 5. Upload the raw observations
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: flaky-test-results
+          path: results/results.txt
