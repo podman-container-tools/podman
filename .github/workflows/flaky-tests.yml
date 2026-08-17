@@ -38,3 +38,10 @@ jobs:
       - name: Run test
         run: |
           echo "Test goes here"
+
+      - name: Find Go tests
+        run: |
+          echo "=== Go test files ==="
+          find . -name '*_test.go' \
+            -not -path './vendor/*' \
+            | sort | head -100
