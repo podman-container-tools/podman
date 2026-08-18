@@ -607,6 +607,9 @@ var _ = Describe("Podman prune", func() {
 	})
 
 	It("podman system prune --build clean up after terminated build", func() {
+		// In remote tests SIGKILL targets podman-remote, while the server-side build may continue.
+		SkipIfRemote("SIGKILL only terminates the podman-remote client, not the server-side build")
+
 		useCustomNetworkDir(podmanTest, tempdir)
 
 		podmanTest.BuildImage(pruneImage, "alpine_notleaker:latest", "false")
