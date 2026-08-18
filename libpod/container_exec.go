@@ -760,21 +760,79 @@ func (c *Container) ExecResize(sessionID string, newSize resize.TerminalSize) er
 	return c.ociRuntime.ExecAttachResize(c, sessionID, newSize)
 }
 
+// ExecKill sends a signal to the process group of a running exec session,
+// reaching any children it spawned, not just the tracked PID.
+func (c *Container) ExecKill(sessionID string, sig uint) error {
+	if !c.batched {
+		c.lock.Lock()
+		defer c.lock.Unlock()
+
+		if err := c.syncContainer(); err != nil {
+			return err
+		}
+	}
+
+	session, ok := c.state.ExecSessions[sessionID]
+	if !ok {
+		return fmt.Errorf("container %s has no exec session with ID %s: %w", c.ID(), sessionID, define.ErrNoSuchExecSession)
+	}
+
+	if session.State != define.ExecStateRunning {
+		return fmt.Errorf("cannot signal container %s exec session %s as it is not running: %w", c.ID(), session.ID(), define.ErrExecSessionStateInvalid)
+	}
+
+	// Also confirms via pidhandle that this PID is still our session, not
+	// one the kernel already reused.
+	running, err := c.ociRuntime.ExecUpdateStatus(c, session.ID())
+	if err != nil {
+		return err
+	}
+	if !running {
+		session.State = define.ExecStateStopped
+
+		if err := c.save(); err != nil {
+			logrus.Errorf("Saving state of container %s: %v", c.ID(), err)
+		}
+
+		return fmt.Errorf("cannot signal container %s exec session %s as it has stopped: %w", c.ID(), session.ID(), define.ErrExecSessionStateInvalid)
+	}
+
+	pidHandle, err := pidhandle.NewPIDHandleFromString(session.PID, session.PIDData)
+	if err != nil {
+		return fmt.Errorf("getting the PID handle for pid %d from '%s': %w", session.PID, session.PIDData, err)
+	}
+	defer pidHandle.Close()
+
+	if err := pidHandle.KillProcessGroup(unix.Signal(sig)); err != nil {
+		if errors.Is(err, unix.ESRCH) {
+			return nil
+		}
+		return fmt.Errorf("killing container %s exec session %s process group %d: %w", c.ID(), session.ID(), session.PID, err)
+	}
+
+	return nil
+}
+
 func (c *Container) healthCheckExec(config *ExecConfig, timeout time.Duration, streams *define.AttachStreams) (int, error) {
 	return c.execLightweight(config, streams, timeout)
 }
 
-func (c *Container) Exec(config *ExecConfig, streams *define.AttachStreams, resize <-chan resize.TerminalSize) (int, error) {
-	return c.exec(config, streams, resize, false)
+// sessionIDCallback, if not nil, fires with the session's ID right after
+// creation, before start/attach, for callers that need it early.
+func (c *Container) Exec(config *ExecConfig, streams *define.AttachStreams, resize <-chan resize.TerminalSize, sessionIDCallback func(string)) (int, error) {
+	return c.exec(config, streams, resize, false, sessionIDCallback)
 }
 
 // Exec emulates the old Libpod exec API, providing a single call to create,
 // run, and remove an exec session. Returns exit code and error. Exit code is
 // not guaranteed to be set sanely if error is not nil.
-func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resizeChan <-chan resize.TerminalSize, isHealthcheck bool) (exitCode int, retErr error) {
+func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resizeChan <-chan resize.TerminalSize, isHealthcheck bool, sessionIDCallback func(string)) (exitCode int, retErr error) {
 	sessionID, err := c.ExecCreate(config)
 	if err != nil {
 		return -1, err
+	}
+	if sessionIDCallback != nil {
+		sessionIDCallback(sessionID)
 	}
 	cleanup := true
 	defer func() {

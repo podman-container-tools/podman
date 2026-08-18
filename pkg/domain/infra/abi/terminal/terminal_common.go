@@ -35,7 +35,10 @@ func ExecAttachCtr(ctx context.Context, ctr *libpod.Container, execConfig *libpo
 			}
 		}()
 	}
-	return ctr.Exec(execConfig, streams, resizechan)
+	// Forward our signals on, so killing `podman exec` stops what it started.
+	return ctr.Exec(execConfig, streams, resizechan, func(sessionID string) {
+		ProxyExecSignals(ctr, sessionID)
+	})
 }
 
 // StartAttachCtr starts and (if required) attaches to a container

@@ -14,6 +14,40 @@ import (
 	"go.podman.io/podman/v6/pkg/signal"
 )
 
+// ProxyExecSignals forwards signals Podman receives to an exec session, via
+// Container.ExecKill so delivery goes through libpod's own PID bookkeeping.
+func ProxyExecSignals(ctr *libpod.Container, sessionID string) {
+	// Stop catching the shutdown signals (SIGINT, SIGTERM) - they're going
+	// to the exec session now.
+	shutdown.Stop() //nolint: errcheck
+
+	sigBuffer := make(chan os.Signal, signal.SignalBufferSize)
+	signal.CatchAll(sigBuffer)
+
+	logrus.Debugf("Enabling signal proxying to exec session %s", sessionID)
+
+	go func() {
+		for s := range sigBuffer {
+			syscallSignal := s.(syscall.Signal)
+
+			if err := ctr.ExecKill(sessionID, uint(syscallSignal)); err != nil {
+				if !errors.Is(err, define.ErrExecSessionStateInvalid) && !errors.Is(err, define.ErrNoSuchExecSession) {
+					logrus.Errorf("forwarding signal %d to exec session %s: %v", s, sessionID, err)
+					continue
+				}
+				// Session is gone: send this one to ourselves rather than
+				// lose it, and let the defaults play out.
+				logrus.Infof("Ceasing signal forwarding, exec session %s has stopped", sessionID)
+				signal.StopCatch(sigBuffer)
+				if err := syscall.Kill(syscall.Getpid(), syscallSignal); err != nil {
+					logrus.Errorf("Failed to kill pid %d", syscall.Getpid())
+				}
+				return
+			}
+		}
+	}()
+}
+
 // ProxySignals ...
 func ProxySignals(ctr *libpod.Container) {
 	// Stop catching the shutdown signals (SIGINT, SIGTERM) - they're going

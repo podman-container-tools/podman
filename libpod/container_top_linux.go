@@ -399,7 +399,7 @@ func (c *Container) execPSinContainer(args []string) ([]string, error) {
 	cmd := append([]string{"ps"}, args...)
 	config := new(ExecConfig)
 	config.Command = cmd
-	ec, err := c.Exec(config, streams, nil)
+	ec, err := c.Exec(config, streams, nil, nil)
 	wPipe.Close()
 	if err != nil {
 		return nil, err

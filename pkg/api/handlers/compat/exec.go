@@ -18,6 +18,7 @@ import (
 	"go.podman.io/podman/v6/pkg/api/server/idle"
 	api "go.podman.io/podman/v6/pkg/api/types"
 	"go.podman.io/podman/v6/pkg/domain/entities"
+	"go.podman.io/podman/v6/pkg/signal"
 	"go.podman.io/podman/v6/pkg/specgenutil"
 	"go.podman.io/podman/v6/pkg/util"
 )
@@ -217,6 +218,49 @@ func ExecStartHandler(w http.ResponseWriter, r *http.Request) {
 		logErr(err)
 	}
 	logrus.Debugf("Attach for container %s exec session %s completed successfully", sessionCtr.ID(), sessionID)
+}
+
+// ExecKillHandler sends a signal to a running exec session.
+func ExecKillHandler(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	decoder := utils.GetDecoder(r)
+
+	sessionID := mux.Vars(r)["id"]
+
+	query := struct {
+		Signal string `schema:"signal"`
+	}{}
+	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	sig, err := signal.ParseSignalNameOrNumber(query.Signal)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, err)
+		return
+	}
+
+	sessionCtr, err := runtime.GetExecSessionContainer(sessionID)
+	if err != nil {
+		utils.Error(w, http.StatusNotFound, err)
+		return
+	}
+
+	if err := sessionCtr.ExecKill(sessionID, uint(sig)); err != nil {
+		if errors.Is(err, define.ErrNoSuchExecSession) {
+			utils.Error(w, http.StatusNotFound, err)
+			return
+		}
+		if errors.Is(err, define.ErrExecSessionStateInvalid) {
+			utils.Error(w, http.StatusConflict, err)
+			return
+		}
+		utils.InternalServerError(w, err)
+		return
+	}
+
+	utils.WriteResponse(w, http.StatusOK, "OK")
 }
 
 // ExecRemoveHandler removes a exec session.
