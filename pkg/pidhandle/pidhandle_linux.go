@@ -10,10 +10,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+// PIDFD_SIGNAL_PROCESS_GROUP, added in Linux 6.9, not yet in golang.org/x/sys/unix.
+const pidfdSignalProcessGroup = 1 << 2
+
+var processGroupSignalUnsupported atomic.Bool
 
 type pidfdHandle struct {
 	pidfd        int
@@ -158,6 +164,22 @@ func (h *pidfdHandle) Kill(signal unix.Signal) error {
 	}
 
 	return h.normalHandle.Kill(signal)
+}
+
+// Sends the signal to the process's entire process group.
+func (h *pidfdHandle) KillProcessGroup(signal unix.Signal) error {
+	if h.pidfd > -1 && !processGroupSignalUnsupported.Load() {
+		err := pidfdSendSignal(h.pidfd, signal, nil, pidfdSignalProcessGroup)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, unix.EINVAL) {
+			return err
+		}
+		processGroupSignalUnsupported.Store(true)
+	}
+
+	return h.normalHandle.KillProcessGroup(signal)
 }
 
 // Returns true in case the process is still alive.

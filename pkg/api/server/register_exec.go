@@ -386,5 +386,36 @@ func (s *APIServer) registerExecHandlers(r *mux.Router) error {
 	//   500:
 	//     $ref: "#/responses/internalError"
 	r.Handle(VersionedPath("/libpod/exec/{id}/remove"), s.APIHandler(compat.ExecRemoveHandler)).Methods(http.MethodPost)
+
+	// swagger:operation POST /libpod/exec/{id}/kill libpod ExecKillLibpod
+	// ---
+	// tags:
+	//   - exec
+	// summary: Signal an exec instance
+	// description: |
+	//   Send a signal to a running exec instance's process group.
+	// parameters:
+	//  - in: path
+	//    name: id
+	//    type: string
+	//    required: true
+	//    description: Exec instance ID
+	//  - in: query
+	//    name: signal
+	//    type: string
+	//    required: true
+	//    description: Signal name or number to send.
+	// produces:
+	// - application/json
+	// responses:
+	//   200:
+	//     description: no error
+	//   404:
+	//     $ref: "#/responses/execSessionNotFound"
+	//   409:
+	//	   description: exec session is not running.
+	//   500:
+	//     $ref: "#/responses/internalError"
+	r.Handle(VersionedPath("/libpod/exec/{id}/kill"), s.APIHandler(compat.ExecKillHandler)).Methods(http.MethodPost)
 	return nil
 }
