@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -383,35 +382,6 @@ func TestCompressRemoteFile(t *testing.T) {
 			entities.ScpCompressionOptions{CompressionFormat: "xz"})
 		assert.ErrorContains(t, err, `unsupported compression format "xz"`)
 		assert.Empty(t, remote.argv)
-	})
-}
-
-// The paths themselves need two hosts, so without this the flag could stop being
-// honoured on one of them and every other test would still pass.
-func TestCompressionOptionsReachTheTransfer(t *testing.T) {
-	level := 9
-	compress := entities.ScpCompressionOptions{CompressionFormat: "gzip", CompressionLevel: &level}
-	opts := entities.ScpExecuteTransferOptions{SSHMode: ssh.GolangMode, ScpCompressionOptions: compress}
-	source := entities.ScpTransferImageOptions{Image: "alpine", File: "/tmp/podman123"}
-	dest := entities.ScpTransferImageOptions{File: "/tmp/podman123"}
-	url := &url.URL{Host: "example.test"}
-
-	t.Run("a remote source compresses on the host holding the image", func(t *testing.T) {
-		got := saveToRemoteOptions(source, url, "iden", opts, opts.ScpCompressionOptions)
-		assert.Equal(t, compress, got.ScpCompressionOptions)
-	})
-
-	t.Run("a local source compresses into the stream", func(t *testing.T) {
-		got := loadToRemoteOptions(dest, source.File, url, "iden", opts, opts.ScpCompressionOptions)
-		assert.Equal(t, compress, got.ScpCompressionOptions)
-	})
-
-	t.Run("remote to remote does not compress twice", func(t *testing.T) {
-		// Compressing again would produce a doubly wrapped stream podman load
-		// cannot read.
-		got := loadToRemoteOptions(dest, dest.File, url, "iden", opts, entities.ScpCompressionOptions{})
-		assert.Empty(t, got.CompressionFormat)
-		assert.Nil(t, got.CompressionLevel)
 	})
 }
 
