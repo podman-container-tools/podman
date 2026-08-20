@@ -107,7 +107,8 @@ func ManifestCreate(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 
-	buffer, err := io.ReadAll(r.Body)
+	// Limit manifest payload to 20MB to prevent DOS
+	buffer, err := io.ReadAll(io.LimitReader(r.Body, 20<<20))
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
