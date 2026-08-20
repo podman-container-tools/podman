@@ -76,5 +76,10 @@ packages)
     # Any not-present packages will be listed as such
     $PKG_LST_CMD "${PKG_NAMES[@]}" | sort -u
     ;;
-ip) showrun sh -c "ip addr && ip route && ip -6 route" ;;
+ip)
+    # Run each independently so a failure in one still collects the rest.
+    showrun ip addr
+    showrun ip route
+    showrun ip -6 route
+    ;;
 esac
