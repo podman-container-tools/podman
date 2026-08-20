@@ -1528,7 +1528,7 @@ func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers 
 	cmd = append(cmd, p.TempDir)
 	session := p.Podman(cmd)
 	session.Wait(240)
-	Expect(session).Should(Exit(0), fmt.Sprintf("BuildImage session output: %q", session.OutputToString()))
+	Expect(session).Should(Exit(0), fmt.Sprintf("BuildImage session output: %q stderr: %q", session.OutputToString(), session.ErrorToString()))
 	output := session.OutputToStringArray()
 	return output[len(output)-1]
 }
