@@ -132,7 +132,13 @@ function _prefetch() {
             if [[ $status -ne 0 ]]; then
                 echo "# 'pull $want' failed again, will retry one last time..." >&3
                 sleep 30
-                $cmd
+                run $cmd
+                echo "$output"
+                if [[ $status -ne 0 ]]; then
+                    # Remove any partial archive so the next run refetches
+                    rm -f "$cachepath"
+                    die "'pull $want' failed three times"
+                fi
             fi
         fi
     fi
@@ -166,7 +172,11 @@ function _prefetch() {
     # with skopeo, not podman, in order to preserve metadata
     cmd="skopeo copy --all oci-archive:$cachepath containers-storage:$want"
     echo "$_LOG_PROMPT $cmd"
-    $cmd
+    run $cmd
+    echo "$output"
+    if [[ $status -ne 0 ]]; then
+        die "failed to load cached image '$want' from $cachepath"
+    fi
 }
 
 # END   tools for fetching & caching test images
