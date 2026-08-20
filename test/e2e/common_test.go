@@ -1504,8 +1504,16 @@ func (s *PodmanSessionIntegration) jq(jqCommand string) (string, error) {
 }
 
 func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers string, label string, extraOptions []string) string {
-	dockerfilePath := filepath.Join(p.TempDir, "Dockerfile-"+stringid.GenerateRandomID())
-	err := os.WriteFile(dockerfilePath, []byte(dockerfile), 0o755)
+	// p.TempDir is the build context and some tests drop files there for COPY
+	// and ADD to pick up, so it has to stay the context. Keep the generated
+	// Containerfile out of it: builds that run concurrently walk this
+	// directory to make the context, and a file appearing mid-walk is a race.
+	containerfileDir, err := os.MkdirTemp(filepath.Dir(p.TempDir), "containerfile")
+	Expect(err).ToNot(HaveOccurred())
+	defer os.RemoveAll(containerfileDir)
+
+	dockerfilePath := filepath.Join(containerfileDir, "Containerfile")
+	err = os.WriteFile(dockerfilePath, []byte(dockerfile), 0o755)
 	Expect(err).ToNot(HaveOccurred())
 	cmd := []string{"build", "--pull-never", "--layers=" + layers, "--file", dockerfilePath}
 	if label != "" {

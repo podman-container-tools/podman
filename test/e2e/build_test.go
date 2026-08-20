@@ -73,6 +73,28 @@ var _ = Describe("Podman build", func() {
 		}
 	})
 
+	It("podman build helper keeps the containerfile out of the context", func() {
+		podmanTest.AddImageToRWStore(ALPINE)
+
+		// The helper used to write its generated Containerfile into
+		// podmanTest.TempDir, which is also the build context, so every build
+		// shipped the Containerfiles of the builds around it.
+		err := os.WriteFile(filepath.Join(podmanTest.TempDir, "marker"), []byte("hi"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		containerfile := fmt.Sprintf(`FROM %s
+COPY . /ctx`, ALPINE)
+		podmanTest.BuildImage(containerfile, "ctxtest", "false")
+
+		session := podmanTest.Podman([]string{"run", "--rm", "ctxtest", "ls", "/ctx"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		// the context is still TempDir, tests rely on that for COPY and ADD
+		Expect(session.OutputToString()).To(ContainSubstring("marker"))
+		Expect(session.OutputToString()).ToNot(ContainSubstring("Containerfile"))
+		Expect(session.OutputToString()).ToNot(ContainSubstring("Dockerfile"))
+	})
+
 	It("podman build and remove basic alpine with TMPDIR as relative", func() {
 		// preserve TMPDIR if it was originally set
 		if cacheDir, found := os.LookupEnv("TMPDIR"); found {
