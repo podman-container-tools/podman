@@ -198,6 +198,17 @@ var _ = Describe("Podman UserNS support", func() {
 		Expect(exec2).Should(ExitCleanly())
 	})
 
+	It("podman --userns=keep-id overrides image user", func() {
+		// Run container with --userns=keep-id against an image with a predefined USER
+		session := podmanTest.Podman([]string{"run", "--userns=keep-id", "quay.io/libpod/testimage:20241011", "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		// Verify the UID inside the container matches the host user's EUID
+		uid := strconv.Itoa(os.Geteuid())
+		Expect(session.OutputToString()).To(Equal(uid))
+	})
+
 	It("podman --userns=auto", func() {
 		u, err := user.Current()
 		Expect(err).ToNot(HaveOccurred())

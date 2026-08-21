@@ -244,14 +244,21 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 			toReturn = append(toReturn, libpod.WithAddCurrentUserPasswdEntry())
 		}
 
+		imageUser := ""
+		if imageData != nil && imageData.Config != nil {
+			imageUser = imageData.Config.User
+		}
+
 		// If user is not overridden, set user in the container
 		// to user running Podman.
-		if s.User == "" {
+		if s.User == "" || (imageUser != "" && s.User == imageUser) {
 			_, uid, gid, err := util.GetKeepIDMapping(opts)
 			if err != nil {
 				return nil, err
 			}
-			toReturn = append(toReturn, libpod.WithUser(fmt.Sprintf("%d:%d", uid, gid)))
+			keepIDUser := fmt.Sprintf("%d:%d", uid, gid)
+			toReturn = append(toReturn, libpod.WithUser(keepIDUser))
+			s.User = keepIDUser
 		}
 	case specgen.FromPod:
 		if pod == nil || infraCtr == nil {
