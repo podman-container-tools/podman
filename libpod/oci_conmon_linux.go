@@ -180,11 +180,6 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 		mustCreateCgroup = false
 	}
 
-	// $INVOCATION_ID is set by systemd when running as a service.
-	if ctr.runtime.RemoteURI() == "" && os.Getenv("INVOCATION_ID") != "" {
-		mustCreateCgroup = false
-	}
-
 	if mustCreateCgroup {
 		// Usually rootless users are not allowed to configure cgroupfs.
 		// There are cases though, where it is allowed, e.g. if the cgroup
