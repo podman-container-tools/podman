@@ -9,4 +9,4 @@ fi
 
 # This should work even when podman-next isn't installed. It'll fetch the
 # highest versions available across all repos.
-dnf -y upgrade --allowerasing "${DISABLE_REPO[@]}" --exclude=podman*
+dnf -y upgrade --allowerasing --setopt=allow_vendor_change=1 "${DISABLE_REPO[@]}" --exclude=podman*
