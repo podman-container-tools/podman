@@ -674,6 +674,16 @@ func (c *Container) LogLabels() map[string]string {
 	return c.config.LogLabels
 }
 
+// LogRotate returns whether log rotation is enabled for the container's log file.
+func (c *Container) LogRotate() bool {
+	return c.config.LogRotate
+}
+
+// LogMaxFiles returns the maximum number of rotated log files kept for the container.
+func (c *Container) LogMaxFiles() uint {
+	return c.config.LogMaxFiles
+}
+
 // RestartPolicy returns the container's restart policy.
 func (c *Container) RestartPolicy() string {
 	return c.config.RestartPolicy

@@ -231,3 +231,109 @@ func TestFillOutSpecGenRecorsUserNs(t *testing.T) {
 	assert.True(t, ok, "UserNsAnnotation is set")
 	assert.Equal(t, "keep-id", v, "UserNsAnnotation is keep-id")
 }
+
+func TestLogOptMaxFile(t *testing.T) {
+	tests := []struct {
+		desc      string
+		logOpts   []string
+		wantVal   string
+		wantErr   bool
+	}{
+		{
+			desc:    "valid max-file integer",
+			logOpts: []string{"max-file=5"},
+			wantVal: "5",
+		},
+		{
+			desc:    "max-file of 1",
+			logOpts: []string{"max-file=1"},
+			wantVal: "1",
+		},
+		{
+			desc:    "invalid max-file string",
+			logOpts: []string{"max-file=notanumber"},
+			wantErr: true,
+		},
+		{
+			desc:    "invalid max-file negative",
+			logOpts: []string{"max-file=-3"},
+			wantErr: true,
+		},
+		{
+			desc:    "invalid max-file zero",
+			logOpts: []string{"max-file=0"},
+			wantErr: true,
+		},
+		{
+			desc:    "conflicting max-file with log-rotate=false",
+			logOpts: []string{"max-file=5", "log-rotate=false"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			sg := specgen.NewSpecGenerator("nothing", false)
+			sg.LogConfiguration = &specgen.LogConfig{}
+			err := FillOutSpecGen(sg, &entities.ContainerCreateOptions{
+				ImageVolume: "ignore",
+				LogOptions:  tt.logOpts,
+			}, []string{})
+			if tt.wantErr {
+				assert.Error(t, err, "expected an error for %q", tt.logOpts)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantVal, sg.LogConfiguration.Options["max-file"],
+				"max-file stored in LogConfiguration.Options")
+		})
+	}
+}
+
+func TestLogOptLogRotate(t *testing.T) {
+	tests := []struct {
+		desc    string
+		logOpts []string
+		wantVal string
+		wantErr bool
+	}{
+		{
+			desc:    "log-rotate true",
+			logOpts: []string{"log-rotate=true"},
+			wantVal: "true",
+		},
+		{
+			desc:    "log-rotate false",
+			logOpts: []string{"log-rotate=false"},
+			wantVal: "false",
+		},
+		{
+			desc:    "log-rotate 1",
+			logOpts: []string{"log-rotate=1"},
+			wantVal: "1",
+		},
+		{
+			desc:    "invalid log-rotate value",
+			logOpts: []string{"log-rotate=maybe"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			sg := specgen.NewSpecGenerator("nothing", false)
+			sg.LogConfiguration = &specgen.LogConfig{}
+			err := FillOutSpecGen(sg, &entities.ContainerCreateOptions{
+				ImageVolume: "ignore",
+				LogOptions:  tt.logOpts,
+			}, []string{})
+			if tt.wantErr {
+				assert.Error(t, err, "expected an error for %q", tt.logOpts)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantVal, sg.LogConfiguration.Options["log-rotate"],
+				"log-rotate stored in LogConfiguration.Options")
+		})
+	}
+}
