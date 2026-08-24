@@ -51,13 +51,14 @@ func init() {
 	_ = lsCommand.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteFormat(&config.Farm{}))
 
 	flags.BoolVarP(&lsOpts.Quiet, "quiet", "q", false, "Print farm names only")
+	flags.BoolP("noheading", "n", false, "Do not print headers")
 }
 
 func list(cmd *cobra.Command, args []string) error {
 	if lsOpts.Quiet && cmd.Flag("format").Changed {
 		return errors.New("quiet and format flags cannot be used together")
 	}
-
+	noHeading, _ := cmd.Flags().GetBool("noheading")
 	format := lsOpts.Format
 	if format == "" && len(args) > 0 {
 		format = "json"
@@ -96,7 +97,7 @@ func list(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if rpt.RenderHeaders {
+	if rpt.RenderHeaders && !noHeading {
 		err = rpt.Execute([]map[string]string{{
 			"Default":     "Default",
 			"Connections": "Connections",

@@ -25,6 +25,8 @@ Valid placeholders for the Go template listed below:
 | .Name           | Farm name                                                             |
 | .ReadWrite      | Indicates if this farm can be modified using the podman farm commands |
 
+@@option noheading
+
 #### **--quiet**, **-q**
 
 Print farm output in quiet mode. Only print the farm names.
@@ -38,6 +40,14 @@ Name        Connections  Default     ReadWrite
 farm1       [f38 f37]    false       true
 farm2       [f37]        true        true
 ```
+
+List all farms without showing the headers:
+```
+$ podman farm list --noheading
+farm1       [f38 f37]    false       true
+farm2       [f37]        true        true
+```
+
 Show farms in JSON format:
 ```
 $ podman farm list --format json

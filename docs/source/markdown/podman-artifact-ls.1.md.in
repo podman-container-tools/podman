@@ -30,6 +30,10 @@ Print results with a Go template.
 
 @@option noheading
 
+#### **--quiet**, **-q**
+
+Lists only the artifact digests.
+
 ## EXAMPLES
 
 List artifacts in the local store
@@ -74,6 +78,13 @@ $ podman artifact ls --format json"
         "Digest": "cd734b558ceb"
     }
 ]
+```
+
+List only artifact digests
+```
+$ podman artifact ls --quiet
+ab609fad386d
+cd734b558ceb
 ```
 
 

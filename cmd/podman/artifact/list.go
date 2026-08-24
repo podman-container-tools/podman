@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -36,6 +37,7 @@ type listFlagType struct {
 	format    string
 	noHeading bool
 	noTrunc   bool
+	quiet     bool
 }
 
 type artifactListOutput struct {
@@ -78,9 +80,14 @@ func init() {
 	_ = listCmd.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteFormat(&artifactListOutput{}))
 	flags.BoolVarP(&listFlag.noHeading, "noheading", "n", false, "Do not print column headings")
 	flags.BoolVar(&listFlag.noTrunc, "no-trunc", false, "Do not truncate output")
+	flags.BoolVarP(&listFlag.quiet, "quiet", "q", false, "Display only artifact digests")
 }
 
 func list(cmd *cobra.Command, _ []string) error {
+	if listFlag.quiet && cmd.Flags().Changed("format") {
+		return errors.New("quiet and format flags cannot be used together")
+	}
+
 	reports, err := registry.ImageEngine().ArtifactList(registry.Context(), entities.ArtifactListOptions{})
 	if err != nil {
 		return err
@@ -135,11 +142,22 @@ func list(cmd *cobra.Command, _ []string) error {
 		})
 	}
 
+	if listFlag.quiet {
+		quietOut(artifacts)
+		return nil
+	}
+
 	switch {
 	case report.IsJSON(listFlag.format):
 		return writeJSON(artifacts)
 	default:
 		return writeTemplate(cmd, artifacts)
+	}
+}
+
+func quietOut(listed []artifactListOutput) {
+	for _, a := range listed {
+		fmt.Println(a.Digest)
 	}
 }
 

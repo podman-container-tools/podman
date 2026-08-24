@@ -9,6 +9,19 @@ load helpers.bash
     run_podman farm ls
     assert "$output" =~ $FARMNAME
     assert "$output" =~ ${CONNECTION_NAME}
+
+    #Confirm name header present on farm list output
+    assert "$output" =~ "Name"
+
+    #Test the farm list output for no headers
+    run_podman farm ls --noheading
+    assert "$output" !~ "Name"
+    assert "$output" =~ "$FARMNAME"
+
+    #Test the farm list noheading shorthand
+    run_podman farm ls -n
+    assert "$output" !~ "Name"
+    assert "$output" =~ "$FARMNAME"
 }
 
 @test "farm - build on local only" {
