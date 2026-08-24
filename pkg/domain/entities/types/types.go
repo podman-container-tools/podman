@@ -64,6 +64,9 @@ type BuildOptions struct {
 	buildahDefine.BuildOptions
 	ContainerFiles []string
 	FarmBuildOptions
+	// ClientContextDirectory is the original context directory on the client before
+	// localapi translates ContextDirectory to a path available on the machine.
+	ClientContextDirectory string `json:"-"`
 	// Files that need to be closed after the build
 	// so need to pass this to the main build functions
 	LogFileToClose *os.File

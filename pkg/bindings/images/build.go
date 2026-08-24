@@ -1059,7 +1059,11 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 
 	// build secrets are usually absolute host path or relative to context dir on host
 	// in any case move secret to current context and ship the tar.
-	secretsForRemote, secretsTarContent, err := prepareSecrets(options.CommonBuildOpts.Secrets, options.ContextDirectory, tempManager)
+	secretsContextDir := options.ContextDirectory
+	if options.ClientContextDirectory != "" {
+		secretsContextDir = options.ClientContextDirectory
+	}
+	secretsForRemote, secretsTarContent, err := prepareSecrets(options.CommonBuildOpts.Secrets, secretsContextDir, tempManager)
 	if err != nil {
 		return nil, err
 	}
