@@ -3,9 +3,12 @@
 package events
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -171,4 +174,50 @@ func TestRenameLog(t *testing.T) {
 	require.Error(t, os.Remove(source.Name()))
 	require.NoError(t, os.Remove(target.Name()))
 	require.Equal(t, beforeRename, afterRename)
+}
+
+func TestEventLogFileReadUntilInPast(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "events.log")
+	eventer, err := newLogFileEventer(EventerOptions{
+		LogFilePath: logPath,
+	})
+	require.NoError(t, err)
+
+	// Write an event timestamped 2 minutes ago
+	eventTime := time.Now().Add(-2 * time.Minute)
+	ev := Event{
+		Type:   Container,
+		Status: Start,
+		Time:   eventTime,
+		ID:     "1234567890ab",
+		Name:   "test-container",
+	}
+	err = eventer.Write(ev)
+	require.NoError(t, err)
+
+	// Read events with --until 1m in the past and --stream=false
+	eventChan := make(chan ReadResult)
+	opts := ReadOptions{
+		EventChannel: eventChan,
+		FromStart:    true,
+		Stream:       false,
+		Until:        "1m", // 1 minute in the past relative to now
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = eventer.Read(ctx, opts)
+	require.NoError(t, err)
+
+	var readEvents []Event
+	for res := range eventChan {
+		require.NoError(t, res.Error)
+		if res.Event != nil {
+			readEvents = append(readEvents, *res.Event)
+		}
+	}
+
+	require.Len(t, readEvents, 1)
+	require.Equal(t, "test-container", readEvents[0].Name)
 }
