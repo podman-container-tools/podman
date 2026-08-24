@@ -22,7 +22,6 @@ const (
 
 type decompressor interface {
 	compressedFileSize() int64
-	compressedFileMode() os.FileMode
 	compressedFileReader() (io.ReadCloser, error)
 	decompress(w io.WriteSeeker, r io.Reader) error
 	close()
@@ -90,7 +89,7 @@ func runDecompression(d decompressor, decompressedFilePath string) (retErr error
 
 	var decompressedFileWriter *os.File
 
-	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, d.compressedFileMode()); err != nil {
+	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, 0o600); err != nil {
 		logrus.Errorf("Unable to open destination file %s for writing: %q", decompressedFilePath, err)
 		return err
 	}

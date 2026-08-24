@@ -2,7 +2,6 @@ package compression
 
 import (
 	"io"
-	"io/fs"
 	"os"
 	"runtime"
 
@@ -29,10 +28,6 @@ func newGenericDecompressor(compressedFilePath string) (*genericDecompressor, er
 
 func (d *genericDecompressor) compressedFileSize() int64 {
 	return d.compressedFileInfo.Size()
-}
-
-func (d *genericDecompressor) compressedFileMode() fs.FileMode {
-	return d.compressedFileInfo.Mode()
 }
 
 func (d *genericDecompressor) compressedFileReader() (io.ReadCloser, error) {
