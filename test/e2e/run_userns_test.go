@@ -177,6 +177,27 @@ var _ = Describe("Podman UserNS support", func() {
 		Expect(session.OutputToString()).To(Equal("0"))
 	})
 
+	It("podman --userns=keep-id overrides image USER", func() {
+		image := "user-override-keep-id"
+		podmanTest.BuildImage(podmanTest.TempDir, image, `FROM `+ALPINE+`
+RUN adduser -D -u 1001 appuser
+USER 1001`, ALPINE)
+
+		session := podmanTest.Podman([]string{"run", "--rm", "--userns=keep-id", image, "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		uid := os.Getuid()
+		// If running as root, keep-id means uid=0. If rootless, uid=caller's uid.
+		Expect(session.OutputToString()).To(Equal(fmt.Sprintf("%d", uid)))
+
+		// But if explicitly overridden, it must use the explicit user.
+		session = podmanTest.Podman([]string{"run", "--rm", "--userns=keep-id", "--user", "1001", image, "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal("1001"))
+	})
+
 	It("podman run --userns=keep-id can add users", func() {
 		userName := os.Getenv("USER")
 		if userName == "" {

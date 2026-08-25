@@ -321,7 +321,11 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	}
 
 	if len(s.User) == 0 && inspectData != nil {
-		s.User = inspectData.Config.User
+		// Only inherit the image user if we aren't using keep-id.
+		// keep-id overrides the image user to the current host user.
+		if s.UserNS.NSMode != specgen.KeepID {
+			s.User = inspectData.Config.User
+		}
 	}
 	// Unless already set via the CLI, check if we need to disable process
 	// labels or set the defaults.
