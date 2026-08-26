@@ -51,7 +51,7 @@ func (a psSortedNames) Less(i, j int) bool {
 type psSortedPod struct{ SortListContainers }
 
 func (a psSortedPod) Less(i, j int) bool {
-	return a.SortListContainers[i].Pod < a.SortListContainers[j].Pod
+	return a.SortListContainers[i].PodName < a.SortListContainers[j].PodName
 }
 
 type psSortedRunningFor struct{ SortListContainers }
@@ -102,7 +102,7 @@ func SortPsOutput(sortBy string, psOutput SortListContainers) (SortListContainer
 	case "pod":
 		sort.Sort(psSortedPod{psOutput})
 	default:
-		return nil, errors.New("invalid option for --sort, options are: command, created, id, image, names, runningfor, size, or status")
+		return nil, errors.New("invalid option for --sort, options are: command, created, id, image, names, pod, runningfor, size, or status")
 	}
 	return psOutput, nil
 }

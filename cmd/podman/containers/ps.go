@@ -101,7 +101,7 @@ func listFlagSet(cmd *cobra.Command) {
 	flags.UintVarP(&listOpts.Watch, watchFlagName, "w", 0, "Watch the ps output on an interval in seconds")
 	_ = cmd.RegisterFlagCompletionFunc(watchFlagName, completion.AutocompleteNone)
 
-	sort := validate.Value(&listOpts.Sort, "command", "created", "id", "image", "names", "runningfor", "size", "status")
+	sort := validate.Value(&listOpts.Sort, "command", "created", "id", "image", "names", "pod", "runningfor", "size", "status")
 	sortFlagName := "sort"
 	flags.Var(sort, sortFlagName, "Sort output by: "+sort.Choices())
 	_ = cmd.RegisterFlagCompletionFunc(sortFlagName, common.AutocompletePsSort)
