@@ -82,4 +82,47 @@ t POST containers/${CTR}/exec $TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
 eid=$(jq -r '.Id' <<<"$output")
 t POST exec/$eid/start 200 $'\001\012'1042:1043
 
+# Test PUT /archive?path=/ into container with volume mount (#21861)
+VOLNAME="ArchiveVol$(random_string 5)"
+CTR_VOL="ArchiveVolCtr$(random_string 5)"
+podman volume create ${VOLNAME} &>/dev/null
+podman create --name ${CTR_VOL} -v ${VOLNAME}:/volmount "${IMAGE}" top &>/dev/null
+
+VOL_TMPD=$(mktemp -d podman-apiv2-test.volarchive.XXXXXXXX)
+mkdir -p ${VOL_TMPD}/volmount/subdir
+echo "volcontent" > ${VOL_TMPD}/volmount/volfile.txt
+echo "subcontent" > ${VOL_TMPD}/volmount/subdir/subfile.txt
+ln -s volfile.txt ${VOL_TMPD}/volmount/volsymlink
+VOL_TAR="${VOL_TMPD}/vol.tar"
+tar -C ${VOL_TMPD} -cvf ${VOL_TAR} volmount &>/dev/null
+
+t PUT "/containers/${CTR_VOL}/archive?path=%2F" ${VOL_TAR} 200 ''
+
+# Start container and verify file, directory, and symlink content
+podman start ${CTR_VOL} &>/dev/null
+cat >$VOL_TMPD/exec.json <<EOF
+{ "AttachStdout":true,"Cmd":["cat","/volmount/volfile.txt"]}
+EOF
+t POST containers/${CTR_VOL}/exec $VOL_TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t POST exec/$eid/start 200 $'\001\012'volcontent
+
+cat >$VOL_TMPD/exec.json <<EOF
+{ "AttachStdout":true,"Cmd":["cat","/volmount/subdir/subfile.txt"]}
+EOF
+t POST containers/${CTR_VOL}/exec $VOL_TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t POST exec/$eid/start 200 $'\001\012'subcontent
+
+cat >$VOL_TMPD/exec.json <<EOF
+{ "AttachStdout":true,"Cmd":["cat","/volmount/volsymlink"]}
+EOF
+t POST containers/${CTR_VOL}/exec $VOL_TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t POST exec/$eid/start 200 $'\001\012'volcontent
+
+podman rm -f ${CTR_VOL} &>/dev/null
+podman volume rm ${VOLNAME} &>/dev/null
+rm -rf ${VOL_TMPD} &>/dev/null
+
 cleanUpArchiveTest

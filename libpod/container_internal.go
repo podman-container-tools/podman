@@ -1947,6 +1947,11 @@ func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string)
 			return nil, fmt.Errorf("reading contents of source directory for copy up into volume %s: %w", vol.Name(), err)
 		}
 		if len(srcContents) == 0 {
+			if vol.state.NeedsChown {
+				if err := c.fixVolumePermissionsUnlocked(v, vol); err != nil {
+					logrus.Errorf("Unable to fix volume %s permissions: %v", vol.Name(), err)
+				}
+			}
 			return vol, nil
 		}
 

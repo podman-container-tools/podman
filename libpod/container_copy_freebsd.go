@@ -13,3 +13,8 @@ func (c *Container) joinMountAndExec(f func() error) error {
 func (c *Container) resolveCopyTarget(mountPoint string, containerPath string) (string, string, *Volume, error) {
 	return c.resolvePath(mountPoint, containerPath)
 }
+
+// mountContainerVolumesAndMounts is a no-op on FreeBSD.
+func (c *Container) mountContainerVolumesAndMounts(_ string) ([]func(), error) {
+	return nil, nil
+}
