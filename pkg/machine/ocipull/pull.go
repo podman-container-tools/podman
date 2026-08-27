@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah/pkg/parse"
@@ -48,6 +49,10 @@ var noSignaturePolicy string = `{"default":[{"type":"insecureAcceptAnything"}]}`
 
 // pull `imageInput` from a container registry to `sourcePath`.
 func pull(ctx context.Context, imageInput types.ImageReference, localDestPath *define.VMFile, options *pullOptions) error {
+	if err := os.MkdirAll(filepath.Dir(localDestPath.GetPath()), 0o755); err != nil {
+		return err
+	}
+
 	destRef, err := layout.ParseReference(localDestPath.GetPath())
 	if err != nil {
 		return err
