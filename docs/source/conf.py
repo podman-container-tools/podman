@@ -5,7 +5,6 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
-
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -37,16 +36,12 @@ out, err = p.communicate()
 if p.returncode != 0:
     raise Exception("failed to run markdown-preprocess", out, err)
 
-
 # -- Project information -----------------------------------------------------
-
 project = "Podman"
 copyright = "2019, team"
 author = "team"
 
-
 # -- General configuration ---------------------------------------------------
-
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
@@ -68,7 +63,6 @@ smartquotes_action = "qe"
 locale_dirs = ["locale/"]
 
 # -- Options for HTML output -------------------------------------------------
-
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
@@ -78,13 +72,11 @@ html_theme = "alabaster"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
-
 html_css_files = [
     "custom.css",
 ]
 
 # -- Extension configuration -------------------------------------------------
-
 # IMPORTANT: explicitly unset the extensions, by default dollarmath is enabled.
 # We use the dollar sign as text and do not want it to be interpreted as math expression.
 myst_enable_extensions = []
@@ -103,5 +95,27 @@ def convert_markdown_title(app, docname, source):
         # after the user's last visit.
         source[0] = re.sub(r"^% (.*)\s(\d)", r"```{title} \g<1>\n```", source[0])
 
+
+def convert_markdown_links(app, docname, source):
+    # Process markdown files only
+    docpath = app.env.doc2path(docname)
+    if not docpath.endswith(".md"):
+        return
+    markdown_dir = os.path.dirname(docpath)
+    # Turn plain-text references like "podman-foo(1)" into markdown links,
+    # but only when a matching man page file actually exists.
+    #
+    # Skip anything already wrapped in a markdown link, e.g.
+    # "[podman-foo(1)](podman-foo.1.md)", so we don't double-wrap it.
+    def replace(match):
+        name, section = match.group(1), match.group(2)
+        filename = f"{name}.{section}.md"
+        if os.path.exists(os.path.join(markdown_dir, filename)):
+            return f"[{name}({section})]({filename})"
+        return match.group(0)
+    source[0] = re.sub(r"(?<!\[)(podman-[a-z0-9.-]+)\((\d)\)(?!\]\()", replace, source[0])
+
+
 def setup(app):
     app.connect("source-read", convert_markdown_title)
+    app.connect("source-read", convert_markdown_links)
