@@ -73,10 +73,13 @@ type netavarkNetwork struct {
 	rootlessNetns *rootlessnetns.Netns
 
 	// rootlessPortForwarder is the value of config.RootlessPortForwarder from
-	// containers.conf. When set to config.RootlessPortForwarderPasta, HostIP
-	// is stripped from port mappings before passing to netavark because pasta's
-	// splice changes the destination IP.
+	// containers.conf. When set to config.RootlessPortForwarderPasta, pesto
+	// handles port forwarding directly and netavark DNAT rules are skipped.
 	rootlessPortForwarder string
+
+	// config is the containers.conf config, needed for FindHelperBinary
+	// when invoking pesto for dynamic port forwarding.
+	config *config.Config
 }
 
 type InitConfig struct {
@@ -167,6 +170,7 @@ func NewNetworkInterface(conf *InitConfig) (types.ContainerNetwork, error) {
 		syslog:                conf.Syslog,
 		rootlessNetns:         netns,
 		rootlessPortForwarder: conf.Config.Network.RootlessPortForwarder,
+		config:                conf.Config,
 	}
 
 	return n, nil

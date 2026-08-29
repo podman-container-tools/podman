@@ -214,7 +214,7 @@ func getDevices(path string) ([]spec.LinuxDevice, error) {
 
 		device, err := DeviceFromPath(filepath.Join(path, f.Name()))
 		if err != nil {
-			if err == errNotADevice {
+			if errors.Is(err, errNotADevice) {
 				continue
 			}
 			if errors.Is(err, fs.ErrNotExist) {

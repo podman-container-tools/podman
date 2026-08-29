@@ -1215,7 +1215,7 @@ func ParseRestartPolicy(policy string) (string, uint, error) {
 	case 1:
 		// No retries specified
 		policyType = splitRestart[0]
-		if strings.ToLower(splitRestart[0]) == "never" {
+		if strings.EqualFold(splitRestart[0], "never") {
 			policyType = define.RestartPolicyNo
 		}
 	case 2:

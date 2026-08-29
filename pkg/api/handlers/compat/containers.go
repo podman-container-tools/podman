@@ -403,13 +403,13 @@ func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handl
 			for _, b := range bindings {
 				hostPortInt, err := strconv.Atoi(b.HostPort)
 				if err != nil {
-					return nil, fmt.Errorf("invalid HostPort: %v", err)
+					return nil, fmt.Errorf("invalid HostPort: %w", err)
 				}
 				addr := netip.Addr{}
 				if b.HostIP != "" {
 					addr, err = netip.ParseAddr(b.HostIP)
 					if err != nil {
-						return nil, fmt.Errorf("invalid HostIP: %v", err)
+						return nil, fmt.Errorf("invalid HostIP: %w", err)
 					}
 				}
 
@@ -634,11 +634,12 @@ func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageI
 	var healthcheck *container.HealthConfig
 	if inspect.Config.Healthcheck != nil {
 		healthcheck = &container.HealthConfig{
-			Test:        inspect.Config.Healthcheck.Test,
-			Interval:    inspect.Config.Healthcheck.Interval,
-			Timeout:     inspect.Config.Healthcheck.Timeout,
-			StartPeriod: inspect.Config.Healthcheck.StartPeriod,
-			Retries:     inspect.Config.Healthcheck.Retries,
+			Test:          inspect.Config.Healthcheck.Test,
+			Interval:      inspect.Config.Healthcheck.Interval,
+			Timeout:       inspect.Config.Healthcheck.Timeout,
+			StartPeriod:   inspect.Config.Healthcheck.StartPeriod,
+			StartInterval: inspect.Config.Healthcheck.StartInterval,
+			Retries:       inspect.Config.Healthcheck.Retries,
 		}
 	}
 

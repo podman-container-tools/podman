@@ -552,12 +552,13 @@ EOCONF
 
     run_podman inspect $cid --format "{{(index .NetworkSettings.Networks \"$netname\").IPAddress}}
 {{(index .NetworkSettings.Networks \"$netname\").MacAddress}}
-{{(index .NetworkSettings.Networks \"$netname\").Aliases}}"
+{{(index .NetworkSettings.Networks \"$netname\").DNSNames}}"
     ip="${lines[0]}"
     mac="${lines[1]}"
 
-    # check network alias for container short id
-    is "${lines[2]}" "[${cid:0:12} $hostname]" "short container id and hostname in network aliases"
+    # check DNSNames for container short id and hostname
+    assert "${lines[2]}" =~ "${cid:0:12}" "short container id in DNSNames"
+    assert "${lines[2]}" =~ "$hostname" "hostname in DNSNames"
 
     # check /etc/hosts for our entry
     run_podman exec $cid cat /etc/hosts
@@ -615,9 +616,10 @@ EOCONF
     run_podman network connect $netname2 $cid
     is "$output" "" "Output should be empty (no errors)"
 
-    # check network2 alias for container short id
-    run_podman inspect $cid --format "{{(index .NetworkSettings.Networks \"$netname2\").Aliases}}"
-    is "$output" "[${cid:0:12} $hostname]" "short container id and hostname in network2 aliases"
+    # check network2 DNSNames for container short id and hostname
+    run_podman inspect $cid --format "{{(index .NetworkSettings.Networks \"$netname2\").DNSNames}}"
+    assert "$output" =~ "${cid:0:12}" "short container id in network2 DNSNames"
+    assert "$output" =~ "$hostname" "hostname in network2 DNSNames"
 
     # curl should work
     run curl --max-time 3 -s -S $SERVER/index.txt
@@ -1255,6 +1257,56 @@ EOF
     assert "$output" =~ "ddress already in use" "explicit IPv6 wildcard should conflict with dual-stack"
 
     run_podman rm -f -t0 $cid1
+}
+
+# bats test_tags=ci:parallel
+@test "podman run - verify dual-stack port binds" {
+    myport=$(random_free_port)
+    cname="c1-$(safename)"
+
+    netmodes=("bridge")
+    if is_rootless; then
+        netmodes+=("pasta")
+    fi
+
+    for netmode in "${netmodes[@]}"; do
+        run_podman run -d --name $cname -p $myport:8080 $IMAGE sleep inf
+
+        run -0 ss -tnlH state all sport = $myport
+        assert "$output" =~ "\*:$myport"
+
+        run_podman rm -f -t0 $cname
+
+        # Now again but with explcilt "0.0.0.0" and "[::]" binds.
+        run_podman run -d --name $cname -p "0.0.0.0:$myport:8080" -p "[::]:$myport:8080" $IMAGE sleep inf
+
+        run -0 ss -tnlH state all sport = $myport
+        assert "$output" =~ "0\.0\.0\.0:$myport"
+        assert "$output" =~ "\[::\]:$myport"
+
+        run_podman rm -f -t0 $cname
+    done
+}
+
+# bats test_tags=ci:parallel
+@test "podman run - test force_port_listen containers.conf option" {
+    skip_if_rootless "force_port_listen is only used as root"
+    skip_if_remote "force_port_listen would need to be set on the server side"
+    myport=$(random_free_port)
+    cname="c1-$(safename)"
+
+    containersconf=$PODMAN_TMPDIR/containers.conf
+    cat >$containersconf <<EOF
+[engine]
+force_port_listen = true
+EOF
+
+    CONTAINERS_CONF_OVERRIDE=$containersconf run_podman run -d --name $cname -p $myport:8080 $IMAGE sleep inf
+
+    run -0 ss -Hlpn sport = $myport
+    assert "$output" =~ "tcp[[:blank:]]LISTEN.*\*:$myport" "tcp port should be in LISTEN state"
+
+    run_podman rm -f -t0 $cname
 }
 
 # vim: filetype=sh

@@ -1,25 +1,9 @@
 package provider
 
 import (
-	"go.podman.io/podman/v6/pkg/machine/define"
 	"go.podman.io/podman/v6/pkg/machine/env"
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
 )
-
-func InstalledProviders() ([]define.VMType, error) {
-	installedTypes := []define.VMType{}
-	providers := GetAll()
-	for _, p := range providers {
-		installed, err := IsInstalled(p.VMType())
-		if err != nil {
-			return nil, err
-		}
-		if installed {
-			installedTypes = append(installedTypes, p.VMType())
-		}
-	}
-	return installedTypes, nil
-}
 
 // GetAllMachinesAndRootfulness collects all podman machine configs and returns
 // a map in the format: { machineName: isRootful }

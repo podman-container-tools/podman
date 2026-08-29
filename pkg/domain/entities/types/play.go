@@ -29,6 +29,9 @@ type PlayKubeReport struct {
 	Secrets []PlaySecret
 	// ServiceContainerID - ID of the service container if one is created
 	ServiceContainerID string
+	// ValidationWarnings - non-fatal messages produced by --validate=warn, for
+	// example unrecognized YAML fields or unsupported kinds.
+	ValidationWarnings []string
 	// If set, exit with the specified exit code.
 	ExitCode *int32
 }

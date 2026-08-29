@@ -54,11 +54,6 @@ func GetAll() []vmconfigs.VMProvider {
 	}
 }
 
-// SupportedProviders returns the providers that are supported on the host operating system
-func SupportedProviders() []define.VMType {
-	return []define.VMType{define.HyperVVirt, define.WSLVirt}
-}
-
 func IsInstalled(provider define.VMType) (bool, error) {
 	switch provider {
 	case define.WSLVirt:

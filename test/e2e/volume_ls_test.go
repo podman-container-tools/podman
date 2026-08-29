@@ -21,7 +21,7 @@ var _ = Describe("Podman volume ls", func() {
 		empty := podmanTest.PodmanExitCleanly("volume", "ls")
 		Expect(empty.OutputToString()).To(ContainSubstring("DRIVER"))
 		Expect(empty.OutputToString()).To(ContainSubstring("VOLUME NAME"))
-		Expect(empty.ErrorToStringArray()).To(HaveLen(1))
+		Expect(empty.ErrorToStringArray()).To(BeEmpty())
 
 		session := podmanTest.Podman([]string{"volume", "create", "myvol"})
 		session.WaitWithDefaultTimeout()

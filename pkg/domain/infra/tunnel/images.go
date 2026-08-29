@@ -204,8 +204,8 @@ func (ir *ImageEngine) Inspect(_ context.Context, namesOrIDs []string, opts enti
 	for _, i := range namesOrIDs {
 		r, err := images.GetImage(ir.ClientCtx, i, options)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, nil, err
 			}
 			if errModel.ResponseCode == 404 {

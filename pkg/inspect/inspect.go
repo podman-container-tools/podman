@@ -37,6 +37,8 @@ type ImageData struct {
 }
 
 // RootFS holds the root fs information of an image.
+//
+// swagger:model InspectRootFS
 type RootFS struct {
 	Type   string          `json:"Type"`
 	Layers []digest.Digest `json:"Layers"`

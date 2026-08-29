@@ -1707,7 +1707,7 @@ VOLUME %s`, ALPINE, volPath, volPath)
 		}
 
 		scopeOptions := PodmanExecOptions{
-			Wrapper: []string{"systemd-run", "--scope"},
+			Wrapper: []string{"systemd-run", "--scope", "--property=Delegate=yes"},
 		}
 		if isRootless() {
 			scopeOptions.Wrapper = append(scopeOptions.Wrapper, "--user")
@@ -2346,9 +2346,7 @@ WORKDIR /madethis`, BB)
 		mount := podmanTest.Podman([]string{"exec", ctrName, "mount"})
 		mount.WaitWithDefaultTimeout()
 		Expect(mount).Should(ExitCleanly())
-		t, strings := mount.GrepString("tmpfs on /run/lock")
-		Expect(t).To(BeTrue(), "found /run/lock")
-		Expect(strings[0]).Should(ContainSubstring("size=10240k"))
+		Expect(mount.OutputToStringArray()).To(ContainElement(MatchRegexp(`tmpfs on /run/lock.*size=10240k`)))
 	})
 
 	It("podman run does not preserve image annotations", func() {

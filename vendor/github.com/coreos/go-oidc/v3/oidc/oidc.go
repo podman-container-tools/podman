@@ -1,4 +1,3 @@
-// Package oidc implements OpenID Connect client logic for the golang.org/x/oauth2 package.
 package oidc
 
 import (
@@ -23,6 +22,26 @@ import (
 const (
 	// ScopeOpenID is the mandatory scope for all OpenID Connect OAuth2 requests.
 	ScopeOpenID = "openid"
+
+	// ScopeProfile can be used to request information about the user's profile,
+	// such as "name", "picture", etc.
+	//
+	// The exact set of claims supported by identity providers differs widely,
+	// though "name" and "picture" are commonly returned.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
+	ScopeProfile = "profile"
+
+	// ScopeEmail can be used to request the user's email address through the
+	// "email" and "email_verified" claims.
+	//
+	// What it means to verify an email isn't well defined. Clients can
+	// generally throw out emails when the "emvail_verified" claim is false, but
+	// should consult identity provider specific docs if attempting to ensure
+	// that the user controls the returned email address.
+	//
+	// See: https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
+	ScopeEmail = "email"
 
 	// ScopeOfflineAccess is an optional scope defined by OpenID Connect for requesting
 	// OAuth2 refresh tokens.
@@ -92,7 +111,24 @@ func doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	return client.Do(req.WithContext(ctx))
 }
 
-// Provider represents an OpenID Connect server's configuration.
+// Provider represents an OpenID Connect server's configuration, fetched from
+// the discovery document.
+//
+// To access fields in the discovery document that aren't exposed directly
+// through this package's API, use the [Provider.Claims] method. For example, to
+// access the registration or end session endpoints:
+//
+//	p, err := oidc.NewProvider(ctx, "https://issuer.example.com")
+//	if err != nil {
+//		// ...
+//	}
+//	var metadata struct {
+//		EndSessionEndpoint   string `json:"end_session_endpoint"`
+//		RegistrationEndpoint string `json:"registration_endpoint"`
+//	}
+//	if err := p.Claims(&metadata); err != nil {
+//		// ...
+//	}
 type Provider struct {
 	issuer        string
 	authURL       string
@@ -213,6 +249,8 @@ type ProviderConfig struct {
 //
 // The provided context is only used for [http.Client] configuration through
 // [ClientContext], not cancelation.
+//
+// For providers that implement discovery, use [NewProvider] instead.
 func (p *ProviderConfig) NewProvider(ctx context.Context) *Provider {
 	return &Provider{
 		issuer:        p.IssuerURL,
@@ -226,12 +264,36 @@ func (p *ProviderConfig) NewProvider(ctx context.Context) *Provider {
 	}
 }
 
+// IssuerMismatchError is returned by [NewProvider] when the "iss" value
+// reported by the upstream is different than the expected value.
+//
+// Issuer mismatches can occur due to trailing slashes ("https://example.com"
+// vs. "https://example.com/") or represent significant misconfiguration for
+// multi-tenant issuers.
+//
+// Issuers must match exactly as they are also used to validate ID Tokens.
+//
+// https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+type IssuerMismatchError struct {
+	// The value provided to this package. The expected value.
+	Provided string
+	// The value advertised by the discovery document.
+	Discovered string
+}
+
+func (e *IssuerMismatchError) Error() string {
+	return fmt.Sprintf("oidc: issuer URL provided to client (%q) did not match the issuer URL returned by provider (%q)", e.Provided, e.Discovered)
+}
+
 // NewProvider uses the OpenID Connect discovery mechanism to construct a Provider.
 // The issuer is the URL identifier for the service. For example: "https://accounts.google.com"
 // or "https://login.salesforce.com".
 //
+// If the "iss" value returned in the discovery document doesn't match the value
+// provided here, [IssuerMismatchError] is returned.
+//
 // OpenID Connect providers that don't implement discovery or host the discovery
-// document at a non-spec complaint path (such as requiring a URL parameter),
+// document at a non-spec compliant path (such as requiring a URL parameter),
 // should use [ProviderConfig] instead.
 //
 // See: https://openid.net/specs/openid-connect-discovery-1_0.html
@@ -267,7 +329,10 @@ func NewProvider(ctx context.Context, issuer string) (*Provider, error) {
 		issuerURL = issuer
 	}
 	if p.Issuer != issuerURL && !skipIssuerValidation {
-		return nil, fmt.Errorf("oidc: issuer URL provided to client (%q) did not match the issuer URL returned by provider (%q)", issuer, p.Issuer)
+		return nil, &IssuerMismatchError{
+			Provided:   issuerURL,
+			Discovered: p.Issuer,
+		}
 	}
 	var algs []string
 	for _, a := range p.Algorithms {
@@ -301,7 +366,7 @@ func NewProvider(ctx context.Context, issuer string) (*Provider, error) {
 //
 // For a list of fields defined by the OpenID Connect spec see:
 // https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
-func (p *Provider) Claims(v interface{}) error {
+func (p *Provider) Claims(v any) error {
 	if p.rawClaims == nil {
 		return errors.New("oidc: claims not set")
 	}
@@ -340,7 +405,7 @@ type userInfoRaw struct {
 }
 
 // Claims unmarshals the raw JSON object claims into the provided object.
-func (u *UserInfo) Claims(v interface{}) error {
+func (u *UserInfo) Claims(v any) error {
 	if u.claims == nil {
 		return errors.New("oidc: claims not set")
 	}
@@ -348,6 +413,44 @@ func (u *UserInfo) Claims(v interface{}) error {
 }
 
 // UserInfo uses the token source to query the provider's user info endpoint.
+//
+// It's fewer round trips and better supported to validate the ID Token with
+// [Provider.Verifier], rather than using the UserInfo endpoint. The ID Token
+// contains all information [UserInfo] provides:
+//
+//	p, err := oidc.NewProvider(ctx, "https://issuer.example.com")
+//	if err != nil {
+//		// ...
+//	}
+//	config := &oidc.Config{
+//		ClientID: clientID,
+//	}
+//	v := p.Verifier(config)
+//	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+//		oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
+//		if err != nil {
+//			// ...
+//		}
+//		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+//		if !ok {
+//			// ...
+//		}
+//		idToken, err := verifier.Verify(ctx, rawIDToken)
+//		if err != nil {
+//			// ...
+//		}
+//		// https://openid.net/specs/openid-connect-core-1_0.html#Claims
+//		var claims struct {
+//			Email         string `json:"email"`
+//			EmailVerified bool   `json:"email_verified"`
+//			Name          string `json:"name"`
+//			Picture       string `json:"picture"`
+//		}
+//		if err := idToken.Claims(&claims); err != nil {
+//			// ...
+//		}
+//		// Use claims...
+//	})
 func (p *Provider) UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*UserInfo, error) {
 	if p.userInfoURL == "" {
 		return nil, errors.New("oidc: user info endpoint is not supported by this provider")
@@ -425,7 +528,7 @@ type IDToken struct {
 	// A unique string which identifies the end user.
 	Subject string
 
-	// Expiry of the token. Ths package will not process tokens that have
+	// Expiry of the token. This package will not process tokens that have
 	// expired unless that validation is explicitly turned off.
 	Expiry time.Time
 	// When the token was issued by the provider.
@@ -433,7 +536,7 @@ type IDToken struct {
 
 	// Initial nonce provided during the authentication redirect.
 	//
-	// This package does NOT provided verification on the value of this field
+	// This package does NOT provide verification on the value of this field
 	// and it's the user's responsibility to ensure it contains a valid value.
 	Nonce string
 
@@ -465,15 +568,15 @@ type IDToken struct {
 //	if err := idToken.Claims(&claims); err != nil {
 //		// handle error
 //	}
-func (i *IDToken) Claims(v interface{}) error {
+func (i *IDToken) Claims(v any) error {
 	if i.claims == nil {
 		return errors.New("oidc: claims not set")
 	}
 	return json.Unmarshal(i.claims, v)
 }
 
-// VerifyAccessToken verifies that the hash of the access token that corresponds to the iD token
-// matches the hash in the id token. It returns an error if the hashes  don't match.
+// VerifyAccessToken verifies that the hash of the access token that corresponds to the ID token
+// matches the hash in the ID token. It returns an error if the hashes don't match.
 // It is the caller's responsibility to ensure that the optional access token hash is present for the ID token
 // before calling this method. See https://openid.net/specs/openid-connect-core-1_0.html#CodeIDToken
 func (i *IDToken) VerifyAccessToken(accessToken string) error {
@@ -570,7 +673,7 @@ func (j *jsonTime) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func unmarshalResp(r *http.Response, body []byte, v interface{}) error {
+func unmarshalResp(r *http.Response, body []byte, v any) error {
 	err := json.Unmarshal(body, &v)
 	if err == nil {
 		return nil

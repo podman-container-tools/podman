@@ -99,24 +99,24 @@ func retrieveOperation{{pascalize $operationGroup }}{{ pascalize $operation }}{{
 	retAdded := false
 	{{- $flagStr := .Name }}
 		{{- /*only set the param if user set the flag*/}}
-	if cmd.Flags().Changed("{{ $flagStr }}") {
+	if cmd.Flags().Changed({{ printf "%q" $flagStr }}) {
 	{{- if .IsPrimitive }}
 		{{ template "primitiveretriever" . }}
 	{{- else if .IsArray }}
 		{{ template "arrayretriever" . }}
 	{{- else if .IsMap }}
-		// warning: {{ .Name }} map type {{.GoType}} is not supported by go-swagger cli yet
+		// warning: {{ escapeDoubleQuoted .Name }} map type {{.GoType}} is not supported by go-swagger cli yet
 	{{- else if and .IsBodyParam .Schema .IsComplexObject (not .IsStream) }}
 		{{- /*schema payload can be passed in cmd as a string and here is unmarshalled to model struct and attached in params*/}}
-		// Read {{ $flagStr }} string from cmd and unmarshal
-		{{ flagValueVar .Name }}Str, err := cmd.Flags().GetString("{{ $flagStr }}")
+		// Read {{ escapeDoubleQuoted $flagStr }} string from cmd and unmarshal
+		{{ flagValueVar .Name }}Str, err := cmd.Flags().GetString({{ printf "%q" $flagStr }})
 		if err != nil {
 			return err, false
 		}
 		{{/*Note anonymous body schema is not pointer*/}}
 		{{ flagValueVar .Name }} := {{if containsPkgStr .GoType}}{{ .GoType }}{{else}}{{ .Pkg }}.{{.GoType}}{{ end }}{}
 		if err := json.Unmarshal([]byte({{ flagValueVar .Name }}Str), &{{ flagValueVar .Name }}); err!= nil{
-			return fmt.Errorf("cannot unmarshal {{ $flagStr }} string in {{.GoType}}: %w", err), false
+			return fmt.Errorf("cannot unmarshal {{ escapeDoubleQuoted $flagStr }} string in {{.GoType}}: %w", err), false
 		}
 		m.{{ .ID }} = {{- if .IsNullable }}&{{- end }}{{ flagValueVar .Name }}
 	{{- else }}

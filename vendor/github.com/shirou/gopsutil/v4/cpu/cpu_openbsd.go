@@ -62,6 +62,9 @@ func TimesWithContext(_ context.Context, percpu bool) ([]TimesStat, error) {
 		if err != nil {
 			return ret, err
 		}
+		if len(buf) < int(unsafe.Sizeof(cpuTimes{})) {
+			return ret, fmt.Errorf("unexpected size: kern.cp_time, %d", len(buf))
+		}
 		times := (*cpuTimes)(unsafe.Pointer(&buf[0]))
 		ret = append(ret, TimesStat{
 			CPU:    "cpu-total",
@@ -85,6 +88,9 @@ func TimesWithContext(_ context.Context, percpu bool) ([]TimesStat, error) {
 		buf, _, err := common.CallSyscall(mib)
 		if err != nil {
 			return ret, err
+		}
+		if len(buf) < int(unsafe.Sizeof(cpuStats{})) {
+			continue
 		}
 
 		stats := (*cpuStats)(unsafe.Pointer(&buf[0]))

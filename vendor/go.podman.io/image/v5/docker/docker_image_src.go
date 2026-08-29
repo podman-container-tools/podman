@@ -8,15 +8,20 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/docker/distribution/registry/api/errcode"
+	v2 "github.com/docker/distribution/registry/api/v2"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
@@ -48,6 +53,31 @@ type dockerImageSource struct {
 	// State
 	cachedManifest         []byte // nil if not loaded yet
 	cachedManifestMIMEType string // Only valid if cachedManifest != nil
+
+	// Mirror fallback: when a blob fetch fails with a fallback-worthy error,
+	// try remaining pull sources before giving up. Protected by mirrorMu.
+	mirrorMu          sync.Mutex
+	mirrorOverride    *mirrorSource                // If non-nil, this is the mirror and physicalRef for the override client
+	prevOverrides     []*dockerClient              // mirror clients replaced by a newer mirrorOverride; kept open because other goroutines may still be reading blobs through them, closed in Close()
+	remainingSources  []sysregistriesv2.PullSource // later pull sources not yet tried, consumed front-to-back during fallback; nil when selected source is already the original source.
+	fallbackSys       *types.SystemContext
+	fallbackRegConfig *registryConfiguration
+}
+
+type mirrorSource struct {
+	client *dockerClient
+	ref    dockerReference
+}
+
+type pullEndpoint struct {
+	client      *dockerClient
+	ref         dockerReference
+	endpointSys *types.SystemContext
+}
+
+type sourceAttempt struct {
+	ref reference.Named
+	err error
 }
 
 // newImageSource creates a new ImageSource for the specified image reference.
@@ -86,12 +116,8 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref dockerRef
 	if err != nil {
 		return nil, err
 	}
-	type attempt struct {
-		ref reference.Named
-		err error
-	}
-	attempts := []attempt{}
-	for _, pullSource := range pullSources {
+	attempts := []sourceAttempt{}
+	for i, pullSource := range pullSources {
 		if sys != nil && sys.DockerLogMirrorChoice {
 			logrus.Infof("Trying to access %q", pullSource.Reference)
 		} else {
@@ -99,10 +125,15 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref dockerRef
 		}
 		s, err := newImageSourceAttempt(ctx, sys, ref, pullSource, registryConfig)
 		if err == nil {
+			if i+1 < len(pullSources) {
+				s.remainingSources = pullSources[i+1:]
+				s.fallbackSys = sys
+				s.fallbackRegConfig = registryConfig
+			}
 			return s, nil
 		}
 		logrus.Debugf("Accessing %q failed: %v", pullSource.Reference, err)
-		attempts = append(attempts, attempt{
+		attempts = append(attempts, sourceAttempt{
 			ref: pullSource.Reference,
 			err: err,
 		})
@@ -131,6 +162,63 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref dockerRef
 func newImageSourceAttempt(ctx context.Context, sys *types.SystemContext, logicalRef dockerReference, pullSource sysregistriesv2.PullSource,
 	registryConfig *registryConfiguration,
 ) (*dockerImageSource, error) {
+	endpoint, err := newPullClient(sys, logicalRef, pullSource, registryConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &dockerImageSource{
+		PropertyMethodsInitialize: impl.PropertyMethods(impl.Properties{
+			HasThreadSafeGetBlob: true,
+		}),
+
+		logicalRef:  logicalRef,
+		physicalRef: endpoint.ref,
+		c:           endpoint.client,
+	}
+	s.Compat = impl.AddCompat(s)
+
+	if err := s.ensureManifestIsLoaded(ctx); err != nil {
+		endpoint.client.Close()
+		return nil, err
+	}
+
+	if h, err := sysregistriesv2.AdditionalLayerStoreAuthHelper(endpoint.endpointSys); err == nil && h != "" {
+		acf := map[string]struct {
+			Username      string `json:"username,omitempty"`
+			Password      string `json:"password,omitempty"`
+			IdentityToken string `json:"identityToken,omitempty"`
+		}{
+			endpoint.ref.ref.String(): {
+				Username:      endpoint.client.auth.Username,
+				Password:      endpoint.client.auth.Password,
+				IdentityToken: endpoint.client.auth.IdentityToken,
+			},
+		}
+		acfD, err := json.Marshal(acf)
+		if err != nil {
+			logrus.Warnf("failed to marshal auth config: %v", err)
+		} else {
+			cmd := exec.Command(h)
+			cmd.Stdin = bytes.NewReader(acfD)
+			if err := cmd.Run(); err != nil {
+				var stderr string
+				if ee, ok := err.(*exec.ExitError); ok {
+					stderr = string(ee.Stderr)
+				}
+				logrus.Warnf("Failed to call additional-layer-store-auth-helper (stderr:%s): %v", stderr, err)
+			}
+		}
+	}
+	return s, nil
+}
+
+// newPullClient creates a dockerClient, reference, and endpoint-specific SystemContext
+// for the given pull source.
+// The caller must call client.Close() when done.
+func newPullClient(sys *types.SystemContext, logicalRef dockerReference, pullSource sysregistriesv2.PullSource,
+	registryConfig *registryConfiguration,
+) (*pullEndpoint, error) {
 	physicalRef, err := newReference(pullSource.Reference, false)
 	if err != nil {
 		return nil, err
@@ -152,50 +240,7 @@ func newImageSourceAttempt(ctx context.Context, sys *types.SystemContext, logica
 	client.tlsClientConfig.InsecureSkipVerify = pullSource.Endpoint.Insecure
 	client.namespaceProxy = pullSource.Endpoint.NamespaceProxy
 
-	s := &dockerImageSource{
-		PropertyMethodsInitialize: impl.PropertyMethods(impl.Properties{
-			HasThreadSafeGetBlob: true,
-		}),
-
-		logicalRef:  logicalRef,
-		physicalRef: physicalRef,
-		c:           client,
-	}
-	s.Compat = impl.AddCompat(s)
-
-	if err := s.ensureManifestIsLoaded(ctx); err != nil {
-		client.Close()
-		return nil, err
-	}
-
-	if h, err := sysregistriesv2.AdditionalLayerStoreAuthHelper(endpointSys); err == nil && h != "" {
-		acf := map[string]struct {
-			Username      string `json:"username,omitempty"`
-			Password      string `json:"password,omitempty"`
-			IdentityToken string `json:"identityToken,omitempty"`
-		}{
-			physicalRef.ref.String(): {
-				Username:      client.auth.Username,
-				Password:      client.auth.Password,
-				IdentityToken: client.auth.IdentityToken,
-			},
-		}
-		acfD, err := json.Marshal(acf)
-		if err != nil {
-			logrus.Warnf("failed to marshal auth config: %v", err)
-		} else {
-			cmd := exec.Command(h)
-			cmd.Stdin = bytes.NewReader(acfD)
-			if err := cmd.Run(); err != nil {
-				var stderr string
-				if ee, ok := err.(*exec.ExitError); ok {
-					stderr = string(ee.Stderr)
-				}
-				logrus.Warnf("Failed to call additional-layer-store-auth-helper (stderr:%s): %v", stderr, err)
-			}
-		}
-	}
-	return s, nil
+	return &pullEndpoint{client: client, ref: physicalRef, endpointSys: endpointSys}, nil
 }
 
 // Reference returns the reference used to set up this source, _as specified by the user_
@@ -206,6 +251,18 @@ func (s *dockerImageSource) Reference() types.ImageReference {
 
 // Close removes resources associated with an initialized ImageSource, if any.
 func (s *dockerImageSource) Close() error {
+	s.mirrorMu.Lock()
+	prev := s.prevOverrides
+	override := s.mirrorOverride
+	s.prevOverrides = nil
+	s.mirrorOverride = nil
+	s.mirrorMu.Unlock()
+	for _, m := range prev {
+		m.Close()
+	}
+	if override != nil {
+		override.client.Close()
+	}
 	return s.c.Close()
 }
 
@@ -416,9 +473,88 @@ func (s *dockerImageSource) GetBlobAt(ctx context.Context, info types.BlobInfo, 
 	if err := info.Digest.Validate(); err != nil { // Make sure info.Digest.String() does not contain any unexpected characters
 		return nil, nil, err
 	}
-	path := fmt.Sprintf(blobsPath, reference.Path(s.physicalRef.ref), info.Digest.String())
+
+	client, physRef, hasRemaining := s.getActiveSource()
+	streams, errs, err := tryGetBlobAt(ctx, client, physRef, info, chunks, headers, hasRemaining)
+	if err == nil || !hasRemaining {
+		return streams, errs, err
+	}
+	if isMirrorTransientError(err) || isMirrorFallbackError(err) {
+		logrus.Debugf("Partial blob %s fetch from %q failed (%v), trying fallback sources", info.Digest, physRef.ref, err)
+		return s.getBlobAtWithMirrorFallback(ctx, info, chunks, headers, err, client)
+	}
+	return streams, errs, err
+}
+
+// GetBlob returns a stream for the specified blob, and the blob’s size (or -1 if unknown).
+// The Digest field in BlobInfo is guaranteed to be provided, Size may be -1 and MediaType may be optionally provided.
+// May update BlobInfoCache, preferably after it knows for certain that a blob truly exists at a specific location.
+func (s *dockerImageSource) GetBlob(ctx context.Context, info types.BlobInfo, cache types.BlobInfoCache) (io.ReadCloser, int64, error) {
+	client, physRef, hasRemaining := s.getActiveSource()
+	reader, size, err := tryGetBlob(ctx, client, physRef, info, cache, hasRemaining)
+	if err == nil || !hasRemaining {
+		return reader, size, err
+	}
+	if isMirrorTransientError(err) || isMirrorFallbackError(err) {
+		logrus.Debugf("Blob %s fetch from %q failed (%v), trying fallback sources", info.Digest, physRef.ref, err)
+		return s.getBlobWithMirrorFallback(ctx, info, cache, err, client)
+	}
+	return reader, size, err
+}
+
+func (s *dockerImageSource) getActiveSource() (*dockerClient, dockerReference, bool) {
+	s.mirrorMu.Lock()
+	defer s.mirrorMu.Unlock()
+	hasRemaining := len(s.remainingSources) > 0
+	if s.mirrorOverride != nil {
+		return s.mirrorOverride.client, s.mirrorOverride.ref, hasRemaining
+	}
+	return s.c, s.physicalRef, hasRemaining
+}
+
+// tryGetBlob attempts to fetch a blob, retrying once on transient errors if fallback mirrors remain.
+func tryGetBlob(ctx context.Context, client *dockerClient, physRef dockerReference,
+	info types.BlobInfo, cache types.BlobInfoCache, hasRemainingSources bool,
+) (io.ReadCloser, int64, error) {
+	reader, size, err := client.getBlob(ctx, physRef, info, cache)
+	if err != nil && hasRemainingSources && isMirrorTransientError(err) {
+		logrus.Debugf("Transient error fetching blob %s from %q, retrying: %v", info.Digest, physRef.ref, err)
+		delay := time.Second + rand.N(time.Second/10) // same as retry.IfNecessary first attempt: 1s + 10% jitter
+		select {
+		case <-ctx.Done():
+			return nil, 0, fmt.Errorf("%w (while retrying after: %v)", ctx.Err(), err)
+		case <-time.After(delay):
+		}
+		reader, size, err = client.getBlob(ctx, physRef, info, cache)
+	}
+	return reader, size, err
+}
+
+// tryGetBlobAt attempts to fetch a partial blob (range request), retrying once on transient errors
+// if fallback mirrors remain. Mirrors tryGetBlob for the partial-pull (zstd:chunked) path.
+func tryGetBlobAt(ctx context.Context, client *dockerClient, physRef dockerReference,
+	info types.BlobInfo, chunks []private.ImageSourceChunk, headers map[string][]string, hasRemainingSources bool,
+) (chan io.ReadCloser, chan error, error) {
+	streams, errs, err := fetchBlobAt(ctx, client, physRef, info, chunks, headers)
+	if err != nil && hasRemainingSources && isMirrorTransientError(err) {
+		logrus.Debugf("Transient error fetching partial blob %s from %q, retrying: %v", info.Digest, physRef.ref, err)
+		delay := time.Second + rand.N(time.Second/10)
+		select {
+		case <-ctx.Done():
+			return nil, nil, fmt.Errorf("%w (while retrying after: %v)", ctx.Err(), err)
+		case <-time.After(delay):
+		}
+		streams, errs, err = fetchBlobAt(ctx, client, physRef, info, chunks, headers)
+	}
+	return streams, errs, err
+}
+
+func fetchBlobAt(ctx context.Context, client *dockerClient, physRef dockerReference,
+	info types.BlobInfo, chunks []private.ImageSourceChunk, headers map[string][]string,
+) (chan io.ReadCloser, chan error, error) {
+	path := fmt.Sprintf(blobsPath, reference.Path(physRef.ref), info.Digest.String())
 	logrus.Debugf("Downloading %s", path)
-	res, err := s.c.makeRequest(ctx, http.MethodGet, path, headers, nil, v2Auth, nil)
+	res, err := client.makeRequest(ctx, http.MethodGet, path, headers, nil, v2Auth, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -436,27 +572,195 @@ func (s *dockerImageSource) GetBlobAt(ctx context.Context, info types.BlobInfo, 
 		if err != nil {
 			return nil, nil, err
 		}
-
 		streams := make(chan io.ReadCloser)
 		errs := make(chan error)
-
 		go handle206Response(streams, errs, res.Body, chunks, mediaType, params)
 		return streams, errs, nil
 	case http.StatusBadRequest:
 		res.Body.Close()
 		return nil, nil, private.BadPartialRequestError{Status: res.Status}
 	default:
-		err := registryHTTPResponseToError(res)
+		httpErr := registryHTTPResponseToError(res)
 		res.Body.Close()
-		return nil, nil, fmt.Errorf("fetching partial blob: %w", err)
+		return nil, nil, fmt.Errorf("fetching partial blob: %w", httpErr)
 	}
 }
 
-// GetBlob returns a stream for the specified blob, and the blob’s size (or -1 if unknown).
-// The Digest field in BlobInfo is guaranteed to be provided, Size may be -1 and MediaType may be optionally provided.
-// May update BlobInfoCache, preferably after it knows for certain that a blob truly exists at a specific location.
-func (s *dockerImageSource) GetBlob(ctx context.Context, info types.BlobInfo, cache types.BlobInfoCache) (io.ReadCloser, int64, error) {
-	return s.c.getBlob(ctx, s.physicalRef, info, cache)
+// isMirrorFallbackError returns true for errors where the blob is not present
+// on this source but may be available from another — warranting a fallback attempt.
+// All tested registries (docker.io, registry.redhat.io, quay.io, registry.access.redhat.com)
+// return BLOB_UNKNOWN for blob 404s, matching the OCI distribution spec.
+func isMirrorFallbackError(err error) bool {
+	var ec errcode.ErrorCoder
+	if errors.As(err, &ec) {
+		switch ec.ErrorCode() {
+		case v2.ErrorCodeBlobUnknown:
+			// Blob endpoint returns HTTP 404 with errcode JSON body
+			// {"errors":[{"code":"BLOB_UNKNOWN",...}]}.
+			// registryHTTPResponseToError calls handleErrorResponse → parseHTTPErrorResponse,
+			// then unwraps errcode.Errors to the first errcode.Error.
+			return true
+		case errcode.ErrorCodeTooManyRequests:
+			// makeRequestToResolvedURL already retried 5 times with exponential
+			// backoff. This source's rate limit is exhausted — skip straight to
+			// the next mirror which has its own rate limit budget.
+			return true
+		}
+	}
+
+	// UnexpectedHTTPStatusError (capital U) is NOT matched here — for regular blobs,
+	// handleErrorResponse never produces it for 4xx (only for 5xx). For external blobs,
+	// getExternalBlob() produces it via newUnexpectedHTTPStatusError() directly for any
+	// non-200 including 404, but external URLs are fixed and mirror-independent —
+	// a different registry mirror cannot serve them.
+	return false
+}
+
+// isMirrorTransientError returns true for errors that are transient; the source
+// probably has the blob but temporarily cannot serve it.
+func isMirrorTransientError(err error) bool {
+	// HTTP 5xx: handleErrorResponse returns UnexpectedHTTPStatusError for status
+	// codes outside 400–499. Server-side error, another mirror may succeed.
+	var httpErr UnexpectedHTTPStatusError
+	if errors.As(err, &httpErr) && httpErr.StatusCode >= 500 {
+		return true
+	}
+
+	// Network timeout: makeRequest returns net.Error with Timeout() == true.
+	// The mirror is reachable but slow — worth retrying on another.
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+// retireStaleOverride checks if the current mirrorOverride was set by another
+// goroutine and differs from failedClient. If so, it returns the override's
+// client and ref for the caller to retry. If the override is the same client
+// that already failed, or is nil, it returns nil. Must be called with mirrorMu held.
+func (s *dockerImageSource) retireStaleOverride(failedClient *dockerClient) (*dockerClient, dockerReference, bool) {
+	if s.mirrorOverride != nil && s.mirrorOverride.client != failedClient {
+		return s.mirrorOverride.client, s.mirrorOverride.ref, true
+	}
+	return nil, dockerReference{}, false
+}
+
+// retireCurrentOverride moves the current mirrorOverride to prevOverrides.
+// Must be called with mirrorMu held.
+func (s *dockerImageSource) retireCurrentOverride() {
+	if s.mirrorOverride != nil {
+		s.prevOverrides = append(s.prevOverrides, s.mirrorOverride.client)
+		s.mirrorOverride = nil
+	}
+}
+
+func formatFallbackError(attempts []sourceAttempt, originalErr error) error {
+	if len(attempts) == 0 {
+		return originalErr
+	}
+	extras := make([]string, 0, len(attempts))
+	for _, a := range attempts {
+		extras = append(extras, fmt.Sprintf("[%s: %v]", a.ref.String(), a.err))
+	}
+	return fmt.Errorf("(Fallback sources also failed: %s): %w", strings.Join(extras, "\n"), originalErr)
+}
+
+func (s *dockerImageSource) getBlobWithMirrorFallback(ctx context.Context, info types.BlobInfo, cache types.BlobInfoCache, originalErr error, failedClient *dockerClient) (io.ReadCloser, int64, error) {
+	// Held for the full fallback loop, including network I/O. This serializes
+	// concurrent blob fetchers during fallback — only one goroutine probes
+	// sources while the rest block on getActiveSource(). Acceptable trade-off:
+	// fallback is rare and serialization prevents thundering-herd probing.
+	s.mirrorMu.Lock()
+	defer s.mirrorMu.Unlock()
+
+	if client, physRef, ok := s.retireStaleOverride(failedClient); ok {
+		reader, size, err := tryGetBlob(ctx, client, physRef, info, cache, len(s.remainingSources) > 0)
+		if err == nil {
+			return reader, size, nil
+		}
+		s.retireCurrentOverride()
+	}
+
+	attempts := []sourceAttempt{}
+	for len(s.remainingSources) > 0 {
+		pullSource := s.remainingSources[0]
+		s.remainingSources = s.remainingSources[1:]
+
+		logrus.Debugf("Trying to access %q", pullSource.Reference)
+
+		fallbackEndpoint, clientErr := newPullClient(s.fallbackSys, s.logicalRef, pullSource, s.fallbackRegConfig)
+		if clientErr != nil {
+			logrus.Debugf("Accessing %q failed: %v", pullSource.Reference, clientErr)
+			attempts = append(attempts, sourceAttempt{ref: pullSource.Reference, err: clientErr})
+			continue
+		}
+
+		reader, size, err := tryGetBlob(ctx, fallbackEndpoint.client, fallbackEndpoint.ref, info, cache, len(s.remainingSources) > 0)
+		if err != nil {
+			fallbackEndpoint.client.Close()
+			logrus.Debugf("Accessing %q failed: %v", pullSource.Reference, err)
+			attempts = append(attempts, sourceAttempt{ref: pullSource.Reference, err: err})
+			if !isMirrorTransientError(err) && !isMirrorFallbackError(err) {
+				// non-transient errors are unlikely to be resolved by trying another source: stop probing further.
+				// break here to log the attempts and return originalErr below.
+				break
+			}
+			continue
+		}
+
+		s.retireCurrentOverride()
+		s.mirrorOverride = &mirrorSource{client: fallbackEndpoint.client, ref: fallbackEndpoint.ref}
+		logrus.Debugf("Blob fetch succeeded from fallback source %q, switching to it for future requests", pullSource.Reference)
+
+		return reader, size, nil
+	}
+	return nil, 0, formatFallbackError(attempts, originalErr)
+}
+
+func (s *dockerImageSource) getBlobAtWithMirrorFallback(ctx context.Context, info types.BlobInfo, chunks []private.ImageSourceChunk, headers map[string][]string, originalErr error, failedClient *dockerClient) (chan io.ReadCloser, chan error, error) {
+	s.mirrorMu.Lock()
+	defer s.mirrorMu.Unlock()
+
+	if client, physRef, ok := s.retireStaleOverride(failedClient); ok {
+		streams, errs, err := tryGetBlobAt(ctx, client, physRef, info, chunks, headers, len(s.remainingSources) > 0)
+		if err == nil {
+			return streams, errs, nil
+		}
+		s.retireCurrentOverride()
+	}
+
+	attempts := []sourceAttempt{}
+	for len(s.remainingSources) > 0 {
+		pullSource := s.remainingSources[0]
+		s.remainingSources = s.remainingSources[1:]
+
+		logrus.Debugf("Trying to access %q", pullSource.Reference)
+
+		fallbackEndpoint, clientErr := newPullClient(s.fallbackSys, s.logicalRef, pullSource, s.fallbackRegConfig)
+		if clientErr != nil {
+			logrus.Debugf("Accessing %q failed: %v", pullSource.Reference, clientErr)
+			attempts = append(attempts, sourceAttempt{ref: pullSource.Reference, err: clientErr})
+			continue
+		}
+
+		streams, errs, err := tryGetBlobAt(ctx, fallbackEndpoint.client, fallbackEndpoint.ref, info, chunks, headers, len(s.remainingSources) > 0)
+		if err != nil {
+			fallbackEndpoint.client.Close()
+			logrus.Debugf("Accessing %q failed: %v", pullSource.Reference, err)
+			attempts = append(attempts, sourceAttempt{ref: pullSource.Reference, err: err})
+			if !isMirrorTransientError(err) && !isMirrorFallbackError(err) {
+				// non-transient errors are unlikely to be resolved by trying another source: stop probing further.
+				// break here to log the attempts and return originalErr below.
+				break
+			}
+			continue
+		}
+
+		s.retireCurrentOverride()
+		s.mirrorOverride = &mirrorSource{client: fallbackEndpoint.client, ref: fallbackEndpoint.ref}
+		logrus.Debugf("Partial blob fetch succeeded from fallback source %q, switching to it for future requests", pullSource.Reference)
+
+		return streams, errs, nil
+	}
+	return nil, nil, formatFallbackError(attempts, originalErr)
 }
 
 // GetSignaturesWithFormat returns the image's signatures.  It may use a remote (= slow) service.

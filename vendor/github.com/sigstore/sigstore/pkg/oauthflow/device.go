@@ -127,6 +127,13 @@ func (d *DeviceFlowTokenGetter) deviceFlow(p *oidc.Provider, clientID, redirectU
 	if err := json.Unmarshal(b, &parsed); err != nil {
 		return "", err
 	}
+	// RFC 8628 section 3.2: interval is OPTIONAL and defaults to 5 seconds when
+	// the authorization server omits it. Without this default a missing interval
+	// leaves parsed.Interval at 0, so the authorization_pending case below sleeps
+	// for zero seconds and busy-loops the token endpoint.
+	if parsed.Interval <= 0 {
+		parsed.Interval = 5
+	}
 	uri := parsed.VerificationURIComplete
 	if uri == "" {
 		uri = parsed.VerificationURI

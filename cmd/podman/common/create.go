@@ -174,7 +174,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		imageVolumeFlagName := "image-volume"
 		createFlags.String(
 			imageVolumeFlagName, cf.ImageVolume,
-			`Tells podman how to handle the builtin image volumes ("bind"|"tmpfs"|"ignore")`,
+			`Tells podman how to handle the builtin image volumes ("anonymous"|"tmpfs"|"ignore")`,
 		)
 		_ = cmd.RegisterFlagCompletionFunc(imageVolumeFlagName, AutocompleteImageVolume)
 
@@ -494,6 +494,9 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 			"Chroot directories inside the container",
 		)
 		_ = cmd.RegisterFlagCompletionFunc(chrootDirsFlagName, completion.AutocompleteDefault)
+
+		passwdFlagName := "passwd"
+		createFlags.BoolVar(&cf.Passwd, passwdFlagName, true, "add entries to /etc/passwd and /etc/group")
 
 		passwdEntryName := "passwd-entry"
 		createFlags.StringVar(&cf.PasswdEntry, passwdEntryName, "", "Entry to write to /etc/passwd")

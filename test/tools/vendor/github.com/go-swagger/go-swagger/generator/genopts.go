@@ -84,6 +84,8 @@ type GenOpts struct {
 	ReturnErrors           bool
 	WithCustomFormatter    bool
 	WithExtraInitialisms   []string
+	Restricted             bool
+	Rooted                 string
 
 	// Viper carries an optional configuration (typically a `.swagger.{yml,json}`
 	// file). Its `layout:` sections are applied as overrides on top of the

@@ -107,7 +107,7 @@ func restService(flags *pflag.FlagSet, cfg *entities.PodmanConfig, opts entities
 	// https://access.redhat.com/solutions/6512011.
 	for _, val := range []string{"LISTEN_FDS", "LISTEN_PID", "LISTEN_FDNAMES"} {
 		if err := os.Unsetenv(val); err != nil {
-			return fmt.Errorf("unsetting %s: %v", val, err)
+			return fmt.Errorf("unsetting %s: %w", val, err)
 		}
 	}
 

@@ -3,12 +3,15 @@
 package kube
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.podman.io/podman/v6/libpod"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
 	"go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/api/resource"
 	"go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/util/intstr"
+	"go.podman.io/podman/v6/pkg/specgen"
 )
 
 func testPropagation(t *testing.T, propagation v1.MountPropagationMode, expected string) {
@@ -177,6 +180,137 @@ func TestQuantityToInt64(t *testing.T) {
 			q := resource.MustParse(tt.input)
 			got := quantityToInt64(&q)
 			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func seccompProfile(profileType v1.SeccompProfileType, localhostProfile *string) *v1.SeccompProfile {
+	return &v1.SeccompProfile{Type: profileType, LocalhostProfile: localhostProfile}
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func TestSetupSecurityContextSeccompProfile(t *testing.T) {
+	profileRoot := t.TempDir()
+	defaultPath, err := libpod.DefaultSeccompPath()
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name                   string
+		ctr                    *v1.SecurityContext
+		pod                    *v1.PodSecurityContext
+		seccompAnnotationPaths *SeccompAnnotationPaths
+		ctrName                string
+		expected               string
+		expectedError          string
+	}{
+		{
+			name: "container profile",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(v1.SeccompProfileTypeUnconfined, nil),
+			},
+			expected: "unconfined",
+		},
+		{
+			name: "pod profile",
+			pod: &v1.PodSecurityContext{
+				SeccompProfile: seccompProfile(v1.SeccompProfileTypeLocalhost, stringPtr("profiles/pod.json")),
+			},
+			expected: filepath.Join(profileRoot, "profiles/pod.json"),
+		},
+		{
+			name: "container overrides pod",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(v1.SeccompProfileTypeLocalhost, stringPtr("profiles/container.json")),
+			},
+			pod: &v1.PodSecurityContext{
+				SeccompProfile: seccompProfile(v1.SeccompProfileTypeUnconfined, nil),
+			},
+			expected: filepath.Join(profileRoot, "profiles/container.json"),
+		},
+		{
+			name: "container securityContext overrides container annotation",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(
+					v1.SeccompProfileTypeUnconfined,
+					nil,
+				),
+			},
+			seccompAnnotationPaths: &SeccompAnnotationPaths{
+				containerPaths: map[string]string{
+					"test-container": filepath.Join(profileRoot, "annotation.json"),
+				},
+			},
+			ctrName:  "test-container",
+			expected: "unconfined",
+		},
+		{
+			name: "pod securityContext overrides pod annotation",
+			pod: &v1.PodSecurityContext{
+				SeccompProfile: seccompProfile(
+					v1.SeccompProfileTypeLocalhost,
+					stringPtr("profiles/pod.json"),
+				),
+			},
+			seccompAnnotationPaths: &SeccompAnnotationPaths{
+				containerPaths: map[string]string{},
+				podPath:        filepath.Join(profileRoot, "annotation.json"),
+			},
+			expected: filepath.Join(profileRoot, "profiles/pod.json"),
+		},
+		{
+			name:     "unset profile uses default",
+			expected: defaultPath,
+		},
+		{
+			name: "RuntimeDefault profile",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(v1.SeccompProfileTypeRuntimeDefault, nil),
+			},
+			expected: defaultPath,
+		},
+		{
+			name: "reject empty seccomp profile type",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: &v1.SeccompProfile{},
+			},
+			expectedError: "invalid seccomp profile type",
+		},
+		{
+			name: "reject absolute localhost profile",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(
+					v1.SeccompProfileTypeLocalhost,
+					stringPtr("/etc/seccomp.json"),
+				),
+			},
+			expectedError: "must be a relative path",
+		},
+		{
+			name: "reject localhost profile with backstep",
+			ctr: &v1.SecurityContext{
+				SeccompProfile: seccompProfile(
+					v1.SeccompProfileTypeLocalhost,
+					stringPtr("profiles/../seccomp.json"),
+				),
+			},
+			expectedError: "must not contain '..'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &specgen.SpecGenerator{}
+			err := setupSecurityContext(s, tt.ctr, tt.pod, profileRoot, tt.seccompAnnotationPaths, tt.ctrName)
+			if tt.expectedError != "" {
+				assert.ErrorContains(t, err, tt.expectedError)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, s.SeccompProfilePath)
 		})
 	}
 }

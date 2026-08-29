@@ -143,7 +143,7 @@ func perCPUTimes(sys *common.SystemLib) ([]TimesStat, error) {
 	var cpuload *hostCpuLoadInfoData
 
 	status := sys.HostProcessorInfo(sys.MachHostSelf(), processorCpuLoadInfo,
-		&ncpu, uintptr(unsafe.Pointer(&cpuload)), &count)
+		&ncpu, unsafe.Pointer(&cpuload), &count)
 
 	if status != common.KERN_SUCCESS {
 		return nil, fmt.Errorf("host_processor_info error=%d", status)
@@ -177,7 +177,7 @@ func allCPUTimes(sys *common.SystemLib) ([]TimesStat, error) {
 	count := uint32(cpuStateMax)
 
 	status := sys.HostStatistics(sys.MachHostSelf(), common.HOST_CPU_LOAD_INFO,
-		uintptr(unsafe.Pointer(&cpuload)), &count)
+		unsafe.Pointer(&cpuload), &count)
 
 	if status != common.KERN_SUCCESS {
 		return nil, fmt.Errorf("host_statistics error=%d", status)

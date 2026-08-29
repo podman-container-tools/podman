@@ -22,6 +22,8 @@ var (
 )
 
 // Version is an output struct for API
+//
+// swagger:model LibpodVersion
 type Version struct {
 	APIVersion  string
 	Version     string

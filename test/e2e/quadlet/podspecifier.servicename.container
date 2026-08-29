@@ -1,0 +1,8 @@
+## assert-podman-args "--pod" "systemd-pod-specifier-svc"
+## assert-last-key-contains "Unit" "BindsTo" "pod-specifier-svc-pod.service"
+## assert-last-key-contains "Unit" "After" "pod-specifier-svc-pod.service"
+
+[Container]
+Image=localhost/imagename
+ServiceName=pod-specifier-svc
+Pod=%N.pod

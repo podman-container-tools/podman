@@ -34,6 +34,18 @@ EOF
     run_podman rmi -f $imgname
 }
 
+# 22642: a failed flag check used to leak the downloaded context directory
+@test "podman build - no tmpdir leak on early failure" {
+    tmpdir=$PODMAN_TMPDIR/build-tmp
+    mkdir -p $tmpdir
+
+    TMPDIR=$tmpdir run_podman 125 build --authfile=$PODMAN_TMPDIR/bogus-authfile - <<<"from scratch"
+    is "$output" ".*credential file is not accessible.*" "expected authfile error"
+
+    run ls -A $tmpdir
+    assert "$output" == "" "leftover files in TMPDIR after failed build"
+}
+
 @test "podman buildx - basic test" {
     rand_filename=$(random_string 20)
     rand_content=$(random_string 50)
@@ -1296,6 +1308,41 @@ function teardown() {
 @test "podman build --help defaults" {
     run_podman build --help
     assert "$output" =~ "--pull.*(default \"missing\")" "pull should default to missing"
+}
+
+@test "podman build --ignorefile overrides .dockerignore" {
+    local contextdir=$PODMAN_TMPDIR/build-test-$(random_string 10)
+    mkdir -p $contextdir
+
+    local testfile=testfile-$(random_string 12)
+    echo "test content" > $contextdir/$testfile
+
+    cat >$contextdir/.dockerignore <<EOF
+$testfile
+EOF
+
+    cat >$contextdir/Containerfile <<EOF
+FROM $IMAGE
+COPY . /testdir/
+RUN find /testdir/
+EOF
+
+    # Empty ignorefile inside context dir
+    local emptyignore=$contextdir/.emptyignore
+    touch $emptyignore
+
+    imgname="b-$(safename)"
+    run_podman build -t $imgname --ignorefile $emptyignore $contextdir
+    assert "$output" =~ "$testfile" "empty ignorefile inside context dir should override .dockerignore"
+    run_podman rmi -f $imgname
+
+    # Empty ignorefile outside context dir
+    local outsideignore=$PODMAN_TMPDIR/.outside-emptyignore
+    touch $outsideignore
+
+    run_podman build -t $imgname --ignorefile $outsideignore $contextdir
+    assert "$output" =~ "$testfile" "empty ignorefile outside context dir should override .dockerignore"
+    run_podman rmi -f $imgname
 }
 
 # vim: filetype=sh

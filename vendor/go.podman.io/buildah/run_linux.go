@@ -833,7 +833,7 @@ func setupNamespaces(_ *logrus.Logger, g *generate.Generator, namespaceOptions d
 	addSysctl := func(prefixes []string) error {
 		for _, sysctl := range defaultContainerConfig.Sysctls() {
 			splitn := strings.SplitN(sysctl, "=", 2)
-			if len(splitn) > 2 {
+			if len(splitn) != 2 {
 				return fmt.Errorf("sysctl %q defined in containers.conf must be formatted name=value", sysctl)
 			}
 			for _, prefix := range prefixes {

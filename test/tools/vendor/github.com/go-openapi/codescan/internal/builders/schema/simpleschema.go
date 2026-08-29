@@ -8,41 +8,38 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// inFormData is the `in:` parameter-location value that enables the
-// `file` type under SimpleSchema. Lifted into a constant to satisfy
-// goconst across this file and walker_classifiers.go.
+// inFormData is the `in:` parameter-location value that enables the `file` type under SimpleSchema.
+//
+// Lifted into a constant to satisfy goconst across this file and walker_classifiers.go.
 const inFormData = "formData"
 
-// SimpleSchemaProbe is the schema-builder-side contract a
-// SimpleSchema target must satisfy. Implemented structurally by
-// `paramTypable` and (M2) `headerTypable`.
+// SimpleSchemaProbe is the schema-builder-side contract a SimpleSchema target must satisfy.
+//
+// Implemented structurally by `paramTypable` and (M2) `headerTypable`.
 //
 // # Details
 //
-// See [§simple-schema-mode](./README.md#simple-schema-mode) — full
-// interface contract, reset semantics, and the catch-at-exit
-// validator's role.
+// See [§simple-schema-mode](./README.md#simple-schema-mode) — full interface contract, reset
+// semantics, and the catch-at-exit validator's role.
 type SimpleSchemaProbe interface {
 	SimpleSchemaShape() *oaispec.SimpleSchema
 	HasRef() bool
 	ResetForViolation()
 }
 
-// validateSimpleSchemaOutcome runs the "catch at exit" contract:
-// inspect the resolved target, accept SimpleSchema-legal outcomes,
-// emit a diagnostic and reset on violation.
+// validateSimpleSchemaOutcome runs the "catch at exit" contract: inspect the resolved target,
+// accept SimpleSchema-legal outcomes, emit a diagnostic and reset on violation.
 //
 // # Details
 //
-// See [§simple-schema-mode](./README.md#simple-schema-mode) for the
-// allowed-type set, the file/formData special case, and the
-// honest-over-lossy reset rationale.
+// See [§simple-schema-mode](./README.md#simple-schema-mode) for the allowed-type set, the
+// file/formData special case, and the honest-over-lossy reset rationale.
 func (s *Builder) validateSimpleSchemaOutcome() {
 	probe, ok := s.target.(SimpleSchemaProbe)
 	if !ok {
-		// Target doesn't expose a SimpleSchema shape — caller chose
-		// the SimpleSchema mode for a target that can't surface a
-		// violation. Trust the caller; emit no diagnostic.
+		// Target doesn't expose a SimpleSchema shape — caller chose the SimpleSchema mode for a target
+		// that can't surface a violation.
+		// Trust the caller; emit no diagnostic.
 		return
 	}
 
@@ -66,15 +63,16 @@ func (s *Builder) validateSimpleSchemaOutcome() {
 	))
 	probe.ResetForViolation()
 	if refViolation {
-		// MakeRef discovered the now-dissolved target's decl; drop it so
-		// it doesn't linger as an orphan definition (go-swagger#1088).
+		// MakeRef discovered the now-dissolved target's decl; drop it so it doesn't linger as an orphan
+		// definition (go-swagger#1088).
 		s.ResetPostDeclarations()
 	}
 }
 
-// isAllowedSimpleSchemaType reports whether t is a SimpleSchema-legal
-// type given the caller's `in` location. Empty string means "any" and
-// is accepted (e.g. json.RawMessage recognizer emits an empty schema).
+// isAllowedSimpleSchemaType reports whether t is a SimpleSchema-legal type given the caller's `in`
+// location.
+//
+// Empty string means "any" and is accepted (e.g. json.RawMessage recognizer emits an empty schema).
 // `file` is only valid for in == inFormData.
 func isAllowedSimpleSchemaType(t, in string) bool {
 	switch t {
@@ -86,8 +84,7 @@ func isAllowedSimpleSchemaType(t, in string) bool {
 	return false
 }
 
-// simpleSchemaViolationReason produces a short human-readable cause
-// for the diagnostic message.
+// simpleSchemaViolationReason produces a short human-readable cause for the diagnostic message.
 func simpleSchemaViolationReason(t string, refViolation bool, in string) string {
 	switch {
 	case refViolation:
@@ -97,8 +94,8 @@ func simpleSchemaViolationReason(t string, refViolation bool, in string) string 
 	case t == "object":
 		return `type "object" is forbidden under SimpleSchema`
 	case t == "":
-		// Should never get here — empty type is accepted by
-		// isAllowedSimpleSchemaType. Defensive only.
+		// Should never get here — empty type is accepted by isAllowedSimpleSchemaType.
+		// Defensive only.
 		return "empty type unexpectedly rejected"
 	}
 	return "type " + t + " is not in the allowed SimpleSchema set"

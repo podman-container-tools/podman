@@ -134,7 +134,7 @@ const (
 func MustParse(str string) Quantity {
 	q, err := ParseQuantity(str)
 	if err != nil {
-		panic(fmt.Errorf("cannot parse '%v': %v", str, err))
+		panic(fmt.Errorf("cannot parse '%v': %w", str, err))
 	}
 	return q
 }

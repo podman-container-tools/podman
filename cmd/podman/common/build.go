@@ -195,6 +195,22 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 		contextDir   string
 		apiBuildOpts entities.BuildOptions
 	)
+	// The caller only cleans up TmpDirToClose and LogFileToClose when we
+	// return successfully, so clean them up ourselves on every error path.
+	succeeded := false
+	defer func() {
+		if succeeded {
+			return
+		}
+		if apiBuildOpts.TmpDirToClose != "" {
+			if err := os.RemoveAll(apiBuildOpts.TmpDirToClose); err != nil {
+				logrus.Errorf("Removing temporary directory %q: %v", apiBuildOpts.TmpDirToClose, err)
+			}
+		}
+		if apiBuildOpts.LogFileToClose != nil {
+			apiBuildOpts.LogFileToClose.Close()
+		}
+	}()
 	if len(args) > 0 {
 		// The context directory could be a URL.  Try to handle that.
 		tempDir, subDir, err := buildahDefine.TempDirForURL("", "buildah", args[0])
@@ -283,6 +299,7 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 	apiBuildOpts.ContainerFiles = containerFiles
 	apiBuildOpts.Authfile = buildOpts.Authfile
 
+	succeeded = true
 	return &apiBuildOpts, err
 }
 
@@ -697,6 +714,14 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 			return nil, fmt.Errorf("unable to parse ignore file: %w", err)
 		}
 		opts.Excludes = excludes
+
+		// Always pass ignore file to force buildah to consider
+		// an empty ignore file if passed.
+		absIgnoreFile, err := filepath.Abs(flags.IgnoreFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to resolve ignore file path: %w", err)
+		}
+		opts.IgnoreFile = absIgnoreFile
 	}
 
 	if flags.SourceDateEpoch != "" { // could be explicitly specified, or passed via the environment, tricking .Changed()
@@ -723,7 +748,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 // otherwise it returns true
 func useLayers() string {
 	layers := os.Getenv("BUILDAH_LAYERS")
-	if strings.ToLower(layers) == "false" || layers == "0" {
+	if strings.EqualFold(layers, "false") || layers == "0" {
 		return "false"
 	}
 	return "true"

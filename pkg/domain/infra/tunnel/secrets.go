@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -34,8 +35,8 @@ func (ic *ContainerEngine) SecretInspect(_ context.Context, nameOrIDs []string, 
 	for _, name := range nameOrIDs {
 		inspected, err := secrets.Inspect(ic.ClientCtx, name, opts)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, nil, err
 			}
 			if errModel.ResponseCode == 404 {
@@ -73,8 +74,8 @@ func (ic *ContainerEngine) SecretRm(_ context.Context, nameOrIDs []string, optio
 	for _, name := range nameOrIDs {
 		secret, err := secrets.Inspect(ic.ClientCtx, name, nil)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, err
 			}
 			if errModel.ResponseCode == 404 {

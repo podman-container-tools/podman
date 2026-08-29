@@ -133,9 +133,7 @@ var _ = Describe("Podman pod clone", func() {
 		run := podmanTest.Podman([]string{"run", "--pod", podClone.OutputToString(), ALPINE, "mount"})
 		run.WaitWithDefaultTimeout()
 		Expect(run).Should(ExitCleanly())
-		t, strings := run.GrepString("shm on /dev/shm type tmpfs")
-		Expect(t).To(BeTrue(), "found /dev/shm")
-		Expect(strings[0]).Should(ContainSubstring("size=10240k"))
+		Expect(run.OutputToStringArray()).To(ContainElement(MatchRegexp(`shm on /dev/shm type tmpfs.*size=10240k`)))
 	})
 
 	It("podman pod clone --uts test", func() {

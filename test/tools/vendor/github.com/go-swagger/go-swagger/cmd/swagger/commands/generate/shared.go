@@ -141,6 +141,8 @@ type sharedOptionsCommon struct {
 	DumpData              bool           `description:"when present dumps the json for the template generator instead of generating files" group:"shared"                                            long:"dump-data"`
 	StrictResponders      bool           `description:"Use strict type for the handler return value"                                       long:"strict-responders"`
 	ReturnErrors          bool           `description:"handlers explicitly return an error as the second value"                            group:"shared"                                            long:"return-errors"           short:"e"`
+	Restricted            bool           `description:"Use restricted http client for remote $ref"                                         group:"shared"                                            long:"restricted"`
+	Rooted                string         `description:"Local $ref resolution contained relative to root FS"                                group:"shared"                                            long:"rooted"`
 }
 
 func (s sharedOptionsCommon) apply(opts *generator.GenOpts) {
@@ -157,6 +159,8 @@ func (s sharedOptionsCommon) apply(opts *generator.GenOpts) {
 	opts.ReturnErrors = s.ReturnErrors
 	opts.WithCustomFormatter = s.WithCustomFormatter
 	opts.WithExtraInitialisms = s.AdditionalInitialisms
+	opts.Restricted = s.Restricted
+	opts.Rooted = s.Rooted
 }
 
 func setCopyright(copyrightFile string) (string, error) {

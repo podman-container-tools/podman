@@ -292,14 +292,14 @@ func (c *Container) recreateHealthCheckTimer(ctx context.Context, isStartup bool
 	}
 
 	if err := c.createTimer(interval, isStartup); err != nil {
-		return fmt.Errorf("recreating container %s (isStartup: %t) healthcheck: %v", c.ID(), isStartup, err)
+		return fmt.Errorf("recreating container %s (isStartup: %t) healthcheck: %w", c.ID(), isStartup, err)
 	}
 	if err := c.startTimer(isStartup); err != nil {
-		return fmt.Errorf("restarting container %s (isStartup: %t) healthcheck timer: %v", c.ID(), isStartup, err)
+		return fmt.Errorf("restarting container %s (isStartup: %t) healthcheck timer: %w", c.ID(), isStartup, err)
 	}
 
 	if err := c.removeTransientFiles(ctx, isStartupRemoved, oldUnit); err != nil {
-		return fmt.Errorf("removing container %s healthcheck: %v", c.ID(), err)
+		return fmt.Errorf("removing container %s healthcheck: %w", c.ID(), err)
 	}
 	return nil
 }
@@ -326,7 +326,7 @@ func (c *Container) incrementStartupHCFailureCounter(ctx context.Context) error 
 		logrus.Infof("Restarting container %s as startup healthcheck failed", c.ID())
 		// Restart the container
 		if err := c.restartWithTimeout(ctx, c.config.StopTimeout); err != nil {
-			return fmt.Errorf("restarting container %s after healthcheck failure: %v", c.ID(), err)
+			return fmt.Errorf("restarting container %s after healthcheck failure: %w", c.ID(), err)
 		}
 		return nil
 	}

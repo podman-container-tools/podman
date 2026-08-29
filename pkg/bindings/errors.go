@@ -55,14 +55,15 @@ func (h *APIResponse) ProcessWithError(unmarshalInto any, unmarshalErrorInto any
 }
 
 func CheckResponseCode(inError error) (int, error) {
-	switch e := inError.(type) {
-	case *errorhandling.ErrorModel:
-		return e.Code(), nil
-	case *errorhandling.PodConflictErrorModel:
-		return e.Code(), nil
-	default:
-		return -1, errors.New("is not type ErrorModel")
+	var errModel *errorhandling.ErrorModel
+	if errors.As(inError, &errModel) {
+		return errModel.Code(), nil
 	}
+	var podConflictModel *errorhandling.PodConflictErrorModel
+	if errors.As(inError, &podConflictModel) {
+		return podConflictModel.Code(), nil
+	}
+	return -1, errors.New("is not type ErrorModel")
 }
 
 type APIVersionError struct {

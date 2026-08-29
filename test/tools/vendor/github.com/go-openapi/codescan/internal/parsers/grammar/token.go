@@ -5,8 +5,9 @@ package grammar
 
 import "go/token"
 
-// TokenKind classifies a lexer-emitted token. The kinds map onto
-// the grammar's terminal vocabulary:
+// TokenKind classifies a lexer-emitted token.
+//
+// The kinds map onto the grammar's terminal vocabulary:
 //
 //   - ANN_*  → TokenAnnotation,    Name carries the annotation label
 //   - KW_*   → TokenKeyword,       Name carries the keyword label
@@ -19,9 +20,8 @@ import "go/token"
 //   - OPAQUE_YAML → TokenOpaqueYaml
 //   - TITLE / DESC / BLANK / EOF → TokenTitle / TokenDesc / TokenBlank / TokenEOF
 //
-// The lexer also emits a few internal kinds (tokenYAMLFence,
-// tokenText, tokenKeywordPre, tokenRawLine, tokenDirective) that
-// are consumed by intermediate stages and never appear in the
+// The lexer also emits a few internal kinds (tokenYAMLFence, tokenText, tokenKeywordPre,
+// tokenRawLine, tokenDirective) that are consumed by intermediate stages and never appear in the
 // final stream the parser consumes.
 type TokenKind int
 
@@ -40,6 +40,7 @@ const (
 	TokenTypeRef        // TYPE_REF
 	TokenHTTPMethod     // HTTP_METHOD
 	TokenURLPath        // URL_PATH
+	TokenWildcard       // WILDCARD — the `*` shared-namespace target (swagger:parameters)
 	TokenNumberValue    // NUMBER_VALUE
 	TokenIntValue       // INT_VALUE
 	TokenBoolValue      // BOOL_VALUE
@@ -85,6 +86,8 @@ func (k TokenKind) String() string {
 		return "HTTP_METHOD"
 	case TokenURLPath:
 		return "URL_PATH"
+	case TokenWildcard:
+		return "WILDCARD"
 	case TokenNumberValue:
 		return "NUMBER_VALUE"
 	case TokenIntValue:
@@ -118,7 +121,9 @@ func (k TokenKind) String() string {
 	}
 }
 
-// Token is one lexer-emitted item. Field population varies by kind:
+// Token is one lexer-emitted item.
+//
+// Field population varies by kind:
 //
 //   - TokenAnnotation: Name = annotation label, Args are pre-tokenised
 //     argument tokens already disambiguated by the lexer
@@ -151,6 +156,7 @@ type Token struct {
 	Truncated  bool    // body lexed without a closer (e.g. unmatched ---)
 }
 
-// HasArg reports whether the annotation token has at least n positional
-// arguments. Convenience used by the parser dispatchers.
+// HasArg reports whether the annotation token has at least n positional arguments.
+//
+// Convenience used by the parser dispatchers.
 func (t Token) HasArg(n int) bool { return len(t.Args) >= n }

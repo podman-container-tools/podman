@@ -10,6 +10,11 @@ OS_RELEASE_ID="$(
 )"
 OS_REL_VER="$OS_RELEASE_ID-$OS_RELEASE_VER"
 
+TEST_NAME=$(
+    IFS=-
+    echo "${*}"
+)
+
 function die() {
     echo "$1" >&2
     exit 1

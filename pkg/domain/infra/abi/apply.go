@@ -121,7 +121,7 @@ func setUpClusterClient(kconfig k8sAPI.Config, applyOptions entities.ApplyOption
 	caCertPool := x509.NewCertPool()
 
 	// Be insecure if user sets ca-cert-file flag to insecure
-	if strings.ToLower(caCertFile) == "insecure" {
+	if strings.EqualFold(caCertFile, "insecure") {
 		insecureSkipVerify = true
 	} else if caCertFile == "" {
 		caCertFile = kconfig.Clusters[0].Cluster.CertificateAuthority

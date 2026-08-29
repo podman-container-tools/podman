@@ -233,8 +233,8 @@ func (ic *ContainerEngine) PodInspect(_ context.Context, namesOrIDs []string, _ 
 	for _, name := range namesOrIDs {
 		inspect, err := pods.Inspect(ic.ClientCtx, name, nil)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, nil, err
 			}
 			if errModel.ResponseCode == 404 {

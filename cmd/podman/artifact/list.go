@@ -1,6 +1,8 @@
 package artifact
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -35,12 +37,14 @@ type listFlagType struct {
 	format    string
 	noHeading bool
 	noTrunc   bool
+	quiet     bool
 }
 
 type artifactListOutput struct {
 	Digest       string
 	Repository   string
 	Size         string
+	sizeBytes    int64
 	Tag          string
 	created      time.Time
 	VirtualSize  string
@@ -76,21 +80,21 @@ func init() {
 	_ = listCmd.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteFormat(&artifactListOutput{}))
 	flags.BoolVarP(&listFlag.noHeading, "noheading", "n", false, "Do not print column headings")
 	flags.BoolVar(&listFlag.noTrunc, "no-trunc", false, "Do not truncate output")
+	flags.BoolVarP(&listFlag.quiet, "quiet", "q", false, "Display only artifact digests")
 }
 
 func list(cmd *cobra.Command, _ []string) error {
+	if listFlag.quiet && cmd.Flags().Changed("format") {
+		return errors.New("quiet and format flags cannot be used together")
+	}
+
 	reports, err := registry.ImageEngine().ArtifactList(registry.Context(), entities.ArtifactListOptions{})
 	if err != nil {
 		return err
 	}
 
-	return outputTemplate(cmd, reports)
-}
-
-func outputTemplate(cmd *cobra.Command, lrs []*entities.ArtifactListReport) error {
-	var err error
 	artifacts := make([]artifactListOutput, 0)
-	for _, lr := range lrs {
+	for _, lr := range reports {
 		var tag string
 		artifactName, err := lr.Artifact.GetName()
 		if err != nil {
@@ -130,12 +134,66 @@ func outputTemplate(cmd *cobra.Command, lrs []*entities.ArtifactListReport) erro
 			Digest:       artifactHash,
 			Repository:   named.Name(),
 			Size:         units.HumanSize(float64(lr.Artifact.TotalSizeBytes())),
+			sizeBytes:    lr.Artifact.TotalSizeBytes(),
 			Tag:          tag,
 			created:      createdTime,
 			VirtualSize:  fmt.Sprintf("%d", lr.Artifact.TotalSizeBytes()),
 			virtualBytes: lr.Artifact.TotalSizeBytes(),
 		})
 	}
+
+	if listFlag.quiet {
+		quietOut(artifacts)
+		return nil
+	}
+
+	switch {
+	case report.IsJSON(listFlag.format):
+		return writeJSON(artifacts)
+	default:
+		return writeTemplate(cmd, artifacts)
+	}
+}
+
+func quietOut(listed []artifactListOutput) {
+	for _, a := range listed {
+		fmt.Println(a.Digest)
+	}
+}
+
+func writeJSON(artifacts []artifactListOutput) error {
+	type artifact struct {
+		Repository string `json:"Repository,omitempty"`
+		CreatedAt  string
+		Size       int64
+		Tag        string `json:"Tag,omitempty"`
+		Digest     string
+	}
+
+	arti := make([]artifact, 0, len(artifacts))
+
+	for _, e := range artifacts {
+		var a artifact
+		a.Repository = e.Repository
+		a.CreatedAt = e.created.Format(time.RFC3339Nano)
+		a.Size = e.sizeBytes
+		a.Repository = e.Repository
+		a.Tag = e.Tag
+		a.Digest = e.Digest
+
+		arti = append(arti, a)
+	}
+
+	prettyJSON, err := json.MarshalIndent(arti, "", "    ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(prettyJSON))
+	return nil
+}
+
+func writeTemplate(cmd *cobra.Command, artifacts []artifactListOutput) error {
+	var err error
 
 	headers := report.Headers(artifactListOutput{}, map[string]string{
 		"REPOSITORY": "REPOSITORY",

@@ -44,6 +44,7 @@ import (
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/lockfile"
 	"go.podman.io/storage/pkg/unshare"
+	stypes "go.podman.io/storage/types"
 )
 
 // Set up the JSON library for all of Libpod
@@ -1310,6 +1311,13 @@ func (r *Runtime) LockConflicts() (map[uint32][]string, []uint32, error) {
 	return toReturn, locksHeld, nil
 }
 
+// containerGoneErr reports whether err means the container no longer exists in
+// the store. Callers that only care about the container being absent can treat
+// this as success.
+func containerGoneErr(err error) bool {
+	return errors.Is(err, stypes.ErrContainerUnknown) || errors.Is(err, stypes.ErrNotAContainer)
+}
+
 // PruneBuildContainers removes any build containers that were created during the build,
 // but were not removed because the build was unexpectedly terminated.
 //
@@ -1324,6 +1332,13 @@ func (r *Runtime) PruneBuildContainers() ([]*reports.PruneReport, error) {
 	for _, container := range containers {
 		path, err := r.store.ContainerDirectory(container.ID)
 		if err != nil {
+			// The container list is a snapshot, so a container can be removed
+			// while we are still working through it. A build that was killed
+			// cleans up its own stage containers in the background, which is
+			// exactly the case this function is meant to run after. Skip it.
+			if containerGoneErr(err) {
+				continue
+			}
 			return stageContainersPruneReports, err
 		}
 		if err := fileutils.Exists(filepath.Join(path, "buildah.json")); err != nil {
@@ -1335,11 +1350,19 @@ func (r *Runtime) PruneBuildContainers() ([]*reports.PruneReport, error) {
 		}
 		size, err := r.store.ContainerSize(container.ID)
 		if err != nil {
+			if containerGoneErr(err) {
+				continue
+			}
 			report.Err = err
 		}
 		report.Size = uint64(size)
 
 		if err := r.store.DeleteContainer(container.ID); err != nil {
+			// Pruning wants the container gone. If something else removed it
+			// first that is the result we wanted, so do not report it.
+			if containerGoneErr(err) {
+				continue
+			}
 			report.Err = errors.Join(report.Err, err)
 		}
 		stageContainersPruneReports = append(stageContainersPruneReports, report)

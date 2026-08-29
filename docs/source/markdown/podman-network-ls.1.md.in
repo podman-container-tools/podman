@@ -1,7 +1,7 @@
 % podman-network-ls 1
 
 ## NAME
-podman\-network\-ls - Display a summary of networks
+podman\-network\-ls - Display a summary of networks (alias list)
 
 ## SYNOPSIS
 **podman network ls**  [*options*]

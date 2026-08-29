@@ -9,7 +9,7 @@ import (
 )
 
 // ErrNoSuchUser indicates that the user provided by the caller does not
-// exist in /etc/passws
+// exist in /etc/passwd
 var ErrNoSuchUser = errors.New("user does not exist in /etc/passwd")
 
 // GetUser will return the uid, gid of the user specified in the userspec

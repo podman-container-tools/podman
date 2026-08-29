@@ -4,6 +4,7 @@
 package generator
 
 import (
+	"iter"
 	"regexp"
 	"slices"
 	"sort"
@@ -18,31 +19,38 @@ const (
 	multipartForm  = "multipartform"
 )
 
-var mediaTypeNames = map[*regexp.Regexp]string{
-	regexp.MustCompile("application/.*json"):                jsonSerializer,
-	regexp.MustCompile("application/.*yaml"):                "yaml",
-	regexp.MustCompile("application/.*protobuf"):            "protobuf",
-	regexp.MustCompile("application/.*capnproto"):           "capnproto",
-	regexp.MustCompile("application/.*thrift"):              "thrift",
-	regexp.MustCompile("(?:application|text)/.*xml"):        "xml",
-	regexp.MustCompile("text/.*markdown"):                   "markdown",
-	regexp.MustCompile("text/.*html"):                       "html",
-	regexp.MustCompile("text/.*csv"):                        "csv",
-	regexp.MustCompile("text/.*tsv"):                        "tsv",
-	regexp.MustCompile("text/.*javascript"):                 "js",
-	regexp.MustCompile("text/.*css"):                        "css",
-	regexp.MustCompile("text/.*plain"):                      "txt",
-	regexp.MustCompile("application/.*octet-stream"):        "bin",
-	regexp.MustCompile("application/.*tar"):                 "tar",
-	regexp.MustCompile("application/.*gzip"):                "gzip",
-	regexp.MustCompile("application/.*gz"):                  "gzip",
-	regexp.MustCompile("application/.*raw-stream"):          "bin",
-	regexp.MustCompile("application/x-www-form-urlencoded"): "urlform",
-	regexp.MustCompile("application/javascript"):            "txt",
-	regexp.MustCompile("multipart/form-data"):               multipartForm,
-	regexp.MustCompile("image/.*"):                          "bin",
-	regexp.MustCompile("audio/.*"):                          "bin",
-	regexp.MustCompile("application/pdf"):                   "bin",
+type mediaMatcher struct {
+	rex  *regexp.Regexp
+	name string
+}
+
+func mediaTypeNames() iter.Seq[mediaMatcher] {
+	return slices.Values([]mediaMatcher{
+		{rex: regexp.MustCompile("application/.*json"), name: jsonSerializer},
+		{rex: regexp.MustCompile("application/.*yaml"), name: "yaml"},
+		{rex: regexp.MustCompile("application/.*protobuf"), name: "protobuf"},
+		{rex: regexp.MustCompile("application/.*capnproto"), name: "capnproto"},
+		{rex: regexp.MustCompile("application/.*thrift"), name: "thrift"},
+		{rex: regexp.MustCompile("(?:application|text)/.*xml"), name: "xml"},
+		{rex: regexp.MustCompile("text/.*markdown"), name: "markdown"},
+		{rex: regexp.MustCompile("text/.*html"), name: "html"},
+		{rex: regexp.MustCompile("text/.*csv"), name: "csv"},
+		{rex: regexp.MustCompile("text/.*tsv"), name: "tsv"},
+		{rex: regexp.MustCompile("text/.*javascript"), name: "js"},
+		{rex: regexp.MustCompile("text/.*css"), name: "css"},
+		{rex: regexp.MustCompile("text/.*plain"), name: "txt"},
+		{rex: regexp.MustCompile("application/.*octet-stream"), name: "bin"},
+		{rex: regexp.MustCompile("application/.*tar"), name: "tar"},
+		{rex: regexp.MustCompile("application/.*gzip"), name: "gzip"},
+		{rex: regexp.MustCompile("application/.*gz"), name: "gzip"},
+		{rex: regexp.MustCompile("application/.*raw-stream"), name: "bin"},
+		{rex: regexp.MustCompile("application/x-www-form-urlencoded"), name: "urlform"},
+		{rex: regexp.MustCompile("application/javascript"), name: "txt"},
+		{rex: regexp.MustCompile("multipart/form-data"), name: multipartForm},
+		{rex: regexp.MustCompile("image/.*"), name: "bin"},
+		{rex: regexp.MustCompile("audio/.*"), name: "bin"},
+		{rex: regexp.MustCompile("application/pdf"), name: "bin"},
+	})
 }
 
 var knownProducers = map[string]string{
@@ -68,11 +76,12 @@ var knownConsumers = map[string]string{
 }
 
 func wellKnownMime(tn string) (string, bool) {
-	for k, v := range mediaTypeNames {
-		if k.MatchString(tn) {
-			return v, true
+	for matcher := range mediaTypeNames() {
+		if matcher.rex.MatchString(tn) {
+			return matcher.name, true
 		}
 	}
+
 	return "", false
 }
 

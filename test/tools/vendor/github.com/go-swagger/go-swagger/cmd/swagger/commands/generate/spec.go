@@ -28,30 +28,37 @@ const (
 
 // SpecFile command to generate a swagger spec from a go application.
 type SpecFile struct {
-	WorkDir                        string         `default:"."                                                                                                                                                      description:"the base path to use" long:"work-dir" short:"w"`
-	BuildTags                      string         `default:""                                                                                                                                                       description:"build tags"           long:"tags"     short:"t"`
-	ScanModels                     bool           `description:"includes models that were annotated with 'swagger:model'"                                                                                           long:"scan-models"                 short:"m"`
-	Compact                        bool           `description:"when present, doesn't prettify the json"                                                                                                            long:"compact"`
-	Output                         flags.Filename `description:"the file to write to"                                                                                                                               long:"output"                      short:"o"`
-	Input                          flags.Filename `description:"an input swagger file with which to merge"                                                                                                          long:"input"                       short:"i"`
-	Include                        []string       `description:"include packages matching pattern"                                                                                                                  long:"include"                     short:"c"`
-	Exclude                        []string       `description:"exclude packages matching pattern"                                                                                                                  long:"exclude"                     short:"x"`
-	IncludeTags                    []string       `description:"include routes having specified tags (can be specified many times)"                                                                                 long:"include-tag"                 short:""`
-	ExcludeTags                    []string       `description:"exclude routes having specified tags (can be specified many times)"                                                                                 long:"exclude-tag"                 short:""`
-	ExcludeDeps                    bool           `description:"exclude all dependencies of project"                                                                                                                long:"exclude-deps"                short:""`
-	SetXNullableForPointers        bool           `description:"set x-nullable extension to true automatically for fields of pointer types without 'omitempty'"                                                     long:"nullable-pointers"           short:"n"`
-	RefAliases                     bool           `description:"transform aliased types into $ref rather than expanding their definition"                                                                           long:"ref-aliases"                 short:"r"`
-	TransparentAliases             bool           `description:"treat type aliases as completely transparent, never creating definitions for them"                                                                  long:"transparent-aliases"         short:""`
-	SkipExtensions                 bool           `description:"skip generation of x-go-* go-swagger extensions"                                                                                                    long:"skip-extensions"             short:""`
-	SkipEnumDescriptions           bool           `description:"controls whether descriptions of enum values in field are preserved in the main description"                                                        long:"skip-enum-desc"              short:""`
-	DescWithRef                    bool           `description:"allow descriptions to flow alongside $ref"                                                                                                          long:"allow-desc-with-ref"         short:""`
-	Format                         string         `choice:"yaml"                                                                                                                                                    choice:"json"                      default:"json"  description:"the format for the spec document" long:"format"`
-	EmitXGoType                    bool           `description:"controls whether special extension x-go-type is emitted"                                                                                            long:"emit-x-go-type"              short:""`
-	EmitHierarchicalNames          bool           `description:"controls how name conflicts are handled - this enables the last resort, failsafe method using nested definitions"                                   long:"emit-hierarchical-defs"      short:""`
-	SingleLineCommentAsDescription bool           `description:"controls how single line comments are handled. Default (false): as title. When true, title is skipped and only description is hydrated"             long:"single-line-comment-desc"    short:""`
-	EnableAllOfCompounding         bool           `description:"controls compounded validations & descriptions with $ref. Default is to drop. When enabled, construct a allOf compound that preserves all siblings" long:"enable-allof-compounding"    short:""`
-	Colorized                      bool           `description:"enable colorized diagnostics on stderr"                                                                                                             long:"colorized"                   short:""`
-	Quiet                          bool           `description:"mute diagnostics on stderr"                                                                                                                         long:"quiet"                       short:"q"`
+	WorkDir                        string         `default:"."                                                                                                                                                       description:"the base path to use" long:"work-dir" short:"w"`
+	BuildTags                      string         `default:""                                                                                                                                                        description:"build tags"           long:"tags"     short:"t"`
+	ScanModels                     bool           `description:"includes models that were annotated with 'swagger:model'"                                                                                            long:"scan-models"                 short:"m"`
+	Compact                        bool           `description:"when present, doesn't prettify the json"                                                                                                             long:"compact"`
+	Output                         flags.Filename `description:"the file to write to"                                                                                                                                long:"output"                      short:"o"`
+	Input                          flags.Filename `description:"an input swagger file with which to merge"                                                                                                           long:"input"                       short:"i"`
+	Include                        []string       `description:"include packages matching pattern"                                                                                                                   long:"include"                     short:"c"`
+	Exclude                        []string       `description:"exclude packages matching pattern"                                                                                                                   long:"exclude"                     short:"x"`
+	IncludeTags                    []string       `description:"include routes having specified tags (can be specified many times)"                                                                                  long:"include-tag"                 short:""`
+	ExcludeTags                    []string       `description:"exclude routes having specified tags (can be specified many times)"                                                                                  long:"exclude-tag"                 short:""`
+	ExcludeDeps                    bool           `description:"exclude all dependencies of project"                                                                                                                 long:"exclude-deps"                short:""`
+	SetXNullableForPointers        bool           `description:"set x-nullable extension to true automatically for fields of pointer types without 'omitempty'"                                                      long:"nullable-pointers"           short:"n"`
+	RefAliases                     bool           `description:"transform aliased types into $ref rather than expanding their definition"                                                                            long:"ref-aliases"                 short:"r"`
+	TransparentAliases             bool           `description:"treat type aliases as completely transparent, never creating definitions for them"                                                                   long:"transparent-aliases"         short:""`
+	SkipExtensions                 bool           `description:"skip generation of x-go-* go-swagger extensions"                                                                                                     long:"skip-extensions"             short:""`
+	SkipEnumDescriptions           bool           `description:"controls whether descriptions of enum values in field are preserved in the main description"                                                         long:"skip-enum-desc"              short:""`
+	DescWithRef                    bool           `description:"allow descriptions to flow alongside $ref"                                                                                                           long:"allow-desc-with-ref"         short:""`
+	Format                         string         `choice:"yaml"                                                                                                                                                     choice:"json"                      default:"json"  description:"the format for the spec document" long:"format"`
+	EmitXGoType                    bool           `description:"controls whether special extension x-go-type is emitted"                                                                                             long:"emit-x-go-type"              short:""`
+	EmitHierarchicalNames          bool           `description:"controls how name conflicts are handled - this enables the last resort, failsafe method using nested definitions"                                    long:"emit-hierarchical-defs"      short:""`
+	SingleLineCommentAsDescription bool           `description:"controls how single line comments are handled. Default (false): as title. When true, title is skipped and only description is hydrated"              long:"single-line-comment-desc"    short:""`
+	EnableAllOfCompounding         bool           `description:"controls compounded validations & descriptions with $ref. Default is to drop. When enabled, construct a allOf compound that preserves all siblings"  long:"enable-allof-compounding"    short:""`
+	DefaultAllOfForEmbeds          bool           `description:"render plain (untagged) struct embeds as allOf composition instead of inlining their properties"                                                     long:"default-allof-embeds"        short:""`
+	NameFromTags                   []string       `description:"ordered list of struct tag types consulted to derive property names, e.g. 'form' then 'json' (can be specified many times); defaults to 'json'"      long:"name-from-tag"               short:""`
+	SkipJSONifyInterfaceMethods    bool           `description:"emit interface method names verbatim, skipping the auto-jsonify (ToJSONName) mangler"                                                                long:"skip-jsonify-methods"        short:""`
+	NameConcatBudget               float64        `description:"readability cutoff in [0,1] for concatenating package segments when deconflicting colliding definition names; 0 selects the built-in default (0.65)" long:"name-concat-budget"          short:""`
+	AfterDeclComments              bool           `description:"allow swagger annotations inside a declaration body (leading comment of a struct body) or as a trailing inline comment"                              long:"after-decl-comments"         short:""`
+	CleanGoDoc                     bool           `description:"rewrite godoc-specific syntax (doc-link brackets, reference-style link definitions) when carried from a Go doc comment into the spec"                long:"clean-godoc"                 short:""`
+	PruneUnusedModels              bool           `description:"with --scan-models, drop discovered definitions not transitively referenced from a path, response, parameter or input spec"                          long:"prune"                       short:""`
+	Colorized                      bool           `description:"enable colorized diagnostics on stderr"                                                                                                              long:"colorized"                   short:""`
+	Quiet                          bool           `description:"mute diagnostics on stderr"                                                                                                                          long:"quiet"                       short:"q"`
 }
 
 // Execute runs this command.
@@ -82,8 +89,25 @@ func (s *SpecFile) Execute(args []string) error {
 		logger = slog.Default()
 	}
 
-	opts := codescan.Options{
-		Packages:                       args,
+	opts := s.toOptions(args, input, skipExt)
+	opts.OnDiagnostic = s.diagnosticHandler(logger, debug)
+
+	swspec, err := codescan.Run(&opts)
+	if err != nil {
+		return err
+	}
+
+	return writeToFile(swspec, !s.Compact, s.Format, string(s.Output))
+}
+
+// toOptions maps the CLI flags onto a [codescan.Options] value.
+//
+// It is a pure mapping (no I/O, no OnDiagnostic wiring) so the flag-to-option correspondence — in
+// particular the polarity-sensitive cases (EnableAllOfCompounding, DescWithRef) — can be asserted in
+// isolation.
+func (s *SpecFile) toOptions(packages []string, input *spec.Swagger, skipExt bool) codescan.Options {
+	return codescan.Options{
+		Packages:                       packages,
 		WorkDir:                        s.WorkDir,
 		InputSpec:                      input,
 		ScanModels:                     s.ScanModels,
@@ -103,45 +127,51 @@ func (s *SpecFile) Execute(args []string) error {
 		SingleLineCommentAsDescription: s.SingleLineCommentAsDescription,
 		SkipAllOfCompounding:           !s.EnableAllOfCompounding,
 		EmitHierarchicalNames:          s.EmitHierarchicalNames,
-		OnDiagnostic: func(diag codescan.Diagnostic) {
-			if diag.Severity == codescan.SeverityHint && !debug {
-				return
-			}
-
-			var l func(string, ...any)
-			switch diag.Severity {
-			case codescan.SeverityError:
-				l = logger.Error
-			case codescan.SeverityWarning:
-				l = logger.Warn
-			case codescan.SeverityHint:
-				fallthrough
-			default:
-				l = logger.Info
-			}
-
-			pth := diag.Pos.Filename
-			wkdir, err := filepath.Abs(s.WorkDir)
-			if err == nil {
-				pth, _ = filepath.Rel(wkdir, diag.Pos.Filename)
-			}
-
-			l(diag.Message,
-				slog.String("severity", diag.Severity.String()),
-				slog.String("diagnostic", string(diag.Code)),
-				slog.String("file", pth),
-				slog.Int("line", diag.Pos.Line),
-				slog.Int("column", diag.Pos.Column),
-			)
-		},
+		DefaultAllOfForEmbeds:          s.DefaultAllOfForEmbeds,
+		NameFromTags:                   s.NameFromTags,
+		SkipJSONifyInterfaceMethods:    s.SkipJSONifyInterfaceMethods,
+		NameConcatBudget:               s.NameConcatBudget,
+		AfterDeclComments:              s.AfterDeclComments,
+		CleanGoDoc:                     s.CleanGoDoc,
+		PruneUnusedModels:              s.PruneUnusedModels,
 	}
+}
 
-	swspec, err := codescan.Run(&opts)
-	if err != nil {
-		return err
+// diagnosticHandler builds the OnDiagnostic callback that routes codescan diagnostics to logger.
+//
+// Hints are muted unless debug is set.
+func (s *SpecFile) diagnosticHandler(logger *slog.Logger, debug bool) func(codescan.Diagnostic) {
+	return func(diag codescan.Diagnostic) {
+		if diag.Severity == codescan.SeverityHint && !debug {
+			return
+		}
+
+		var l func(string, ...any)
+		switch diag.Severity {
+		case codescan.SeverityError:
+			l = logger.Error
+		case codescan.SeverityWarning:
+			l = logger.Warn
+		case codescan.SeverityHint:
+			fallthrough
+		default:
+			l = logger.Info
+		}
+
+		pth := diag.Pos.Filename
+		wkdir, err := filepath.Abs(s.WorkDir)
+		if err == nil {
+			pth, _ = filepath.Rel(wkdir, diag.Pos.Filename)
+		}
+
+		l(diag.Message,
+			slog.String("severity", diag.Severity.String()),
+			slog.String("diagnostic", string(diag.Code)),
+			slog.String("file", pth),
+			slog.Int("line", diag.Pos.Line),
+			slog.Int("column", diag.Pos.Column),
+		)
 	}
-
-	return writeToFile(swspec, !s.Compact, s.Format, string(s.Output))
 }
 
 func loadSpec(input string) (*spec.Swagger, error) {

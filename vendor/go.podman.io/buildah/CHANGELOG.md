@@ -2,6 +2,132 @@
 
 # Changelog
 
+## v1.45.0 (2026-07-30)
+
+    Bump to c/storage 1.64.0, c/image 5.41.0, c/common v0.69.0
+    Handle duplicate stage nicknames
+    imagebuildah.executor.Build: index dependencyMap by position, too
+    imagebuildah.executor: make afterDependency a local variable
+    imagebuildah.executor: add stageIndex() and stageIndexUnlocked()
+    Copier: add Symlink() for creating symlinks with inline target
+    chore(deps): update actions/stale action to v11
+    fix(deps): update module github.com/moby/moby/client to v0.5.1
+    fix: replace dead len > 2 guard with len != 2 in addSysctl
+    fix(deps): update module github.com/docker/go-connections to v0.8.1
+    fix(deps): update module github.com/docker/go-connections to v0.8.0
+    tests: add link to coreutils bug workaround
+    chroot: skip setgroups when namespace denies it
+    fix(deps): update module github.com/pkg/sftp to v1.13.11
+    chore(deps): update dependency podman-container-tools/automation to v20260722
+    build: accept "FROM containers-storage:" prefixes again
+    CI: Re-enable tests with "rootless" privilege level
+    integration tests: handle rootless with overlay correctly
+    CLI: add "mount-sshfs", "umount-sshfs"
+    CLI: add "serve-sftp"
+    tests/test_runner.sh: run tests with --timing
+    Add a 'pipeloop' test helper
+    Copier: add CreateDestPath option to PutOptions
+    fix(deps): update module github.com/opencontainers/cgroups to v0.0.8
+    fix(deps): update module github.com/containers/ocicrypt to v1.3.2
+    chore(deps): update actions/checkout action to v7.0.1
+    .github/workflows/issue_pr_lock.yml: update org name
+    .github/workflows/stale.yml: pin actions/stale
+    .github/workflows: do not run cron jobs at midnight
+    Update a few comments
+    Clean up the grammar in an error message and in a few comments.
+    Fix a typo in an error message (h/t codespell)
+    tests: fix "chroot with overlay root" flake
+    fix(deps): update module github.com/moby/buildkit to v0.31.2
+    renovate: point config to new repo
+    test/conformance: update heredoc dockerfile frontend
+    ci: update VM images to 2026-07-07
+    ci: make the automation release renovate managed
+    chore(deps): update actions/setup-go action to v7
+    fix(deps): update module google.golang.org/grpc to v1.82.1
+    fix(deps): update module github.com/opencontainers/runc to v1.5.1
+    docs: fix typo dns-option
+    seccomp: fix --security-opt seccomp=profile silently ignored
+    imagebuildah: default RUN --mount type to bind for cache checksums
+    fix(deps): update common, image, and storage deps to 629dae5
+    fix(deps): update module github.com/mattn/go-shellwords to v1.0.14
+    docs: fix buildah-from no-new-privileges option
+    fix(deps): update module golang.org/x/crypto to v0.54.0
+    vendor: update container-libs to latest
+    fix(deps): update module golang.org/x/term to v0.45.0
+    chroot.mountFlagMap: change keys from int to uintptr
+    fix(deps): update module golang.org/x/sys to v0.47.0
+    fix(deps): update module golang.org/x/sync to v0.22.0
+    fix(deps): update module github.com/containers/ocicrypt to v1.3.1
+    golangci-lint: enable modernize
+    golangci-lint: enable nilnesserr
+    golangci-lint: show all issues at once
+    golangci-lint: enable more govet checks
+    build: commit an empty layer instead of a layer with nothing in it
+    Commit: add an EmptyLayerIfEmptyDiff flag
+    chore(deps): update dorny/paths-filter action to v4.0.2
+    internal/mkcw.GenerateMeasurement(): just glob for libkrunfw-sev.so.*
+    fix(deps): update module google.golang.org/grpc to v1.82.0
+    fix(deps): update common, image, and storage deps to 5af159b
+    copier: add PutOptions.Timestamp for timestamp override
+    fix(deps): update module github.com/moby/buildkit to v0.31.1
+    chore(deps): update actions/setup-go action to v6.5.0
+    parse: honor containers.conf seccomp_profile
+    fix(deps): update common, image, and storage deps to ebd3c74
+    fix(deps): update module go.etcd.io/bbolt to v1.5.0
+    fix(deps): update module github.com/opencontainers/runc to v1.5.0
+    fix(deps): update module github.com/moby/moby/client to v0.5.0
+    chore(deps): update actions/checkout action to v7
+    ci: also run on release branches
+    Update module github.com/cyphar/filepath-securejoin to v0.7.0
+    fix: typos in code comment
+    Update module github.com/moby/buildkit to v0.31.0
+    Update module github.com/opencontainers/cgroups to v0.0.7
+    ci: do not duplicate job names
+    runner.sh: do not make all for integration
+    remove hack/check_vendor_toolchain.sh
+    Makefile: simplify go.mod go version query
+    Makefile: add binaries target
+    Makefile: split install.tools
+    update golangci-lint to v2.12.2
+    Makefile: run lint as part of validate
+    fix lint error
+    Makefile: run codespell as part of validate
+    tests/bud.bats: fix typo
+    validate: add custom commit length check
+    ci: check vendor in test/tools as well
+    run make -C tests/tools vendor
+    ci: rename smoke to validate task and run without VM
+    ci: Use the GitHub action grouping syntax
+    run codespell
+    .github/workflows/ci.yml: run make vendor directly on runner
+    .github/workflows/lima.yml: do not clone 50 commits
+    .github/filters.yaml: remove non relevant files
+    remove tests/validate/buildahimages-are-sane
+    tests/NEW-IMAGES: do not pull ubi10
+    ci: rename contrib/ci to hack/ci
+    runner.sh: do not install packages at runtime
+    Update automation image to 2026-06-16
+    Update common, image, and storage deps to 9869b8f
+    Update module github.com/opencontainers/runc to v1.4.3
+    feat(manifest-push): add --timestamp parameter
+    CI: Use -U when running apt-get to install util-linux-extra
+    Update to container-libs main
+    Fix TempDirForURL leaks for --build-context and ADD git
+    Update module golang.org/x/crypto to v0.53.0
+    Update module golang.org/x/sync to v0.21.0
+    Re-enable git ADD escape directory test
+    Update dependency macos to v26
+    Update module github.com/opencontainers/selinux to v1.15.1
+    Update module github.com/fsouza/go-dockerclient to v1.13.2
+    [skip-ci] Update actions/checkout action to v6.0.3
+    ci: install cached Docker debs for debian conformance
+    new gha ci with lima
+    Add a FollowSymlink option to AddAndCopyOptions
+    Bump to v1.45.0-dev
+    selinux: simplify code
+    deps: bump oc/selinux to v1.15.0
+    Add support for symbolic chmod options
+
 ## v1.44.0 (2026-05-27)
 
     TEMPORARY: Skip a newly-added test

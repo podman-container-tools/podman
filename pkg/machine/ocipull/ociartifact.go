@@ -164,7 +164,7 @@ func (o *OCIArtifactDisk) get() (func(), error) {
 	// check if we have the latest and greatest disk image
 	if _, err = os.Stat(cachedImagePath.GetPath()); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("unable to access cached image path %q: %q", cachedImagePath.GetPath(), err)
+			return nil, fmt.Errorf("unable to access cached image path %q: %w", cachedImagePath.GetPath(), err)
 		}
 
 		// On cache misses, we clean out the cache
@@ -294,7 +294,7 @@ func (o *OCIArtifactDisk) unpack(diskArtifactHash digest.Digest) error {
 
 	blobInfo, err := GetLocalBlob(o.ctx, blobDir.GetPath())
 	if err != nil {
-		return fmt.Errorf("unable to get local manifest for %s: %q", blobDir.GetPath(), err)
+		return fmt.Errorf("unable to get local manifest for %s: %w", blobDir.GetPath(), err)
 	}
 
 	diskBlobPath := filepath.Join(blobDir.GetPath(), "blobs", "sha256", blobInfo.Digest.Encoded())

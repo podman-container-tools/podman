@@ -3,6 +3,10 @@
 # test more container-related endpoints
 #
 
+# Reset server to known good state
+stop_service
+start_service
+
 podman pull "${IMAGE}" &>/dev/null
 
 # Ensure clean slate

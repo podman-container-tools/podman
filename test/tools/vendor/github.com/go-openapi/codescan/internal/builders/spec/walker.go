@@ -12,20 +12,23 @@ import (
 	"github.com/go-openapi/spec"
 )
 
-// applyMetaBlock dispatches one parsed swagger:meta block into the
-// matching *spec.Swagger fields. Title and Description come from
-// grammar's prose classifier; level-0 Property entries are
-// routed by keyword name to the appropriate setter.
+// applyMetaBlock dispatches one parsed swagger:meta block into the matching *spec.Swagger fields.
 //
-// swspec may have a nil Info field on entry; the helper allocates
-// one before writing the first Info.* value.
-func applyMetaBlock(swspec *spec.Swagger, block grammar.Block) error {
+// Title and Description come from grammar's prose classifier; level-0 Property entries are routed
+// by keyword name to the appropriate setter.
+//
+// swspec may have a nil Info field on entry; the helper allocates one before writing the first
+// Info.* value.
+func applyMetaBlock(swspec *spec.Swagger, block grammar.Block, clean func(string) string) error {
 	if swspec.Info == nil {
 		swspec.Info = new(spec.Info)
 	}
 
-	swspec.Info.Title = stripPackagePrefix(block.Title())
-	swspec.Info.Description = block.Description()
+	// Title / Description are godoc-derived (swagger:meta has no override path), so they pass through
+	// the CleanGoDoc filter; the remaining meta fields are structured values, not prose, and are left
+	// untouched.
+	swspec.Info.Title = clean(stripPackagePrefix(block.Title()))
+	swspec.Info.Description = clean(block.Description())
 
 	for p := range block.Properties() {
 		if p.ItemsDepth != 0 {
@@ -71,10 +74,10 @@ func applyMetaBlock(swspec *spec.Swagger, block grammar.Block) error {
 	return nil
 }
 
-// dispatchMetaKeyword routes one Property to the matching meta-side
-// setter. Inline-value keywords (schemes, version, host, basePath,
-// license, contact) read Property.Value; raw-block keywords (tos,
-// consumes, produces, security, securityDefinitions, infoExtensions,
+// dispatchMetaKeyword routes one Property to the matching meta-side setter.
+//
+// Inline-value keywords (schemes, version, host, basePath, license, contact) read Property.Value;
+// raw-block keywords (tos, consumes, produces, security, securityDefinitions, infoExtensions,
 // extensions) split Property.Body and feed the body parsers.
 func dispatchMetaKeyword(p grammar.Property, swspec *spec.Swagger) error {
 	if dispatchMetaSimple(p, swspec) {
@@ -110,16 +113,14 @@ func dispatchMetaSimple(p grammar.Property, swspec *spec.Swagger) bool {
 	return true
 }
 
-// dispatchMetaYAMLBlock handles the keywords whose bodies are
-// structurally YAML and not amenable to the flex-list union:
-// securityDefinitions and externalDocs. extensions / infoExtensions
-// ride grammar's typed Extensions surface (see applyMetaBlock —
-// the block.Extensions() loop routes each entry by ext.Source).
+// dispatchMetaYAMLBlock handles the keywords whose bodies are structurally YAML and not amenable to
+// the flex-list union: securityDefinitions and externalDocs. extensions / infoExtensions ride
+// grammar's typed Extensions surface (see applyMetaBlock — the block.Extensions() loop routes
+// each entry by ext.Source).
 //
-// The KwExternalDocs arm here sets the top-level spec.ExternalDocs for
-// swagger:meta. The same keyword on route/operation/schema is emitted
-// by their own builders (routes/walker.go, handlers.schemaRawHandler),
-// and per-tag externalDocs rides the KwTags []spec.Tag unmarshal below.
+// The KwExternalDocs arm here sets the top-level spec.ExternalDocs for swagger:meta.
+// The same keyword on route/operation/schema is emitted by their own builders (routes/walker.go,
+// handlers.schemaRawHandler), and per-tag externalDocs rides the KwTags []spec.Tag unmarshal below.
 func dispatchMetaYAMLBlock(p grammar.Property, swspec *spec.Swagger) error {
 	switch p.Keyword.Name {
 	case grammar.KwSecurityDefinitions:
@@ -137,16 +138,16 @@ func dispatchMetaYAMLBlock(p grammar.Property, swspec *spec.Swagger) error {
 			if err := json.Unmarshal(data, &d); err != nil {
 				return err
 			}
-			// Skip an empty/blank block so we don't emit a useless
-			// `externalDocs: {}` (the OAS object requires `url`).
+			// Skip an empty/blank block so we don't emit a useless `externalDocs: {}` (the OAS object
+			// requires `url`).
 			if d != (spec.ExternalDocumentation{}) {
 				swspec.ExternalDocs = &d
 			}
 			return nil
 		})
 	case grammar.KwTags:
-		// `Tags:` is a YAML list of tag objects ({name, description,
-		// externalDocs, x-*}) → spec.Swagger.Tags (go-swagger#2655).
+		// `Tags:` is a YAML list of tag objects ({name, description, externalDocs, x-*}) →
+		// spec.Swagger.Tags (go-swagger#2655).
 		return yamlparser.UnmarshalListBody(p.Body, func(data []byte) error {
 			var tags []spec.Tag
 			if err := json.Unmarshal(data, &tags); err != nil {
@@ -159,8 +160,7 @@ func dispatchMetaYAMLBlock(p grammar.Property, swspec *spec.Swagger) error {
 	return nil
 }
 
-// bodyLines splits a grammar raw-block body into the []string shape
-// the meta body parsers expect.
+// bodyLines splits a grammar raw-block body into the []string shape the meta body parsers expect.
 func bodyLines(body string) []string {
 	if body == "" {
 		return nil
@@ -172,10 +172,10 @@ func bodyLines(body string) []string {
 	return lines
 }
 
-// joinNonBlank joins lines with "\n" after dropping whitespace-only
-// entries. Used for the `Terms Of Service:` body — author free-form
-// prose that should land as a single multi-line string on
-// Info.TermsOfService.
+// joinNonBlank joins lines with "\n" after dropping whitespace-only entries.
+//
+// Used for the `Terms Of Service:` body — author free-form prose that should land as a single
+// multi-line string on Info.TermsOfService.
 func joinNonBlank(lines []string) string {
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
@@ -186,17 +186,16 @@ func joinNonBlank(lines []string) string {
 	return strings.Join(out, "\n")
 }
 
-// stripPackagePrefix shaves a leading `Package <ident>` prefix off a
-// meta title. Go's `// Package <name>` doc-comment convention puts
-// the package marker on the first prose line; the emitted
-// Info.Title should carry only the rest. Returns the input unchanged
-// when the pattern is not present.
+// stripPackagePrefix shaves a leading `Package <ident>` prefix off a meta title.
 //
-// Match shape: optional leading whitespace, then `Package` (capital
-// P, the canonical godoc spelling — `package` lowercase rejected so
-// authors writing prose like "package this carefully" don't get
-// silently chopped), one or more spaces, the package identifier
-// (any non-space run), then optional trailing whitespace.
+// Go's `// Package <name>` doc-comment convention puts the package marker on the first prose line;
+// the emitted Info.Title should carry only the rest.
+// Returns the input unchanged when the pattern is not present.
+//
+// Match shape: optional leading whitespace, then `Package` (capital P, the canonical godoc spelling
+// — `package` lowercase rejected so authors writing prose like "package this carefully" don't get
+// silently chopped), one or more spaces, the package identifier (any non-space run), then optional
+// trailing whitespace.
 func stripPackagePrefix(s string) string {
 	rest, ok := strings.CutPrefix(strings.TrimLeft(s, " \t"), "Package ")
 	if !ok {
@@ -208,9 +207,8 @@ func stripPackagePrefix(s string) string {
 	}
 	idx := strings.IndexAny(rest, " \t")
 	if idx < 0 {
-		// Title is exactly `Package <ident>` with nothing after —
-		// preserve the original so the spec doesn't end up with an
-		// empty Title.
+		// Title is exactly `Package <ident>` with nothing after — preserve the original so the spec
+		// doesn't end up with an empty Title.
 		return s
 	}
 	return strings.TrimLeft(rest[idx:], " \t")

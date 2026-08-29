@@ -1,7 +1,6 @@
 OCI Image Builder
 ==========================
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/openshift/imagebuilder)](https://goreportcard.com/report/github.com/openshift/imagebuilder)
 [![GoDoc](https://godoc.org/github.com/openshift/imagebuilder?status.png)](https://godoc.org/github.com/openshift/imagebuilder)
 [![Travis](https://app.travis-ci.com/openshift/imagebuilder.svg?branch=master)](https://app.travis-ci.com/github/openshift/imagebuilder)
 [![Join the chat at freenode:openshift-dev](https://img.shields.io/badge/irc-freenode%3A%20%23openshift--dev-blue.svg)](http://webchat.freenode.net/?channels=%23openshift-dev)

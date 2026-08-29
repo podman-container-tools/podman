@@ -187,6 +187,7 @@ const (
 	KeyUID                   = "UID"
 	KeyUIDMap                = "UIDMap"
 	KeyUlimit                = "Ulimit"
+	KeyUmask                 = "Umask"
 	KeyUnmask                = "Unmask"
 	KeyUser                  = "User"
 	KeyUserNS                = "UserNS"
@@ -337,6 +338,7 @@ var (
 				KeyTmpfs:                 true,
 				KeyUIDMap:                true,
 				KeyUlimit:                true,
+				KeyUmask:                 true,
 				KeyUnmask:                true,
 				KeyUser:                  true,
 				KeyUserNS:                true,
@@ -610,10 +612,10 @@ func ConvertContainer(container *parser.UnitFile, unitsInfoMap map[string]*UnitI
 	image, _ := container.Lookup(ContainerGroup, KeyImage)
 	rootfs, _ := container.Lookup(ContainerGroup, KeyRootfs)
 	if len(image) == 0 && len(rootfs) == 0 {
-		return nil, warnings, fmt.Errorf("no Image or Rootfs key specified")
+		return nil, warnings, errors.New("no Image or Rootfs key specified")
 	}
 	if len(image) > 0 && len(rootfs) > 0 {
-		return nil, warnings, fmt.Errorf("the Image And Rootfs keys conflict can not be specified together")
+		return nil, warnings, errors.New("the Image And Rootfs keys conflict can not be specified together")
 	}
 
 	if len(image) > 0 {
@@ -703,6 +705,7 @@ func ConvertContainer(container *parser.UnitFile, unitsInfoMap map[string]*UnitI
 		KeyRetry:       "--retry",
 		KeyRetryDelay:  "--retry-delay",
 		KeyImageVolume: "--image-volume",
+		KeyUmask:       "--umask",
 	}
 	lookupAndAddString(container, ContainerGroup, stringKeys, podman)
 
@@ -1058,10 +1061,10 @@ func ConvertNetwork(network *parser.UnitFile, unitsInfoMap map[string]*UnitInfo,
 	ipRanges := network.LookupAll(NetworkGroup, KeyIPRange)
 	if len(subnets) > 0 {
 		if len(gateways) > len(subnets) {
-			return nil, warnings, fmt.Errorf("cannot set more gateways than subnets")
+			return nil, warnings, errors.New("cannot set more gateways than subnets")
 		}
 		if len(ipRanges) > len(subnets) {
-			return nil, warnings, fmt.Errorf("cannot set more ranges than subnets")
+			return nil, warnings, errors.New("cannot set more ranges than subnets")
 		}
 		for i := range subnets {
 			podman.add("--subnet", subnets[i])
@@ -1073,7 +1076,7 @@ func ConvertNetwork(network *parser.UnitFile, unitsInfoMap map[string]*UnitInfo,
 			}
 		}
 	} else if len(ipRanges) > 0 || len(gateways) > 0 {
-		return nil, warnings, fmt.Errorf("cannot set gateway or range without subnet")
+		return nil, warnings, errors.New("cannot set gateway or range without subnet")
 	}
 
 	keyValKeys := map[string]string{
@@ -1191,7 +1194,7 @@ func ConvertVolume(volume *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, i
 					service.AddEscaped(UnitGroup, "RequiresMountsFor", dev)
 				}
 			} else {
-				return nil, warnings, fmt.Errorf("key Type can't be used without Device")
+				return nil, warnings, errors.New("key Type can't be used without Device")
 			}
 		}
 
@@ -1236,7 +1239,7 @@ func ConvertKube(kube *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isUse
 
 	yamlPaths := kube.LookupAllStrv(KubeGroup, KeyYaml)
 	if len(yamlPaths) == 0 {
-		return nil, fmt.Errorf("no Yaml key specified")
+		return nil, errors.New("no Yaml key specified")
 	}
 
 	// Convert all yaml paths to absolute paths
@@ -1366,7 +1369,7 @@ func ConvertImage(image *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isU
 
 	imageName, ok := image.Lookup(ImageGroup, KeyImage)
 	if !ok || len(imageName) == 0 {
-		return nil, fmt.Errorf("no Image key specified")
+		return nil, errors.New("no Image key specified")
 	}
 
 	podman := createBasePodmanCommand(image, ImageGroup)
@@ -1421,7 +1424,7 @@ func ConvertBuild(build *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isU
 
 	// Fast fail is ResouceName is not set
 	if len(unitInfo.ResourceName) == 0 {
-		return nil, warnings, fmt.Errorf("no ImageTag key specified")
+		return nil, warnings, errors.New("no ImageTag key specified")
 	}
 
 	podman := createBasePodmanCommand(build, BuildGroup)
@@ -1493,7 +1496,7 @@ func ConvertBuild(build *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isU
 	workingDirectory, okWD := service.Lookup(ServiceGroup, ServiceKeyWorkingDirectory)
 	filePath, okFile := build.Lookup(BuildGroup, KeyFile)
 	if (!okWD || len(workingDirectory) == 0) && (!okFile || len(filePath) == 0) && len(context) == 0 {
-		return nil, warnings, fmt.Errorf("neither SetWorkingDirectory, nor File key specified")
+		return nil, warnings, errors.New("neither SetWorkingDirectory, nor File key specified")
 	}
 
 	if len(filePath) > 0 {
@@ -1508,7 +1511,7 @@ func ConvertBuild(build *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isU
 	} else if !startsWithSystemdSpecifier(filePath) && !filepath.IsAbs(filePath) && !isURL(filePath) {
 		// Special handling for relative filePaths
 		if len(workingDirectory) == 0 {
-			return nil, warnings, fmt.Errorf("relative path in File key requires SetWorkingDirectory key to be set")
+			return nil, warnings, errors.New("relative path in File key requires SetWorkingDirectory key to be set")
 		}
 		podman.add(workingDirectory)
 	}
@@ -1725,7 +1728,7 @@ func handleUser(unitFile *parser.UnitFile, groupName string, podman *PodmanCmdli
 
 	if !okUser {
 		if okGroup {
-			return fmt.Errorf("invalid Group set without User")
+			return errors.New("invalid Group set without User")
 		}
 		return nil
 	}
@@ -1776,7 +1779,7 @@ func handleUserMappings(unitFile *parser.UnitFile, groupName string, podman *Pod
 		_, hasRemapGID := unitFile.Lookup(groupName, KeyRemapGid)
 		_, RemapUsers := unitFile.LookupLast(groupName, KeyRemapUsers)
 		if hasRemapUID || hasRemapGID || RemapUsers {
-			return fmt.Errorf("deprecated Remap keys are set along with explicit mapping keys")
+			return errors.New("deprecated Remap keys are set along with explicit mapping keys")
 		}
 		return nil
 	}
@@ -1791,10 +1794,10 @@ func handleUserRemap(unitFile *parser.UnitFile, groupName string, podman *Podman
 	switch remapUsers {
 	case "":
 		if len(uidMaps) > 0 {
-			return fmt.Errorf("UidMap set without RemapUsers")
+			return errors.New("UidMap set without RemapUsers")
 		}
 		if len(gidMaps) > 0 {
-			return fmt.Errorf("GidMap set without RemapUsers")
+			return errors.New("GidMap set without RemapUsers")
 		}
 	case "manual":
 		if supportManual {
@@ -1805,7 +1808,7 @@ func handleUserRemap(unitFile *parser.UnitFile, groupName string, podman *Podman
 				podman.add("--gidmap", gidMap)
 			}
 		} else {
-			return fmt.Errorf("RemapUsers=manual is not supported")
+			return errors.New("RemapUsers=manual is not supported")
 		}
 	case "auto":
 		autoOpts := make([]string, 0)
@@ -1825,13 +1828,13 @@ func handleUserRemap(unitFile *parser.UnitFile, groupName string, podman *Podman
 		keepidOpts := make([]string, 0)
 		if len(uidMaps) > 0 {
 			if len(uidMaps) > 1 {
-				return fmt.Errorf("RemapUsers=keep-id supports only a single value for UID mapping")
+				return errors.New("RemapUsers=keep-id supports only a single value for UID mapping")
 			}
 			keepidOpts = append(keepidOpts, "uid="+uidMaps[0])
 		}
 		if len(gidMaps) > 0 {
 			if len(gidMaps) > 1 {
-				return fmt.Errorf("RemapUsers=keep-id supports only a single value for GID mapping")
+				return errors.New("RemapUsers=keep-id supports only a single value for GID mapping")
 			}
 			keepidOpts = append(keepidOpts, "gid="+gidMaps[0])
 		}
@@ -1873,7 +1876,7 @@ func addNetworks(quadletUnitFile *parser.UnitFile, groupName string, serviceUnit
 
 				if found {
 					if isContainerUnit {
-						return fmt.Errorf("extra options are not supported when joining another container's network")
+						return errors.New("extra options are not supported when joining another container's network")
 					}
 					network = fmt.Sprintf("%s:%s", unitInfo.ResourceName, options)
 				} else {
@@ -1954,7 +1957,7 @@ func handleLogOpt(unitFile *parser.UnitFile, groupName string, podman *PodmanCmd
 
 func handleStorageSource(quadletUnitFile, serviceUnitFile *parser.UnitFile, source string, unitsInfoMap map[string]*UnitInfo, checkImage bool) (string, error) {
 	if source == "" {
-		return "", fmt.Errorf("source cannot be empty")
+		return "", errors.New("source cannot be empty")
 	}
 	if source[0] == '.' {
 		var err error
@@ -2033,9 +2036,9 @@ func handleSetWorkingDirectory(quadletUnitFile, serviceUnitFile *parser.UnitFile
 
 		yamlPaths := quadletUnitFile.LookupAllStrv(KubeGroup, KeyYaml)
 		if len(yamlPaths) == 0 {
-			return "", fmt.Errorf("no Yaml key specified")
+			return "", errors.New("no Yaml key specified")
 		} else if len(yamlPaths) != 1 {
-			return "", fmt.Errorf("SetWorkingDirectory=yaml is only supported when a single Yaml key is provided")
+			return "", errors.New("SetWorkingDirectory=yaml is only supported when a single Yaml key is provided")
 		}
 
 		relativeToFile = yamlPaths[0]
@@ -2046,7 +2049,7 @@ func handleSetWorkingDirectory(quadletUnitFile, serviceUnitFile *parser.UnitFile
 
 		relativeToFile, ok = quadletUnitFile.Lookup(quadletGroup, KeyFile)
 		if !ok {
-			return "", fmt.Errorf("no File key specified")
+			return "", errors.New("no File key specified")
 		}
 	case "unit":
 		relativeToFile = quadletUnitFile.Path
@@ -2155,7 +2158,7 @@ func resolveContainerMountParams(containerUnitFile, serviceUnitFile *parser.Unit
 		key, val, hasVal := strings.Cut(token, "=")
 		if key == "source" || key == "src" {
 			if !hasVal {
-				return "", fmt.Errorf("source parameter does not include a value")
+				return "", errors.New("source parameter does not include a value")
 			}
 			sourceIndex = i
 			originalSource = val
@@ -2214,6 +2217,10 @@ func createBasePodmanCommand(unitFile *parser.UnitFile, groupName string) *Podma
 func handlePod(quadletUnitFile, serviceUnitFile *parser.UnitFile, groupName string, unitsInfoMap map[string]*UnitInfo, podman *PodmanCmdline) error {
 	pod, ok := quadletUnitFile.Lookup(groupName, KeyPod)
 	if ok && len(pod) > 0 {
+		// XXX: only %N is handled.
+		// it is difficult to properly implement specifiers handling without consulting systemd.
+		pod = strings.ReplaceAll(pod, "%N", GetContainerServiceName(quadletUnitFile))
+
 		if !strings.HasSuffix(pod, ".pod") {
 			return fmt.Errorf("pod %s is not Quadlet based", pod)
 		}
@@ -2411,7 +2418,7 @@ func ConvertArtifact(artifact *parser.UnitFile, unitsInfoMap map[string]*UnitInf
 
 	artifactName, ok := artifact.Lookup(ArtifactGroup, KeyArtifact)
 	if !ok || len(artifactName) == 0 {
-		return nil, fmt.Errorf("no Artifact key specified")
+		return nil, errors.New("no Artifact key specified")
 	}
 
 	podman := createBasePodmanCommand(artifact, ArtifactGroup)

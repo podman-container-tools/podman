@@ -120,6 +120,34 @@ var _ = Describe("Podman volume create", func() {
 		Expect(session.OutputToString()).To(ContainSubstring("hello"))
 	})
 
+	It("podman import volume preserves first mount permission adjustment", func() {
+		imageName := "volume-copyup-permissions:latest"
+		containerfile := fmt.Sprintf(`FROM %s
+RUN mkdir -p /vol-target && chown 70:71 /vol-target && chmod 750 /vol-target && echo hello > /vol-target/test
+`, ALPINE)
+		podmanTest.BuildImage(containerfile, imageName, "false")
+
+		volName := "my_vol_" + RandomString(10)
+		podmanTest.PodmanExitCleanly("volume", "create", volName)
+
+		session := podmanTest.PodmanExitCleanly("run", "--volume", volName+":/vol-target", imageName, "stat", "-c", "%u:%g %a", "/vol-target")
+		Expect(session.OutputToString()).To(Equal("70:71 750"))
+
+		helloTar := filepath.Join(podmanTest.TempDir, "hello.tar")
+		podmanTest.PodmanExitCleanly("volume", "export", volName, "--output", helloTar)
+
+		importedVolName := "my_vol_" + RandomString(10)
+		podmanTest.PodmanExitCleanly("volume", "create", importedVolName)
+
+		podmanTest.PodmanExitCleanly("volume", "import", importedVolName, helloTar)
+
+		session = podmanTest.PodmanExitCleanly("run", "--volume", importedVolName+":/vol-target", imageName, "stat", "-c", "%u:%g %a", "/vol-target")
+		Expect(session.OutputToString()).To(Equal("70:71 750"))
+
+		session = podmanTest.PodmanExitCleanly("run", "--volume", importedVolName+":/vol-target", imageName, "cat", "/vol-target/test")
+		Expect(session.OutputToString()).To(Equal("hello"))
+	})
+
 	It("podman import/export volume should fail", func() {
 		// try import on volume or source which does not exist
 		SkipIfRemote("Volume export check does not work with a remote client")

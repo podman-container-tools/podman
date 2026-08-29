@@ -124,7 +124,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 		}
 
 		if err := vsock.RemoveAllHVSockRegistryEntries(); err != nil {
-			return fmt.Errorf("unable to remove hvsock registry entries: %q", err)
+			return fmt.Errorf("unable to remove hvsock registry entries: %w", err)
 		}
 
 		return nil
@@ -282,7 +282,7 @@ func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) err
 
 	err = fsCmd.Start()
 	if err != nil {
-		return fmt.Errorf("unable to start 9p server: %v", err)
+		return fmt.Errorf("unable to start 9p server: %w", err)
 	}
 	logrus.Infof("Started podman 9p server as PID %d", fsCmd.Process.Pid)
 
@@ -661,7 +661,7 @@ func (h HyperVStubber) StopHostNetworking(mc *vmconfigs.MachineConfig, vmType de
 	err := machine.StopWinProxy(mc.Name, vmType)
 	// in podman 4, this was a "soft" error; keeping behavior as such
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
 	return nil
@@ -796,7 +796,7 @@ func resizeDisk(newSize strongunits.GiB, imagePath *define.VMFile) error {
 	resize.Stderr = os.Stderr
 	resize.Env = append(os.Environ(), "IMAGE_PATH="+imagePath.GetPath())
 	if err := resize.Run(); err != nil {
-		return fmt.Errorf("resizing image: %q", err)
+		return fmt.Errorf("resizing image: %w", err)
 	}
 	return nil
 }

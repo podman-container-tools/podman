@@ -131,6 +131,27 @@ func lookupHandle(handle unsafe.Pointer) any {
 	return lookupHandleVal(handle).val
 }
 
+// deleteHandle releases a single handle created by newHandle. It is a no-op
+// if the handle is unknown (e.g. already released).
+func deleteHandle(handle unsafe.Pointer) {
+	handleLock.Lock()
+	defer handleLock.Unlock()
+
+	current := loadHandleVals()
+	if _, ok := current[handle]; !ok {
+		return
+	}
+	next := make(map[unsafe.Pointer]handleVal, len(current)-1)
+	for h, v := range current {
+		if h == handle {
+			continue
+		}
+		next[h] = v
+	}
+	handleVals.Store(next)
+	C.free(handle)
+}
+
 func deleteHandles(db *SQLiteConn) {
 	handleLock.Lock()
 	defer handleLock.Unlock()

@@ -103,24 +103,17 @@ var _ = Describe("Podman healthcheck run", func() {
 	})
 
 	It("podman healthcheck on valid container", func() {
-		Skip("Extremely consistent flake - re-enable on debugging")
+		SkipIfNotAMD64() // https://github.com/containers/podman/issues/28269
 		session := podmanTest.Podman([]string{"run", "-dt", "--name", "hc", HEALTHCHECK_IMAGE})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 
-		exitCode := 999
-
 		// Buy a little time to get container running
-		for i := range 5 {
+		Eventually(func() int {
 			hc := podmanTest.Podman([]string{"healthcheck", "run", "hc"})
 			hc.WaitWithDefaultTimeout()
-			exitCode = hc.ExitCode()
-			if exitCode == 0 || i == 4 {
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
-		Expect(exitCode).To(Equal(0))
+			return hc.ExitCode()
+		}, 30*time.Second, 1*time.Second).Should(Equal(0))
 
 		ps := podmanTest.Podman([]string{"ps"})
 		ps.WaitWithDefaultTimeout()
@@ -169,6 +162,7 @@ var _ = Describe("Podman healthcheck run", func() {
 	})
 
 	It("podman healthcheck --ignore-result exits 0 on failing healthcheck", func() {
+		SkipIfNotAMD64() // https://github.com/containers/podman/issues/28269
 		session := podmanTest.Podman([]string{"run", "-q", "-dt", "--name", "hc", "quay.io/libpod/badhealthcheck:latest"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())

@@ -60,6 +60,23 @@ func calcServiceName(path string) string {
 	return service
 }
 
+// serviceNameFromUnit returns the value of the ServiceName= key in a unit
+// file's own group (e.g. [Container]), or "" if it is not set. Quadlet uses
+// this value verbatim as the generated service name when present.
+func serviceNameFromUnit(path string) string {
+	unit, err := parser.ParseUnitFile(path)
+	if err != nil {
+		return ""
+	}
+	ext := strings.TrimPrefix(filepath.Ext(path), ".")
+	if ext == "" {
+		return ""
+	}
+	group := strings.ToUpper(ext[:1]) + ext[1:]
+	serviceName, _ := unit.Lookup(group, "ServiceName")
+	return serviceName
+}
+
 func loadQuadletTestcase(path string) *quadletTestcase {
 	return loadQuadletTestcaseWithServiceName(path, "")
 }
@@ -68,6 +85,11 @@ func loadQuadletTestcaseWithServiceName(path, serviceName string) *quadletTestca
 	data, err := os.ReadFile(path)
 	Expect(err).ToNot(HaveOccurred())
 
+	// When the unit sets ServiceName= explicitly, Quadlet names the generated
+	// service after it rather than after the unit file, so honor it here too.
+	if len(serviceName) == 0 {
+		serviceName = serviceNameFromUnit(path)
+	}
 	var service string
 	if len(serviceName) > 0 {
 		service = serviceName
@@ -998,6 +1020,7 @@ BOGUS=foo
 		Entry("sysctl.container", "sysctl.container"),
 		Entry("timezone.container", "timezone.container"),
 		Entry("ulimit.container", "ulimit.container"),
+		Entry("umask.container", "umask.container"),
 		Entry("unmask.container", "unmask.container"),
 		Entry("user.container", "user.container"),
 		Entry("userns.container", "userns.container"),
@@ -1238,6 +1261,8 @@ BOGUS=foo
 		Entry("Container - Mount overriding service name", "mount.servicename.container", []string{"service-name.volume"}),
 		Entry("Container - Quadlet Network overriding service name", "network.quadlet.servicename.container", []string{"service-name.network"}),
 		Entry("Container - Quadlet Volume overriding service name", "volume.servicename.container", []string{"service-name.volume"}),
+		Entry("Container - Pod with %N specifier", "podspecifier.container", []string{"podspecifier.pod"}),
+		Entry("Container - Pod with %N specifier and ServiceName", "podspecifier.servicename.container", []string{"pod-specifier-svc.pod"}),
 		Entry("Container - Quadlet build with multiple tags", "build.multiple-tags.container", []string{"multiple-tags.build"}),
 		Entry("Container - Artifact Mount", "artifact-mount.container", []string{"basic.artifact"}),
 		Entry("Container - Reuse another container's network", "network.reuse.container", []string{"basic.container"}),

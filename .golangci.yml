@@ -20,6 +20,7 @@ linters:
     - dogsled
     - durationcheck
     - errchkjson
+    - errorlint
     - exptostd
     - fatcontext
     - forbidigo

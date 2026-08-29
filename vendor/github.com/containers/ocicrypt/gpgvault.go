@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 // GPGVault defines an interface for wrapping multiple secret key rings

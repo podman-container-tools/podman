@@ -194,3 +194,14 @@ func xNewPRSigstoreSignedKeyPath(t *testing.T, keyPath string, signedIdentity si
 	require.NoError(t, err)
 	return pr
 }
+
+func TestParseUids(t *testing.T) {
+	// Malformed uid/pub records with fewer than 10 colon-separated fields
+	// must be skipped rather than panicking on an out-of-range index.
+	assert.Empty(t, parseUids([]byte("uid:u:1:2:3\n")))
+	assert.Empty(t, parseUids([]byte("pub:\n")))
+
+	// A well-formed uid record still yields the parsed email address.
+	valid := []byte("uid:u:1:2:3:4:5:6:7:Test User <test@example.com>\n")
+	assert.Equal(t, []string{"test@example.com"}, parseUids(valid))
+}

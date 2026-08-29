@@ -13,18 +13,19 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// classifierPatternProperties applies a decl-level
-// `swagger:patternProperties "<re>": <spec>, …` marker onto a top-level model
-// schema. Each pair maps a quoted property-name regex to a typed value schema
-// (`<spec>` uses the swagger:type-style grammar, type-name → $ref) — the typed
-// counterpart of the regex-only `patternProperties:` field keyword, which sets
-// an empty value schema.
+// classifierPatternProperties applies a decl-level `swagger:patternProperties "<re>": <spec>, …`
+// marker onto a top-level model schema.
 //
-// Like additionalProperties, it only rides on an object (lowest-priority
-// precedence) and replaces a bare $ref with a clean object. Each regex is
-// RE2-hygiene-checked: an invalid regex is preserved on the schema but raises a
-// CodeInvalidAnnotation warning (never dropped silently). See
-// [§pattern-properties](./README.md#pattern-properties).
+// Each pair maps a quoted property-name regex to a typed value schema (`<spec>` uses the
+// swagger:type-style grammar, type-name → $ref) — the typed counterpart of the regex-only
+// `patternProperties:` field keyword, which sets an empty value schema.
+//
+// Like additionalProperties, it only rides on an object (lowest-priority precedence) and replaces a
+// bare $ref with a clean object.
+// Each regex is RE2-hygiene-checked: an invalid regex is preserved on the schema but raises a
+// CodeInvalidAnnotation warning (never dropped silently).
+//
+// See [§pattern-properties](./README.md#pattern-properties).
 func (s *Builder) classifierPatternProperties(schema *oaispec.Schema, pos token.Position) {
 	arg, ok := s.findRawAnnotationArg(s.Decl.Comments, grammar.AnnPatternProperties)
 	if !ok {
@@ -55,9 +56,9 @@ func (s *Builder) classifierPatternProperties(schema *oaispec.Schema, pos token.
 
 	for _, pr := range pairs {
 		valSchema := new(oaispec.Schema)
-		// Cross-ref linkage: each value lands at <base>/patternProperties/<regex>
-		// (per-pair, not a shared additionalProperties node), so anchors emitted
-		// while resolving an inlined value resolve under the right pointer.
+		// Cross-ref linkage: each value lands at <base>/patternProperties/<regex> (per-pair, not a shared
+		// additionalProperties node), so anchors emitted while resolving an inlined value resolve under
+		// the right pointer.
 		restore := s.descend("patternProperties", pr.regex)
 		resolved := s.resolveAdditionalPropertiesType(pr.spec, valSchema, pos)
 		restore()
@@ -76,17 +77,17 @@ func (s *Builder) classifierPatternProperties(schema *oaispec.Schema, pos token.
 	}
 }
 
-// patternPropPair is one `"<regex>": <spec>` entry of a swagger:patternProperties
-// marker.
+// patternPropPair is one `"<regex>": <spec>` entry of a swagger:patternProperties marker.
 type patternPropPair struct {
 	regex string
 	spec  string
 }
 
 // parsePatternPropertyPairs parses `"<re>": <spec>, "<re>": <spec>` into pairs.
-// The regex is double-quoted so it may contain commas/colons/spaces; only `\"`
-// is an escape inside it (every other backslash is preserved verbatim — `\d`
-// stays `\d`). The spec runs from the colon to the next top-level comma.
+//
+// The regex is double-quoted so it may contain commas/colons/spaces; only `\"` is an escape inside
+// it (every other backslash is preserved verbatim — `\d` stays `\d`).
+// The spec runs from the colon to the next top-level comma.
 // Returns ok=false on a structural error.
 func parsePatternPropertyPairs(arg string) (pairs []patternPropPair, ok bool) {
 	i := 0
@@ -138,10 +139,11 @@ func parsePatternPropertyPairs(arg string) (pairs []patternPropPair, ok bool) {
 	return pairs, true
 }
 
-// findRawAnnotationArg is the unfiltered sibling of findAnnotationArg: it
-// returns the first argument of the first block of kind verbatim, including
-// whitespace-bearing args (the swagger:patternProperties pair list). The
-// single-word filter is intentionally not applied.
+// findRawAnnotationArg is the unfiltered sibling of findAnnotationArg: it returns the first
+// argument of the first block of kind verbatim, including whitespace-bearing args (the
+// swagger:patternProperties pair list).
+//
+// The single-word filter is intentionally not applied.
 func (s *Builder) findRawAnnotationArg(cg *ast.CommentGroup, kind grammar.AnnotationKind) (string, bool) {
 	for _, b := range s.ParseBlocks(cg) {
 		if b.AnnotationKind() != kind {

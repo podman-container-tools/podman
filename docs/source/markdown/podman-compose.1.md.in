@@ -11,9 +11,9 @@ podman\-compose - Run Compose workloads via an external compose provider
 
 The default compose providers are `docker-compose` and `podman-compose`.  If installed, `docker-compose` takes precedence since it is the original implementation of the Compose specification and is widely used on the supported platforms (i.e., Linux, Mac OS, Windows).
 
-If you want to change the default behavior or have a custom installation path for your provider of choice, please change the `compose_providers` field in `containers.conf(5)` to `compose_providers = ["/path/to/provider"]`. You may also set the `PODMAN_COMPOSE_PROVIDER` environment variable.
+If you want to change the default behavior or have a custom installation path for your provider of choice, please change the `compose_providers` field in the `[engine]` table of `containers.conf(5)` to `compose_providers = ["/path/to/provider"]`. You may also set the `PODMAN_COMPOSE_PROVIDER` environment variable.
 
-By default, `podman compose` will emit a warning saying that it executes an external command. This warning can be disabled by setting `compose_warning_logs` to false in `containers.conf(5)` or setting the `PODMAN_COMPOSE_WARNING_LOGS` environment variable to false. See the man page for `containers.conf(5)` for more information.
+By default, `podman compose` will emit a warning saying that it executes an external command. This warning can be disabled by setting `compose_warning_logs` to false in the `[engine]` table of `containers.conf(5)` or setting the `PODMAN_COMPOSE_WARNING_LOGS` environment variable to false. See the man page for `containers.conf(5)` for more information.
 
 ## OPTIONS
 

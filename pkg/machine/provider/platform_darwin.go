@@ -51,11 +51,6 @@ func GetAll() []vmconfigs.VMProvider {
 	return []vmconfigs.VMProvider{new(libkrun.LibKrunStubber), new(applehv.AppleHVStubber)}
 }
 
-// SupportedProviders returns the providers that are supported on the host operating system
-func SupportedProviders() []define.VMType {
-	return []define.VMType{define.AppleHvVirt, define.LibKrun}
-}
-
 func IsInstalled(provider define.VMType) (bool, error) {
 	switch provider {
 	case define.AppleHvVirt:
@@ -87,7 +82,7 @@ func appleHvInstalled() (bool, error) {
 	cmd := exec.Command("sw_vers", "--productVersion")
 	cmd.Stdout = &outBuf
 	if err := cmd.Run(); err != nil {
-		return false, fmt.Errorf("unable to check current macOS version using `sw_vers --productVersion`: %s", err)
+		return false, fmt.Errorf("unable to check current macOS version using `sw_vers --productVersion`: %w", err)
 	}
 
 	// the output will be in the format of MAJOR.MINOR.PATCH

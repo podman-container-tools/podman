@@ -721,7 +721,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	if !connected {
 		msg := "machine did not transition into running state"
 		if sshError != nil {
-			return fmt.Errorf("%s: ssh error: %v", msg, sshError)
+			return fmt.Errorf("%s: ssh error: %w", msg, sshError)
 		}
 		return errors.New(msg)
 	}
@@ -905,7 +905,7 @@ func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.R
 	}
 
 	if err := genericRm(); err != nil {
-		return fmt.Errorf("failed to remove machines files: %v", err)
+		return fmt.Errorf("failed to remove machines files: %w", err)
 	}
 	return nil
 }
@@ -1021,5 +1021,5 @@ func promptUpdateSystemConn() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.ToLower(answer)[0] == 'y', nil
+	return len(answer) > 0 && (answer[0] == 'y' || answer[0] == 'Y'), nil
 }

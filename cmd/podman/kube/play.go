@@ -22,6 +22,7 @@ import (
 	"go.podman.io/podman/v6/cmd/podman/parse"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/utils"
+	"go.podman.io/podman/v6/cmd/podman/validate"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/annotations"
@@ -39,6 +40,7 @@ type playKubeOptionsWrapper struct {
 	CredentialsCLI string
 	StartCLI       bool
 	BuildCLI       bool
+	ValidateCLI    string
 	annotations    []string
 	macs           []string
 }
@@ -143,6 +145,12 @@ func playFlags(cmd *cobra.Command) {
 	)
 	_ = cmd.RegisterFlagCompletionFunc(usernsFlagName, common.AutocompleteUserNamespace)
 
+	playOptions.ValidateCLI = string(entities.KubeValidateIgnore)
+	validateChoice := validate.Value(&playOptions.ValidateCLI, entities.KubeValidateModeNames()...)
+	validateFlagName := "validate"
+	flags.Var(validateChoice, validateFlagName, "How to handle unrecognized YAML fields and objects: "+validateChoice.Choices())
+	_ = cmd.RegisterFlagCompletionFunc(validateFlagName, common.AutocompleteKubePlayValidate)
+
 	flags.BoolVar(&playOptions.NoHostname, "no-hostname", false, "Do not create /etc/hostname within the container, instead use the version from the image")
 	flags.BoolVar(&playOptions.NoHosts, "no-hosts", podmanConfig.ContainersConfDefaultsRO.Containers.NoHosts, "Do not create /etc/hosts within the pod's containers, instead use the version from the image")
 	flags.BoolVarP(&playOptions.Quiet, "quiet", "q", false, "Suppress output information when pulling images")
@@ -218,6 +226,8 @@ func play(cmd *cobra.Command, args []string) error {
 	if playOptions.ServiceContainer && !playOptions.StartCLI { // Sanity check to be future proof
 		return fmt.Errorf("--service-container does not work with --start=stop")
 	}
+	// The --validate value is enforced at flag-parse time by validate.Value.
+	playOptions.Validate = entities.KubeValidateMode(playOptions.ValidateCLI)
 	// TLS verification in c/image is controlled via a `types.OptionalBool`
 	// which allows for distinguishing among set-true, set-false, unspecified
 	// which is important to implement a sane way of dealing with defaults of
@@ -306,7 +316,7 @@ func play(cmd *cobra.Command, args []string) error {
 	var teardownErr error
 	if playOptions.Wait {
 		// Stop the shutdown signal handler so we can actually clean up after a SIGTERM or interrupt
-		if err := shutdown.Stop(); err != nil && err != shutdown.ErrNotStarted {
+		if err := shutdown.Stop(); err != nil && !errors.Is(err, shutdown.ErrNotStarted) {
 			return err
 		}
 		// Create a channel to catch an interrupt or SIGTERM signal
@@ -327,7 +337,7 @@ func play(cmd *cobra.Command, args []string) error {
 			// clean up any volumes that were created as well
 			fmt.Println("\nCleaning up containers, pods, and volumes...")
 			if err := teardown(teardownReader, entities.PlayKubeDownOptions{Force: true}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
-				teardownErr = fmt.Errorf("error during cleanup: %v", err)
+				teardownErr = fmt.Errorf("error during cleanup: %w", err)
 			}
 		})
 	}
@@ -518,6 +528,11 @@ func kubeplay(body io.Reader) error {
 // printPlayReport goes through the report returned by KubePlay and prints it out in a human
 // friendly format.
 func printPlayReport(report *entities.PlayKubeReport) error {
+	// Print any validation warnings (for example --validate=warn) to stderr.
+	for _, warning := range report.ValidationWarnings {
+		fmt.Fprintln(os.Stderr, "Warning:", warning)
+	}
+
 	// Print volumes report
 	for i, volume := range report.Volumes {
 		if i == 0 {

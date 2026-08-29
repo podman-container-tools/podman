@@ -59,7 +59,7 @@ func Extract(ctx context.Context, artifactName string, target string, options *E
 	tr := tar.NewReader(response.Body)
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break // End of archive
 		}
 		if err != nil {

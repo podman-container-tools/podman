@@ -253,12 +253,15 @@ func (d *DirDriver) Path(req *volume.PathRequest) (*volume.PathResponse, error) 
 
 	logrus.Infof("Hit Path() endpoint")
 
-	// TODO: Should we return error if not mounted?
-
 	vol, exists := d.volumes[req.Name]
 	if !exists {
 		logrus.Debugf("Cannot locate volume %s", req.Name)
 		return nil, fmt.Errorf("no volume with name %s found", req.Name)
+	}
+
+	if len(vol.mounts) == 0 {
+		logrus.Debugf("Volume %s is not mounted", req.Name)
+		return nil, fmt.Errorf("volume %s is not mounted", req.Name)
 	}
 
 	return &volume.PathResponse{

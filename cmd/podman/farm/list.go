@@ -1,6 +1,7 @@
 package farm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -34,6 +35,7 @@ and the output format can be changed to JSON or a user specified Go template.`
 	// Temporary struct to hold cli values.
 	lsOpts = struct {
 		Format string
+		Quiet  bool
 	}{}
 )
 
@@ -47,9 +49,16 @@ func init() {
 	formatFlagName := "format"
 	flags.StringVar(&lsOpts.Format, formatFlagName, "", "Format farm output using Go template")
 	_ = lsCommand.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteFormat(&config.Farm{}))
+
+	flags.BoolVarP(&lsOpts.Quiet, "quiet", "q", false, "Print farm names only")
+	flags.BoolP("noheading", "n", false, "Do not print headers")
 }
 
 func list(cmd *cobra.Command, args []string) error {
+	if lsOpts.Quiet && cmd.Flag("format").Changed {
+		return errors.New("quiet and format flags cannot be used together")
+	}
+	noHeading, _ := cmd.Flags().GetBool("noheading")
 	format := lsOpts.Format
 	if format == "" && len(args) > 0 {
 		format = "json"
@@ -75,9 +84,12 @@ func list(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if format != "" {
+	switch {
+	case format != "":
 		rpt, err = rpt.Parse(report.OriginUser, format)
-	} else {
+	case lsOpts.Quiet:
+		rpt, err = rpt.Parse(report.OriginUser, "{{range .}}{{.Name}}\n{{end -}}")
+	default:
 		rpt, err = rpt.Parse(report.OriginPodman,
 			"{{range .}}{{.Name}}\t{{.Connections}}\t{{.Default}}\t{{.ReadWrite}}\n{{end -}}")
 	}
@@ -85,7 +97,7 @@ func list(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if rpt.RenderHeaders {
+	if rpt.RenderHeaders && !noHeading {
 		err = rpt.Execute([]map[string]string{{
 			"Default":     "Default",
 			"Connections": "Connections",

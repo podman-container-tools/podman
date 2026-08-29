@@ -162,7 +162,7 @@ func RelaunchElevatedWait() error {
 	case syscall.WAIT_FAILED:
 		return fmt.Errorf("could not wait for process, failed: %w", err)
 	default:
-		return fmt.Errorf("could not wait for process, unknown error. event: %X, err: %v", w, err)
+		return fmt.Errorf("could not wait for process, unknown error. event: %X, err: %w", w, err)
 	}
 	var code uint32
 	if err := syscall.GetExitCodeProcess(handle, &code); err != nil {

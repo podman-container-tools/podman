@@ -209,8 +209,7 @@ func (ic *ContainerEngine) VolumeMounted(_ context.Context, nameOrID string) (*e
 	}
 	mountCount, err := vol.MountCount()
 	if err != nil {
-		// FIXME: this error should probably be returned
-		return &entities.BoolReport{Value: false}, nil //nolint: nilerr
+		return nil, err
 	}
 	if mountCount > 0 {
 		return &entities.BoolReport{Value: true}, nil

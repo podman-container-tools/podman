@@ -1,6 +1,6 @@
 package decor
 
-var _ Decorator = any{}
+var _ Decorator = anyDecorFunc{}
 
 // Any decorator.
 // Converts DecorFunc into Decorator.
@@ -8,14 +8,14 @@ var _ Decorator = any{}
 //	`fn` DecorFunc callback
 //	`wcc` optional WC config
 func Any(fn DecorFunc, wcc ...WC) Decorator {
-	return any{initWC(wcc...), fn}
+	return anyDecorFunc{initWC(wcc...), fn}
 }
 
-type any struct {
+type anyDecorFunc struct {
 	WC
 	fn DecorFunc
 }
 
-func (d any) Decor(s Statistics) (string, int) {
+func (d anyDecorFunc) Decor(s Statistics) (string, int) {
 	return d.Format(d.fn(s))
 }

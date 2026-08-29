@@ -3,9 +3,10 @@
 
 package grammar
 
-// AnnotationPrefix is the literal that introduces every codescan
-// annotation header. Centralised so callers and tests reference the
-// single source of truth rather than the bare literal.
+// AnnotationPrefix is the literal that introduces every codescan annotation header.
+//
+// Centralised so callers and tests reference the single source of truth rather than the bare
+// literal.
 const AnnotationPrefix = "swagger:"
 
 // AnnotationKind identifies the top-level swagger:<name> directive.
@@ -30,16 +31,28 @@ const (
 	AnnType        // swagger:type
 	AnnFile        // swagger:file
 	// AnnAdditionalProperties — swagger:additionalProperties <spec>.
-	// A type/model-level classifier whose arg is true | false | a
-	// swagger:type-style spec. See the schema builder's
-	// classifierAdditionalProperties.
+	//
+	// A type/model-level classifier whose arg is true | false | a swagger:type-style spec.
+	// See the schema builder's classifierAdditionalProperties.
 	AnnAdditionalProperties
-	// AnnPatternProperties — swagger:patternProperties "<re>": <spec>, …
-	// A type/model-level classifier whose arg is a comma-separated list of
-	// quoted-regex → swagger:type-style-spec pairs. The whole remainder is
-	// captured as one raw arg token; the schema builder parses the pairs. See
-	// classifierPatternProperties.
+	// AnnPatternProperties — swagger:patternProperties "<re>": <spec>, … A type/model-level
+	// classifier whose arg is a comma-separated list of quoted-regex → swagger:type-style-spec
+	// pairs.
+	//
+	// The whole remainder is captured as one raw arg token; the schema builder parses the pairs.
+	// See classifierPatternProperties.
 	AnnPatternProperties
+	// AnnTitle — swagger:title <text>.
+	//
+	// A schema-level override that replaces the godoc-derived title on a model / field.
+	// Single-line: the arg is the whole rest of the line.
+	AnnTitle
+	// AnnDescription — swagger:description <text> [+ body].
+	//
+	// A schema / response / header override that replaces the godoc-derived description.
+	// The arg is the rest of the head line; under Option B a blank-terminated body may extend it (P4).
+	// See the design doc above.
+	AnnDescription
 )
 
 const (
@@ -60,6 +73,8 @@ const (
 	labelFile                 = "file"
 	labelAdditionalProperties = "additionalProperties"
 	labelPatternProperties    = "patternProperties"
+	labelTitle                = "title"
+	labelDescription          = "description"
 	labelUnknown              = "unknown"
 )
 
@@ -100,6 +115,10 @@ func (a AnnotationKind) String() string {
 		return labelAdditionalProperties
 	case AnnPatternProperties:
 		return labelPatternProperties
+	case AnnTitle:
+		return labelTitle
+	case AnnDescription:
+		return labelDescription
 	case AnnUnknown:
 		fallthrough
 	default:
@@ -108,6 +127,7 @@ func (a AnnotationKind) String() string {
 }
 
 // AnnotationKindFromName resolves the swagger:<name> label to its kind.
+//
 // Returns AnnUnknown for labels outside the recognised set.
 func AnnotationKindFromName(name string) AnnotationKind {
 	switch name {
@@ -145,13 +165,18 @@ func AnnotationKindFromName(name string) AnnotationKind {
 		return AnnAdditionalProperties
 	case labelPatternProperties:
 		return AnnPatternProperties
+	case labelTitle:
+		return AnnTitle
+	case labelDescription:
+		return AnnDescription
 	default:
 		return AnnUnknown
 	}
 }
 
-// annotationFamily classifies an AnnotationKind into one of the four
-// family sub-grammars. Used by the parser dispatcher.
+// annotationFamily classifies an AnnotationKind into one of the four family sub-grammars.
+//
+// Used by the parser dispatcher.
 type annotationFamily int
 
 const (
@@ -165,12 +190,18 @@ const (
 func (a AnnotationKind) family() annotationFamily {
 	switch a {
 	case AnnModel, AnnResponse, AnnParameters,
-		// swagger:name is a field-level rename that accepts the same
-		// validation-keyword body as a schema field (min length, pattern,
-		// required, etc.). It dispatches through the schema parser so the
-		// body keywords surface as Properties rather than being rejected
-		// as context-invalid under a classifier block. See README §parser-contract.
-		AnnName:
+		// swagger:name is a field-level rename that accepts the same validation-keyword body as a schema
+		// field (min length, pattern, required, etc.).
+		// It dispatches through the schema parser so the body keywords surface as Properties rather than
+		// being rejected as context-invalid under a classifier block.
+		//
+		// See README §parser-contract.
+		AnnName,
+		// swagger:title / swagger:description are field/decl overrides that, like swagger:name, must
+		// coexist with the field's own validation keywords on the same comment group — so they dispatch
+		// through the schema parser too (familySchema), not the classifier parser which would reject
+		// those co-located keywords.
+		AnnTitle, AnnDescription:
 		return familySchema
 	case AnnRoute, AnnOperation:
 		return familyOperation

@@ -12,22 +12,22 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// classifierAdditionalProperties applies a decl-level
-// `swagger:additionalProperties <spec>` marker onto a top-level model schema.
+// classifierAdditionalProperties applies a decl-level `swagger:additionalProperties <spec>` marker
+// onto a top-level model schema.
 //
-// <spec> is `true` | `false` | a swagger:type-style spec (primitive / `[]T` /
-// type-name → `$ref`). Semantics depend on the schema the Go type produced:
+// <spec> is `true` | `false` | a swagger:type-style spec (primitive / `[]T` / type-name →
+// `$ref`).
+// Semantics depend on the schema the Go type produced:
 //
 //   - struct → COMPLEMENT: keep the named properties, add additionalProperties;
 //   - map → OVERRIDE the element-derived additionalProperties;
 //   - a bare `$ref` (a map/wrapper type) → DEFINE a clean object schema (the
 //     marker beats the Go type; a `$ref` cannot carry sibling keywords).
 //
-// additionalProperties is the lowest-priority annotation: if a prior rule has
-// already resolved a non-object type (swagger:type on a non-object,
-// swagger:strfmt, a special/known type), the marker is dropped with a
-// diagnostic — it only ever rides on top of an object. See
-// [§additional-properties](./README.md#additional-properties).
+// additionalProperties is the lowest-priority annotation: if a prior rule has already resolved a
+// non-object type (swagger:type on a non-object, swagger:strfmt, a special/known type), the marker
+// is dropped with a diagnostic — it only ever rides on top of an object.
+// See [§additional-properties](./README.md#additional-properties).
 func (s *Builder) classifierAdditionalProperties(schema *oaispec.Schema, pos token.Position) {
 	arg, ok := s.findAnnotationArg(s.Decl.Comments, grammar.AnnAdditionalProperties)
 	if !ok {
@@ -36,13 +36,14 @@ func (s *Builder) classifierAdditionalProperties(schema *oaispec.Schema, pos tok
 	s.applyAdditionalPropertiesSpec(schema, arg, pos)
 }
 
-// applyAdditionalPropertiesSpec sets additionalProperties on an object schema
-// from a <spec> arg. Shared by the swagger:additionalProperties marker and the
-// additionalProperties: field keyword (non-$ref path).
+// applyAdditionalPropertiesSpec sets additionalProperties on an object schema from a <spec> arg.
 //
-// Lowest-priority precedence: a schema already typed non-object is left alone
-// with a diagnostic. A bare $ref is replaced by a clean object (a $ref ignores
-// sibling keywords, so additionalProperties could not ride alongside it).
+// Shared by the swagger:additionalProperties marker and the additionalProperties: field keyword
+// (non-$ref path).
+//
+// Lowest-priority precedence: a schema already typed non-object is left alone with a diagnostic.
+// A bare $ref is replaced by a clean object (a $ref ignores sibling keywords, so
+// additionalProperties could not ride alongside it).
 func (s *Builder) applyAdditionalPropertiesSpec(schema *oaispec.Schema, arg string, pos token.Position) {
 	if len(schema.Type) > 0 && !schema.Type.Contains("object") {
 		s.RecordDiagnostic(grammar.Warnf(pos, grammar.CodeShapeMismatch,
@@ -51,12 +52,12 @@ func (s *Builder) applyAdditionalPropertiesSpec(schema *oaispec.Schema, arg stri
 		return
 	}
 
-	// Cross-ref linkage: the value schema lands at <base>/additionalProperties,
-	// so advance the base path for its build (an inlined element's properties /
-	// enum values resolve under it). Brackets only the value resolve; the
-	// $ref-sibling path (refOverrideCollector) calls
-	// resolveAdditionalPropertiesValue directly and is intentionally not
-	// bracketed here — its value lives in an untracked allOf member.
+	// Cross-ref linkage: the value schema lands at <base>/additionalProperties, so advance the base
+	// path for its build (an inlined element's properties / enum values resolve under it).
+	//
+	// Brackets only the value resolve; the $ref-sibling path (refOverrideCollector) calls
+	// resolveAdditionalPropertiesValue directly and is intentionally not bracketed here — its value
+	// lives in an untracked allOf member.
 	restore := s.descend("additionalProperties")
 	sob, ok := s.resolveAdditionalPropertiesValue(arg, pos)
 	restore()
@@ -71,11 +72,11 @@ func (s *Builder) applyAdditionalPropertiesSpec(schema *oaispec.Schema, arg stri
 	schema.AdditionalProperties = sob
 }
 
-// resolveAdditionalPropertiesValue turns a <spec> arg (true | false | a
-// swagger:type-style spec) into a SchemaOrBool, without mutating any parent
-// schema — so it serves both the type-forcing paths (marker / field keyword)
-// and the allOf-sibling path on a $ref'd field. Returns ok=false (diagnostic
-// recorded) when a TypeSpec cannot be resolved.
+// resolveAdditionalPropertiesValue turns a <spec> arg (true | false | a swagger:type-style spec)
+// into a SchemaOrBool, without mutating any parent schema — so it serves both the type-forcing
+// paths (marker / field keyword) and the allOf-sibling path on a $ref'd field.
+//
+// Returns ok=false (diagnostic recorded) when a TypeSpec cannot be resolved.
 func (s *Builder) resolveAdditionalPropertiesValue(arg string, pos token.Position) (*oaispec.SchemaOrBool, bool) {
 	switch arg {
 	case "true":
@@ -91,11 +92,13 @@ func (s *Builder) resolveAdditionalPropertiesValue(arg string, pos token.Positio
 	}
 }
 
-// resolveAdditionalPropertiesType resolves a swagger:type-style spec onto the
-// additionalProperties value schema. Unlike swagger:type's resolveTypeOverride
-// (which inlines named references), a type-name here resolves to a `$ref` — an
-// additionalProperties value naturally references a model, matching how a
-// `map[string]Model` field renders. Leading `[]` build array layers.
+// resolveAdditionalPropertiesType resolves a swagger:type-style spec onto the additionalProperties
+// value schema.
+//
+// Unlike swagger:type's resolveTypeOverride (which inlines named references), a type-name here
+// resolves to a `$ref` — an additionalProperties value naturally references a model, matching how
+// a `map[string]Model` field renders.
+// Leading `[]` build array layers.
 func (s *Builder) resolveAdditionalPropertiesType(arg string, target *oaispec.Schema, pos token.Position) bool {
 	base, depth := stripArrayPrefixes(arg)
 
@@ -104,9 +107,9 @@ func (s *Builder) resolveAdditionalPropertiesType(arg string, target *oaispec.Sc
 		inner.Typed("array", "")
 		inner = inner.Items()
 	}
-	// Cross-ref linkage: the base resolves into the innermost items node; keep
-	// the path aligned for anchors emitted there (caller has already descended
-	// the additionalProperties / patternProperties segment).
+	// Cross-ref linkage: the base resolves into the innermost items node; keep the path aligned for
+	// anchors emitted there (caller has already descended the additionalProperties / patternProperties
+	// segment).
 	defer s.descendItems(depth)()
 
 	// Primitive / OAS-2 scalar / Go-builtin spelling — inline.
@@ -114,11 +117,10 @@ func (s *Builder) resolveAdditionalPropertiesType(arg string, target *oaispec.Sc
 		return true
 	}
 
-	// Type-name reference → $ref. Resolve the leaf in the builder's own
-	// package first, then uniquely across the scanned packages' models
-	// (name-identity leaf resolution). buildFromType uses the NAMED type
-	// (not its Underlying) so buildNamedType emits the $ref and registers it
-	// for discovery.
+	// Type-name reference → $ref.
+	// Resolve the leaf in the builder's own package first, then uniquely across the scanned packages'
+	// models (name-identity leaf resolution). buildFromType uses the NAMED type (not its Underlying)
+	// so buildNamedType emits the $ref and registers it for discovery.
 	decl, found, ambiguous := s.resolveNamedTypeLeaf(base, pos)
 	if ambiguous {
 		return false // diagnostic already recorded

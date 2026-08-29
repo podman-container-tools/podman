@@ -42,7 +42,11 @@ var _ = Describe("Podman Info", func() {
 
 			desc := fmt.Sprintf("JSON test(%q)", tt.input)
 			Expect(session).Should(Exit(tt.exitCode), desc)
-			Expect(session.IsJSONOutputValid()).To(Equal(tt.success), desc)
+			if tt.success {
+				Expect(session.OutputToString()).To(BeValidJSON(), desc)
+			} else {
+				Expect(session.OutputToString()).ToNot(BeValidJSON(), desc)
+			}
 		}
 	})
 
@@ -121,19 +125,6 @@ var _ = Describe("Podman Info", func() {
 		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.CgroupControllers}}")
 		Expect(session.OutputToString()).To(ContainSubstring("memory"))
 		Expect(session.OutputToString()).To(ContainSubstring("pids"))
-	})
-
-	It("Podman info: check desired runtime", func() {
-		// defined in .cirrus.yml
-		want := os.Getenv("CI_DESIRED_RUNTIME")
-		if want == "" {
-			if os.Getenv("CIRRUS_CI") == "" {
-				Skip("CI_DESIRED_RUNTIME is not set--this is OK because we're not running under Cirrus")
-			}
-			Fail("CIRRUS_CI is set, but CI_DESIRED_RUNTIME is not! See #14912")
-		}
-		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.OCIRuntime.Name}}")
-		Expect(session.OutputToString()).To(Equal(want))
 	})
 
 	It("Podman info: check desired network backend", func() {
@@ -222,13 +213,13 @@ var _ = Describe("Podman Info", func() {
 	})
 
 	It("Podman info: check desired storage driver", func() {
-		// defined in .cirrus.yml
+		// set by hack/ci/runner.sh
 		want := os.Getenv("CI_DESIRED_STORAGE")
 		if want == "" {
-			if os.Getenv("CIRRUS_CI") == "" {
-				Skip("CI_DESIRED_STORAGE is not set--this is OK because we're not running under Cirrus")
+			if os.Getenv("PODMAN_CI") == "" {
+				Skip("CI_DESIRED_STORAGE is not set--this is OK because we're not running in podman CI")
 			}
-			Fail("CIRRUS_CI is set, but CI_DESIRED_STORAGE is not! See #20161")
+			Fail("PODMAN_CI is set, but CI_DESIRED_STORAGE is not! See #20161")
 		}
 		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Store.GraphDriverName}}")
 		Expect(session.OutputToString()).To(Equal(want), ".Store.GraphDriverName from podman info")

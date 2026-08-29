@@ -33,6 +33,10 @@ type Copy struct {
 	// If set, the owner:group for the destination.  This value is passed
 	// to the executor for handling.
 	Chown string
+	// If set, an octal mode (0 through 07777) or chmod(1) symbolic mode
+	// clauses for the destination. This value is passed to the executor for
+	// handling: symbolic clauses (including the conditional X) are resolved
+	// against each copied file's current mode there.
 	Chmod string
 	// If set, a checksum which the source must match, or be rejected.
 	Checksum string

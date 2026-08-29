@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# logformatter - highlight a Cirrus test log (ginkgo or bats)
+# logformatter - highlight a ci test log (ginkgo or bats)
 #
 # Adapted from https://raw.githubusercontent.com/edsantiago/greasemonkey/podman-ginkgo-highlight
 #
@@ -19,7 +19,7 @@ use warnings;
 
 (our $ME = $0) =~ s|.*/||;
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 # Autoflush stdout
 $| = 1;
@@ -112,7 +112,7 @@ Usage: $ME [OPTIONS] TEST_NAME
 $ME is a filter; it HTMLifies an input stream (presumably
 Ginkgo or BATS log results), writing HTML results to an output file
 but passing stdin unmodified to stdout. It is intended to run in
-the Cirrus CI environment.
+the github CI environment.
 
 Parameters:
 
@@ -212,26 +212,9 @@ END_HTML
     print { $out_fh } "<h2>Synopsis</h2>\n<hr/>\n",
         job_synopsis($test_name), "<hr/>\n";
 
-    # FOR DEBUGGING: dump environment, but in HTML comments to not clutter
-    # This is safe. There is a TOKEN envariable, but it's not sensitive.
-    # There are no sensitive/secret values in our execution environment,
-    # but we're careful anyway. $SECRET_ENV_RE is set in lib.sh
-    my $filter_re = $ENV{SECRET_ENV_RE} || 'ACCOUNT|GC[EP]|PASSW|SECRET|TOKEN';
-    $filter_re .= '|BASH_FUNC';   # These are long and un-useful
-
-    print { $out_fh } "<!-- Environment: -->\n";
-    for my $e (sort keys %ENV) {
-        next if $e =~ /$filter_re/;
-
-        my $val = escapeHTML($ENV{$e});
-        $val =~ s/--/-&#x002D;/g;       # double dash not valid in comments
-        printf { $out_fh } "<!--  %-20s %s -->\n", $e, $val;
-    }
-
     # State variables
     my $previous_timestamp = '';  # timestamp of previous line
     my $previous_timestamp_fine;  # fine-grain timestamp (BATS only)
-    my $cirrus_task;              # Cirrus task number, used for linking
     my $git_commit;               # git SHA, used for linking to source files
     my $subtest_status;           # pass, fail, skip, flake - for each subtest
     my $subtest_name;             # assembled from two or more Describe()/It()s
@@ -243,8 +226,8 @@ END_HTML
     my $looks_like_python;        #   " "   "  : for colorizing python tests
     my %bats_count;               # For summary line: count of pass/fail/skip
 
-    # When running in cirrus, we have the commit SHA
-    $git_commit = $ENV{CIRRUS_CHANGE_IN_REPO};
+    # When running in github, we have the commit SHA
+    $git_commit = $ENV{GITHUB_SHA};
 
     print { $out_fh } "<div class='tt'> <!-- begin processed output -->\n";
 
@@ -314,29 +297,14 @@ END_HTML
         }
         # ...so we can link to specific lines in source files
         if ($git_commit) {
-            #           1  12  3                 34     4 5   526  6
-            $line =~ s{^(.*)(\/(containers\/[^/]+)(\/\S+):(\d+))(.*)$}
+            #           1  12  3                             34     4 5   526  6
+            $line =~ s{^(.*)(\/(podman-container-tools\/[^/]+)(\/\S+):(\d+))(.*)$}
                       {$1<a class="codelink" href='https://github.com/$3/blob/$git_commit$4#L$5'>$2</a>$6};
 
             # Same, for python errors
-            #           1  12  3                 34         4             5   526
-            $line =~ s{^(.*)(\/(containers\/[^/]+)(\/\S+\.py).*,\s+line\s+(\d+))(,\s+in.*)$}
+            #           1  12  3                             34         4             5   526
+            $line =~ s{^(.*)(\/(podman-container-tools\/[^/]+)(\/\S+\.py).*,\s+line\s+(\d+))(,\s+in.*)$}
                       {$1<a class="codelink" href='https://github.com/$3/blob/$git_commit$4#L$5'>$2</a>$6};
-
-            # And, sigh, Macintosh always has to be different
-            #           1              123    3 4   425  5
-            $line =~ s{^(.*/ci/task-\d+)((/\S+):(\d+))(.*)$}
-                      {$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit$3#L$4">$2</a>$5};
-
-            # ...as does Windows
-            #           1                             123    3 4   435  5
-            $line =~ s{^(.*/Local/cirrus-ci-build/repo)((/\S+):(\d+))(.*)$}
-                      {$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit$3#L$4">$2</a>$5}
-        }
-
-        # Try to identify the cirrus task
-        if ($line =~ /cirrus-task-(\d+)/) {
-            $cirrus_task = $1;
         }
 
         # logrus messages, always highlighted
@@ -440,7 +408,7 @@ END_HTML
             # and 'test/system' because there's no way to get them from log.
             #
             #          1  2      2               13     4         43           5
-            $line =~ s{(in(\stest)?\s+file\s+\S+/)(\S+\.(bats|bash)),\s+line\s+(\d+)}{$1<a class="codelink" href="https://github.com/containers/podman/blob/$git_commit/test/system/$3#L$5">$3, line $5</a>};
+            $line =~ s{(in(\stest)?\s+file\s+\S+/)(\S+\.(bats|bash)),\s+line\s+(\d+)}{$1<a class="codelink" href="https://github.com/podman-container-tools/podman/blob/$git_commit/test/system/$3#L$5">$3, line $5</a>};
 
             if ($css) {
                 # Make it linkable, e.g. foo.html#t--00001
@@ -746,14 +714,6 @@ END_HTML
 
         print { $out_fh } "</div>  <!-- end processed output -->\n";
 
-        # Did we find a cirrus task? Link back.
-        if ($cirrus_task) {
-            print { $out_fh } <<"END_HTML";
-<hr />
-<h3>Cirrus <a href="https://cirrus-ci.com/task/$cirrus_task">task $cirrus_task</a></h3>
-END_HTML
-        }
-
         # FIXME: need a safe way to get TZ
         printf { $out_fh } <<"END_HTML", scalar(CORE::localtime);
 <hr />
@@ -782,27 +742,6 @@ END_HTML
         print  "\n";
         printf "Failed tests (%d):\n", scalar(@$fails);
         printf " - %d %s\n", @$_ for @$fails;
-    }
-
-    # If Cirrus magic envariables are available, write a link to results.
-    # FIXME: it'd be so nice to make this a clickable live link.
-    #
-    # As of June 2022 we use the Cirrus API[1] as the source of our logs,
-    # instead of linking directly to googleapis.com. This will allow us
-    # to abstract cloud-specific details, so we can one day use Amazon cloud.
-    # See #14569 for more info.
-    #
-    #   [1] https://cirrus-ci.org/guide/writing-tasks/#latest-build-artifacts
-    if ($have_formatted_log && $ENV{CIRRUS_TASK_ID}) {
-        my $URL_BASE = "https://api.cirrus-ci.com";
-        my $task_id  = $ENV{CIRRUS_TASK_ID};
-
-        # Link by *taskID*, not buildID + taskname. First, this is shorter
-        # and less duplicaty. Second, and more important, buildID + taskname
-        # is non-unique, and a link to a flake log will be clobbered.
-        my $URL = "${URL_BASE}/v1/artifact/task/$task_id/html/${outfile}";
-
-        print "\n\nAnnotated results:\n  $URL\n";
     }
 }
 
@@ -846,61 +785,23 @@ sub job_synopsis {
 <table class="synopsis">
 END_SYNOPSIS
 
-    # PR 1234 - title of the pr
-    my $pr_title = escapeHTML(_env_replace("{CIRRUS_CHANGE_TITLE}"));
+    # PR 1234 - title of the pr, envs are set in lima.yml
+    my $pr_title = escapeHTML(_env_replace("{PR_TITLE}"));
     $s .= _tr("GitHub PR", sprintf("%s - %s",
-                                   _a("{CIRRUS_PR}", "https://{CIRRUS_REPO_CLONE_HOST}/{CIRRUS_REPO_FULL_NAME}/pull/{CIRRUS_PR}"),
+                                   _a("{PR_NUMBER}", "{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/pull/{PR_NUMBER}"),
                                    $pr_title));
 
     # PR author, if signed-off-by
-    if (my $msg = _env_replace("{CIRRUS_COMMIT_MESSAGE}")) {
-        while ($msg =~ /^Signed-off-by:\s+(\S.*\S)$/gmi) {
-            $s .= _tr("Author", escapeHTML($1));
-        }
+    if (my $actor = _env_replace("{GITHUB_ACTOR}")) {
+        $s .= _tr("Author", escapeHTML($actor));
     }
 
-    # eg "test fedora", "special_testing_rootless"
-    # WARNING: As of 2020-10-05, $CIRRUS_TASK_NAME reflects the same
-    # descriptive content as our $subtest_name argument (confirm via
-    # cross-checking runner.sh:logformatter() vs cirrus.yml:&std_name_fmt).
-    # If this ever becomes untrue, just add _tr("Subtest", $subtest_name).
-    my $test_name = _env_replace("{CIRRUS_TASK_NAME}");
-    # (Special-case cleanup: Cirrus\ quotes\ spaces; remove for readability).
-    $test_name =~ s/\\\s+/ /g;
-    $s .= _tr("Test name", $test_name);
+    $s .= _tr("Test name", $subtest_name);
 
-    # Macs always have to be different
-    my $is_mac = ($test_name =~ /darwin/);
-
-    # Link to further Cirrus results, e.g. other runs.
-    # Build is mostly boring, it's usually TASK that we want to see.
-    $s .= _tr("Cirrus", sprintf("<small>Build %s</small> / <b>Task %s</b>",
-                                _a("{CIRRUS_BUILD_ID}", "https://cirrus-ci.com/build/{CIRRUS_BUILD_ID}"),
-                                _a("{CIRRUS_TASK_ID}", "https://cirrus-ci.com/task/{CIRRUS_TASK_ID}")));
-
-    # Logs: link to original (unformatted) log; journal; cleanup tracer; and, if remote, server
-    my @logs;
-    push @logs, _a("main", sprintf("https://api.cirrus-ci.com/v1/task/{CIRRUS_TASK_ID}/logs/%s.log",
-                                   ($is_mac ? 'test' : 'main')));
-    push @logs, _a("journal", "https://api.cirrus-ci.com/v1/task/{CIRRUS_TASK_ID}/logs/journal.log")
-        unless $is_mac;
-
-    push @logs, _a("cleanup tracer", "https://api.cirrus-ci.com/v1/artifact/task/{CIRRUS_TASK_ID}/cleanup_tracer/podman-cleanup-tracer.log")
-        unless $is_mac;
-
-    # System tests are single-threaded, and have a server log available
-    if ($test_name =~ /sys\s+remote\s/) {
-        push @logs, _a("remote server", "https://api.cirrus-ci.com/v1/artifact/task/{CIRRUS_TASK_ID}/server_log/podman-server.log");
-    }
-    $s .= _tr("Logs", join(" / ", @logs));
-
-    # PR_BASE_SHA (set in lib.sh) can tell us if our parent includes--or
-    # doesn't--a purported fix for a flake. Note about the URL: "commits", plural,
-    # links to a git history listing; if we used "commit", singular, that would
-    # be less useful.
-    if (my $base = $ENV{PR_BASE_SHA}) {
-        $s .= _tr("Base commit", _a($base, "https://{CIRRUS_REPO_CLONE_HOST}/{CIRRUS_REPO_FULL_NAME}/commits/$base"));
-    }
+    # Link to github action results.
+    # We cannot direct link to the job result, only to the overall run as the job is does not seem to be exposed anywhere by default.
+    $s .= _tr("GitHub Actions RUN", sprintf("<b>%s</b>",
+                        _a("{GITHUB_RUN_ID}", "{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/actions/runs/{GITHUB_RUN_ID}")));
 
     $s .= "</table>\n";
     return $s;

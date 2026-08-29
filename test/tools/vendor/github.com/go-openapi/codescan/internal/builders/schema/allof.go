@@ -13,15 +13,13 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// scanEmbeddedFields walks st's anonymous fields and decides whether
-// each embed contributes properties to the outer schema directly or
-// becomes an `allOf` compound member.
+// scanEmbeddedFields walks st's anonymous fields and decides whether each embed contributes
+// properties to the outer schema directly or becomes an `allOf` compound member.
 //
 // # Details
 //
-// See [§allof](./README.md#allof) — embed classification rules,
-// `IsAllOfMember` semantics, and how the returned target ties to
-// `buildFromStruct`'s second pass.
+// See [§allof](./README.md#allof) — embed classification rules, `IsAllOfMember` semantics, and
+// how the returned target ties to `buildFromStruct`'s second pass.
 //
 // Returns:
 //   - target — the schema receiving properties; nil if no embed contributed,
@@ -45,7 +43,7 @@ func (s *Builder) scanEmbeddedFields(
 			continue
 		}
 
-		_, ignore, isString, omitEmpty, err := resolvers.ParseJSONTag(afld, fld.Name())
+		_, ignore, isString, omitEmpty, err := resolvers.ParseFieldTag(afld, fld.Name(), s.Ctx.NameFromTags())
 		if err != nil {
 			return nil, false, err
 		}
@@ -53,7 +51,16 @@ func (s *Builder) scanEmbeddedFields(
 			continue
 		}
 
-		if !fd.IsAllOfMember {
+		// DefaultAllOfForEmbeds promotes a plain (untagged) embed to allOf composition, exactly as a
+		// `swagger:allOf` tag would.
+		// A json-named embed is a single named property, not a promotion, so it stays inline
+		// (go-swagger#2038); interface embeds are out of scope here.
+		isAllOf := fd.IsAllOfMember
+		if !isAllOf && s.Ctx.DefaultAllOfForEmbeds() && embedNestName(afld, fd) == "" {
+			isAllOf = true
+		}
+
+		if !isAllOf {
 			target, err = s.buildPlainEmbed(fld, afld, fd, isString, omitEmpty, schema, target, nameByJSON)
 			if err != nil {
 				return nil, false, err
@@ -79,9 +86,8 @@ func (s *Builder) scanEmbeddedFields(
 	return target, hasAllOf, nil
 }
 
-// buildPlainEmbed handles an anonymous embed that carries no
-// `swagger:allOf` annotation, returning the (possibly newly-assigned)
-// property target.
+// buildPlainEmbed handles an anonymous embed that carries no `swagger:allOf` annotation, returning
+// the (possibly newly-assigned) property target.
 //
 // Two shapes, mirroring Go's encoding/json:
 //
@@ -103,10 +109,7 @@ func (s *Builder) buildPlainEmbed(
 		target = schema
 	}
 
-	nestName := resolvers.ExplicitJSONName(afld)
-	if fd.JSONName != "" {
-		nestName = fd.JSONName
-	}
+	nestName := embedNestName(afld, fd)
 	if nestName != "" {
 		err := s.applyFieldCarrier(fieldCarrier{
 			name:      nestName,
@@ -120,9 +123,8 @@ func (s *Builder) buildPlainEmbed(
 		return target, err
 	}
 
-	// A `required:` annotation on the embed applies to the properties it
-	// promotes (go-swagger#2701). Thread it through the recursion,
-	// restoring afterwards so sibling fields are unaffected.
+	// A `required:` annotation on the embed applies to the properties it promotes (go-swagger#2701).
+	// Thread it through the recursion, restoring afterwards so sibling fields are unaffected.
 	saved := s.embedInherited
 	s.embedInherited = s.ReadEmbedInheritance(afld.Doc, saved)
 	err := s.buildEmbedded(fld.Type(), target, nameByJSON)
@@ -131,19 +133,30 @@ func (s *Builder) buildPlainEmbed(
 	return target, err
 }
 
-// buildAllOf builds the schema for one allOf compound member. Peels
-// pointers and routes named types and aliases to their dedicated
-// helpers.
+// embedNestName returns the explicit name an embed nests under — the json tag name, overridden by
+// `swagger:name` — or "" when the embed promotes its properties (Go field promotion).
+//
+// An embed with a nest name is a single named property, never a promotion or allOf composition
+// (go-swagger#2038).
+func embedNestName(afld *ast.Field, fd fieldDoc) string {
+	if fd.JSONName != "" {
+		return fd.JSONName
+	}
+	return resolvers.ExplicitJSONName(afld)
+}
+
+// buildAllOf builds the schema for one allOf compound member.
+//
+// Peels pointers and routes named types and aliases to their dedicated helpers.
 //
 // # Details
 //
-// See [§allof](./README.md#allof) — the three-arm dispatch and why
-// non-Named / non-Alias inputs are dropped silently with a logger
-// warning rather than an error.
+// See [§allof](./README.md#allof) — the three-arm dispatch and why non-Named / non-Alias inputs
+// are dropped silently with a logger warning rather than an error.
 func (s *Builder) buildAllOf(tpe types.Type, schema *oaispec.Schema) error {
-	// Cross-ref linkage: an allOf member is an untracked subtree
-	// (/allOf/{k}/…); clear the base path so nothing inside emits a wrong
-	// anchor. Members that are $refs anchor via their own definition.
+	// Cross-ref linkage: an allOf member is an untracked subtree (/allOf/{k}/…); clear the base path
+	// so nothing inside emits a wrong anchor.
+	// Members that are $refs anchor via their own definition.
 	defer s.repath("")()
 
 	switch ftpe := tpe.(type) {
@@ -161,15 +174,14 @@ func (s *Builder) buildAllOf(tpe types.Type, schema *oaispec.Schema) error {
 }
 
 // buildNamedAllOf resolves a named type appearing as an allOf member.
-// Struct and interface underlyings share the same precedence shape:
-// user-classifier first, then stdlib specials, then model lookup, then
-// inline build.
+//
+// Struct and interface underlyings share the same precedence shape: user-classifier first, then
+// stdlib specials, then model lookup, then inline build.
 //
 // # Details
 //
-// See [§allof](./README.md#allof) — arm symmetry rationale and why
-// `classifierAliasTargetStrfmt` is preferred over a comment-group-keyed
-// variant.
+// See [§allof](./README.md#allof) — arm symmetry rationale and why `classifierAliasTargetStrfmt`
+// is preferred over a comment-group-keyed variant.
 func (s *Builder) buildNamedAllOf(ftpe *types.Named, schema *oaispec.Schema) error {
 	tgt := NewTypable(schema, 0, s.skipExtensions)
 	tio := ftpe.Obj()

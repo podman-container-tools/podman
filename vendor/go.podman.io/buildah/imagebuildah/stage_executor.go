@@ -417,7 +417,7 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 		preserveOwnership := false
 		contextDir := s.executor.contextDir
 		// If we are copying files via heredoc syntax, then
-		// its time to create these temporary files on host
+		// it's time to create these temporary files on host
 		// and copy these to container
 		if len(copy.Files) > 0 {
 			// If we are copying files from heredoc syntax, there
@@ -477,8 +477,8 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 		}
 
 		if copy.From != "" && len(copy.Files) == 0 {
-			// If from has an argument within it, resolve it to its
-			// value.  Otherwise just return the value found.
+			// If "from" has an argument within it, resolve it to
+			// its value.  Otherwise just return the value found.
 			from, fromErr := imagebuilder.ProcessWord(copy.From, s.stage.Builder.Arguments())
 			if fromErr != nil {
 				return fmt.Errorf("unable to resolve argument %q: %w", copy.From, fromErr)
@@ -538,9 +538,9 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 				if isStage, err := s.executor.waitForStage(s.ctx, from, s.stages[:s.index]); isStage && err != nil {
 					return err
 				}
-				if other, ok := s.executor.stages[from]; ok && other.index < s.index {
-					contextDir = other.mountPoint
-					idMappingOptions = &other.builder.IDMappingOptions
+				if otherStageIndex, otherStage := s.executor.stageIndex(from, s.stages[:s.index]); otherStageIndex != -1 {
+					contextDir = otherStage.mountPoint
+					idMappingOptions = &otherStage.builder.IDMappingOptions
 				} else if builder, ok := s.executor.containerMap[copy.From]; ok {
 					contextDir = builder.MountPoint
 					idMappingOptions = &builder.IDMappingOptions
@@ -752,7 +752,7 @@ func (s *stageExecutor) runStageMountPoints(mountList []string) (map[string]inte
 					}
 					// If the source's name is a stage, return a
 					// pointer to its rootfs.
-					if otherStage, ok := s.executor.stages[from]; ok && otherStage.index < s.index {
+					if otherStageIndex, otherStage := s.executor.stageIndex(from, s.stages[:s.index]); otherStageIndex != -1 {
 						stageMountPoints[from] = internal.StageMountDetails{
 							IsStage:    true,
 							DidExecute: otherStage.didExecute,
@@ -997,7 +997,7 @@ func (s *stageExecutor) sanitizeFrom(from, tmpdir string) (newFrom string, err e
 		return "", fmt.Errorf("parsing image name %q: %w", from, err)
 	}
 	// TODO: drop this part and just return an error... someday
-	return sanitize.ImageName(transportName, restOfImageName, s.executor.contextDir, tmpdir)
+	return sanitize.ImageName(s.executor.store, transportName, restOfImageName, s.executor.contextDir, tmpdir)
 }
 
 // prepare creates a working container based on the specified image, or if one
@@ -1023,11 +1023,8 @@ func (s *stageExecutor) prepare(ctx context.Context, from string, initializeIBCo
 	if s.executor.sourcePolicy != nil && from != "scratch" {
 		// Check if 'from' references a previous stage by name, index, or image ID
 		isStageRef := false
-		for i, st := range s.stages[:s.index] {
-			if st.Name == from || strconv.Itoa(i) == from {
-				isStageRef = true
-				break
-			}
+		if stageIndex, _ := s.executor.stageIndex(from, s.stages[:s.index]); stageIndex != -1 {
+			isStageRef = true
 		}
 		// Also check if 'from' is an image ID that was created by a previous stage
 		// (this happens when execute() resolves stage names to image IDs before calling prepare)
@@ -1292,8 +1289,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 	lastStage := !moreStages
 	onlyBaseImage := false
 	imageIsUsedLater := moreStages && (internalUtil.SetHas(s.executor.baseMap, stage.Name) || internalUtil.SetHas(s.executor.baseMap, strconv.Itoa(stage.Position)))
-	rootfsIsUsedLater := moreStages && (internalUtil.SetHas(s.executor.rootfsMap, stage.Name) || internalUtil.SetHas(s.executor.rootfsMap, strconv.Itoa(stage.Position)))
-
+	rootfsIsUsedLater := moreStages && internalUtil.SetHas(s.executor.rootfsMap, stage.Position)
 	// If the base image's name corresponds to the result of an earlier
 	// stage, make sure that stage has finished building an image, and
 	// substitute that image's ID for the base image's name here and force
@@ -1308,10 +1304,12 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 	pullPolicy := s.executor.pullPolicy
 	s.executor.stagesLock.Lock()
 	var preserveBaseImageAnnotationsAtStageStart bool
-	if stageImage, isPreviousStage := s.executor.imageMap[base]; isPreviousStage {
-		base = stageImage
-		pullPolicy = define.PullNever
-		preserveBaseImageAnnotationsAtStageStart = true
+	if otherStageIndex, _ := s.executor.stageIndexUnlocked(base, s.stages[:s.index]); otherStageIndex != -1 {
+		if stageImage, isPreviousStage := s.executor.imageMap[otherStageIndex]; isPreviousStage {
+			base = stageImage
+			pullPolicy = define.PullNever
+			preserveBaseImageAnnotationsAtStageStart = true
+		}
 	}
 	s.executor.stagesLock.Unlock()
 
@@ -1487,18 +1485,17 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 		// Check if there's a --from if the step command is COPY.
 		// Also check the chmod and the chown flags for validity.
 		for _, flag := range step.Flags {
-			command := strings.ToUpper(step.Command)
 			// chmod, chown and from flags should have an '=' sign, '--chmod=', '--chown=' or '--from=' or '--exclude='
-			if command == "COPY" && (flag == "--chmod" || flag == "--chown" || flag == "--from" || flag == "--exclude") {
-				return "", nil, false, fmt.Errorf("COPY only supports the --chmod=<permissions> --chown=<uid:gid> --from=<image|stage> and the --exclude=<pattern> flags")
+			if step.Command == command.Copy && (flag == "--chmod" || flag == "--chown" || flag == "--from" || flag == "--exclude") {
+				return "", nil, false, fmt.Errorf("COPY only supports the --chmod=<permissions>, --chown=<uid:gid>, --from=<image|stage>, and --exclude=<pattern> flags")
 			}
-			if command == "ADD" && (flag == "--chmod" || flag == "--chown" || flag == "--checksum" || flag == "--exclude") {
-				return "", nil, false, fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, and --checksum=<checksum> --exclude=<pattern> flags")
+			if step.Command == command.Add && (flag == "--chmod" || flag == "--chown" || flag == "--checksum" || flag == "--exclude") {
+				return "", nil, false, fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, --checksum=<checksum>, and --exclude=<pattern> flags")
 			}
-			if strings.Contains(flag, "--from") && command == "COPY" {
+			if strings.Contains(flag, "--from") && step.Command == command.Copy {
 				arr := strings.Split(flag, "=")
 				if len(arr) != 2 {
-					return "", nil, false, fmt.Errorf("%s: invalid --from flag %q, should be --from=<name|stage>", command, flag)
+					return "", nil, false, fmt.Errorf("%s: invalid --from flag %q, should be --from=<name|stage>", strings.ToUpper(step.Command), flag)
 				}
 				// If arr[1] has an argument within it, resolve it to its
 				// value.  Otherwise just return the value found.
@@ -1527,7 +1524,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 					// replace with image set in build context
 					from = additionalBuildContext.Value
 					if _, err := s.getImageRootfs(ctx, from); err != nil {
-						return "", nil, false, fmt.Errorf("%s --from=%s: no stage or image found with that name", command, from)
+						return "", nil, false, fmt.Errorf("%s --from=%s: no stage or image found with that name", strings.ToUpper(step.Command), from)
 					}
 					break
 				}
@@ -1538,10 +1535,10 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 				if isStage, err := s.executor.waitForStage(ctx, from, s.stages[:s.index]); isStage && err != nil {
 					return "", nil, false, err
 				}
-				if otherStage, ok := s.executor.stages[from]; ok && otherStage.index < s.index {
+				if otherStageIndex, _ := s.executor.stageIndex(from, s.stages[:s.index]); otherStageIndex != -1 {
 					break
 				} else if _, err = s.getImageRootfs(ctx, from); err != nil {
-					return "", nil, false, fmt.Errorf("%s --from=%s: no stage or image found with that name", command, from)
+					return "", nil, false, fmt.Errorf("%s --from=%s: no stage or image found with that name", strings.ToUpper(step.Command), from)
 				}
 				break
 			}
@@ -1586,12 +1583,13 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 				s.builder.AddPrependedEmptyLayer(&timestamp, createdBy, "", "")
 				continue
 			}
-			// This is the last instruction for this stage,
-			// so we should commit this container to create
-			// an image, but only if it's the last stage,
-			// or if it's used as the basis for a later
-			// stage or we are forcing saving stages by
-			// --save-stages
+			// This is the last instruction for this stage, so we
+			// should commit this container to create an image, but
+			// only if it's the last stage, if it's used as the
+			// basis for a later stage, if we are just always
+			// saving stages due to --save-stages having been
+			// specified, or if we need to use it for generating
+			// custom build outputs.
 			if lastStage || imageIsUsedLater || s.executor.saveStages {
 				logCommit(s.output, i)
 				createdBy, err := s.getCreatedBy(node, addedContentSummary, lastStage && lastInstruction)
@@ -1633,7 +1631,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 			canMatchCacheOnlyAfterRun bool
 		)
 
-		// Only attempt to find cache if its needed, this part is needed
+		// Only attempt to find cache if it's needed, this part is needed
 		// so that if a step is using RUN --mount and mounts content from
 		// previous stages then it uses the freshly built stage instead
 		// of reusing the older stage from the store.
@@ -1679,6 +1677,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 				return "", nil, false, fmt.Errorf("failed while generating cache key: %w", err)
 			}
 		}
+
 		// Check if there's already an image based on our parent that
 		// has the same change that we're about to make, so far as we
 		// can tell.
@@ -1686,7 +1685,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 		// we need to call ib.Run() to correctly put the args together before
 		// determining if a cached layer with the same build args already exists
 		// and that is done in the if block below.
-		if checkForLayers && step.Command != "arg" && (!s.executor.squash || !lastInstruction || !lastStage) && !avoidLookingCache {
+		if checkForLayers && step.Command != command.Arg && (!s.executor.squash || !lastInstruction || !lastStage) && !avoidLookingCache {
 			// For `COPY` and `ADD`, history entries include digests computed from
 			// the content that's copied in.  We need to compute that information so that
 			// it can be used to evaluate the cache, which means we need to go ahead
@@ -1712,8 +1711,9 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 			if err != nil {
 				return "", nil, false, fmt.Errorf("checking if cached image exists from a previous build: %w", err)
 			}
-			// All the best effort to find cache on localstorage have failed try pulling
-			// cache from remote repo if `--cache-from` was configured.
+			// All the best efforts to find a suitable cache hit in local storage have
+			// failed; try pulling cache from a remote repo if `--cache-from` was
+			// configured.
 			if cacheID == "" && len(s.executor.cacheFrom) != 0 {
 				// only attempt to use cache again if pulling was successful
 				// otherwise do nothing and attempt to run the step, err != nil
@@ -2079,9 +2079,9 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 			}
 			// Source specified is part of stage, image or additional-build-context.
 			if mountOptionFrom != "" {
-				if stage, ok := s.executor.stages[mountOptionFrom]; ok {
-					// If source is a previous stage then checksum is image digest for that stage
-					if image, isPreviousStage := s.executor.imageDigestMap[stage.name]; isPreviousStage {
+				if otherStageIndex, _ := s.executor.stageIndex(mountOptionFrom, s.stages[:s.stage.Position]); otherStageIndex != -1 {
+					// If source is a previous stage then checksum is the image digest for that stage
+					if image, isPreviousStage := s.executor.imageDigestMap[otherStageIndex]; isPreviousStage {
 						mountCheckSum = image
 					}
 				} else {

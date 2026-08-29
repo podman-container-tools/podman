@@ -10,19 +10,18 @@ import (
 	"github.com/go-openapi/codescan/internal/parsers/grammar"
 )
 
-// ResponseDecl is one parsed response line from a swagger:route
-// `Responses:` body.
+// ResponseDecl is one parsed response line from a swagger:route `Responses:` body.
 //
-// Code is the line's <code> head — "default" (case-insensitive) or
-// a decimal HTTP status code string. BodyTypeRef / ResponseRef are
-// mutually exclusive: at most one is non-empty. Arrays carries the
-// number of `[]` prefixes stripped from the ref target (0 for a
-// scalar ref). Description is the post-tag prose tail.
+// Code is the line's <code> head — "default" (case-insensitive) or a decimal HTTP status code
+// string.
+// BodyTypeRef / ResponseRef are mutually exclusive: at most one is non-empty.
+// Arrays carries the number of `[]` prefixes stripped from the ref target (0 for a scalar ref).
 //
-// An empty-value line (`204:` with nothing after the colon)
-// produces a ResponseDecl with Code set and every other field
-// zero. The orchestrator emits the response with an explicitly
-// empty description.
+// Description is the post-tag prose tail.
+//
+// An empty-value line (`204:` with nothing after the colon) produces a ResponseDecl with Code set
+// and every other field zero.
+// The orchestrator emits the response with an explicitly empty description.
 type ResponseDecl struct {
 	Code        string
 	BodyTypeRef string
@@ -32,12 +31,12 @@ type ResponseDecl struct {
 	Pos         token.Position
 }
 
-// ParseResponses lowers a Responses: raw block body into typed
-// response lines. See package godoc for the grammar spec.
+// ParseResponses lowers a Responses: raw block body into typed response lines.
 //
-// basePos is the source position of the `responses:` keyword head;
-// each line's Pos is offset by the line number within body
-// (1-indexed) so diagnostics point at the offending line.
+// See package godoc for the grammar spec.
+//
+// basePos is the source position of the `responses:` keyword head; each line's Pos is offset by the
+// line number within body (1-indexed) so diagnostics point at the offending line.
 //
 // diag may be nil; when nil, diagnostics are dropped.
 func ParseResponses(body string, basePos token.Position, diag func(grammar.Diagnostic)) []ResponseDecl {
@@ -80,9 +79,10 @@ func ParseResponses(body string, basePos token.Position, diag func(grammar.Diagn
 	return out
 }
 
-// parseResponseValue tokenises the right-hand side of a response
-// line and lowers it into a ResponseDecl. Empty value yields an
-// empty-body Decl carrying just the code.
+// parseResponseValue tokenises the right-hand side of a response line and lowers it into a
+// ResponseDecl.
+//
+// Empty value yields an empty-body Decl carrying just the code.
 func parseResponseValue(code, value string, pos token.Position, diag func(grammar.Diagnostic)) (ResponseDecl, bool) {
 	decl := ResponseDecl{Code: code, Pos: pos}
 	if value == "" {
@@ -113,11 +113,10 @@ func parseResponseValue(code, value string, pos token.Position, diag func(gramma
 			seenBodyOrResponse = true
 			decl.ResponseRef, decl.Arrays = stripArrayPrefixes(val)
 		case isTagged && tag == "description":
-			// `description:Foo bar baz` — value is everything after
-			// the colon on this token, joined with subsequent tokens
-			// as raw prose. Skip the empty val that arises from a
-			// bare `description:` token (val=="") so the joined
-			// result does not lead with a stray space.
+			// `description:Foo bar baz` — value is everything after the colon on this token, joined with
+			// subsequent tokens as raw prose.
+			// Skip the empty val that arises from a bare `description:` token (val=="") so the joined result
+			// does not lead with a stray space.
 			if val != "" {
 				descTokens = append(descTokens, val)
 			}
@@ -131,11 +130,10 @@ func parseResponseValue(code, value string, pos token.Position, diag func(gramma
 				"response line %q: unknown tag %q", code+": "+value, tag)
 			return ResponseDecl{}, false
 		default:
-			// Untagged token. If the first untagged token is literally
-			// "body" or "response", treat it as a typo for `body:Foo`
-			// / `response:Foo` (missing colon) and drop the line with
-			// a diagnostic rather than silently parsing it as a ref
-			// named "body" / "response".
+			// Untagged token.
+			// If the first untagged token is literally "body" or "response", treat it as a typo for
+			// `body:Foo` / `response:Foo` (missing colon) and drop the line with a diagnostic rather than
+			// silently parsing it as a ref named "body" / "response".
 			if i == 0 && (tok == "body" || tok == "response") {
 				emitDiagf(diag, pos,
 					"response line %q: missing `:` after %q — write `%s:Foo` not `%s Foo`",
@@ -144,11 +142,11 @@ func parseResponseValue(code, value string, pos token.Position, diag func(gramma
 			}
 			if i == 0 {
 				// First untagged token is the response ref candidate.
-				// The orchestrator resolves it against the responses
-				// map first and falls back to definitions (treating
-				// the hit as a body ref). `[]` prefixes apply just as
-				// on tagged refs, so the orchestrator can wrap arrays
-				// around the resolved body schema.
+				// The orchestrator resolves it against the responses map first and falls back to definitions
+				// (treating the hit as a body ref).
+				//
+				// `[]` prefixes apply just as on tagged refs, so the orchestrator can wrap arrays around the
+				// resolved body schema.
 				seenBodyOrResponse = true
 				decl.ResponseRef, decl.Arrays = stripArrayPrefixes(tok)
 				continue
@@ -163,10 +161,10 @@ func parseResponseValue(code, value string, pos token.Position, diag func(gramma
 	return decl, true
 }
 
-// splitTagToken splits a single `tag:value` token. Returns
-// (tag, value, true) when the colon is present; (_, _, false)
-// otherwise. The split takes only the FIRST colon — anything
-// after it is the value.
+// splitTagToken splits a single `tag:value` token.
+//
+// Returns (tag, value, true) when the colon is present; (_, _, false) otherwise.
+// The split takes only the FIRST colon — anything after it is the value.
 func splitTagToken(tok string) (tag, value string, ok bool) {
 	before, after, ok := strings.Cut(tok, ":")
 	if !ok {
@@ -175,8 +173,10 @@ func splitTagToken(tok string) (tag, value string, ok bool) {
 	return before, after, true
 }
 
-// stripArrayPrefixes counts leading `[]` prefixes on a body/response
-// ref token. Returns (name, arrayCount). `[][]Foo` → ("Foo", 2).
+// stripArrayPrefixes counts leading `[]` prefixes on a body/response ref token.
+//
+// Returns (name, arrayCount).
+// `[][]Foo` → ("Foo", 2).
 func stripArrayPrefixes(ref string) (string, int) {
 	arrays := 0
 	for strings.HasPrefix(ref, "[]") {

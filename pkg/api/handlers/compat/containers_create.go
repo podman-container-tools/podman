@@ -18,6 +18,7 @@ import (
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/api/handlers"
@@ -116,6 +117,20 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("fill out specgen: %w", err))
 		return
 	}
+
+	// empty test command means inherit the image healthcheck, but we need to preserve the other health config fields if provided
+	if hc := body.Config.Healthcheck; hc != nil && len(hc.Test) == 0 && sg.HealthConfig == nil {
+		if hc.Interval != 0 || hc.Timeout != 0 || hc.Retries != 0 || hc.StartPeriod != 0 || hc.StartInterval != 0 {
+			sg.HealthConfig = &manifest.Schema2HealthConfig{
+				Interval:      hc.Interval,
+				Timeout:       hc.Timeout,
+				Retries:       hc.Retries,
+				StartPeriod:   hc.StartPeriod,
+				StartInterval: hc.StartInterval,
+			}
+		}
+	}
+
 	// moby always create the working directory
 	localTrue := true
 	sg.CreateWorkingDir = &localTrue
@@ -253,8 +268,25 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 			}
 		case mount.TypeTmpfs:
 			if m.TmpfsOptions != nil {
-				addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
-				addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
+				if m.TmpfsOptions.SizeBytes != 0 {
+					addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
+				}
+				if m.TmpfsOptions.Mode != 0 {
+					addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
+				}
+				for _, opt := range m.TmpfsOptions.Options {
+					switch len(opt) {
+					case 1:
+						if builder.Len() > 0 {
+							builder.WriteRune(',')
+						}
+						builder.WriteString(opt[0])
+					case 2:
+						addField(&builder, opt[0], opt[1])
+					default:
+						return nil, nil, fmt.Errorf("invalid tmpfs format %q,", opt)
+					}
+				}
 			}
 		case mount.TypeVolume:
 			if m.VolumeOptions != nil {
@@ -594,7 +626,7 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 	if cc.HostConfig.OomKillDisable != nil {
 		cliOpts.OOMKillDisable = *cc.HostConfig.OomKillDisable
 	}
-	if cc.Config.Healthcheck != nil {
+	if cc.Config.Healthcheck != nil && len(cc.Config.Healthcheck.Test) > 0 {
 		// Encode healthcheck test as JSON to preserve arguments with spaces.
 		// MakeHealthCheckFromCli will unmarshal this back to the original array.
 		cmdJSON, err := json.Marshal(cc.Config.Healthcheck.Test)

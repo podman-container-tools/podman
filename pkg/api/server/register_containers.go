@@ -1661,6 +1661,10 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//    name: printStats
 	//    type: boolean
 	//    description: add checkpoint statistics to the returned CheckpointReport
+	//  - in: query
+	//    name: createImage
+	//    type: string
+	//    description: create a checkpoint image with the specified name
 	// produces:
 	// - application/json
 	// responses:

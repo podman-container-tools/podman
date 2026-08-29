@@ -67,11 +67,13 @@ const (
 	K8sKindJob = "job"
 )
 
+// swagger:model LibpodWeightDevice
 type WeightDevice struct {
 	Path   string
 	Weight uint16
 }
 
+// swagger:model LibpodThrottleDevice
 type ThrottleDevice struct {
 	Path string
 	Rate uint64

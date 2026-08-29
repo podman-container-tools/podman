@@ -32,8 +32,8 @@ func New{{ pascalize .Name }}API(spec *loads.Document) *{{ pascalize .Name }}API
   return &{{ pascalize .Name }}API{
     handlers:               make(map[string]map[string]http.Handler),
     formats:                strfmt.Default,
-    defaultConsumes:        "{{ .DefaultConsumes }}",
-    defaultProduces:        "{{ .DefaultProduces }}",
+    defaultConsumes:        {{ printf "%q" .DefaultConsumes }},
+    defaultProduces:        {{ printf "%q" .DefaultProduces }},
     customConsumers:        make(map[string]runtime.Consumer),
     customProducers:        make(map[string]runtime.Producer),
     PreServerShutdown:      func() {  },
@@ -100,15 +100,15 @@ func New{{ pascalize .Name }}API(spec *loads.Document) *{{ pascalize .Name }}API
       _ = user
       _ = password
 
-      return nil, errors.NotImplemented("basic auth  ({{ .ID }}) has not yet been implemented")
+      return nil, errors.NotImplemented("basic auth  ({{ escapeDoubleQuoted .ID }}) has not yet been implemented")
     },
       {{- end }}
       {{- if .IsAPIKeyAuth }}
-      // Applies when the "{{ .Name }}" {{ .Source }} is set
+      // Applies when the "{{ escapeDoubleQuoted .Name }}" {{ escapeDoubleQuoted .Source }} is set
     {{ pascalize .ID }}Auth: func(token string) ({{if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
       _ = token
 
-      return nil, errors.NotImplemented("api key auth ({{ .ID }}) {{.Name}} from {{.Source}} param [{{ .Name }}] has not yet been implemented")
+      return nil, errors.NotImplemented("api key auth ({{ escapeDoubleQuoted .ID }}) {{ escapeDoubleQuoted .Name }} from {{ escapeDoubleQuoted .Source }} param [{{ escapeDoubleQuoted .Name }}] has not yet been implemented")
     },
       {{- end }}
       {{- if .IsOAuth2 }}
@@ -116,7 +116,7 @@ func New{{ pascalize .Name }}API(spec *loads.Document) *{{ pascalize .Name }}API
       _ = token
       _ = scopes
 
-      return nil, errors.NotImplemented("oauth2 bearer auth ({{ .ID }}) has not yet been implemented")
+      return nil, errors.NotImplemented("oauth2 bearer auth ({{ escapeDoubleQuoted .ID }}) has not yet been implemented")
     },
       {{- end }}
     {{- end }}
@@ -156,14 +156,14 @@ type {{ pascalize .Name }}API struct {
   {{ range .Consumes }}
   // {{ pascalize .Name }}Consumer registers a consumer for the following mime types:
     {{- range .AllSerializers }}
-  //   - {{ .MediaType }}
+{{ linePadComment "   " "- " .MediaType -}}
     {{- end }}
     {{ pascalize .Name }}Consumer runtime.Consumer
   {{- end }}
   {{ range .Produces}}
   // {{ pascalize .Name }}Producer registers a producer for the following mime types:
     {{- range .AllSerializers }}
-  //   - {{ .MediaType }}
+{{ linePadComment "   " "- " .MediaType -}}
     {{- end }}
     {{ pascalize .Name }}Producer runtime.Producer
   {{- end }}
@@ -322,7 +322,7 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) AuthenticatorsFor(schemes map
     {{- if gt (len .SecurityDefinitions) 1 }}
     switch name {
       {{- range .SecurityDefinitions }}
-      case "{{.ID}}":
+      case {{ printf "%q" .ID }}:
         {{- template "defForScheme" . }}
       {{ end }}
     }
@@ -330,7 +330,7 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) AuthenticatorsFor(schemes map
     {{- /* whenever we only have one security definition, write this as a if statement rather than a switch */}}
     {{- $definition := (index .SecurityDefinitions 0) }}
     {{- with $definition }}
-    if name == "{{ .ID }}" {
+    if name == {{ printf "%q" .ID }} {
       {{- template "defForScheme" . }}
     }
     {{- end }}
@@ -363,8 +363,8 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) ConsumersFor(mediaTypes []str
     switch mt {
       {{- range .Consumes }}
         {{- range .AllSerializers }}
-      case "{{ .MediaType }}":
-        result["{{ .MediaType }}"] = {{.ReceiverName}}.{{ pascalize .Name }}Consumer
+      case {{ printf "%q" .MediaType }}:
+        result[{{ printf "%q" .MediaType }}] = {{.ReceiverName}}.{{ pascalize .Name }}Consumer
         {{- end }}
       {{- end }}
     }
@@ -373,8 +373,8 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) ConsumersFor(mediaTypes []str
       {{- $serializerGroup := (index .Consumes 0) }}
       {{- $serializer := (index $serializerGroup.AllSerializers 0) }}
       {{- with $serializer }}
-      if mt == "{{ .MediaType }}" {
-        result["{{ .MediaType }}"] = {{.ReceiverName}}.{{ pascalize .Name }}Consumer
+      if mt == {{ printf "%q" .MediaType }} {
+        result[{{ printf "%q" .MediaType }}] = {{.ReceiverName}}.{{ pascalize .Name }}Consumer
       }
       {{- end }}
     {{- end }}
@@ -401,8 +401,8 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) ProducersFor(mediaTypes []str
     switch mt {
       {{- range .Produces }}
         {{- range .AllSerializers }}
-      case "{{ .MediaType }}":
-        result["{{ .MediaType }}"] = {{.ReceiverName}}.{{ pascalize .Name }}Producer
+      case {{ printf "%q" .MediaType }}:
+        result[{{ printf "%q" .MediaType }}] = {{.ReceiverName}}.{{ pascalize .Name }}Producer
         {{- end }}
       {{- end }}
     }
@@ -411,8 +411,8 @@ func ({{.ReceiverName}} *{{ pascalize .Name }}API) ProducersFor(mediaTypes []str
       {{- $serializerGroup := (index .Produces 0) }}
       {{- $serializer := (index $serializerGroup.AllSerializers 0) }}
       {{- with $serializer }}
-      if mt == "{{ .MediaType }}" {
-        result["{{ .MediaType }}"] = {{.ReceiverName}}.{{ pascalize .Name }}Producer
+      if mt == {{ printf "%q" .MediaType }} {
+        result[{{ printf "%q" .MediaType }}] = {{.ReceiverName}}.{{ pascalize .Name }}Producer
       }
       {{- end }}
     {{- end }}

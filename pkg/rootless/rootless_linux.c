@@ -447,7 +447,6 @@ do_preexec_hooks_dir (const char *dir, char **argv, int argc)
 
       strncpy (buffer + nfiles * (NAME_MAX + 1), de->d_name, NAME_MAX + 1);
       nfiles++;
-      buffer[nfiles * (NAME_MAX + 1)] = '\0';
     }
 
   qsort (buffer, nfiles, NAME_MAX + 1, (int (*)(const void *, const void *)) strcmp);

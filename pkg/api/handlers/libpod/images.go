@@ -361,7 +361,7 @@ func ImagesLoad(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(tmpfile, r.Body)
 	tmpfile.Close()
 
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("unable to write archive to temporary file: %w", err))
 		return
 	}
@@ -451,7 +451,7 @@ func ImagesImport(w http.ResponseWriter, r *http.Request) {
 		}
 		defer os.Remove(tmpfile.Name())
 
-		if _, err := io.Copy(tmpfile, r.Body); err != nil && err != io.EOF {
+		if _, err := io.Copy(tmpfile, r.Body); err != nil && !errors.Is(err, io.EOF) {
 			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("unable to write archive to temporary file: %w", err))
 			tmpfile.Close()
 			return

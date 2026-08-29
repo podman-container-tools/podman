@@ -353,7 +353,7 @@ var _ = Describe("Podman checkpoint", func() {
 		// "Error: crun: (00.054135) Error (criu/cgroup.c:1998): cg: cgroupd: recv req error: No such file or directory: OCI runtime attempted to invoke a command that was not found"
 		expectStderr := "cg: cgroupd: recv req error|CRIU restoring failed: -52"
 		if podmanTest.OCIRuntime == "runc" {
-			expectStderr = "runc: criu failed: type NOTIFY errno 0"
+			expectStderr = "runc: criu failed: type (NOTIFY|RESTORE) errno 0"
 		}
 		Expect(result).Should(ExitWithErrorRegex(125, expectStderr))
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
@@ -368,6 +368,10 @@ var _ = Describe("Podman checkpoint", func() {
 	})
 
 	It("podman restore container with tcp-close", func() {
+		if podmanTest.OCIRuntime != "crun" {
+			Skip("tcp-close only implemented for crun")
+		}
+
 		// Start a container with redis (which listens on tcp port)
 		localRunString := getRunString([]string{REDIS_IMAGE})
 		session := podmanTest.PodmanExitCleanly(localRunString...)
@@ -396,9 +400,6 @@ var _ = Describe("Podman checkpoint", func() {
 		// Some older versions print "CRIU restoring failed: -52" while others
 		// "Error: crun: (00.054135) Error (criu/cgroup.c:1998): cg: cgroupd: recv req error: No such file or directory: OCI runtime attempted to invoke a command that was not found"
 		expectStderr := "cg: cgroupd: recv req error|CRIU restoring failed: -52"
-		if podmanTest.OCIRuntime == "runc" {
-			expectStderr = "runc: criu failed: type NOTIFY errno 0"
-		}
 		Expect(result).Should(ExitWithErrorRegex(125, expectStderr))
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
 		Expect(podmanTest.GetContainerStatus()).To(ContainSubstring("Exited"))

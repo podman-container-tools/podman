@@ -2,9 +2,12 @@ version: "2"
 linters:
   default: all
   disable:
+    - goconst # has become too noisy. Disabled
     - depguard
     - funlen
     - gomoddirectives
+    - gomodguard
+    - gomodguard_v2
     - godox
     - exhaustruct
     - nlreturn

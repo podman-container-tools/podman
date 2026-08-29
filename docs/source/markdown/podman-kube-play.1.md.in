@@ -296,6 +296,19 @@ Start the pod after creating it, set to false to only create it.
 
 @@option userns.container
 
+#### **--validate**=*mode*
+
+Control how unrecognized YAML fields and unsupported objects are handled. Supported modes are:
+
+- **ignore**: silently skip them (default).
+- **warn**: report a warning and continue. Warnings are printed to stderr and, when using the API, returned in the play report.
+- **strict**: fail with an error.
+
+When **strict** is used, any object that fails validation halts the processing of
+further objects, but prior objects will still exist and will not be rolled back.
+For example, in a YAML file containing a Pod followed by an unsupported object, the
+Pod is created and then the command fails.
+
 #### **--wait**, **-w**
 
 Run pods and containers in the foreground. Default is false.

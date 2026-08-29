@@ -12,6 +12,7 @@ import (
 )
 
 // buildFromTextMarshal renders a TextMarshaler-implementing type as a string.
+//
 // Six-step pipeline; user-annotation first, implicit recognizers next, generic fallback last.
 //
 // # Details
@@ -21,8 +22,8 @@ func (s *Builder) buildFromTextMarshal(tpe types.Type, target ifaces.SwaggerTypa
 	if typePtr, ok := tpe.(*types.Pointer); ok {
 		return s.buildFromTextMarshal(typePtr.Elem(), target)
 	}
-	// Aliases route through buildAlias so RefAliases / TransparentAliases
-	// stay in charge of the alias indirection.
+	// Aliases route through buildAlias so RefAliases / TransparentAliases stay in charge of the alias
+	// indirection.
 	if typeAlias, ok := tpe.(*types.Alias); ok {
 		return s.buildAlias(typeAlias, target)
 	}
@@ -42,8 +43,8 @@ func (s *Builder) buildFromTextMarshal(tpe types.Type, target ifaces.SwaggerTypa
 	if applySpecialType(tio, target, s.skipExtensions, recognizeError, recognizeTime, recognizeRawMessage, recognizeUUID) {
 		return nil
 	}
-	// Generic fallback: x-go-type carries pkg.Name, so PkgForType-miss
-	// must bail (can't produce the extension without the package).
+	// Generic fallback: x-go-type carries pkg.Name, so PkgForType-miss must bail (can't produce the
+	// extension without the package).
 	if _, found := s.Ctx.PkgForType(tpe); !found {
 		return nil
 	}
@@ -60,16 +61,17 @@ const (
 	recognizeAny
 	recognizeError
 	recognizeRawMessage
-	// recognizeUUID is a fuzzy name-only match (case-insensitive
-	// "uuid"). Caller-gated — opt in only where the type is
-	// guaranteed to render as text. See
-	// [§special-types](./README.md#special-types).
+	// recognizeUUID is a fuzzy name-only match (case-insensitive "uuid").
+	//
+	// Caller-gated — opt in only where the type is guaranteed to render as text.
+	// See [§special-types](./README.md#special-types).
 	recognizeUUID
 )
 
-// applyStdlibSpecials runs the canonical safe set of identity-based
-// recognizers (any / time.Time / error / json.RawMessage). Safe at
-// every call site that handles a *types.TypeName.
+// applyStdlibSpecials runs the canonical safe set of identity-based recognizers (any / time.Time /
+// error / json.RawMessage).
+//
+// Safe at every call site that handles a *types.TypeName.
 //
 // # Details
 //
@@ -79,16 +81,16 @@ func applyStdlibSpecials(obj *types.TypeName, target ifaces.SwaggerTypable, skip
 		recognizeAny, recognizeTime, recognizeError, recognizeRawMessage)
 }
 
-// applySpecialType iterates wanted recognizers in order and applies
-// the first match to target, returning resolved=true. Recognizers are
-// identity-based except recognizeUUID, which is fuzzy (caller-gated).
-// skipExt gates vendor-extension writes.
+// applySpecialType iterates wanted recognizers in order and applies the first match to target,
+// returning resolved=true.
+//
+// Recognizers are identity-based except recognizeUUID, which is fuzzy (caller-gated). skipExt gates
+// vendor-extension writes.
 //
 // # Details
 //
-// See [§special-types](./README.md#special-types),
-// [§user-overrides](./README.md#user-overrides) (skipExt plumbing) and
-// [§quirks](./README.md#quirks) (per-recognizer rationale).
+// See [§special-types](./README.md#special-types), [§user-overrides](./README.md#user-overrides)
+// (skipExt plumbing) and [§quirks](./README.md#quirks) (per-recognizer rationale).
 func applySpecialType(obj *types.TypeName, target ifaces.SwaggerTypable, skipExt bool, wanted ...recognizeType) (resolved bool) {
 	for _, typeKey := range wanted {
 		switch typeKey {

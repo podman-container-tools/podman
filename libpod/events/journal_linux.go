@@ -153,7 +153,7 @@ func (e EventJournalD) Read(ctx context.Context, options ReadOptions) (retErr er
 	}()
 	err = j.SetDataThreshold(0)
 	if err != nil {
-		return fmt.Errorf("cannot set data threshold for journal: %v", err)
+		return fmt.Errorf("cannot set data threshold for journal: %w", err)
 	}
 	// match only podman journal entries
 	podmanJournal := sdjournal.Match{Field: "SYSLOG_IDENTIFIER", Value: "podman"}
@@ -212,7 +212,7 @@ func (e EventJournalD) Read(ctx context.Context, options ReadOptions) (retErr er
 				// Don't fail hard - that would make events unusable.
 				// Instead, log and continue.
 				if !errors.Is(err, ErrEventTypeBlank) {
-					options.EventChannel <- ReadResult{Error: fmt.Errorf("unable to decode event: %v", err)}
+					options.EventChannel <- ReadResult{Error: fmt.Errorf("unable to decode event: %w", err)}
 				}
 				continue
 			}

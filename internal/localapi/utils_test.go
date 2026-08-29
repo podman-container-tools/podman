@@ -138,6 +138,19 @@ func TestIsPathAvailableOnMachine_Unix(t *testing.T) {
 			wantRemotePath: "/mnt/home/user/file.txt",
 			wantFound:      true,
 		},
+		{
+			name: "QEMU - Ignore file within mount",
+			mounts: []*vmconfigs.Mount{
+				{
+					Source: "/home/test",
+					Target: "/mnt/host",
+				},
+			},
+			vmType:         define.QemuVirt,
+			localPath:      "/home/test/project/.containerignore",
+			wantRemotePath: "/mnt/host/project/.containerignore",
+			wantFound:      true,
+		},
 	}
 
 	for _, tt := range tests {

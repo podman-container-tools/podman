@@ -90,7 +90,12 @@ func runDecompression(d decompressor, decompressedFilePath string) (retErr error
 
 	var decompressedFileWriter *os.File
 
-	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, d.compressedFileMode()); err != nil {
+	mode := d.compressedFileMode()
+
+	// Ensure the owner always has write permission.
+	mode |= 0o200
+
+	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, mode); err != nil {
 		logrus.Errorf("Unable to open destination file %s for writing: %q", decompressedFilePath, err)
 		return err
 	}

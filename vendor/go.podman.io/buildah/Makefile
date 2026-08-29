@@ -60,7 +60,7 @@ export GOLANGCI_LINT_VERSION := 2.12.2
 #           use source debugging tools like delve.
 all: binaries docs
 
-binaries: bin/buildah bin/imgtype bin/copy bin/inet bin/tutorial bin/dumpspec bin/passwd bin/crash bin/wait bin/grpcnoop
+binaries: bin/buildah bin/imgtype bin/copy bin/inet bin/tutorial bin/dumpspec bin/passwd bin/crash bin/wait bin/grpcnoop bin/pipeloop
 
 bin/buildah: $(SOURCES) internal/mkcw/embed/entrypoint_amd64.gz
 	$(GO_BUILD) $(BUILDAH_LDFLAGS) $(GO_GCFLAGS) "$(GOGCFLAGS)" -o $@ $(BUILDFLAGS) ./cmd/buildah
@@ -133,6 +133,9 @@ bin/passwd: tests/passwd/passwd.go
 
 bin/grpcnoop: tests/rpc/noop/noop.go
 	$(GO_BUILD) $(BUILDAH_LDFLAGS) -o $@ $(BUILDFLAGS) ./tests/rpc/noop/noop.go
+
+bin/pipeloop: tests/pipeloop/pipeloop.go
+	$(GO_BUILD) $(BUILDAH_LDFLAGS) -o $@ $(BUILDFLAGS) ./tests/pipeloop/pipeloop.go
 
 .PHONY: clean
 clean:

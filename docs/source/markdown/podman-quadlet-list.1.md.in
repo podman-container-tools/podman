@@ -8,7 +8,7 @@ podman\-quadlet\-list - List installed quadlets (alias ls)
 
 ## DESCRIPTION
 
-List all Quadlets configured for the current user.
+List all Quadlets configured for the current user. Outputs the following by default: quadlet name, systemd unit name, file path, status, application and pod.
 
 ## OPTIONS
 

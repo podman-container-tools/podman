@@ -209,6 +209,19 @@ func (n *Netns) setupPasta(nsPath string) error {
 		extraOpts = append(extraOpts, "-c", n.getPath(pestoSocketFile))
 	}
 
+	// For the rootless netns, hard-code IPv6 --map-guest-addr, --address, and
+	// --gateway so pasta uses routable addresses for inbound IPv6 forwarding
+	// (instead of link-local which is not routable across bridges).
+	// The v4 --map-guest-addr must also be listed here because providing any
+	// --map-guest-addr suppresses the default one added by createPastaArgs.
+	// See: https://bugs.passt.top/show_bug.cgi?id=217
+	extraOpts = append(extraOpts,
+		"--map-guest-addr", pasta.MapGuestAddrIpv4,
+		"--map-guest-addr", pasta.MapGuestAddrIpv6,
+		"--address", pasta.GuestAddrIpv6,
+		"--gateway", pasta.GatewayIpv6,
+	)
+
 	pastaOpts := pasta.SetupOptions{
 		Config:       n.config,
 		Netns:        nsPath,

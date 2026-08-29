@@ -6,7 +6,8 @@ package resolvers
 import (
 	"fmt"
 	"go/ast"
-	"go/importer"
+	"go/parser"
+	"go/token"
 	"go/types"
 
 	oaispec "github.com/go-openapi/spec"
@@ -55,8 +56,9 @@ func MustBeAType(tpe types.TypeAndValue) {
 	panic(fmt.Errorf("declaration is not a type: %v: %w", tpe, ErrInternal))
 }
 
-// IsFieldStringable check if the field type is a scalar. If the field type is
-// *ast.StarExpr and is pointer type, check if it refers to a scalar.
+// IsFieldStringable check if the field type is a scalar.
+//
+// If the field type is *ast.StarExpr and is pointer type, check if it refers to a scalar.
 // Otherwise, the ",string" directive doesn't apply.
 func IsFieldStringable(tpe ast.Expr) bool {
 	if ident, ok := tpe.(*ast.Ident); ok {
@@ -74,34 +76,70 @@ func IsFieldStringable(tpe ast.Expr) bool {
 	return false
 }
 
-func IsTextMarshaler(tpe types.Type) bool {
-	encoding, err := importer.Default().Import("encoding")
+// textMarshalerIface is the encoding.TextMarshaler interface:
+//
+//	interface{ MarshalText() (text []byte, err error) }
+//
+// It is resolved by type-checking a one-line source snippet rather than by importing the real
+// "encoding" package through go/importer's default importer.
+//
+// The importer reads stdlib export data out of the GOROOT the binary was built against:
+// when GOTOOLCHAIN selects a different toolchain at runtime — or the callgin binary simply runs on a machine where
+// Go installation lives at a different path than the build machine's — the lookup fails, and the error is silently
+// swallowed: every TextMarshaler check returns false.
+//
+// This snippet imports nothing (the result types []byte and error are Universe types), so the type-checker never
+// consults an importer. The construction has no runtime dependency on a working toolchain or GOROOT.
+//
+// types.Implements compares method sets structurally: the resulting interface is equivalent to the one the "encoding" package supplies.
+var textMarshalerIface = mustIfaceFromSource( //nolint:gochecknoglobals // immutable, built once, read-only
+	`package p; type T interface{ MarshalText() (text []byte, err error) }`,
+)
+
+// mustIfaceFromSource type-checks src: it must declare a single interface type T that imports nothing.
+//
+// It returns its underlying *types.Interface. It panics on malformed input: src is a compile-time constant
+// (a failure is a programming error never a runtime condition).
+func mustIfaceFromSource(src string) *types.Interface {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "iface.go", src, 0)
 	if err != nil {
-		return false
+		panic(fmt.Errorf("parsing synthetic interface source %q: %w: %w", src, err, ErrInternal))
 	}
 
-	iface := encoding.Scope().Lookup("TextMarshaler")
-	if iface == nil {
-		return false
+	// nil importer: the snippet imports nothing, so the type-checker never invokes it.
+	pkg, err := new(types.Config).Check("p", fset, []*ast.File{f}, nil)
+	if err != nil {
+		panic(fmt.Errorf("type-checking synthetic interface source %q: %w: %w", src, err, ErrInternal))
 	}
 
-	asInterface, ok := iface.Type().Underlying().(*types.Interface)
+	obj := pkg.Scope().Lookup("T")
+	if obj == nil {
+		panic(fmt.Errorf("synthetic interface source %q does not declare a type T: %w", src, ErrInternal))
+	}
+
+	iface, ok := obj.Type().Underlying().(*types.Interface)
 	if !ok {
-		return false
+		panic(fmt.Errorf("synthetic interface source %q did not declare an interface T: %w", src, ErrInternal))
 	}
 
-	return types.Implements(tpe, asInterface)
+	return iface
 }
 
-// IsJSONMapKey reports whether a Go map with this key type marshals to a JSON
-// object under encoding/json — i.e. whether the map is representable as
-// {type: object, additionalProperties: V}.
+func IsTextMarshaler(tpe types.Type) bool {
+	return types.Implements(tpe, textMarshalerIface)
+}
+
+// IsJSONMapKey reports whether a Go map with this key type marshals to a JSON object under
+// encoding/json — i.e. whether the map is representable as {type: object, additionalProperties:
+// V}.
 //
-// The rule mirrors encoding/json's newMapEncoder: the key kind is string or any
-// integer / unsigned-integer kind (int, int8…int64, uint, uint8…uint64,
-// uintptr — all stringified), or the key implements encoding.TextMarshaler.
-// Everything else (float, bool, struct without TextMarshaler, interface, func)
-// makes json.Marshal fail; json.Marshaler is never consulted for keys.
+// The rule mirrors encoding/json's newMapEncoder: the key kind is string or any integer /
+// unsigned-integer kind (int, int8…int64, uint, uint8…uint64, uintptr — all stringified), or
+// the key implements encoding.TextMarshaler.
+//
+// Everything else (float, bool, struct without TextMarshaler, interface, func) makes json.Marshal
+// fail; json.Marshaler is never consulted for keys.
 func IsJSONMapKey(key types.Type) bool {
 	if b, ok := key.Underlying().(*types.Basic); ok && b.Info()&(types.IsString|types.IsInteger) != 0 {
 		return true

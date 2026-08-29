@@ -115,11 +115,17 @@ var _ = Describe("Podman network connect and disconnect", func() {
 		Expect(ctr).Should(ExitCleanly())
 		cid := ctr.OutputToString()
 
-		// network alias container short id is always added and shown in inspect
+		// Aliases should be empty (no user-provided aliases)
 		inspect := podmanTest.Podman([]string{"container", "inspect", "test", "--format", "{{(index .NetworkSettings.Networks \"" + netName + "\").Aliases}}"})
 		inspect.WaitWithDefaultTimeout()
 		Expect(inspect).Should(ExitCleanly())
-		Expect(inspect.OutputToString()).To(Equal("[" + cid[0:12] + "]"))
+		Expect(inspect.OutputToString()).To(Equal("[]"))
+
+		// DNSNames should contain the short ID
+		inspect = podmanTest.Podman([]string{"container", "inspect", "test", "--format", "{{(index .NetworkSettings.Networks \"" + netName + "\").DNSNames}}"})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).Should(ExitCleanly())
+		Expect(inspect.OutputToString()).To(ContainSubstring(cid[0:12]))
 
 		con := podmanTest.Podman([]string{"network", "connect", netName, "test"})
 		con.WaitWithDefaultTimeout()
@@ -179,11 +185,17 @@ var _ = Describe("Podman network connect and disconnect", func() {
 		Expect(inspect).Should(ExitCleanly())
 		Expect(inspect.OutputToString()).To(Equal("2"))
 
-		// network alias container short id is always added and shown in inspect
+		// Aliases should be empty after network connect (no user-provided aliases)
 		inspect = podmanTest.Podman([]string{"container", "inspect", "test", "--format", "{{(index .NetworkSettings.Networks \"" + newNetName + "\").Aliases}}"})
 		inspect.WaitWithDefaultTimeout()
 		Expect(inspect).Should(ExitCleanly())
-		Expect(inspect.OutputToString()).To(Equal("[" + cid[0:12] + "]"))
+		Expect(inspect.OutputToString()).To(Equal("[]"))
+
+		// DNSNames should contain the short ID
+		inspect = podmanTest.Podman([]string{"container", "inspect", "test", "--format", "{{(index .NetworkSettings.Networks \"" + newNetName + "\").DNSNames}}"})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).Should(ExitCleanly())
+		Expect(inspect.OutputToString()).To(ContainSubstring(cid[0:12]))
 
 		exec = podmanTest.Podman([]string{"exec", "test", "ip", "addr", "show", "eth1"})
 		exec.WaitWithDefaultTimeout()

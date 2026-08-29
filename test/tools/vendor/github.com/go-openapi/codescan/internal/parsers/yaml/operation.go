@@ -10,9 +10,8 @@ import (
 	"github.com/go-openapi/swag/yamlutils"
 )
 
-// UnmarshalBody runs a raw godoc-comment YAML body through the
-// standard godoc → YAML → JSON pipeline expected by every Swagger
-// target that consumes JSON-shape input:
+// UnmarshalBody runs a raw godoc-comment YAML body through the standard godoc → YAML → JSON
+// pipeline expected by every Swagger target that consumes JSON-shape input:
 //
 //  1. RemoveIndent — strip the common indent godoc adds to every
 //     line and turn leading tabs into two-space sequences (YAML
@@ -26,10 +25,9 @@ import (
 //
 // Empty body returns nil — the caller's target is left untouched.
 //
-// Used by the operations bridge (swagger:operation YAML body),
-// the meta bridge (securityDefinitions, externalDocs), and any
-// future mapping target that needs the same shape. Sequence-shaped
-// bodies (e.g. meta `Tags:`) use [UnmarshalListBody].
+// Used by the operations bridge (swagger:operation YAML body), the meta bridge
+// (securityDefinitions, externalDocs), and any future mapping target that needs the same shape.
+// Sequence-shaped bodies (e.g. meta `Tags:`) use [UnmarshalListBody].
 func UnmarshalBody(body string, unmarshal func([]byte) error) error {
 	if body == "" {
 		return nil
@@ -71,9 +69,8 @@ func UnmarshalListBody(body string, unmarshal func([]byte) error) error {
 	return unmarshal(jsonValue)
 }
 
-// normaliseBody applies the godoc-comment dedent shared by the
-// body unmarshal helpers: strip the common leading indent and expand
-// residual leading tabs to spaces (YAML refuses tab indentation).
+// normaliseBody applies the godoc-comment dedent shared by the body unmarshal helpers: strip the
+// common leading indent and expand residual leading tabs to spaces (YAML refuses tab indentation).
 func normaliseBody(body string) string {
 	lines := strings.Split(body, "\n")
 	lines = RemoveIndent(lines)

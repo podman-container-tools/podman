@@ -177,6 +177,7 @@ var _ = Describe("podman machine start", func() {
 	})
 
 	It("start two machines in parallel", func() {
+		skipIfVmtype(define.AppleHvVirt, "parallel machine start is not supported on Apple Hypervisor")
 		i := initMachine{}
 		machine1 := "m1-" + randomString()
 		session, err := mb.setName(machine1).setCmd(i.withImage(mb.imagePath)).run()

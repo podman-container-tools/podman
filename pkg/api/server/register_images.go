@@ -541,6 +541,13 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//      Path within the build context to the `Dockerfile`.
 	//      This is ignored if remote is specified and points to an external `Dockerfile`.
 	//  - in: query
+	//    name: ignorefile
+	//    type: string
+	//    description: |
+	//      Path to an alternate ignore file (e.g. `.containerignore`) within the build context.
+	//      When set, this file is used instead of the default `.containerignore`/`.dockerignore`,
+	//      and an empty ignore file is honored, overriding any default ignore file.
+	//  - in: query
 	//    name: t
 	//    type: string
 	//    default: latest
@@ -1575,6 +1582,13 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//      Path within the build context to the `Dockerfile`.
 	//      This is ignored if remote is specified and points to an external `Dockerfile`.
 	//  - in: query
+	//    name: ignorefile
+	//    type: string
+	//    description: |
+	//      Path to an alternate ignore file (e.g. `.containerignore`) within the build context.
+	//      When set, this file is used instead of the default `.containerignore`/`.dockerignore`,
+	//      and an empty ignore file is honored, overriding any default ignore file.
+	//  - in: query
 	//    name: t
 	//    type: string
 	//    default: latest
@@ -1931,6 +1945,13 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    description: |
 	//      Absolute path within the build context to the `Dockerfile`.
 	//      This is ignored if remote is specified and points to an external `Dockerfile`.
+	//  - in: query
+	//    name: ignorefile
+	//    type: string
+	//    description: |
+	//      Path to an alternate ignore file (e.g. `.containerignore`) within the build context.
+	//      When set, this file is used instead of the default `.containerignore`/`.dockerignore`,
+	//      and an empty ignore file is honored, overriding any default ignore file.
 	//  - in: query
 	//    name: t
 	//    type: string

@@ -9,14 +9,12 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// ItemsTypable adapts an *oaispec.Items target to
-// ifaces.SwaggerTypable so the parameters/responses builders can
-// recurse through nested array layers (SimpleSchema's items chain).
+// ItemsTypable adapts an *oaispec.Items target to ifaces.SwaggerTypable so the parameters/responses
+// builders can recurse through nested array layers (SimpleSchema's items chain).
 //
-// One adapter, two callers (parameters, responses); lives here
-// because it's pure ifaces-glue with no builder-specific logic.
-// The schema builder uses its own *oaispec.Schema.Items chain and
-// has no need for this adapter.
+// One adapter, two callers (parameters, responses); lives here because it's pure ifaces-glue with
+// no builder-specific logic.
+// The schema builder uses its own *oaispec.Schema.Items chain and has no need for this adapter.
 type ItemsTypable struct {
 	items *oaispec.Items
 	level int
@@ -54,38 +52,41 @@ func (pt ItemsTypable) WithEnum(values ...any) {
 }
 
 func (pt ItemsTypable) WithEnumDescription(_ string) {
-	// items levels carry no description channel; the enclosing
-	// parameter / header description already absorbs the enum doc.
+	// items levels carry no description channel; the enclosing parameter / header description already
+	// absorbs the enum doc.
 }
 
-// SimpleSchemaShape satisfies schema.SimpleSchemaProbe: an items level
-// in a non-body parameter / response header is itself a Swagger 2.0
-// SimpleSchema. Exposing it lets the schema builder's catch-at-exit
-// validator inspect array-element shapes, not just the top-level
-// target (go-swagger#1088).
+// SimpleSchemaShape satisfies schema.SimpleSchemaProbe: an items level in a non-body parameter /
+// response header is itself a Swagger 2.0 SimpleSchema.
+//
+// Exposing it lets the schema builder's catch-at-exit validator inspect array-element shapes, not
+// just the top-level target (go-swagger#1088).
 func (pt ItemsTypable) SimpleSchemaShape() *oaispec.SimpleSchema {
 	return &pt.items.SimpleSchema
 }
 
-// HasRef satisfies schema.SimpleSchemaProbe. SimpleSchema forbids a
-// $ref, including on array items: a named object element ([]Ele under
-// in: query) otherwise resolves to `items: {$ref}`, which the Swagger
-// 2.0 editor rejects (go-swagger#1088).
+// HasRef satisfies schema.SimpleSchemaProbe.
+//
+// SimpleSchema forbids a $ref, including on array items: a named object element ([]Ele under in:
+// query) otherwise resolves to `items: {$ref}`, which the Swagger 2.0 editor rejects
+// (go-swagger#1088).
 func (pt ItemsTypable) HasRef() bool {
 	return pt.items.Ref.String() != ""
 }
 
-// ResetForViolation satisfies schema.SimpleSchemaProbe. Dissolves an
-// illegal $ref / shape on this items level back to empty, mirroring
+// ResetForViolation satisfies schema.SimpleSchemaProbe.
+//
+// Dissolves an illegal $ref / shape on this items level back to empty, mirroring
 // paramTypable.ResetForViolation one level down.
 func (pt ItemsTypable) ResetForViolation() {
 	pt.items.SimpleSchema = oaispec.SimpleSchema{}
 	pt.items.Ref = oaispec.Ref{}
 }
 
-// ItemsValidations wraps an *oaispec.Items as a ValidationBuilder /
-// OperationValidationBuilder target. Used by parameters' and
-// responses' grammar items-level Walker dispatch.
+// ItemsValidations wraps an *oaispec.Items as a ValidationBuilder / OperationValidationBuilder
+// target.
+//
+// Used by parameters' and responses' grammar items-level Walker dispatch.
 type ItemsValidations struct {
 	current *oaispec.Items
 }

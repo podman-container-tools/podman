@@ -37,7 +37,7 @@ func CountersKiloByte(pairFmt string, wcc ...WC) Decorator {
 //	pairFmt="% .1f / % .1f" output: "1.0 MB / 12.0 MB"
 //	pairFmt="%f / %f"       output: "1.000000MB / 12.000000MB"
 //	pairFmt="% f / % f"     output: "1.000000 MB / 12.000000 MB"
-func Counters(unit interface{}, pairFmt string, wcc ...WC) Decorator {
+func Counters(unit any, pairFmt string, wcc ...WC) Decorator {
 	producer := func() DecorFunc {
 		switch unit.(type) {
 		case SizeB1024:
@@ -99,7 +99,7 @@ func TotalKiloByte(format string, wcc ...WC) Decorator {
 //	format="% .1f" output: "12.0 MiB"
 //	format="%f"    output: "12.000000MiB"
 //	format="% f"   output: "12.000000 MiB"
-func Total(unit interface{}, format string, wcc ...WC) Decorator {
+func Total(unit any, format string, wcc ...WC) Decorator {
 	producer := func() DecorFunc {
 		switch unit.(type) {
 		case SizeB1024:
@@ -161,7 +161,7 @@ func CurrentKiloByte(format string, wcc ...WC) Decorator {
 //	format="% .1f" output: "12.0 MiB"
 //	format="%f"    output: "12.000000MiB"
 //	format="% f"   output: "12.000000 MiB"
-func Current(unit interface{}, format string, wcc ...WC) Decorator {
+func Current(unit any, format string, wcc ...WC) Decorator {
 	producer := func() DecorFunc {
 		switch unit.(type) {
 		case SizeB1024:
@@ -223,7 +223,7 @@ func InvertedCurrentKiloByte(format string, wcc ...WC) Decorator {
 //	format="% .1f" output: "12.0 MiB"
 //	format="%f"    output: "12.000000MiB"
 //	format="% f"   output: "12.000000 MiB"
-func InvertedCurrent(unit interface{}, format string, wcc ...WC) Decorator {
+func InvertedCurrent(unit any, format string, wcc ...WC) Decorator {
 	producer := func() DecorFunc {
 		switch unit.(type) {
 		case SizeB1024:

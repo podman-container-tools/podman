@@ -7,7 +7,6 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"go.podman.io/podman/v6/pkg/logiface"
@@ -201,6 +200,18 @@ func GetUserLevelFilter(resolvedUnitDirAdminUser string) func(string, bool) bool
 	}
 }
 
+// isNumeric returns true if the string only contains digits.
+// Note: It returns true for an empty string, matching the behavior
+// of the original `^[0-9]*$` regular expression it replaced.
+func isNumeric(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func GetNonNumericFilter(resolvedUnitDirAdminUser string, systemUserDirLevel int) func(string, bool) bool {
 	return func(path string, _ bool) bool {
 		// when running in rootless, recursive walk directories that are non numeric
@@ -212,7 +223,7 @@ func GetNonNumericFilter(resolvedUnitDirAdminUser string, systemUserDirLevel int
 				return true
 			}
 			if len(listDirUserPathLevels) > systemUserDirLevel {
-				if !(regexp.MustCompile(`^[0-9]*$`).MatchString(listDirUserPathLevels[systemUserDirLevel])) {
+				if !isNumeric(listDirUserPathLevels[systemUserDirLevel]) {
 					return true
 				}
 			}
