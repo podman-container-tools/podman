@@ -42,11 +42,11 @@ func CleanupGVProxy(f define.VMFile) error {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("unable to read gvproxy pid file: %v", err)
+		return fmt.Errorf("unable to read gvproxy pid file: %w", err)
 	}
 	proxyPid, err := strconv.Atoi(string(gvPid))
 	if err != nil {
-		return fmt.Errorf("unable to convert pid to integer: %v", err)
+		return fmt.Errorf("unable to convert pid to integer: %w", err)
 	}
 	if err := waitOnProcess(proxyPid); err != nil {
 		return err

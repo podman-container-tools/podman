@@ -1,4 +1,4 @@
-![PODMAN logo](https://raw.githubusercontent.com/containers/common/main/logos/podman-logo-full-vert.png)
+![PODMAN logo](https://raw.githubusercontent.com/containers/container-libs/main/common/logos/podman-logo-full-vert.png)
 # Contributing to Podman
 
 We'd love to have you join the community!
@@ -10,7 +10,7 @@ Below summarizes the processes that we follow.
 * [Reporting Issues](#reporting-issues)
 * [Working On Issues](#working-on-issues)
 * [Contributing to Podman](#contributing-to-podman)
-* [Continuous Integration](#continuous-integration) [![Build Status](https://github.com/containers/podman/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/containers/podman/actions/workflows/ci.yml?query=branch%3Amain)
+* [Continuous Integration](#continuous-integration) [![Build Status](https://github.com/podman-container-tools/podman/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/podman-container-tools/podman/actions/workflows/ci.yml?query=branch%3Amain)
 * [Submitting Pull Requests](#submitting-pull-requests)
 * [Communications](#communications)
 
@@ -21,7 +21,7 @@ This includes comments, issues, PRs and any other interactions with the Podman t
 
 ## Reporting Issues
 
-Before reporting an issue, check our backlog of [open issues](https://github.com/containers/podman/issues) to see if someone else has already reported it.
+Before reporting an issue, check our backlog of [open issues](https://github.com/podman-container-tools/podman/issues) to see if someone else has already reported it.
 If so, feel free to add your scenario, or additional information, to the discussion.
 Or simply "subscribe" to it to be notified when it is updated.
 Please do not add comments like "+1" or "I have this issue as well" without adding any new information.
@@ -43,17 +43,16 @@ Reproducers make finding and fixing issues much easier for maintainers.
 The easier it is for us to reproduce a bug, the faster it'll be fixed!
 
 Please don't include any private/sensitive information in your issue!
-Security issues should NOT be reported via Github and should instead be reported via the process described [here](https://github.com/containers/container-libs/blob/main/SECURITY.md).
+Security issues should NOT be reported via Github and should instead be reported via the process described [here](https://github.com/podman-container-tools/container-libs/blob/main/SECURITY.md).
 
 ## Working On Issues
 
-Once you have decided to contribute to Podman by working on an issue, check our backlog of [open issues](https://github.com/containers/podman/issues) looking for any that are unassigned.
+Once you have decided to contribute to Podman by working on an issue, check our backlog of [open issues](https://github.com/podman-container-tools/podman/issues) looking for any that are unassigned.
 If you want to work on a specific issue that is already assigned but does not appear to be actively being worked on, please ping the assignee in the issue and ask if you can take over.
 If they do not respond after several days, you can notify a maintainer to have the issue reassigned.
 When working on an issue, please assign it to yourself.
 You can use the `/assign` bot command in a comment on an issue to assign it to yourself.
-If you lack permissions to do so, you can ping the `@containers/podman-maintainers` group to have a maintainer set you as assignee.
-If you are a maintainer of Podman project, please following the [instructions](https://github.com/containers/podman/blob/main/TRIAGE.md) to triage new issues.
+If you are a maintainer of Podman project, please following the [instructions](https://github.com/podman-container-tools/podman/blob/main/TRIAGE.md) to triage new issues.
 
 ## Contributing to Podman
 
@@ -72,7 +71,7 @@ The install documentation will illustrate the following steps:
 - Installation of required libraries and tools
 - Installing Podman from source
 
-The minimum version of Golang required to build Podman is contained in [go.mod](https://github.com/containers/podman/blob/main/go.mod#L5).
+The minimum version of Golang required to build Podman is contained in [go.mod](https://github.com/podman-container-tools/podman/blob/main/go.mod#L5).
 You will need to make sure your system's Go compiler is at least this version using the `go version` command.
 
 ### Fork and clone Podman
@@ -132,7 +131,7 @@ Description about important directories in our repository is found [here](./docs
 ## Testing
 
 Podman provides an extensive suite of regression tests in the `test/` directory.
-There is a [readme](https://github.com/containers/podman/blob/main/test/README.md) file available with details about the tests and how to run them.
+There is a [readme](https://github.com/podman-container-tools/podman/blob/main/test/README.md) file available with details about the tests and how to run them.
 All pull requests should be accompanied by test changes covering the changes in the PR.
 Pull requests without tests will receive additional scrutiny from maintainers and may be blocked from merging unless tests are added.
 Maintainers will decide if tests are not necessary during review.
@@ -181,7 +180,7 @@ Make sure to update the documentation if needed.
 Podman is primarily documented via its manpages, which are located under `docs/source/markdown`.
 There are a number of automated tests to make sure the manpages are up to date.
 These tests run on all submitted pull requests.
-Full details on working with the manpages can be found in the [README](https://github.com/containers/podman/blob/main/docs/README.md) for the docs.
+Full details on working with the manpages can be found in the [README](https://github.com/podman-container-tools/podman/blob/main/docs/README.md) for the docs.
 
 Podman also provides Swagger documentation for the REST API.
 Swagger is generated from comments on registered handlers located in the `pkg/api/server/` directory.
@@ -191,6 +190,11 @@ All API changes should update these Swagger comments to ensure the documentation
 
 No Pull Request (PR) is too small!
 Typos, additional comments in the code, new test cases, bug fixes, new features, more documentation, ... it's all welcome!
+
+If you are a new contributor to the project, please do not create more than two open Pull Requests. If the existing PRs
+have not been reviewed yet, please wait before opening more PRs; this may be enforced via a GitHub setting depending
+on the repository activity. Do not spam-ping maintainers for reviews. If the PR has not been reviewed after several
+weeks, you can try to ping a maintainer and ask nicely or use our [communication channels](#communications).
 
 While bug fixes can first be identified via an "issue" in Github, that is not required.
 It's ok to just open up a PR with the fix, but make sure you include the same information you would have included in an issue - like how to reproduce it.
@@ -220,9 +224,8 @@ When your PR fixes an issue, please note that by including `Fixes: #00000` in th
 More details on this are below, in the "Describe your changes in Commit Messages" section.
 
 The Podman repo follows a two-ack policy for merges.
-PRs will be approved by an [approver][owners] listed in [`OWNERS`](OWNERS).
-They will then be merged by a repo owner.
-Two reviews are required for a pull request to merge.
+PRs will be approved and merged by a Maintainer listed in [`MAINTAINERS.md`](MAINTAINERS.md).
+Two reviews are required normally for a pull request to merge.
 
 ### Describe your Changes in Commit Messages
 
@@ -340,21 +343,21 @@ If you set your `user.name` and `user.email` git configs, you can sign your comm
 
 ### Reviewing PRs
 
-If you are a maintainer of Podman project, please following the [guidelines](https://github.com/containers/podman/blob/main/REVIEWING.md) on how to review a PR.
+If you are a maintainer of Podman project, please following the [guidelines](https://github.com/podman-container-tools/podman/blob/main/REVIEWING.md) on how to review a PR.
 
 ### Continuous Integration
 
 All pull requests automatically run Podman's test suite.
 The tests have been configured such that only tests relevant to the code changed will be run.
 For example, a documentation-only PR with no code changes will run a substantially reduced set of tests.
-To force a PR to run all tests, you can include the string `[CI:ALL]` in the PR title, but this is almost never necessary.
 
 There is always additional complexity added by automation, and so it sometimes can fail for any number of reasons.
-This includes post-merge testing on all branches, which you may occasionally see [failed runs on the workflow history](https://github.com/containers/podman/actions/workflows/ci.yml?query=branch%3Amain+is%3Afailure).
+This includes post-merge testing on all branches, which you may occasionally see [failed runs on the workflow history](https://github.com/podman-container-tools/podman/actions/workflows/ci.yml?query=branch%3Amain+is%3Afailure).
 
 Most notably, the tests will occasionally flake.
 If you see a single test on your PR has failed, and you do not believe it is caused by your changes, you can rerun the tests.
-If you lack permissions to rerun the tests, please ping the maintainers using the `@containers/podman-maintainers` group and request that the failing test be rerun.
+If you lack permissions to rerun the tests, just wait for a maintainer to rerun them for you. Do not unnecessarily force push
+the branch in that case.
 
 If you see multiple test failures, you may wish to check the status graph mentioned above.
 When the graph shows mostly green bars on the right, it's a good indication the main branch is currently stable.
@@ -386,12 +389,12 @@ Contributors and maintainers should feel free to ignore failure status on such j
 
 ## Communications
 
-If you need help, you can contact the maintainers using the channels mentioned in Podman's [communications](https://github.com/containers/podman/blob/main/README.md#communications) document.
+If you need help, you can contact the maintainers using the channels mentioned in Podman's [communications](https://github.com/podman-container-tools/podman/blob/main/README.md#communications) document.
 
 For discussions around issues/bugs and features, you can use the GitHub
-[issues](https://github.com/containers/podman/issues)
+[issues](https://github.com/podman-container-tools/podman/issues)
 and
-[PRs](https://github.com/containers/podman/pulls)
+[PRs](https://github.com/podman-container-tools/podman/pulls)
 tracking system.
 
 ### PR Approval and Merging

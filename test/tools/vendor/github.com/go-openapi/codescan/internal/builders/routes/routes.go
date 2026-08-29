@@ -14,11 +14,11 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// Builder constructs OAS v2 path entries for one `swagger:route`
-// annotation. It embeds *common.Builder for shared state (Ctx,
-// ParseBlocks cache, diagnostic sink). The embedded Decl is left
-// nil — routes build off a path annotation, not a declaration —
-// so MakeRef and other Decl-anchored helpers must not be called.
+// Builder constructs OAS v2 path entries for one `swagger:route` annotation.
+//
+// It embeds *common.Builder for shared state (Ctx, ParseBlocks cache, diagnostic sink).
+// The embedded Decl is left nil — routes build off a path annotation, not a declaration — so
+// MakeRef and other Decl-anchored helpers must not be called.
 type Builder struct {
 	*common.Builder
 
@@ -64,8 +64,8 @@ func (r *Builder) Build(tgt *oaispec.Paths) error {
 	}
 	tgt.Paths[r.route.Path] = pthObj
 
-	// Cross-ref linkage: anchor the operation node to its swagger:route
-	// annotation; parameters/responses under it resolve to this node.
+	// Cross-ref linkage: anchor the operation node to its swagger:route annotation;
+	// parameters/responses under it resolve to this node.
 	if r.Ctx.OriginEnabled() && r.route.Pos.IsValid() {
 		r.Ctx.RecordOrigin(
 			scanner.JSONPointer("paths", r.route.Path, strings.ToLower(r.route.Method)),

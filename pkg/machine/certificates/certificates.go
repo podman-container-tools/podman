@@ -43,14 +43,14 @@ func ImportNativeCertificates(mc *vmconfigs.MachineConfig, vmType define.VMType)
 	// Save the certificates to a PEM file in the machine data folder
 	certFilePath, err := saveCertificatesToFile(mc, certs)
 	if err != nil {
-		return fmt.Errorf("failed to create certs file in machine data folder: %s", err)
+		return fmt.Errorf("failed to create certs file in machine data folder: %w", err)
 	}
 	logrus.Debugf("Saved the certificates to file %q", certFilePath)
 	// Copy or transfer via SCP the file with the certificates to the anchors
 	// folder in the guest
 	err = copyOrTransferFileToGuestAnchorsFolder(mc, vmType, certFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to transfer or copy the certs file in the guest anchors folder: %s", err)
+		return fmt.Errorf("failed to transfer or copy the certs file in the guest anchors folder: %w", err)
 	}
 	// Update the CA trust list
 	if err := runUpdateCATrustInGuest(mc); err != nil {

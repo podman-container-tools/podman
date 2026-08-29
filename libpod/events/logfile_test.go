@@ -10,16 +10,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestLogNeedsRotationMultiByteContent is a regression test for the bug where
+// logNeedsRotation used len([]rune(content)) (rune/character count) instead of
+// len(content) (byte count) to measure the size of incoming event content.
+//
+// file.Size() returns bytes, so the comparison must also use bytes.  For ASCII
+// strings both values are equal, but for strings containing multi-byte UTF-8
+// characters len([]rune(s)) < len(s).  The old code underestimated content
+// size and could allow the log file to grow past its configured limit.
+func TestLogNeedsRotationMultiByteContent(t *testing.T) {
+	// "北京市" is 3 runes but 9 bytes in UTF-8 (3 bytes each).
+	// Construct a string with multi-byte characters.
+	multiByte := strings.Repeat("北", 10) // 10 runes, 30 bytes
+
+	runeLen := uint64(len([]rune(multiByte))) // 10  (old, wrong measurement)
+	byteLen := uint64(len(multiByte))         // 30  (correct measurement)
+	require.Less(t, runeLen, byteLen, "sanity: rune count must be less than byte count for multi-byte content")
+
+	tmp, err := os.CreateTemp(t.TempDir(), "log-rotation-multibyte-")
+	require.NoError(t, err)
+	defer tmp.Close()
+
+	// Fill the file so that:
+	//   filesize(20) + byteLen(30) + 1(newline) = 51  >= limit(40)  → must rotate
+	//   filesize(20) + runeLen(10) + 1(newline) = 31  <  limit(40)  → old code would NOT rotate
+	initialContent := make([]byte, 20)
+	_, err = tmp.Write(initialContent)
+	require.NoError(t, err)
+
+	const limit = 40
+
+	rotated, err := rotateLog(tmp.Name(), multiByte, limit)
+	require.NoError(t, err)
+	require.True(t, rotated, "logNeedsRotation must measure content size in bytes, not runes")
+}
+
 func TestRotateLog(t *testing.T) {
 	tests := []struct {
-		// If sizeInitial + sizeContent >= sizeLimit, then rotate
+		// If sizeInitial + sizeContent + 1 (trailing newline) >= sizeLimit, then rotate
 		sizeInitial uint64
 		sizeContent uint64
 		sizeLimit   uint64
 		mustRotate  bool
 	}{
 		// No rotation
-		{0, 0, 1, false},
+		{0, 0, 2, false},
 		{1, 1, 0, false},
 		{10, 10, 30, false},
 		{1000, 500, 1600, false},

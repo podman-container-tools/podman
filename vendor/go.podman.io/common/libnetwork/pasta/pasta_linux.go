@@ -36,6 +36,26 @@ const (
 	// mapGuestAddrIpv4 static ip used as forwarder address inside the netns to reach the host,
 	// given this is a "link local" ip it should be very unlikely that it causes conflicts.
 	mapGuestAddrIpv4 = "169.254.1.2"
+
+	// mapGuestAddrIpv6 static ip used as IPv6 forwarder address inside the netns to reach the host.
+	mapGuestAddrIpv6 = "fc00::2"
+
+	// gatewayIpv6 is the IPv6 default gateway for the guest. pasta uses this as the source
+	// address for inbound IPv6 forwarding. Must differ from mapGuestAddrIpv6 to avoid
+	// --map-guest-addr intercepting reply traffic.
+	// See: https://bugs.passt.top/show_bug.cgi?id=217
+	gatewayIpv6 = "fc00::1"
+
+	// guestAddrIpv6 is assigned to the guest interface so the IPv6 gateway is reachable.
+	guestAddrIpv6 = "fc00::3"
+)
+
+// Exported IPv6 address constants for use by the rootless netns setup.
+const (
+	MapGuestAddrIpv4 = mapGuestAddrIpv4
+	MapGuestAddrIpv6 = mapGuestAddrIpv6
+	GatewayIpv6      = gatewayIpv6
+	GuestAddrIpv6    = guestAddrIpv6
 )
 
 type SetupOptions struct {
@@ -67,39 +87,24 @@ func Setup(opts *SetupOptions) (*SetupResult, error) {
 
 	logrus.Debugf("pasta arguments: %s", strings.Join(cmdArgs, " "))
 
-	for {
-		// pasta forks once ready, and quits once we delete the target namespace
-		out, err := exec.Command(path, cmdArgs...).CombinedOutput()
-		if err != nil {
-			exitErr := &exec.ExitError{}
-			if errors.As(err, &exitErr) {
-				// special backwards compat check, --map-guest-addr was added in pasta version 20240814 so we
-				// cannot hard require it yet. Once we are confident that the update is most distros we can remove it.
-				if exitErr.ExitCode() == 1 &&
-					strings.Contains(string(out), "unrecognized option '"+mapGuestAddrOpt) &&
-					len(mapGuestAddrIPs) == 1 && mapGuestAddrIPs[0] == mapGuestAddrIpv4 {
-					// we did add the default --map-guest-addr option, if users set something different we want
-					// to get to the error below. We have to unset mapGuestAddrIPs here to avoid a infinite loop.
-					mapGuestAddrIPs = nil
-					// Trim off last two args which are --map-guest-addr 169.254.1.2.
-					cmdArgs = cmdArgs[:len(cmdArgs)-2]
-					continue
-				}
-				return nil, fmt.Errorf("pasta failed with exit code %d:\n%s",
-					exitErr.ExitCode(), string(out))
-			}
-			return nil, fmt.Errorf("failed to start pasta: %w", err)
+	// pasta forks once ready, and quits once we delete the target namespace
+	out, err := exec.Command(path, cmdArgs...).CombinedOutput()
+	if err != nil {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("pasta failed with exit code %d:\n%s",
+				exitErr.ExitCode(), string(out))
 		}
+		return nil, fmt.Errorf("failed to start pasta: %w", err)
+	}
 
-		if len(out) > 0 {
-			// TODO: This should be warning but as of August 2024 pasta still prints
-			// things with --quiet that we do not care about. In podman CI I still see
-			// "Couldn't get any nameserver address" so until this is fixed we cannot
-			// enable it. For now info is fine and we can bump it up later, it is only a
-			// nice to have.
-			logrus.Infof("pasta logged warnings: %q", strings.TrimSpace(string(out)))
-		}
-		break
+	if len(out) > 0 {
+		// TODO: This should be warning but as of August 2024 pasta still prints
+		// things with --quiet that we do not care about. In podman CI I still see
+		// "Couldn't get any nameserver address" so until this is fixed we cannot
+		// enable it. For now info is fine and we can bump it up later, it is only a
+		// nice to have.
+		logrus.Infof("pasta logged warnings: %q", strings.TrimSpace(string(out)))
 	}
 
 	var ipv4, ipv6 bool
@@ -265,15 +270,12 @@ func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
 		cmdArgs = append(cmdArgs, "--quiet")
 	}
 
-	cmdArgs = append(cmdArgs, "--netns", opts.Netns)
-
-	// do this as last arg so we can easily trim them off in the error case when we have an older version
 	if len(mapGuestAddrIPs) == 0 {
-		// the user did not request custom --map-guest-addr so add our own so that we can use this
-		// for our own host.containers.internal host entry.
 		cmdArgs = append(cmdArgs, mapGuestAddrOpt, mapGuestAddrIpv4)
 		mapGuestAddrIPs = append(mapGuestAddrIPs, mapGuestAddrIpv4)
 	}
+
+	cmdArgs = append(cmdArgs, "--netns", opts.Netns)
 
 	return cmdArgs, dnsForwardIPs, mapGuestAddrIPs, nil
 }

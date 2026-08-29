@@ -33,6 +33,7 @@ Flags, useful for manual debugging:
 # Parse command-line options (used in development only, not in CI)
 do_checkout=y
 do_test=y
+REMOTE=
 declare -a bats_filter=()
 for i; do
     value=$(expr "$i" : '[^=]*=\(.*\)')
@@ -40,7 +41,7 @@ for i; do
         --no-checkout)  do_checkout= ; shift;;
         --no-test)      do_test=     ; shift;;
         --filter=*)     bats_filter=("--filter" "$value"); shift;;
-        --remote)       PODBIN_NAME=remote;;
+        --remote)       REMOTE=1;;
        -h|--help)       echo "$usage"; exit 0;;
         *)              echo "$ME: Unrecognized option '$i'" >&2; exit 1;;
     esac
@@ -73,10 +74,8 @@ PATCHES=${BUD_TEST_DIR}/buildah-tests.diff
 BUD_TEST_DIR_REL=$(dirname $(git ls-files --full-name ${BASH_SOURCE[0]}))
 # Path to podman binary; again, do it before we cd
 PODMAN_BINARY=$(pwd)/bin/podman
-REMOTE=
 # If remote, start server & change path
-if [[ "${PODBIN_NAME:-}" = "remote" ]]; then
-    REMOTE=1
+if [[ -n "$REMOTE" ]]; then
     PODMAN_BINARY+="-remote"
 fi
 

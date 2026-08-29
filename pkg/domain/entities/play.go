@@ -7,6 +7,41 @@ import (
 	entitiesTypes "go.podman.io/podman/v6/pkg/domain/entities/types"
 )
 
+// KubeValidateMode controls how `podman kube play` handles unrecognized YAML
+// fields and unsupported kinds.
+type KubeValidateMode string
+
+const (
+	// KubeValidateIgnore silently skips unrecognized fields and kinds.
+	KubeValidateIgnore KubeValidateMode = "ignore"
+	// KubeValidateWarn logs a warning for unrecognized fields and kinds.
+	KubeValidateWarn KubeValidateMode = "warn"
+	// KubeValidateStrict fails on unrecognized fields and kinds.
+	KubeValidateStrict KubeValidateMode = "strict"
+)
+
+// supportedKubeValidateModes is the set of accepted --validate values.
+var supportedKubeValidateModes = map[KubeValidateMode]bool{
+	KubeValidateIgnore: true,
+	KubeValidateWarn:   true,
+	KubeValidateStrict: true,
+}
+
+// IsValid reports whether m is a supported validate mode.
+func (m KubeValidateMode) IsValid() bool {
+	return supportedKubeValidateModes[m]
+}
+
+// KubeValidateModeNames returns the supported --validate values as strings, in
+// order of increasing strictness, for use in shell completion and error messages.
+func KubeValidateModeNames() []string {
+	return []string{
+		string(KubeValidateIgnore),
+		string(KubeValidateWarn),
+		string(KubeValidateStrict),
+	}
+}
+
 // PlayKubeOptions controls playing kube YAML files.
 type PlayKubeOptions struct {
 	// Annotations - Annotations to add to Pods
@@ -83,6 +118,8 @@ type PlayKubeOptions struct {
 	SystemContext *types.SystemContext
 	// Do not prefix container name with pod name
 	NoPodPrefix bool
+	// Validate controls how unrecognized YAML fields and kinds are handled.
+	Validate KubeValidateMode
 }
 
 // PlayKubePod represents a single pod and associated containers created by play kube

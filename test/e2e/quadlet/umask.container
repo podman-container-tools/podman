@@ -1,0 +1,5 @@
+## assert-podman-args "--umask" "0077"
+
+[Container]
+Image=localhost/imagename
+Umask=0077

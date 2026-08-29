@@ -4,16 +4,15 @@
 // Used by rootless bridge networking: pesto incrementally adds or deletes
 // port forwarding rules for individual containers.
 //
-// Passt only forwards traffic from the host into the rootless netns.
-// Netavark handles the final DNAT to the container IP:ContainerPort
-// inside the netns. Each mapping uses HostPort as both source and
-// destination so traffic arrives at the port netavark expects.
+// Each mapping specifies both the host binding and container target
+// address, so pasta forwards traffic directly to the correct
+// container IP:ContainerPort.
 //
 // When no HostIP is specified, pesto binds both IPv4 (0.0.0.0) and
 // IPv6 ([::]) so dual-stack networks work out of the box.
 //
 // Limitations:
-//   - TCP and UDP only (SCTP is silently skipped)
+//   - TCP and UDP only (unsupported protocols return an error)
 
 package pasta
 
@@ -32,31 +31,35 @@ const PestoBinaryName = "pesto"
 
 // PestoAddPorts adds port forwarding rules to the running pasta instance
 // via -A/--add. Idempotent: adding already-active ports is a no-op.
-func PestoAddPorts(conf *config.Config, socketPath string, ports []types.PortMapping) error {
+// containerIPv4 and containerIPv6 are the container's addresses inside the
+// network namespace; they are embedded in the target side of each mapping.
+func PestoAddPorts(conf *config.Config, socketPath string, ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
 	if socketPath == "" {
 		return errors.New("pesto control socket not available")
 	}
 	logrus.Debugf("pesto: adding %d port mappings", len(ports))
-	return pestoModifyPorts(conf, socketPath, ports, "--add")
+	return pestoModifyPorts(conf, socketPath, ports, "--add", containerIPv4, containerIPv6)
 }
 
 // PestoDeletePorts removes port forwarding rules from the running pasta
 // instance via -D/--delete.
-func PestoDeletePorts(conf *config.Config, socketPath string, ports []types.PortMapping) error {
+// containerIPv4 and containerIPv6 are the container's addresses inside the
+// network namespace; they are embedded in the target side of each mapping.
+func PestoDeletePorts(conf *config.Config, socketPath string, ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
 	if socketPath == "" {
 		return nil
 	}
 	logrus.Debugf("pesto: deleting %d port mappings", len(ports))
-	return pestoModifyPorts(conf, socketPath, ports, "--delete")
+	return pestoModifyPorts(conf, socketPath, ports, "--delete", containerIPv4, containerIPv6)
 }
 
-func pestoModifyPorts(conf *config.Config, socketPath string, ports []types.PortMapping, mode string) error {
+func pestoModifyPorts(conf *config.Config, socketPath string, ports []types.PortMapping, mode, containerIPv4, containerIPv6 string) error {
 	pestoPath, err := conf.FindHelperBinary(PestoBinaryName, true)
 	if err != nil {
 		return fmt.Errorf("could not find pesto binary: %w", err)
 	}
 
-	pestoArgs, err := portMappingsToPestoArgs(ports)
+	pestoArgs, err := portMappingsToPestoArgs(ports, containerIPv4, containerIPv6)
 	if err != nil {
 		return err
 	}
@@ -77,23 +80,42 @@ func pestoModifyPorts(conf *config.Config, socketPath string, ports []types.Port
 	return nil
 }
 
-// portMappingsToPestoArgs converts PortMappings into pesto CLI arguments.
+// portMappingsToPestoArgs converts PortMappings into pesto CLI arguments
+// using the target mapping syntax: -t hostIP/hostPort:containerIP/containerPort.
 //
-// When HostIP is set, a single binding is created (e.g. "-t 127.0.0.1/8080").
-// When HostIP is empty, both IPv4 and IPv6 bindings are created so that
-// dual-stack networks work: "-t 0.0.0.0/8080 -t [::]/8080".
-func portMappingsToPestoArgs(ports []types.PortMapping) ([]string, error) {
+// IPv6 host addresses are bracketed (e.g. [::]) to disambiguate colons
+// from the mapping ":" separator; container addresses are never bracketed
+// because they appear after the ":" where there is no ambiguity.
+//
+// When HostIP is empty, dual-stack bindings are created using 0.0.0.0 with
+// containerIPv4, and (if containerIPv6 is non-empty) [::] with containerIPv6.
+// When HostIP is set, the address-family-matched container IP is used.
+func portMappingsToPestoArgs(ports []types.PortMapping, containerIPv4, containerIPv6 string) ([]string, error) {
+	type addrPair struct {
+		host, container string
+	}
+
 	var args []string
 
 	for _, p := range ports {
-		var addrs []string
+		var pairs []addrPair
+
 		switch {
 		case p.HostIP == "":
-			addrs = []string{"0.0.0.0/", "[::]/"}
+			if containerIPv4 != "" {
+				pairs = append(pairs, addrPair{"0.0.0.0", containerIPv4})
+			}
+			if containerIPv6 != "" {
+				pairs = append(pairs, addrPair{"[::]", containerIPv6})
+			}
 		case strings.Contains(p.HostIP, ":"):
-			addrs = []string{"[" + p.HostIP + "]/"}
+			if containerIPv6 != "" {
+				pairs = append(pairs, addrPair{"[" + p.HostIP + "]", containerIPv6})
+			}
 		default:
-			addrs = []string{p.HostIP + "/"}
+			if containerIPv4 != "" {
+				pairs = append(pairs, addrPair{p.HostIP, containerIPv4})
+			}
 		}
 
 		for protocol := range strings.SplitSeq(p.Protocol, ",") {
@@ -112,12 +134,14 @@ func portMappingsToPestoArgs(ports []types.PortMapping) ([]string, error) {
 				portRange = 1
 			}
 
-			for _, addr := range addrs {
+			for _, pair := range pairs {
 				var arg string
 				if portRange == 1 {
-					arg = fmt.Sprintf("%s%d", addr, p.HostPort)
+					arg = fmt.Sprintf("%s/%d:%s/%d", pair.host, p.HostPort, pair.container, p.ContainerPort)
 				} else {
-					arg = fmt.Sprintf("%s%d-%d", addr, p.HostPort, p.HostPort+portRange-1)
+					arg = fmt.Sprintf("%s/%d-%d:%s/%d-%d",
+						pair.host, p.HostPort, p.HostPort+portRange-1,
+						pair.container, p.ContainerPort, p.ContainerPort+portRange-1)
 				}
 				args = append(args, flag, arg)
 			}

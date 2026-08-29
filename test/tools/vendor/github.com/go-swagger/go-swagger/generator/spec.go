@@ -28,15 +28,25 @@ import (
 // the related preprocessing flags.
 type specAnalyzer struct {
 	*GenOpts
+
+	loader loads.DocLoader
 }
 
 func newSpecAnalyzer(g *GenOpts) *specAnalyzer {
-	return &specAnalyzer{GenOpts: g}
+	return &specAnalyzer{
+		GenOpts: g,
+	}
 }
 
 func (g *specAnalyzer) validateAndFlattenSpec() (*loads.Document, error) {
+	// Set options for the spec loader.
+	//
+	// This allows to confine the global loader chain so that validation, flattening and expansion resolve every
+	// transitive $ref under the same Restricted/Rooted restrictions, not just the initial load.
+	g.setLoaderOptions()
+
 	// Load spec document
-	specDoc, err := loads.Spec(g.Spec)
+	specDoc, err := loads.Spec(g.Spec, loads.WithDocLoader(g.loader))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +62,7 @@ func (g *specAnalyzer) validateAndFlattenSpec() (*loads.Document, error) {
 	// Validate if needed
 	if g.ValidateSpec {
 		log.Printf("validating spec %v", g.Spec)
-		validationErrors := validate.Spec(specDoc, strfmt.Default)
+		validationErrors := validate.Spec(specDoc, strfmt.Default, validate.WithPathLoader(g.loader))
 		if validationErrors != nil {
 			var b strings.Builder
 
@@ -73,7 +83,7 @@ func (g *specAnalyzer) validateAndFlattenSpec() (*loads.Document, error) {
 
 		// TODO(fredbi): due to uncontrolled $ref state in spec, we need to reload the spec atm, or flatten won't
 		// work properly (validate expansion alters the $ref cache in go-openapi/spec)
-		specDoc, _ = loads.Spec(g.Spec)
+		specDoc, _ = loads.Spec(g.Spec, loads.WithDocLoader(g.loader))
 	}
 
 	// Flatten spec
@@ -102,6 +112,7 @@ func (g *specAnalyzer) validateAndFlattenSpec() (*loads.Document, error) {
 
 	g.FlattenOpts.BasePath = specDoc.SpecFilePath()
 	g.FlattenOpts.Spec = analysis.New(specDoc.Spec())
+	g.FlattenOpts.PathLoaderWithOptions = g.loader
 
 	g.printFlattenOpts()
 
@@ -133,7 +144,7 @@ func (g *specAnalyzer) analyzeSpec() (*loads.Document, *analysis.Spec, error) {
 	// spec preprocessing option
 	if g.PropertiesSpecOrder {
 		g.Spec = WithAutoXOrder(g.Spec)
-		specDoc, err = loads.Spec(g.Spec)
+		specDoc, err = loads.Spec(g.Spec, loads.WithDocLoader(g.loader))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -156,6 +167,50 @@ func (g *specAnalyzer) printFlattenOpts() {
 		preprocessingOption = "full flattening"
 	}
 	log.Printf("preprocessing spec with option:  %s", preprocessingOption)
+}
+
+// setLoaderOptions builds the document loader used for spec loading, validation and flattening.
+// The default (no Restricted/Rooted flags) is an unrestricted YAML/JSON loader.
+//
+// With the Restricted/Rooted flags, the loader confines every load — the initial root document and
+// every transitive $ref resolved afterwards — to the same restrictions. The confined loader is
+// threaded explicitly into each stage that resolves references:
+//
+//   - loads.Spec via [loads.WithDocLoader];
+//   - go-openapi/validate via validate.WithPathLoader;
+//   - go-openapi/analysis (flatten/expand) via FlattenOpts.PathLoaderWithOptions.
+//
+// This replaces the earlier approach of mutating the package-global spec loader chain
+// (loads.SetLoaders): threading the loader per call is explicit, has no global side effects and is
+// safe for concurrent code generation. The security options are baked into the loader (appended
+// last so they win over any call-time options), so confinement holds even when a downstream stage
+// invokes the loader with no options of its own.
+func (g *specAnalyzer) setLoaderOptions() {
+	loadOptions := g.securityOptions()
+
+	// wrap a base loader so the security options are always applied, appended after any call-time
+	// options so they take precedence (loading options are last-wins).
+	yamlLoader := loads.NewDocLoaderWithMatch(loads.LoaderWithOptions(loading.YAMLDoc, loadOptions...), loading.YAMLMatcher)
+	jsonLoader := loads.NewDocLoaderWithMatch(loads.LoaderWithOptions(loading.JSONDoc, loadOptions...), nil) // JSON catch-all fallback
+
+	g.loader = loads.LoaderChain(yamlLoader, jsonLoader)
+}
+
+// inject secure options for spec loading.
+func (g *specAnalyzer) securityOptions() []loading.Option {
+	const securityOptions = 2
+	loadingOptions := make([]loading.Option, 0, securityOptions)
+	if g.Rooted != "" {
+		// local $ref contained within "Rooted"
+		loadingOptions = append(loadingOptions, loading.WithRoot(g.Rooted))
+	}
+
+	if g.Restricted {
+		// remote $ref pass the default restricted client in swag/loadin
+		loadingOptions = append(loadingOptions, loading.WithHTTPClient(loads.RestrictedHTTPClient()))
+	}
+
+	return loadingOptions
 }
 
 // findSwaggerSpec fetches a default swagger spec if none is provided.
@@ -306,5 +361,6 @@ func applyDefaultSwagger(doc *loads.Document) (*loads.Document, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return loads.Analyzed(jazon, swspec.Swagger)
 }

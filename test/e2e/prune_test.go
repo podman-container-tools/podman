@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -178,9 +179,13 @@ var _ = Describe("Podman prune", func() {
 		none := podmanTest.Podman([]string{"images", "-a"})
 		none.WaitWithDefaultTimeout()
 		Expect(none).Should(ExitCleanly())
-		hasNone, result := none.GrepString("<none>")
-		Expect(result).To(HaveLen(2))
-		Expect(hasNone).To(BeTrue())
+		noneLines := 0
+		for _, line := range none.OutputToStringArray() {
+			if strings.Contains(line, "<none>") {
+				noneLines++
+			}
+		}
+		Expect(noneLines).To(Equal(2), "<none> lines in images -a")
 
 		prune := podmanTest.Podman([]string{"image", "prune", "-f"})
 		prune.WaitWithDefaultTimeout()
@@ -189,10 +194,8 @@ var _ = Describe("Podman prune", func() {
 		after := podmanTest.Podman([]string{"images", "-a"})
 		after.WaitWithDefaultTimeout()
 		Expect(after).Should(ExitCleanly())
-		hasNoneAfter, result := after.GrepString("<none>")
-		Expect(hasNoneAfter).To(BeTrue())
+		Expect(after.OutputToStringArray()).To(ContainElement(ContainSubstring("<none>")))
 		Expect(len(after.OutputToStringArray())).To(BeNumerically(">", 1))
-		Expect(result).ToNot(BeEmpty())
 	})
 
 	It("podman image prune unused images", func() {
@@ -623,7 +626,7 @@ var _ = Describe("Podman prune", func() {
 		// Build will never finish so let's wait for build to ask for SIGKILL to simulate a failed build that leaves stage containers.
 		matchedOutput := false
 		for range 900 {
-			if build.LineInOutputContains("Please use signal 9") {
+			if strings.Contains(build.OutputToString(), "Please use signal 9") {
 				matchedOutput = true
 				build.Signal(syscall.SIGKILL)
 				break

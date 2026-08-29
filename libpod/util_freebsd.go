@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"errors"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
@@ -17,7 +18,7 @@ func LabelVolumePath(_, _ string) error {
 // Unmount umounts a target directory
 func Unmount(mount string) {
 	if err := unix.Unmount(mount, unix.MNT_FORCE); err != nil {
-		if err != syscall.EINVAL {
+		if !errors.Is(err, syscall.EINVAL) {
 			logrus.Warnf("Failed to unmount %s : %v", mount, err)
 		} else {
 			logrus.Debugf("failed to unmount %s : %v", mount, err)

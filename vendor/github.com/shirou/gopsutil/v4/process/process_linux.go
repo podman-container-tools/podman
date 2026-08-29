@@ -350,6 +350,9 @@ func (p *Process) ChildrenWithContext(ctx context.Context) ([]*Process, error) {
 			continue
 		}
 		fields := splitProcStat(statContents)
+		if len(fields) < 5 {
+			continue
+		}
 		pid, err := strconv.ParseInt(fields[1], 10, 32)
 		if err != nil {
 			continue
@@ -756,6 +759,9 @@ func (p *Process) fillFromStatmWithContext(ctx context.Context) (*MemoryInfoStat
 		return nil, nil, err
 	}
 	fields := strings.Split(string(contents), " ")
+	if len(fields) < 6 {
+		return nil, nil, fmt.Errorf("malformed statm file: expected at least 6 fields, got %d", len(fields))
+	}
 
 	vms, err := strconv.ParseUint(fields[0], 10, 64)
 	if err != nil {
@@ -861,6 +867,12 @@ func (p *Process) fillFromStatusWithContext(ctx context.Context) error {
 			// Ensure we have a copy and not reference into slice
 			p.name = string([]byte(p.name))
 		case "State":
+			if value == "" {
+				// Clear rather than leave a stale status from a previous
+				// parse, since Process objects can be reused across calls.
+				p.status = ""
+				continue
+			}
 			p.status = convertStatusChar(value[0:1])
 			// Ensure we have a copy and not reference into slice
 			p.status = string([]byte(p.status))
@@ -1195,6 +1207,12 @@ func readPidsFromDir(path string) ([]int32, error) {
 func splitProcStat(content []byte) []string {
 	nameStart := bytes.IndexByte(content, '(')
 	nameEnd := bytes.LastIndexByte(content, ')')
+	// Guard against a malformed/truncated stat file that is missing the
+	// parentheses around comm, which would otherwise cause the slice
+	// operations below to panic. Callers validate the field count.
+	if nameStart < 0 || nameEnd < nameStart || nameEnd+2 > len(content) {
+		return nil
+	}
 	restFields := strings.Fields(string(content[nameEnd+2:])) // +2 skip ') '
 	name := content[nameStart+1 : nameEnd]
 	pid := strings.TrimSpace(string(content[:nameStart]))

@@ -5,5 +5,6 @@ package operations
 
 import "errors"
 
-// ErrOperations is the sentinel error for all errors originating from the operations builder package.
+// ErrOperations is the sentinel error for all errors originating from the operations builder
+// package.
 var ErrOperations = errors.New("codescan:builders:operations")

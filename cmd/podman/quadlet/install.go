@@ -56,7 +56,7 @@ func install(_ *cobra.Command, args []string) error {
 		return err
 	}
 	for pathOrURL, err := range installReport.QuadletErrors {
-		errs = append(errs, fmt.Errorf("quadlet %q failed to install: %v", pathOrURL, err))
+		errs = append(errs, fmt.Errorf("quadlet %q failed to install: %w", pathOrURL, err))
 	}
 	for _, s := range installReport.InstalledQuadlets {
 		fmt.Println(s)

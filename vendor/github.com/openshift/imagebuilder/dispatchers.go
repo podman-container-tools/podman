@@ -28,6 +28,7 @@ import (
 	buildkitcommand "github.com/moby/buildkit/frontend/dockerfile/command"
 	buildkitparser "github.com/moby/buildkit/frontend/dockerfile/parser"
 	buildkitshell "github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/tonistiigi/dchapes-mode"
 )
 
 var (
@@ -814,11 +815,20 @@ func shell(b *Builder, args []string, attributes map[string]bool, flagArgs []str
 }
 
 // checkChmodConversion makes sure that the argument to a --chmod= flag for
-// COPY or ADD is an octal number
+// COPY or ADD is an octal number between 0 and 07777 or a symbolic mode,
+// both of which the dockerfile frontend spec accepts since Dockerfile
+// syntax 1.14. Parsing here only validates the syntax: the clauses are
+// resolved against each copied file's current mode by the executor, which
+// is where conditional bits such as the capital X in a+rX are meaningful.
 func checkChmodConversion(chmod string) error {
-	_, err := strconv.ParseUint(chmod, 8, 32)
-	if err != nil {
-		return fmt.Errorf("Error parsing chmod %s", chmod)
+	if v, err := strconv.ParseUint(chmod, 8, 32); err == nil {
+		if v > 0o7777 {
+			return fmt.Errorf("Error parsing chmod %s: it should be octal and between 0 and 07777", chmod)
+		}
+		return nil
+	}
+	if _, err := mode.Parse(chmod); err != nil {
+		return fmt.Errorf("Error parsing chmod %s: %w", chmod, err)
 	}
 	return nil
 }

@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
@@ -31,7 +32,7 @@ type ociError struct {
 }
 
 // Bind ports to keep them closed on the host
-func bindPorts(ports []types.PortMapping) ([]*os.File, error) {
+func bindPorts(ports []types.PortMapping, forceListen bool) ([]*os.File, error) {
 	var files []*os.File
 	sctpWarning := true
 	for _, port := range ports {
@@ -42,7 +43,7 @@ func bindPorts(ports []types.PortMapping) ([]*os.File, error) {
 		protocols := strings.SplitSeq(port.Protocol, ",")
 		for protocol := range protocols {
 			for i := uint16(0); i < port.Range; i++ {
-				f, err := bindPort(protocol, port.HostIP, port.HostPort+i, isV6, &sctpWarning)
+				f, err := bindPort(protocol, port.HostIP, port.HostPort+i, isV6, &sctpWarning, forceListen)
 				if err != nil {
 					// close all open ports in case of early error so we do not
 					// rely on the garbage collector to close them
@@ -60,9 +61,9 @@ func bindPorts(ports []types.PortMapping) ([]*os.File, error) {
 	return files, nil
 }
 
-// bindPort reserves a port on the host using socket+bind without listen.
+// bindPort reserves a port on the host using socket+bind, listen() only when listen is set to true
 // Dual-stack bind by default unless hostIP is specified.
-func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool) (*os.File, error) {
+func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool, forceListen bool) (*os.File, error) {
 	switch protocol {
 	case "tcp", "udp":
 		sockType := unix.SOCK_STREAM
@@ -92,6 +93,13 @@ func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool
 		if err := unix.Bind(fd, sa); err != nil {
 			unix.Close(fd)
 			return nil, fmt.Errorf("cannot bind %s port %s: %w", protocol, net.JoinHostPort(hostIP, strconv.FormatUint(uint64(port), 10)), err)
+		}
+
+		if forceListen && sockType == unix.SOCK_STREAM {
+			if err := unix.Listen(fd, 0); err != nil {
+				unix.Close(fd)
+				return nil, fmt.Errorf("cannot listen on %s port %s: %w", protocol, net.JoinHostPort(hostIP, strconv.FormatUint(uint64(port), 10)), err)
+			}
 		}
 
 		return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
@@ -152,24 +160,30 @@ func bindPortV4Fallback(protocol string, sockType int, port uint16) (*os.File, e
 	return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
 }
 
+var (
+	regexPermissionDenied = regexp.Delayed("(?i).*permission denied.*|.*operation not permitted.*")
+	regexNotFound         = regexp.Delayed("(?i).*executable file not found in.*|.*no such file or directory.*|.*open executable.*")
+	regexProcAttr         = regexp.Delayed("`/proc/[a-z0-9-].+/attr.*`")
+)
+
 func getOCIRuntimeError(name, runtimeMsg string) error {
 	includeFullOutput := logrus.GetLevel() == logrus.DebugLevel
 
-	if match := regexp.MustCompile("(?i).*permission denied.*|.*operation not permitted.*").FindString(runtimeMsg); match != "" {
+	if match := regexPermissionDenied.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg
 		}
 		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimePermissionDenied)
 	}
-	if match := regexp.MustCompile("(?i).*executable file not found in.*|.*no such file or directory.*|.*open executable.*").FindString(runtimeMsg); match != "" {
+	if match := regexNotFound.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg
 		}
 		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimeNotFound)
 	}
-	if match := regexp.MustCompile("`/proc/[a-z0-9-].+/attr.*`").FindString(runtimeMsg); match != "" {
+	if match := regexProcAttr.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg

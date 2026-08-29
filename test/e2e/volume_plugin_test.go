@@ -18,7 +18,6 @@ var _ = Describe("Podman volume plugins", func() {
 		os.Setenv("CONTAINERS_CONF", "config/containers.conf")
 		SkipIfRemote("Volume plugins only supported as local")
 		SkipIfRootless("Root is required for volume plugin testing")
-		SkipIfNotAMD64() // https://github.com/containers/podman/issues/28270
 		err = os.MkdirAll("/run/docker/plugins", 0o755)
 		Expect(err).ToNot(HaveOccurred())
 	})

@@ -140,4 +140,31 @@ var _ = Describe("Podman container inspect", func() {
 		Expect(data).To(HaveLen(1))
 		Expect(data[0].Config.Env).To(ContainElement(Equal(secretName + "=*******")))
 	})
+
+	It("podman inspect NetworkSettings DNSNames and Aliases", func() {
+		netName := "dnstest"
+		session := podmanTest.Podman([]string{"network", "create", netName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		defer podmanTest.removeNetwork(netName)
+
+		ctrName := "testdns"
+		session = podmanTest.Podman([]string{"create", "--name", ctrName, "--hostname", "myhostname", "--network", netName, "--network-alias", "myalias", ALPINE, "top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		cid := session.OutputToString()
+
+		data := podmanTest.InspectContainer(ctrName)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].NetworkSettings.Networks).To(HaveKey(netName))
+
+		network := data[0].NetworkSettings.Networks[netName]
+		// Aliases should only contain user-provided alias
+		Expect(network.Aliases).To(Equal([]string{"myalias"}))
+		// DNSNames should contain container name, user alias, short ID, and hostname
+		Expect(network.DNSNames).To(ContainElement(ctrName))
+		Expect(network.DNSNames).To(ContainElement("myalias"))
+		Expect(network.DNSNames).To(ContainElement(cid[0:12]))
+		Expect(network.DNSNames).To(ContainElement("myhostname"))
+	})
 })

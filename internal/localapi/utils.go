@@ -234,6 +234,21 @@ func CheckIfImageBuildPathsOnRunningMachine(ctx context.Context, containerFiles 
 			context.Value = mapping.RemotePath
 		}
 	}
+
+	// Ignore file
+	if options.IgnoreFile != "" {
+		if err := fileutils.Lexists(options.IgnoreFile); errors.Is(err, fs.ErrNotExist) {
+			logrus.Debugf("Path %q does not exist locally, skipping machine check", options.IgnoreFile)
+			return nil, options, false
+		}
+		mapping, found := IsPathAvailableOnMachine(mounts, vmType, options.IgnoreFile)
+		if !found {
+			logrus.Debugf("Path %q is not available on the running machine", options.IgnoreFile)
+			return nil, options, false
+		}
+		options.IgnoreFile = mapping.RemotePath
+	}
+
 	return translatedContainerFiles, options, true
 }
 

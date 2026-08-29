@@ -325,6 +325,9 @@ func parseSecurityOpts(securityOpts []string, commonOpts *define.CommonBuildOpti
 		case "apparmor":
 			commonOpts.ApparmorProfile = con[1]
 		case "seccomp":
+			if !supportsSeccomp && con[1] != "unconfined" {
+				return fmt.Errorf("seccomp profile %q requested, but seccomp support is not enabled in this build", con[1])
+			}
 			commonOpts.SeccompProfilePath = con[1]
 		case "mask":
 			commonOpts.Masks = append(commonOpts.Masks, strings.Split(con[1], ":")...)
@@ -343,7 +346,7 @@ func parseSecurityOpts(securityOpts []string, commonOpts *define.CommonBuildOpti
 		}
 	}
 
-	if commonOpts.SeccompProfilePath == "" {
+	if supportsSeccomp && commonOpts.SeccompProfilePath == "" {
 		if err := fileutils.Exists(SeccompOverridePath); err == nil {
 			commonOpts.SeccompProfilePath = SeccompOverridePath
 		} else {
@@ -863,7 +866,7 @@ func GetConfidentialWorkloadOptions(arg string) (define.ConfidentialWorkloadOpti
 		case strings.HasPrefix(option, "memory="):
 			options.Memory, err = strconv.Atoi(strings.TrimPrefix(option, "memory="))
 			if err != nil {
-				return options, fmt.Errorf("parsing memory= value %q: %w", strings.TrimPrefix(option, "memorys"), err)
+				return options, fmt.Errorf("parsing memory= value %q: %w", strings.TrimPrefix(option, "memory="), err)
 			}
 		case option == "ignore_attestation_errors", option == "ignore-attestation-errors":
 			options.IgnoreAttestationErrors = true

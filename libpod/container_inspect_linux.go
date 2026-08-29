@@ -292,6 +292,13 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 				}
 			}
 		}
+
+		// If userns=auto, setting up the namespace is deferred until the container
+		// is created. If the container is configured, check if it is going to have a
+		// private userns and return accordingly
+		if c.state.State == define.ContainerStateConfigured && c.config.IDMappings.AutoUserNs {
+			usernsMode = "private"
+		}
 	}
 	hostConfig.UsernsMode = usernsMode
 	if c.config.IDMappings.UIDMap != nil && c.config.IDMappings.GIDMap != nil {

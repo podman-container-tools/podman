@@ -33,13 +33,14 @@ jobs:
       sys: ${{ steps.filter.outputs.sys }}
       machine: ${{ steps.filter.outputs.machine }}
       upgrade: ${{ steps.filter.outputs.upgrade }}
+      farm: ${{ steps.filter.outputs.farm }}
       windows: ${{ steps.filter.outputs.windows }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: .github/filters.yaml
@@ -84,6 +85,7 @@ jobs:
             libseccomp-dev \
             libsystemd-dev \
             libclone-perl \
+            libtest-differences-perl \
             man-db \
             podman \
             python3-pip
@@ -413,6 +415,10 @@ jobs:
             distro: fedora-current
             mode: v5.6.2
             priv: root
+          # farm tests only make sense rootless
+          - test: farm
+            distro: fedora-current
+            priv: rootless
 
     uses: ./.github/workflows/lima.yml
     with:
@@ -437,7 +443,7 @@ jobs:
       needs.path-filter.outputs.machine == 'true'
     name: machine linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -707,9 +713,6 @@ jobs:
       - name: Post-run cleanup
         if: always()
         run: ./hack/ci/gha_mac_cleanup.sh
-
-### TODO missing
-# Farm, needs extra setup I need to look into
 
   # Merge protection is setup for this job name, do not change it.
   success:

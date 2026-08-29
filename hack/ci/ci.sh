@@ -20,11 +20,16 @@ IMAGE_URL="https://objectstorage.us-ashburn-1.oraclecloud.com/n/id0lmbbwgcdv/b/p
 
 trap "limactl delete --force $LIMA_VM_NAME" EXIT
 
+echo "::group::Starting VM"
 limactl --yes start --plain --name=$LIMA_VM_NAME --cpus $(nproc) --memory 8 --nested-virt \
     --set ".images=[{\"location\":\"$IMAGE_URL\", \"arch\": \"x86_64\"}]" \
     "$SCRIPT_DIR/template.lima.yml"
 
-limactl copy "$REPO_DIR" $LIMA_VM_NAME:/var/tmp/podman
+limactl shell $LIMA_VM_NAME mkdir -p /var/tmp/podman-container-tools
+
+limactl copy -r "$REPO_DIR" $LIMA_VM_NAME:/var/tmp/podman-container-tools/podman
+
+echo "::endgroup::"
 
 # If binaries were downloaded/copied, make sure they are executable and have current timestamps
 # so make doesn't rebuild them inside the VM.
@@ -34,10 +39,12 @@ fi
 
 set +e
 
-limactl shell --workdir /var/tmp/podman $LIMA_VM_NAME ./hack/ci/runner.sh "${@}"
+limactl shell --preserve-env --workdir /var/tmp/podman-container-tools/podman $LIMA_VM_NAME ./hack/ci/runner.sh "${@}"
 rc=$?
 
-limactl shell --workdir /var/tmp/podman $LIMA_VM_NAME sudo ./hack/ci/logcollector.sh journal &> "$SCRIPT_DIR/journal.log"
+echo "::group::Collecting logs"
+limactl copy -r $LIMA_VM_NAME:/var/tmp/podman-container-tools/podman/hack/ci/logs/ $SCRIPT_DIR/logs
+echo "::endgroup::"
 
 # Fix permissions of the cache directories so the host user can read/write them
 limactl shell $LIMA_VM_NAME sh -c "sudo chown -R --reference=/var/tmp/podman /var/tmp/podman/.gocache /var/tmp/podman/.gomodcache || true"

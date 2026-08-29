@@ -5,18 +5,18 @@
   }
 {{- else if .IsArray }}
   {{- if or ( and .Child.IsPrimitive .Child.IsCustomFormatter ) .Child.IsArray }}
-  if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (printf "%s" (json .Default)) }}`), &{{ varname .ID }}Default); err != nil {
     msg := fmt.Sprintf("invalid default value for {{ varname .ID }}: %v",err)
     panic(msg) // panics if the specification is invalid
   }
   {{- else if and (not .Child.IsPrimitive) (not .Child.IsArray) }} {{/* shouldn't get there: guard */}}
-  if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (printf "%s" (json .Default)) }}`), &{{ varname .ID }}Default); err != nil {
     msg := fmt.Sprintf("invalid default value for {{ varname .ID }}: %v",err)
     panic(msg) // panics if the specification is invalid
   }
   {{- end }}
 {{- else if not .IsPrimitive }} {{/* shouldn't get there: guard (defaults to letting json figure out) */}}
-  if err := json.Unmarshal([]byte(`{{printf "%s" (json .Default)}}`), &{{ varname .ID }}Default); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (printf "%s" (json .Default)) }}`), &{{ varname .ID }}Default); err != nil {
     msg := fmt.Sprintf("invalid default value for {{ varname .ID }}: %v",err)
     panic(msg) // panics if the specification is invalid
   }

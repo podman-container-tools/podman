@@ -70,6 +70,14 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//    items:
 	//      type: string
 	//  - in: query
+	//    name: compressionFormat
+	//    type: string
+	//    description: Compression format used to compress image layers.
+	//  - in: query
+	//    name: compressionLevel
+	//    type: integer
+	//    description: Compression level used to compress image layers.
+	//  - in: query
 	//    name: forceCompressionFormat
 	//    description: Enforce compressing the layers with the specified --compression and do not reuse differently compressed blobs on the registry.
 	//    type: boolean
@@ -84,6 +92,14 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//    description: push all images
 	//    type: boolean
 	//    default: true
+	//  - in: query
+	//    name: format
+	//    type: string
+	//    description: Manifest type (oci, v2s1, or v2s2) to use when pushing an image. Default is manifest type of source, with fallbacks.
+	//  - in: query
+	//    name: removeSignatures
+	//    type: boolean
+	//    description: Discard any pre-existing signatures in the image.
 	//  - in: query
 	//    name: tlsVerify
 	//    type: boolean
@@ -142,6 +158,17 @@ func (s *APIServer) registerManifestHandlers(r *mux.Router) error {
 	//   name: amend
 	//   type: boolean
 	//   description: modify an existing list if one with the desired name already exists
+	// - in: query
+	//   name: annotation
+	//   type: array
+	//   items:
+	//     type: string
+	//   description: |
+	//     Annotation to set on the manifest list, in key=value format. Repeat parameter as needed.
+	// - in: query
+	//   name: annotations
+	//   type: string
+	//   description: JSON encoded map[string]string of annotations to set on the manifest list
 	// - in: body
 	//   name: options
 	//   description: options for new manifest

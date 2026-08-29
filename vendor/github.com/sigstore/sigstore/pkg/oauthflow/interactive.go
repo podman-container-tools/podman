@@ -42,6 +42,23 @@ type InteractiveIDTokenGetter struct {
 	ExtraAuthURLParams []oauth2.AuthCodeOption
 	Input              io.Reader
 	Output             io.Writer
+	// BrowserOpener, if set, is used to open the login URL in a browser during
+	// the interactive flow. It receives the authorization URL and should return
+	// an error if the browser could not be opened, in which case the flow falls
+	// back to the out-of-band flow. This allows callers to customize how (or
+	// whether) a browser is launched - for example, to select a specific
+	// browser or profile. When nil, the platform default browser is used
+	// (browser.OpenURL).
+	BrowserOpener func(url string) error
+}
+
+// openURL opens the given URL in a browser, using the configured BrowserOpener
+// if set and otherwise falling back to the package default.
+func (i *InteractiveIDTokenGetter) openURL(url string) error {
+	if i.BrowserOpener != nil {
+		return i.BrowserOpener(url)
+	}
+	return browserOpener(url)
 }
 
 // GetIDToken gets an OIDC ID Token from the specified provider using an interactive browser session
@@ -77,7 +94,7 @@ func (i *InteractiveIDTokenGetter) GetIDToken(p *oidc.Provider, cfg oauth2.Confi
 	}
 	authCodeURL := cfg.AuthCodeURL(stateToken, opts...)
 	var code string
-	if err := browserOpener(authCodeURL); err != nil {
+	if err := i.openURL(authCodeURL); err != nil {
 		// Swap to the out of band flow if we can't open the browser
 		fmt.Fprintf(i.GetOutput(), "error opening browser: %v\n", err)
 		code = i.doOobFlow(&cfg, stateToken, opts)

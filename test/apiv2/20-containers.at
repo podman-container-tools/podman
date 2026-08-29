@@ -639,6 +639,60 @@ t GET containers/$cid/json 200 \
 t DELETE containers/$cid?v=true 204
 rm -rf $HEALTHCHECK_TMPD
 
+# Test Compat Create with an empty healthcheck (compose "healthcheck: {}") inherits image health check
+HEALTHCHECK_INHERIT_TMPD=$(mktemp -d podman-apiv2-test.healthcheck-inherit.XXXXXXXX)
+cat >$HEALTHCHECK_INHERIT_TMPD/Dockerfile <<EOF
+FROM $IMAGE
+HEALTHCHECK --interval=99s --timeout=98s --start-period=97s --start-interval=96s --retries=95 CMD true
+EOF
+# HEALTHCHECK is only recorded in the docker image format, the oci default drops it
+podman build --format docker -t healthcheck_inherit $HEALTHCHECK_INHERIT_TMPD &>/dev/null
+
+# empty Test inherits the image healthcheck unchanged (all fields preserved)
+t POST containers/create Image=healthcheck_inherit Cmd='["top"]' Healthcheck='{"Test":[]}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Healthcheck.Test[0]="CMD-SHELL" \
+  .Config.Healthcheck.Test[1]="true" \
+  .Config.Healthcheck.Interval=99000000000 \
+  .Config.Healthcheck.Timeout=98000000000 \
+  .Config.Healthcheck.StartPeriod=97000000000 \
+  .Config.Healthcheck.StartInterval=96000000000 \
+  .Config.Healthcheck.Retries=95
+t DELETE containers/$cid?v=true 204
+
+# empty Test with explicit fields inherits the command, overrides every field
+t POST containers/create Image=healthcheck_inherit Cmd='["top"]' Healthcheck='{"Test":[],"Interval":10000000000,"Timeout":11000000000,"StartPeriod":12000000000,"StartInterval":13000000000,"Retries":14}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Healthcheck.Test[0]="CMD-SHELL" \
+  .Config.Healthcheck.Test[1]="true" \
+  .Config.Healthcheck.Interval=10000000000 \
+  .Config.Healthcheck.Timeout=11000000000 \
+  .Config.Healthcheck.StartPeriod=12000000000 \
+  .Config.Healthcheck.StartInterval=13000000000 \
+  .Config.Healthcheck.Retries=14
+t DELETE containers/$cid?v=true 204
+
+# empty Test overrides explicitly provided fields, inherits the rest
+t POST containers/create Image=healthcheck_inherit Cmd='["top"]' Healthcheck='{"Test":[],"Timeout":11000000000,"Retries":14}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .Config.Healthcheck.Test[0]="CMD-SHELL" \
+  .Config.Healthcheck.Test[1]="true" \
+  .Config.Healthcheck.Interval=99000000000 \
+  .Config.Healthcheck.Timeout=11000000000 \
+  .Config.Healthcheck.StartPeriod=97000000000 \
+  .Config.Healthcheck.StartInterval=96000000000 \
+  .Config.Healthcheck.Retries=14
+t DELETE containers/$cid?v=true 204
+
+podman rmi -f healthcheck_inherit &>/dev/null
+rm -rf $HEALTHCHECK_INHERIT_TMPD
+
 # compat api: Test for mount options support
 # Sigh, JSON can't handle octal. 0755(octal) = 493(decimal)
 payload='{"Mounts":[{"Type":"tmpfs","Target":"/mnt/scratch","TmpfsOptions":{"SizeBytes":1024,"Mode":493}}]}'
@@ -966,6 +1020,31 @@ for runtime in "${oci_runtimes[@]}"; do
     t DELETE containers/$cid 204
 done
 
+# 27998: make sure a created (and not started) container with userns=auto shows
+# UsernsMode = private before being started
+# 27988: make sure creation with "userns": {"nsmode": "auto"} works even without
+# explicit idmappings
+
+t POST libpod/containers/create \
+  Image=$IMAGE \
+  UserNS='{"NSMode":"auto"}' \
+  201
+cid=$(jq -r '.Id' <<<"$output")
+
+t GET libpod/containers/$cid/json \
+  200 \
+  .HostConfig.UsernsMode='private'
+
+t POST   libpod/containers/$cid/start 204
+
+t GET libpod/containers/$cid/json \
+  200 \
+  .HostConfig.UsernsMode=private
+
+t DELETE libpod/containers/$cid 200 .[0].Id=$cid
+
+
+# clean up
 podman rmi -f $IMAGE
 
 # Test health status in /containers/json (GH #27786)
@@ -1007,3 +1086,32 @@ t GET containers/healthcheck-test-running/json 200 \
   .State.Health.Status="healthy"
 
 podman rm -f healthcheck-test-running
+
+#
+# Test DNSNames / Aliases field in container inspect
+#
+podman network create dnstest
+podman create --name dnscontainer --network dnstest --hostname myhostname --network-alias myalias $IMAGE top
+t GET containers/dnscontainer/json 200
+cid=$(jq -r '.Id' <<<"$output")
+short_id=${cid:0:12}
+
+# Compat API should return DNSNames and user-only Aliases
+t GET containers/dnscontainer/json 200 \
+  .NetworkSettings.Networks.dnstest.Aliases[0]=myalias \
+  .NetworkSettings.Networks.dnstest.DNSNames[0]=dnscontainer \
+  .NetworkSettings.Networks.dnstest.DNSNames[1]=myalias \
+  .NetworkSettings.Networks.dnstest.DNSNames[2]=$short_id \
+  .NetworkSettings.Networks.dnstest.DNSNames[3]=myhostname
+
+# Test network connect adds DNSNames but not short ID/hostname to Aliases
+podman network create dnstest2
+t POST networks/dnstest2/connect Container=dnscontainer 200
+t GET containers/dnscontainer/json 200 \
+  .NetworkSettings.Networks.dnstest2.Aliases=null \
+  .NetworkSettings.Networks.dnstest2.DNSNames[0]=dnscontainer \
+  .NetworkSettings.Networks.dnstest2.DNSNames[1]=$short_id
+
+# cleanup
+podman rm -f dnscontainer
+podman network rm -f dnstest dnstest2

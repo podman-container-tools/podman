@@ -60,8 +60,8 @@ func (x ewmaProxyReaderFrom) ReadFrom(r io.Reader) (int64, error) {
 	return x.rf.ReadFrom(ewmaProxyReadCloser{r, x.bar})
 }
 
-func newProxyWriter(w io.Writer, b *Bar, hasEwma bool) io.WriteCloser {
-	if hasEwma {
+func newProxyWriter(w io.Writer, b *Bar) io.WriteCloser {
+	if len(b.ewmaDecorators) != 0 {
 		epw := ewmaProxyWriteCloser{w, b}
 		if rf, ok := w.(io.ReaderFrom); ok {
 			return ewmaProxyReaderFrom{epw, rf}

@@ -76,11 +76,8 @@ func runFlags(cmd *cobra.Command) {
 	flags.BoolVarP(&runOpts.Detach, "detach", "d", false, "Run container in background and print container ID")
 
 	detachKeysFlagName := "detach-keys"
-	flags.StringVar(&runOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Override the key sequence for detaching a container. Format is a single character `[a-Z]` or a comma separated sequence of `ctrl-<value>`, where `<value>` is one of: `a-cf`, `@`, `^`, `[`, `\\`, `]`, `^` or `_`")
+	flags.StringVar(&runOpts.DetachKeys, detachKeysFlagName, containerConfig.DetachKeys(), "Override the key sequence for detaching a container. Format is a single character `[a-Z]` or a comma separated sequence of `ctrl-<value>`, where `<value>` is one of: `a-z`, `@`, `[`, `\\`, `]`, `^` or `_`")
 	_ = cmd.RegisterFlagCompletionFunc(detachKeysFlagName, common.AutocompleteDetachKeys)
-
-	passwdFlagName := "passwd"
-	flags.BoolVar(&runOpts.Passwd, passwdFlagName, true, "add entries to /etc/passwd and /etc/group")
 
 	if registry.IsRemote() {
 		_ = flags.MarkHidden(preserveFdsFlagName)
@@ -129,6 +126,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	runOpts.CIDFile = cliVals.CIDFile
 	runOpts.Rm = cliVals.Rm
+	runOpts.Passwd = cliVals.Passwd
 	cliVals, err := CreateInit(cmd, cliVals, false)
 	if err != nil {
 		return err

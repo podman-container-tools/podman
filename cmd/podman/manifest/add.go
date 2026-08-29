@@ -179,7 +179,7 @@ func add(cmd *cobra.Command, args []string) error {
 		if manifestAddOpts.artifactConfigFile != "" {
 			configBytes, err := os.ReadFile(manifestAddOpts.artifactConfigFile)
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				return err
 			}
 			manifestAddOpts.artifactOptions.Config = string(configBytes)
 		}

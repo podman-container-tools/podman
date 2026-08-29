@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -106,7 +105,7 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 	for _, file := range files {
 		name := file.Name()
 		if _, ok := seen[name]; !ok && quadlet.IsExtSupported(name) {
-			path := path.Join(sourcePath, name)
+			path := filepath.Join(sourcePath, name)
 
 			Debugf("Loading source unit file %s", path)
 
@@ -115,7 +114,7 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 				if prevError == nil {
 					prevError = err
 				} else {
-					prevError = fmt.Errorf("%s\n%s", prevError, err)
+					prevError = fmt.Errorf("%w\n%w", prevError, err)
 				}
 			} else {
 				seen[name] = void
@@ -131,7 +130,7 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 	var prevError error
 	reportError := func(err error) {
 		if prevError != nil {
-			err = fmt.Errorf("%s\n%s", prevError, err)
+			err = fmt.Errorf("%w\n%w", prevError, err)
 		}
 		prevError = err
 	}
@@ -140,7 +139,7 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 	dropinDirs := make([]string, 0, len(unitDropinPaths))
 	for _, dropinPath := range unitDropinPaths {
 		for _, sourcePath := range sourcePaths {
-			dropinDirs = append(dropinDirs, path.Join(sourcePath, dropinPath))
+			dropinDirs = append(dropinDirs, filepath.Join(sourcePath, dropinPath))
 		}
 	}
 
@@ -165,7 +164,7 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 				continue // We already saw this name
 			}
 
-			dropinPaths[dropinName] = path.Join(dropinDir, dropinName)
+			dropinPaths[dropinName] = filepath.Join(dropinDir, dropinName)
 		}
 	}
 
@@ -264,14 +263,14 @@ func enableServiceFile(outputPath string, service *parser.UnitFile) {
 	}
 
 	for _, symlinkRel := range symlinks {
-		target, err := filepath.Rel(path.Dir(symlinkRel), service.Filename)
+		target, err := filepath.Rel(filepath.Dir(symlinkRel), service.Filename)
 		if err != nil {
 			Logf("Can't create symlink %s: %s", symlinkRel, err)
 			continue
 		}
-		symlinkPath := path.Join(outputPath, symlinkRel)
+		symlinkPath := filepath.Join(outputPath, symlinkRel)
 
-		symlinkDir := path.Dir(symlinkPath)
+		symlinkDir := filepath.Dir(symlinkPath)
 		err = os.MkdirAll(symlinkDir, os.ModePerm)
 		if err != nil {
 			Logf("Can't create dir %s: %s", symlinkDir, err)
@@ -441,7 +440,7 @@ func main() {
 func process() bool {
 	var processErred bool
 
-	prgname := path.Base(os.Args[0])
+	prgname := filepath.Base(os.Args[0])
 	isUserFlag = strings.Contains(prgname, "user")
 
 	flag.Parse()
@@ -567,7 +566,7 @@ func process() bool {
 			continue
 		}
 
-		service.Path = path.Join(outputPath, service.Filename)
+		service.Path = filepath.Join(outputPath, service.Filename)
 
 		if dryRunFlag {
 			data, err := service.ToString()

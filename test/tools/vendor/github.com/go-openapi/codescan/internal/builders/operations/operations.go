@@ -13,16 +13,16 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// Builder constructs OAS v2 operation entries for one
-// `swagger:operation` annotation. Embeds *common.Builder for shared
-// state (Ctx, ParseBlocks cache, diagnostic sink). Decl is unused
-// because operations build off a path annotation, not a declaration;
-// the MakeRef / Decl-anchored helpers must not be called.
+// Builder constructs OAS v2 operation entries for one `swagger:operation` annotation.
+//
+// Embeds *common.Builder for shared state (Ctx, ParseBlocks cache, diagnostic sink).
+// Decl is unused because operations build off a path annotation, not a declaration; the MakeRef /
+// Decl-anchored helpers must not be called.
 //
 // # Details
 //
-// See [§builder](./README.md#builder) for the Build orchestration
-// and the path-item-slot reuse semantics.
+// See [§builder](./README.md#builder) for the Build orchestration and the path-item-slot reuse
+// semantics.
 type Builder struct {
 	*common.Builder
 
@@ -58,8 +58,8 @@ func (o *Builder) Build(tgt *oaispec.Paths) error {
 
 	tgt.Paths[o.path.Path] = pthObj
 
-	// Cross-ref linkage: anchor the operation node to its swagger:operation
-	// annotation; parameters/responses under it resolve to this node.
+	// Cross-ref linkage: anchor the operation node to its swagger:operation annotation;
+	// parameters/responses under it resolve to this node.
 	if o.Ctx.OriginEnabled() && o.path.Pos.IsValid() {
 		o.Ctx.RecordOrigin(
 			scanner.JSONPointer("paths", o.path.Path, strings.ToLower(o.path.Method)),
@@ -74,16 +74,16 @@ func SetPathOperation(method, id string, pthObj *oaispec.PathItem, op *oaispec.O
 	return setPathOperation(method, id, pthObj, op)
 }
 
-// setPathOperation lands op on the HTTP-verb slot of pthObj. Returns
-// the operation now occupying the slot — either the reused existing
-// one or op itself. Unrecognised methods leave pthObj untouched and
-// return op verbatim.
+// setPathOperation lands op on the HTTP-verb slot of pthObj.
+//
+// Returns the operation now occupying the slot — either the reused existing one or op itself.
+// Unrecognised methods leave pthObj untouched and return op verbatim.
 //
 // # Details
 //
-// See [§path-operation-slot](./README.md#path-operation-slot) for the
-// slot-reuse contract, the nil-op allocation behaviour, and the
-// public `SetPathOperation` re-export used by sibling packages.
+// See [§path-operation-slot](./README.md#path-operation-slot) for the slot-reuse contract, the
+// nil-op allocation behaviour, and the public `SetPathOperation` re-export used by sibling
+// packages.
 func setPathOperation(method, id string, pthObj *oaispec.PathItem, op *oaispec.Operation) *oaispec.Operation {
 	if op == nil {
 		op = new(oaispec.Operation)

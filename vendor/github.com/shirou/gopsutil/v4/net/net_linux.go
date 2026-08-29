@@ -50,6 +50,10 @@ func IOCountersByFileWithContext(_ context.Context, pernic bool, filename string
 		return nil, err
 	}
 
+	if len(lines) < 2 {
+		return nil, fmt.Errorf("malformed %s: expected at least 2 header lines, got %d", filename, len(lines))
+	}
+
 	statlen := len(lines) - 1
 
 	ret := make([]IOCountersStat, 0, statlen)
@@ -764,7 +768,7 @@ func processUnix(file string, kind netConnectionKindType, inodes map[string][]in
 	// skip first line
 	for _, line := range lines[1:] {
 		tokens := strings.Fields(string(line))
-		if len(tokens) < 6 {
+		if len(tokens) < 7 {
 			continue
 		}
 		st, err := strconv.ParseInt(tokens[4], 10, 32)

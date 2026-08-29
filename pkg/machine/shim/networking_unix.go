@@ -78,7 +78,7 @@ func setupForwardingLinks(hostSocket, dataDir *define.VMFile) (string, machine.A
 		_ = userGlobalSocket.Delete()
 
 		if err := os.Symlink(hostSocket.GetPath(), userGlobalSocket.GetPath()); err != nil {
-			logrus.Warnf("could not create user global API forwarding link: %s", err.Error())
+			logrus.Warnf("could not create user global API forwarding link: %v", err)
 			return hostSocket.GetPath(), machine.MachineLocal, nil
 		}
 	}

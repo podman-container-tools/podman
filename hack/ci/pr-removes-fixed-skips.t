@@ -128,6 +128,12 @@ __END__
 ! pkg/podman/foo_test.go~:10:    Skip("#10101: no match in ~ file")
 ! pkg/podman/foo_test.go.bkp:10:    Skip("#10101: no match in .bkp file")
 
+== issue number at end of line
+[11871]
++ cmd/podman/foo_test.go:12:    // FIXME: see #11871
++ test/system/foo.bats:10:    # FIXME: debugging for #11871
+! test/system/foo.bats:14:    # FIXME: unrelated #118710
+
 == no match if Skip is commented out
 [123]
 ! test/e2e/foo_test.go:10:   // Skip("#123: commented out")

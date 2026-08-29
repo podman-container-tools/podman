@@ -12,6 +12,7 @@ coverprofile
 /docs/*.[158].gz
 /docs/build/
 /docs/remote
+/hack/ci/logs/
 **.DS_Store
 .gopathok
 .idea*

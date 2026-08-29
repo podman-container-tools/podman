@@ -10,18 +10,18 @@ import (
 	"unicode/utf8"
 )
 
-// Value-shape dispatch lives in this module so the lexer emits
-// already-disambiguated typed tokens and the parser's productions
-// stay context-free. See README §disambiguation.
+// Value-shape dispatch lives in this module so the lexer emits already-disambiguated typed tokens
+// and the parser's productions stay context-free.
+// See README §disambiguation.
 
-// classifyDefaultValue chooses between JSON_VALUE and RAW_VALUE for
-// the argument of swagger:default. Tries JSON_VALUE first (full
-// JSON validation via the stdlib decoder), falling back to
-// RAW_VALUE. The quick check uses the leading character; full JSON
-// validation confirms.
+// classifyDefaultValue chooses between JSON_VALUE and RAW_VALUE for the argument of
+// swagger:default.
 //
-// Returns either TokenJSONValue or TokenRawValue. The Pos is left
-// to the caller to set.
+// Tries JSON_VALUE first (full JSON validation via the stdlib decoder), falling back to RAW_VALUE.
+// The quick check uses the leading character; full JSON validation confirms.
+//
+// Returns either TokenJSONValue or TokenRawValue.
+// The Pos is left to the caller to set.
 func classifyDefaultValue(s string) TokenKind {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
@@ -46,8 +46,9 @@ func classifyDefaultValue(s string) TokenKind {
 	return TokenRawValue
 }
 
-// isJSONValue reports whether s is a valid JSON literal. Uses the
-// stdlib JSON decoder for correctness.
+// isJSONValue reports whether s is a valid JSON literal.
+//
+// Uses the stdlib JSON decoder for correctness.
 func isJSONValue(s string) bool {
 	dec := json.NewDecoder(strings.NewReader(s))
 	dec.UseNumber()
@@ -62,6 +63,7 @@ func isJSONValue(s string) bool {
 }
 
 // enumArgsForm captures the four-way EnumArgs dispatch outcome.
+//
 // See README §disambiguation.
 type enumArgsForm int
 
@@ -74,10 +76,11 @@ const (
 	enumFormNamePlusPlain                         // EnumWithName + EnumPlainList
 )
 
-// classifyEnumArgs implements the four-way dispatch on the
-// trim-stripped argument string after `swagger:enum`. Returns the
-// form plus the name (if any) and the verbatim values fragment (if
-// any). The fragment is further parsed by classifyEnumValueList.
+// classifyEnumArgs implements the four-way dispatch on the trim-stripped argument string after
+// `swagger:enum`.
+//
+// Returns the form plus the name (if any) and the verbatim values fragment (if any).
+// The fragment is further parsed by classifyEnumValueList.
 func classifyEnumArgs(arg string) (form enumArgsForm, name, values string) {
 	s := strings.TrimSpace(arg)
 	if s == "" {
@@ -100,10 +103,11 @@ func classifyEnumArgs(arg string) (form enumArgsForm, name, values string) {
 	return enumFormNamePlusPlain, s[:identEnd], rest
 }
 
-// scanEnumIdentifier returns the byte length of a leading
-// IdentifierName: Letter followed by NameChar*. Stops at the first
-// non-NameChar byte. Returns 0 if the leading character is not a
-// letter.
+// scanEnumIdentifier returns the byte length of a leading IdentifierName: Letter followed by
+// NameChar*.
+//
+// Stops at the first non-NameChar byte.
+// Returns 0 if the leading character is not a letter.
 func scanEnumIdentifier(s string) int {
 	r, size := utf8.DecodeRuneInString(s)
 	if size == 0 || !unicode.IsLetter(r) {
@@ -123,8 +127,7 @@ func scanEnumIdentifier(s string) int {
 	return i
 }
 
-// isIdentifierContinue matches NameChar:
-// Letter | Digit | "_" | "-" | ".".
+// isIdentifierContinue matches NameChar: Letter | Digit | "_" | "-" | ".".
 func isIdentifierContinue(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) ||
 		r == '_' || r == '-' || r == '.'
@@ -168,22 +171,22 @@ var httpMethods = map[string]string{
 	"trace":   "TRACE",
 }
 
-// classifyHTTPMethod returns the canonical method name and true iff s
-// is a recognised HTTP method (case-insensitive).
+// classifyHTTPMethod returns the canonical method name and true iff s is a recognised HTTP method
+// (case-insensitive).
 func classifyHTTPMethod(s string) (string, bool) {
 	canonical, ok := httpMethods[strings.ToLower(s)]
 	return canonical, ok
 }
 
-// looksLikeTypeRef reports whether s is a well-formed `swagger:type`
-// argument token — an optionally `[]`-prefixed (array), optionally
-// dot-qualified Go-style identifier. It is a LEXICAL check only: the
-// grammar no longer owns the closed type vocabulary. Semantic validity
-// (is it a known keyword / scanned type? is the format compatible?) is
-// resolved by the builder, which alone knows the scanned definitions and
-// the annotated Go type (the F3 reconciliation — see
-// .claude/plans/quirks-F-series-fix.md). The lexer only rejects
-// structurally malformed tokens (empty, embedded spaces, a bare `[]`, a
+// looksLikeTypeRef reports whether s is a well-formed `swagger:type` argument token — an
+// optionally `[]`-prefixed (array), optionally dot-qualified Go-style identifier.
+//
+// It is a LEXICAL check only: the grammar no longer owns the closed type vocabulary.
+// Semantic validity (is it a known keyword / scanned type? is the format compatible?) is resolved
+// by the builder, which alone knows the scanned definitions and the annotated Go type (the F3
+// reconciliation — see .claude/plans/quirks-F-series-fix.md).
+//
+// The lexer only rejects structurally malformed tokens (empty, embedded spaces, a bare `[]`, a
 // leading digit, illegal characters), which the parser flags.
 func looksLikeTypeRef(s string) bool {
 	s = strings.TrimSpace(s)
@@ -206,9 +209,9 @@ func looksLikeTypeRef(s string) bool {
 	return true
 }
 
-// looksLikeURLPath is a coarse check for the OperationArgs URL path
-// position: must start with "/". Full RFC 3986 conformance is left to
-// the analyzer / consumers; the lexer only needs to dispatch.
+// looksLikeURLPath is a coarse check for the OperationArgs URL path position: must start with "/".
+//
+// Full RFC 3986 conformance is left to the analyzer / consumers; the lexer only needs to dispatch.
 func looksLikeURLPath(s string) bool {
 	return strings.HasPrefix(s, "/")
 }

@@ -10,17 +10,17 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// buildFromStruct emits the schema for a named Go struct. A first
-// pass scans anonymous embeds for allOf composition; the second pass
-// fills the property map from exported fields. The user-classifier
-// short-circuit (`swagger:type`) wins outright.
+// buildFromStruct emits the schema for a named Go struct.
+//
+// A first pass scans anonymous embeds for allOf composition; the second pass fills the property map
+// from exported fields.
+// The user-classifier short-circuit (`swagger:type`) wins outright.
 //
 // # Details
 //
-// See [§struct](./README.md#struct) — two-pass shape, the
-// target-vs-schema split when allOf is in play, and why the
-// `target.Typed("object", "")` line always fires (no
-// SimpleSchema-style early exit yet).
+// See [§struct](./README.md#struct) — two-pass shape, the target-vs-schema split when allOf is
+// in play, and why the `target.Typed("object", "")` line always fires (no SimpleSchema-style early
+// exit yet).
 func (s *Builder) buildFromStruct(decl *scanner.EntityDecl, st *types.Struct, schema *oaispec.Schema, nameByJSON map[string]propOwner) error {
 	if s.classifierStructPreBuildType(decl.Comments, NewTypable(schema, 0, s.skipExtensions)) {
 		return nil
@@ -44,9 +44,9 @@ func (s *Builder) buildFromStruct(decl *scanner.EntityDecl, st *types.Struct, sc
 	}
 	target.Typed("object", "")
 
-	// Cross-ref linkage: when own fields land in a fresh allOf member (target
-	// diverges from schema), their pointer is /allOf/{k}/properties/… — not the
-	// tracked base — so clear the path and let them resolve to schema's anchor.
+	// Cross-ref linkage: when own fields land in a fresh allOf member (target diverges from schema),
+	// their pointer is /allOf/{k}/properties/… — not the tracked base — so clear the path and
+	// let them resolve to schema's anchor.
 	// Plain structs and plain embeds keep target == schema and anchor directly.
 	if target != schema {
 		defer s.repath("")()

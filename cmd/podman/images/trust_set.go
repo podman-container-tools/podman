@@ -3,8 +3,9 @@ package images
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
@@ -65,6 +66,11 @@ func setTrust(_ *cobra.Command, args []string) error {
 	return registry.ImageEngine().SetTrust(registry.Context(), args, setOptions)
 }
 
+var (
+	imageURIRegexHost     = regexp.Delayed(`^[a-zA-Z0-9-_\.]+\/?:?[0-9]*[a-z0-9-\/:]*$`)
+	imageURIRegexFragment = regexp.Delayed(`^[a-z0-9-:\./]*$`)
+)
+
 // isValidImageURI checks if image name has valid format
 func isValidImageURI(imguri string) (bool, error) {
 	uri := "http://" + imguri
@@ -72,13 +78,11 @@ func isValidImageURI(imguri string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("invalid image uri: %s: %w", imguri, err)
 	}
-	reg := regexp.MustCompile(`^[a-zA-Z0-9-_\.]+\/?:?[0-9]*[a-z0-9-\/:]*$`)
-	ret := reg.FindAllString(u.Host, -1)
+	ret := imageURIRegexHost.FindAllString(u.Host, -1)
 	if len(ret) == 0 {
 		return false, fmt.Errorf("invalid image uri: %s: %w", imguri, err)
 	}
-	reg = regexp.MustCompile(`^[a-z0-9-:\./]*$`)
-	ret = reg.FindAllString(u.Fragment, -1)
+	ret = imageURIRegexFragment.FindAllString(u.Fragment, -1)
 	if len(ret) == 0 {
 		return false, fmt.Errorf("invalid image uri: %s: %w", imguri, err)
 	}

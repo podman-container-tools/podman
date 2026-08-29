@@ -198,6 +198,26 @@ var _ = Describe("Podman UserNS support", func() {
 		Expect(exec2).Should(ExitCleanly())
 	})
 
+	It("podman --userns=keep-id overrides image default user", func() {
+		// 1. Create a temporary Containerfile that sets a custom image user
+		dockerfile := fmt.Sprintf("FROM %s\nUSER 1001\n", CITEST_IMAGE)
+		imageName := "test-keepid-user-image"
+
+		podmanTest.BuildImage(dockerfile, imageName, "false")
+
+		// 2. Case 1: --userns=keep-id without --user flag -> should run as host user UID
+		session := podmanTest.Podman([]string{"run", "--userns=keep-id", imageName, "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal(strconv.Itoa(os.Geteuid())))
+
+		// 3. Case 2: --userns=keep-id with explicit --user 1001 -> should run as UID 1001
+		session = podmanTest.Podman([]string{"run", "--userns=keep-id", "--user", "1001", imageName, "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal("1001"))
+	})
+
 	It("podman --userns=auto", func() {
 		u, err := user.Current()
 		Expect(err).ToNot(HaveOccurred())

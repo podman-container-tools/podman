@@ -5,6 +5,7 @@ package pidhandle
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -43,18 +44,18 @@ func NewPIDHandle(pid int) (PIDHandle, error) {
 	pidData := ""
 	pidfd, err := pidfdOpen(pid, 0)
 	if err != nil {
-		switch err {
-		case unix.ENOSYS:
+		switch {
+		case errors.Is(err, unix.ENOSYS):
 			// Do not fail if PidFdOpen is not supported, we will
 			// fallback to process start-time later.
 
-		case unix.ESRCH:
+		case errors.Is(err, unix.ESRCH):
 			// The process does not exist, so any future call of Kill
 			// or IsAlive should return unix.ESRCH, even if the pid is
 			// recycled in the future. Let's note it in the pidData.
 			pidData = noSuchProcessID
 
-		case unix.EINVAL:
+		case errors.Is(err, unix.EINVAL):
 			// The PidfdOpen returns EINVAL if pid is invalid or if it refers
 			// to a thread and not to process. This is not a valid PID for
 			// PIDHandle and it most likely means the pid has been recycled
@@ -120,7 +121,7 @@ func NewPIDHandleFromString(pid int, pidData string) (PIDHandle, error) {
 		defer unix.Close(fd)
 		pidfd, err := openByHandleAt(fd, fh, unix.O_CLOEXEC)
 		if err != nil {
-			if err == unix.ESTALE {
+			if errors.Is(err, unix.ESTALE) {
 				h.normalHandle.pidData = noSuchProcessID
 				return &h, nil
 			}
@@ -163,7 +164,7 @@ func (h *pidfdHandle) Kill(signal unix.Signal) error {
 func (h *pidfdHandle) IsAlive() (bool, error) {
 	err := h.Kill(0)
 	if err != nil {
-		if err == unix.ESRCH {
+		if errors.Is(err, unix.ESRCH) {
 			return false, nil
 		}
 		return false, err
@@ -185,7 +186,7 @@ func (h *pidfdHandle) String() (string, error) {
 		if err != nil {
 			// Do not fail if NameToHandleAt is not supported, we will
 			// fallback to process start-time later.
-			if err == unix.ENOTSUP {
+			if errors.Is(err, unix.ENOTSUP) {
 				logrus.Debugf("NameToHandleAt(%d) failed: %v", h.pidfd, err)
 			} else {
 				return "", err

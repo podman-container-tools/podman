@@ -7,10 +7,10 @@ import "io"
 //go:generate go run ../generator/generator.go InspectOptions
 type InspectOptions struct {
 	// Authfile - path to an authentication file.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// SkipTLSVerify - skip https and certificate validation when
 	// contacting container registries.
-	SkipTLSVerify *bool
+	SkipTLSVerify *bool `schema:"-"`
 }
 
 // CreateOptions are optional options for creating manifests
@@ -43,10 +43,10 @@ type AddOptions struct {
 	Variant    *string
 
 	Images        []string
-	Authfile      *string
-	Password      *string
-	Username      *string
-	SkipTLSVerify *bool `schema:"-"`
+	Authfile      *string `schema:"-"`
+	Password      *string `schema:"-"`
+	Username      *string `schema:"-"`
+	SkipTLSVerify *bool   `schema:"-"`
 }
 
 // AddArtifactOptions are optional options for adding artifact manifests
@@ -95,10 +95,10 @@ type ModifyOptions struct {
 	Variant          *string           // Variant overrides the architecture variant for the image
 
 	Images        []string // Images is an optional list of images to add/remove to/from manifest list depending on operation
-	Authfile      *string
-	Password      *string
-	Username      *string
-	SkipTLSVerify *bool `schema:"-"`
+	Authfile      *string  `schema:"-"`
+	Password      *string  `schema:"-"`
+	Username      *string  `schema:"-"`
+	SkipTLSVerify *bool    `schema:"-"`
 
 	ArtifactType          **string          `json:"artifact_type"`           // the ArtifactType in an artifact manifest being created
 	ArtifactConfigType    *string           `json:"artifact_config_type"`    // the config.MediaType in an artifact manifest being created

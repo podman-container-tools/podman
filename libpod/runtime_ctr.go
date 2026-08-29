@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -298,9 +299,8 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 					return nil, errors.New("failed to find free network interface name")
 				}
 			}
-			network.Aliases = append(network.Aliases, getExtraNetworkAliases(ctr)...)
-
 			network.Name = netName
+			network.Aliases = slices.Compact(slices.Sorted(slices.Values(network.Aliases)))
 			normalizeNetworks = append(normalizeNetworks, network)
 		}
 		ctr.config.Networks = normalizeNetworks
@@ -1195,7 +1195,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 			if !volume.Anonymous() {
 				continue
 			}
-			if err := r.removeVolume(ctx, volume, false, timeout, false); err != nil && err != define.ErrNoSuchVolume && err != define.ErrVolumeBeingUsed {
+			if err := r.removeVolume(ctx, volume, false, timeout, false); err != nil && !errors.Is(err, define.ErrNoSuchVolume) && !errors.Is(err, define.ErrVolumeBeingUsed) {
 				logrus.Errorf("Cleaning up volume (%s): %v", v.Name, err)
 			}
 		}
@@ -1457,7 +1457,7 @@ func (r *Runtime) StorageContainers() ([]storage.Container, error) {
 	retCtrs := []storage.Container{}
 	for _, container := range storeContainers {
 		exists, err := r.state.HasContainer(container.ID)
-		if err != nil && err != define.ErrNoSuchCtr {
+		if err != nil && !errors.Is(err, define.ErrNoSuchCtr) {
 			return nil, fmt.Errorf("failed to check if %s container exists in database: %w", container.ID, err)
 		}
 		if exists {

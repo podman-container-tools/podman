@@ -753,9 +753,15 @@ func (g *GenApp) UseModernMode() bool {
 // GenSerGroups sorted representation of serializer groups.
 type GenSerGroups []GenSerGroup
 
-func (g GenSerGroups) Len() int           { return len(g) }
-func (g GenSerGroups) Swap(i, j int)      { g[i], g[j] = g[j], g[i] }
-func (g GenSerGroups) Less(i, j int) bool { return g[i].Name < g[j].Name }
+func (g GenSerGroups) Len() int      { return len(g) }
+func (g GenSerGroups) Swap(i, j int) { g[i], g[j] = g[j], g[i] }
+func (g GenSerGroups) Less(i, j int) bool {
+	if g[i].Name == g[j].Name {
+		return g[i].MediaType < g[j].MediaType
+	}
+
+	return g[i].Name < g[j].Name
+}
 
 // NumSerializers yields the total number of serializer entries in this group.
 func (g GenSerGroups) NumSerializers() int {

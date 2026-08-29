@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -123,9 +122,15 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 			return err
 		}
 		go func() {
-			time.Sleep(time.Until(untilTime))
-			if err := t.Stop(); err != nil {
-				logrus.Errorf("Stopping logger: %v", err)
+			timer := time.NewTimer(time.Until(untilTime))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				if err := t.Stop(); err != nil {
+					logrus.Errorf("Stopping logger: %v", err)
+				}
+			case <-ctx.Done():
+				return
 			}
 		}()
 	}
@@ -263,7 +268,9 @@ func logNeedsRotation(logfile string, content string, limit uint64) (bool, error
 		return false, err
 	}
 	filesize := uint64(file.Size())
-	contentsize := uint64(len([]rune(content)))
+	// writeToFile appends a trailing newline, so include that byte in the
+	// size estimate to keep the comparison consistent with file.Size().
+	contentsize := uint64(len(content)) + 1
 	if filesize+contentsize < limit {
 		return false, nil
 	}
@@ -287,7 +294,7 @@ func truncate(filePath string) error {
 	size := origFinfo.Size()
 	threshold := size / 2
 
-	tmp, err := os.CreateTemp(path.Dir(filePath), "")
+	tmp, err := os.CreateTemp(filepath.Dir(filePath), "")
 	if err != nil {
 		// Retry in /tmp in case creating a tmp file in the same
 		// directory has failed.

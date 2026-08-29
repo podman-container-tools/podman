@@ -19,15 +19,15 @@ var (
 	// set (regardless of its value). This is a global option and affects all
 	// colors. For more control over each color block use the methods
 	// DisableColor() individually.
-	NoColor = noColorIsSet() || os.Getenv("TERM") == "dumb" ||
-		(!isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()))
+	NoColor = noColorIsSet() || os.Getenv("TERM") == "dumb" || !stdoutIsTerminal()
 
 	// Output defines the standard output of the print functions. By default,
-	// os.Stdout is used.
-	Output = colorable.NewColorableStdout()
+	// stdOut() is used.
+	Output = stdOut()
 
-	// Error defines a color supporting writer for os.Stderr.
-	Error = colorable.NewColorableStderr()
+	// Error defines the standard error of the print functions. By default,
+	// stdErr() is used.
+	Error = stdErr()
 
 	// colorsCache is used to reduce the count of created Color objects and
 	// allows to reuse already created objects with required Attribute.
@@ -38,6 +38,33 @@ var (
 // noColorIsSet returns true if the environment variable NO_COLOR is set to a non-empty string.
 func noColorIsSet() bool {
 	return os.Getenv("NO_COLOR") != ""
+}
+
+// stdoutIsTerminal returns true if os.Stdout is a terminal.
+// Returns false if os.Stdout is nil (e.g., when running as a Windows service).
+func stdoutIsTerminal() bool {
+	if os.Stdout == nil {
+		return false
+	}
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
+// stdOut returns a writer for color output.
+// Returns io.Discard if os.Stdout is nil (e.g., when running as a Windows service).
+func stdOut() io.Writer {
+	if os.Stdout == nil {
+		return io.Discard
+	}
+	return colorable.NewColorableStdout()
+}
+
+// stdErr returns a writer for color error output.
+// Returns io.Discard if os.Stderr is nil (e.g., when running as a Windows service).
+func stdErr() io.Writer {
+	if os.Stderr == nil {
+		return io.Discard
+	}
+	return colorable.NewColorableStderr()
 }
 
 // Color defines a custom color object which is defined by SGR parameters.
@@ -98,6 +125,9 @@ const (
 	FgMagenta
 	FgCyan
 	FgWhite
+
+	// used internally for 256 and 24-bit coloring
+	foreground
 )
 
 // Foreground Hi-Intensity text colors
@@ -122,6 +152,9 @@ const (
 	BgMagenta
 	BgCyan
 	BgWhite
+
+	// used internally for 256 and 24-bit coloring
+	background
 )
 
 // Background Hi-Intensity text colors
@@ -147,6 +180,30 @@ func New(value ...Attribute) *Color {
 	}
 
 	c.Add(value...)
+	return c
+}
+
+// RGB returns a new foreground color in 24-bit RGB.
+func RGB(r, g, b int) *Color {
+	return New(foreground, 2, Attribute(r), Attribute(g), Attribute(b))
+}
+
+// BgRGB returns a new background color in 24-bit RGB.
+func BgRGB(r, g, b int) *Color {
+	return New(background, 2, Attribute(r), Attribute(g), Attribute(b))
+}
+
+// AddRGB is used to chain foreground RGB SGR parameters. Use as many as parameters to combine
+// and create custom color objects. Example: .Add(34, 0, 12).Add(255, 128, 0).
+func (c *Color) AddRGB(r, g, b int) *Color {
+	c.params = append(c.params, foreground, 2, Attribute(r), Attribute(g), Attribute(b))
+	return c
+}
+
+// AddRGB is used to chain background RGB SGR parameters. Use as many as parameters to combine
+// and create custom color objects. Example: .Add(34, 0, 12).Add(255, 128, 0).
+func (c *Color) AddBgRGB(r, g, b int) *Color {
+	c.params = append(c.params, background, 2, Attribute(r), Attribute(g), Attribute(b))
 	return c
 }
 
@@ -190,26 +247,30 @@ func (c *Color) unset() {
 // a low-level function, and users should use the higher-level functions, such
 // as color.Fprint, color.Print, etc.
 func (c *Color) SetWriter(w io.Writer) *Color {
+	_, _ = c.setWriter(w)
+	return c
+}
+
+func (c *Color) setWriter(w io.Writer) (int, error) {
 	if c.isNoColorSet() {
-		return c
+		return 0, nil
 	}
 
-	fmt.Fprint(w, c.format())
-	return c
+	return fmt.Fprint(w, c.format())
 }
 
 // UnsetWriter resets all escape attributes and clears the output with the give
 // io.Writer. Usually should be called after SetWriter().
 func (c *Color) UnsetWriter(w io.Writer) {
+	_, _ = c.unsetWriter(w)
+}
+
+func (c *Color) unsetWriter(w io.Writer) (int, error) {
 	if c.isNoColorSet() {
-		return
+		return 0, nil
 	}
 
-	if NoColor {
-		return
-	}
-
-	fmt.Fprintf(w, "%s[%dm", escape, Reset)
+	return fmt.Fprintf(w, "%s[%dm", escape, Reset)
 }
 
 // Add is used to chain SGR parameters. Use as many as parameters to combine
@@ -225,10 +286,20 @@ func (c *Color) Add(value ...Attribute) *Color {
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprint(w io.Writer, a ...interface{}) (n int, err error) {
-	c.SetWriter(w)
-	defer c.UnsetWriter(w)
+	n, err = c.setWriter(w)
+	if err != nil {
+		return n, err
+	}
 
-	return fmt.Fprint(w, a...)
+	nn, err := fmt.Fprint(w, a...)
+	n += nn
+	if err != nil {
+		return
+	}
+
+	nn, err = c.unsetWriter(w)
+	n += nn
+	return n, err
 }
 
 // Print formats using the default formats for its operands and writes to
@@ -248,10 +319,20 @@ func (c *Color) Print(a ...interface{}) (n int, err error) {
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprintf(w io.Writer, format string, a ...interface{}) (n int, err error) {
-	c.SetWriter(w)
-	defer c.UnsetWriter(w)
+	n, err = c.setWriter(w)
+	if err != nil {
+		return n, err
+	}
 
-	return fmt.Fprintf(w, format, a...)
+	nn, err := fmt.Fprintf(w, format, a...)
+	n += nn
+	if err != nil {
+		return
+	}
+
+	nn, err = c.unsetWriter(w)
+	n += nn
+	return n, err
 }
 
 // Printf formats according to a format specifier and writes to standard output.
@@ -269,7 +350,7 @@ func (c *Color) Printf(format string, a ...interface{}) (n int, err error) {
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprintln(w io.Writer, a ...interface{}) (n int, err error) {
-	return fmt.Fprintln(w, c.wrap(fmt.Sprint(a...)))
+	return fmt.Fprintln(w, c.wrap(sprintln(a...)))
 }
 
 // Println formats using the default formats for its operands and writes to
@@ -278,7 +359,7 @@ func (c *Color) Fprintln(w io.Writer, a ...interface{}) (n int, err error) {
 // encountered. This is the standard fmt.Print() method wrapped with the given
 // color.
 func (c *Color) Println(a ...interface{}) (n int, err error) {
-	return fmt.Fprintln(Output, c.wrap(fmt.Sprint(a...)))
+	return fmt.Fprintln(Output, c.wrap(sprintln(a...)))
 }
 
 // Sprint is just like Print, but returns a string instead of printing it.
@@ -288,7 +369,7 @@ func (c *Color) Sprint(a ...interface{}) string {
 
 // Sprintln is just like Println, but returns a string instead of printing it.
 func (c *Color) Sprintln(a ...interface{}) string {
-	return fmt.Sprintln(c.Sprint(a...))
+	return c.wrap(sprintln(a...)) + "\n"
 }
 
 // Sprintf is just like Printf, but returns a string instead of printing it.
@@ -370,7 +451,7 @@ func (c *Color) SprintfFunc() func(format string, a ...interface{}) string {
 // string. Windows users should use this in conjunction with color.Output.
 func (c *Color) SprintlnFunc() func(a ...interface{}) string {
 	return func(a ...interface{}) string {
-		return fmt.Sprintln(c.Sprint(a...))
+		return c.wrap(sprintln(a...)) + "\n"
 	}
 }
 
@@ -401,7 +482,7 @@ func (c *Color) format() string {
 
 func (c *Color) unformat() string {
 	//return fmt.Sprintf("%s[%dm", escape, Reset)
-	//for each element in sequence let's use the speficic reset escape, ou the generic one if not found
+	//for each element in sequence let's use the specific reset escape, or the generic one if not found
 	format := make([]string, len(c.params))
 	for i, v := range c.params {
 		format[i] = strconv.Itoa(int(Reset))
@@ -445,27 +526,24 @@ func (c *Color) Equals(c2 *Color) bool {
 	if c == nil || c2 == nil {
 		return false
 	}
+
 	if len(c.params) != len(c2.params) {
 		return false
 	}
 
+	counts := make(map[Attribute]int, len(c.params))
 	for _, attr := range c.params {
-		if !c2.attrExists(attr) {
+		counts[attr]++
+	}
+
+	for _, attr := range c2.params {
+		if counts[attr] == 0 {
 			return false
 		}
+		counts[attr]--
 	}
 
 	return true
-}
-
-func (c *Color) attrExists(a Attribute) bool {
-	for _, attr := range c.params {
-		if attr == a {
-			return true
-		}
-	}
-
-	return false
 }
 
 func boolPtr(v bool) *bool {
@@ -647,4 +725,9 @@ func HiCyanString(format string, a ...interface{}) string { return colorString(f
 // foreground.
 func HiWhiteString(format string, a ...interface{}) string {
 	return colorString(format, FgHiWhite, a...)
+}
+
+// sprintln is a helper function to format a string with fmt.Sprintln and trim the trailing newline.
+func sprintln(a ...interface{}) string {
+	return strings.TrimSuffix(fmt.Sprintln(a...), "\n")
 }

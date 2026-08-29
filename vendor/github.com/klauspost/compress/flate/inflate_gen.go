@@ -10,6 +10,15 @@ import (
 	"strings"
 )
 
+func peekBufio(fr *bufio.Reader) ([]byte, error) {
+	if fr.Buffered() == 0 {
+		if _, err := fr.Peek(1); err != nil && fr.Buffered() == 0 {
+			return nil, err
+		}
+	}
+	return fr.Peek(fr.Buffered())
+}
+
 // Decode a single Huffman block from f.
 // hl and hd are the Huffman states for the lit/length values
 // and the distance values, respectively. If hd == nil, using the
@@ -527,6 +536,8 @@ func (f *decompressor) huffmanBufioReader() {
 	// but is smart enough to keep local variables in registers, so use nb and b,
 	// inline call to moreBits and reassign b,nb back to f on return.
 	fnb, fb, dict := f.nb, f.b, &f.dict
+	pbuf, _ := fr.Peek(fr.Buffered())
+	pos := 0
 
 	switch f.stepState {
 	case stateInit:
@@ -548,12 +559,19 @@ readLiteral:
 			n := uint(f.hl.maxRead)
 			for {
 				for fnb < n {
-					c, err := fr.ReadByte()
-					if err != nil {
-						f.b, f.nb = fb, fnb
-						f.err = noEOF(err)
-						return
+					if pos >= len(pbuf) {
+						fr.Discard(pos)
+						var err error
+						pbuf, err = peekBufio(fr)
+						pos = 0
+						if len(pbuf) == 0 {
+							f.b, f.nb = fb, fnb
+							f.err = noEOF(err)
+							return
+						}
 					}
+					c := pbuf[pos]
+					pos++
 					f.roffset++
 					fb |= uint32(c) << (fnb & regSizeMaskUint32)
 					fnb += 8
@@ -566,6 +584,7 @@ readLiteral:
 				}
 				if n <= fnb {
 					if n == 0 {
+						fr.Discard(pos)
 						f.b, f.nb = fb, fnb
 						if debugDecode {
 							fmt.Println("huffsym: n==0")
@@ -586,6 +605,7 @@ readLiteral:
 		case v < 256:
 			dict.writeByte(byte(v))
 			if dict.availWrite() == 0 {
+				fr.Discard(pos)
 				f.toRead = dict.readFlush()
 				f.step = huffmanBufioReader
 				f.stepState = stateInit
@@ -594,6 +614,7 @@ readLiteral:
 			}
 			goto readLiteral
 		case v == 256:
+			fr.Discard(pos)
 			f.b, f.nb = fb, fnb
 			f.finishBlock()
 			return
@@ -605,15 +626,22 @@ readLiteral:
 			length = int(val.length) + 3
 			n := uint(val.extra)
 			for fnb < n {
-				c, err := fr.ReadByte()
-				if err != nil {
-					f.b, f.nb = fb, fnb
-					if debugDecode {
-						fmt.Println("morebits n>0:", err)
+				if pos >= len(pbuf) {
+					fr.Discard(pos)
+					var err error
+					pbuf, err = peekBufio(fr)
+					pos = 0
+					if len(pbuf) == 0 {
+						f.b, f.nb = fb, fnb
+						if debugDecode {
+							fmt.Println("morebits n>0:", err)
+						}
+						f.err = err
+						return
 					}
-					f.err = err
-					return
 				}
+				c := pbuf[pos]
+				pos++
 				f.roffset++
 				fb |= uint32(c) << (fnb & regSizeMaskUint32)
 				fnb += 8
@@ -622,6 +650,7 @@ readLiteral:
 			fb >>= n & regSizeMaskUint32
 			fnb -= n
 		default:
+			fr.Discard(pos)
 			if debugDecode {
 				fmt.Println(v, ">= maxNumLit")
 			}
@@ -633,15 +662,22 @@ readLiteral:
 		var dist uint32
 		if f.hd == nil {
 			for fnb < 5 {
-				c, err := fr.ReadByte()
-				if err != nil {
-					f.b, f.nb = fb, fnb
-					if debugDecode {
-						fmt.Println("morebits f.nb<5:", err)
+				if pos >= len(pbuf) {
+					fr.Discard(pos)
+					var err error
+					pbuf, err = peekBufio(fr)
+					pos = 0
+					if len(pbuf) == 0 {
+						f.b, f.nb = fb, fnb
+						if debugDecode {
+							fmt.Println("morebits f.nb<5:", err)
+						}
+						f.err = err
+						return
 					}
-					f.err = err
-					return
 				}
+				c := pbuf[pos]
+				pos++
 				f.roffset++
 				fb |= uint32(c) << (fnb & regSizeMaskUint32)
 				fnb += 8
@@ -660,12 +696,19 @@ readLiteral:
 			// inline call to moreBits and reassign b,nb back to f on return.
 			for {
 				for fnb < n {
-					c, err := fr.ReadByte()
-					if err != nil {
-						f.b, f.nb = fb, fnb
-						f.err = noEOF(err)
-						return
+					if pos >= len(pbuf) {
+						fr.Discard(pos)
+						var err error
+						pbuf, err = peekBufio(fr)
+						pos = 0
+						if len(pbuf) == 0 {
+							f.b, f.nb = fb, fnb
+							f.err = noEOF(err)
+							return
+						}
 					}
+					c := pbuf[pos]
+					pos++
 					f.roffset++
 					fb |= uint32(c) << (fnb & regSizeMaskUint32)
 					fnb += 8
@@ -678,6 +721,7 @@ readLiteral:
 				}
 				if n <= fnb {
 					if n == 0 {
+						fr.Discard(pos)
 						f.b, f.nb = fb, fnb
 						if debugDecode {
 							fmt.Println("huffsym: n==0")
@@ -701,15 +745,22 @@ readLiteral:
 			// have 1 bit in bottom of dist, need nb more.
 			extra := (dist & 1) << (nb & regSizeMaskUint32)
 			for fnb < nb {
-				c, err := fr.ReadByte()
-				if err != nil {
-					f.b, f.nb = fb, fnb
-					if debugDecode {
-						fmt.Println("morebits f.nb<nb:", err)
+				if pos >= len(pbuf) {
+					fr.Discard(pos)
+					var err error
+					pbuf, err = peekBufio(fr)
+					pos = 0
+					if len(pbuf) == 0 {
+						f.b, f.nb = fb, fnb
+						if debugDecode {
+							fmt.Println("morebits f.nb<nb:", err)
+						}
+						f.err = err
+						return
 					}
-					f.err = err
-					return
 				}
+				c := pbuf[pos]
+				pos++
 				f.roffset++
 				fb |= uint32(c) << (fnb & regSizeMaskUint32)
 				fnb += 8
@@ -720,6 +771,7 @@ readLiteral:
 			dist = 1<<((nb+1)&regSizeMaskUint32) + 1 + extra
 			// slower: dist = bitMask32[nb+1] + 2 + extra
 		default:
+			fr.Discard(pos)
 			f.b, f.nb = fb, fnb
 			if debugDecode {
 				fmt.Println("dist too big:", dist, maxNumDist)
@@ -730,6 +782,7 @@ readLiteral:
 
 		// No check on length; encoding can be prescient.
 		if dist > uint32(dict.histSize()) {
+			fr.Discard(pos)
 			f.b, f.nb = fb, fnb
 			if debugDecode {
 				fmt.Println("dist > dict.histSize():", dist, dict.histSize())
@@ -752,6 +805,7 @@ copyHistory:
 		f.copyLen -= cnt
 
 		if dict.availWrite() == 0 || f.copyLen > 0 {
+			fr.Discard(pos)
 			f.toRead = dict.readFlush()
 			f.step = huffmanBufioReader // We need to continue this work
 			f.stepState = stateDict

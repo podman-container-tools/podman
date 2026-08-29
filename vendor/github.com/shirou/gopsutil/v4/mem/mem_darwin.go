@@ -95,7 +95,7 @@ func VirtualMemoryWithContext(_ context.Context) (*VirtualMemoryStat, error) {
 	var vmstat vmStatisticsData
 
 	status := sys.HostStatistics(sys.MachHostSelf(), common.HOST_VM_INFO,
-		uintptr(unsafe.Pointer(&vmstat)), &count)
+		unsafe.Pointer(&vmstat), &count)
 
 	if status != common.KERN_SUCCESS {
 		return nil, fmt.Errorf("host_statistics error=%d", status)

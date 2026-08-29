@@ -355,9 +355,11 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			var podYAML v1.Pod
 			var podTemplateSpec v1.PodTemplateSpec
 
-			if err := yaml.Unmarshal(document, &podYAML); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube Pod: %w", err)
+			warnings, err := unmarshalKubeObject("Pod", options.Validate, document, &podYAML)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
 			podTemplateSpec.Spec = podYAML.Spec
@@ -380,14 +382,17 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			notifyProxies = append(notifyProxies, proxies...)
 
 			report.Pods = append(report.Pods, r.Pods...)
+			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
 		case "DaemonSet":
 			var daemonSetYAML v1apps.DaemonSet
 
-			if err := yaml.Unmarshal(document, &daemonSetYAML); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube DaemonSet: %w", err)
+			warnings, err := unmarshalKubeObject("DaemonSet", options.Validate, document, &daemonSetYAML)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			r, proxies, err := ic.playKubeDaemonSet(ctx, &daemonSetYAML, options, &ipIndex, configMaps, serviceContainer)
 			if err != nil {
@@ -396,14 +401,17 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			notifyProxies = append(notifyProxies, proxies...)
 
 			report.Pods = append(report.Pods, r.Pods...)
+			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
 		case "Deployment":
 			var deploymentYAML v1apps.Deployment
 
-			if err := yaml.Unmarshal(document, &deploymentYAML); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube Deployment: %w", err)
+			warnings, err := unmarshalKubeObject("Deployment", options.Validate, document, &deploymentYAML)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer)
 			if err != nil {
@@ -412,14 +420,17 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			notifyProxies = append(notifyProxies, proxies...)
 
 			report.Pods = append(report.Pods, r.Pods...)
+			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
 		case "Job":
 			var jobYAML v1.Job
 
-			if err := yaml.Unmarshal(document, &jobYAML); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube Job: %w", err)
+			warnings, err := unmarshalKubeObject("Job", options.Validate, document, &jobYAML)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			r, proxies, err := ic.playKubeJob(ctx, &jobYAML, options, &ipIndex, configMaps, serviceContainer)
 			if err != nil {
@@ -428,14 +439,17 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			notifyProxies = append(notifyProxies, proxies...)
 
 			report.Pods = append(report.Pods, r.Pods...)
+			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
 		case "PersistentVolumeClaim":
 			var pvcYAML v1.PersistentVolumeClaim
 
-			if err := yaml.Unmarshal(document, &pvcYAML); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube PersistentVolumeClaim: %w", err)
+			warnings, err := unmarshalKubeObject("PersistentVolumeClaim", options.Validate, document, &pvcYAML)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			for name, val := range options.Annotations {
 				if pvcYAML.Annotations == nil {
@@ -460,16 +474,20 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "ConfigMap":
 			var configMap v1.ConfigMap
 
-			if err := yaml.Unmarshal(document, &configMap); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as Kube ConfigMap: %w", err)
+			warnings, err := unmarshalKubeObject("ConfigMap", options.Validate, document, &configMap)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 			configMaps = append(configMaps, configMap)
 		case "Secret":
 			var secret v1.Secret
 
-			if err := yaml.Unmarshal(document, &secret); err != nil {
-				return nil, fmt.Errorf("unable to read YAML as kube secret: %w", err)
+			warnings, err := unmarshalKubeObject("Secret", options.Validate, document, &secret)
+			if err != nil {
+				return nil, err
 			}
+			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
 			r, err := ic.playKubeSecret(&secret)
 			if err != nil {
@@ -478,7 +496,15 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			report.Secrets = append(report.Secrets, entities.PlaySecret{CreateReport: r})
 			validKinds++
 		default:
-			logrus.Infof("Kube kind %s not supported", kind)
+			msg := fmt.Sprintf("kube kind %q is not supported", kind)
+			switch options.Validate {
+			case entities.KubeValidateStrict:
+				return nil, errors.New(msg)
+			case entities.KubeValidateWarn:
+				report.ValidationWarnings = append(report.ValidationWarnings, msg)
+			default:
+				logrus.Info(msg)
+			}
 			continue
 		}
 	}
@@ -541,6 +567,40 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 	return report, nil
 }
 
+// unmarshalKubeObject decodes a kube YAML document into obj, honoring the
+// validation mode for unrecognized fields, and returns any non-fatal warnings.
+// In "ignore" mode the document is decoded leniently. In "strict" mode an
+// unknown field is a fatal error. In "warn" mode an unknown field is decoded
+// leniently and returned as a warning so the caller can surface it (in the
+// report and/or logs).
+func unmarshalKubeObject(kind string, mode entities.KubeValidateMode, document []byte, obj any) ([]string, error) {
+	switch mode {
+	case entities.KubeValidateStrict:
+		if err := yaml.UnmarshalStrict(document, obj); err != nil {
+			return nil, fmt.Errorf("validating kube %s: %w", kind, err)
+		}
+	case entities.KubeValidateWarn:
+		if err := yaml.UnmarshalStrict(document, obj); err != nil {
+			warning := fmt.Sprintf("kube %s: %v", kind, err)
+			if err := decodeKubeObject(kind, document, obj); err != nil {
+				return nil, err
+			}
+			return []string{warning}, nil
+		}
+	default: // ignore, plus an unset value sent by an older remote client
+		return nil, decodeKubeObject(kind, document, obj)
+	}
+	return nil, nil
+}
+
+// decodeKubeObject leniently decodes a kube YAML document into obj.
+func decodeKubeObject(kind string, document []byte, obj any) error {
+	if err := yaml.Unmarshal(document, obj); err != nil {
+		return fmt.Errorf("unable to read YAML as Kube %s: %w", kind, err)
+	}
+	return nil
+}
+
 func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML *v1apps.DaemonSet, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	var (
 		daemonSetName string
@@ -560,6 +620,7 @@ func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML 
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
 	report.Pods = podReport.Pods
+	report.ValidationWarnings = podReport.ValidationWarnings
 
 	return &report, proxies, nil
 }
@@ -591,6 +652,7 @@ func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAM
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
 	report.Pods = podReport.Pods
+	report.ValidationWarnings = podReport.ValidationWarnings
 
 	return &report, proxies, nil
 }
@@ -614,6 +676,7 @@ func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, opt
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
 	report.Pods = podReport.Pods
+	report.ValidationWarnings = podReport.ValidationWarnings
 
 	return &report, proxies, nil
 }
@@ -761,10 +824,11 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 		defer f.Close()
 
-		cms, err := readConfigMapFromFile(f)
+		cms, cmWarnings, err := readConfigMapFromFile(f, options.Validate)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%q: %w", p, err)
 		}
+		report.ValidationWarnings = append(report.ValidationWarnings, cmWarnings...)
 
 		for _, cm := range cms {
 			if _, present := configMapIndex[cm.Name]; present {
@@ -845,7 +909,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 	}
 
-	seccompPaths, err := kube.InitializeSeccompPaths(podYAML.ObjectMeta.Annotations, options.SeccompProfileRoot)
+	seccompAnnotationPaths, err := kube.InitializeSeccompAnnotationPaths(podYAML.ObjectMeta.Annotations, options.SeccompProfileRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -979,28 +1043,29 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 
 		specgenOpts := kube.CtrSpecGenOptions{
-			Annotations:        annotations,
-			ConfigMaps:         configMaps,
-			Container:          initCtr,
-			Image:              pulledImage,
-			InitContainerType:  initCtrType,
-			Labels:             labels,
-			LogDriver:          options.LogDriver,
-			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
-			PodID:              pod.ID(),
-			PodInfraID:         podInfraID,
-			PodName:            podName,
-			PodSecurityContext: podYAML.Spec.SecurityContext,
-			ReadOnly:           readOnly,
-			RestartPolicy:      define.RestartPolicyNo,
-			SeccompPaths:       seccompPaths,
-			SecretsManager:     secretsManager,
-			UserNSIsHost:       p.Userns.IsHost(),
-			Volumes:            volumes,
-			VolumesFrom:        volumesFrom,
-			ImageVolumes:       automountImages,
-			UtsNSIsHost:        p.UtsNs.IsHost(),
+			Annotations:            annotations,
+			ConfigMaps:             configMaps,
+			Container:              initCtr,
+			Image:                  pulledImage,
+			InitContainerType:      initCtrType,
+			Labels:                 labels,
+			LogDriver:              options.LogDriver,
+			LogOptions:             options.LogOptions,
+			NetNSIsHost:            p.NetNS.IsHost(),
+			PodID:                  pod.ID(),
+			PodInfraID:             podInfraID,
+			PodName:                podName,
+			PodSecurityContext:     podYAML.Spec.SecurityContext,
+			ReadOnly:               readOnly,
+			RestartPolicy:          define.RestartPolicyNo,
+			SeccompAnnotationPaths: seccompAnnotationPaths,
+			SeccompProfileRoot:     options.SeccompProfileRoot,
+			SecretsManager:         secretsManager,
+			UserNSIsHost:           p.Userns.IsHost(),
+			Volumes:                volumes,
+			VolumesFrom:            volumesFrom,
+			ImageVolumes:           automountImages,
+			UtsNSIsHost:            p.UtsNs.IsHost(),
 		}
 		specGen, err := kube.ToSpecGen(ctx, &specgenOpts)
 		if err != nil {
@@ -1068,30 +1133,31 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 
 		specgenOpts := kube.CtrSpecGenOptions{
-			Annotations:        annotations,
-			ConfigMaps:         configMaps,
-			Container:          container,
-			Image:              pulledImage,
-			IpcNSIsHost:        p.Ipc.IsHost(),
-			Labels:             labels,
-			LogDriver:          options.LogDriver,
-			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
-			PidNSIsHost:        p.Pid.IsHost(),
-			PodID:              pod.ID(),
-			PodInfraID:         podInfraID,
-			PodName:            podName,
-			PodSecurityContext: podYAML.Spec.SecurityContext,
-			RestartPolicy:      podSpec.PodSpecGen.RestartPolicy, // pass the restart policy to the container (https://github.com/containers/podman/issues/20903)
-			ReadOnly:           readOnly,
-			SeccompPaths:       seccompPaths,
-			SecretsManager:     secretsManager,
-			UserNSIsHost:       p.Userns.IsHost(),
-			Volumes:            volumes,
-			VolumesFrom:        volumesFrom,
-			ImageVolumes:       automountImages,
-			UtsNSIsHost:        p.UtsNs.IsHost(),
-			NoPodPrefix:        options.NoPodPrefix,
+			Annotations:            annotations,
+			ConfigMaps:             configMaps,
+			Container:              container,
+			Image:                  pulledImage,
+			IpcNSIsHost:            p.Ipc.IsHost(),
+			Labels:                 labels,
+			LogDriver:              options.LogDriver,
+			LogOptions:             options.LogOptions,
+			NetNSIsHost:            p.NetNS.IsHost(),
+			PidNSIsHost:            p.Pid.IsHost(),
+			PodID:                  pod.ID(),
+			PodInfraID:             podInfraID,
+			PodName:                podName,
+			PodSecurityContext:     podYAML.Spec.SecurityContext,
+			RestartPolicy:          podSpec.PodSpecGen.RestartPolicy, // pass the restart policy to the container (https://github.com/containers/podman/issues/20903)
+			ReadOnly:               readOnly,
+			SeccompAnnotationPaths: seccompAnnotationPaths,
+			SeccompProfileRoot:     options.SeccompProfileRoot,
+			SecretsManager:         secretsManager,
+			UserNSIsHost:           p.Userns.IsHost(),
+			Volumes:                volumes,
+			VolumesFrom:            volumesFrom,
+			ImageVolumes:           automountImages,
+			UtsNSIsHost:            p.UtsNs.IsHost(),
+			NoPodPrefix:            options.NoPodPrefix,
 		}
 
 		if podYAML.Spec.TerminationGracePeriodSeconds != nil {
@@ -1519,38 +1585,41 @@ func (ic *ContainerEngine) importVolume(ctx context.Context, vol *libpod.Volume,
 }
 
 // readConfigMapFromFile returns a kubernetes configMap obtained from --configmap flag
-func readConfigMapFromFile(r io.Reader) ([]v1.ConfigMap, error) {
+func readConfigMapFromFile(r io.Reader, mode entities.KubeValidateMode) ([]v1.ConfigMap, []string, error) {
 	configMaps := make([]v1.ConfigMap, 0)
+	var warnings []string
 
 	content, err := io.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read ConfigMap YAML content: %w", err)
+		return nil, nil, fmt.Errorf("unable to read ConfigMap YAML content: %w", err)
 	}
 
 	// split yaml document
 	documentList, err := splitMultiDocYAML(content)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read as kube YAML: %w", err)
+		return nil, nil, fmt.Errorf("unable to read as kube YAML: %w", err)
 	}
 
 	for _, document := range documentList {
 		kind, err := getKubeKind(document)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read as kube YAML: %w", err)
+			return nil, nil, fmt.Errorf("unable to read as kube YAML: %w", err)
 		}
 
 		if kind != "ConfigMap" {
-			return nil, fmt.Errorf("invalid YAML kind: %q. [ConfigMap] is the only supported by --configmap", kind)
+			return nil, nil, fmt.Errorf("invalid YAML kind: %q. [ConfigMap] is the only supported by --configmap", kind)
 		}
 
 		var configMap v1.ConfigMap
-		if err := yaml.Unmarshal(document, &configMap); err != nil {
-			return nil, fmt.Errorf("unable to read YAML as Kube ConfigMap: %w", err)
+		docWarnings, err := unmarshalKubeObject("ConfigMap", mode, document, &configMap)
+		if err != nil {
+			return nil, nil, err
 		}
+		warnings = append(warnings, docWarnings...)
 		configMaps = append(configMaps, configMap)
 	}
 
-	return configMaps, nil
+	return configMaps, warnings, nil
 }
 
 // splitMultiDocYAML reads multiple documents in a YAML file and
@@ -1563,7 +1632,7 @@ func splitMultiDocYAML(yamlContent []byte) ([][]byte, error) {
 		var o any
 		// read individual document
 		err := d.Decode(&o)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

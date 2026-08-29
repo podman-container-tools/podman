@@ -297,8 +297,20 @@ func exposePorts(pm rkport.Manager, portMappings []types.PortMapping, childIP st
 	for _, port := range portMappings {
 		for protocol := range strings.SplitSeq(port.Protocol, ",") {
 			hostIP := port.HostIP
-			if hostIP == "" {
-				hostIP = "0.0.0.0"
+			if hostIP != "" {
+				// go binds dual stack by default even when 0.0.0.0 is set as ip
+				// We want no host ip to mean dual stack (default), "0.0.0.0" ipv4 only
+				// and "::" ipv6 only. To do that the go std protocol strict uses tcp4/6.
+				ip := net.ParseIP(hostIP)
+				if ip.IsUnspecified() {
+					if ip.To4() != nil {
+						// is ipv4
+						protocol += "4"
+					} else {
+						// else is ipv6
+						protocol += "6"
+					}
+				}
 			}
 			for i := uint16(0); i < port.Range; i++ {
 				spec := rkport.Spec{
@@ -309,10 +321,8 @@ func exposePorts(pm rkport.Manager, portMappings []types.PortMapping, childIP st
 					ChildIP:    childIP,
 				}
 
-				for _, spec = range splitDualStackSpecIfWsl(spec) {
-					if err := validateAndAddPort(ctx, pm, spec); err != nil {
-						return err
-					}
+				if err := validateAndAddPort(ctx, pm, spec); err != nil {
+					return err
 				}
 			}
 		}

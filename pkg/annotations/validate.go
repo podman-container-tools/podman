@@ -3,8 +3,9 @@ package annotations
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"go.podman.io/podman/v6/libpod/define"
 )
@@ -34,7 +35,7 @@ const (
 // DNS1123SubdomainMaxLength is a subdomain's max length in DNS (RFC 1123)
 const DNS1123SubdomainMaxLength int = 253
 
-var dns1123SubdomainRegexp = regexp.MustCompile("^" + dns1123SubdomainFmt + "$")
+var dns1123SubdomainRegexp = regexp.Delayed("^" + dns1123SubdomainFmt + "$")
 
 // isDNS1123Subdomain tests for a string that conforms to the definition of a
 // subdomain in DNS (RFC 1123).
@@ -58,7 +59,7 @@ const (
 	qualifiedNameMaxLength int    = 63
 )
 
-var qualifiedNameRegexp = regexp.MustCompile("^" + qualifiedNameFmt + "$")
+var qualifiedNameRegexp = regexp.Delayed("^" + qualifiedNameFmt + "$")
 
 // isQualifiedName tests whether the value passed is what Kubernetes calls a
 // "qualified name".  This is a format used in various places throughout the

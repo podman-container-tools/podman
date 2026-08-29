@@ -48,11 +48,6 @@ func GetByVMType(resolvedVMType define.VMType) (vmconfigs.VMProvider, error) {
 	return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
 }
 
-// SupportedProviders returns the providers that are supported on the host operating system
-func SupportedProviders() []define.VMType {
-	return []define.VMType{define.QemuVirt}
-}
-
 func IsInstalled(provider define.VMType) (bool, error) {
 	switch provider {
 	case define.QemuVirt:

@@ -300,9 +300,12 @@ type EngineConfig struct {
 	// host when they are forwarded to containers. When enabled, when ports are
 	// forwarded to containers, they are held open by conmon as long as the
 	// container is running, ensuring that they cannot be reused by other
-	// programs on the host. However, this can cause significant memory usage if
-	// a container has many ports forwarded to it. Disabling this can save
-	// memory.
+	// programs on the host. However, this can cause increased memory usage
+	// if a container has many ports forwarded to it. Disabling this can save
+	// memory but is not recommended as port conflicts are not noticed.
+	// Note this option is only used for rootful container when ports are
+	// forwarded via firewall rules. Rootless containers using pasta(1)
+	// always have to bind each port.
 	EnablePortReservation bool `toml:"enable_port_reservation,omitempty"`
 
 	// Environment variables to be used when running the container engine (e.g., Podman, Buildah). For example "http_proxy=internal.proxy.company.com"
@@ -322,6 +325,18 @@ type EngineConfig struct {
 	// container-create event which includes a JSON payload with detailed
 	// information about the container.
 	EventsContainerCreateInspectData bool `toml:"events_container_create_inspect_data,omitempty"`
+
+	// ForcePortListen forces the port reservation to use listen().
+	// For rootful containers when reserving the ports Podman will not use listen()
+	// on TCP ports by default as connections are forwarded via firewall rules.
+	// This is done to ensure if the firewall rule is bypassed, i.e. a connection
+	// to "::1", the connection will be correctly refused and not hang forever as we
+	// never accept() them.
+	// For applications which only monitor the listening state of a socket it means they
+	// will not see the bound port then. In that case this option can be set to true in
+	// order to force Podman to also call listen() on the ports.
+	// Also see the **enable_port_reservation** option.
+	ForcePortListen bool `toml:"force_port_listen,omitempty"`
 
 	// graphRoot internal stores the location of the graphroot
 	graphRoot string

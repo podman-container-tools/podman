@@ -135,9 +135,9 @@ func genErrMsg(first, second crypto.PublicKey, keyType string) string {
 
 // ValidatePubKey validates the parameters of an RSA, ECDSA, or ED25519 public key.
 //
-// Deprecated: Prefer goodkey.ValidatePubKey. This function has been
-// updated to verify only the size of the key for RSA or the curve
-// for ECDSA.
+// Deprecated: This function only verifies the size of the key for RSA or the curve
+// for ECDSA. This is largely unnecessary, and this function will be removed
+// in a future version.
 func ValidatePubKey(pub crypto.PublicKey) error {
 	switch pk := pub.(type) {
 	case *rsa.PublicKey:

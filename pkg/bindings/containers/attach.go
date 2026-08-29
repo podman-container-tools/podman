@@ -144,7 +144,7 @@ func Attach(ctx context.Context, nameOrID string, stdin io.Reader, stdout io.Wri
 			// Ignore "closed network connection" as it occurs when the container ends, which is expected.
 			// This avoids noisy logs but does not fix the goroutine leak
 			// https://github.com/containers/podman/issues/25344
-			if err != nil && err != define.ErrDetach && !errors.Is(err, net.ErrClosed) {
+			if err != nil && !errors.Is(err, define.ErrDetach) && !errors.Is(err, net.ErrClosed) {
 				logrus.Errorf("Failed to write input to service: %v", err)
 			}
 			if err == nil {

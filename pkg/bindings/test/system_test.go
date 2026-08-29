@@ -15,7 +15,9 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities/reports"
 )
 
-var _ = Describe("Podman system", func() {
+// Serial because system.Prune also prunes networks, and the network config dir
+// is shared between all the services these tests start.
+var _ = Describe("Podman system", Serial, func() {
 	var (
 		bt     *bindingTest
 		s      *gexec.Session

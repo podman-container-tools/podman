@@ -2,8 +2,8 @@ package mpb
 
 import (
 	"container/heap"
+	"errors"
 	"iter"
-	"slices"
 	"sync"
 
 	"github.com/vbauerster/mpb/v8/decor"
@@ -32,8 +32,9 @@ type pushData struct {
 }
 
 type renderData struct {
-	width int
-	seqCh chan<- iter.Seq[*Bar]
+	width   int
+	seqCh   chan<- iter.Seq[*Bar]
+	offload <-chan heapRequest
 }
 
 type fixData struct {
@@ -42,7 +43,7 @@ type fixData struct {
 	lazy     bool
 }
 
-func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, handOverBarHeap chan<- []*Bar) {
+func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, depleteHeap chan<- *Bar) {
 	var bHeap barHeap
 	var sync bool
 	var prevLen int
@@ -50,12 +51,11 @@ func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, handOverBarHe
 	var aMatrix map[int][]*decor.Sync
 
 	defer func() {
-		if handOverBarHeap != nil {
-			ordered := make([]*Bar, 0, bHeap.Len())
+		if depleteHeap != nil {
 			for bHeap.Len() != 0 {
-				ordered = append(ordered, heap.Pop(&bHeap).(*Bar))
+				depleteHeap <- heap.Pop(&bHeap).(*Bar)
 			}
-			handOverBarHeap <- ordered
+			close(depleteHeap)
 		}
 		pwg.Done()
 	}()
@@ -84,15 +84,26 @@ func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, handOverBarHe
 			heap.Push(&bHeap, data.bar)
 			sync = sync || data.sync
 		case h_render:
+			var pushQ []heapRequest
 			data := req.data.(renderData)
 			for _, b := range bHeap {
 				go b.render(data.width)
 			}
-			ordered := make([]*Bar, 0, bHeap.Len())
-			for bHeap.Len() != 0 {
-				ordered = append(ordered, heap.Pop(&bHeap).(*Bar))
+			data.seqCh <- func(yield func(*Bar) bool) {
+				for bHeap.Len() != 0 {
+					if !yield(heap.Pop(&bHeap).(*Bar)) {
+						break
+					}
+				}
 			}
-			data.seqCh <- slices.Values(ordered)
+			for req := range data.offload {
+				pushQ = append(pushQ, req)
+			}
+			for _, req := range pushQ {
+				data := req.data.(pushData)
+				heap.Push(&bHeap, data.bar)
+				sync = sync || data.sync
+			}
 		case h_iter:
 			seqCh := req.data.(chan<- iter.Seq[*Bar])
 			done := make(chan struct{})
@@ -122,16 +133,33 @@ func (m heapManager) sync() {
 	m <- heapRequest{cmd: h_sync}
 }
 
-func (m heapManager) push(b *Bar, sync bool) {
-	data := pushData{b, sync}
-	m <- heapRequest{cmd: h_push, data: data}
+func (m heapManager) push(bar *Bar, sync bool, offload chan<- heapRequest) {
+	req := heapRequest{cmd: h_push, data: pushData{
+		bar:  bar,
+		sync: sync,
+	}}
+	select {
+	case m <- req:
+	default:
+		if offload != nil {
+			offload <- req
+		} else {
+			bar.container.bwg.Go(func() {
+				m <- req
+			})
+		}
+	}
 }
 
-func (m heapManager) render(width int) iter.Seq[*Bar] {
+func (m heapManager) render(width int, offload <-chan heapRequest) iter.Seq[*Bar] {
+	if offload == nil {
+		panic(errors.New("expected non nil offload chan heapRequest"))
+	}
 	seqCh := make(chan iter.Seq[*Bar], 1)
 	m <- heapRequest{cmd: h_render, data: renderData{
-		width: width,
-		seqCh: seqCh,
+		width:   width,
+		seqCh:   seqCh,
+		offload: offload,
 	}}
 	return <-seqCh
 }
@@ -153,6 +181,7 @@ func syncWidth(matrix map[int][]*decor.Sync, done <-chan any) {
 
 func maxWidthDistributor(column []*decor.Sync, done <-chan any) {
 	var maxWidth int
+loop:
 	for _, s := range column {
 		select {
 		case w := <-s.Tx:
@@ -160,7 +189,7 @@ func maxWidthDistributor(column []*decor.Sync, done <-chan any) {
 				maxWidth = w
 			}
 		case <-done:
-			return
+			break loop
 		}
 	}
 	for _, s := range column {

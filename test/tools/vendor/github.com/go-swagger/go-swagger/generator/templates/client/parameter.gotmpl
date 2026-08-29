@@ -308,7 +308,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
   joined{{ pascalize .Name }} := {{ .ReceiverName }}.bindParam{{ pascalize .Name }}(reg)
         {{- else }}
   values{{ pascalize .Name }} := {{ if and (not .IsArray) (not .IsStream) (not .IsMap) (.IsNullable) }}*{{end}}{{ .ValueExpression }}
-  joined{{ pascalize .Name}} := stringutils.JoinByFormat(values{{ pascalize .Name }}, "{{.CollectionFormat}}")
+  joined{{ pascalize .Name}} := stringutils.JoinByFormat(values{{ pascalize .Name }}, {{ printf "%q" .CollectionFormat }})
         {{- end }}
 
         {{- if .IsQueryParam }}

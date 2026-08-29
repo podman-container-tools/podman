@@ -53,7 +53,7 @@ jobs:
     packages: [podman-fedora]
     notifications: &packit_generic_failure_notification
       failure_comment:
-        message: "[NON-BLOCKING] Packit jobs failed. @containers/packit-build please check. Everyone else, feel free to ignore."
+        message: "[NON-BLOCKING] Packit jobs failed. @podman-container-tools/packit-jobs please check. Everyone else, feel free to ignore."
     enable_net: true
     # CAUTION: The builds from these jobs are consumed by podman-machine-os
     # during the release process. Any change here should be mindful of it.
@@ -103,9 +103,11 @@ jobs:
   - job: tests
     trigger: pull_request
     packages: [podman-fedora]
+    skip_missing_branched_composes: true
     notifications: *packit_generic_failure_notification
     targets:
-      - fedora-all
+      - fedora-all-x86_64
+      - fedora-all-aarch64
     tmt_plan: "/plans/system/*"
     tf_extra_params:
       environments:
@@ -117,6 +119,7 @@ jobs:
     identifier: cockpit-revdeps
     trigger: pull_request
     packages: [podman-fedora]
+    skip_missing_branched_composes: true
     notifications:
       failure_comment:
         message: "Cockpit tests failed for commit {commit_sha}. @jelly, @mvollmer please check."
@@ -164,6 +167,7 @@ jobs:
     packages: [podman-fedora]
     dist_git_branches: &fedora_targets
       - fedora-rawhide
+      - fedora-45
 
   - job: koji_build
     trigger: commit

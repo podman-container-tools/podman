@@ -414,7 +414,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string) error {
 	// Hard code TMPDIR functions to use /var/tmp, if user did not override
 	if _, ok := os.LookupEnv("TMPDIR"); !ok {
 		if tmpdir, err := podmanConfig.ContainersConfDefaultsRO.ImageCopyTmpDir(); err != nil {
-			logrus.Warnf("Failed to retrieve default tmp dir: %s", err.Error())
+			logrus.Warnf("Failed to retrieve default tmp dir: %v", err)
 		} else {
 			os.Setenv("TMPDIR", tmpdir)
 		}
@@ -474,7 +474,7 @@ func configHook() {
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			// Cases where the folder does not exist are allowed, BUT cases where some other Stat() error
 			// is returned should fail
-			fmt.Fprintf(os.Stderr, "Supplied --config folder (%s) exists but is not accessible: %s\n", dockerConfig, err.Error())
+			fmt.Fprintf(os.Stderr, "Supplied --config folder (%s) exists but is not accessible: %v\n", dockerConfig, err)
 			os.Exit(1)
 		}
 		if err == nil && !statInfo.IsDir() {
@@ -483,7 +483,7 @@ func configHook() {
 			os.Exit(1)
 		}
 		if err := os.Setenv("DOCKER_CONFIG", dockerConfig); err != nil {
-			fmt.Fprintf(os.Stderr, "cannot set DOCKER_CONFIG=%s: %s\n", dockerConfig, err.Error())
+			fmt.Fprintf(os.Stderr, "cannot set DOCKER_CONFIG=%s: %v\n", dockerConfig, err)
 			os.Exit(1)
 		}
 	}
@@ -491,7 +491,7 @@ func configHook() {
 
 func loggingHook() {
 	if debug {
-		if logLevel != defaultLogLevel {
+		if rootCmd.Flag("log-level").Changed {
 			fmt.Fprintf(os.Stderr, "Setting --log-level and --debug is not allowed\n")
 			os.Exit(1)
 		}
@@ -529,7 +529,7 @@ func stdOutHook() {
 
 			// if we couldn't open the file for write, then just bail with an error.
 		} else {
-			fmt.Fprintf(os.Stderr, "unable to open file for standard output: %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "unable to open file for standard output: %v\n", err)
 			os.Exit(1)
 		}
 	}
@@ -594,7 +594,7 @@ func rootFlags(cmd *cobra.Command, podmanConfig *entities.PodmanConfig) {
 	pFlags := cmd.PersistentFlags()
 	if registry.IsRemote() {
 		if err := lFlags.MarkHidden("remote"); err != nil {
-			logrus.Warnf("Unable to mark --remote flag as hidden: %s", err.Error())
+			logrus.Warnf("Unable to mark --remote flag as hidden: %v", err)
 		}
 		podmanConfig.Remote = true
 	} else {
@@ -697,7 +697,7 @@ func rootFlags(cmd *cobra.Command, podmanConfig *entities.PodmanConfig) {
 			"trace",
 		} {
 			if err := pFlags.MarkHidden(f); err != nil {
-				logrus.Warnf("Unable to mark %s flag as hidden: %s", f, err.Error())
+				logrus.Warnf("Unable to mark %s flag as hidden: %v", f, err)
 			}
 		}
 	}

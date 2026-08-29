@@ -5,6 +5,7 @@ import (
 	"errors"
 )
 
+// swagger:model ReportsPruneReport
 type PruneReport struct {
 	Id   string `json:"Id"`
 	Err  error  `json:"Err,omitempty"`

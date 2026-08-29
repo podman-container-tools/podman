@@ -90,10 +90,9 @@ func Inspect(ctx context.Context, name string, options *InspectOptions) (*manife
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 
@@ -128,10 +127,9 @@ func InspectListData(ctx context.Context, name string, options *InspectOptions) 
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 
@@ -364,11 +362,11 @@ func Modify(ctx context.Context, name string, images []string, options *ModifyOp
 			}
 			requestPartWriter, err := writer.CreatePart(headers)
 			if err != nil {
-				artifactWriterError = fmt.Errorf("creating form part for request: %v", err)
+				artifactWriterError = fmt.Errorf("creating form part for request: %w", err)
 				return
 			}
 			if _, err := io.Copy(requestPartWriter, requestBodyReader); err != nil {
-				artifactWriterError = fmt.Errorf("uploading request as form part: %v", err)
+				artifactWriterError = fmt.Errorf("uploading request as form part: %w", err)
 				return
 			}
 			// now walk the list of files we're attaching

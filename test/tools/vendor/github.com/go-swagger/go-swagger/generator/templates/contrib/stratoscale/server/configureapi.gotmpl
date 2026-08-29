@@ -65,7 +65,7 @@ type Config struct {
 	{{- end }}
 	{{- if .IsAPIKeyAuth }}
 
-	// Auth{{ pascalize .ID }} Applies when the "{{ .Name }}" {{ .Source }} is set
+	// Auth{{ pascalize .ID }} Applies when the "{{ escapeDoubleQuoted .Name }}" {{ escapeDoubleQuoted .Source }} is set
   Auth{{ pascalize .ID }} func(token string) ({{ if .PrincipalIsNullable }}*{{ end }}{{ .Principal }}, error)
 	{{- end }}
 	{{- if .IsOAuth2 }}

@@ -16,8 +16,9 @@ type responseTypable struct {
 	response *oaispec.Response
 	skipExt  bool
 
-	// refAttempted: caller-owned flag flipped when SetRef is called
-	// under non-body mode. See [§typable](./README.md#typable).
+	// refAttempted: caller-owned flag flipped when SetRef is called under non-body mode.
+	//
+	// See [§typable](./README.md#typable).
 	refAttempted *bool
 }
 
@@ -25,12 +26,13 @@ func (ht responseTypable) In() string { return ht.in }
 
 func (ht responseTypable) Level() int { return 0 }
 
-// Typed writes the primitive type onto the body schema in body mode,
-// or onto the header in SimpleSchema mode. Without the body branch a
-// primitive `Body` field (e.g. `Body string`) lands its type on the
-// header, which body responses discard — leaving the response with no
-// schema at all (go-swagger#2942). Mirrors SetRef's body/non-body
-// split.
+// Typed writes the primitive type onto the body schema in body mode, or onto the header in
+// SimpleSchema mode.
+//
+// Without the body branch a primitive `Body` field (e.g. `Body string`) lands its type on the
+// header, which body responses discard — leaving the response with no schema at all
+// (go-swagger#2942).
+// Mirrors SetRef's body/non-body split.
 func (ht responseTypable) Typed(tpe, format string) {
 	if ht.in == inBody {
 		ht.Schema().Typed(tpe, format)
@@ -55,9 +57,10 @@ func (ht responseTypable) Items() ifaces.SwaggerTypable { //nolint:ireturn // po
 	return resolvers.NewItemsTypable(ht.header.Items, 1, "header")
 }
 
-// SetRef writes the ref onto the body schema in body mode; under
-// non-body it no-ops and flips refAttempted (Q2). See
-// [§typable](./README.md#typable).
+// SetRef writes the ref onto the body schema in body mode; under non-body it no-ops and flips
+// refAttempted (Q2).
+//
+// See [§typable](./README.md#typable).
 func (ht responseTypable) SetRef(ref oaispec.Ref) {
 	if ht.in == inBody {
 		ht.Schema().Ref = ref
@@ -81,46 +84,47 @@ func (ht responseTypable) AddExtension(key string, value any) {
 }
 
 func (ht responseTypable) WithEnum(values ...any) {
-	// Spread the variadic through: passing the slice itself would nest it
-	// one level deep (enum: [[FIRST, SECOND]]), producing malformed OAS2.
-	// Mirrors paramTypable / schema.Typable / ItemsTypable.
+	// Spread the variadic through: passing the slice itself would nest it one level deep (enum:
+	// [[FIRST, SECOND]]), producing malformed OAS2. Mirrors paramTypable / schema.Typable /
+	// ItemsTypable.
 	ht.header.WithEnum(values...)
 }
 
-// WithEnumDescription rides the enum const-name mapping on the
-// header's x-go-enum-desc vendor extension, mirroring
-// paramTypable.WithEnumDescription.
+// WithEnumDescription rides the enum const-name mapping on the header's x-go-enum-desc vendor
+// extension, mirroring paramTypable.WithEnumDescription.
 //
-// This is wired against go-openapi/spec >= v0.22.6, where
-// Header.MarshalJSON emits the embedded VendorExtensible (go-openapi/spec#277).
-// Earlier versions dropped header extensions at marshal, so this was a
-// documented no-op. The enum *values* themselves ship via WithEnum and
-// were never affected.
+// This is wired against go-openapi/spec >= v0.22.6, where Header.MarshalJSON emits the embedded
+// VendorExtensible (go-openapi/spec#277).
+// Earlier versions dropped header extensions at marshal, so this was a documented no-op.
+// The enum *values* themselves ship via WithEnum and were never affected.
 func (ht responseTypable) WithEnumDescription(desc string) {
 	if desc == "" {
 		return
 	}
-	// Gated on SkipExtensions (mirrors schema.Typable): the contract is that
-	// x-go-* vendor extensions are suppressed everywhere when SkipExtensions
-	// is set.
+	// Gated on SkipExtensions (mirrors schema.Typable): the contract is that x-go-* vendor extensions
+	// are suppressed everywhere when SkipExtensions is set.
 	resolvers.AddExtension(&ht.header.VendorExtensible, resolvers.ExtEnumDesc, desc, ht.skipExt)
 }
 
-// SimpleSchemaShape satisfies schema.SimpleSchemaProbe (non-body
-// path; body uses WithType). See [§typable](./README.md#typable).
+// SimpleSchemaShape satisfies schema.SimpleSchemaProbe (non-body path; body uses WithType).
+//
+// See [§typable](./README.md#typable).
 func (ht responseTypable) SimpleSchemaShape() *oaispec.SimpleSchema {
 	return &ht.header.SimpleSchema
 }
 
-// HasRef satisfies schema.SimpleSchemaProbe. True when a non-body
-// SetRef attempt was recorded — the exit validator emits
-// CodeUnsupportedInSimpleSchema. See [§typable](./README.md#typable).
+// HasRef satisfies schema.SimpleSchemaProbe.
+//
+// True when a non-body SetRef attempt was recorded — the exit validator emits
+// CodeUnsupportedInSimpleSchema.
+// See [§typable](./README.md#typable).
 func (ht responseTypable) HasRef() bool {
 	return ht.refAttempted != nil && *ht.refAttempted
 }
 
-// ResetForViolation satisfies schema.SimpleSchemaProbe. Wipes the
-// header's SimpleSchema back to `{}`.
+// ResetForViolation satisfies schema.SimpleSchemaProbe.
+//
+// Wipes the header's SimpleSchema back to `{}`.
 func (ht responseTypable) ResetForViolation() {
 	ht.header.SimpleSchema = oaispec.SimpleSchema{}
 }

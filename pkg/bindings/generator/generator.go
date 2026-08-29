@@ -86,7 +86,7 @@ func main() {
 		imports = append(imports, imp.Path.Value)
 	}
 
-	out, err := os.Create(strings.TrimRight(srcFile, ".go") + "_" + strings.Replace(strings.ToLower(inputStructName), "options", "_options", 1) + ".go")
+	out, err := os.Create(strings.TrimSuffix(srcFile, ".go") + "_" + strings.Replace(strings.ToLower(inputStructName), "options", "_options", 1) + ".go")
 	if err != nil {
 		panic(err)
 	}

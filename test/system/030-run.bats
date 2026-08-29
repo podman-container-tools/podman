@@ -288,9 +288,6 @@ EOF
        "Conmon pid in pidfile matches what 'podman inspect' claims"
 
     # /proc/PID/exe should be a symlink to a conmon executable
-    # FIXME: 'echo' and 'ls' are to help debug #7580, a CI flake
-    echo "conmon pid = $conmon_pid_from_file"
-    ls -l /proc/$conmon_pid_from_file
     is "$(readlink /proc/$conmon_pid_from_file/exe)" ".*/conmon"  \
        "conmon pidfile (= PID $conmon_pid_from_file) points to conmon process"
 

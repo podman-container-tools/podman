@@ -1151,9 +1151,9 @@ func AutocompleteCgroupMode(_ *cobra.Command, _ []string, _ string) ([]string, c
 }
 
 // AutocompleteImageVolume - Autocomplete image volume options.
-// -> "bind", "tmpfs", "ignore"
+// -> "anonymous", "tmpfs", "ignore"
 func AutocompleteImageVolume(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	imageVolumes := []string{"bind", "tmpfs", "ignore"}
+	imageVolumes := []string{"anonymous", "tmpfs", "ignore"}
 	return imageVolumes, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -2004,6 +2004,11 @@ func AutocompleteSSH(cmd *cobra.Command, args []string, toComplete string) ([]st
 // AutocompleteHealthOnFailure - action to take once the container turns unhealthy.
 func AutocompleteHealthOnFailure(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	return define.SupportedHealthCheckOnFailureActions, cobra.ShellCompDirectiveNoFileComp
+}
+
+// AutocompleteKubePlayValidate - autocomplete the values for the kube play --validate flag.
+func AutocompleteKubePlayValidate(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return entities.KubeValidateModeNames(), cobra.ShellCompDirectiveNoFileComp
 }
 
 // AutocompleteSysctl - autocomplete list all sysctl names

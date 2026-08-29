@@ -247,11 +247,11 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 
 	// Stop user-mode networking if enabled
 	if err := stopUserModeNetworking(mc); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %v\n", err)
 	}
 
 	if err := machine.StopWinProxy(mc.Name, vmtype); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")

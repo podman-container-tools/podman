@@ -53,14 +53,14 @@ type ManifestAddOptions struct {
 type ManifestAddArtifactOptions struct {
 	ManifestAnnotateOptions
 	// Note to future maintainers: keep these fields synchronized with ManifestModifyOptions!
-	Type          *string           `json:"artifact_type" schema:"artifact_type"`
-	LayerType     string            `json:"artifact_layer_type" schema:"artifact_layer_type"`
-	ConfigType    string            `json:"artifact_config_type" schema:"artifact_config_type"`
-	Config        string            `json:"artifact_config" schema:"artifact_config"`
-	ExcludeTitles bool              `json:"artifact_exclude_titles" schema:"artifact_exclude_titles"`
-	Annotations   map[string]string `json:"artifact_annotations" schema:"artifact_annotations"`
-	Subject       string            `json:"artifact_subject" schema:"artifact_subject"`
-	Files         []string          `json:"artifact_files" schema:"-"`
+	Type                *string           `json:"artifact_type" schema:"artifact_type"`
+	LayerType           string            `json:"artifact_layer_type" schema:"artifact_layer_type"`
+	ConfigType          string            `json:"artifact_config_type" schema:"artifact_config_type"`
+	Config              string            `json:"artifact_config" schema:"artifact_config"`
+	ExcludeTitles       bool              `json:"artifact_exclude_titles" schema:"artifact_exclude_titles"`
+	ArtifactAnnotations map[string]string `json:"artifact_annotations" schema:"artifact_annotations"`
+	Subject             string            `json:"artifact_subject" schema:"artifact_subject"`
+	Files               []string          `json:"artifact_files" schema:"-"`
 }
 
 // ManifestAnnotateOptions provides model for annotating manifest list

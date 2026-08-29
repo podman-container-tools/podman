@@ -171,7 +171,7 @@ func supportAmbientCapabilities() bool {
 
 func shouldMask(mask string, unmask []string) bool {
 	for _, m := range unmask {
-		if strings.ToLower(m) == "all" {
+		if strings.EqualFold(m, "all") {
 			return false
 		}
 		for m1 := range strings.SplitSeq(m, ":") {

@@ -146,4 +146,48 @@ t DELETE "libpod/kube/play" $TMPD/play.yaml 200 \
 
 rm -rf $TMPD
 
+# check the validate parameter
+
+TMPD=$(mktemp -d podman-apiv2-test-kube-validate.XXXXXX)
+YAML="${TMPD}/validate.yaml"
+cat > $YAML << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-validate
+spec:
+  containers:
+    - name: container
+      image: ${IMAGE}
+      bogusfield: nope
+EOF
+
+# No validate parameter at all: older clients keep working and unknown fields
+# are ignored
+t POST "libpod/play/kube" $YAML 200 \
+   .Pods[0].ID~[0-9a-f]\\{64\\} \
+   .ValidationWarnings=null
+t DELETE libpod/kube/play $YAML 200
+
+# validate=ignore behaves the same as not passing the parameter
+t POST "libpod/play/kube?validate=ignore" $YAML 200 \
+   .Pods[0].ID~[0-9a-f]\\{64\\} \
+   .ValidationWarnings=null
+t DELETE libpod/kube/play $YAML 200
+
+# validate=warn still plays the pod and returns the warning in the response
+t POST "libpod/play/kube?validate=warn" $YAML 200 \
+   .Pods[0].ID~[0-9a-f]\\{64\\} \
+   .ValidationWarnings[0]~".*bogusfield.*"
+t DELETE libpod/kube/play $YAML 200
+
+# validate=strict fails the request and creates nothing
+t POST "libpod/play/kube?validate=strict" $YAML 500 \
+   .message~".*bogusfield.*"
+
+# an unsupported value is rejected
+t POST "libpod/play/kube?validate=bogus" $YAML 400
+
+rm -rf $TMPD
+
 # vim: filetype=sh

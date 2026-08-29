@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.podman.io/common/pkg/config"
@@ -41,6 +42,15 @@ var (
 	TunnelMode = entities.TunnelMode.String()
 )
 
+type earlyCLIOptions struct {
+	completion bool
+	debug      bool
+	logLevel   string
+	modules    []string
+	parseErr   error
+	remote     bool
+}
+
 // PodmanConfig returns an entities.PodmanConfig built up from
 // environment and CLI.
 func PodmanConfig() *entities.PodmanConfig {
@@ -48,41 +58,80 @@ func PodmanConfig() *entities.PodmanConfig {
 	return &podmanOptions
 }
 
-// Return the index of os.Args where to start parsing CLI flags.
+// Return the index of args where to start parsing CLI flags.
 // An index > 1 implies Podman is running in shell completion.
-func parseIndex() int {
+func parseIndex(args []string) int {
 	// The shell completion logic will call a command called "__complete" or "__completeNoDesc"
 	// This command will always be the second argument
 	// To still parse --remote correctly in this case we have to set args offset to two in this case
-	if len(os.Args) > 1 && (os.Args[1] == cobra.ShellCompRequestCmd || os.Args[1] == cobra.ShellCompNoDescRequestCmd) {
+	if len(args) > 1 && (args[1] == cobra.ShellCompRequestCmd || args[1] == cobra.ShellCompNoDescRequestCmd) {
 		return 2
 	}
 	return 1
 }
 
-// Return the containers.conf modules to load.
-func containersConfModules() ([]string, error) {
-	index := parseIndex()
-	if index > 1 {
-		// Do not load the modules during shell completion.
-		return nil, nil
+// parseEarlyCLIOptions parses flags needed during command initialization.
+// Cobra parses and validates the complete command line later.
+func parseEarlyCLIOptions(args []string) *earlyCLIOptions {
+	options := new(earlyCLIOptions)
+	index := parseIndex(args)
+	options.completion = index > 1
+	if _, found := os.LookupEnv("CONTAINER_HOST"); found {
+		options.remote = true
+	} else if _, found := os.LookupEnv("CONTAINER_CONNECTION"); found {
+		options.remote = true
 	}
 
-	var modules []string
-	fs := pflag.NewFlagSet("module", pflag.ContinueOnError)
+	fs := pflag.NewFlagSet("early podman flags", pflag.ContinueOnError)
 	fs.ParseErrorsAllowlist.UnknownFlags = true
 	fs.Usage = func() {}
 	fs.SetInterspersed(false)
-	fs.StringArrayVar(&modules, "module", nil, "")
+	fs.StringArrayVar(&options.modules, "module", nil, "")
+	fs.StringVar(&options.logLevel, "log-level", "", "")
+	fs.BoolVarP(&options.debug, "debug", "D", false, "")
+	fs.BoolVarP(&options.remote, "remote", "r", options.remote, "")
+	connectionFlagName := "connection"
+	fs.StringP(connectionFlagName, "c", "", "")
+	contextFlagName := "context"
+	fs.String(contextFlagName, "", "")
+	hostFlagName := "host"
+	fs.StringP(hostFlagName, "H", "", "")
+	urlFlagName := "url"
+	fs.String(urlFlagName, "", "")
 	fs.BoolP("help", "h", false, "") // Need a fake help flag to avoid the `pflag: help requested` error
-	return modules, fs.Parse(os.Args[index:])
+
+	options.parseErr = fs.Parse(args[index:])
+	// --connection, --context, --host, or --url implies --remote.
+	options.remote = options.remote || fs.Changed(connectionFlagName) || fs.Changed(contextFlagName) || fs.Changed(hostFlagName) || fs.Changed(urlFlagName)
+	return options
+}
+
+// Set the log level before containers.conf is loaded.
+func setEarlyLogLevel(options *earlyCLIOptions) {
+	if options.completion {
+		return
+	}
+
+	if options.debug && options.logLevel == "" {
+		logrus.SetLevel(logrus.DebugLevel)
+	} else if !options.debug && options.logLevel != "" {
+		if level, err := logrus.ParseLevel(options.logLevel); err == nil {
+			logrus.SetLevel(level)
+		}
+	}
 }
 
 func newPodmanConfig() {
-	modules, err := containersConfModules()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing containers.conf modules: %v\n", err)
+	options := parseEarlyCLIOptions(os.Args)
+	setEarlyLogLevel(options)
+	if options.parseErr != nil && !options.completion {
+		fmt.Fprintf(os.Stderr, "Error parsing command-line flags: %v\n", options.parseErr)
 		os.Exit(1)
+	}
+	modules := options.modules
+	if options.completion {
+		// Do not load the modules during shell completion.
+		modules = nil
 	}
 
 	if err := setXdgDirs(); err != nil {
@@ -100,13 +149,14 @@ func newPodmanConfig() {
 	}
 
 	var mode entities.EngineMode
+	remote := options.remote && !isPodmanSh(os.Args)
 	switch runtime.GOOS {
 	case "darwin", "windows":
 		mode = entities.TunnelMode
 	case "linux", "freebsd":
 		// Some linux clients might only be compiled without ABI
 		// support (e.g., podman-remote).
-		if abiSupport && !IsRemote() {
+		if abiSupport && !remote {
 			mode = entities.ABIMode
 		} else {
 			mode = entities.TunnelMode

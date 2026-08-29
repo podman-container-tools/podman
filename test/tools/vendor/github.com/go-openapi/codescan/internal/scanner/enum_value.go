@@ -9,14 +9,12 @@ import (
 	"strings"
 )
 
-// enumBasicLitValue converts the RHS of a `const Foo Kind = "bar"`
-// declaration into its runtime value — int64 / float64 / unquoted
-// string — for emission as an enum entry on the Swagger schema the
-// scanner is building.
+// enumBasicLitValue converts the RHS of a `const Foo Kind = "bar"` declaration into its runtime
+// value — int64 / float64 / unquoted string — for emission as an enum entry on the Swagger
+// schema the scanner is building.
 //
-// Returns nil when the literal kind is INT or FLOAT but the textual
-// value fails to parse (rare — Go's own parser would have caught it
-// upstream, but the safety net is cheap).
+// Returns nil when the literal kind is INT or FLOAT but the textual value fails to parse (rare —
+// Go's own parser would have caught it upstream, but the safety net is cheap).
 func enumBasicLitValue(basicLit *ast.BasicLit) any {
 	switch basicLit.Kind.String() {
 	case "INT":

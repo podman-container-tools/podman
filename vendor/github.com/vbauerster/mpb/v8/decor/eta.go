@@ -38,13 +38,7 @@ func EwmaETA(style TimeStyle, age float64, wcc ...WC) Decorator {
 
 // EwmaNormalizedETA same as EwmaETA but with TimeNormalizer option.
 func EwmaNormalizedETA(style TimeStyle, age float64, normalizer TimeNormalizer, wcc ...WC) Decorator {
-	var average ewma.MovingAverage
-	if age == 0 {
-		average = ewma.NewMovingAverage()
-	} else {
-		average = ewma.NewMovingAverage(age)
-	}
-	return MovingAverageETA(style, average, normalizer, wcc...)
+	return MovingAverageETA(style, ewma.NewMovingAverage(age), normalizer, wcc...)
 }
 
 // MovingAverageETA decorator relies on MovingAverage implementation to calculate its average.
@@ -57,13 +51,10 @@ func EwmaNormalizedETA(style TimeStyle, age float64, normalizer TimeNormalizer, 
 //
 //	`wcc` optional WC config
 func MovingAverageETA(style TimeStyle, average ewma.MovingAverage, normalizer TimeNormalizer, wcc ...WC) Decorator {
-	if average == nil {
-		average = NewMedian()
-	}
 	d := &movingAverageETA{
 		WC:         initWC(wcc...),
 		producer:   chooseTimeProducer(style),
-		average:    average,
+		average:    NewThreadSafeMovingAverage(average),
 		normalizer: normalizer,
 	}
 	return d
@@ -87,17 +78,13 @@ func (d *movingAverageETA) Decor(s Statistics) (string, int) {
 }
 
 func (d *movingAverageETA) EwmaUpdate(n int64, dur time.Duration) {
-	if n <= 0 {
-		d.zDur += dur
-		return
-	}
 	durPerItem := float64(d.zDur+dur) / float64(n)
 	if math.IsInf(durPerItem, 0) || math.IsNaN(durPerItem) {
 		d.zDur += dur
-		return
+	} else if !math.Signbit(durPerItem) {
+		d.zDur = 0
+		d.average.Add(durPerItem)
 	}
-	d.zDur = 0
-	d.average.Add(durPerItem)
 }
 
 // AverageETA decorator. It's wrapper of NewAverageETA.

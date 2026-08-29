@@ -142,7 +142,7 @@ type ImageHistoryReport struct {
 	Layers []ImageHistoryLayer
 }
 
-// swagger:alias
+// swagger:model ImagePullStatus
 type ImagePullStatus string
 
 const (
@@ -179,7 +179,7 @@ type ImagePullReport struct {
 	Progress *ArtifactPullProgress `json:"pullProgress,omitempty"`
 }
 
-// swagger:alias
+// swagger:model ArtifactPullStatus
 type ArtifactPullStatus string
 
 const (

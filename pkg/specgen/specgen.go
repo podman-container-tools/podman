@@ -649,6 +649,7 @@ func (s *SpecGenerator) IsInitContainer() bool {
 	return len(s.InitContainerType) != 0
 }
 
+// swagger:model SpecgenSecret
 type Secret struct {
 	Source string
 	Target string

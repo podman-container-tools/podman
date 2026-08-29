@@ -274,6 +274,7 @@ type ContainerCreateOptions struct {
 
 	CgroupConf []string
 
+	Passwd      bool
 	GroupEntry  string
 	PasswdEntry string
 }

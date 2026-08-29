@@ -22,19 +22,19 @@ adjust+:
     tag: [ local, root ]
     summary: local rootful test
     test: bash ./system.sh
-    duration: 30m
+    duration: 60m
 
 /local-rootless:
     tag: [ local, rootless ]
     summary: rootless test
     test: bash ./system.sh rootless
-    duration: 30m
+    duration: 60m
 
 /remote-root:
     tag: [ remote, root ]
     summary: remote rootful test
     test: bash ./system.sh
-    duration: 30m
+    duration: 60m
     environment+:
         PODMAN: /usr/bin/podman-remote
     require+:
@@ -44,7 +44,7 @@ adjust+:
     tag: [ remote, rootless ]
     summary: remote rootless test
     test: bash ./system.sh rootless
-    duration: 30m
+    duration: 60m
     environment+:
         PODMAN: /usr/bin/podman-remote
     require+:

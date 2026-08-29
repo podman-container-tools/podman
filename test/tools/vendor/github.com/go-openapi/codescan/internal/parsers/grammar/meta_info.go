@@ -8,16 +8,16 @@ import (
 	"strings"
 )
 
-// Contact is the typed shape of a `contact:` inline value on a
-// swagger:meta block. The convention is:
+// Contact is the typed shape of a `contact:` inline value on a swagger:meta block.
+//
+// The convention is:
 //
 //	contact: <Name> <email> <URL>
 //
-// where each part is optional in the order written: the parser
-// recognises a `Name <email>` head (Go's net/mail.ParseAddress form)
-// followed by an optional URL. A bare email without a name is also
-// accepted. Empty or unrecognised inputs return (Contact{}, false)
-// from Block.Contact().
+// where each part is optional in the order written: the parser recognises a `Name <email>` head
+// (Go's net/mail.ParseAddress form) followed by an optional URL.
+// A bare email without a name is also accepted.
+// Empty or unrecognised inputs return (Contact{}, false) from Block.Contact().
 type Contact struct {
 	Name, Email, URL string
 }
@@ -26,20 +26,19 @@ type Contact struct {
 //
 //	license: <Name> <URL>
 //
-// where Name is everything before the URL prefix and URL is the
-// scheme-anchored remainder. A line without a URL keeps Name and
-// leaves URL empty. Empty input returns (License{}, false) from
-// Block.License().
+// where Name is everything before the URL prefix and URL is the scheme-anchored remainder.
+// A line without a URL keeps Name and leaves URL empty.
+// Empty input returns (License{}, false) from Block.License().
 type License struct {
 	Name, URL string
 }
 
 // parseContact converts the raw contact: value into a typed Contact.
+//
 // Returns (Contact{}, nil) on empty input (treated as "no contact").
-// A non-nil error signals a malformed `Name <email>` head — the
-// caller decides whether to fail the build or downgrade to a
-// warning. An isolated URL (no name/email) yields (Contact{URL: …},
-// nil).
+// A non-nil error signals a malformed `Name <email>` head — the caller decides whether to fail
+// the build or downgrade to a warning.
+// An isolated URL (no name/email) yields (Contact{URL: …}, nil).
 func parseContact(line string) (Contact, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -57,9 +56,9 @@ func parseContact(line string) (Contact, error) {
 }
 
 // parseLicense converts the raw license: value into a typed License.
-// Returns (License{}, false) only when the input is empty; any
-// non-empty input yields a (License, true) with Name and URL split
-// on the URL prefix (Name may be empty if the line starts with the
+//
+// Returns (License{}, false) only when the input is empty; any non-empty input yields a (License,
+// true) with Name and URL split on the URL prefix (Name may be empty if the line starts with the
 // URL).
 func parseLicense(line string) (License, bool) {
 	line = strings.TrimSpace(line)
@@ -76,9 +75,10 @@ func parseLicense(line string) (License, bool) {
 //nolint:gochecknoglobals // immutable lookup table; read-only.
 var urlSchemes = []string{"https://", "http://", "ftps://", "ftp://", "wss://", "ws://"}
 
-// splitURL separates the leading non-URL prefix from the trailing
-// URL on a single line. Returns ("", url) when the line begins with
-// a URL scheme; (line, "") when no scheme is found anywhere.
+// splitURL separates the leading non-URL prefix from the trailing URL on a single line.
+//
+// Returns ("", url) when the line begins with a URL scheme; (line, "") when no scheme is found
+// anywhere.
 func splitURL(line string) (notURL, url string) {
 	str := strings.TrimSpace(line)
 	idx := -1

@@ -16,9 +16,10 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// resolveTypeOverride applies a `swagger:type` argument onto tgt, ALWAYS
-// producing an inline schema (never a $ref). It is the single resolution
-// point for the keyword consumed at every swagger:type site (the F3
+// resolveTypeOverride applies a `swagger:type` argument onto tgt, ALWAYS producing an inline schema
+// (never a $ref).
+//
+// It is the single resolution point for the keyword consumed at every swagger:type site (the F3
 // reconciliation — see .claude/plans/quirks-F-series-fix.md).
 //
 //   - ownType is the annotated field/decl's Go type, consumed by the
@@ -26,13 +27,12 @@ import (
 //     nil when the site has no Go type to expand.
 //   - pos drives diagnostics.
 //
-// Returns applied=true when the override was honoured (the caller
-// short-circuits). applied=false means the caller should fall through to
-// default Go-type resolution; a diagnostic explaining why has already been
-// recorded (unknown type, `file`, or an invalid array element).
+// Returns applied=true when the override was honoured (the caller short-circuits). applied=false
+// means the caller should fall through to default Go-type resolution; a diagnostic explaining why
+// has already been recorded (unknown type, `file`, or an invalid array element).
 //
-// Argument grammar (after stripping N leading `[]` → an N-deep array whose
-// innermost items are the resolved base):
+// Argument grammar (after stripping N leading `[]` → an N-deep array whose innermost items are
+// the resolved base):
 //
 //   - keyword scalars `string`/`integer`/`number`/`boolean`/`object` and the
 //     Go-builtin spellings (`int64`, `uint32`, `float64`, …) — via
@@ -50,24 +50,24 @@ func (s *Builder) resolveTypeOverride(arg string, tgt ifaces.SwaggerTypable, own
 		return s.resolveTypeBase(base, tgt, ownType, pos, false)
 	}
 
-	// `[]T …` — build N array layers, then resolve the base into the
-	// innermost items. The items form an inline schema like any other.
+	// `[]T …` — build N array layers, then resolve the base into the innermost items.
+	// The items form an inline schema like any other.
 	tgt.Typed("array", "")
 	items := tgt.Items()
 	for range depth - 1 {
 		items.Typed("array", "")
 		items = items.Items()
 	}
-	// Cross-ref linkage: the base resolves into the innermost items node, so
-	// any anchors it emits (an inlined named struct's properties, enum values)
-	// must carry the …/items[/items…] pointer, not the parent's.
+	// Cross-ref linkage: the base resolves into the innermost items node, so any anchors it emits (an
+	// inlined named struct's properties, enum values) must carry the …/items[/items…] pointer, not
+	// the parent's.
 	defer s.descendItems(depth)()
 	return s.resolveTypeBase(base, items, ownType, pos, true)
 }
 
-// resolveTypeBase resolves a single (array-stripped) swagger:type base onto
-// target. isElem reports whether target is an array-element position, where
-// the own-type keywords (`inline`/`array`) and `file` are not meaningful.
+// resolveTypeBase resolves a single (array-stripped) swagger:type base onto target. isElem reports
+// whether target is an array-element position, where the own-type keywords (`inline`/`array`) and
+// `file` are not meaningful.
 func (s *Builder) resolveTypeBase(base string, target ifaces.SwaggerTypable, ownType types.Type, pos token.Position, isElem bool) (applied bool) {
 	switch base {
 	case keywordInline, keywordArray:
@@ -96,8 +96,8 @@ func (s *Builder) resolveTypeBase(base string, target ifaces.SwaggerTypable, own
 	}
 
 	// Otherwise a type-name reference: inline a known definition in place.
-	// Resolve the leaf in the builder's own package first, then uniquely
-	// across the scanned packages' models (name-identity leaf resolution).
+	// Resolve the leaf in the builder's own package first, then uniquely across the scanned packages'
+	// models (name-identity leaf resolution).
 	decl, found, ambiguous := s.resolveNamedTypeLeaf(base, pos)
 	if ambiguous {
 		return false // diagnostic already recorded
@@ -113,15 +113,19 @@ func (s *Builder) resolveTypeBase(base string, target ifaces.SwaggerTypable, own
 	return false
 }
 
-// applyStrfmtFormat applies a swagger:strfmt format onto a schema whose type
-// has already been fixed by swagger:type. The format rides as a supplementary
-// hint ONLY when it is consistent with that type (string accepts any; integer
-// / number accept the numeric width formats — see
-// validations.IsFormatCompatible). An incompatible format is dropped with a
-// shape-mismatch diagnostic rather than silently overriding the type. This is
-// the swagger:type + swagger:strfmt precedence: type wins, format is advisory.
-// It does NOT apply to the strfmt-alone path, where strfmt still forces
-// {type: string, format: X} (go-swagger#1512).
+// applyStrfmtFormat applies a swagger:strfmt format onto a schema whose type has already been fixed
+// by swagger:type.
+//
+// The format rides as a supplementary hint ONLY when it is consistent with that type (string
+// accepts any; integer / number accept the numeric width formats — see
+// validations.IsFormatCompatible).
+//
+// An incompatible format is dropped with a shape-mismatch diagnostic rather than silently
+// overriding the type.
+// This is the swagger:type + swagger:strfmt precedence: type wins, format is advisory.
+//
+// It does NOT apply to the strfmt-alone path, where strfmt still forces {type: string, format: X}
+// (go-swagger#1512).
 func (s *Builder) applyStrfmtFormat(ps *oaispec.Schema, format string, pos token.Position) {
 	var schemaType string
 	if len(ps.Type) > 0 {
@@ -136,10 +140,11 @@ func (s *Builder) applyStrfmtFormat(ps *oaispec.Schema, format string, pos token
 		"swagger:strfmt with swagger:type: %s; format ignored", hint))
 }
 
-// inlineGoType expands a Go type onto target as an inline schema, never a
-// $ref: pointers are peeled and a named/alias type is reduced to its
-// underlying shape (so buildFromType emits the structure rather than a
-// reference). Returns true on success.
+// inlineGoType expands a Go type onto target as an inline schema, never a $ref: pointers are peeled
+// and a named/alias type is reduced to its underlying shape (so buildFromType emits the structure
+// rather than a reference).
+//
+// Returns true on success.
 func (s *Builder) inlineGoType(t types.Type, target ifaces.SwaggerTypable) bool {
 	base := t
 	for {
@@ -149,18 +154,17 @@ func (s *Builder) inlineGoType(t types.Type, target ifaces.SwaggerTypable) bool 
 		}
 		base = ptr.Elem()
 	}
-	// Underlying() peels a Named/Alias to its structural type and is a
-	// no-op for already-structural types — so buildFromType inlines
-	// uniformly without taking the $ref branch in buildNamedType.
+	// Underlying() peels a Named/Alias to its structural type and is a no-op for already-structural
+	// types — so buildFromType inlines uniformly without taking the $ref branch in buildNamedType.
 	return s.buildFromType(base.Underlying(), target) == nil
 }
 
-// resolveNamedTypeLeaf resolves a bare type name written in a type-name
-// keyword (swagger:type / swagger:additionalProperties /
-// swagger:patternProperties) to its declaration. It looks in the builder's
-// own package first — a local type wins (intent) — then, failing that,
-// resolves the leaf across the scanned packages' annotated model set
-// (name-identity leaf resolution, mirroring routes' resolveDefinitionByLeaf):
+// resolveNamedTypeLeaf resolves a bare type name written in a type-name keyword (swagger:type /
+// swagger:additionalProperties / swagger:patternProperties) to its declaration.
+//
+// It looks in the builder's own package first — a local type wins (intent) — then, failing
+// that, resolves the leaf across the scanned packages' annotated model set (name-identity leaf
+// resolution, mirroring routes' resolveDefinitionByLeaf):
 //
 //   - exactly one model with that leaf -> (decl, true, false);
 //   - several -> records an ambiguity diagnostic and returns (nil, false, true);
@@ -191,9 +195,9 @@ func (s *Builder) resolveNamedTypeLeaf(name string, pos token.Position) (decl *s
 	}
 }
 
-// declNamedType returns the named or alias type a decl carries (nil if
-// neither). The caller decides whether to emit it as a $ref (the named type)
-// or inline it (its Underlying).
+// declNamedType returns the named or alias type a decl carries (nil if neither).
+//
+// The caller decides whether to emit it as a $ref (the named type) or inline it (its Underlying).
 func declNamedType(decl *scanner.EntityDecl) types.Type {
 	switch {
 	case decl.Type != nil:
@@ -205,18 +209,19 @@ func declNamedType(decl *scanner.EntityDecl) types.Type {
 	}
 }
 
-// swagger:type keyword values that are not resolved as scalar/builtin type
-// names (lowercase, case-sensitive — a capitalised spelling is a type-name
-// reference instead, e.g. `Inline` vs the keyword `inline`).
+// swagger:type keyword values that are not resolved as scalar/builtin type names (lowercase,
+// case-sensitive — a capitalised spelling is a type-name reference instead, e.g. `Inline` vs the
+// keyword `inline`).
 const (
 	keywordInline = "inline"
 	keywordArray  = "array"
 	keywordFile   = "file"
 )
 
-// stripArrayPrefixes counts leading `[]` prefixes on a swagger:type argument
-// and returns the bare base plus the array depth. `[][]string` → ("string", 2),
-// `int64` → ("int64", 0).
+// stripArrayPrefixes counts leading `[]` prefixes on a swagger:type argument and returns the bare
+// base plus the array depth.
+//
+// `[][]string` → ("string", 2), `int64` → ("int64", 0).
 func stripArrayPrefixes(arg string) (base string, depth int) {
 	base = strings.TrimSpace(arg)
 	for strings.HasPrefix(base, "[]") {

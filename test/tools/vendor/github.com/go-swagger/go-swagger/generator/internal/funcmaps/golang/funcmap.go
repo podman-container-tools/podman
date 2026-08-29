@@ -77,6 +77,17 @@ func FuncMap(mangler mangling.NameMangler) template.FuncMap {
 		"escapeBackticks": func(arg string) string {
 			return strings.ReplaceAll(arg, "`", "`+\"`\"+`")
 		},
+		// escapeDoubleQuoted escapes arg so it can be safely interpolated inside a
+		// double-quoted Go string literal ("..."). strconv.Quote produces a fully
+		// escaped literal; stripping its surrounding quotes yields the inner form,
+		// so an embedded '"', '\' or newline in spec-derived text (e.g. an
+		// operation path baked into a diagnostic message) cannot break out of the
+		// literal. For text without special characters this is a no-op.
+		"escapeDoubleQuoted": func(arg string) string {
+			quoted := strconv.Quote(arg)
+
+			return quoted[1 : len(quoted)-1]
+		},
 		"flagNameVar": func(in string) string {
 			return fmt.Sprintf("flag%sName", pascalize(in))
 		},

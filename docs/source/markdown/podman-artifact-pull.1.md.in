@@ -29,11 +29,6 @@ $ podman artifact pull quay.io/foobar/artifact:special
 
 @@option decryption-key
 
-
-#### **--help**, **-h**
-
-Print the usage statement.
-
 @@option quiet
 
 @@option retry

@@ -46,7 +46,7 @@ type Endpoint struct {
 	Insecure bool `toml:"insecure,omitempty"`
 	// PullFromMirror is used for adding restrictions to image pull through the mirror.
 	// Set to "all", "digest-only", or "tag-only".
-	// If "digest-only"， mirrors will only be used for digest pulls. Pulling images by
+	// If "digest-only", mirrors will only be used for digest pulls. Pulling images by
 	// tag can potentially yield different images, depending on which endpoint
 	// we pull from.  Restricting mirrors to pulls by digest avoids that issue.
 	// If "tag-only", mirrors will only be used for tag pulls.  For a more up-to-date and expensive mirror

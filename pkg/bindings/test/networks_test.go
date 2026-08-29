@@ -16,7 +16,10 @@ import (
 	"go.podman.io/podman/v6/pkg/bindings/network"
 )
 
-var _ = Describe("Podman networks", func() {
+// Serial because the network config dir is shared between all the services
+// these tests start, so the prune in BeforeEach and the list assertions below
+// would see networks belonging to another test.
+var _ = Describe("Podman networks", Serial, func() {
 	var (
 		bt       *bindingTest
 		s        *gexec.Session

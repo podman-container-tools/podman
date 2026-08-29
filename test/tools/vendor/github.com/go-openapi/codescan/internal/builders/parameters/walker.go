@@ -11,23 +11,21 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// paramItemsLevelTarget pairs a 1-indexed nesting depth (matching
-// grammar.Property.ItemsDepth) with the *oaispec.Items target into
-// which validations at that depth must be written.
+// paramItemsLevelTarget pairs a 1-indexed nesting depth (matching grammar.Property.ItemsDepth) with
+// the *oaispec.Items target into which validations at that depth must be written.
 type paramItemsLevelTarget struct {
 	level int
 	items *oaispec.Items
 }
 
-// collectParamItemsLevels walks the AST array layers of a parameter
-// field type and returns the (level, items) pairs reachable from
-// the param's items chain. Mirrors items.ParseArrayTypes' shape on
-// the grammar path; the schema builder handles the Schema-side
-// equivalent internally.
+// collectParamItemsLevels walks the AST array layers of a parameter field type and returns the
+// (level, items) pairs reachable from the param's items chain.
 //
-// Starting level is 1 — `items.maximum:` has ItemsDepth=1 in the
-// grammar lexer. Named/aliased array types opt out (parity with
-// v1's tagger pipeline).
+// Mirrors items.ParseArrayTypes' shape on the grammar path; the schema builder handles the
+// Schema-side equivalent internally.
+//
+// Starting level is 1 — `items.maximum:` has ItemsDepth=1 in the grammar lexer.
+// Named/aliased array types opt out (parity with v1's tagger pipeline).
 func collectParamItemsLevels(expr ast.Expr, it *oaispec.Items, level int) []paramItemsLevelTarget {
 	if it == nil {
 		return nil
@@ -63,19 +61,17 @@ func collectParamItemsLevels(expr ast.Expr, it *oaispec.Items, level int) []para
 	}
 }
 
-// applyBlockToField parses afld.Doc through grammar and dispatches
-// description, level-0 validations, required flag, vendor extensions,
-// and items-level validations into param.
+// applyBlockToField parses afld.Doc through grammar and dispatches description, level-0
+// validations, required flag, vendor extensions, and items-level validations into param.
 //
 // # Details
 //
-// See [§dispatch](./README.md#dispatch) — the three-phase Walker
-// dispatch, why `in:` is resolved upstream, and the items-level
-// chain.
+// See [§dispatch](./README.md#dispatch) — the three-phase Walker dispatch, why `in:` is resolved
+// upstream, and the items-level chain.
 func (p *Builder) applyBlockToField(afld *ast.Field, param *oaispec.Parameter) error {
 	block := p.ParseBlock(afld.Doc)
 
-	param.Description = block.Prose()
+	param.Description = p.CleanGoDoc(block.Prose())
 	param.Description = resolvers.AppendEnumDesc(param.Description, param.Extensions, p.Ctx.SkipEnumDescriptions())
 
 	if err := handlers.DispatchParamLevel0(block, param, p.RecordDiagnostic); err != nil {

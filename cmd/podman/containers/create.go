@@ -161,6 +161,8 @@ func create(cmd *cobra.Command, args []string) error {
 	}
 	s.RawImageName = rawImageName
 
+	s.Passwd = &cliVals.Passwd
+
 	// Include the command used to create the container.
 	s.ContainerCreateCommand = os.Args
 
@@ -241,6 +243,10 @@ func CreateInit(c *cobra.Command, vals entities.ContainerCreateOptions, isInfra 
 	}
 	if c.Flag("kernel-memory") != nil && c.Flag("kernel-memory").Changed {
 		logrus.Warnf("The --kernel-memory flag is no longer supported. This flag is a noop.")
+	}
+
+	if c.Flag("image-volume") != nil && c.Flag("image-volume").Changed && c.Flag("image-volume").Value.String() == "bind" {
+		logrus.Warnf("The --image-volume=bind value is deprecated, use --image-volume=anonymous instead")
 	}
 
 	if cliVals.LogDriver == define.PassthroughLogging {

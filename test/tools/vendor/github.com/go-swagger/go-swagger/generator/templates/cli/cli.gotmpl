@@ -58,18 +58,18 @@ func makeClient(cmd *cobra.Command, _ []string) (*client.{{ pascalize .Name }}, 
   {{ range .Consumes }}
     {{ range .AllSerializers }}
       {{- if stringContains .MediaType "json" }}
-  r.Consumers["{{ .MediaType }}"] = runtime.JSONConsumer()
+  r.Consumers[{{ printf "%q" .MediaType }}] = runtime.JSONConsumer()
       {{- else }}
-  // warning: consumes {{ .MediaType }} is not supported by go-swagger cli yet
+  // warning: consumes {{ escapeDoubleQuoted .MediaType }} is not supported by go-swagger cli yet
       {{- end }}
     {{- end }}
   {{ end }}
   {{ range .Produces }}
     {{- range .AllSerializers }}
       {{- if stringContains .MediaType "json" }}
-  r.Producers["{{ .MediaType }}"] = runtime.JSONProducer()
+  r.Producers[{{ printf "%q" .MediaType }}] = runtime.JSONProducer()
       {{- else }}
-  // warning: produces {{ .MediaType }} is not supported by go-swagger cli yet
+  // warning: produces {{ escapeDoubleQuoted .MediaType }} is not supported by go-swagger cli yet
       {{- end }}
     {{- end }}
   {{- end }}

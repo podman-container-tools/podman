@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -741,7 +742,7 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 		_, ipnet, err := net.ParseCIDR(cidr)
 		Expect(err).ToNot(HaveOccurred())
 		addr := &netlink.Addr{IPNet: ipnet, Label: ""}
-		if err := netlink.AddrAdd(containerInterface, addr); err != nil && err != syscall.EEXIST {
+		if err := netlink.AddrAdd(containerInterface, addr); err != nil && !errors.Is(err, syscall.EEXIST) {
 			return err
 		}
 		return nil
@@ -1096,6 +1097,7 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 					if forwarder == "rootlessport" {
 						Skip("rootlessport does not support native IPv6 port forwarding")
 					}
+					SkipIfNoIPv6Route("pesto IPv6 forwarding requires routable IPv6 on the host")
 				}
 				configurePortForwarder(forwarder)
 
@@ -1190,8 +1192,9 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 			podmanTest.PodmanExitCleanly("rm", "-f", "cleanup-ctr2")
 		})
 
-		It(fmt.Sprintf("podman run bridge dual-stack network IPv4 and IPv6 port forwarding with %s", forwarder), func() {
+		It(fmt.Sprintf("podman run bridge dual-stack network IPv4 and IPv6 port forwarding with %s", forwarder), Serial, func() {
 			SkipIfNotRootless("netavark does not support IPv6 port forwarding")
+			SkipIfNoIPv6Route("pesto IPv6 forwarding requires routable IPv6 on the host")
 			configurePortForwarder(forwarder)
 
 			netName := createNetworkName("dual-stack")
@@ -1220,6 +1223,218 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 			podmanTest.WaitForContainerLog(ctr4, msg4)
 		})
 	}
+
+	// https://github.com/containers/podman/issues/28771
+	It("podman run bridge dual-stack same port IPv4 and IPv6 route to different containers", func() {
+		SkipIfNoIPv6Route("pesto IPv6 forwarding requires routable IPv6 on the host")
+		configurePortForwarder("pasta")
+		subnet4 := "172.45.0.0/24"
+		subnet6 := "fd00:47::/64"
+		netName := createNetworkName("dualip")
+		podmanTest.PodmanExitCleanly("network", "create", "--ipv6", "--subnet", subnet4, "--subnet", subnet6, netName)
+		defer podmanTest.removeNetwork(netName)
+
+		port := GetPort()
+
+		ctr1 := podmanTest.startNCContainer(
+			"c-dualip-v4", port,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", port, port),
+		)
+
+		ctr2Port := GetPort()
+		ctr2 := podmanTest.startNCContainer(
+			"c-dualip-v6", ctr2Port,
+			"--network", netName,
+			"-p", fmt.Sprintf("[::1]:%d:%d", port, ctr2Port),
+		)
+
+		msg1 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port), msg1)
+		podmanTest.WaitForContainerLog(ctr1, msg1)
+
+		msg2 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("[::1]:%d", port), msg2)
+		podmanTest.WaitForContainerLog(ctr2, msg2)
+
+		logs1 := podmanTest.PodmanExitCleanly("logs", ctr1)
+		Expect(logs1.OutputToString()).To(ContainSubstring(msg1))
+		Expect(logs1.OutputToString()).ToNot(ContainSubstring(msg2))
+
+		logs2 := podmanTest.PodmanExitCleanly("logs", ctr2)
+		Expect(logs2.OutputToString()).To(ContainSubstring(msg2))
+		Expect(logs2.OutputToString()).ToNot(ContainSubstring(msg1))
+	})
+
+	// https://github.com/containers/podman/issues/14928
+	It("podman run bridge network same port different HostIPs routes to correct container", func() {
+		configurePortForwarder("pasta")
+		subnet := "172.43.0.0/24"
+		netName := createNetworkName("multiip")
+		podmanTest.PodmanExitCleanly("network", "create", "--subnet", subnet, netName)
+		defer podmanTest.removeNetwork(netName)
+
+		port := GetPort()
+
+		ctr1 := podmanTest.startNCContainer(
+			"c-multiip-1", port,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", port, port),
+		)
+
+		ctr2 := podmanTest.startNCContainer(
+			"c-multiip-2", port,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.2:%d:%d", port, port),
+		)
+
+		msg1 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port), msg1)
+		podmanTest.WaitForContainerLog(ctr1, msg1)
+
+		msg2 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.2:%d", port), msg2)
+		podmanTest.WaitForContainerLog(ctr2, msg2)
+
+		logs := podmanTest.PodmanExitCleanly("logs", ctr1)
+		Expect(logs.OutputToString()).ToNot(ContainSubstring(msg2))
+		Expect(logs.OutputToString()).To(ContainSubstring(msg1))
+
+		logs = podmanTest.PodmanExitCleanly("logs", ctr2)
+		Expect(logs.OutputToString()).ToNot(ContainSubstring(msg1))
+		Expect(logs.OutputToString()).To(ContainSubstring(msg2))
+	})
+
+	// https://github.com/containers/podman/issues/28771
+	It("podman run bridge multiple containers same network different ports with pesto", func() {
+		configurePortForwarder("pasta")
+		subnet := "172.44.0.0/24"
+		netName := createNetworkName("multipesto")
+		podmanTest.PodmanExitCleanly("network", "create", "--subnet", subnet, netName)
+		defer podmanTest.removeNetwork(netName)
+
+		port1 := GetPort()
+		ctr1 := podmanTest.startNCContainer(
+			"c-multi-1", port1,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", port1, port1),
+		)
+
+		port2 := GetPort()
+		ctr2 := podmanTest.startNCContainer(
+			"c-multi-2", port2,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", port2, port2),
+		)
+
+		port3 := GetPort()
+		ctr3 := podmanTest.startNCContainer(
+			"c-multi-3", port3,
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", port3, port3),
+		)
+
+		msg1 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port1), msg1)
+		podmanTest.WaitForContainerLog(ctr1, msg1)
+
+		msg2 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port2), msg2)
+		podmanTest.WaitForContainerLog(ctr2, msg2)
+
+		msg3 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port3), msg3)
+		podmanTest.WaitForContainerLog(ctr3, msg3)
+
+		logs1 := podmanTest.PodmanExitCleanly("logs", ctr1)
+		Expect(logs1.OutputToString()).To(ContainSubstring(msg1))
+		Expect(logs1.OutputToString()).ToNot(ContainSubstring(msg2))
+		Expect(logs1.OutputToString()).ToNot(ContainSubstring(msg3))
+
+		logs2 := podmanTest.PodmanExitCleanly("logs", ctr2)
+		Expect(logs2.OutputToString()).To(ContainSubstring(msg2))
+		Expect(logs2.OutputToString()).ToNot(ContainSubstring(msg1))
+
+		logs3 := podmanTest.PodmanExitCleanly("logs", ctr3)
+		Expect(logs3.OutputToString()).To(ContainSubstring(msg3))
+		Expect(logs3.OutputToString()).ToNot(ContainSubstring(msg1))
+	})
+
+	// https://github.com/containers/podman/issues/28771
+	It("podman run bridge container with multiple port mappings on different addresses", func() {
+		SkipIfNoIPv6Route("pesto IPv6 forwarding requires routable IPv6 on the host")
+		configurePortForwarder("pasta")
+		subnet4 := "172.46.0.0/24"
+		subnet6 := "fd00:48::/64"
+		netName := createNetworkName("multiport")
+		podmanTest.PodmanExitCleanly("network", "create", "--ipv6", "--subnet", subnet4, "--subnet", subnet6, netName)
+		defer podmanTest.removeNetwork(netName)
+
+		port4 := GetPort()
+		port6 := GetPort()
+
+		podmanTest.PodmanExitCleanly(
+			"run", "-d", "--name", "c-multiport",
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:8080", port4),
+			"-p", fmt.Sprintf("[::1]:%d:8081", port6),
+			ALPINE, "sh", "-c",
+			"nc -l -n -v -p 8080 2>&1; nc -l -n -v -p 8081 2>&1",
+		)
+		podmanTest.WaitForContainerLog("c-multiport", "listening")
+		time.Sleep(500 * time.Millisecond)
+
+		msg4 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", port4), msg4)
+		podmanTest.WaitForContainerLog("c-multiport", msg4)
+
+		msg6 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("[::1]:%d", port6), msg6)
+		podmanTest.WaitForContainerLog("c-multiport", msg6)
+
+		logs := podmanTest.PodmanExitCleanly("logs", "c-multiport")
+		Expect(logs.OutputToString()).To(ContainSubstring(msg4))
+		Expect(logs.OutputToString()).To(ContainSubstring(msg6))
+	})
+
+	// https://github.com/containers/podman/issues/28771
+	It("podman run bridge different host and container ports on dual-stack network with pesto", func() {
+		SkipIfNoIPv6Route("pesto IPv6 forwarding requires routable IPv6 on the host")
+		configurePortForwarder("pasta")
+		subnet4 := "172.47.0.0/24"
+		subnet6 := "fd00:49::/64"
+		netName := createNetworkName("diffport-ds")
+		podmanTest.PodmanExitCleanly("network", "create", "--ipv6", "--subnet", subnet4, "--subnet", subnet6, netName)
+		defer podmanTest.removeNetwork(netName)
+
+		hostPort4 := GetPort()
+		ctrPort4 := GetPort()
+		hostPort6 := GetPort()
+		ctrPort6 := GetPort()
+
+		podmanTest.PodmanExitCleanly(
+			"run", "-d", "--name", "c-diffport-ds",
+			"--network", netName,
+			"-p", fmt.Sprintf("127.0.0.1:%d:%d", hostPort4, ctrPort4),
+			"-p", fmt.Sprintf("[::1]:%d:%d", hostPort6, ctrPort6),
+			ALPINE, "sh", "-c",
+			fmt.Sprintf("nc -l -n -v -p %d 2>&1; nc -l -n -v -p %d 2>&1", ctrPort4, ctrPort6),
+		)
+		podmanTest.WaitForContainerLog("c-diffport-ds", "listening")
+		time.Sleep(500 * time.Millisecond)
+
+		msg4 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("127.0.0.1:%d", hostPort4), msg4)
+		podmanTest.WaitForContainerLog("c-diffport-ds", msg4)
+
+		msg6 := RandomString(20)
+		sendMessageToAddr(fmt.Sprintf("[::1]:%d", hostPort6), msg6)
+		podmanTest.WaitForContainerLog("c-diffport-ds", msg6)
+
+		logs := podmanTest.PodmanExitCleanly("logs", "c-diffport-ds")
+		Expect(logs.OutputToString()).To(ContainSubstring(msg4))
+		Expect(logs.OutputToString()).To(ContainSubstring(msg6))
+	})
 
 	It("podman run pasta network preserves source IP", func() {
 		SkipIfNotRootless("pasta network mode is only supported rootless")
@@ -1661,20 +1876,55 @@ options ndots:1
 })
 
 // sendMessageToAddr sends a message to the given tcp address (host:port).
+// For IPv6 addresses, it retries several times with a delay to allow
+// NDP neighbor discovery inside the rootless netns to complete before
+// pasta can relay traffic to the container.
 func sendMessageToAddr(addr string, message string) {
 	GinkgoHelper()
+	isIPv6 := strings.Contains(addr, "[")
+	maxAttempts := 1
+	if isIPv6 {
+		maxAttempts = 5
+	}
+
+	var lastErr error
+	for attempt := range maxAttempts {
+		if attempt > 0 {
+			time.Sleep(time.Second)
+		}
+		lastErr = trySendMessage(addr, message)
+		if lastErr == nil {
+			return
+		}
+	}
+	Expect(lastErr).ToNot(HaveOccurred(), "failed to send message to %s after %d attempts", addr, maxAttempts)
+}
+
+func trySendMessage(addr string, message string) error {
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-	Expect(err).ToNot(HaveOccurred(), "should connect to %s", addr)
+	if err != nil {
+		return err
+	}
 
 	tcpConn := conn.(*net.TCPConn)
-	_, err = tcpConn.Write([]byte(message))
-	Expect(err).ToNot(HaveOccurred())
+	defer tcpConn.Close()
 
-	err = tcpConn.CloseWrite()
-	Expect(err).ToNot(HaveOccurred())
+	// For IPv6, pasta may accept the host-side connection immediately
+	// but the inner TAP-side connection to the container needs NDP
+	// resolution (1-2s). Delay before writing so the relay path is ready.
+	if strings.Contains(addr, "[") {
+		time.Sleep(2 * time.Second)
+	}
 
-	err = tcpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	Expect(err).ToNot(HaveOccurred())
+	if _, err = tcpConn.Write([]byte(message)); err != nil {
+		return err
+	}
+
+	if err = tcpConn.CloseWrite(); err != nil {
+		return err
+	}
+
+	tcpConn.SetReadDeadline(time.Now().Add(5 * time.Second)) //nolint:errcheck
 	_, _ = io.Copy(io.Discard, tcpConn)
-	tcpConn.Close()
+	return nil
 }

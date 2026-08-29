@@ -430,6 +430,7 @@ Valid options for `[Container]` are listed below:
 | Tmpfs=/work                          | --tmpfs /work                                        |
 | UIDMap=0:10000:10                    | --uidmap=0:10000:10                                  |
 | Ulimit=nofile=1000:10000             | --ulimit nofile=1000:10000                           |
+| Umask=0077                           | --umask 0077                                         |
 | Unmask=ALL                           | --security-opt unmask=ALL                            |
 | User=bin                             | --user bin                                           |
 | UserNS=keep-id:uid=200,gid=210       | --userns keep-id:uid=200,gid=210                     |
@@ -614,6 +615,11 @@ argument passed to Podman. Using `Group=` without `User=` will result in an erro
 Assign additional groups to the primary user running within the container process. Also supports the `keep-groups` special flag.
 Equivalent to the Podman `--group-add` option.
 
+Note: for a rootless unit, `keep-groups` passes in the supplementary groups of the `systemd --user`
+manager, which only holds the groups the user had when that manager was started. Groups the user is
+added to afterwards are not passed into the container until the user's systemd manager is restarted,
+for example with `loginctl terminate-user <user>` followed by a new login.
+
 ### `HealthCmd=`
 
 Set or alter a healthcheck command for a container. A value of none disables existing healthchecks.
@@ -724,7 +730,8 @@ Special Cases:
 
 ### `ImageVolume=`
 
-Tells Podman how to handle the builtin image volumes. Default is **bind**.
+Tells Podman how to handle the builtin image volumes. Default is **anonymous**.
+In the past, a **bind** option was accepted as well. This is deprecated, and currently aliased to **anonymous**.
 Equivalent to the Podman `--image-volume` option.
 
 ### `IP=`
@@ -1029,6 +1036,12 @@ This key can be listed multiple times.
 Ulimit options. Sets the ulimits values inside of the container.
 
 This key can be listed multiple times.
+
+### `Umask=` (defaults to `0022`)
+
+Set the umask inside the container.
+
+This is equivalent to the Podman `--umask` option.
 
 ### `Unmask=`
 

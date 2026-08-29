@@ -117,7 +117,7 @@ func (ir *ImageEngine) ManifestAddArtifact(_ context.Context, name string, files
 	options.WithType(opts.Type).WithConfigType(opts.ConfigType).WithLayerType(opts.LayerType)
 	options.WithConfig(opts.Config)
 	options.WithExcludeTitles(opts.ExcludeTitles).WithSubject(opts.Subject)
-	options.WithAnnotations(opts.Annotations)
+	options.WithAnnotations(opts.ArtifactAnnotations)
 	options.WithFiles(files)
 	id, err := manifests.AddArtifact(ir.ClientCtx, name, options)
 	if err != nil {

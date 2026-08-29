@@ -470,7 +470,7 @@ var _ = Describe("Podman push", func() {
 		SkipIfRootless("rootless user has no permission to use default docker.sock")
 		setup := SystemExec("bash", []string{"-c", "systemctl status docker 2>&1"})
 
-		if setup.LineInOutputContains("Active: inactive") {
+		if strings.Contains(setup.OutputToString(), "Active: inactive") {
 			setup = SystemExec("systemctl", []string{"start", "docker"})
 			Expect(setup).Should(ExitCleanly())
 			defer func() {

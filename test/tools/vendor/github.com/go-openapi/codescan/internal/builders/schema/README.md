@@ -428,6 +428,19 @@ classification per embed:
     ordinary field rather than promoting it (go-swagger#2038).
   - no explicit name — properties merge (promote) into the outer schema.
 
+**`DefaultAllOfForEmbeds` (opt-in).** When `Options.DefaultAllOfForEmbeds`
+is set, a plain embed with **no explicit name** is reclassified as an
+allOf member — exactly as if it carried `swagger:allOf` — so it takes the
+`buildAllOf` path ($ref when the embedded type is a model, inline member
+otherwise) and the embedding struct's own fields move into a sibling allOf
+member. The decision lives in `scanEmbeddedFields` (`isAllOf` is forced
+true via `embedNestName(afld, fd) == ""`); a json-named embed keeps its
+nested-property shape (go-swagger#2038), an explicit `swagger:allOf` is
+already in this shape, and interface embeds are out of scope (they compose
+via allOf regardless — see [§embedded](#embedded)). Default off ⇒ output
+unchanged. Pinned by `fixtures/enhancements/default-allof-embeds/` +
+`integration/coverage_default_allof_embeds_test.go`.
+
 The `swagger:allOf` arg, when present, is recorded as
 `x-class: <arg>` on the outer schema (`fd.AllOfClass`). This is the
 discriminator hint downstream go-swagger consumes.
@@ -638,8 +651,16 @@ This asymmetry is intentional, not a quirk:
   serialization mirror.
 
 The "one size fits all" mangler on interfaces will not always be
-what the author wanted — a future global opt-out
-(`skip-jsonify-interfaces` or similar) is on the roadmap.
+what the author wanted, so it can be turned off globally with
+**`Options.SkipJSONifyInterfaceMethods`** (opt-out, default `false`).
+When set, the carrier emits the Go method name verbatim instead of
+calling `s.interfaceJSONName(fld.Name())` — useful for an interface
+already named for its JSON shape, or a codebase with its own
+canonical-name discipline. A `swagger:name X` override still wins
+verbatim regardless (see below); the flag only changes the
+no-override fallback. The on/off contract is pinned by
+`fixtures/enhancements/interface-no-mangle/` +
+`integration/coverage_skip_jsonify_interface_test.go`.
 
 ### `swagger:name X` is verbatim
 
@@ -759,6 +780,46 @@ would otherwise emit. Currently only `recognizeError` writes one
 consult `skipExt`. All eight schema-internal call sites pass
 `s.skipExtensions` so the recognizer subsystem honours the same
 `SkipExtensions` flag as the rest of the builder.
+
+### `swagger:title` / `swagger:description` overrides
+
+Two override annotations let the author replace the **godoc-derived**
+title / description with curated API-facing text (Q30 close-out: a
+Go doc comment written for Go readers — e.g. `time.Time`'s monotonic-
+clock prose — should not have to leak into the spec).
+
+- **`swagger:title <text>`** — single line; sets the schema/property
+  `title`. Schema-only.
+- **`swagger:description <text>`** — replaces the `description`. May span
+  multiple lines: the prose lines following the annotation fold into the
+  description (joined with `\n`), terminated by the first blank line,
+  keyword, or annotation (Option B). On responses/headers only the
+  description override applies; `swagger:title` there raises
+  `parse.context-invalid` (OpenAPI 2.0 has no Response/Header title).
+
+Semantics:
+
+- **Precedence.** Present ⇒ replaces the godoc value; absent ⇒ godoc is
+  used unchanged (no behaviour change for un-annotated decls).
+- **Empty ⇒ suppress + warn.** A bare `swagger:description` (or a
+  whitespace/blank-only body) applies the empty value — the deliberate
+  godoc-suppression affordance — and raises `scan.empty-override`.
+- **Harvest.** `common.Builder.HarvestOverrides` collects the two
+  annotations from a comment group's sibling blocks; `WarnEmptyOverride`
+  raises the empty warning at the consumption point (sibling classifier
+  blocks are not `Walk`-ed, so a grammar-stored diagnostic would not reach
+  `OnDiagnostic`). The schema builder wraps both in `overridesFor`.
+- **Family.** Unlike the classifier annotations above, `swagger:title` /
+  `swagger:description` dispatch through the **schema** family (like
+  `swagger:name`), so a co-located validation keyword (`maximum:`,
+  `pattern:`, …) on the same field surfaces as a Property and is applied
+  rather than rejected as context-invalid.
+- **`$ref` fields.** title and description are symmetric `$ref` siblings:
+  they ride description's existing preservation rule — kept under
+  `EmitRefSiblings` / a forced `allOf` compound, dropped to a bare `$ref`
+  under the default flags (see [§ref-override](#ref-override)).
+
+See `.claude/plans/features/swagger-description-override-design.md`.
 
 ---
 

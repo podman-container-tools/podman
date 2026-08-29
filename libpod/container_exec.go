@@ -1211,13 +1211,13 @@ func (c *Container) execLightweight(config *ExecConfig, streams *define.AttachSt
 		select {
 		case err = <-attachErrChan:
 			if err != nil {
-				return -1, fmt.Errorf("container %s light exec session with pid: %d error: %v", c.ID(), pid, err)
+				return -1, fmt.Errorf("container %s light exec session with pid: %d error: %w", c.ID(), pid, err)
 			}
 		case <-time.After(timeout):
 			if err := c.ociRuntime.ExecStopContainer(c, session.ID(), 0); err != nil {
 				return -1, err
 			}
-			return -1, fmt.Errorf("%v of %s", define.ErrHealthCheckTimeout, timeout.String())
+			return -1, fmt.Errorf("%w of %s", define.ErrHealthCheckTimeout, timeout.String())
 		}
 	} else {
 		// For no-session exec, wait for completion without timeout

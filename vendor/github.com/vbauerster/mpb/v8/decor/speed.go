@@ -39,14 +39,8 @@ func (s *speedFormatter) Format(st fmt.State, verb rune) {
 // EwmaSpeed exponential-weighted-moving-average based speed decorator.
 // For this decorator to work correctly you have to measure each iteration's
 // duration and pass it to one of the (*Bar).EwmaIncr... family methods.
-func EwmaSpeed(unit interface{}, format string, age float64, wcc ...WC) Decorator {
-	var average ewma.MovingAverage
-	if age == 0 {
-		average = ewma.NewMovingAverage()
-	} else {
-		average = ewma.NewMovingAverage(age)
-	}
-	return MovingAverageSpeed(unit, format, average, wcc...)
+func EwmaSpeed(unit any, format string, age float64, wcc ...WC) Decorator {
+	return MovingAverageSpeed(unit, format, NewThreadSafeMovingAverage(ewma.NewMovingAverage(age)), wcc...)
 }
 
 // MovingAverageSpeed decorator relies on MovingAverage implementation
@@ -66,11 +60,11 @@ func EwmaSpeed(unit interface{}, format string, age float64, wcc ...WC) Decorato
 //	unit=SizeB1024(0), format="% .1f" output: "1.0 MiB/s"
 //	unit=SizeB1000(0), format="%.1f"  output: "1.0MB/s"
 //	unit=SizeB1000(0), format="% .1f" output: "1.0 MB/s"
-func MovingAverageSpeed(unit interface{}, format string, average ewma.MovingAverage, wcc ...WC) Decorator {
+func MovingAverageSpeed(unit any, format string, average ewma.MovingAverage, wcc ...WC) Decorator {
 	d := &movingAverageSpeed{
 		WC:       initWC(wcc...),
 		producer: chooseSpeedProducer(unit, format),
-		average:  average,
+		average:  NewThreadSafeMovingAverage(average),
 	}
 	return d
 }
@@ -94,22 +88,18 @@ func (d *movingAverageSpeed) Decor(_ Statistics) (string, int) {
 }
 
 func (d *movingAverageSpeed) EwmaUpdate(n int64, dur time.Duration) {
-	if n <= 0 {
-		d.zDur += dur
-		return
-	}
 	durPerByte := float64(d.zDur+dur) / float64(n)
 	if math.IsInf(durPerByte, 0) || math.IsNaN(durPerByte) {
 		d.zDur += dur
-		return
+	} else if !math.Signbit(durPerByte) {
+		d.zDur = 0
+		d.average.Add(durPerByte)
 	}
-	d.zDur = 0
-	d.average.Add(durPerByte)
 }
 
 // AverageSpeed decorator with dynamic unit measure adjustment. It's
 // a wrapper of NewAverageSpeed.
-func AverageSpeed(unit interface{}, format string, wcc ...WC) Decorator {
+func AverageSpeed(unit any, format string, wcc ...WC) Decorator {
 	return NewAverageSpeed(unit, format, time.Now(), wcc...)
 }
 
@@ -130,7 +120,7 @@ func AverageSpeed(unit interface{}, format string, wcc ...WC) Decorator {
 //	unit=SizeB1024(0), format="% .1f" output: "1.0 MiB/s"
 //	unit=SizeB1000(0), format="%.1f"  output: "1.0MB/s"
 //	unit=SizeB1000(0), format="% .1f" output: "1.0 MB/s"
-func NewAverageSpeed(unit interface{}, format string, start time.Time, wcc ...WC) Decorator {
+func NewAverageSpeed(unit any, format string, start time.Time, wcc ...WC) Decorator {
 	d := &averageSpeed{
 		WC:       initWC(wcc...),
 		start:    start,
@@ -158,7 +148,7 @@ func (d *averageSpeed) AverageAdjust(start time.Time) {
 	d.start = start
 }
 
-func chooseSpeedProducer(unit interface{}, format string) func(float64) string {
+func chooseSpeedProducer(unit any, format string) func(float64) string {
 	switch unit.(type) {
 	case SizeB1024:
 		if format == "" {

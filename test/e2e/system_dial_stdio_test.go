@@ -15,7 +15,4 @@ var _ = Describe("podman system dial-stdio", func() {
 		Expect(session).Should(ExitCleanly())
 		Expect(session.OutputToString()).To(ContainSubstring("Examples: podman system dial-stdio"))
 	})
-
-	// TODO: this should have a proper connection test where we spawn a server
-	// and the use dial-stdio to connect to it and send data.
 })

@@ -839,7 +839,7 @@ const (
 var {{ camelize .Name }}Enum []any
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -859,7 +859,7 @@ var {{ camelize .Name }}ItemsEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" .Items }}
-  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .ItemsEnum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -881,7 +881,7 @@ var {{ camelize .Name }}ValueEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -965,7 +965,7 @@ var {{ camelize $.Name }}Type{{ .GoName }}PropEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -997,7 +997,7 @@ func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else 
 var {{ camelize $.Name }}{{ .GoName }}ItemsEnum []any
 func init() {
   var res []{{ template "dereffedSchemaType" .Items }}
-  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .ItemsEnum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1018,7 +1018,7 @@ var {{ camelize $.Name }}Type{{ .GoName }}PropEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" .AdditionalItems }}
-  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .AdditionalItems.Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1041,7 +1041,7 @@ var {{ camelize $.Name }}{{ .GoName }}ValueEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1099,7 +1099,7 @@ var {{ camelize $.Name }}Type{{ .GoName }}PropEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1120,7 +1120,7 @@ var {{ camelize $.Name }}{{ .GoName }}ItemsEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" .Items }}
-  if err := json.Unmarshal([]byte(`{{ json .ItemsEnum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .ItemsEnum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1141,7 +1141,7 @@ var {{ camelize $.Name }}Type{{ .GoName }}PropEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" .AdditionalItems }}
-  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .AdditionalItems.Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1162,7 +1162,7 @@ func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else 
 var {{ camelize $.Name }}{{ .GoName }}ValueEnum []any
 func init() {
   var res []{{ template "dereffedSchemaType" . }}
-  if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {
@@ -1205,7 +1205,7 @@ var {{ camelize .Name }}ItemsEnum []any
 
 func init() {
   var res []{{ template "dereffedSchemaType" .AdditionalItems }}
-  if err := json.Unmarshal([]byte(`{{ json .AdditionalItems.Enum }}`), &res); err != nil {
+  if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .AdditionalItems.Enum) }}`), &res); err != nil {
     panic(err)
   }
   for _, v := range res {

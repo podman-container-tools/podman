@@ -333,6 +333,21 @@ func (o *PlayOptions) GetUserns() string {
 	return *o.Userns
 }
 
+// WithValidate set field Validate to given value
+func (o *PlayOptions) WithValidate(value string) *PlayOptions {
+	o.Validate = &value
+	return o
+}
+
+// GetValidate returns value of field Validate
+func (o *PlayOptions) GetValidate() string {
+	if o.Validate == nil {
+		var z string
+		return z
+	}
+	return *o.Validate
+}
+
 // WithForce set field Force to given value
 func (o *PlayOptions) WithForce(value bool) *PlayOptions {
 	o.Force = &value

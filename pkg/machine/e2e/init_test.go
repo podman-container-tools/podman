@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -741,6 +742,37 @@ var _ = Describe("podman machine init", func() {
 			}
 			Expect(p).To(Equal(l.VMType))
 		}
+	})
+
+	It("init with read-only image should succeed", func() {
+		// Step 1: create temp image
+		img := filepath.Join(GinkgoT().TempDir(), "test.qcow2")
+
+		// Step 2: copy existing image and make it read-only
+		src, err := os.Open(mb.imagePath)
+		Expect(err).ToNot(HaveOccurred())
+
+		dst, err := os.Create(img)
+		Expect(err).ToNot(HaveOccurred())
+
+		_, err = io.Copy(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = dst.Close()
+		Expect(err).ToNot(HaveOccurred())
+
+		err = src.Close()
+		Expect(err).ToNot(HaveOccurred())
+
+		err = os.Chmod(img, 0o444)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Step 3: run podman machine init
+		i := new(initMachine)
+		session, err := mb.setCmd(i.withImage(img)).run()
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(session).To(Exit(0))
 	})
 })
 

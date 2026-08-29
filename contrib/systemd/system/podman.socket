@@ -5,6 +5,7 @@ Documentation=man:podman-system-service(1)
 [Socket]
 ListenStream=%t/podman/podman.sock
 SocketMode=0660
+DirectoryMode=0700
 
 [Install]
 WantedBy=sockets.target

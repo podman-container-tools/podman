@@ -245,11 +245,14 @@ func TestLockSemaphoreActuallyLocks(t *testing.T) {
 		// Get the current time
 		startTime := time.Now()
 
+		lockAcquired := make(chan struct{})
+
 		// Start a goroutine to take the lock and then release it after
 		// a second.
 		go func() {
 			err := locks.LockSemaphore(0)
 			assert.NoError(t, err)
+			close(lockAcquired)
 
 			time.Sleep(1 * time.Second)
 
@@ -257,9 +260,8 @@ func TestLockSemaphoreActuallyLocks(t *testing.T) {
 			assert.NoError(t, err)
 		}()
 
-		// Sleep for a quarter of a second to give the goroutine time
-		// to kick off and grab the lock
-		time.Sleep(250 * time.Millisecond)
+		// Wait until the goroutine has acquired the lock.
+		<-lockAcquired
 
 		// Take the lock
 		err := locks.LockSemaphore(0)

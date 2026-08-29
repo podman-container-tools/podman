@@ -108,7 +108,7 @@ END_ADVICE
 sub unremoved_skips {
     my $issues = join('|', @_);
 
-    my $re = "(^\\s\+skip|fixme).*#($issues)[^0-9]";
+    my $re = "(^\\s\+skip|fixme).*#($issues)([^0-9]|\$)";
     # FIXME FIXME FIXME: use File::Find instead of enumerating directories
     # (the important thing here is to exclude vendor)
     my @grep = ('grep', '-E', '-rin', $re, "test", "cmd", "libpod", "pkg");

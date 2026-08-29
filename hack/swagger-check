@@ -132,22 +132,79 @@ sub finder {
     open my $in, '<', $path
         or die "$ME: Cannot read $path: $!\n";
     my @comments;
+    my @handles;
+    my %prefix;
     while (my $line = <$in>) {
-        if ($line =~ m!^\s*//!) {
-            push @comments, $line;
+        # Routes may be registered on a subrouter, in which case the path passed to
+        # Handle() is relative to the subrouter's prefix:
+        #     v4 := r.PathPrefix("/v{version:...}/libpod/manifests").Subrouter()
+        #     v4.Handle("/{name}/registry/{destination}", ...)
+        # Remember the prefix so the full endpoint can be reassembled below. The
+        # version element is dropped, just as VersionedPath() is ignored.
+        if ($line =~ m!^\s*(\w+)\s*:=\s*\w+\.PathPrefix\("([^"]+)"\)\.Subrouter\(\)!) {
+            my ($var, $pfx) = ($1, $2);
+            $pfx =~ s!^/v\{version:[^\}]*\}!!;
+            $prefix{$var} = $pfx;
+            next;
         }
-        else {
-            # Not a comment line. If it's an r.Handle*() one, process it.
-            if ($line =~ m!^\s*r\.Handle(Func)?\(!) {
-                handle_handle($path, $line, @comments)
-                    or $exit_status = 1;
-            }
 
-            # Reset comments
-            @comments = ();
+        if ($line =~ m!^\s*//!) {
+            # A comment following a run of Handle()s begins a new block.
+            if (@handles) {
+                handle_handles($path, \@handles, \@comments)
+                    or $exit_status = 1;
+                @handles  = ();
+                @comments = ();
+            }
+            push @comments, $line;
+            next;
         }
+
+        # A single swagger comment may cover several consecutive Handle() lines,
+        # e.g. the v3 and v4 registrations of one logical endpoint. Collect the run.
+        if ($line =~ m!^\s*(\w+)\.Handle(Func)?\(!) {
+            push @handles, [ $line, $prefix{$1} // '' ];
+            next;
+        }
+
+        # Any other line ends the block.
+        if (@handles) {
+            handle_handles($path, \@handles, \@comments)
+                or $exit_status = 1;
+        }
+        @handles  = ();
+        @comments = ();
+    }
+    if (@handles) {
+        handle_handles($path, \@handles, \@comments)
+            or $exit_status = 1;
     }
     close $in;
+}
+
+
+####################
+#  handle_handles  #  Check one swagger comment against a run of route registrations
+####################
+#
+# A swagger comment may precede more than one consecutive route registration,
+# e.g. the v3 and v4 spellings of the same endpoint. The comment is correct if
+# it describes any one of them.
+#
+# Returns false only if none of the registrations match.
+#
+sub handle_handles {
+    my ($path, $handles, $comments) = @_;
+
+    return 1 if !@$handles;
+    return 1 if !grep { /swagger:operation/ } @$comments;
+
+    for my $h (@$handles) {
+        return 1 if handle_handle($path, $h->[0], $h->[1], 1, @$comments);
+    }
+
+    # Nothing matched; report the discrepancy against the first registration.
+    return handle_handle($path, $handles->[0][0], $handles->[0][1], 0, @$comments);
 }
 
 
@@ -161,13 +218,15 @@ sub finder {
 sub handle_handle {
     my $path     = shift;               # for error messages only
     my $line     = shift;               # in: the r.Handle* line
+    my $prefix   = shift;               # in: subrouter path prefix, or ''
+    my $quiet    = shift;               # in: if true, don't report a mismatch
     my @comments = @_;                  # in: preceding comment lines
 
     # Preserve the original line, so we can show it in comments
     my $line_orig = $line;
 
     # Strip off the 'r.Handle*(' and leading whitespace; preserve the latter
-    $line =~ s!^(\s*)r\.Handle(Func)?\(!!
+    $line =~ s!^(\s*)\w+\.Handle(Func)?\(!!
         or die "$ME: INTERNAL ERROR! Got '$line'!\n";
     my $indent = $1;
 
@@ -176,12 +235,12 @@ sub handle_handle {
     $line =~ s!^VersionedPath\(([^\)]+)\)!$1!;
     $line =~ m!^"(/[^"]+)",!
         or die "$ME: $path:$.: Cannot grok '$line'\n";
-    my $endpoint = $1;
+    my $endpoint = $prefix . $1;
 
     # Some function declarations require an argument of the form '{name:.*}'
     # but the swagger (which gets derived from the comments) should not
     # include them. Normalize all such args to just '{name}'.
-    $endpoint =~ s/\{name:\.\*\}/\{name\}/;
+    $endpoint =~ s/\{(\w+):[^\}]*\}/\{$1\}/g;
 
     # e.g. /auth, /containers/*/rename, /distribution, /monitor, /plugins
     return 1 if $line =~ /\.UnsupportedHandler/;
@@ -196,7 +255,7 @@ sub handle_handle {
     elsif ($line =~ m!\.Methods\((.*)\)!) {
         my $x = $1;
 
-        if ($x =~ /Method(Post|Get|Delete|Head)/) {
+        if ($x =~ /Method(Post|Get|Delete|Head|Put)/) {
             $method = uc $1;
         }
         elsif ($x =~ /\"(HEAD|GET|POST)"/) {
@@ -238,7 +297,8 @@ sub handle_handle {
     #
     # Compare actual swagger comment to what we expect based on Handle call.
     #
-    my $expect = " // swagger:operation $method $endpoint $tag $operation ";
+    my @expect = map { " // swagger:operation $method $endpoint $tag $_ " } @$operation;
+    my $expect = $expect[0];
     my @actual = grep { /swagger:operation/ } @comments;
 
     return 1 if !@actual;         # No swagger comment in file; oh well
@@ -248,7 +308,8 @@ sub handle_handle {
     # (Ignore whitespace discrepancies)
     (my $a_trimmed = $actual) =~ s/\s+/ /g;
 
-    return 1 if $a_trimmed eq $expect;
+    return 1 if grep { $a_trimmed eq $_ } @expect;
+    return 0 if $quiet;
 
     # Mismatch. Display it. Start with filename, if different from previous
     print "\n";
@@ -289,6 +350,23 @@ sub handle_handle {
 ####################
 sub operation_name {
     my ($method, $endpoint) = @_;
+
+    # A few operation names cannot be derived from method + path. The manifests
+    # handlers use v3 and v4 subrouters that register the same path, so one
+    # method+path pair can legitimately map to more than one operation, and some
+    # names (Push for .../registry/..., Create for POST on {name}) simply do not
+    # follow the usual pattern. List the acceptable names explicitly.
+    my %exception = (
+        'POST /libpod/manifests/{name}/push'                   => ['ManifestPushV3Libpod'],
+        'POST /libpod/manifests/{name}/registry/{destination}' => ['ManifestPushLibpod'],
+        'POST /libpod/manifests/{name}'                        => ['ManifestCreateLibpod'],
+        'PUT /libpod/manifests/{name}'                         => ['ManifestModifyLibpod'],
+        'DELETE /libpod/manifests/{name}'                      => ['ManifestDeleteV3Libpod',
+                                                                   'ManifestDeleteLibpod'],
+    );
+    if (my $names = $exception{"$method $endpoint"}) {
+        return $names;
+    }
 
     # /libpod/foo/bar -> (libpod, foo, bar)
     my @endpoints = grep { /\S/ } split '/', $endpoint;
@@ -353,7 +431,7 @@ sub operation_name {
         $action .= 's' if $action eq 'event';
     }
 
-    return "\u${main}\u${action}$Libpod";
+    return [ "\u${main}\u${action}$Libpod" ];
 }
 
 

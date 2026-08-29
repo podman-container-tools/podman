@@ -297,12 +297,9 @@ func sshClient(_url *url.URL, uri string, identity string, machine bool) (Connec
 		val := strings.TrimSuffix(b.String(), "\n")
 		_url.Path = val
 	}
-	dialContext := func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return ssh.DialNetContext(ctx, conn, "unix", _url)
-	}
 	connection.Client = &http.Client{
 		Transport: &http.Transport{
-			DialContext: dialContext,
+			DialContext: newSSHDialContext(conn, _url),
 		},
 	}
 	return connection, nil

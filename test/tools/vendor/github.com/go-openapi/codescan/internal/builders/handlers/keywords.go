@@ -37,14 +37,13 @@ var simpleSchemaAllowed = map[string]struct{}{
 	grammar.KwRequired:         {},
 }
 
-// IsSimpleSchemaKeyword reports whether keyword is legal on an OAS
-// v2 SimpleSchema site. Returns false for full-Schema-only keywords
-// (`readOnly`, `discriminator`, `$ref`, `allOf`, ...) and for unknown
-// names.
+// IsSimpleSchemaKeyword reports whether keyword is legal on an OAS v2 SimpleSchema site.
 //
-// Consumers wired in SimpleSchema mode (the schema builder under
-// WithSimpleSchema, the parameters dispatcher, the responses
-// dispatcher) use this predicate to gate writes and emit
+// Returns false for full-Schema-only keywords (`readOnly`, `discriminator`, `$ref`, `allOf`, ...)
+// and for unknown names.
+//
+// Consumers wired in SimpleSchema mode (the schema builder under WithSimpleSchema, the parameters
+// dispatcher, the responses dispatcher) use this predicate to gate writes and emit
 // CodeUnsupportedInSimpleSchema diagnostics on miss.
 func IsSimpleSchemaKeyword(keyword string) bool {
 	_, ok := simpleSchemaAllowed[keyword]

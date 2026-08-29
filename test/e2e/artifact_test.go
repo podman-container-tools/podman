@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,6 +52,24 @@ var _ = Describe("Podman artifact", func() {
 		Expect(output).To(ContainElement(artifact1Name))
 		Expect(output).To(ContainElement(artifact2Name))
 
+		// --format=json should work, produce valid json
+		listFormatJsonSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--format", "json")
+		Expect(listFormatJsonSession).Should(ExitCleanly())
+		jsonOutput := listFormatJsonSession.OutputToString()
+		Expect(jsonOutput).To(BeValidJSON())
+
+		// --format=json should contain repository and tag fields
+		jsonArtifactsList := []map[string]any{}
+		jsonUnmarshalErr := json.Unmarshal([]byte(jsonOutput), &jsonArtifactsList)
+
+		Expect(jsonUnmarshalErr).ToNot(HaveOccurred())
+		Expect(jsonArtifactsList).ToNot(BeEmpty())
+
+		for _, image := range jsonArtifactsList {
+			Expect(image).To(HaveKey("Repository"))
+			Expect(image).To(HaveKey("Tag"))
+		}
+
 		// Check default digest length (should be 12)
 		defaultFormatSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--format", "{{.Digest}}")
 		defaultOutput := defaultFormatSession.OutputToStringArray()[0]
@@ -67,6 +86,30 @@ var _ = Describe("Podman artifact", func() {
 		noHeaderOutput := noHeaderSession.OutputToStringArray()
 		Expect(noHeaderOutput).To(HaveLen(2))
 		Expect(noHeaderOutput).ToNot(ContainElement("REPOSITORY"))
+
+		// check with --quiet and verify only the (truncated) digests are printed
+		quietSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--quiet")
+		quietOutput := quietSession.OutputToStringArray()
+		Expect(quietOutput).To(HaveLen(2))
+		Expect(quietOutput).ToNot(ContainElement("REPOSITORY"))
+		Expect(quietOutput).To(ContainElement(defaultOutput))
+		for _, digest := range quietOutput {
+			Expect(digest).To(HaveLen(12))
+		}
+
+		// check with --quiet and --no-trunc combined and verify full (non-truncated) digests are printed
+		quietNoTruncSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--quiet", "--no-trunc")
+		quietNoTruncOutput := quietNoTruncSession.OutputToStringArray()
+		Expect(quietNoTruncOutput).To(HaveLen(2))
+		Expect(quietNoTruncOutput).ToNot(ContainElement("REPOSITORY"))
+		for _, digest := range quietNoTruncOutput {
+			Expect(digest).To(HaveLen(len(add1.OutputToString())))
+		}
+
+		// check --quiet and --format together are rejected
+		quietFormatSession := podmanTest.Podman([]string{"artifact", "ls", "--quiet", "--format", "{{.Repository}}"})
+		quietFormatSession.WaitWithDefaultTimeout()
+		Expect(quietFormatSession).To(ExitWithError(125, "quiet and format flags cannot be used together"))
 
 		// Check if .VirtualSize is reported correctly
 		virtualSizeFormatSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--format", "{{.VirtualSize}}")

@@ -68,7 +68,7 @@ func InspectSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	ic := abi.ContainerEngine{Libpod: runtime}
 	opts := entities.SecretInspectOptions{}
-	opts.ShowSecret = query.ShowSecret
+	opts.ShowSecret = query.ShowSecret && utils.IsLibpodRequest(r)
 
 	reports, errs, err := ic.SecretInspect(r.Context(), names, opts)
 	if err != nil {

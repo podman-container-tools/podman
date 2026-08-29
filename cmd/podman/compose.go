@@ -26,7 +26,7 @@ var composeCommand = &cobra.Command{
 
 The default compose providers are docker-compose and podman-compose.  If installed, docker-compose takes precedence since it is the original implementation of the Compose specification and is widely used on the supported platforms (i.e., Linux, Mac OS, Windows).
 
-If you want to change the default behavior or have a custom installation path for your provider of choice, please change the compose_providers field in containers.conf(5) to compose_providers = ["/path/to/provider"]. You may also set the PODMAN_COMPOSE_PROVIDER environment variable.`,
+If you want to change the default behavior or have a custom installation path for your provider of choice, please change the compose_providers field in the ` + "`[engine]`" + ` table of containers.conf(5) to compose_providers = ["/path/to/provider"]. You may also set the PODMAN_COMPOSE_PROVIDER environment variable.`,
 	RunE:              composeMain,
 	ValidArgsFunction: composeCompletion,
 	Example: `podman compose -f nginx.yaml up --detach
@@ -92,7 +92,7 @@ func composeProvider() (string, error) {
 		lookupErrors = append(lookupErrors, err)
 	}
 
-	return "", fmt.Errorf("looking up compose provider failed\n%v", errorhandling.JoinErrors(lookupErrors))
+	return "", fmt.Errorf("looking up compose provider failed\n%w", errorhandling.JoinErrors(lookupErrors))
 }
 
 // composeDockerHost returns the value to be set in the DOCKER_HOST environment
@@ -219,7 +219,8 @@ func composeProviderExec(args []string, stdout io.Writer, stderr io.Writer, warn
 
 	if err := cmd.Run(); err != nil {
 		// Make sure podman returns with the same exit code as the compose provider.
-		if exitErr, isExit := err.(*exec.ExitError); isExit {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			registry.SetExitCode(exitErr.ExitCode())
 		}
 		// Format the error to make it explicit that error did not come

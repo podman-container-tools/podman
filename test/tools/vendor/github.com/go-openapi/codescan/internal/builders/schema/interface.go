@@ -29,8 +29,7 @@ func (s *Builder) buildFromInterface(decl *scanner.EntityDecl, it *types.Interfa
 		copy(flist, specType.Methods.List)
 	}
 
-	// First collect the embedded interfaces
-	// create refs when:
+	// First collect the embedded interfaces create refs when:
 	//
 	//   1. the embedded interface is decorated with an allOf annotation
 	//   2. the embedded interface is an alias
@@ -56,8 +55,8 @@ func (s *Builder) buildFromInterface(decl *scanner.EntityDecl, it *types.Interfa
 	}
 	target.Typed("object", "")
 
-	// Cross-ref linkage: same divergence guard as buildFromStruct — methods
-	// landing in a fresh allOf member resolve to schema's anchor.
+	// Cross-ref linkage: same divergence guard as buildFromStruct — methods landing in a fresh allOf
+	// member resolve to schema's anchor.
 	if target != schema {
 		defer s.repath("")()
 	}
@@ -131,7 +130,7 @@ func (s *Builder) buildNamedInterface(
 
 	var newSch oaispec.Schema
 	// when the embedded struct is annotated with swagger:allOf it will be used as allOf property
-	// otherwise the fields will just be included as normal properties
+	// otherwise the fields will just be included as normal properties.
 	if err = s.buildAllOf(o.Type(), &newSch); err != nil {
 		return hasAllOf, err
 	}

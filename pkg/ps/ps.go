@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -376,9 +375,12 @@ func getNamespaceInfo(path string) (string, error) {
 
 // getStrFromSquareBrackets gets the string inside [] from a string.
 func getStrFromSquareBrackets(cmd string) string {
-	reg := regexp.MustCompile(`.*\[|\].*`)
-	arr := strings.Split(reg.ReplaceAllLiteralString(cmd, ""), ",")
-	return strings.Join(arr, ",")
+	start := strings.IndexByte(cmd, '[')
+	end := strings.IndexByte(cmd, ']')
+	if start != -1 && end != -1 && end > start {
+		return cmd[start+1 : end]
+	}
+	return cmd
 }
 
 // SortContainers helps us set-up ability to sort by createTime

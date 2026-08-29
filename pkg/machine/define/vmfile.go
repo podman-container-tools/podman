@@ -58,7 +58,7 @@ func (m *VMFile) ReadMagicNumber(n int) ([]byte, error) {
 	defer f.Close()
 	b := make([]byte, n)
 	n, err = io.ReadFull(f, b)
-	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 		return b[:n], err
 	} else {
 		return b[:n], nil

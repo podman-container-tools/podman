@@ -246,10 +246,10 @@ func setConstraints(key *AddedKey, constraintBytes []byte) error {
 // on arbitrary inputs; the CRT coefficient recomputation is cubic in
 // |p| and can consume excessive CPU on oversized keys.
 func checkRSAKeyParams(N, E, P, Q *big.Int) error {
-	if N.BitLen() > 8192 {
+	if N.BitLen() > 16384 {
 		return errors.New("agent: RSA modulus too large")
 	}
-	if P.BitLen() > 4096 || Q.BitLen() > 4096 {
+	if P.BitLen() > 8192 || Q.BitLen() > 8192 {
 		return errors.New("agent: RSA prime too large")
 	}
 	if E.BitLen() > 24 {

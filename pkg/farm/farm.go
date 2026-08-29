@@ -272,7 +272,10 @@ func (f *Farm) Build(ctx context.Context, schedule Schedule, options entities.Bu
 		authfile:      options.Authfile,
 		skipTLSVerify: options.SkipTLSVerify,
 	}
-	manifestListBuilder := newManifestListBuilder(reference, f.localEngine, listBuilderOptions)
+	manifestListBuilder, err := newManifestListBuilder(reference, f.localEngine, listBuilderOptions)
+	if err != nil {
+		return fmt.Errorf("failed to create manifest list %q: %w", reference, err)
+	}
 
 	// Start builds in parallel and wait for them all to finish.
 	var (

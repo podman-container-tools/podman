@@ -145,6 +145,8 @@ func (matcher *exitCleanlyMatcher) NegatedFailureMessage(_ any) (message string)
 
 type ValidJSONMatcher struct {
 	types.GomegaMatcher
+	// err is why the input was not valid JSON, reported in FailureMessage.
+	err error
 }
 
 func BeValidJSON() *ValidJSONMatcher {
@@ -159,13 +161,17 @@ func (matcher *ValidJSONMatcher) Match(actual any) (success bool, err error) {
 
 	var i any
 	if err := json.Unmarshal([]byte(s), &i); err != nil {
-		return false, err
+		// Not valid JSON is a mismatch, not a failure to evaluate. Returning
+		// the error here makes ToNot(BeValidJSON()) fail on exactly the input
+		// it is meant to accept, so keep it for FailureMessage instead.
+		matcher.err = err
+		return false, nil //nolint:nilerr // reported by FailureMessage
 	}
 	return true, nil
 }
 
 func (matcher *ValidJSONMatcher) FailureMessage(actual any) (message string) {
-	return format.Message(actual, "to be valid JSON")
+	return format.Message(actual, fmt.Sprintf("to be valid JSON: %v", matcher.err))
 }
 
 func (matcher *ValidJSONMatcher) NegatedFailureMessage(actual any) (message string) {

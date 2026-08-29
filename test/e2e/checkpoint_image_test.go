@@ -5,6 +5,7 @@ package integration
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -61,7 +62,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeFalse())
+		Expect(session.OutputToStringArray()).ToNot(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Check if none of the checkpoint/restore specific information is displayed
 		// for newly started containers.
@@ -94,7 +95,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeTrue())
+		Expect(session.OutputToStringArray()).To(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Check if the checkpoint image contains annotations
 		inspect = podmanTest.Podman([]string{"inspect", checkpointImage})
@@ -159,7 +160,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeFalse())
+		Expect(session.OutputToStringArray()).ToNot(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		result := podmanTest.Podman([]string{"container", "checkpoint", "--create-image", checkpointImage, "--keep", containerID})
 		result.WaitWithDefaultTimeout()
@@ -172,7 +173,7 @@ var _ = Describe("Podman checkpoint", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("localhost/"+checkpointImage, "latest")).To(BeTrue())
+		Expect(session.OutputToStringArray()).To(ContainElement(MatchRegexp("^" + regexp.QuoteMeta("localhost/"+checkpointImage) + `\s+latest\s`)))
 
 		// Remove existing container
 		result = podmanTest.Podman([]string{"rm", "-t", "1", "-f", containerID})

@@ -79,7 +79,7 @@ type Authable interface{
   // Applies when the Authorization header is set with the Basic scheme
   {{ pascalize .ID }}Auth(user string, password string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error)
     {{- else if .IsAPIKeyAuth }}
-  // Applies when the "{{ .Name }}" {{ .Source }} is set
+  // Applies when the "{{ escapeDoubleQuoted .Name }}" {{ escapeDoubleQuoted .Source }} is set
   {{ pascalize .ID }}Auth(token string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error)
     {{- else if .IsOAuth2 }}
   {{ pascalize .ID }}Auth(token string, scopes []string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error)
@@ -146,7 +146,7 @@ func configureAPI(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) http.Handl
   }
 
     {{- else if .IsAPIKeyAuth }}
-  // Applies when the "{{ .Name }}" {{ .Source }} is set
+  // Applies when the "{{ escapeDoubleQuoted .Name }}" {{ escapeDoubleQuoted .Source }} is set
   api.{{ pascalize .ID }}Auth = func(token string) ({{ if .PrincipalIsNullable }}*{{ end }}{{.Principal}}, error) {
       return Impl.{{ pascalize .ID }}Auth(token)
   }

@@ -151,7 +151,7 @@ This option specifies the name of the farm to be used in the build process.
 
 #### **--local**, **-l**
 
-Build image on local machine as well as on farm nodes.
+Build image on local machine as well as on farm nodes (Default: true).
 
 @@option logfile
 

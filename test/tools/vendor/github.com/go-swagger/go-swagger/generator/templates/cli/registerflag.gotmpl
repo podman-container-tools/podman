@@ -6,7 +6,7 @@
         {{- $fullDescription = printf "Required. %v" $fullDescription}}
     {{- end}}
     {{- if .Enum }}
-        {{- $fullDescription = printf "Enum: %v. %v" (json .Enum) $fullDescription}}
+        {{- $fullDescription = printf "Enum: %v. %v" (escapeBackticks (json .Enum)) $fullDescription}}
     {{- end }}
     {{ flagDescriptionVar .Name }} := `{{ $fullDescription }}`
 {{ end }}
@@ -36,7 +36,7 @@
 if err := cmd.RegisterFlagCompletionFunc({{ flagNameVar .Name }},
     func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
         var res []string
-        if err := json.Unmarshal([]byte(`{{ json .Enum }}`), &res); err != nil {
+        if err := json.Unmarshal([]byte(`{{ escapeBackticks (json .Enum) }}`), &res); err != nil {
             panic(err)
         }
 		return res, cobra.ShellCompDirectiveDefault

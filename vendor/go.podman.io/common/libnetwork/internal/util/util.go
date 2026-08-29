@@ -8,7 +8,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
-	"go.podman.io/common/pkg/config"
 )
 
 // GetBridgeInterfaceNames returns all bridge interface names
@@ -75,71 +74,4 @@ func GetUsedSubnets(n NetUtil) ([]*net.IPNet, error) {
 		return nil, err
 	}
 	return append(subnets, liveSubnets...), nil
-}
-
-// GetFreeIPv4NetworkSubnet returns a unused ipv4 subnet.
-func GetFreeIPv4NetworkSubnet(usedNetworks []*net.IPNet, subnetPools []config.SubnetPool) (*types.Subnet, error) {
-	var err error
-	for _, pool := range subnetPools {
-		// make sure to copy the netip to prevent overwriting the subnet pool
-		netIP := make(net.IP, net.IPv4len)
-		copy(netIP, pool.Base.IP)
-		network := &net.IPNet{
-			IP:   netIP,
-			Mask: net.CIDRMask(pool.Size, 32),
-		}
-		for pool.Base.Contains(network.IP) {
-			if !NetworkIntersectsWithNetworks(network, usedNetworks) {
-				logrus.Debugf("found free ipv4 network subnet %s", network.String())
-				return &types.Subnet{
-					Subnet: types.IPNet{IPNet: *network},
-				}, nil
-			}
-			network, err = NextSubnet(network)
-			if err != nil {
-				// when error go to next pool, we return the error only when all pools are done
-				break
-			}
-		}
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	return nil, errors.New("could not find free subnet from subnet pools")
-}
-
-// GetFreeIPv6NetworkSubnet returns a unused ipv6 subnet.
-func GetFreeIPv6NetworkSubnet(usedNetworks []*net.IPNet) (*types.Subnet, error) {
-	// FIXME: Is 10000 fine as limit? We should prevent an endless loop.
-	for range 10000 {
-		// RFC4193: Choose the ipv6 subnet random and NOT sequentially.
-		network, err := getRandomIPv6Subnet()
-		if err != nil {
-			return nil, err
-		}
-		if intersectsConfig := NetworkIntersectsWithNetworks(&network, usedNetworks); !intersectsConfig {
-			logrus.Debugf("found free ipv6 network subnet %s", network.String())
-			return &types.Subnet{
-				Subnet: types.IPNet{IPNet: network},
-			}, nil
-		}
-	}
-	return nil, errors.New("failed to get random ipv6 subnet")
-}
-
-// MapDockerBridgeDriverOptions docker driver network options to podman network options.
-func MapDockerBridgeDriverOptions(n *types.Network) {
-	// validate the given options
-	for key, value := range n.Options {
-		switch key {
-		case "com.docker.network.driver.mtu":
-			n.Options[types.MTUOption] = value
-			delete(n.Options, "com.docker.network.driver.mtu")
-
-		case "com.docker.network.bridge.name":
-			n.NetworkInterface = value
-			delete(n.Options, "com.docker.network.bridge.name")
-		}
-	}
 }

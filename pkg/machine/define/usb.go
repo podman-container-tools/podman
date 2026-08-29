@@ -57,12 +57,12 @@ func ParseUSBs(usbs []string) ([]USBConfig, error) {
 
 			vendor, err := strconv.ParseInt(vendorStr, 16, 0)
 			if err != nil {
-				return configs, fmt.Errorf("usb: fail to convert vendor of %s: %s", str, err)
+				return configs, fmt.Errorf("usb: fail to convert vendor of %s: %w", str, err)
 			}
 
 			product, err := strconv.ParseInt(productStr, 16, 0)
 			if err != nil {
-				return configs, fmt.Errorf("usb: fail to convert product of %s: %s", str, err)
+				return configs, fmt.Errorf("usb: fail to convert product of %s: %w", str, err)
 			}
 
 			configs = append(configs, USBConfig{
