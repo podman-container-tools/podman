@@ -495,6 +495,9 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		)
 		_ = cmd.RegisterFlagCompletionFunc(chrootDirsFlagName, completion.AutocompleteDefault)
 
+		passwdFlagName := "passwd"
+		createFlags.BoolVar(&cf.Passwd, passwdFlagName, true, "add entries to /etc/passwd and /etc/group")
+
 		passwdEntryName := "passwd-entry"
 		createFlags.StringVar(&cf.PasswdEntry, passwdEntryName, "", "Entry to write to /etc/passwd")
 		_ = cmd.RegisterFlagCompletionFunc(passwdEntryName, completion.AutocompleteNone)

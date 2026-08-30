@@ -645,7 +645,8 @@ cat >$HEALTHCHECK_INHERIT_TMPD/Dockerfile <<EOF
 FROM $IMAGE
 HEALTHCHECK --interval=99s --timeout=98s --start-period=97s --start-interval=96s --retries=95 CMD true
 EOF
-podman build -t healthcheck_inherit $HEALTHCHECK_INHERIT_TMPD &>/dev/null
+# HEALTHCHECK is only recorded in the docker image format, the oci default drops it
+podman build --format docker -t healthcheck_inherit $HEALTHCHECK_INHERIT_TMPD &>/dev/null
 
 # empty Test inherits the image healthcheck unchanged (all fields preserved)
 t POST containers/create Image=healthcheck_inherit Cmd='["top"]' Healthcheck='{"Test":[]}' 201 \

@@ -292,11 +292,8 @@ var _ = Describe("Podman ps", func() {
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 		Expect(result.OutputToString()).To(BeValidJSON())
-		// must contain "Status"
-		match, StatusLine := result.GrepString(`Status`)
-		Expect(match).To(BeTrue(), "found 'Status'")
-		// we waited for container to exit, so this must contain `Exited`
-		Expect(StatusLine[0]).To(ContainSubstring("Exited"))
+		// we waited for container to exit, so the Status line must contain Exited
+		Expect(result.OutputToStringArray()).To(ContainElement(MatchRegexp(`Status.*Exited`)))
 	})
 
 	It("podman ps namespace flag with go template format", func() {

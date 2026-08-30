@@ -72,7 +72,7 @@ func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, pr
 
 	resources := ctnr.LinuxResources()
 	memoryLimit := cgroupStat.MemoryStats.Usage.Limit
-	if resources != nil && resources.Memory != nil && *resources.Memory.Limit > 0 {
+	if resources != nil && resources.Memory != nil && resources.Memory.Limit != nil && *resources.Memory.Limit > 0 {
 		memoryLimit = uint64(*resources.Memory.Limit)
 	}
 

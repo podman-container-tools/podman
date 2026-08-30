@@ -90,10 +90,9 @@ func Inspect(ctx context.Context, name string, options *InspectOptions) (*manife
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 
@@ -128,10 +127,9 @@ func InspectListData(ctx context.Context, name string, options *InspectOptions) 
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 

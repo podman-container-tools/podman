@@ -727,7 +727,8 @@ ginkgo-remote:
 # bindings tests need access to podman-registry
 testbindings: PATH := $(PATH):$(CURDIR)/hack
 testbindings: .install.ginkgo
-	$(GINKGO) -v $(TESTFLAGS) --tags "$(TAGS) remote" $(GINKGOTIMEOUT) --trace --no-color --timeout 30m  -v -r ./pkg/bindings/test
+	$(GINKGO) -v $(TESTFLAGS) --tags "$(TAGS) remote" $(GINKGOTIMEOUT) --trace --no-color --timeout 30m \
+		$(if $(findstring y,$(GINKGO_PARALLEL)),-p,) -r ./pkg/bindings/test
 
 .PHONY: localintegration
 localintegration: test-binaries ginkgo ## Run integration tests locally (test/e2e/)

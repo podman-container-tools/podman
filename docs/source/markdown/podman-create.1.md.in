@@ -287,6 +287,8 @@ This option conflicts with **--add-host**.
 
 @@option os.pull
 
+@@option passwd
+
 @@option passwd-entry
 
 @@option personality

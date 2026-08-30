@@ -1942,21 +1942,21 @@ func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string)
 		// a bizarre issue where something copier.Get will ENOENT on
 		// empty directories and sometimes it will not.
 		// RHBZ#1928643
-		srcContents, err := os.ReadDir(srcDir)
+		srcEmpty, err := isDirEmpty(srcDir)
 		if err != nil {
 			return nil, fmt.Errorf("reading contents of source directory for copy up into volume %s: %w", vol.Name(), err)
 		}
-		if len(srcContents) == 0 {
+		if srcEmpty {
 			return vol, nil
 		}
 
 		// If the volume is not empty, we should not copy up.
 		volMount := vol.mountPoint()
-		contents, err := os.ReadDir(volMount)
+		volEmpty, err := isDirEmpty(volMount)
 		if err != nil {
 			return nil, fmt.Errorf("listing contents of volume %s mountpoint when copying up from container %s: %w", vol.Name(), c.ID(), err)
 		}
-		if len(contents) > 0 {
+		if !volEmpty {
 			// The volume is not empty. It was likely modified
 			// outside of Podman. For safety, let's not copy up into
 			// it. Fixes CVE-2020-1726.

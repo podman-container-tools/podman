@@ -39,13 +39,9 @@ var _ = Describe("Podman trust", Ordered, func() {
 		Expect(session).Should(ExitCleanly())
 		var teststruct map[string][]map[string]string
 		policyContent, err := os.ReadFile(policyJSON)
-		if err != nil {
-			os.Exit(1)
-		}
+		Expect(err).ToNot(HaveOccurred())
 		err = json.Unmarshal(policyContent, &teststruct)
-		if err != nil {
-			os.Exit(1)
-		}
+		Expect(err).ToNot(HaveOccurred())
 		Expect(teststruct["default"][0]).To(HaveKeyWithValue("type", "insecureAcceptAnything"))
 	})
 

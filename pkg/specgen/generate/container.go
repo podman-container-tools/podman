@@ -320,7 +320,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		s.SeccompProfilePath = p
 	}
 
-	if len(s.User) == 0 && inspectData != nil {
+	if len(s.User) == 0 && inspectData != nil && !s.UserNS.IsKeepID() {
 		s.User = inspectData.Config.User
 	}
 	// Unless already set via the CLI, check if we need to disable process

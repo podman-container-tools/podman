@@ -3035,12 +3035,12 @@ func (c *Container) fixVolumePermissionsUnlocked(v *ContainerNamedVolume, vol *V
 	// If the volume is not empty, and it is not the first copy-up event -
 	// we should not do a chown.
 	if vol.state.NeedsChown && !vol.state.CopiedUp {
-		contents, err := os.ReadDir(vol.mountPoint())
+		empty, err := isDirEmpty(vol.mountPoint())
 		if err != nil {
 			return fmt.Errorf("reading contents of volume %q: %w", vol.Name(), err)
 		}
 		// Not empty, do nothing and unset NeedsChown.
-		if len(contents) > 0 {
+		if !empty {
 			vol.state.NeedsChown = false
 			if err := vol.save(); err != nil {
 				return fmt.Errorf("saving volume %q state: %w", vol.Name(), err)
