@@ -225,6 +225,7 @@ END_HTML
     my $looks_like_bats;          # binary flag: for detecting BATS results
     my $looks_like_python;        #   " "   "  : for colorizing python tests
     my %bats_count;               # For summary line: count of pass/fail/skip
+    my @ginkgo_fails;             # For the tail summary: names of failed specs
 
     # When running in github, we have the commit SHA
     $git_commit = $ENV{GITHUB_SHA};
@@ -678,6 +679,8 @@ END_HTML
             $desc =~ s/^TOP-LEVEL\s*//;
             my $id = make_id("$desc $testname", 'link');
 
+            push @ginkgo_fails, $desc ? "$desc $testname" : $testname;
+
             $line = "<span class=\"log-error\">$lhs<a href='#t--$id'>$testname</a></span>";
         }
 
@@ -738,10 +741,13 @@ END_HTML
     # Grumble. Github only shows the last N lines of the log... which is
     # anti-helpful when you want a quick synopsis of what failed. Write a
     # summary at the tail, to make it easier for humans to see what went wrong.
-    if (my $fails = $bats_count{__fail_list}) {
+    my @fails;
+    push @fails, sprintf("%d %s", @$_) for @{ $bats_count{__fail_list} || [] };
+    push @fails, @ginkgo_fails;
+    if (@fails) {
         print  "\n";
-        printf "Failed tests (%d):\n", scalar(@$fails);
-        printf " - %d %s\n", @$_ for @$fails;
+        printf "Failed tests (%d):\n", scalar(@fails);
+        printf " - %s\n", $_ for @fails;
     }
 }
 

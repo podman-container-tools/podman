@@ -360,6 +360,11 @@ ok 4 blah
 <span class="timestamp">         </span>Ran 1889 of 2014 Specs in 1607.919 seconds
 <span class="timestamp">         </span><span class="ginkgo-final-fail">FAIL!</span> -- <span class="bats-passed"><b>1881</b> Passed</span> | <span class="bats-failed"><b>1</b> Failed</span> | 0 Pending | <span class="bats-skipped"><b>125</b> Skipped</span>
 
+%%%
+Failed tests (1):
+ - Podman pod create podman pod correctly sets up PIDNS
+
+
 == simple python
 
 <<<
