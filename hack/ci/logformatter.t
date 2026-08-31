@@ -33,6 +33,11 @@ while (my $line = <DATA>) {
     elsif ($line =~ /^>>>/) {
         $context = 'expect';
     }
+    elsif ($line =~ /^%%%/) {
+        # Optional: what logformatter should write to stdout, not the html
+        $context = 'stdout';
+        $tests[-1]{stdout} = [];
+    }
     elsif (@tests && $line) {
         # Handles trailing spaces in log, because we can't have actual ones.
         $line =~ s/\&TRAILINGSPACE;/ /g;
@@ -40,7 +45,7 @@ while (my $line = <DATA>) {
     }
 }
 
-plan tests => scalar(@tests);
+plan tests => scalar(@tests) + grep { $_->{stdout} } @tests;
 
 my $tempdir = tempdir("logformatter-test.XXXXXX", TMPDIR => 1, CLEANUP => !$ENV{DEBUG});
 
@@ -57,7 +62,7 @@ for my $t (@tests) {
     close $fh_out
         or die "$ME: Error writing $tempdir/$fname.txt: $!\n";
 
-    system("$FindBin::Bin/logformatter $fname <$fname.txt >/dev/null");
+    system("$FindBin::Bin/logformatter $fname <$fname.txt >$fname.stdout");
     open my $fh_in, '<', "$fname.log.html"
         or die "$ME: Fatal: $fname: logformatter did not create .log.html\n";
     my @actual;
@@ -78,6 +83,21 @@ for my $t (@tests) {
     }
 
     is_deeply \@actual, $t->{expect}, $name;
+
+    # The tail summary goes to stdout, not into the html
+    if (my $want = $t->{stdout}) {
+        open my $fh_stdout, '<', "$fname.stdout"
+            or die "$ME: Fatal: $fname: cannot read stdout: $!\n";
+        # logformatter echoes the whole log; we only care about the
+        # summary it appends at the very end.
+        my @got;
+        while (my $line = <$fh_stdout>) {
+            chomp $line;
+            push @got, $line if @got || $line =~ /^Failed tests \(/;
+        }
+        close $fh_stdout;
+        is_deeply \@got, $want, "$name (stdout)";
+    }
 }
 
 chdir '/';
