@@ -15,6 +15,25 @@ const (
 	completionDescription = `Generate shell autocompletions.
   Valid arguments are bash, zsh, fish, and powershell.
   Please refer to the man page to see how you can load these completions.`
+
+	// cobra registers the completion only for the command name itself, i.e.
+	// "podman". On Windows the binary is called podman.exe and shells such as
+	// git bash complete the command to that name before the argument
+	// completion runs, so the generated script never matches. Claim the .exe
+	// name as well, mirroring the condition cobra uses for the plain name.
+	windowsBashCompletion = `
+if [[ $(type -t compopt) = "builtin" ]]; then
+    complete -o default -F __start_%[1]s %[1]s.exe
+else
+    complete -o default -o nospace -F __start_%[1]s %[1]s.exe
+fi
+`
+
+	// Same problem as above for powershell, where podman.exe is the common
+	// way to call the binary.
+	windowsPwshCompletion = `
+Register-ArgumentCompleter -CommandName '%[1]s.exe' -ScriptBlock ${__%[2]sCompleterBlock}
+`
 )
 
 var (
@@ -65,7 +84,10 @@ func completion(cmd *cobra.Command, args []string) error {
 	var err error
 	switch args[0] {
 	case "bash":
-		err = cmd.Root().GenBashCompletionV2(w, !noDesc)
+		if err = cmd.Root().GenBashCompletionV2(w, !noDesc); err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, fmt.Sprintf(windowsBashCompletion, cmd.Root().Name()))
 	case "zsh":
 		if noDesc {
 			err = cmd.Root().GenZshCompletionNoDesc(w)
@@ -80,6 +102,13 @@ func completion(cmd *cobra.Command, args []string) error {
 		} else {
 			err = cmd.Root().GenPowerShellCompletionWithDesc(w)
 		}
+		if err != nil {
+			return err
+		}
+		// cobra sanitizes the name for the powershell variable it declares.
+		name := cmd.Root().Name()
+		nameForVar := strings.NewReplacer("-", "_", ":", "_").Replace(name)
+		_, err = io.WriteString(w, fmt.Sprintf(windowsPwshCompletion, name, nameForVar))
 	}
 
 	if err != nil {

@@ -269,4 +269,6 @@ filter __podman_escapeStringWithSpecialChars {
 
 Register-ArgumentCompleter -CommandName 'podman' -ScriptBlock ${__podmanCompleterBlock}
 
+Register-ArgumentCompleter -CommandName 'podman.exe' -ScriptBlock ${__podmanCompleterBlock}
+
 # This file is generated with "podman completion"; see: podman-completion(1)

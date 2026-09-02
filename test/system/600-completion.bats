@@ -433,3 +433,21 @@ function _check_no_suggestions() {
 
     _check_completion_end NoFileComp
 }
+
+@test "podman completion - scripts claim the .exe name" {
+    # On Windows the binary is called podman.exe and shells such as git bash
+    # complete the command to that name before the argument completion runs,
+    # so the generated scripts must claim it in addition to the plain name.
+    local -a podman_as_array=($PODMAN)
+    local name
+    name=$(basename "${podman_as_array[0]}")
+    name=${name%.exe}
+
+    run_podman completion bash
+    assert "$output" =~ "-F __start_$name $name\.exe" \
+      "bash completion script must also complete $name.exe"
+
+    run_podman completion powershell
+    assert "$output" =~ "-CommandName '$name\.exe'" \
+      "powershell completion script must also complete $name.exe"
+}

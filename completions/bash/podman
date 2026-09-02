@@ -425,4 +425,10 @@ fi
 
 # ex: ts=4 sw=4 et filetype=sh
 
+if [[ $(type -t compopt) = "builtin" ]]; then
+    complete -o default -F __start_podman podman.exe
+else
+    complete -o default -o nospace -F __start_podman podman.exe
+fi
+
 # This file is generated with "podman completion"; see: podman-completion(1)
