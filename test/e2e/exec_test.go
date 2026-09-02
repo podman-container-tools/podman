@@ -543,6 +543,29 @@ RUN useradd -u 1000 auser`, FEDORA_MINIMAL)
 		Expect(kill).Should(ExitCleanly())
 	})
 
+	It("podman exec --user resolves supplementary groups", func() {
+		dockerfile := fmt.Sprintf(`FROM %s
+RUN groupadd -g 4000 testgrp1
+RUN groupadd -g 4001 testgrp2
+RUN useradd -u 1000 -G testgrp1,testgrp2 testuser`, FEDORA_MINIMAL)
+		imgName := "testimg-supp"
+		podmanTest.BuildImage(dockerfile, imgName, "false")
+
+		ctrName := "testctr-supp"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName, imgName, "sleep", "300")
+
+		// exec --user should resolve supplementary groups from
+		// the container's /etc/group, not just the image rootfs.
+		exec := podmanTest.PodmanExitCleanly("exec", "--user", "testuser", ctrName, "id")
+		output := exec.OutputToString()
+		Expect(output).To(ContainSubstring("4000(testgrp1)"))
+		Expect(output).To(ContainSubstring("4001(testgrp2)"))
+		Expect(output).To(ContainSubstring("1000(testuser)"))
+
+		// Kill the container just so the test does not take 15 seconds to stop.
+		podmanTest.PodmanExitCleanly("kill", ctrName)
+	})
+
 	It("podman exec --detach", func() {
 		ctrName := "testctr"
 		ctr := podmanTest.Podman([]string{"run", "-d", "--name", ctrName, ALPINE, "top"})

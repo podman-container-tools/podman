@@ -1006,6 +1006,9 @@ func (c *Container) getUserOverrides() *lookup.Overrides {
 	if path, ok := c.state.BindMounts["/etc/passwd"]; ok {
 		overrides.ContainerEtcPasswdPath = path
 	}
+	if path, ok := c.state.BindMounts["/etc/group"]; ok {
+		overrides.ContainerEtcGroupPath = path
+	}
 	return &overrides
 }
 
