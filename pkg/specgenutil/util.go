@@ -95,7 +95,7 @@ func CreatePortBindings(ports []string) ([]types.PortMapping, error) {
 		case 1:
 			// No protocol was provided
 		case 2:
-			proto = &(splitProto[1])
+			proto = &splitProto[1]
 		default:
 			return nil, errors.New("invalid port format - protocol can only be specified once")
 		}
@@ -132,14 +132,14 @@ func CreatePortBindings(ports []string) ([]types.PortMapping, error) {
 			}
 			ctrPort = splitPort[0]
 		case 2:
-			hostPort = &(splitPort[0])
+			hostPort = &splitPort[0]
 			ctrPort = splitPort[1]
 		case 3:
 			if haveV6 {
 				return nil, errors.New("invalid port format - when v6 address specified, must be [ipv6]:hostPort:ctrPort")
 			}
-			hostIP = &(splitPort[0])
-			hostPort = &(splitPort[1])
+			hostIP = &splitPort[0]
+			hostPort = &splitPort[1]
 			ctrPort = splitPort[2]
 		default:
 			return nil, errors.New("invalid port format - format is [[hostIP:]hostPort:]containerPort")

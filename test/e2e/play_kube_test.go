@@ -5458,7 +5458,7 @@ ENV OPENJ9_JAVA_OPTIONS=%q
 		podmanTest.PodmanExitCleanly("kube", "play", kubeYaml, "--log-driver", "journald", "--log-opt", "tag={{.ImageName}},withcomma")
 		podmanTest.PodmanExitCleanly("start", getCtrNameInPod(pod))
 		inspect := podmanTest.PodmanExitCleanly("inspect", getCtrNameInPod(pod))
-		Expect((inspect.InspectContainerToJSON()[0]).HostConfig.LogConfig.Tag).To(Equal("{{.ImageName}},withcomma"))
+		Expect(inspect.InspectContainerToJSON()[0].HostConfig.LogConfig.Tag).To(Equal("{{.ImageName}},withcomma"))
 	})
 
 	It("using a user namespace", func() {

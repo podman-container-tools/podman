@@ -38,7 +38,7 @@ func reload(_ *cobra.Command, _ []string) error {
 	}
 	printReload("Added", report.Added)
 	printReload("Removed", report.Removed)
-	errs := (utils.OutputErrors)(report.Errors)
+	errs := utils.OutputErrors(report.Errors)
 	return errs.PrintErrors()
 }
 

@@ -980,8 +980,8 @@ func AutocompleteTopCmd(cmd *cobra.Command, args []string, toComplete string) ([
 		}
 		return getContainers(cmd, toComplete, completeDefault)
 	}
-	descriptors, err := util.GetContainerPidInformationDescriptors()
-	if err != nil {
+	descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
+	if err != nil {                                                  //nolint:staticcheck,nolintlint
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

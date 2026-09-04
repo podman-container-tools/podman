@@ -52,13 +52,13 @@ func Attach(ctx context.Context, nameOrID string, stdin io.Reader, stdout io.Wri
 	}
 	// Ensure golang can determine that interfaces are "really" nil
 	if !isSet.stdin {
-		stdin = (io.Reader)(nil)
+		stdin = io.Reader(nil)
 	}
 	if !isSet.stdout {
-		stdout = (io.Writer)(nil)
+		stdout = io.Writer(nil)
 	}
 	if !isSet.stderr {
-		stderr = (io.Writer)(nil)
+		stderr = io.Writer(nil)
 	}
 
 	conn, err := bindings.GetClient(ctx)

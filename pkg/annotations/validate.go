@@ -103,9 +103,9 @@ func isQualifiedName(value string) error {
 func validateAnnotationsSize(annotations map[string]string) error {
 	var totalSize int64
 	for k, v := range annotations {
-		totalSize += (int64)(len(k)) + (int64)(len(v))
+		totalSize += int64(len(k)) + int64(len(v))
 	}
-	if totalSize > (int64)(define.TotalAnnotationSizeLimitB) {
+	if totalSize > int64(define.TotalAnnotationSizeLimitB) {
 		return fmt.Errorf("annotations size %d is larger than limit %d", totalSize, define.TotalAnnotationSizeLimitB)
 	}
 	return nil

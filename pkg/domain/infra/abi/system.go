@@ -84,7 +84,7 @@ func (ic *ContainerEngine) SystemPrune(ctx context.Context, options entities.Sys
 	for k, v := range options.Filters {
 		filters = append(filters, fmt.Sprintf("%s=%s", k, v[0]))
 	}
-	reclaimedSpace := (uint64)(0)
+	reclaimedSpace := uint64(0)
 
 	// Prune Build Containers
 	if options.Build {
@@ -114,7 +114,7 @@ func (ic *ContainerEngine) SystemPrune(ctx context.Context, options entities.Sys
 
 		// Remove all unused containers.
 		containerPruneOptions := entities.ContainerPruneOptions{}
-		containerPruneOptions.Filters = (url.Values)(options.Filters)
+		containerPruneOptions.Filters = url.Values(options.Filters)
 
 		containerPruneReports, err := ic.ContainerPrune(ctx, containerPruneOptions)
 		if err != nil {
@@ -160,7 +160,7 @@ func (ic *ContainerEngine) SystemPrune(ctx context.Context, options entities.Sys
 		// Remove unused volume data.
 		if options.Volume {
 			volumePruneOptions := entities.VolumePruneOptions{}
-			volumePruneOptions.Filters = (url.Values)(options.Filters)
+			volumePruneOptions.Filters = url.Values(options.Filters)
 
 			if len(volumePruneOptions.Filters) == 0 {
 				volumePruneOptions.Filters.Set("all", "true")

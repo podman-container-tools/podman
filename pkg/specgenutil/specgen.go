@@ -141,7 +141,7 @@ func LimitToSwap(memory *specs.LinuxMemory, swap string, ml int64) {
 		memory.Limit = &ml
 		if swap == "" {
 			limit := 2 * ml
-			memory.Swap = &(limit)
+			memory.Swap = &limit
 		}
 	}
 }

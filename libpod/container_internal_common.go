@@ -361,8 +361,6 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			}
 
 			overlayOpts = &overlay.Options{
-				RootUID:                backingUID,
-				RootGID:                backingGID,
 				UpperDirOptionFragment: upperDir,
 				WorkDirOptionFragment:  workDir,
 				GraphOpts:              c.runtime.store.GraphOptions(),
@@ -517,8 +515,6 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			workDir = filepath.Join(contentDir, "work")
 		}
 		overlayOpts := &overlay.Options{
-			RootUID:                backingUID,
-			RootGID:                backingGID,
 			UpperDirOptionFragment: upperDir,
 			WorkDirOptionFragment:  workDir,
 			GraphOpts:              c.runtime.store.GraphOptions(),
@@ -588,8 +584,6 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 
 		var overlayMount spec.Mount
 		overlayOpts := &overlay.Options{
-			RootUID:    c.RootUID(),
-			RootGID:    c.RootGID(),
 			GraphOpts:  c.runtime.store.GraphOptions(),
 			ReadOnly:   !volume.ReadWrite,
 			ForceMount: forceOverlayMount,
@@ -1333,7 +1327,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 }
 
 func (c *Container) checkpointRestoreSupported(version int) error {
-	if err := criu.CheckForCriu(version); err != nil {
+	if err := criu.CheckForCriu(version); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 		return err
 	}
 	if !c.ociRuntime.SupportsCheckpoint() {

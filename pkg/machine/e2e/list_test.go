@@ -87,7 +87,7 @@ var _ = Describe("podman machine list", func() {
 		startSession, err := mb.setCmd(s).runWithoutWait()
 		Expect(err).ToNot(HaveOccurred())
 		wait := 3
-		retries := (int)(mb.timeout/time.Second) / wait
+		retries := int(mb.timeout/time.Second) / wait
 		for range retries {
 			listSession, err := mb.setCmd(l).run()
 			Expect(listSession).To(Exit(0))
@@ -154,7 +154,7 @@ var _ = Describe("podman machine list", func() {
 		Expect(session).To(Exit(0))
 
 		list := new(listMachine)
-		list = list.withFormat(("json"))
+		list = list.withFormat("json")
 		listSession, err := mb.setCmd(list).run()
 		Expect(err).NotTo(HaveOccurred())
 		var listResponse []*entities.ListReporter
