@@ -4,9 +4,12 @@ package abi
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
 	v12 "go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -359,6 +362,63 @@ func TestUnmarshalKubeObject(t *testing.T) {
 			} else {
 				assert.Empty(t, warnings)
 			}
+		})
+	}
+}
+
+func TestGetBuildFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		imageName string
+		files     []string
+		expected  string
+	}{
+		{
+			name:      "backward compatible simple image name",
+			imageName: "service-a:latest",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image name",
+			imageName: "mocks/service-a:v3.42",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image falls back to simple image name",
+			imageName: "mocks/service-a:v3.43",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image with registry and port",
+			imageName: "localhost:5000/mocks/service-a:v2.34",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image with digest",
+			imageName: "quay.io/mocks/service-a@sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+			files:     []string{"mocks/service-a/Dockerfile"},
+			expected:  "mocks/service-a/Dockerfile",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			for _, file := range test.files {
+				path := filepath.Join(tmpDir, file)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+				require.NoError(t, os.WriteFile(path, []byte("FROM alpine\n"), 0o644))
+			}
+
+			got, err := getBuildFile(test.imageName, tmpDir)
+			require.NoError(t, err)
+
+			assert.Equal(t, filepath.Join(tmpDir, test.expected), got)
 		})
 	}
 }

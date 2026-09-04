@@ -1727,33 +1727,46 @@ func imageNamePrefix(imageName string) string {
 	return prefix
 }
 
+func extractNestedPathFromImageName(imageName string) string {
+	ref, err := reference.ParseNormalizedNamed(imageName)
+	if err != nil {
+		return imageName
+	}
+	return reference.Path(ref)
+}
+
 func getBuildFile(imageName string, cwd string) (string, error) {
-	buildDirName := imageNamePrefix(imageName)
-	containerfilePath := filepath.Join(cwd, buildDirName, "Containerfile")
-	dockerfilePath := filepath.Join(cwd, buildDirName, "Dockerfile")
-
-	err := fileutils.Exists(containerfilePath)
-	if err == nil {
-		logrus.Debugf("Building %s with %s", imageName, containerfilePath)
-		return containerfilePath, nil
-	}
-	// If the error is not because the file does not exist, take
-	// a mulligan and try Dockerfile.  If that also fails, return that
-	// error
-	if !errors.Is(err, os.ErrNotExist) {
-		logrus.Error(err.Error())
+	buildDirNames := []string{
+		imageNamePrefix(imageName),
+		extractNestedPathFromImageName(imageName),
 	}
 
-	err = fileutils.Exists(dockerfilePath)
-	if err == nil {
-		logrus.Debugf("Building %s with %s", imageName, dockerfilePath)
-		return dockerfilePath, nil
+	for _, buildDirName := range buildDirNames {
+		containerfilePath := filepath.Join(cwd, buildDirName, "Containerfile")
+		dockerfilePath := filepath.Join(cwd, buildDirName, "Dockerfile")
+
+		err := fileutils.Exists(containerfilePath)
+		if err == nil {
+			logrus.Debugf("Building %s with %s", imageName, containerfilePath)
+			return containerfilePath, nil
+		}
+		// If the error is not because the file does not exist, take
+		// a mulligan and try Dockerfile.  If that also fails, return that
+		// error
+		if !errors.Is(err, os.ErrNotExist) {
+			logrus.Error(err.Error())
+		}
+
+		err = fileutils.Exists(dockerfilePath)
+		if err == nil {
+			logrus.Debugf("Building %s with %s", imageName, dockerfilePath)
+			return dockerfilePath, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
 	}
-	// Strike two
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	return "", err
+	return "", nil
 }
 
 func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, options entities.PlayKubeDownOptions) (*entities.PlayKubeReport, error) {

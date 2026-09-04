@@ -1512,6 +1512,20 @@ spec:
         stopSignal: noSuchSignal
 `
 
+var nestedImagePathPodYaml = `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nested-image-path-pod
+spec:
+  containers:
+    - name: testctr
+      image: quay.io/mocks/service-a:v2.34
+      command:
+        - sleep
+        - "60"
+`
+
 var (
 	defaultCtrName        = "testCtr"
 	defaultCtrCmd         = []string{"top"}
@@ -6891,5 +6905,36 @@ spec:
 		podmanTest.PodmanExitCleanly("kube", "play", "--no-pod-prefix", kubeYaml)
 		inspect := podmanTest.PodmanExitCleanly("inspect", "simpleWithoutPodPrefix")
 		Expect(inspect.InspectContainerToJSON()[0].Name).Should(Equal("simpleWithoutPodPrefix"))
+	})
+
+	It("build image from nested image path", func() {
+		if IsRemote() {
+			Skip("kube play --build is not supported in remote mode")
+		}
+
+		buildDir := filepath.Join("mocks", "service-a")
+		Expect(os.MkdirAll(buildDir, 0o755)).To(Succeed())
+
+		defer os.RemoveAll("mocks")
+
+		containerfile := filepath.Join(buildDir, "Containerfile")
+		Expect(os.WriteFile(containerfile, []byte(`FROM alpine
+RUN echo "hello"`), 0o644)).To(Succeed())
+
+		err := writeYaml(nestedImagePathPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		kube := podmanTest.Podman([]string{"kube", "play", "--build", kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(Exit(0), kube.ErrorToString())
+
+		result := podmanTest.Podman([]string{
+			"exec",
+			"nested-image-path-pod-testctr",
+			"cat",
+			"/etc/os-release",
+		})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(Exit(0), result.ErrorToString())
 	})
 })
