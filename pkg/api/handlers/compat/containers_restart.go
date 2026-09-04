@@ -38,11 +38,15 @@ func RestartContainer(w http.ResponseWriter, r *http.Request) {
 	name := utils.GetName(r)
 
 	options := entities.RestartOptions{
-		All:     query.All,
-		Timeout: &query.DockerTimeout,
+		All: query.All,
+	}
+	if _, found := r.URL.Query()["t"]; found {
+		options.Timeout = &query.DockerTimeout
 	}
 	if utils.IsLibpodRequest(r) {
-		options.Timeout = &query.LibpodTimeout
+		if _, found := r.URL.Query()["timeout"]; found {
+			options.Timeout = &query.LibpodTimeout
+		}
 	}
 	report, err := containerEngine.ContainerRestart(r.Context(), []string{name}, options)
 	if err != nil {
