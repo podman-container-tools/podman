@@ -250,4 +250,8 @@ type ExistsOptions struct{}
 type ScpOptions struct {
 	Quiet       *bool
 	Destination *string
+	// CompressionFormat is the algorithm used to compress the transfer archive.
+	CompressionFormat *string
+	// CompressionLevel is the level handed to the compressor.
+	CompressionLevel *int
 }

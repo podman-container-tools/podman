@@ -22,6 +22,26 @@ This is not a direct storage-to-storage copy. The image is saved to an archive (
 
 ## OPTIONS
 
+#### **--compression-format**=*algorithm*
+
+Compress the transfer archive with *algorithm* before it is sent over the network. Allowed values are **gzip** and **zstd**. If omitted, the archive is transferred uncompressed.
+
+Because **podman save** writes docker-archive layers uncompressed, compressing the archive typically cuts the transferred data to around half its original size or less. The receiving **podman load** detects the compression and decompresses the archive itself, so nothing has to be configured on the destination.
+
+How much is gained depends on **--format**. An **oci-archive** keeps the layers in the compression they already have, so there is little left to compress and the transfer is barely smaller; the saving applies to the default **docker-archive**.
+
+Compression is applied on the host that produces the archive, so that only compressed bytes cross the network. When the source is a remote host, the archive is compressed there and the matching command line compressor (**gzip** or **zstd**) must be installed on that host. When the source is local, Podman compresses the archive itself and no extra tooling is needed.
+
+This option has no effect on a transfer between two users on the same machine, because no data crosses a network.
+
+#### **--compression-level**=*level*
+
+Compression level to use, **1**-**9** for **gzip** and **1**-**19** for **zstd**. If omitted, the algorithm's default is used. Requires **--compression-format**.
+
+The accepted range for **zstd** stops at **19** rather than the **20** accepted by **podman push**, because levels above that need the compressor's *--ultra* mode when the archive is compressed on a remote host.
+
+Note that **zstd** levels are only fully distinct when the source is a remote host, where the level is passed to the command line compressor. When the source is local, Podman compresses through the same library used elsewhere, which groups the level into four bands (**1**-**2**, **3**-**5**, **6**-**9**, **10** and above), so any level of **10** or more produces the same output.
+
 #### **--format**=*format*
 
 Format passed to **podman save** when creating the transfer archive. Allowed values are **oci-archive** and **docker-archive**. If omitted, **podman save** uses its default (docker-archive).
@@ -111,6 +131,18 @@ $ podman image scp --format oci-archive quay.io/fedora/fedora:43 root@localhost:
 Copy image to remote host (uses default format when **--format** is omitted):
 ```
 $ podman image scp alpine root@myserver::
+```
+
+Copy specified image to a remote host, compressing the transfer archive with zstd:
+```
+$ podman image scp --compression-format zstd alpine root@myserver::
+Loaded image: docker.io/library/alpine:latest
+```
+
+Copy specified image to a remote host, trading CPU time for the smallest transfer:
+```
+$ podman image scp --compression-format zstd --compression-level 19 alpine root@myserver::
+Loaded image: docker.io/library/alpine:latest
 ```
 
 ## SEE ALSO

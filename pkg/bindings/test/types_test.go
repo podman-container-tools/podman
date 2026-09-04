@@ -51,6 +51,27 @@ var _ = Describe("Binding types", func() {
 		Expect(params.Has("password")).To(BeFalse())
 	})
 
+	It("serialize image scp options", func() {
+		// The names here are what the libpod ImageScp handler decodes, so a
+		// rename on either side silently drops compression on the remote client.
+		format := "zstd"
+		level := 3
+		opts := &images.ScpOptions{CompressionFormat: &format, CompressionLevel: &level}
+		params, err := opts.ToParams()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(params.Get("compressionformat")).To(Equal("zstd"))
+		Expect(params.Get("compressionlevel")).To(Equal("3"))
+	})
+
+	It("serialize image scp options without compression", func() {
+		// An unset level must not be sent as 0: the server would reject it.
+		opts := &images.ScpOptions{}
+		params, err := opts.ToParams()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(params.Has("compressionformat")).To(BeFalse())
+		Expect(params.Has("compressionlevel")).To(BeFalse())
+	})
+
 	It("serialize manifest modify options", func() {
 		opts := new(manifests.ModifyOptions).WithOS("foo").WithSkipTLSVerify(true).
 			WithAuthfile("/tmp/auth.json").WithUsername("user").WithPassword("pass")

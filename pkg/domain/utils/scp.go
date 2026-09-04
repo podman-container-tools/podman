@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -22,6 +23,10 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 	dest := entities.ScpTransferImageOptions{}
 	sshInfo := entities.ImageScpConnections{}
 	loadReport := entities.ScpLoadReport{Names: []string{}}
+
+	if err := ValidateScpCompression(opts.ScpCompressionOptions); err != nil {
+		return nil, err
+	}
 
 	podman, err := os.Executable()
 	if err != nil {
@@ -98,6 +103,8 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 		saveToRemoteOpts.Iden = sshInfo.Identities[0]
 		saveToRemoteOpts.SSHMode = opts.SSHMode
 		saveToRemoteOpts.Format = opts.SaveFormat
+		// Compress on the source host: only compressed bytes are copied down.
+		saveToRemoteOpts.ScpCompressionOptions = opts.ScpCompressionOptions
 		_, err = SaveToRemote(saveToRemoteOpts)
 		if err != nil {
 			return nil, err
@@ -110,6 +117,8 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			loadToRemoteOpts.URL = sshInfo.URI[1]
 			loadToRemoteOpts.Iden = sshInfo.Identities[1]
 			loadToRemoteOpts.SSHMode = opts.SSHMode
+			// ScpCompressionOptions is deliberately left unset: SaveToRemote
+			// already compressed this on the source host, so stream it on as it is.
 			loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 			if err != nil {
 				return nil, err
@@ -159,6 +168,8 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 		loadToRemoteOpts.URL = sshInfo.URI[0]
 		loadToRemoteOpts.Iden = sshInfo.Identities[0]
 		loadToRemoteOpts.SSHMode = opts.SSHMode
+		// Compress on the fly: only compressed bytes cross the network.
+		loadToRemoteOpts.ScpCompressionOptions = opts.ScpCompressionOptions
 		loadToRemoteRep, err := LoadToRemote(loadToRemoteOpts)
 		if err != nil {
 			return nil, err
@@ -173,6 +184,10 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			return nil, err
 		}
 	default: // else native load, both source and dest are local and transferring between users
+		if opts.CompressionFormat != "" {
+			// Nothing crosses the network here, so compressing would only burn CPU.
+			logrus.Warnf("Ignoring compression format %q: it only applies to transfers over ssh", opts.CompressionFormat)
+		}
 		if source.User == "" { // source user has to be set, destination does not
 			source.User = os.Getenv("USER")
 			if source.User == "" {
@@ -265,7 +280,18 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 	}
 	defer input.Close()
 
-	out, err := ssh.ExecWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, input)
+	var stream io.Reader = input
+	if opts.CompressionFormat != "" {
+		// The remote podman load detects the compression itself.
+		compressed, err := compressReader(input, opts.ScpCompressionOptions)
+		if err != nil {
+			return nil, err
+		}
+		defer compressed.Close()
+		stream = compressed
+	}
+
+	out, err := ssh.ExecWithInput(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"podman", "image", "load"}}, opts.SSHMode, stream)
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +308,26 @@ func LoadToRemote(opts entities.ScpLoadToRemoteOptions) (*entities.ScpLoadToRemo
 		}
 	}
 	return &entities.ScpLoadToRemoteReport{Response: rep, ID: id}, nil
+}
+
+// trimRemotePath drops the trailing newline ssh.Exec hands back with the rest of
+// a remote command's raw output.
+func trimRemotePath(out string) string {
+	return strings.TrimSpace(out)
+}
+
+// remoteExec is ssh.Exec, taken as an argument so the commands built for a remote
+// host can be exercised without one.
+type remoteExec func(opts *ssh.ConnectionExecOptions, mode ssh.EngineMode) (string, error)
+
+// removeRemoteFiles deletes paths on the host described by execOpts. Best effort:
+// a failure is logged, not returned.
+func removeRemoteFiles(run remoteExec, execOpts ssh.ConnectionExecOptions, sshMode ssh.EngineMode, paths ...string) {
+	rm := execOpts
+	rm.Args = append([]string{"rm", "-f"}, paths...)
+	if _, err := run(&rm, sshMode); err != nil {
+		logrus.Errorf("Removing file on endpoint: %v", err)
+	}
 }
 
 // SaveToRemote takes image information and remote connection information. it connects to the specified client
@@ -302,10 +348,15 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 		}
 	}
 
-	remoteFile, err := ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"mktemp"}}, opts.SSHMode)
+	execOpts := ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User}
+
+	mktemp := execOpts
+	mktemp.Args = []string{"mktemp"}
+	remoteFile, err := ssh.Exec(&mktemp, opts.SSHMode)
 	if err != nil {
 		return nil, err
 	}
+	remoteFile = trimRemotePath(remoteFile)
 
 	saveArgs := []string{"podman", "image", "save", opts.Image}
 	if opts.Format != "" {
@@ -314,9 +365,21 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 
 	saveArgs = append(saveArgs, "--output", remoteFile)
 
-	_, err = ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: saveArgs}, opts.SSHMode)
+	save := execOpts
+	save.Args = saveArgs
+	_, err = ssh.Exec(&save, opts.SSHMode)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.CompressionFormat != "" {
+		// Compress it where it is, so only compressed bytes are copied over the
+		// network.
+		compressedFile, err := compressRemoteFile(ssh.Exec, execOpts, opts.SSHMode, remoteFile, opts.ScpCompressionOptions)
+		if err != nil {
+			return nil, err
+		}
+		remoteFile = compressedFile
 	}
 
 	scpConnOpts := ssh.ConnectionScpOptions{User: opts.URL.User, Identity: opts.Iden, Port: port, Source: "ssh://" + opts.URL.User.String() + "@" + opts.URL.Hostname() + ":" + remoteFile, Destination: opts.LocalFile}
@@ -324,10 +387,7 @@ func SaveToRemote(opts entities.ScpSaveToRemoteOptions) (*entities.ScpSaveToRemo
 	if err != nil {
 		return nil, err
 	}
-	_, err = ssh.Exec(&ssh.ConnectionExecOptions{Host: opts.URL.String(), Identity: opts.Iden, Port: port, User: opts.URL.User, Args: []string{"rm", scpRep}}, opts.SSHMode)
-	if err != nil {
-		logrus.Errorf("Removing file on endpoint: %v", err)
-	}
+	removeRemoteFiles(ssh.Exec, execOpts, opts.SSHMode, scpRep)
 
 	return &entities.ScpSaveToRemoteReport{}, nil
 }

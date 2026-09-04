@@ -6,6 +6,16 @@ import (
 	"go.podman.io/common/pkg/ssh"
 )
 
+// ScpCompressionOptions describes how the transfer archive should be compressed.
+type ScpCompressionOptions struct {
+	// CompressionFormat is the algorithm used to compress the archive before it
+	// is sent over the network. An empty string disables compression.
+	CompressionFormat string `json:"compressionFormat,omitempty"`
+	// CompressionLevel is the level handed to the compressor. A nil value uses
+	// the algorithm's default.
+	CompressionLevel *int `json:"compressionLevel,omitempty"`
+}
+
 // ScpTransferImageOptions provide options for securely copying images to and from a remote host
 type ScpTransferImageOptions struct {
 	// Remote determines if this entity is operating on a remote machine
@@ -33,6 +43,9 @@ type ScpExecuteTransferOptions struct {
 	SSHMode ssh.EngineMode
 	// SaveFormat is the format for podman save (oci-archive or docker-archive). Empty means default of podman save (docker-archive).
 	SaveFormat string
+	// ScpCompressionOptions describes how to compress the archive before it is
+	// sent over the network.
+	ScpCompressionOptions
 }
 
 type ScpExecuteTransferReport struct {
@@ -70,6 +83,9 @@ type ScpLoadToRemoteOptions struct {
 	Iden string
 	// SSHMode is the specified ssh.EngineMode which should be used
 	SSHMode ssh.EngineMode
+	// ScpCompressionOptions compresses LocalFile as it is streamed. Must be empty
+	// when LocalFile is already compressed.
+	ScpCompressionOptions
 }
 
 type ScpLoadToRemoteReport struct {
@@ -93,6 +109,9 @@ type ScpSaveToRemoteOptions struct {
 	SSHMode ssh.EngineMode
 	// Format is the save format (oci-archive or docker-archive). Empty means default of podman save (docker-archive).
 	Format string
+	// ScpCompressionOptions describes how to compress the archive on the remote
+	// host before it is copied over the network.
+	ScpCompressionOptions
 }
 
 type ScpSaveToRemoteReport struct{}
