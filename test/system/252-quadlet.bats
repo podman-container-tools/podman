@@ -390,7 +390,7 @@ EOF
 
     run_quadlet "$quadlet_file"
 
-    service_setup $QUADLET_SERVICE_NAME
+    service_setup $QUADLET_SERVICE_NAME wait
 
     local volume_name=systemd-$(basename $quadlet_file .volume)
     run_podman volume ls
@@ -415,7 +415,7 @@ EOF
 
     run_quadlet "$quadlet_file"
 
-    service_setup $QUADLET_SERVICE_NAME
+    service_setup $QUADLET_SERVICE_NAME wait
 
     local volume_name=systemd-$(basename $quadlet_file .volume)
     run_podman volume ls
@@ -468,10 +468,10 @@ EOF
     # Start the container service which should also trigger the start of the volume service
     service_setup $container_service
 
-    # Volume system unit should be active
+    # Volume system unit should be inactive (oneshot)
     run systemctl show --property=ActiveState "$vol_service"
-    assert "$output" = "ActiveState=active" \
-           "volume should be active via dependency"
+    assert "$output" = "ActiveState=inactive" \
+           "volume should be inactive via dependency"
 
     # Volume should exist
     run_podman volume exists ${volume_name}
@@ -552,10 +552,10 @@ EOF
     SERVICES_TO_STOP+=("$vol_service_instance")
     SERVICES_TO_STOP+=("$net_service_instance")
 
-    # Volume system unit instance should be active
+    # Volume system unit instance should be inactive (oneshot)
     run systemctl show --property=ActiveState "$vol_service_instance"
-    assert "$output" = "ActiveState=active" \
-           "volume template instance should be active via dependency"
+    assert "$output" = "ActiveState=inactive" \
+           "volume template instance should be inactive via dependency"
 
     # Network system unit instance should be active
     run systemctl show --property=ActiveState "$net_service_instance"
@@ -614,9 +614,9 @@ EOF
     # Start the container service which should also trigger the start of the volume service
     service_setup $container_service
 
-    # Volume system unit should be active
+    # Volume system unit should be inactive (oneshot)
     run systemctl show --property=ActiveState "$vol_service"
-    assert "$output" = "ActiveState=active" "volume should be active via dependency"
+    assert "$output" = "ActiveState=inactive" "volume should be inactive via dependency"
 
     # Volume should exist
     run_podman volume exists ${volume_name}
