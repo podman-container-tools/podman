@@ -288,6 +288,12 @@ Tears down the pods created by a previous run of `kube play` and recreates the p
 
 Directory path for seccomp profiles (default: "/var/lib/kubelet/seccomp"). (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
 
+#### **--service-container**
+
+Sets the default log-driver to `passthrough`.
+
+*This flags is used for systemd integration and is not meant to be used directly.*
+
 #### **--start**
 
 Start the pod after creating it, set to false to only create it.
