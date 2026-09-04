@@ -407,7 +407,7 @@ github.com/moby/go-archive
 github.com/moby/go-archive/compression
 github.com/moby/go-archive/internal/archiveoptions
 github.com/moby/go-archive/tarheader
-# github.com/moby/moby/api v1.55.0
+# github.com/moby/moby/api v1.56.0
 ## explicit; go 1.24
 github.com/moby/moby/api
 github.com/moby/moby/api/pkg/stdcopy
@@ -428,7 +428,7 @@ github.com/moby/moby/api/types/storage
 github.com/moby/moby/api/types/swarm
 github.com/moby/moby/api/types/system
 github.com/moby/moby/api/types/volume
-# github.com/moby/moby/client v0.5.1
+# github.com/moby/moby/client v0.6.0
 ## explicit; go 1.24
 github.com/moby/moby/client
 github.com/moby/moby/client/internal
