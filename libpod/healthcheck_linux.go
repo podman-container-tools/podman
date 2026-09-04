@@ -180,10 +180,12 @@ func (c *Container) disableHealthCheckSystemd(isStartup bool) bool {
 // Bare indicates that a random suffix should not be applied to the name. This
 // was default behavior previously, and is used for backwards compatibility.
 func (c *Container) hcUnitName(isStartup, bare bool) string {
-	unitName := c.ID()
+	unitName := "libpod-healthcheck-" + c.ID()
+
 	if isStartup {
 		unitName += "-startup"
 	}
+
 	if !bare {
 		// Ensure that unit names are unique from run to run by appending
 		// a random suffix.
