@@ -111,8 +111,8 @@ func ConvertToEntitiesEvent(e libpodEvents.Event) *types.Event {
 	return &types.Event{
 		Message:      message,
 		HealthStatus: e.HealthStatus,
-		Status:       e.Status.String(),
-		ID:           e.ID,
-		From:         e.Image,
+		Status:       e.Status.String(), //nolint:staticcheck // we still have to support older API versions which set this
+		ID:           e.ID,              //nolint:staticcheck // we still have to support older API versions which set this
+		From:         e.Image,           //nolint:staticcheck // we still have to support older API versions which set this
 	}
 }

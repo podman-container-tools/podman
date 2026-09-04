@@ -106,11 +106,11 @@ func GetDiskUsage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		utils.WriteResponse(w, http.StatusOK, handlers.LegacyDiskUsage{ //nolint:staticcheck // LegacyDiskUsage is deprecated but kept for Docker API compat < v1.52
-			LayersSize: df.ImagesSize,
-			Images:     legacy,
-			Containers: ctnrs,
-			Volumes:    vols,
-			BuildCache: []build.CacheRecord{},
+			LayersSize: df.ImagesSize,         //nolint:staticcheck // we still have to support older API versions which set this
+			Images:     legacy,                //nolint:staticcheck // we still have to support older API versions which set this
+			Containers: ctnrs,                 //nolint:staticcheck // we still have to support older API versions which set this
+			Volumes:    vols,                  //nolint:staticcheck // we still have to support older API versions which set this
+			BuildCache: []build.CacheRecord{}, //nolint:staticcheck // we still have to support older API versions which set this
 		})
 		return
 	}

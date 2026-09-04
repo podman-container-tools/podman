@@ -102,7 +102,7 @@ func SearchImages(w http.ResponseWriter, r *http.Request) {
 				Description: report.Description,
 				StarCount:   report.Stars,
 				IsOfficial:  toBool(report.Official),
-				IsAutomated: toBool(report.Automated),
+				IsAutomated: toBool(report.Automated), //nolint:staticcheck // we still have to support older API versions which set this
 			}
 			if isAutomatedDeprecated {
 				//nolint:staticcheck
