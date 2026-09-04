@@ -700,10 +700,6 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 		s.Sysctl = sysmap
 	}
 
-	if c.CIDFile != "" {
-		s.Annotations[define.InspectAnnotationCIDFile] = c.CIDFile
-	}
-
 	for _, opt := range c.SecurityOpt {
 		// Docker deprecated the ":" syntax but still supports it,
 		// so we need to as well
