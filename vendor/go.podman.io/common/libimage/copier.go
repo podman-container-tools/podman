@@ -554,8 +554,7 @@ func checkRegistrySourcesAllows(dest types.ImageReference) (insecure *bool, err 
 	}
 
 	if slices.Contains(sources.InsecureRegistries, reference.Domain(dref)) {
-		insecure := true
-		return &insecure, nil
+		return new(true), nil
 	}
 
 	return nil, nil

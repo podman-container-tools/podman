@@ -219,9 +219,8 @@ func (s *storageImageSource) getBlobAndLayerID(digest digest.Digest, layers []st
 	}
 	// Force the storage layer to not try to match any compression that was used when the layer was first
 	// handed to it.
-	noCompression := archive.Uncompressed
 	diffOptions = &storage.DiffOptions{
-		Compression: &noCompression,
+		Compression: new(archive.Uncompressed),
 	}
 	if layer.UncompressedSize < 0 {
 		n = -1

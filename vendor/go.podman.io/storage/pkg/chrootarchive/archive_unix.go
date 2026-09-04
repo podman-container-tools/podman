@@ -169,12 +169,8 @@ func invokeUnpack(decompressedArchive io.Reader, dest *unpackDestination, option
 			return fmt.Errorf("%w\nexhausting input failed (error: %w)", errorOut, err)
 		}
 
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			status := exitErr.ExitCode()
-			if status == statusCodeENOSPC {
-				return unix.ENOSPC
-			}
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == statusCodeENOSPC {
+			return unix.ENOSPC
 		}
 
 		return errorOut

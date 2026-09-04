@@ -159,8 +159,7 @@ func (n *netavarkNetwork) execBinary(path string, args []string, stdin, result a
 	stdoutW.Close()
 	stdoutWClosed = true
 	if err != nil {
-		exitError := &exec.ExitError{}
-		if errors.As(err, &exitError) {
+		if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
 			ne := &netavarkError{}
 			// lets disallow unknown fields to make sure we do not get some unexpected stuff
 			dec.DisallowUnknownFields()

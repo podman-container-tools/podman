@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/klauspost/compress/internal/le"
+	"github.com/klauspost/compress/internal/regmask"
 )
 
 type fastEnc interface {
@@ -108,7 +109,7 @@ type tableEntryPrev struct {
 // hash7 returns the hash of the lowest 7 bytes of u to fit in a hash table with h bits.
 // Preferably h should be a constant and should always be <64.
 func hash7(u uint64, h uint8) uint32 {
-	return uint32(((u << (64 - 56)) * prime7bytes) >> ((64 - h) & reg8SizeMask64))
+	return uint32(((u << (64 - 56)) * prime7bytes) >> ((64 - h) & regmask.Shift64ByUint8))
 }
 
 // hashLen returns a hash of the lowest mls bytes of with length output bits.

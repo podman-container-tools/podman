@@ -65,10 +65,10 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
 	go.podman.io/buildah v1.45.0
-	go.podman.io/common v0.69.2-0.20260902183646-144f9a50f3bb
-	go.podman.io/image/v5 v5.41.2-0.20260902183646-144f9a50f3bb
-	go.podman.io/storage v1.64.1-0.20260902183646-144f9a50f3bb
-	golang.org/x/crypto v0.55.0
+	go.podman.io/common v0.69.2-0.20260904133341-741ebc37de41
+	go.podman.io/image/v5 v5.41.2-0.20260904133341-741ebc37de41
+	go.podman.io/storage v1.64.1-0.20260904133341-741ebc37de41
+	golang.org/x/crypto v0.56.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
@@ -129,7 +129,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/compress v1.19.2 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20240909124753-873cd0166683 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
@@ -155,7 +155,7 @@ require (
 	github.com/proglottis/gpgme v0.1.6 // indirect
 	github.com/seccomp/libseccomp-golang v0.12.0 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.11.1 // indirect
-	github.com/sigstore/fulcio v1.8.7 // indirect
+	github.com/sigstore/fulcio v1.8.8 // indirect
 	github.com/sigstore/protobuf-specs v0.5.1 // indirect
 	github.com/sigstore/sigstore v1.10.9 // indirect
 	github.com/skeema/knownhosts v1.3.3 // indirect

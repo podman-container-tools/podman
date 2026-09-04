@@ -58,8 +58,7 @@ func readEstargzChunkedManifest(blobStream ImageSourceSeekable, blobSize int64, 
 	footer := make([]byte, footerSize)
 	streamsOrErrors, err := getBlobAt(blobStream, ImageSourceChunk{Offset: uint64(blobSize - footerSize), Length: uint64(footerSize)})
 	if err != nil {
-		var badRequestErr ErrBadRequest
-		if errors.As(err, &badRequestErr) {
+		if _, ok := errors.AsType[ErrBadRequest](err); ok {
 			err = errFallbackCanConvert{newErrFallbackToOrdinaryLayerDownload(err)}
 		}
 		return nil, 0, err
@@ -98,8 +97,7 @@ func readEstargzChunkedManifest(blobStream ImageSourceSeekable, blobSize int64, 
 
 	streamsOrErrors, err = getBlobAt(blobStream, ImageSourceChunk{Offset: uint64(tocOffset), Length: uint64(size)})
 	if err != nil {
-		var badRequestErr ErrBadRequest
-		if errors.As(err, &badRequestErr) {
+		if _, ok := errors.AsType[ErrBadRequest](err); ok {
 			err = errFallbackCanConvert{newErrFallbackToOrdinaryLayerDownload(err)}
 		}
 		return nil, 0, err
@@ -228,8 +226,7 @@ func readZstdChunkedManifest(tmpDir string, blobStream ImageSourceSeekable, tocD
 
 	streamsOrErrors, err := getBlobAt(blobStream, chunks...)
 	if err != nil {
-		var badRequestErr ErrBadRequest
-		if errors.As(err, &badRequestErr) {
+		if _, ok := errors.AsType[ErrBadRequest](err); ok {
 			err = errFallbackCanConvert{newErrFallbackToOrdinaryLayerDownload(err)}
 		}
 		return nil, nil, nil, 0, err
@@ -383,7 +380,7 @@ func tarSizeFromTarSplit(tarSplit io.Reader) (int64, error) {
 			// > Sparse files SHOULD NOT be used because they lack consistent support across tar implementations.
 			res += entry.Size
 		default:
-			return -1, fmt.Errorf("unexpected tar-split entry type %q", entry.Type)
+			return -1, fmt.Errorf("unexpected tar-split entry type %d", entry.Type)
 		}
 	}
 	return res, nil
@@ -431,16 +428,16 @@ func ensureFileMetadataAttributesMatch(a, b *minimal.FileMetadata) error {
 		return fmt.Errorf("mismatch of Linkname: %q != %q", a.Linkname, b.Linkname)
 	}
 	if a.Mode != b.Mode {
-		return fmt.Errorf("mismatch of Mode: %q != %q", a.Mode, b.Mode)
+		return fmt.Errorf("mismatch of Mode: %#o != %#o", a.Mode, b.Mode)
 	}
 	if a.Size != b.Size {
-		return fmt.Errorf("mismatch of Size: %q != %q", a.Size, b.Size)
+		return fmt.Errorf("mismatch of Size: %d != %d", a.Size, b.Size)
 	}
 	if a.UID != b.UID {
-		return fmt.Errorf("mismatch of UID: %q != %q", a.UID, b.UID)
+		return fmt.Errorf("mismatch of UID: %d != %d", a.UID, b.UID)
 	}
 	if a.GID != b.GID {
-		return fmt.Errorf("mismatch of GID: %q != %q", a.GID, b.GID)
+		return fmt.Errorf("mismatch of GID: %d != %d", a.GID, b.GID)
 	}
 
 	if err := ensureTimePointersMatch(a.ModTime, b.ModTime); err != nil {
@@ -453,10 +450,10 @@ func ensureFileMetadataAttributesMatch(a, b *minimal.FileMetadata) error {
 		return fmt.Errorf("mismatch of ChangeTime: %w", err)
 	}
 	if a.Devmajor != b.Devmajor {
-		return fmt.Errorf("mismatch of Devmajor: %q != %q", a.Devmajor, b.Devmajor)
+		return fmt.Errorf("mismatch of Devmajor: %d != %d", a.Devmajor, b.Devmajor)
 	}
 	if a.Devminor != b.Devminor {
-		return fmt.Errorf("mismatch of Devminor: %q != %q", a.Devminor, b.Devminor)
+		return fmt.Errorf("mismatch of Devminor: %d != %d", a.Devminor, b.Devminor)
 	}
 	if !maps.Equal(a.Xattrs, b.Xattrs) {
 		return fmt.Errorf("mismatch of Xattrs: %q != %q", a.Xattrs, b.Xattrs)

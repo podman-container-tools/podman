@@ -226,13 +226,12 @@ func Schema2ListPublicClone(list *Schema2ListPublic) *Schema2ListPublic {
 func (list *Schema2ListPublic) ToOCI1Index() (*OCI1IndexPublic, error) {
 	components := make([]imgspecv1.Descriptor, 0, len(list.Manifests))
 	for _, manifest := range list.Manifests {
-		platform := ociPlatformFromSchema2PlatformSpec(manifest.Platform)
 		components = append(components, imgspecv1.Descriptor{
 			MediaType: manifest.MediaType,
 			Size:      manifest.Size,
 			Digest:    manifest.Digest,
 			URLs:      slices.Clone(manifest.URLs),
-			Platform:  &platform,
+			Platform:  new(ociPlatformFromSchema2PlatformSpec(manifest.Platform)),
 		})
 	}
 	oci := OCI1IndexPublicFromComponents(components, nil)

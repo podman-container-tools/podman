@@ -714,7 +714,7 @@ func prepareCacheFile(manifest []byte, format graphdriver.DifferOutputFormat) ([
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("unknown format %q", format)
+		return nil, fmt.Errorf("unknown format %d", format)
 	}
 
 	var r []*fileMetadata

@@ -260,6 +260,7 @@ func (d *compressor) fillWindow(b []byte) {
 	}
 	// Update window information.
 	d.windowEnd += n
+	d.blockStart = d.windowEnd
 	s.index = n
 }
 

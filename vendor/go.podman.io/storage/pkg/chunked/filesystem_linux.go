@@ -112,7 +112,9 @@ func doHardLink(dirfd, srcFd int, destFile string) error {
 	return err
 }
 
-func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool) (*os.File, int64, error) {
+// copyFileContent copies the content of srcFd into a new file under dirfd.
+// The returned *os.File, when non-nil, is opened read-only.
+func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool, needsForkLock bool) (*os.File, int64, error) {
 	destFile := fileMetadata.Name
 	src := procPathForFd(srcFd)
 	st, err := os.Stat(src)
@@ -131,6 +133,13 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 		}
 	}
 
+	if needsForkLock {
+		// Prevent concurrent fork(2) from duplicating this writable fd.
+		// See openDestinationFile for the full explanation.
+		syscall.ForkLock.RLock()
+		defer syscall.ForkLock.RUnlock()
+	}
+
 	// If the destination file already exists, we shouldn't blow it away
 	dstFile, err := openFileUnderRoot(dirfd, destFile, newFileFlags, mode)
 	if err != nil {
@@ -142,7 +151,13 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 		dstFile.Close()
 		return nil, -1, fmt.Errorf("copy to file %q under rootfs: %w", destFile, err)
 	}
-	return dstFile, st.Size(), nil
+
+	roFile, err := reopenFileReadOnly(dstFile)
+	dstFile.Close()
+	if err != nil {
+		return nil, -1, fmt.Errorf("reopen %q as read-only: %w", destFile, err)
+	}
+	return roFile, st.Size(), nil
 }
 
 func timeToTimespec(time *time.Time) (ts unix.Timespec) {
@@ -372,7 +387,7 @@ func openFileUnderRootOpenat2(dirfd int, name string, flags uint64, mode os.File
 
 // skipOpenat2 is set when openat2 is not supported by the underlying kernel and avoid
 // using it again.
-var skipOpenat2 int32
+var skipOpenat2 atomic.Bool
 
 // openFileUnderRootRaw tries to open a file using openat2 and if it is not supported fallbacks to a
 // userspace lookup.
@@ -386,14 +401,14 @@ func openFileUnderRootRaw(dirfd int, name string, flags uint64, mode os.FileMode
 		}
 		return fd, nil
 	}
-	if atomic.LoadInt32(&skipOpenat2) > 0 {
+	if skipOpenat2.Load() {
 		fd, err = openFileUnderRootFallback(dirfd, name, flags, mode)
 	} else {
 		fd, err = openFileUnderRootOpenat2(dirfd, name, flags, mode)
 		// If the function failed with ENOSYS, switch off the support for openat2
 		// and fallback to using safejoin.
 		if err != nil && errors.Is(err, unix.ENOSYS) {
-			atomic.StoreInt32(&skipOpenat2, 1)
+			skipOpenat2.Store(true)
 			fd, err = openFileUnderRootFallback(dirfd, name, flags, mode)
 		}
 	}
@@ -521,7 +536,7 @@ func safeLink(dirfd int, mode os.FileMode, metadata *fileMetadata, options *arch
 		return err
 	}
 
-	newFile, err := openFileUnderRoot(dirfd, metadata.Name, unix.O_WRONLY|unix.O_NOFOLLOW, 0)
+	newFile, err := openFileUnderRoot(dirfd, metadata.Name, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		// If the target is a symlink, open the file with O_PATH.
 		if errors.Is(err, unix.ELOOP) {

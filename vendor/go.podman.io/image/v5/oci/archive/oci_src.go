@@ -58,8 +58,7 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref ociArchiv
 
 	unpackedSrc, err := tempDirRef.ociRefExtracted.NewImageSource(ctx, sys)
 	if err != nil {
-		var notFound ocilayout.ImageNotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[ocilayout.ImageNotFoundError](err); ok {
 			err = ImageNotFoundError{ref: ref}
 		}
 		if err := tempDirRef.deleteTempDir(); err != nil {

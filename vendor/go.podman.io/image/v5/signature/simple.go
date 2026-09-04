@@ -61,15 +61,11 @@ type UntrustedSignatureInformation struct {
 // newUntrustedSignature returns an untrustedSignature object with
 // the specified primary contents and appropriate metadata.
 func newUntrustedSignature(dockerManifestDigest digest.Digest, dockerReference string) untrustedSignature {
-	// Use intermediate variables for these values so that we can take their addresses.
-	// Golang guarantees that they will have a new address on every execution.
-	creatorID := "atomic " + version.Version
-	timestamp := time.Now().Unix()
 	return untrustedSignature{
 		untrustedDockerManifestDigest: dockerManifestDigest,
 		untrustedDockerReference:      dockerReference,
-		untrustedCreatorID:            &creatorID,
-		untrustedTimestamp:            &timestamp,
+		untrustedCreatorID:            new("atomic " + version.Version),
+		untrustedTimestamp:            new(time.Now().Unix()),
 	}
 }
 

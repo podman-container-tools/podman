@@ -106,8 +106,7 @@ func (r *rekorClient) uploadEntry(ctx context.Context, proposedEntry rekorPropos
 		// In ordinary operation, we should not get duplicate entries, because our payload contains a timestamp,
 		// so it is supposed to be unique; and the default key format, ECDSA p256, also contains a nonce.
 		// But conflicts can fairly easily happen during debugging and experimentation, so it pays to handle this.
-		var conflictErr *createLogEntryConflictError
-		if errors.As(err, &conflictErr) && conflictErr.location != "" {
+		if conflictErr, ok := errors.AsType[*createLogEntryConflictError](err); ok && conflictErr.location != "" {
 			location := conflictErr.location
 			logrus.Debugf("CreateLogEntry reported a conflict, location = %s", location)
 			// We might be able to just GET the returned Location, but let’s use the formal API method.
@@ -128,11 +127,6 @@ func (r *rekorClient) uploadEntry(ctx context.Context, proposedEntry rekorPropos
 	return resp, nil
 }
 
-// stringPointer is a helper to create *string fields in JSON data.
-func stringPointer(s string) *string {
-	return &s
-}
-
 // uploadKeyOrCert integrates this code into sigstore/internal.Signer.
 // Given components of the created signature, it returns a SET that should be added to the signature.
 func (r *rekorClient) uploadKeyOrCert(ctx context.Context, keyOrCertBytes []byte, signatureBytes []byte, payloadBytes []byte) ([]byte, error) {
@@ -140,8 +134,8 @@ func (r *rekorClient) uploadKeyOrCert(ctx context.Context, keyOrCertBytes []byte
 	hashedRekordSpec, err := json.Marshal(internal.RekorHashedrekordV001Schema{
 		Data: &internal.RekorHashedrekordV001SchemaData{
 			Hash: &internal.RekorHashedrekordV001SchemaDataHash{
-				Algorithm: stringPointer(internal.RekorHashedrekordV001SchemaDataHashAlgorithmSha256),
-				Value:     stringPointer(hex.EncodeToString(payloadHash[:])),
+				Algorithm: new(internal.RekorHashedrekordV001SchemaDataHashAlgorithmSha256),
+				Value:     new(hex.EncodeToString(payloadHash[:])),
 			},
 		},
 		Signature: &internal.RekorHashedrekordV001SchemaSignature{
@@ -155,7 +149,7 @@ func (r *rekorClient) uploadKeyOrCert(ctx context.Context, keyOrCertBytes []byte
 		return nil, err
 	}
 	proposedEntry := internal.RekorHashedrekord{
-		APIVersion: stringPointer(internal.RekorHashedRekordV001APIVersion),
+		APIVersion: new(internal.RekorHashedRekordV001APIVersion),
 		Spec:       hashedRekordSpec,
 	}
 
