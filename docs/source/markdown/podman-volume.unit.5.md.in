@@ -44,6 +44,7 @@ Valid options for `[Volume]` are listed below:
 | Label="foo=bar"                     | --label "foo=bar"                         |
 | Options=XYZ                         | --opt "o=XYZ"                             |
 | PodmanArgs=--driver=image           | --driver=image                            |
+| ServiceName=name                    | Name the systemd unit `name.service`      |
 | Type=type                           | Filesystem type of Device                 |
 | User=123                            | --opt uid=123                             |
 | VolumeName=foo                      | podman volume create foo                  |
@@ -100,6 +101,13 @@ This key can be listed multiple times.
 The mount options to use for a filesystem as used by the **mount(8)** command `-o` option.
 
 @@option quadlet:podman-args
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit by appending `-volume` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 ### `Type=`
 
