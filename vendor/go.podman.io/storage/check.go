@@ -284,9 +284,8 @@ func (s *store) Check(options *CheckOptions) (CheckReport, error) {
 						return err
 					}
 					// Extract the diff.
-					uncompressed := archive.Uncompressed
 					diffOptions := DiffOptions{
-						Compression: &uncompressed,
+						Compression: new(archive.Uncompressed),
 					}
 					diff, err := store.Diff("", id, &diffOptions)
 					if err != nil {

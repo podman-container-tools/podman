@@ -389,18 +389,17 @@ func (s *storageImageDestination) PutBlobPartial(ctx context.Context, chunkAcces
 	var untrustedDiffID digest.Digest // "" if unknown
 	udid, err := s.untrustedLayerDiffID(options.LayerIndex)
 	if err != nil {
-		var diffIDUnknownErr untrustedLayerDiffIDUnknownError
-		switch {
-		case errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable):
+		if errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable) {
 			// PutBlobPartial is a private API, so all callers are within c/image, and should have called
 			// NoteOriginalOCIConfig first.
 			return private.UploadedBlob{}, fmt.Errorf("internal error: in PutBlobPartial, untrustedLayerDiffID returned errUntrustedLayerDiffIDNotYetAvailable")
-		case errors.As(err, &diffIDUnknownErr):
+		}
+		if _, ok := errors.AsType[untrustedLayerDiffIDUnknownError](err); ok {
 			if inputTOCDigest != nil {
 				return private.UploadedBlob{}, private.NewErrFallbackToOrdinaryLayerDownload(err)
 			}
 			untrustedDiffID = "" // A schema1 image or a non-TOC layer with no ambiguity, let it through
-		default:
+		} else {
 			return private.UploadedBlob{}, err
 		}
 	} else {
@@ -414,8 +413,7 @@ func (s *storageImageDestination) PutBlobPartial(ctx context.Context, chunkAcces
 	}
 
 	defer func() {
-		var perr chunked.ErrFallbackToOrdinaryLayerDownload
-		if errors.As(retErr, &perr) {
+		if _, ok := errors.AsType[chunked.ErrFallbackToOrdinaryLayerDownload](retErr); ok {
 			retErr = private.NewErrFallbackToOrdinaryLayerDownload(retErr)
 		}
 	}()
@@ -541,16 +539,15 @@ func (s *storageImageDestination) tryReusingBlobAsPending(blobDigest digest.Dige
 		// Only consider using TOCDigest if we can avoid ambiguous image “views”, see the detailed comment in PutBlobPartial.
 		_, err := s.untrustedLayerDiffID(*options.LayerIndex)
 		if err != nil {
-			var diffIDUnknownErr untrustedLayerDiffIDUnknownError
-			switch {
-			case errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable):
+			if errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable) {
 				// options.TOCDigest is a private API, so all callers are within c/image, and should have called
 				// NoteOriginalOCIConfig first.
 				return false, private.ReusedBlob{}, fmt.Errorf("internal error: in TryReusingBlobWithOptions, untrustedLayerDiffID returned errUntrustedLayerDiffIDNotYetAvailable")
-			case errors.As(err, &diffIDUnknownErr):
+			}
+			if _, ok := errors.AsType[untrustedLayerDiffIDUnknownError](err); ok {
 				logrus.Debugf("Not using TOC %q to look for layer reuse: %v", options.TOCDigest, err)
 				// But don’t abort entirely, keep useTOCDigest = false, try a blobDigest match.
-			default:
+			} else {
 				return false, private.ReusedBlob{}, err
 			}
 		} else {
@@ -1014,12 +1011,11 @@ func (s *storageImageDestination) commitLayer(index int, info addedLayerInfo, si
 	if trusted.diffID != "" {
 		untrustedDiffID, err := s.untrustedLayerDiffID(index)
 		if err != nil {
-			var diffIDUnknownErr untrustedLayerDiffIDUnknownError
-			switch {
-			case errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable):
-				logrus.Debugf("Skipping commit for layer %q, manifest not yet available for DiffID check", index)
+			if errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable) {
+				logrus.Debugf("Skipping commit for layer %d, manifest not yet available for DiffID check", index)
 				return true, nil
-			case errors.As(err, &diffIDUnknownErr):
+			}
+			if _, ok := errors.AsType[untrustedLayerDiffIDUnknownError](err); ok {
 				// If untrustedLayerDiffIDUnknownError, the input image is schema1, has no TOC annotations,
 				// so we could not have reused a TOC-identified layer nor have done a TOC-identified partial pull,
 				// i.e. there is no other “view” to worry about.  Sanity-check that we really see the only expected view.
@@ -1032,7 +1028,7 @@ func (s *storageImageDestination) commitLayer(index int, info addedLayerInfo, si
 						index, trusted.logString())
 				}
 				// else a schema1 image or a non-TOC layer with no ambiguity, let it through
-			default:
+			} else {
 				return false, err
 			}
 		} else if trusted.diffID != untrustedDiffID {
@@ -1098,12 +1094,11 @@ func (s *storageImageDestination) createNewLayer(index int, trusted trustedLayer
 		if diffOutput.UncompressedDigest == "" {
 			d, err := s.untrustedLayerDiffID(index)
 			if err != nil {
-				var diffIDUnknownErr untrustedLayerDiffIDUnknownError
-				switch {
-				case errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable):
+				if errors.Is(err, errUntrustedLayerDiffIDNotYetAvailable) {
 					logrus.Debugf("Skipping commit for layer %q, manifest not yet available", newLayerID)
 					return nil, nil
-				case errors.As(err, &diffIDUnknownErr):
+				}
+				if _, ok := errors.AsType[untrustedLayerDiffIDUnknownError](err); ok {
 					// If untrustedLayerDiffIDUnknownError, the input image is schema1, has no TOC annotations,
 					// so we should have !trusted.layerIdentifiedByTOC, i.e. we should have set
 					// diffOutput.UncompressedDigest above in this function, at the very latest.
@@ -1112,7 +1107,7 @@ func (s *storageImageDestination) createNewLayer(index int, trusted trustedLayer
 					// commitLayer should have already refused this image when dealing with the “view” ambiguity.
 					return nil, fmt.Errorf("internal error: layer %d for blob %s was partially-pulled with unknown UncompressedDigest, but we don't have a DiffID in config",
 						index, trusted.logString())
-				default:
+				} else {
 					return nil, err
 				}
 			}
@@ -1196,9 +1191,8 @@ func (s *storageImageDestination) createNewLayer(index int, trusted trustedLayer
 		}
 
 		// Read the layer's contents.
-		noCompression := archive.Uncompressed
 		diffOptions := &storage.DiffOptions{
-			Compression: &noCompression,
+			Compression: new(archive.Uncompressed),
 		}
 		diff, err2 := s.imageRef.transport.store.Diff("", layer.ID, diffOptions)
 		if err2 != nil {

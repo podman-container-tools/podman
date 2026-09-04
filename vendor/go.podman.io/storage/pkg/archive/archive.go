@@ -436,33 +436,32 @@ const (
 // than a host-specific UID. Ownership is remapped the same way for the file
 // itself in prepareAddFile.
 //
-// Values that are not v3 are returned unchanged. A rootid outside the mapping is
-// left as-is. When the rootid maps to container root, the value is downgraded to
-// v2, matching what the kernel returns when the capability is read from within
-// the container namespace.
-func normalizeCapabilityRootID(idMappings *idtools.IDMappings, capData []byte) []byte {
+// Values that are not v3 are returned unchanged. When the rootid maps to container
+// root, the value is downgraded to v2, matching what the kernel returns when the
+// capability is read from within the container namespace.
+func normalizeCapabilityRootID(idMappings *idtools.IDMappings, capData []byte) ([]byte, error) {
 	if idMappings == nil || idMappings.Empty() || len(capData) != vfsCapDataSizeV3 {
-		return capData
+		return capData, nil
 	}
 	magicEtc := binary.LittleEndian.Uint32(capData[:4])
 	if magicEtc&vfsCapRevisionMask != vfsCapRevision3 {
-		return capData
+		return capData, nil
 	}
 	hostRootID := binary.LittleEndian.Uint32(capData[vfsCapRootIDOffset:])
 	containerID, err := idtools.RawToContainer(int(hostRootID), idMappings.UIDs())
-	if err != nil || containerID < 0 {
-		return capData
+	if err != nil {
+		return nil, err
 	}
 	if containerID == 0 {
 		v2 := make([]byte, vfsCapDataSizeV2)
 		copy(v2, capData[:vfsCapDataSizeV2])
 		binary.LittleEndian.PutUint32(v2[:4], (magicEtc&^vfsCapRevisionMask)|vfsCapRevision2)
-		return v2
+		return v2, nil
 	}
 	out := make([]byte, vfsCapDataSizeV3)
 	copy(out, capData)
 	binary.LittleEndian.PutUint32(out[vfsCapRootIDOffset:], uint32(containerID))
-	return out
+	return out, nil
 }
 
 // readSecurityXattrToTarHeader reads security.capability, security,image
@@ -480,7 +479,10 @@ func readSecurityXattrToTarHeader(path string, hdr *tar.Header, idMappings *idto
 			continue
 		}
 		if xattr == "security.capability" {
-			capability = normalizeCapabilityRootID(idMappings, capability)
+			capability, err = normalizeCapabilityRootID(idMappings, capability)
+			if err != nil {
+				return fmt.Errorf("failed to normalize %q attribute from %q: %w", xattr, path, err)
+			}
 		}
 		hdr.PAXRecords[PaxSchilyXattr+xattr] = string(capability)
 	}

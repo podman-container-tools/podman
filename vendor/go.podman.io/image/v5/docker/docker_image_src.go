@@ -621,15 +621,17 @@ func isMirrorFallbackError(err error) bool {
 func isMirrorTransientError(err error) bool {
 	// HTTP 5xx: handleErrorResponse returns UnexpectedHTTPStatusError for status
 	// codes outside 400–499. Server-side error, another mirror may succeed.
-	var httpErr UnexpectedHTTPStatusError
-	if errors.As(err, &httpErr) && httpErr.StatusCode >= 500 {
+	if httpErr, ok := errors.AsType[UnexpectedHTTPStatusError](err); ok && httpErr.StatusCode >= 500 {
 		return true
 	}
 
 	// Network timeout: makeRequest returns net.Error with Timeout() == true.
 	// The mirror is reachable but slow — worth retrying on another.
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+		return true
+	}
+
+	return false
 }
 
 // retireStaleOverride checks if the current mirrorOverride was set by another

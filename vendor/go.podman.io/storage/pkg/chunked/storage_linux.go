@@ -46,7 +46,7 @@ import (
 const (
 	maxNumberMissingChunks  = 1024
 	autoMergePartsThreshold = 1024 // if the gap between two ranges is below this threshold, automatically merge them.
-	newFileFlags            = (unix.O_CREAT | unix.O_TRUNC | unix.O_EXCL | unix.O_WRONLY)
+	newFileFlags            = (unix.O_CREAT | unix.O_TRUNC | unix.O_EXCL | unix.O_WRONLY | unix.O_CLOEXEC)
 	bigDataKey              = "zstd-chunked-manifest"
 	chunkedData             = "zstd-chunked-data"
 	chunkedLayerDataKey     = "zstd-chunked-layer-data"
@@ -229,16 +229,14 @@ func NewDiffer(ctx context.Context, store storage.Store, blobDigest digest.Diges
 
 	differ, err := getProperDiffer(store, blobDigest, blobSize, annotations, iss, pullOptions)
 	if err != nil {
-		var fallbackErr ErrFallbackToOrdinaryLayerDownload
-		if !errors.As(err, &fallbackErr) {
+		if _, ok := errors.AsType[ErrFallbackToOrdinaryLayerDownload](err); !ok {
 			return nil, err
 		}
 		// If convert_images is enabled, always attempt to convert it instead of returning an error or falling back to a different method.
 		if !pullOptions.convertImages {
 			return nil, err
 		}
-		var canConvertErr errFallbackCanConvert
-		if !errors.As(err, &canConvertErr) {
+		if _, ok := errors.AsType[errFallbackCanConvert](err); !ok {
 			// We are supposed to use makeConvertFromRawDiffer, but that would not work.
 			// Fail, and make sure the error does _not_ match ErrFallbackToOrdinaryLayerDownload: use only the error text,
 			// discard all type information.
@@ -439,7 +437,7 @@ func makeCopyBuffer() []byte {
 // name is the path to the file to copy in source.
 // dirfd is an open file descriptor to the destination root directory.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirfd int, useHardLinks bool) (bool, *os.File, int64, error) {
+func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
 	srcDirfd, err := unix.Open(source, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
@@ -460,7 +458,7 @@ func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirf
 	}
 	defer srcFile.Close()
 
-	dstFile, written, err := copyFileContent(int(srcFile.Fd()), file, dirfd, 0, useHardLinks)
+	dstFile, written, err := copyFileContent(int(srcFile.Fd()), file, dirfd, 0, useHardLinks, needsForkLock)
 	if err != nil {
 		return false, nil, 0, fmt.Errorf("copy content to %q: %w", file.Name, err)
 	}
@@ -529,7 +527,7 @@ func canDedupFileWithHardLink(file *fileMetadata, fd int, s os.FileInfo) bool {
 // ostreeRepos is a list of OSTree repos.
 // dirfd is an open fd to the destination checkout.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, useHardLinks bool) (bool, *os.File, int64, error) {
+func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
 	digest, err := digest.Parse(file.Digest)
 	if err != nil {
 		logrus.Debugf("could not parse digest: %v", err)
@@ -562,7 +560,7 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 			continue
 		}
 
-		dstFile, written, err := copyFileContent(fd, file, dirfd, 0, useHardLinks)
+		dstFile, written, err := copyFileContent(fd, file, dirfd, 0, useHardLinks, needsForkLock)
 		if err != nil {
 			logrus.Debugf("could not copyFileContent: %v", err)
 			return false, nil, 0, nil
@@ -571,7 +569,7 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 	}
 	// If hard links deduplication was used and it has failed, try again without hard links.
 	if useHardLinks {
-		return findFileInOSTreeRepos(file, ostreeRepos, dirfd, false)
+		return findFileInOSTreeRepos(file, ostreeRepos, dirfd, false, needsForkLock)
 	}
 
 	return false, nil, 0, nil
@@ -582,12 +580,12 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 // file is the file to look for.
 // dirfd is an open file descriptor to the checkout root directory.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func findFileInOtherLayers(cache *layersCache, file *fileMetadata, dirfd int, useHardLinks bool) (bool, *os.File, int64, error) {
+func findFileInOtherLayers(cache *layersCache, file *fileMetadata, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
 	target, name, err := cache.findFileInOtherLayers(file, useHardLinks)
 	if err != nil || name == "" {
 		return false, nil, 0, err
 	}
-	return copyFileFromOtherLayer(file, target, name, dirfd, useHardLinks)
+	return copyFileFromOtherLayer(file, target, name, dirfd, useHardLinks, needsForkLock)
 }
 
 func maybeDoIDRemap(manifest []fileMetadata, options *archive.TarOptions) error {
@@ -743,7 +741,7 @@ func (c *chunkedDiffer) prepareCompressedStreamToFile(partCompression compressed
 	case partCompression == fileTypeNoCompression:
 		return fileTypeNoCompression, nil
 	default:
-		return partCompression, fmt.Errorf("unknown file type %q", c.fileType)
+		return partCompression, fmt.Errorf("unknown file type %d", c.fileType)
 	}
 	return partCompression, nil
 }
@@ -794,7 +792,7 @@ func (c *chunkedDiffer) appendCompressedStreamToFile(compression compressedFileT
 			}
 		}
 	default:
-		return fmt.Errorf("unknown file type %q", c.fileType)
+		return fmt.Errorf("unknown file type %d", c.fileType)
 	}
 	return nil
 }
@@ -814,8 +812,16 @@ type destinationFile struct {
 }
 
 func openDestinationFile(dirfd int, metadata *fileMetadata, options *archive.TarOptions, skipValidation bool, recordFsVerity recordFsVerityFunc) (*destinationFile, error) {
+	// Hold ForkLock to prevent concurrent fork(2) from duplicating
+	// the writable fd, which causes ETXTBSY from FS_IOC_ENABLE_VERITY.
+	if recordFsVerity != nil {
+		syscall.ForkLock.RLock()
+	}
 	file, err := openFileUnderRoot(dirfd, metadata.Name, newFileFlags, 0)
 	if err != nil {
+		if recordFsVerity != nil {
+			syscall.ForkLock.RUnlock()
+		}
 		return nil, err
 	}
 
@@ -844,29 +850,18 @@ func openDestinationFile(dirfd int, metadata *fileMetadata, options *archive.Tar
 	}, nil
 }
 
-func (d *destinationFile) Close() (Err error) {
-	defer func() {
-		var roFile *os.File
-		var err error
-
-		if d.recordFsVerity != nil {
-			roFile, err = reopenFileReadOnly(d.file)
-			if err == nil {
-				defer roFile.Close()
-			} else if Err == nil {
-				Err = err
-			}
-		}
-
-		err = d.file.Close()
-		if Err == nil {
-			Err = err
-		}
-
-		if Err == nil && roFile != nil {
-			Err = d.recordFsVerity(d.metadata.Name, roFile)
-		}
-	}()
+func (d *destinationFile) Close() error {
+	if d.recordFsVerity != nil {
+		defer syscall.ForkLock.RUnlock()
+	}
+	// Reopen read-only while the writable fd is still valid, then
+	// close the writable fd to release ForkLock.
+	roFile, err := reopenFileReadOnly(d.file)
+	d.file.Close()
+	if err != nil {
+		return err
+	}
+	defer roFile.Close()
 
 	if !d.skipValidation {
 		manifestChecksum, err := digest.Parse(d.metadata.Digest)
@@ -883,7 +878,14 @@ func (d *destinationFile) Close() (Err error) {
 		mode = *d.options.ForceMask
 	}
 
-	return setFileAttrs(d.dirfd, d.file, mode, d.metadata, d.options, false)
+	if err := setFileAttrs(d.dirfd, roFile, mode, d.metadata, d.options, false); err != nil {
+		return err
+	}
+
+	if d.recordFsVerity != nil {
+		return d.recordFsVerity(d.metadata.Name, roFile)
+	}
+	return nil
 }
 
 func closeDestinationFiles(files chan *destinationFile, errors chan error) {
@@ -1219,32 +1221,23 @@ func reopenFileReadOnly(f *os.File) (*os.File, error) {
 }
 
 func (c *chunkedDiffer) findAndCopyFile(dirfd int, r *fileMetadata, copyOptions *findAndCopyFileOptions, mode os.FileMode) (bool, error) {
-	finalizeFile := func(dstFile *os.File) error {
-		if dstFile == nil {
-			return nil
-		}
-		err := setFileAttrs(dirfd, dstFile, mode, r, copyOptions.options, false)
-		if err != nil {
-			dstFile.Close()
-			return err
-		}
-		var roFile *os.File
-		if c.useFsVerity != graphdriver.DifferFsVerityDisabled {
-			roFile, err = reopenFileReadOnly(dstFile)
-		}
-		dstFile.Close()
-		if err != nil {
-			return err
-		}
+	finalizeFile := func(roFile *os.File) error {
 		if roFile == nil {
 			return nil
 		}
-
 		defer roFile.Close()
+
+		if err := setFileAttrs(dirfd, roFile, mode, r, copyOptions.options, false); err != nil {
+			return err
+		}
+		if c.useFsVerity == graphdriver.DifferFsVerityDisabled {
+			return nil
+		}
 		return c.recordFsVerity(r.Name, roFile)
 	}
 
-	found, dstFile, _, err := findFileInOtherLayers(c.layersCache, r, dirfd, copyOptions.useHardLinks)
+	needsForkLock := c.useFsVerity != graphdriver.DifferFsVerityDisabled
+	found, dstFile, _, err := findFileInOtherLayers(c.layersCache, r, dirfd, copyOptions.useHardLinks, needsForkLock)
 	if err != nil {
 		return false, err
 	}
@@ -1255,7 +1248,7 @@ func (c *chunkedDiffer) findAndCopyFile(dirfd int, r *fileMetadata, copyOptions 
 		return true, nil
 	}
 
-	found, dstFile, _, err = findFileInOSTreeRepos(r, copyOptions.ostreeRepos, dirfd, copyOptions.useHardLinks)
+	found, dstFile, _, err = findFileInOSTreeRepos(r, copyOptions.ostreeRepos, dirfd, copyOptions.useHardLinks, needsForkLock)
 	if err != nil {
 		return false, err
 	}

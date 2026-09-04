@@ -343,14 +343,15 @@ github.com/json-iterator/go
 # github.com/kevinburke/ssh_config v1.5.0
 ## explicit; go 1.18
 github.com/kevinburke/ssh_config
-# github.com/klauspost/compress v1.19.2
-## explicit; go 1.24
+# github.com/klauspost/compress v1.20.0
+## explicit; go 1.25
 github.com/klauspost/compress
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/regmask
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
@@ -603,8 +604,8 @@ github.com/shirou/gopsutil/v4/internal/common
 github.com/shirou/gopsutil/v4/mem
 github.com/shirou/gopsutil/v4/net
 github.com/shirou/gopsutil/v4/process
-# github.com/sigstore/fulcio v1.8.7
-## explicit; go 1.25.7
+# github.com/sigstore/fulcio v1.8.8
+## explicit; go 1.26.0
 github.com/sigstore/fulcio/pkg/api
 github.com/sigstore/fulcio/pkg/certificate
 # github.com/sigstore/protobuf-specs v0.5.1
@@ -774,8 +775,8 @@ go.podman.io/buildah/pkg/sshagent
 go.podman.io/buildah/pkg/util
 go.podman.io/buildah/pkg/volumes
 go.podman.io/buildah/util
-# go.podman.io/common v0.69.2-0.20260902183646-144f9a50f3bb
-## explicit; go 1.25.7
+# go.podman.io/common v0.69.2-0.20260904133341-741ebc37de41
+## explicit; go 1.26.0
 go.podman.io/common/internal
 go.podman.io/common/libimage
 go.podman.io/common/libimage/define
@@ -840,8 +841,8 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.41.2-0.20260902183646-144f9a50f3bb
-## explicit; go 1.25.7
+# go.podman.io/image/v5 v5.41.2-0.20260904133341-741ebc37de41
+## explicit; go 1.26.0
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
 go.podman.io/image/v5/directory/explicitfilepath
@@ -917,8 +918,8 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.64.1-0.20260902183646-144f9a50f3bb
-## explicit; go 1.25.0
+# go.podman.io/storage v1.64.1-0.20260904133341-741ebc37de41
+## explicit; go 1.26.0
 go.podman.io/storage
 go.podman.io/storage/drivers
 go.podman.io/storage/drivers/btrfs
@@ -974,8 +975,8 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.5
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.org/x/crypto v0.55.0
-## explicit; go 1.25.0
+# golang.org/x/crypto v0.56.0
+## explicit; go 1.26.0
 golang.org/x/crypto/argon2
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/blowfish

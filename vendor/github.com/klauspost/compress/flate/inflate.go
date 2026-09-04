@@ -14,6 +14,8 @@ import (
 	"io"
 	"math/bits"
 	"sync"
+
+	"github.com/klauspost/compress/internal/regmask"
 )
 
 const (
@@ -557,8 +559,8 @@ func (f *decompressor) readHuffman() error {
 				return err
 			}
 		}
-		rep += int(f.b & uint32(1<<(nb&regSizeMaskUint32)-1))
-		f.b >>= nb & regSizeMaskUint32
+		rep += int(f.b & uint32(1<<(nb&regmask.Shift32ByUint)-1))
+		f.b >>= nb & regmask.Shift32ByUint
 		f.nb -= nb
 		if i+rep > n {
 			if debugDecode {
@@ -731,7 +733,7 @@ func (f *decompressor) moreBits() error {
 		return noEOF(err)
 	}
 	f.roffset++
-	f.b |= uint32(c) << (f.nb & regSizeMaskUint32)
+	f.b |= uint32(c) << (f.nb & regmask.Shift32ByUint)
 	f.nb += 8
 	return nil
 }
@@ -756,7 +758,7 @@ func (f *decompressor) huffSym(h *huffmanDecoder) (int, error) {
 				return 0, noEOF(err)
 			}
 			f.roffset++
-			b |= uint32(c) << (nb & regSizeMaskUint32)
+			b |= uint32(c) << (nb & regmask.Shift32ByUint)
 			nb += 8
 		}
 		chunk := h.chunks[b&(huffmanNumChunks-1)]
@@ -775,7 +777,7 @@ func (f *decompressor) huffSym(h *huffmanDecoder) (int, error) {
 				f.err = CorruptInputError(f.roffset)
 				return 0, f.err
 			}
-			f.b = b >> (n & regSizeMaskUint32)
+			f.b = b >> (n & regmask.Shift32ByUint)
 			f.nb = nb - n
 			return int(chunk >> huffmanValueShift), nil
 		}

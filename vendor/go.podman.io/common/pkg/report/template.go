@@ -102,8 +102,7 @@ func Headers(object any, overrides map[string]string) []map[string]string {
 
 	// Column header will be field name upper-cased.
 	headers := make(map[string]string, value.NumField())
-	for i := range value.Type().NumField() {
-		field := value.Type().Field(i)
+	for field := range value.Type().Fields() {
 		// Recurse to find field names from promoted structs
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
 			h := Headers(reflect.New(field.Type).Interface(), nil)
