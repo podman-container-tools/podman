@@ -153,7 +153,7 @@ Type=forking
 PIDFile=/run/user/1000/overlay-containers/de1e3223b1b888bc02d0962dd6cb5855eb00734061013ffdd3479d225abacdc6/userdata/conmon.pid
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 
 ### Generate systemd unit file for a container with `--new` flag
@@ -195,7 +195,7 @@ KillMode=none
 Type=forking
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 
 ### Generate systemd unit files for a pod with two simple alpine containers
@@ -235,7 +235,7 @@ Type=forking
 PIDFile=/run/user/1000/overlay-containers/ccfd5c71a088768774ca7bd05888d55cc287698dde06f475c8b02f696a25adcd/userdata/conmon.pid
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 
 ### Installation of generated systemd unit files.
@@ -258,7 +258,7 @@ $ podman generate systemd --files --name systemd-pod
 $ sudo cp pod-systemd-pod.service container-great_payne.service /etc/systemd/system
 $ systemctl enable pod-systemd-pod.service
 Created symlink /etc/systemd/system/multi-user.target.wants/pod-systemd-pod.service → /etc/systemd/system/pod-systemd-pod.service.
-Created symlink /etc/systemd/system/default.target.wants/pod-systemd-pod.service → /etc/systemd/system/pod-systemd-pod.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/pod-systemd-pod.service → /etc/systemd/system/pod-systemd-pod.service.
 $ systemctl is-enabled pod-systemd-pod.service
 enabled
 ```
