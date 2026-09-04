@@ -1738,13 +1738,13 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 			return "", err
 		}
 
-		pid, cleanupFunc, err := idmap.CreateUsernsProcess(util.RuntimeSpecToIDtools(uidMappings), util.RuntimeSpecToIDtools(gidMappings))
-		if err != nil {
+		pid, cleanupFunc, err := idmap.CreateUsernsProcess(util.RuntimeSpecToIDtools(uidMappings), util.RuntimeSpecToIDtools(gidMappings)) //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
+		if err != nil {                                                                                                                    //nolint:staticcheck,nolintlint
 			return "", err
 		}
 		defer cleanupFunc()
 
-		if err := idmap.CreateIDMappedMount(c.config.Rootfs, c.config.Rootfs, pid); err != nil {
+		if err := idmap.CreateIDMappedMount(c.config.Rootfs, c.config.Rootfs, pid); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 			return "", fmt.Errorf("failed to create idmapped mount: %w", err)
 		}
 		defer func() {

@@ -42,8 +42,8 @@ func init() {
 		Parent:  podCmd,
 	})
 
-	descriptors, err := util.GetContainerPidInformationDescriptors()
-	if err == nil {
+	descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
+	if err == nil {                                                  //nolint:staticcheck,nolintlint
 		topDescription = fmt.Sprintf("%s\n\n  Format Descriptors:\n    %s", topDescription, strings.Join(descriptors, ","))
 		topCommand.Long = topDescription
 	}
@@ -57,8 +57,8 @@ func init() {
 
 func top(_ *cobra.Command, args []string) error {
 	if topOptions.ListDescriptors {
-		descriptors, err := util.GetContainerPidInformationDescriptors()
-		if err != nil {
+		descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
+		if err != nil {                                                  //nolint:staticcheck,nolintlint
 			return err
 		}
 		fmt.Println(strings.Join(descriptors, "\n"))

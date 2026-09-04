@@ -253,12 +253,12 @@ func getLockManager(runtime *Runtime) (lock.Manager, error) {
 			lockPath = fmt.Sprintf("%s_%d", define.DefaultRootlessSHMLockPath, rootless.GetRootlessUID())
 		}
 		// Set up the lock manager
-		manager, err = lock.OpenSHMLockManager(lockPath, runtime.config.Engine.NumLocks)
-		if err != nil {
+		manager, err = lock.OpenSHMLockManager(lockPath, runtime.config.Engine.NumLocks) //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
+		if err != nil {                                                                  //nolint:staticcheck,nolintlint
 			switch {
 			case errors.Is(err, os.ErrNotExist):
-				manager, err = lock.NewSHMLockManager(lockPath, runtime.config.Engine.NumLocks)
-				if err != nil {
+				manager, err = lock.NewSHMLockManager(lockPath, runtime.config.Engine.NumLocks) //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
+				if err != nil {                                                                 //nolint:staticcheck,nolintlint
 					return nil, fmt.Errorf("failed to get new shm lock manager: %w", err)
 				}
 			case errors.Is(err, syscall.ERANGE) && runtime.doRenumber:
@@ -271,8 +271,8 @@ func getLockManager(runtime *Runtime) (lock.Manager, error) {
 					return nil, fmt.Errorf("removing libpod locks file %s: %w", lockPath, err)
 				}
 
-				manager, err = lock.NewSHMLockManager(lockPath, runtime.config.Engine.NumLocks)
-				if err != nil {
+				manager, err = lock.NewSHMLockManager(lockPath, runtime.config.Engine.NumLocks) //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
+				if err != nil {                                                                 //nolint:staticcheck,nolintlint
 					return nil, err
 				}
 			default:

@@ -95,7 +95,7 @@ func CRImportCheckpoint(ctx context.Context, runtime *libpod.Runtime, restoreOpt
 
 	if restoreOptions.Pod != "" {
 		// Restoring into a Pod requires much newer versions of CRIU
-		if err := criu.CheckForCriu(criu.PodCriuVersion); err != nil {
+		if err := criu.CheckForCriu(criu.PodCriuVersion); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 			return nil, fmt.Errorf("restoring containers into pod: %w", err)
 		}
 		// The runtime also has to support it

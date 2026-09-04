@@ -1327,7 +1327,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 }
 
 func (c *Container) checkpointRestoreSupported(version int) error {
-	if err := criu.CheckForCriu(version); err != nil {
+	if err := criu.CheckForCriu(version); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 		return err
 	}
 	if !c.ociRuntime.SupportsCheckpoint() {
