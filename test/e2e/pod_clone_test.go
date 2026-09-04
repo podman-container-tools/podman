@@ -80,7 +80,7 @@ var _ = Describe("Podman pod clone", func() {
 		podInspect.WaitWithDefaultTimeout()
 		Expect(podInspect).To(ExitCleanly())
 		data := podInspect.InspectPodToJSON()
-		Expect(data.State).To(ContainSubstring("Running"))
+		Expect(data.State).To(ContainSubstring("running"))
 	})
 
 	It("podman pod clone destroy test", func() {

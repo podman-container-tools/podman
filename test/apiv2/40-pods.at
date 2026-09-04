@@ -90,7 +90,7 @@ t POST  libpod/pods/bar/restart 200 \
   .Id=$pod_bar_id
 
 t GET  libpod/pods/bar/json     200 \
-  .State=Running
+  .State=running
 
 t POST  libpod/pods/bar/restart 200 \
   .Errs=null \

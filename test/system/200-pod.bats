@@ -309,7 +309,7 @@ EOF
 
     # pod ps
     run_podman pod ps --format '{{.ID}} {{.Name}} {{.Status}} {{.Labels}}'
-    assert "$output" =~ "${pod_id:0:12} $podname Running ${labelname}=${labelvalue}"  "pod ps"
+    assert "$output" =~ "${pod_id:0:12} $podname running ${labelname}=${labelvalue}"  "pod ps"
 
     run_podman pod ps --no-trunc --filter "label=${labelname}=${labelvalue}" --format '{{.ID}}'
     is "$output" "$pod_id" "pod ps --filter label=..."
@@ -495,14 +495,14 @@ EOF
     podID="$output"
     run_podman run --pod $podID $IMAGE true
     run_podman pod inspect $podID --format "{{.State}}"
-    _ensure_pod_state $podID Degraded
+    _ensure_pod_state $podID degraded
     run_podman pod rm $podID
 
     run_podman pod create --exit-policy stop
     podID="$output"
     run_podman run --pod $podID $IMAGE true
     run_podman pod inspect $podID --format "{{.State}}"
-    _ensure_pod_state $podID Exited
+    _ensure_pod_state $podID exited
     run_podman pod rm -t -1 -f $podID
 }
 
@@ -527,7 +527,7 @@ spec:
     run_podman play kube $PODMAN_TMPDIR/test.yaml
     run_podman pod inspect $name --format "{{.ExitPolicy}}"
     is "$output" "stop" "custom exit policy"
-    _ensure_pod_state $name Exited
+    _ensure_pod_state $name exited
     run_podman pod rm $name
 }
 
