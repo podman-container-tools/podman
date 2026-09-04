@@ -108,7 +108,7 @@ func outputTemplate(cmd *cobra.Command, responses []*entities.VolumeListReport) 
 		return err
 	}
 
-	if (rpt.RenderHeaders) && !noHeading {
+	if rpt.RenderHeaders && !noHeading {
 		if err := rpt.Execute(headers); err != nil {
 			return fmt.Errorf("failed to write report column headers: %w", err)
 		}

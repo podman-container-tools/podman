@@ -382,8 +382,8 @@ func WeightDevices(wtDevices map[string]spec.LinuxWeightDevice) ([]spec.LinuxWei
 			return nil, fmt.Errorf("failed to inspect '%s' in --blkio-weight-device: %w", k, err)
 		}
 		dev := new(spec.LinuxWeightDevice)
-		dev.Major = (int64(unix.Major(uint64(statT.Rdev)))) //nolint: unconvert
-		dev.Minor = (int64(unix.Minor(uint64(statT.Rdev)))) //nolint: unconvert
+		dev.Major = int64(unix.Major(uint64(statT.Rdev))) //nolint: unconvert
+		dev.Minor = int64(unix.Minor(uint64(statT.Rdev))) //nolint: unconvert
 		dev.Weight = v.Weight
 		devs = append(devs, *dev)
 	}

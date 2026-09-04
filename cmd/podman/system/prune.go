@@ -120,7 +120,7 @@ func prune(_ *cobra.Command, _ []string) error {
 	}
 
 	if !pruneOptions.External {
-		fmt.Printf("Total reclaimed space: %s\n", units.HumanSize((float64)(response.ReclaimedSpace)))
+		fmt.Printf("Total reclaimed space: %s\n", units.HumanSize(float64(response.ReclaimedSpace)))
 	}
 	return nil
 }

@@ -163,7 +163,7 @@ func toMachineFormat(vms []*machine.ListResponse, defaultCon *config.Connection)
 		isDefault := false
 		// check port, in case we somehow have machines with the same name in different providers
 		if defaultCon != nil {
-			isDefault = vm.Name == defaultCon.Name && strings.Contains(defaultCon.URI, strconv.Itoa((vm.Port)))
+			isDefault = vm.Name == defaultCon.Name && strings.Contains(defaultCon.URI, strconv.Itoa(vm.Port))
 		}
 		response := new(entities.ListReporter)
 		response.Default = isDefault

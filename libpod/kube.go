@@ -616,7 +616,7 @@ func (p *Pod) podWithContainers(ctx context.Context, containers []*Container, po
 			}
 		} else {
 			for k, v := range ctr.config.Spec.Annotations {
-				if !podmanOnly && (define.IsReservedAnnotation(k)) {
+				if !podmanOnly && define.IsReservedAnnotation(k) {
 					continue
 				}
 				podAnnotations[fmt.Sprintf("%s/%s", kubeAnnotationAlias(k), removeUnderscores(ctr.Name()))] = v

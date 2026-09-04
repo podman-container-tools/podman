@@ -48,7 +48,7 @@ func Events(ctx context.Context, eventChan chan types.Event, cancelChan chan boo
 		defer response.Body.Close()
 		defer close(eventChan)
 		dec := json.NewDecoder(response.Body)
-		for err = (error)(nil); err == nil; {
+		for err = error(nil); err == nil; {
 			e := types.Event{}
 			err = dec.Decode(&e)
 			if err == nil {

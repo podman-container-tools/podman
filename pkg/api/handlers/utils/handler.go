@@ -118,7 +118,7 @@ var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // MarshalErrorJSON writes error to stream as string
 func MarshalErrorJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
-	p := *((*error)(ptr))
+	p := *(*error)(ptr)
 	if p == nil {
 		stream.WriteNil()
 	} else {
@@ -128,7 +128,7 @@ func MarshalErrorJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 
 // MarshalErrorSliceJSON writes []error to stream as []string JSON blob
 func MarshalErrorSliceJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
-	a := *((*[]error)(ptr))
+	a := *(*[]error)(ptr)
 	switch {
 	case len(a) == 0:
 		stream.WriteNil()
@@ -145,11 +145,11 @@ func MarshalErrorSliceJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 }
 
 func MarshalErrorJSONIsEmpty(ptr unsafe.Pointer) bool {
-	return *((*error)(ptr)) == nil
+	return *(*error)(ptr) == nil
 }
 
 func MarshalErrorSliceJSONIsEmpty(ptr unsafe.Pointer) bool {
-	return len(*((*[]error)(ptr))) == 0
+	return len(*(*[]error)(ptr)) == 0
 }
 
 // ReadJSONFromBody reads JSON from a request body into the given struct.

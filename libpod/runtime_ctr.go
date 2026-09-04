@@ -1386,7 +1386,7 @@ func (r *Runtime) PruneContainers(filterFuncs []ContainerFilter) ([]*reports.Pru
 		if err != nil {
 			report.Err = err
 		} else {
-			report.Size = (uint64)(size)
+			report.Size = uint64(size)
 		}
 		preports = append(preports, report)
 	}

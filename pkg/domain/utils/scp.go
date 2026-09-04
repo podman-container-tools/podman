@@ -428,7 +428,7 @@ func ValidateSCPArgs(locations []*entities.ScpTransferImageOptions) error {
 // returns an int which contains the length of a specified index in a host::image string
 func RemoteArgLength(input string, side int) int {
 	if strings.Contains(input, "::") {
-		return len((strings.Split(input, "::"))[side])
+		return len(strings.Split(input, "::")[side])
 	}
 	return -1
 }
