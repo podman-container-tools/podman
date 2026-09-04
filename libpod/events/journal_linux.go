@@ -61,6 +61,9 @@ func (e EventJournalD) Write(ee Event) error {
 		}
 		if ee.Status == HealthStatus {
 			m["PODMAN_HEALTH_STATUS"] = ee.HealthStatus
+			if ee.HealthStatusChanged {
+				m["PODMAN_HEALTH_STATUS_CHANGED"] = "1"
+			}
 			if ee.HealthLog != "" {
 				m["PODMAN_HEALTH_LOG"] = ee.HealthLog
 			}
@@ -268,6 +271,9 @@ func newEventFromJournalEntry(entry *sdjournal.JournalEntry) (*Event, error) {
 			return nil, err
 		}
 		newEvent.HealthStatus = entry.Fields["PODMAN_HEALTH_STATUS"]
+		if _, ok := entry.Fields["PODMAN_HEALTH_STATUS_CHANGED"]; ok {
+			newEvent.HealthStatusChanged = true
+		}
 		if log, ok := entry.Fields["PODMAN_HEALTH_LOG"]; ok {
 			newEvent.HealthLog = log
 		}
