@@ -522,7 +522,7 @@ func getAllWSLDistros(running bool) (map[string]struct{}, error) {
 
 func isSystemdRunning(dist string) (bool, error) {
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
-	cmd.Stdin = strings.NewReader(sysdpid + "\necho $SYSDPID\n")
+	cmd.Stdin = strings.NewReader(systemdRunning)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return false, err
