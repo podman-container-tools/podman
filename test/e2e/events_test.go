@@ -5,6 +5,8 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -59,6 +61,24 @@ var _ = Describe("Podman events", func() {
 		events = resultPrefix.OutputToStringArray()
 		Expect(events).To(HaveLen(1), "number of events")
 		Expect(events[0]).To(ContainSubstring(vname), "event log includes volume name")
+	})
+
+	It("podman events with a secret filter", func() {
+		secretFilePath := filepath.Join(podmanTest.TempDir, "secret")
+		err := os.WriteFile(secretFilePath, []byte("mysecret"), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		sname := "testsecretname"
+		session := podmanTest.Podman([]string{"secret", "create", sname, secretFilePath})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		result := podmanTest.Podman([]string{"events", "--stream=false", "--filter", fmt.Sprintf("secret=%s", sname)})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(ExitCleanly())
+		events := result.OutputToStringArray()
+		Expect(events).To(HaveLen(1), "number of events")
+		Expect(events[0]).To(ContainSubstring(sname), "event log includes secret name")
 	})
 
 	It("podman events with an event filter and container=cid", func() {
