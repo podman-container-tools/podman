@@ -30,7 +30,7 @@ var (
 	ErrSSHNotListening = errors.New("machine is not listening on ssh port")
 )
 
-func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider, dirs *define.MachineDirs, hostSocks []string) error {
+func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider, dirs *define.MachineDirs, hostSocks []string) (*machine.GvProxyNotifier, error) {
 	forwardUser := mc.SSH.RemoteUsername
 
 	// TODO should this go up the stack higher or
@@ -43,12 +43,12 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 
 	cfg, err := config.Default()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	binary, err := cfg.FindHelperBinary(machine.ForwarderBinaryName, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cmd := gvproxy.NewGvproxyCommand()
@@ -77,49 +77,64 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 	// This allows a provider to perform additional setup as well as
 	// add in any provider specific options for gvproxy
 	if err := provider.StartNetworking(mc, &cmd); err != nil {
-		return err
+		return nil, err
 	}
 
 	c := cmd.Cmd(binary)
 	setGvproxyProcessAttributes(c)
 
-	logrus.Debugf("gvproxy command-line: %s %s", binary, strings.Join(cmd.ToCmdline(), " "))
+	gvProxyNotifier, err := machine.NewGvProxyNotifier(runDir.GetPath())
+	if err != nil {
+		return nil, fmt.Errorf("setting up gvproxy notification listener: %w", err)
+	}
+	// Ensure "unix:///absolute/path" form so gvproxy's url.Parse keeps
+	// the host empty and puts the full path into uri.Path.
+	socketPath := filepath.ToSlash(gvProxyNotifier.SocketPath())
+	if !strings.HasPrefix(socketPath, "/") {
+		socketPath = "/" + socketPath
+	}
+	c.Args = append(c.Args, "-notification", "unix://"+socketPath)
+
+	logrus.Debugf("gvproxy command-line: %s", strings.Join(c.Args, " "))
 	if err := c.Start(); err != nil {
-		return fmt.Errorf("unable to execute: %q: %w", cmd.ToCmdline(), err)
+		gvProxyNotifier.Close()
+		machine.CleanupGvProxyNotifySocket(runDir.GetPath())
+		return nil, fmt.Errorf("unable to execute: %q: %w", cmd.ToCmdline(), err)
 	}
 
-	return nil
+	return gvProxyNotifier, nil
 }
 
-func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, error) {
+func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, *machine.GvProxyNotifier, error) {
 	// Check if SSH port is in use, and reassign if necessary
 	if !ports.IsLocalPortAvailable(mc.SSH.Port) {
 		logrus.Warnf("detected port conflict on machine ssh port [%d], reassigning", mc.SSH.Port)
 		if err := reassignSSHPort(mc, provider); err != nil {
-			return "", 0, err
+			return "", 0, nil, err
 		}
 	}
 
 	// Provider has its own networking code path (e.g. WSL)
 	if provider.UseProviderNetworkSetup() {
-		return "", 0, provider.StartNetworking(mc, nil)
+		return "", 0, nil, provider.StartNetworking(mc, nil)
 	}
 
 	dirs, err := env.GetMachineDirs(provider.VMType())
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 
 	hostSocks, forwardSock, forwardingState, err := setupMachineSockets(mc, dirs)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 
-	if err := startHostForwarder(mc, provider, dirs, hostSocks); err != nil {
-		return "", 0, err
+	gvProxyNotifier, err := startHostForwarder(mc, provider, dirs, hostSocks)
+	if err != nil {
+		return "", 0, nil, err
 	}
 
-	return forwardSock, forwardingState, nil
+	return forwardSock, forwardingState, gvProxyNotifier, nil
 }
 
 // conductVMReadinessCheck checks to make sure the machine is in the proper state
