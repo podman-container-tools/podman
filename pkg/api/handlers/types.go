@@ -235,8 +235,17 @@ type HistoryResponse struct {
 	Comment   string
 }
 
+// #29507
+//
+// Deprecated: use `ExecCreateConfigBody` instead.
 type ExecCreateConfig struct {
 	dockerContainer.ExecCreateRequest
+}
+
+// #28193: added second type for JSON unmarshling, to prevent breaking change in `pkg/bindings`.
+type ExecCreateConfigBody struct {
+	dockerContainer.ExecCreateRequest
+	DetachKeys *string `json:"DetachKeys"`
 }
 
 type ExecStartConfig struct {
