@@ -101,8 +101,12 @@ func (ir *ImageEngine) History(_ context.Context, nameOrID string, _ entities.Im
 func (ir *ImageEngine) Prune(_ context.Context, opts entities.ImagePruneOptions) ([]*reports.PruneReport, error) {
 	filters := make(map[string][]string, len(opts.Filter))
 	for _, filter := range opts.Filter {
-		f := strings.Split(filter, "=")
-		filters[f[0]] = f[1:]
+		f := strings.SplitN(filter, "=", 2)
+		if len(f) > 1 {
+			filters[f[0]] = append(filters[f[0]], f[1])
+		} else {
+			filters[f[0]] = append(filters[f[0]], "")
+		}
 	}
 	options := new(images.PruneOptions).WithAll(opts.All).WithFilters(filters).WithExternal(opts.External).WithBuildCache(opts.BuildCache)
 	reports, err := images.Prune(ir.ClientCtx, options)

@@ -493,6 +493,31 @@ RUN > file2
 		Expect(result.OutputToStringArray()).To(BeEmpty())
 	})
 
+	It("podman image prune --filter label=key=value", func() {
+		dockerfile := `FROM quay.io/libpod/alpine:latest
+RUN > file
+`
+		dockerfile2 := `FROM quay.io/libpod/alpine:latest
+RUN > file2
+`
+		podmanTest.BuildImageWithLabel(dockerfile, "foobar.com/workdir:latest", "false", "version=1.0")
+		podmanTest.BuildImageWithLabel(dockerfile2, "foobar.com/workdir:latest", "false", "version=2.0")
+
+		result := podmanTest.Podman([]string{"image", "prune", "--filter", "label=version=1.0", "--force"})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(ExitCleanly())
+		Expect(result.OutputToStringArray()).To(HaveLen(1))
+
+		// only version=1.0 should be gone; version=2.0 must survive
+		result = podmanTest.Podman([]string{"image", "list", "--filter", "label=version=1.0"})
+		Expect(result.OutputToStringArray()).To(BeEmpty())
+
+		result = podmanTest.Podman([]string{"image", "list", "--filter", "label=version=2.0", "-q"})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(ExitCleanly())
+		Expect(result.OutputToStringArray()).To(HaveLen(1))
+	})
+
 	It("podman builder prune", func() {
 		dockerfile := `FROM quay.io/libpod/alpine:latest
 RUN > file
