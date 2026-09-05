@@ -158,7 +158,7 @@ func playFlags(cmd *cobra.Command) {
 	flags.BoolVar(&playOptions.StartCLI, "start", true, "Start the pod after creating it")
 	flags.BoolVar(&playOptions.Force, "force", false, "Remove volumes as part of --down")
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&playOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = cmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -248,7 +248,7 @@ func play(cmd *cobra.Command, args []string) error {
 			playOptions.SystemContext = systemContext
 		}
 	}
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(playOptions.Authfile); err != nil {
 			return err
 		}

@@ -1835,7 +1835,7 @@ Valid options for `[Build]` are listed below:
 |-------------------------------------|---------------------------------------------|
 | Annotation=annotation=value         | --annotation=annotation=value               |
 | Arch=aarch64                        | --arch=aarch64                              |
-| AuthFile=/etc/registry/auth\.json   | --authfile=/etc/registry/auth\.json         |
+| AuthFile=/etc/registry/auth\.json   | --auth-file=/etc/registry/auth\.json        |
 | BuildArg=foo=bar                    | --build-arg foo=bar                         |
 | ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                     |
 | DNS=192.168.55.1                    | --dns=192.168.55.1                          |
@@ -1879,7 +1879,7 @@ This is equivalent to the `--arch` option of `podman build`.
 
 Path of the authentication file.
 
-This is equivalent to the `--authfile` option of `podman build`.
+This is equivalent to the `--auth-file` option of `podman build`.
 
 ### `BuildArg=`
 
@@ -2107,7 +2107,7 @@ Valid options for `[Image]` are listed below:
 |----------------------------------------|--------------------------------------------------|
 | AllTags=true                           | --all-tags                                       |
 | Arch=aarch64                           | --arch=aarch64                                   |
-| AuthFile=/etc/registry/auth\.json      | --authfile=/etc/registry/auth\.json              |
+| AuthFile=/etc/registry/auth\.json      | --auth-file=/etc/registry/auth\.json             |
 | CertDir=/etc/registry/certs            | --cert-dir=/etc/registry/certs                   |
 | ContainersConfModule=/etc/nvd\.conf    | --module=/etc/nvd\.conf                          |
 | Creds=myname\:mypassword               | --creds=myname\:mypassword                       |
@@ -2140,7 +2140,7 @@ This is equivalent to the Podman `--arch` option.
 
 Path of the authentication file.
 
-This is equivalent to the Podman `--authfile` option.
+This is equivalent to the Podman `--auth-file` option.
 
 ### `CertDir=`
 
@@ -2270,7 +2270,7 @@ Valid options for `[Artifact]` are listed below:
 | **[Artifact] options**                      | **podman artifact pull equivalent**                    |
 |---------------------------------------------|--------------------------------------------------------|
 | Artifact=quay\.io/foobar/artifact:special   | podman artifact pull quay\.io/foobar/artifact:special  |
-| AuthFile=/etc/registry/auth\.json           | --authfile=/etc/registry/auth\.json                    |
+| AuthFile=/etc/registry/auth\.json           | --auth-file=/etc/registry/auth\.json                   |
 | CertDir=/etc/registry/certs                 | --cert-dir=/etc/registry/certs                         |
 | ContainersConfModule=/etc/nvd\.conf         | --module=/etc/nvd\.conf                                |
 | Creds=username:password                     | --creds=username:password                              |
@@ -2294,7 +2294,7 @@ performance and robustness reasons.
 
 Path of the authentication file.
 
-This is equivalent to the Podman `--authfile` option.
+This is equivalent to the Podman `--auth-file` option.
 
 ### `CertDir=`
 

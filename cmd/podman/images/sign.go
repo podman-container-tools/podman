@@ -8,6 +8,7 @@ import (
 	"go.podman.io/common/pkg/completion"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/storage/pkg/fileutils"
 )
@@ -35,6 +36,7 @@ func init() {
 		Parent:  imageCmd,
 	})
 	flags := signCommand.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 	directoryFlagName := "directory"
 	flags.StringVarP(&signOptions.Directory, directoryFlagName, "d", "", "Define an alternate directory to store signatures")
 	_ = signCommand.RegisterFlagCompletionFunc(directoryFlagName, completion.AutocompleteDefault)
@@ -48,13 +50,13 @@ func init() {
 	_ = signCommand.RegisterFlagCompletionFunc(certDirFlagName, completion.AutocompleteDefault)
 	flags.BoolVarP(&signOptions.All, "all", "a", false, "Sign all the manifests of the multi-architecture image")
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&signOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = signCommand.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 }
 
 func sign(cmd *cobra.Command, args []string) error {
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(signOptions.Authfile); err != nil {
 			return err
 		}

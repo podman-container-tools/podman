@@ -32,7 +32,7 @@ Valid options for `[Image]` are listed below:
 |----------------------------------------|--------------------------------------------------|
 | AllTags=true                           | --all-tags                                       |
 | Arch=aarch64                           | --arch=aarch64                                   |
-| AuthFile=/etc/registry/auth\.json      | --authfile=/etc/registry/auth\.json              |
+| AuthFile=/etc/registry/auth\.json      | --auth-file=/etc/registry/auth\.json             |
 | CertDir=/etc/registry/certs            | --cert-dir=/etc/registry/certs                   |
 | ContainersConfModule=/etc/nvd\.conf    | --module=/etc/nvd\.conf                          |
 | Creds=myname\:mypassword               | --creds=myname\:mypassword                       |
