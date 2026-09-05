@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/docker/go-units"
@@ -493,6 +494,19 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 	logConfig.Path = c.config.LogPath
 	logConfig.Size = units.HumanSize(float64(c.LogSizeMax()))
 	logConfig.Tag = c.config.LogTag
+
+	// Populate Config map with log rotation settings when configured.
+	if c.config.LogRotate || c.config.LogMaxFiles > 0 {
+		if logConfig.Config == nil {
+			logConfig.Config = make(map[string]string)
+		}
+		if c.config.LogRotate {
+			logConfig.Config["log-rotate"] = "true"
+		}
+		if c.config.LogMaxFiles > 0 {
+			logConfig.Config["max-file"] = strconv.FormatUint(uint64(c.config.LogMaxFiles), 10)
+		}
+	}
 
 	hostConfig.LogConfig = logConfig
 
