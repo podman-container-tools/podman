@@ -237,11 +237,10 @@ func installUserModeDist(dist string, imagePath string) error {
 }
 
 func createUserModeResolvConf(dist string) error {
-	err := wslPipe(resolvConfUserNet, dist, "bash", "-c", "(rm -f /etc/resolv.conf; cat > /etc/resolv.conf)")
-	if err != nil {
+	if err := wslPipe(createResolvScript, dist, "bash"); err != nil {
 		return fmt.Errorf("could not create resolv.conf: %w", err)
 	}
-	return err
+	return nil
 }
 
 func getUserModeNetDir() (string, error) {
