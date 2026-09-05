@@ -1688,9 +1688,9 @@ func AutocompletePodPsSort(_ *cobra.Command, _ []string, _ string) ([]string, co
 }
 
 // AutocompletePsSort - Autocomplete images sort options.
-// -> "command", "created", "id", "image", "names", "runningfor", "size", "status"
+// -> "command", "created", "id", "image", "names", "pod", "runningfor", "size", "status"
 func AutocompletePsSort(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	sortBy := []string{"command", "created", "id", "image", "names", "runningfor", "size", "status"}
+	sortBy := []string{"command", "created", "id", "image", "names", "pod", "runningfor", "size", "status"}
 	return sortBy, cobra.ShellCompDirectiveNoFileComp
 }
 

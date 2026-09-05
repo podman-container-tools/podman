@@ -116,7 +116,7 @@ Display the total file size
 
 #### **--sort**=*created*
 
-Sort by command, created, id, image, names, runningfor, size, or status",
+Sort by command, created, id, image, names, pod, runningfor, size, or status",
 Note: Choosing size sorts by size of rootFs, not alphabetically like the rest of the options
 
 #### **--sync**
