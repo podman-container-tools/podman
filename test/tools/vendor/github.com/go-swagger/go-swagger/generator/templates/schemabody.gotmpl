@@ -152,7 +152,7 @@
   {{ if not (and .IsBaseType .IsExported) }}{{ .GoType }}{{ end }}{{ end }}
   {{ end }}
   {{range .Properties}}{{ if .IsBaseType }}
-  {{ if not $.IsExported }}{{ else }}{{ .GoName}} {{ template "schemaType" . }} `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`{{ end}}
+  {{ if not $.IsExported }}{{ else }}{{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}{{ end}}
   {{end}}{{ end }}
   {{ if .HasAdditionalProperties }}{{ if and .IsExported }}{{ .AdditionalProperties.GoName }}{{ else }}{{ .AdditionalProperties.GoName }}Field{{ end }} map[string]{{ template "schemaType" .AdditionalProperties }} `json:"-"`
   {{ end }}
@@ -172,7 +172,7 @@
             {{template "structfield" . }}
           {{ end }}
         {{ else }}
-          {{ .GoName }} json.RawMessage `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+          {{ .GoName }} json.RawMessage {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
         {{ end}}
       {{ end }}
       {{ if .HasAdditionalProperties }}
@@ -194,10 +194,10 @@
       {{ if not $.IsExported }}
         {{template "privstructfield" . }}
       {{ else }}
-        {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+        {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
       {{ end}}
     {{ else }}
-      {{ .GoName }} json.RawMessage `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+      {{ .GoName }} json.RawMessage {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
     {{end}}
   {{ end }}
   {{ if .HasAdditionalProperties }}
@@ -237,7 +237,7 @@
       {{ if not .IsExported }}
         {{template "privstructfield" . }}
       {{ else }}
-        {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+        {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
       {{ end}}
     {{end}}
   {{ end }}
@@ -269,13 +269,13 @@
   {{ range .AllOf }}
     {{ range .Properties }}
       {{ if .IsBaseType }}
-        {{ .GoName }} {{ template "schemaType" . }} `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+        {{ .GoName }} {{ template "schemaType" . }} {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
       {{ end }}
     {{ end }}
   {{ end }}
   {{ range .Properties }}
     {{ if or (not .IsExported) .IsBaseType }}
-      {{ .GoName }} {{ template "schemaType" . }} `json:"{{ .Name }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+      {{ .GoName }} {{ template "schemaType" . }} {{ jsonFieldTag .Name (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
     {{ end }}
   {{end}}} {
   {{ range .AllOf }}

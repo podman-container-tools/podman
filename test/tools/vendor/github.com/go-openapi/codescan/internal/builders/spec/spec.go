@@ -24,11 +24,10 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// ErrInternalPanic is the base error for a builder panic recovered while processing a single
-// declaration.
+// ErrInternalPanic is the base error for a builder panic recovered while processing a single declaration.
 //
-// Rather than surfacing a raw Go stack trace, the scan names the offending source declaration
-// (file:line) and aborts with this error.
+// Rather than surfacing a raw Go stack trace, the scan names the offending source declaration (file:line) and aborts
+// with this error.
 // See go-swagger/go-swagger#2886.
 var ErrInternalPanic = errors.New("internal panic during build")
 
@@ -41,23 +40,30 @@ type Builder struct {
 	responses   map[string]oaispec.Response
 	parameters  map[string]oaispec.Parameter
 	operations  map[string]*oaispec.Operation
-	// paramRefIntents are `swagger:parameters * opid …` references collected during buildParameters
-	// and applied (as #/parameters/{name} $refs into operations) once the shared map is complete.
+	// paramRefIntents are `swagger:parameters * opid …` references collected during buildParameters and applied (as
+	// #/parameters/{name} $refs into operations) once the shared map is complete.
 	//
 	// See applyParameterRefs.
 	paramRefIntents []paramRefIntent
-	// pathItemInlines are `swagger:parameters /path` inline registrations collected during
-	// buildParameters and applied to PathItem.Parameters once all paths exist.
+	// pathItemInlines are `swagger:parameters /path` inline registrations collected during buildParameters and applied to
+	// PathItem.Parameters once all paths exist.
 	//
 	// See applyPathItemParameters.
 	pathItemInlines []pathItemInlineIntent
-	// declPos records the source position of each discovered definition, keyed by its fully-qualified
-	// DefKey, so the prune (scan.pruned-unused) and rename (scan.renamed-definition) Hints can be
-	// located at the originating Go type even though the spec node may by then be gone or renamed.
+	// declPos records the source position of each discovered definition, keyed by its fully-qualified DefKey, so the prune
+	// (scan.pruned-unused) and rename (scan.renamed-definition) Hints can be located at the originating Go type even
+	// though the spec node may by then be gone or renamed.
 	declPos map[string]token.Position
-	// sharedParamPos / sharedRespPos record the source position of each scanned shared parameter /
-	// response, keyed by its registered name, so the shared prune (scan.pruned-unused, C4) can locate
-	// its Hint at the originating Go declaration.
+	// declIdentity records the Go type identity (typeIdentity) behind each discovered definition, keyed by DefKey — the
+	// bridge from definition-key space back to the reverse `swagger:allOf` index used by the discriminator-subtype pull
+	// (see subtypes.go).
+	declIdentity map[string]string
+	// subtypeIdx is the lazily-built reverse `swagger:allOf` index (base type identity → subtype declarations).
+	//
+	// Built once per Build, from the model index, which is independent of ScanModels.
+	subtypeIdx subtypeIndex
+	// sharedParamPos / sharedRespPos record the source position of each scanned shared parameter / response, keyed by its
+	// registered name, so the shared prune (scan.pruned-unused) can locate its Hint at the originating Go declaration.
 	sharedParamPos map[string]token.Position
 	sharedRespPos  map[string]token.Position
 	// pinnedParams / pinnedResponses are the shared parameters / responses supplied via InputSpec
@@ -90,8 +96,8 @@ func NewBuilder(input *oaispec.Swagger, sc *scanner.ScanCtx, scanModels bool) *B
 		input.Extensions = make(oaispec.Extensions)
 	}
 
-	// Snapshot the InputSpec-supplied shared parameters / responses before the scan adds any: these
-	// are pinned (never pruned by C4).
+	// Snapshot the InputSpec-supplied shared parameters / responses before the scan adds any: these are pinned
+	// (never pruned).
 	pinnedParams := make(map[string]struct{}, len(input.Parameters))
 	for name := range input.Parameters {
 		pinnedParams[name] = struct{}{}
@@ -110,6 +116,7 @@ func NewBuilder(input *oaispec.Swagger, sc *scanner.ScanCtx, scanModels bool) *B
 		responses:       input.Responses,
 		parameters:      input.Parameters,
 		declPos:         make(map[string]token.Position),
+		declIdentity:    make(map[string]string),
 		sharedParamPos:  make(map[string]token.Position),
 		sharedRespPos:   make(map[string]token.Position),
 		pinnedParams:    pinnedParams,
@@ -118,8 +125,8 @@ func NewBuilder(input *oaispec.Swagger, sc *scanner.ScanCtx, scanModels bool) *B
 }
 
 func (s *Builder) Build() (*oaispec.Swagger, error) {
-	// Resolve same-package duplicate swagger:model names up front so that every later DefKey() /
-	// MakeRef() observes a consistent, conflict-free key for each declaration (D-4).
+	// Resolve same-package duplicate swagger:model names up front so that every later DefKey() / MakeRef() observes a
+	// consistent, conflict-free key for each declaration.
 	// Must run before anything emits a ref.
 	s.resolveSamePackageDuplicates()
 
@@ -133,8 +140,8 @@ func (s *Builder) Build() (*oaispec.Swagger, error) {
 		return nil, err
 	}
 
-	// Wire shared-parameter references (#/parameters/{name} $refs) into operations now that the
-	// top-level #/parameters map is complete, and before buildRoutes attaches operations to paths.
+	// Wire shared-parameter references (#/parameters/{name} $refs) into operations now that the top-level #/parameters map
+	// is complete, and before buildRoutes attaches operations to paths.
 	s.applyParameterRefs()
 
 	if err := s.buildResponses(); err != nil {
@@ -154,52 +161,42 @@ func (s *Builder) Build() (*oaispec.Swagger, error) {
 		return nil, err
 	}
 
-	// Apply path-item parameters now that all paths exist (they are created by buildRoutes /
-	// buildOperations).
-	// `swagger:parameters /path` inlines fields into the path-item; `swagger:parameters /path name`
-	// adds a #/parameters/{name} $ref.
+	// Apply path-item parameters now that all paths exist (they are created by buildRoutes / buildOperations).
+	// `swagger:parameters /path` inlines fields into the path-item; `swagger:parameters /path name` adds a
+	// #/parameters/{name} $ref.
 	s.applyPathItemParameters()
 
-	// Validate shared-namespace references across all paths now that the #/parameters and #/responses
-	// maps are complete.
-	// Catches dangling refs from swagger:operation wholesale-YAML bodies (which unmarshal verbatim)
-	// and acts as a uniform safety net; a dangling ref is dropped, never emitted.
+	// Validate shared-namespace references across all paths now that the #/parameters and #/responses maps are complete.
+	// Catches dangling refs from swagger:operation wholesale-YAML bodies (which unmarshal verbatim) and acts as a uniform
+	// safety net; a dangling ref is dropped, never emitted.
 	s.validateSharedRefs()
 
 	if err := s.buildMeta(); err != nil {
 		return nil, err
 	}
 
-	// Cross-ref linkage: parameter anchors are resolved here, once paths, methods and final array
-	// indices are all known (see emitParameterAnchors).
-	// Param anchors live under /paths/.../parameters/{i}, independent of the definition-name reduction
-	// below.
+	// Cross-ref linkage: parameter anchors are resolved here, once paths, methods and final array indices are all known
+	// (see emitParameterAnchors).
+	// Param anchors live under /paths/.../parameters/{i}, independent of the definition-name reduction below.
 	s.emitParameterAnchors()
 
-	// Prune discovered definitions not reachable from a root, when the caller opted in
-	// (PruneUnusedModels).
-	// Runs before name reduction so an unused model cannot force a spurious collision rename on a used
-	// one.
-	//
+	// Prune discovered definitions not reachable from a root, when the caller opted in (PruneUnusedModels).
+	// Runs before name reduction so an unused model cannot force a spurious collision rename on a used one.
 	s.pruneUnusedModels()
 
-	// Fire the deferred shared-response provenance anchors buffered during buildResponses (only when
-	// PruneUnusedModels + OnProvenance are both on); anchors of responses dropped by the prune above
-	// were already discarded, so none dangle.
+	// Fire the deferred shared-response provenance anchors buffered during buildResponses (only when PruneUnusedModels +
+	// OnProvenance are both on); anchors of responses dropped by the prune above were already discarded, so none dangle.
 	// A no-op otherwise.
 	s.ctx.FlushDeferredOrigins()
 
-	// Final stage: shorten the fully-qualified, collision-proof definition keys produced during
-	// discovery back to user-facing names and re-point every $ref.
-	// Runs last because buildRoutes / buildOperations also emit definition refs.
-	// §9/§12.
+	// Final stage: shorten the fully-qualified, collision-proof definition keys produced during discovery back to
+	// user-facing names and re-point every $ref.
+	// Runs last because buildRoutes / buildOperations also emit definition refs. §9/§12.
 	renames := s.reduceDefinitionNames()
 
-	// Definition provenance was buffered under each definition's fully-qualified key while building
-	// (BeginDefOrigins); now that names are final, re-point every buffered anchor to its final name
-	// and emit it.
+	// Definition provenance was buffered under each definition's fully-qualified key while building (BeginDefOrigins); now
+	// that names are final, re-point every buffered anchor to its final name and emit it.
 	// Anchors for pruned definitions were already dropped, so none dangle.
-	//
 	s.ctx.FlushDefOrigins(func(defKey string) string {
 		if final, ok := renames[defKey]; ok {
 			return final
@@ -207,9 +204,8 @@ func (s *Builder) Build() (*oaispec.Swagger, error) {
 		return defKey
 	})
 
-	// CleanGoDoc idiom recomposition: doc-links resolved at the consumption seam were encoded as
-	// markers carrying a definition key; now that names are final (post-reduce), substitute each
-	// marker for its schema's exposed name.
+	// CleanGoDoc idiom recomposition: doc-links resolved at the consumption seam were encoded as markers carrying a
+	// definition key; now that names are final (post-reduce), substitute each marker for its schema's exposed name.
 	// A no-op when CleanGoDoc is off (no markers were emitted).
 	//
 	// §3.
@@ -226,9 +222,9 @@ func (s *Builder) Build() (*oaispec.Swagger, error) {
 
 // emitParameterAnchors fires the deferred /paths/{path}/{method}/parameters/{i} anchors.
 //
-// Parameters are built before their operation is bound to a path and before the parameter array
-// order is final, so the parameters builder only captured (opid → name → position) via
-// ScanCtx.RecordParamOrigin; here the absolute pointer is assembled from the finished paths tree.
+// Parameters are built before their operation is bound to a path and before the parameter array order is final, so the
+// parameters builder only captured (opid → name → position) via ScanCtx.RecordParamOrigin; here the absolute
+// pointer is assembled from the finished paths tree.
 // Finer parameter sub-nodes resolve to the parameter (or the operation) anchor.
 func (s *Builder) emitParameterAnchors() {
 	if !s.ctx.OriginEnabled() || s.input.Paths == nil {
@@ -251,10 +247,9 @@ func (s *Builder) emitParameterAnchors() {
 	}
 }
 
-// operationsByMethod yields each populated (lowercase method → operation) slot of a path item, in
-// a stable order. (Distinct from reduce.go's operationsOf, which returns the bare operation
-// pointers for ref rewriting; here the method name is needed to build the
-// /paths/{path}/{method}/... anchor pointer.)
+// operationsByMethod yields each populated (lowercase method → operation) slot of a path item, in a stable order.
+// (Distinct from reduce.go's operationsOf, which returns the bare operation pointers for ref rewriting; here the method
+// name is needed to build the /paths/{path}/{method}/... anchor pointer.)
 func operationsByMethod(item *oaispec.PathItem) iter.Seq2[string, *oaispec.Operation] {
 	return func(yield func(string, *oaispec.Operation) bool) {
 		slots := []struct {
@@ -282,12 +277,12 @@ func operationsByMethod(item *oaispec.PathItem) iter.Seq2[string, *oaispec.Opera
 
 // guard runs a per-declaration build step under panic recovery.
 //
-// On panic it emits a located scan.internal-panic diagnostic naming the offending source (pos +
-// what), then returns an aborting error wrapping ErrInternalPanic — so a builder bug surfaces as
-// a clean, located failure instead of a raw stack trace (#2886).
+// On panic it emits a located scan.internal-panic diagnostic naming the offending source (pos + what), then returns an
+// aborting error wrapping ErrInternalPanic — so a builder bug surfaces as a clean, located failure instead of a raw
+// stack trace (#2886).
 //
-// A non-panicking run is transparent. pos/what identify the declaration being built; the
-// spec.Builder build loops wrap each per-decl step.
+// A non-panicking run is transparent. pos/what identify the declaration being built; the spec.Builder build loops wrap
+// each per-decl step.
 // Panics outside any decl loop are caught by the Run backstop.
 func (s *Builder) guard(pos token.Position, what string, run func() error) (err error) {
 	defer func() {
@@ -303,14 +298,14 @@ func (s *Builder) guard(pos token.Position, what string, run func() error) (err 
 	return run()
 }
 
-// declLabel names an EntityDecl for a diagnostic — the fully-qualified Go type when the package
-// path is known, else the bare identifier.
+// declLabel names an EntityDecl for a diagnostic — the fully-qualified Go type when the package path is known, else
+// the bare identifier.
 func declLabel(d *scanner.EntityDecl) string {
-	if d.Pkg != nil && d.Pkg.PkgPath != "" {
-		return d.Pkg.PkgPath + "." + d.Ident.Name
+	if pkgPath := d.PkgPath(); pkgPath != "" {
+		return pkgPath + "." + d.Name()
 	}
 
-	return d.Ident.Name
+	return d.Name()
 }
 
 func (s *Builder) buildDiscovered() error {
@@ -319,17 +314,15 @@ func (s *Builder) buildDiscovered() error {
 	for keepGoing {
 		var queue []*scanner.EntityDecl
 		// Dedupe by name within this pass.
-		// The same decl can appear multiple times in s.discovered (one entry per reference site that
-		// called AppendPostDecl); without this, both copies get queued and Build runs twice, each
-		// appending to the existing schema's AllOf and producing doubled entries.
+		// The same decl can appear multiple times in s.discovered (one entry per reference site that called AppendPostDecl);
+		// without this, both copies get queued and Build runs twice, each appending to the existing schema's AllOf and
+		// producing doubled entries.
 		queued := make(map[string]struct{})
 		for _, d := range s.discovered {
-			// Dedup by the fully-qualified identity key (pkgpath/name), matching the definitions-map key
-			// written by the schema builder.
-			// A cycle / re-discovery of the SAME decl resolves to the same key and is skipped (reuse); two
-			// distinct decls that merely share a short name now get distinct keys and both build.
-			//
-			// See name-identity design §9.1/§12.1.
+			// Dedup by the fully-qualified identity key (pkgpath/name), matching the definitions-map key written by the schema
+			// builder.
+			// A cycle / re-discovery of the SAME decl resolves to the same key and is skipped (reuse); two distinct decls that
+			// merely share a short name now get distinct keys and both build.
 			key := d.DefKey()
 			if _, alreadyDone := s.definitions[key]; alreadyDone {
 				continue
@@ -342,7 +335,7 @@ func (s *Builder) buildDiscovered() error {
 		}
 		s.discovered = nil
 		for _, sd := range queue {
-			if err := s.guard(s.ctx.PosOf(sd.Ident.Pos()), declLabel(sd), func() error {
+			if err := s.guard(s.ctx.PosOf(sd.Pos()), declLabel(sd), func() error {
 				return s.buildDiscoveredSchema(sd)
 			}); err != nil {
 				return err
@@ -358,21 +351,23 @@ func (s *Builder) buildDiscoveredSchema(decl *scanner.EntityDecl) error {
 	sb := schema.NewBuilder(s.ctx, decl)
 	sb.SetDiscovered(s.discovered)
 
-	// Stash the definition's source position for the prune / rename Hints, which fire after the spec
-	// node may have been dropped or renamed.
-	s.declPos[decl.DefKey()] = s.ctx.PosOf(decl.Ident.Pos())
+	// Stash the definition's source position for the prune / rename Hints, which fire after the spec node may have been
+	// dropped or renamed.
+	s.declPos[decl.DefKey()] = s.ctx.PosOf(decl.Pos())
 
-	// Cross-ref linkage: initiate the base pointer for this definition so the schema builder
-	// path-joins its members (properties, …) under it, and anchor the definition node itself to its
-	// type declaration.
+	// Stash the Go type behind this definition so the prune reachability walk can ask the reverse `swagger:allOf` index
+	// for the subtypes of a discriminated base (see subtypeKeysOf).
+	s.declIdentity[decl.DefKey()] = typeIdentity(decl.Obj())
+
+	// Cross-ref linkage: initiate the base pointer for this definition so the schema builder path-joins its members
+	// (properties, …) under it, and anchor the definition node itself to its type declaration.
 	//
-	// The base uses the fully-qualified DefKey, not the user-facing name: the definition is keyed by
-	// DefKey throughout discovery and only renamed to its final name at the end of the build
-	// (reduceDefinitionNames), after a possible prune.
+	// The base uses the fully-qualified DefKey, not the user-facing name: the definition is keyed by DefKey throughout
+	// discovery and only renamed to its final name at the end of the build (reduceDefinitionNames), after a possible
+	// prune.
 	//
-	// Anchors are buffered under DefKey (BeginDefOrigins) and re-pointed to the final name by
-	// FlushDefOrigins once names are settled, so every emitted pointer resolves against the final
-	// document.
+	// Anchors are buffered under DefKey (BeginDefOrigins) and re-pointed to the final name by FlushDefOrigins once names
+	// are settled, so every emitted pointer resolves against the final document.
 	var defPtr string
 	opts := []schema.Option{schema.WithDefinitions(s.definitions)}
 	if s.ctx.OriginEnabled() {
@@ -387,19 +382,25 @@ func (s *Builder) buildDiscoveredSchema(decl *scanner.EntityDecl) error {
 	}
 
 	if defPtr != "" {
-		s.ctx.RecordOrigin(defPtr, s.ctx.PosOf(decl.Ident.Pos()))
+		s.ctx.RecordOrigin(defPtr, s.ctx.PosOf(decl.Pos()))
 	}
 
 	s.discovered = append(s.discovered, sb.PostDeclarations()...)
 
+	// Reverse discovery: if this definition turned out to be a discriminated base, its subtypes belong to the emitted
+	// document too — nothing $refs them, so top-down discovery can never reach them (go-swagger#1913).
+	// Queued like any other discovery, so the loop above keeps pulling their own dependencies, and a subtype that is
+	// itself a discriminated base cascades.
+	s.discovered = append(s.discovered, s.discriminatedSubtypesOf(decl)...)
+
 	return nil
 }
 
-// cleanGoDoc applies godoc-syntax filtering (Options.CleanGoDoc) to godoc- derived prose, returning
-// text unchanged when the option is off.
+// cleanGoDoc applies godoc-syntax filtering (Options.CleanGoDoc) to godoc- derived prose, returning text unchanged when
+// the option is off.
 //
-// The spec builder owns its own ScanCtx (it does not embed common.Builder), so it carries a sibling
-// of common.Builder.CleanGoDoc for the swagger:meta site.
+// The spec builder owns its own ScanCtx (it does not embed common.Builder), so it carries a sibling of
+// common.Builder.CleanGoDoc for the swagger:meta site.
 func (s *Builder) cleanGoDoc(text string) string {
 	if !s.ctx.CleanGoDoc() {
 		return text
@@ -417,9 +418,9 @@ func (s *Builder) buildMeta() error {
 			return err
 		}
 
-		// Cross-ref linkage: anchor the info node to its swagger:meta block, then each meta keyword to
-		// its own line (the top-level fields — host/basePath/consumes/… — have no ancestor anchor
-		// otherwise, since /info is their sibling, not parent).
+		// Cross-ref linkage: anchor the info node to its swagger:meta block, then each meta keyword to its own line (the
+		// top-level fields — host/basePath/consumes/… — have no ancestor anchor otherwise, since /info is their
+		// sibling, not parent).
 		if s.ctx.OriginEnabled() {
 			s.ctx.RecordOrigin(scanner.JSONPointer("info"), s.ctx.PosOf(cg.Pos()))
 			s.recordMetaOrigins(block)
@@ -431,8 +432,8 @@ func (s *Builder) buildMeta() error {
 
 // recordMetaOrigins anchors each meta keyword in block to its source line.
 //
-// The keyword→pointer knowledge lives in the grammar ([grammar.PointerPath]); meta pointers are
-// absolute (Info.* under /info, the rest at the document root), so there is no base to prepend.
+// The keyword→pointer knowledge lives in the grammar ([grammar.PointerPath]); meta pointers are absolute (Info.*
+// under /info, the rest at the document root), so there is no base to prepend.
 func (s *Builder) recordMetaOrigins(block grammar.Block) {
 	for p := range block.Properties() {
 		if p.ItemsDepth != 0 {
@@ -482,8 +483,8 @@ func (s *Builder) buildRoutes() error {
 }
 
 func (s *Builder) buildResponses() error {
-	// Order response declarations deterministically (package import path, then position) so the
-	// keep-first conflict winner does not depend on package-load order.
+	// Order response declarations deterministically (package import path, then position) so the keep-first conflict winner
+	// does not depend on package-load order.
 	//
 	// Distinct names are independent, so the order does not otherwise affect output.
 	var decls []*scanner.EntityDecl
@@ -495,7 +496,7 @@ func (s *Builder) buildResponses() error {
 		if pi != pj {
 			return pi < pj
 		}
-		a, b := s.ctx.PosOf(decls[i].Ident.Pos()), s.ctx.PosOf(decls[j].Ident.Pos())
+		a, b := s.ctx.PosOf(decls[i].Pos()), s.ctx.PosOf(decls[j].Pos())
 		if a.Filename != b.Filename {
 			return a.Filename < b.Filename
 		}
@@ -503,25 +504,24 @@ func (s *Builder) buildResponses() error {
 	})
 
 	// scanned tracks the response short names already registered by a scanned struct in this pass.
-	// A later scanned struct with the same name is a keep-first conflict; an InputSpec (overlay)
-	// response of that name is NOT in the set, so a scanned struct still legitimately extends it.
+	// A later scanned struct with the same name is a keep-first conflict; an InputSpec (overlay) response of that name is
+	// NOT in the set, so a scanned struct still legitimately extends it.
 	scanned := make(map[string]string)
 
-	// Under PruneUnusedModels a shared response may be pruned after the build (C4).
-	// Buffer its provenance anchors (top-level node + headers + inline body sub-anchors) so a pruned
-	// response leaves none dangling; survivors are flushed verbatim by FlushDeferredOrigins after the
-	// prune.
+	// Under PruneUnusedModels a shared response may be pruned after the build.
+	// Buffer its provenance anchors (top-level node + headers + inline body sub-anchors) so a pruned response leaves none
+	// dangling; survivors are flushed verbatim by FlushDeferredOrigins after the prune.
 	deferOrigins := s.ctx.OriginEnabled() && s.ctx.PruneUnusedModels()
 
 	// build responses dictionary
 	for _, decl := range decls {
-		if err := s.guard(s.ctx.PosOf(decl.Ident.Pos()), declLabel(decl), func() error {
+		if err := s.guard(s.ctx.PosOf(decl.Pos()), declLabel(decl), func() error {
 			rb := responses.NewBuilder(s.ctx, decl)
 			name := rb.ResponseName()
 
 			if kept, dup := scanned[name]; dup {
 				if onDiag := s.ctx.OnDiagnostic(); onDiag != nil {
-					onDiag(grammar.Warnf(s.ctx.PosOf(decl.Ident.Pos()), grammar.CodeSharedResponseConflict,
+					onDiag(grammar.Warnf(s.ctx.PosOf(decl.Pos()), grammar.CodeSharedResponseConflict,
 						"shared response %q is already registered by %s; this declaration (%s) is dropped (keep-first)",
 						name, kept, declLabel(decl)))
 				}
@@ -538,12 +538,12 @@ func (s *Builder) buildResponses() error {
 			}
 			s.discovered = append(s.discovered, rb.PostDeclarations()...)
 			scanned[name] = declLabel(decl)
-			s.sharedRespPos[name] = s.ctx.PosOf(decl.Ident.Pos())
+			s.sharedRespPos[name] = s.ctx.PosOf(decl.Pos())
 
 			// Cross-ref linkage: anchor the top-level response node to its swagger:response declaration;
 			// headers/body resolve to it.
 			if s.ctx.OriginEnabled() && name != "" {
-				s.ctx.RecordOrigin(scanner.JSONPointer("responses", name), s.ctx.PosOf(decl.Ident.Pos()))
+				s.ctx.RecordOrigin(scanner.JSONPointer("responses", name), s.ctx.PosOf(decl.Pos()))
 			}
 
 			return nil
@@ -555,17 +555,15 @@ func (s *Builder) buildResponses() error {
 	return nil
 }
 
-// responseOriginKey is the deferred-provenance buffer key for a shared response (see
-// ScanCtx.BeginDeferredOrigins).
+// responseOriginKey is the deferred-provenance buffer key for a shared response (see ScanCtx.BeginDeferredOrigins).
 //
 // Keyed by the registered response name.
 func responseOriginKey(name string) string { return "responses/" + name }
 
-// sharedParamCandidate is one `swagger:parameters *` registration awaiting merge into the top-level
-// #/parameters map.
+// sharedParamCandidate is one `swagger:parameters *` registration awaiting merge into the top-level #/parameters map.
 //
-// Candidates are collected from every declaration first, then resolved in a deterministic order so
-// the keep-first conflict winner does not depend on package-load order.
+// Candidates are collected from every declaration first, then resolved in a deterministic order so the keep-first
+// conflict winner does not depend on package-load order.
 type sharedParamCandidate struct {
 	name  string
 	param oaispec.Parameter
@@ -579,7 +577,7 @@ func (s *Builder) buildParameters() error {
 
 	// build parameters dictionary
 	for decl := range s.ctx.Parameters() {
-		if err := s.guard(s.ctx.PosOf(decl.Ident.Pos()), declLabel(decl), func() error {
+		if err := s.guard(s.ctx.PosOf(decl.Pos()), declLabel(decl), func() error {
 			pb := parameters.NewBuilder(s.ctx, decl)
 			if err := pb.Build(s.operations); err != nil {
 				return err
@@ -587,15 +585,14 @@ func (s *Builder) buildParameters() error {
 			s.discovered = append(s.discovered, pb.PostDeclarations()...)
 
 			pkg := declPkgPath(decl)
-			pos := s.ctx.PosOf(decl.Ident.Pos())
+			pos := s.ctx.PosOf(decl.Pos())
 			for name, prm := range pb.SharedParameters() {
 				sharedCandidates = append(sharedCandidates, sharedParamCandidate{
 					name: name, param: prm, pkg: pkg, pos: pos, label: declLabel(decl),
 				})
 			}
 
-			// `swagger:parameters * opid …` also references the struct's shared parameters into the listed
-			// operations.
+			// `swagger:parameters * opid …` also references the struct's shared parameters into the listed operations.
 			// Collect the intents now; they are applied once the shared map is complete.
 			for _, op := range pb.SharedRefOperations() {
 				for name := range pb.SharedParameters() {
@@ -624,17 +621,16 @@ func (s *Builder) buildParameters() error {
 	return nil
 }
 
-// registerSharedParameters merges the collected `swagger:parameters *` registrations into the
-// spec's top-level #/parameters map.
+// registerSharedParameters merges the collected `swagger:parameters *` registrations into the spec's top-level
+// #/parameters map.
 //
-// Shared parameters are referenced only by short name and are therefore never renamed (unlike
-// definitions): on a duplicate short name the first registration is kept and the later one dropped
-// with a CodeSharedParameterConflict warning (keep-first).
+// Shared parameters are referenced only by short name and are therefore never renamed (unlike definitions): on a
+// duplicate short name the first registration is kept and the later one dropped with a CodeSharedParameterConflict
+// warning (keep-first).
 // InputSpec-supplied entries seed the map before the scan, so they win any collision.
 //
-// Candidates are resolved in a deterministic order — package import path, then source position,
-// then parameter name — so the kept/dropped choice and the emitted diagnostic are stable
-// regardless of package-load order.
+// Candidates are resolved in a deterministic order — package import path, then source position, then parameter name
+// — so the kept/dropped choice and the emitted diagnostic are stable regardless of package-load order.
 func (s *Builder) registerSharedParameters(candidates []sharedParamCandidate) {
 	if len(candidates) == 0 {
 		return
@@ -676,14 +672,10 @@ func (s *Builder) registerSharedParameters(candidates []sharedParamCandidate) {
 
 // declPkgPath returns the import path of the declaration's package, or "" when unknown.
 func declPkgPath(d *scanner.EntityDecl) string {
-	if d.Pkg != nil {
-		return d.Pkg.PkgPath
-	}
-	return ""
+	return d.PkgPath()
 }
 
-// paramRefIntent is one shared-parameter reference to apply as a #/parameters/{name} $ref on an
-// operation.
+// paramRefIntent is one shared-parameter reference to apply as a #/parameters/{name} $ref on an operation.
 type paramRefIntent struct {
 	op    string
 	name  string
@@ -691,18 +683,16 @@ type paramRefIntent struct {
 	label string
 }
 
-// applyParameterRefs wires shared-parameter references into operations as #/parameters/{name}
-// $refs.
+// applyParameterRefs wires shared-parameter references into operations as #/parameters/{name} $refs.
 //
-// Two sources feed it: `swagger:parameters * opid …` markers (collected in paramRefIntents during
-// buildParameters) and standalone `swagger:parameters opid name …` reference markers on func
-// declarations (ScanCtx.ParameterRefs, discovered by the scanner).
+// Two sources feed it: `swagger:parameters * opid …` markers (collected in paramRefIntents during buildParameters)
+// and standalone `swagger:parameters opid name …` reference markers on func declarations (ScanCtx.ParameterRefs,
+// discovered by the scanner).
 //
-// A reference to an unregistered shared parameter is dropped with a scan.dangling-parameter-ref
-// warning rather than emitting a dangling $ref.
+// A reference to an unregistered shared parameter is dropped with a scan.dangling-parameter-ref warning rather than
+// emitting a dangling $ref.
 //
-// Runs after the top-level #/parameters map is complete and before buildRoutes attaches operations
-// to paths.
+// Runs after the top-level #/parameters map is complete and before buildRoutes attaches operations to paths.
 // Intents are applied in a deterministic order (operation id, then parameter name).
 func (s *Builder) applyParameterRefs() {
 	intents := append([]paramRefIntent(nil), s.paramRefIntents...)
@@ -723,13 +713,12 @@ func (s *Builder) applyParameterRefs() {
 	}
 }
 
-// collectStandaloneParameterRefs turns each standalone `swagger:parameters` reference marker on a
-// func (ScanCtx.ParameterRefs) into per-name ref intents.
+// collectStandaloneParameterRefs turns each standalone `swagger:parameters` reference marker on a func
+// (ScanCtx.ParameterRefs) into per-name ref intents.
 //
-// The marker's first token is the target operation id and the remaining tokens are shared-parameter
-// names.
+// The marker's first token is the target operation id and the remaining tokens are shared-parameter names.
 // Path-item references (`/path` target) are handled in a later phase.
-// Duplicate names dropped by the grammar raise a duplicate-ref warning (C2).
+// Duplicate names dropped by the grammar raise a duplicate-ref warning.
 func (s *Builder) collectStandaloneParameterRefs() []paramRefIntent {
 	var out []paramRefIntent
 	for ref := range s.ctx.ParameterRefs() {
@@ -764,8 +753,8 @@ func (s *Builder) collectStandaloneParameterRefs() []paramRefIntent {
 
 // parametersBlockOf returns the first ParametersBlock parsed from cg, or nil.
 //
-// References are parsed straight from the grammar (the targeting parse lives there); the spec
-// builder owns no parameters.Builder for a func-hosted marker.
+// References are parsed straight from the grammar (the targeting parse lives there); the spec builder owns no
+// parameters.Builder for a func-hosted marker.
 func (s *Builder) parametersBlockOf(cg *ast.CommentGroup) *grammar.ParametersBlock {
 	for _, b := range grammar.NewParser(s.ctx.FileSet()).ParseAll(cg) {
 		if pb, ok := b.(*grammar.ParametersBlock); ok {
@@ -775,9 +764,9 @@ func (s *Builder) parametersBlockOf(cg *ast.CommentGroup) *grammar.ParametersBlo
 	return nil
 }
 
-// addParameterRef appends a #/parameters/{name} $ref to the target operation (creating the
-// operation entry when absent), or drops the reference with a scan.dangling-parameter-ref warning
-// when no such shared parameter is registered.
+// addParameterRef appends a #/parameters/{name} $ref to the target operation (creating the operation entry when
+// absent), or drops the reference with a scan.dangling-parameter-ref warning when no such shared parameter is
+// registered.
 //
 // The same $ref is never added twice to one operation.
 func (s *Builder) addParameterRef(in paramRefIntent) {
@@ -809,8 +798,8 @@ func (s *Builder) addParameterRef(in paramRefIntent) {
 	op.Parameters = append(op.Parameters, oaispec.Parameter{Refable: oaispec.Refable{Ref: ref}})
 }
 
-// pathItemInlineIntent is one `swagger:parameters /path` registration: the struct's fields, inlined
-// into the named path-item.
+// pathItemInlineIntent is one `swagger:parameters /path` registration: the struct's fields, inlined into the named
+// path-item.
 type pathItemInlineIntent struct {
 	path   string
 	params []oaispec.Parameter
@@ -819,8 +808,8 @@ type pathItemInlineIntent struct {
 	label  string
 }
 
-// pathItemRefIntent is one `swagger:parameters /path name` reference: a #/parameters/{name} $ref
-// added to the named path-item.
+// pathItemRefIntent is one `swagger:parameters /path name` reference: a #/parameters/{name} $ref added to the named
+// path-item.
 type pathItemRefIntent struct {
 	path  string
 	name  string
@@ -830,17 +819,15 @@ type pathItemRefIntent struct {
 
 // applyPathItemParameters applies path-item parameters once all paths exist.
 //
-// `swagger:parameters /path` inlines a struct's fields into the path-item; `swagger:parameters
-// /path name` adds a #/parameters/{name} $ref.
-// Per-path the inline parameters come first (ordered by package path then position), then the $refs
-// (ordered by name).
+// `swagger:parameters /path` inlines a struct's fields into the path-item; `swagger:parameters /path name` adds a
+// #/parameters/{name} $ref.
+// Per-path the inline parameters come first (ordered by package path then position), then the $refs (ordered by name).
 //
-// The path must already exist as a route/operation target (OAS2 has no path hierarchy — the match
-// is exact); a reference to an unknown path or unregistered shared parameter is dropped with a
-// warning.
+// The path must already exist as a route/operation target (OAS2 has no path hierarchy — the match is exact); a
+// reference to an unknown path or unregistered shared parameter is dropped with a warning.
 //
-// Operation-level parameters are left untouched: path-item and operation parameters co-exist (the
-// operation one wins at resolution per OAS2).
+// Operation-level parameters are left untouched: path-item and operation parameters co-exist (the operation one wins at
+// resolution per OAS2).
 func (s *Builder) applyPathItemParameters() {
 	if s.input.Paths == nil {
 		return
@@ -907,10 +894,10 @@ func (s *Builder) applyPathItemParameters() {
 	}
 }
 
-// collectPathItemRefs turns each standalone `swagger:parameters /path name …` reference marker
-// (ScanCtx.ParameterRefs with a path target) into per-name path-item ref intents.
+// collectPathItemRefs turns each standalone `swagger:parameters /path name …` reference marker (ScanCtx.ParameterRefs
+// with a path target) into per-name path-item ref intents.
 //
-// Duplicate names dropped by the grammar raise a duplicate-ref warning (C2).
+// Duplicate names dropped by the grammar raise a duplicate-ref warning.
 func (s *Builder) collectPathItemRefs() []pathItemRefIntent {
 	var out []pathItemRefIntent
 	for ref := range s.ctx.ParameterRefs() {
@@ -946,13 +933,12 @@ func containsParamRef(params []oaispec.Parameter, ref oaispec.Ref) bool {
 	return false
 }
 
-// validateSharedRefs drops shared-namespace references that resolve to nothing — a
-// #/parameters/{name} or #/responses/{name} $ref whose target is not registered.
+// validateSharedRefs drops shared-namespace references that resolve to nothing — a #/parameters/{name} or
+// #/responses/{name} $ref whose target is not registered.
 //
-// The main source is a swagger:operation wholesale-YAML body, which unmarshals its
-// parameters/responses (and their $refs) verbatim; this pass validates them against the completed
-// #/parameters and #/responses maps and drops danglers with a warning rather than leaving an
-// invalid reference in the output.
+// The main source is a swagger:operation wholesale-YAML body, which unmarshals its parameters/responses (and their
+// $refs) verbatim; this pass validates them against the completed #/parameters and #/responses maps and drops danglers
+// with a warning rather than leaving an invalid reference in the output.
 //
 // Valid refs (and non-shared refs such as #/definitions/…) are left untouched.
 func (s *Builder) validateSharedRefs() {
@@ -979,8 +965,7 @@ func pathItemOperations(pi *oaispec.PathItem) []*oaispec.Operation {
 	return []*oaispec.Operation{pi.Get, pi.Put, pi.Post, pi.Delete, pi.Options, pi.Head, pi.Patch}
 }
 
-// keepResolvableParamRefs returns params with any dangling #/parameters/{name} $ref dropped (and
-// warned).
+// keepResolvableParamRefs returns params with any dangling #/parameters/{name} $ref dropped (and warned).
 //
 // Non-ref and resolvable-ref parameters are preserved in order.
 func (s *Builder) keepResolvableParamRefs(path string, params []oaispec.Parameter, onDiag func(grammar.Diagnostic)) []oaispec.Parameter {
@@ -1000,8 +985,8 @@ func (s *Builder) keepResolvableParamRefs(path string, params []oaispec.Paramete
 	return kept
 }
 
-// dropDanglingResponseRefs removes any dangling #/responses/{name} $ref from an operation's
-// responses (default + per-status), warning on each.
+// dropDanglingResponseRefs removes any dangling #/responses/{name} $ref from an operation's responses
+// (default + per-status), warning on each.
 func (s *Builder) dropDanglingResponseRefs(path string, resp *oaispec.Responses, onDiag func(grammar.Diagnostic)) {
 	if resp == nil {
 		return
@@ -1026,8 +1011,8 @@ func (s *Builder) dropDanglingResponseRefs(path string, resp *oaispec.Responses,
 	}
 }
 
-// danglingResponseRef reports whether r is a #/responses/{name} $ref whose target is not
-// registered, returning the unresolved name.
+// danglingResponseRef reports whether r is a #/responses/{name} $ref whose target is not registered, returning the
+// unresolved name.
 func (s *Builder) danglingResponseRef(r oaispec.Response) (string, bool) {
 	name, ok := sharedRefName(r.Ref, "#/responses/")
 	if !ok {
@@ -1039,8 +1024,8 @@ func (s *Builder) danglingResponseRef(r oaispec.Response) (string, bool) {
 	return name, true
 }
 
-// sharedRefName returns the {name} suffix of a $ref of the form "{prefix}{name}" (e.g. prefix
-// "#/parameters/"), and whether ref matched.
+// sharedRefName returns the {name} suffix of a $ref of the form "{prefix}{name}" (e.g. prefix "#/parameters/"), and
+// whether ref matched.
 func sharedRefName(ref oaispec.Ref, prefix string) (string, bool) {
 	if after, ok := strings.CutPrefix(ref.String(), prefix); ok && after != "" {
 		return after, true
@@ -1048,43 +1033,38 @@ func sharedRefName(ref oaispec.Ref, prefix string) (string, bool) {
 	return "", false
 }
 
-// resolveSamePackageDuplicates detects two distinct annotated models in the SAME package that claim
-// the same definition name — necessarily via a `swagger:model <name>` override, since Go type
-// names are unique per package.
+// resolveSamePackageDuplicates detects two distinct annotated models in the SAME package that claim the same definition
+// name — necessarily via a `swagger:model <name>` override, since Go type names are unique per package.
 //
-// The first (in a deterministic order) keeps the name; later ones have their override suppressed
-// (reverting to the Go type name) and get a diagnostic.
-// This is the build-side half of D-4; cross-package same-name collisions are handled later by the
-// reduce stage.
-//
-// §9.1/§12.1.
+// The first (in a deterministic order) keeps the name; later ones have their override suppressed (reverting to the Go
+// type name) and get a diagnostic.
+// This is the build-side half ; cross-package same-name collisions are handled later by the reduce stage.
 func (s *Builder) resolveSamePackageDuplicates() {
 	models := make([]*scanner.EntityDecl, 0)
 	for _, d := range s.ctx.Models() {
 		models = append(models, d)
 	}
-	// Deterministic order so "first wins" is stable across runs: by key, then by Go name within a
-	// colliding group.
+	// Deterministic order so "first wins" is stable across runs: by key, then by Go name within a colliding group.
 	sort.Slice(models, func(i, j int) bool {
 		ki, kj := models[i].DefKey(), models[j].DefKey()
 		if ki != kj {
 			return ki < kj
 		}
-		return models[i].Ident.Name < models[j].Ident.Name
+		return models[i].Name() < models[j].Name()
 	})
 
 	seen := make(map[string]*scanner.EntityDecl, len(models))
 	for _, d := range models {
 		key := d.DefKey()
-		if first, dup := seen[key]; dup && first.Ident != d.Ident {
+		if first, dup := seen[key]; dup && first.Obj() != d.Obj() {
 			d.SuppressModelOverride()
 			if onDiag := s.ctx.OnDiagnostic(); onDiag != nil {
 				_, goName := d.Names()
 				onDiag(grammar.Warnf(
-					s.ctx.PosOf(d.Spec.Pos()),
+					s.ctx.PosOf(d.Pos()),
 					grammar.CodeDuplicateModelName,
 					"duplicate swagger:model name %q in package %q (already used by type %q); using Go name %q instead",
-					leafName(key), d.Obj().Pkg().Path(), first.Ident.Name, goName,
+					leafName(key), d.Obj().Pkg().Path(), first.Name(), goName,
 				))
 			}
 			continue
@@ -1100,7 +1080,7 @@ func (s *Builder) buildModels() error {
 	}
 
 	for _, decl := range s.ctx.Models() {
-		if err := s.guard(s.ctx.PosOf(decl.Ident.Pos()), declLabel(decl), func() error {
+		if err := s.guard(s.ctx.PosOf(decl.Pos()), declLabel(decl), func() error {
 			return s.buildDiscoveredSchema(decl)
 		}); err != nil {
 			return err

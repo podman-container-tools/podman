@@ -5,24 +5,28 @@ package parsers
 
 import "regexp"
 
+// The path annotations — `swagger:route` and `swagger:operation` — are the only regexes left in the
+// scanner. They match four things in sequence (method, path, optional tags, operationId) and the
+// path's alphabet is the bulk of the pattern; the parse reads the result back by submatch index.
+// The other classifiers, which only ever asked where a keyword sat on a line, are string searches
+// in annotation_line.go.
+
 const (
-	// rxCommentPrefix matches the leading comment noise that precedes an annotation keyword on a raw
-	// comment line: whitespace, tabs, slashes, asterisks, dashes, optional markdown table pipe, then
-	// trailing spaces.
+	// rxCommentPrefix matches the leading comment noise that precedes an annotation keyword on a raw comment line:
+	// whitespace, tabs, slashes, asterisks, dashes, optional markdown table pipe, then trailing spaces.
 	//
-	// Annotations must START the comment line — any prose before the `swagger:xxx` keyword
-	// disqualifies the line, so an annotation buried in prose is ignored.
+	// Annotations must START the comment line — any prose before the `swagger:xxx` keyword disqualifies the line, so an
+	// annotation buried in prose is ignored.
 	//
-	// The sole documented exception is `swagger:route`, which is allowed to follow a single godoc
-	// identifier (see rxRoutePrefix).
+	// The sole documented exception is `swagger:route`, which is allowed to follow a single godoc identifier (see
+	// rxRoutePrefix).
 	rxCommentPrefix = `^[\p{Zs}\t/\*-]*\|?\p{Zs}*`
 
 	// rxRoutePrefix extends rxCommentPrefix with an OPTIONAL single leading identifier.
 	//
-	// Godoc convention places the function/type name before the annotation body, e.g. `// DoBad
-	// swagger:route GET /path`.
-	// The allowance is intentionally narrow — ONE identifier, then whitespace — so multi-word
-	// prose prefixes still fail.
+	// Godoc convention places the function/type name before the annotation body, e.g. `// DoBad swagger:route GET /path`.
+	// The allowance is intentionally narrow — ONE identifier, then whitespace — so multi-word prose prefixes still
+	// fail.
 	//
 	// This exception is reserved for `swagger:route`.
 	// All other annotations must start the comment line, per rxCommentPrefix.
@@ -30,54 +34,39 @@ const (
 
 	rxMethod = "(\\p{L}+)"
 	rxPath   = "((?:/[\\p{L}\\p{N}\\p{Pd}\\p{Pc}{}\\-\\.\\?_~%!$&'()*+,;=:@/]*)+/?)"
-	rxOpTags = "(\\p{L}[\\p{L}\\p{N}\\p{Pd}\\.\\p{Pc}\\p{Zs}]+)"
-	rxOpID   = "((?:\\p{L}[\\p{L}\\p{N}\\p{Pd}\\p{Pc}]+)+)"
+
+	// rxOpTags and rxOpID both accept a name of a SINGLE character: a letter, then zero or more further characters.
+	//
+	// They required one further character until 2026-08-02, which silently voided the whole annotation.
+	// The failure is not local to the offending name, because the tags group is optional: on `swagger:route GET /pets e
+	// listPets` the parse does not stop at `e`, it falls back to matching with NO tags, which leaves rxOpID to swallow `e
+	// listPets` — and its alphabet has no space.
+	//
+	// The line then matches nothing, and a `swagger:route` matching nothing is not a malformed route, it is not a route at
+	// all, so there was nothing left to raise a diagnostic about.
+	//
+	// OAS 2.0 puts no such floor on either: a tag and an operationId are free-form strings.
+	rxOpTags = "(\\p{L}[\\p{L}\\p{N}\\p{Pd}\\.\\p{Pc}\\p{Zs}]*)"
+	rxOpID   = "(\\p{L}[\\p{L}\\p{N}\\p{Pd}\\p{Pc}]*)"
 )
 
 // compile-once regexes; read-only.
 var (
-	// rxSwaggerAnnotation matches `swagger:<name>` anywhere on a comment line where it is preceded by
-	// whitespace, `/`, or start-of-line.
+	// rxRouteHead / rxOperationHead match the HEAD of a path annotation — its full regex up to and including the path,
+	// with the tags and operationId left off.
 	//
-	// Kept loose because it is the classification regex consumed by scanner.index.ExtractAnnotation;
-	// `swagger:route` is allowed to follow a godoc-style identifier per rxRoutePrefix.
+	// They exist to tell "this line is not an annotation" apart from "this line meant to be one and did not parse".
+	// The full regexes cannot make that distinction: a line that fails them is indistinguishable from prose, which is why
+	// a malformed route used to disappear in silence.
 	//
-	// Do NOT use this regex as a block terminator — it triggers on mid-prose mentions and would
-	// truncate descriptions.
-	rxSwaggerAnnotation = regexp.MustCompile(`(?:^|[\s/])swagger:([\p{L}\p{N}\p{Pd}\p{Pc}]+)`)
-
-	rxModelOverride = regexp.MustCompile(rxCommentPrefix + `swagger:model\p{Zs}*(\p{L}[\p{L}\p{N}\p{Pd}\p{Pc}]+)?(?:\.)?$`)
-	// rxResponseOverride is the scanner's classification gate for `swagger:response`.
+	// Matching the keyword alone is NOT enough to tell those apart.
+	// Annotations must start the comment line, so a doc comment whose sentence happens to begin `swagger:route response
+	// lines are …` also starts with the keyword — three such lines exist in this repo's own fixtures.
 	//
-	// The argument is optional (bare marker → name inferred from the type), an identifier name, or
-	// the shared-namespace wildcard `*` (a synonym for the bare form — `swagger:response *` and
-	// `swagger:response` both register a shared response keyed by the type name).
-	//
-	// A malformed name (e.g. a package-qualified `utils.Error`) still fails the match, so
-	// MalformedResponseName can flag it.
-	// The response NAME itself is resolved from the grammar (grammar.ResponseBlock), not from this
-	// capture.
-	rxResponseOverride = regexp.MustCompile(rxCommentPrefix + `swagger:response\p{Zs}*(\*|\p{L}[\p{L}\p{N}\p{Pd}\p{Pc}]+)?(?:\.)?$`)
-	// rxParametersOverride is the scanner's PERMISSIVE classification gate for `swagger:parameters`:
-	// it matches the keyword followed by any non-empty argument and captures it.
-	//
-	// The capture is required by the shared comment matcher (commentMultipleSubMatcher), but its
-	// CONTENT is unused — the argument tokens are parsed and validated by the grammar
-	// (grammar.ParametersBlock), which emits diagnostics for malformed forms.
-	//
-	// The scanner does not re-validate arg shapes: a malformed-but-non-empty argument is classified
-	// and passed on so the grammar can diagnose it, rather than being silently skipped here.
-	rxParametersOverride = regexp.MustCompile(rxCommentPrefix + `swagger:parameters\p{Zs}+(\S.*?)\p{Zs}*$`)
-
-	// rxModelArg / rxResponseArg loosely capture the raw name argument following a single-name struct
-	// marker, regardless of whether it is a well-formed identifier.
-	//
-	// They back the malformed-name detection that warns instead of silently dropping a marker whose
-	// name the strict rxModelOverride / rxResponseOverride rejects (e.g. a package-qualified
-	// `utils.Error`).
-	// See parsers.MalformedModelName / MalformedResponseName.
-	rxModelArg    = regexp.MustCompile(rxCommentPrefix + `swagger:model\p{Zs}+(\S.*?)\p{Zs}*$`)
-	rxResponseArg = regexp.MustCompile(rxCommentPrefix + `swagger:response\p{Zs}+(\S.*?)\p{Zs}*$`)
+	// Requiring a method and a `/`-rooted path costs nothing (a real annotation always has both) and drops every one of
+	// them, since prose after the keyword does not reach a path.
+	rxRouteHead     = regexp.MustCompile(rxRoutePrefix + `swagger:route\p{Zs}+` + rxMethod + `\p{Zs}*` + rxPath)
+	rxOperationHead = regexp.MustCompile(rxCommentPrefix + `swagger:operation\p{Zs}+` + rxMethod + `\p{Zs}*` + rxPath)
 
 	rxRoute = regexp.MustCompile(
 		rxRoutePrefix +

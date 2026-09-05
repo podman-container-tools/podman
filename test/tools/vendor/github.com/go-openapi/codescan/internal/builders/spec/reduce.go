@@ -15,20 +15,18 @@ import (
 	"github.com/go-openapi/swag/mangling"
 )
 
-// reduceDefinitionNames is the final stage of Build: it shortens the fully-qualified,
-// compiler-unique definition keys produced during discovery ("<pkgpath>/<name>", see
-// EntityDecl.DefKey) back to user-facing names, then re-points every $ref accordingly.
-//
-// The name ladder (see .claude/plans/name-identity-cyclic-ref.md §9.2/§12):
+// reduceDefinitionNames is the final stage of Build: it shortens the fully-qualified, compiler-unique definition keys
+// produced during discovery ("<pkgpath>/<name>", see EntityDecl.DefKey) back to user-facing names, then re-points every
+// $ref accordingly.
 //
 //   - a definition whose leaf name is GLOBALLY UNIQUE is lifted to that
 //     bare leaf — byte-identical to the pre-change output, since the leaf
-//     IS the name codescan emitted before (G5 zero-churn common case);
+//     IS the name codescan emitted before (zero-churn common case);
 //
 //   - definitions whose leaf name COLLIDES across packages are qualified
 //     with the minimal-depth PascalCase concat of their nearest package
 //     segments (b.Test / c.Test -> BTest / CTest), deepening until every
-//     name in the group is globally unique (W4-safe), and diagnosed.
+//     name in the group is globally unique, and diagnosed.
 //
 //   - when a colliding group's best flat concat exceeds the readability
 //     budget AND the caller set EmitHierarchicalNames, the group is
@@ -36,11 +34,10 @@ import (
 //     (placeHierarchical); by default the always-correct flat concat is
 //     kept (the concat deepens to the full path if needed).
 //
-// The whole pass is a pure function of the definition key set, so the output is deterministic
-// regardless of discovery / map-iteration order (G4): the previous silent merge was the only source
-// of non-determinism and it is gone now that distinct types get distinct keys.
-// reduceDefinitionNames returns the old->new rename map it applied, so the caller can re-point
-// buffered provenance anchors to the final names (FlushDefOrigins).
+// The whole pass is a pure function of the definition key set, so the output is deterministic regardless of discovery /
+// map-iteration order: the previous silent merge was the only source of non-determinism and it is gone now that
+// distinct types get distinct keys. reduceDefinitionNames returns the old->new rename map it applied, so the caller can
+// re-point buffered provenance anchors to the final names (FlushDefOrigins).
 //
 // A nil/empty map means no definition was renamed.
 func (s *Builder) reduceDefinitionNames() map[string]string {
@@ -61,18 +58,17 @@ func (s *Builder) reduceDefinitionNames() map[string]string {
 	return renames
 }
 
-// diagnoseRenames emits a scan.renamed-definition Hint for every definition the reduce stage
-// renamed to deconflict a cross-package collision.
+// diagnoseRenames emits a scan.renamed-definition Hint for every definition the reduce stage renamed to deconflict a
+// cross-package collision.
 //
-// The trivial lift of a globally-unique leaf to its bare name is not a rename and is skipped (final
-// == leaf).
+// The trivial lift of a globally-unique leaf to its bare name is not a rename and is skipped (final == leaf).
 //
-// Unlike the positionless group Warning (diagnoseCollision), each Hint carries the source position
-// of the originating Go type — captured during the build in declPos — so a source<->spec
-// consumer (the genspec TUI) can follow a renamed type back to its declaration.
+// Unlike the positionless group Warning (diagnoseCollision), each Hint carries the source position of the originating
+// Go type — captured during the build in declPos — so a source<->spec consumer (the genspec TUI) can follow a
+// renamed type back to its declaration.
 //
-// No provenance is emitted here: the renamed node's anchor is the normal flushed one under its
-// final name (see FlushDefOrigins).
+// No provenance is emitted here: the renamed node's anchor is the normal flushed one under its final name (see
+// FlushDefOrigins).
 func (s *Builder) diagnoseRenames(renames map[string]string) {
 	onDiag := s.ctx.OnDiagnostic()
 	if onDiag == nil {
@@ -98,16 +94,14 @@ func (s *Builder) diagnoseRenames(renames map[string]string) {
 	}
 }
 
-// computeNameReductions groups definition keys by their leaf name (the segment after the last '/')
-// and returns the rename map old->new:
+// computeNameReductions groups definition keys by their leaf name (the segment after the last '/') and returns the
+// rename map old->new:
 //
 //   - a unique leaf is lifted to the bare leaf;
 //   - a colliding leaf is resolved by resolveCollisionGroup (concat).
 //
-// Names are reserved in a global "taken" set so a concat can never shadow a bare name or another
-// group's chosen name (W4).
-// Collision groups are processed in sorted order so the result is a pure function of the key set
-// (G4).
+// Names are reserved in a global "taken" set so a concat can never shadow a bare name or another group's chosen name.
+// Collision groups are processed in sorted order so the result is a pure function of the key set.
 func (s *Builder) computeNameReductions() map[string]string {
 	groups := make(map[string][]string, len(s.input.Definitions))
 	for key := range s.input.Definitions {
@@ -118,8 +112,8 @@ func (s *Builder) computeNameReductions() map[string]string {
 	renames := make(map[string]string, len(groups))
 	taken := make(map[string]struct{}, len(groups))
 
-	// Pass 1: unique leaves -> bare; reserve every bare name first so the concat pass (which must
-	// avoid them) sees the full reserved set.
+	// Pass 1: unique leaves -> bare; reserve every bare name first so the concat pass (which must avoid them) sees the
+	// full reserved set.
 	collisions := make([]string, 0)
 	for leaf, keys := range groups {
 		if len(keys) == 1 {
@@ -133,8 +127,8 @@ func (s *Builder) computeNameReductions() map[string]string {
 	}
 	sort.Strings(collisions)
 
-	// Pass 2: colliding leaves -> minimal-depth concat, or the hierarchical fail-safe when the best
-	// flat concat is over budget and the caller opted in.
+	// Pass 2: colliding leaves -> minimal-depth concat, or the hierarchical fail-safe when the best flat concat is over
+	// budget and the caller opted in.
 	mangler := mangling.NewNameMangler()
 	budget := s.concatBudget()
 	hierarchical := s.ctx.EmitHierarchicalNames()
@@ -165,8 +159,8 @@ func (s *Builder) computeNameReductions() map[string]string {
 	return renames
 }
 
-// concatBudget resolves the effective readability budget: the caller-supplied
-// Options.NameConcatBudget, or the built-in default when the caller left it at its zero value.
+// concatBudget resolves the effective readability budget: the caller-supplied Options.NameConcatBudget, or the built-in
+// default when the caller left it at its zero value.
 func (s *Builder) concatBudget() float64 {
 	budget := s.ctx.NameConcatBudget()
 	if budget <= 0 {
@@ -175,16 +169,15 @@ func (s *Builder) concatBudget() float64 {
 	return budget
 }
 
-// resolveCollisionGroup picks a globally-unique PascalCase concat name for every key sharing a
-// leaf.
+// resolveCollisionGroup picks a globally-unique PascalCase concat name for every key sharing a leaf.
 //
-// It tries increasing parent depth (leaf, leaf+1 parent, leaf+2 parents, …) and accepts the
-// shallowest depth at which every name in the group is mutually distinct AND free of the taken set.
-// If even the full path is not enough (ToGoName is not injective on arbitrary paths), a
-// deterministic numeric suffix breaks the remaining tie.
+// It tries increasing parent depth (leaf, leaf+1 parent, leaf+2 parents, …) and accepts the shallowest depth at which
+// every name in the group is mutually distinct AND free of the taken set.
+// If even the full path is not enough (ToGoName is not injective on arbitrary paths), a deterministic numeric suffix
+// breaks the remaining tie.
 //
-// It also returns the group's worst (least-readable) concatScore, which the caller checks against
-// the configured budget — the seam for the hierarchical fallback (Stage 3 / K3).
+// It also returns the group's worst (least-readable) concatScore, which the caller checks against the configured budget
+// — the seam for the hierarchical fallback.
 func resolveCollisionGroup(keys []string, taken map[string]struct{}, m *mangling.NameMangler) (map[string]string, float64) {
 	segs := make(map[string][]string, len(keys))
 	maxDepth := 0
@@ -238,35 +231,33 @@ func resolveCollisionGroup(keys []string, taken map[string]struct{}, m *mangling
 	return cand, groupWorstScore(keys, cand, segs, maxDepth)
 }
 
-// concatName PascalCase-concatenates the leaf with its d nearest parent segments (clamped to the
-// available depth).
+// concatName PascalCase-concatenates the leaf with its d nearest parent segments (clamped to the available depth).
 func concatName(segs []string, d int, m *mangling.NameMangler) string {
 	return m.ToGoName(strings.Join(concatParts(segs, d), " "))
 }
 
-// concatParts returns the leaf plus its d nearest parent segments (clamped to the available depth)
-// — the raw words concatName joins.
+// concatParts returns the leaf plus its d nearest parent segments (clamped to the available depth) — the raw words
+// concatName joins.
 func concatParts(segs []string, d int) []string {
 	start := max(len(segs)-d-1, 0)
 	return segs[start:]
 }
 
-// defaultNameConcatBudget is the readability cutoff used when the caller leaves
-// Options.NameConcatBudget at its zero value.
+// defaultNameConcatBudget is the readability cutoff used when the caller leaves Options.NameConcatBudget at its zero
+// value.
 //
-// Empirically chosen (see concat_score_test.go): comfortably accepts the common 2-segment concats
-// while fencing off long 3-segment ones.
+// Empirically chosen (see concat_score_test.go): comfortably accepts the common 2-segment concats while fencing off
+// long 3-segment ones.
 const defaultNameConcatBudget = 0.65
 
 // concatScore rates a deconflicted concat name in [0,1]: lower is more readable.
 //
-// It blends the three criteria — total length, part count and longest segment — each normalized
-// to [0,1] against a budget, with weights summing to 1, so every criterion pushes the score UP as
-// it grows.
+// It blends the three criteria — total length, part count and longest segment — each normalized to [0,1] against a
+// budget, with weights summing to 1, so every criterion pushes the score UP as it grows.
 // A 4+-part concat is always 1.0 (ruled out).
 //
-// The weights and budgets are the tuning knobs; the function is exercised against alternatives in
-// the (disabled) concat_score_test.go harness.
+// The weights and budgets are the tuning knobs; the function is exercised against alternatives in the (disabled)
+// concat_score_test.go harness.
 func concatScore(concat string, parts []string) float64 {
 	const (
 		maxParts = 3.00
@@ -302,8 +293,8 @@ func concatScore(concat string, parts []string) float64 {
 	return min(scoreCeil, wLen*lenTerm+wParts*partsTerm+wWord*wordTerm)
 }
 
-// groupWorstScore returns the least-readable (highest) concatScore across a resolved collision
-// group, the value the budget is checked against.
+// groupWorstScore returns the least-readable (highest) concatScore across a resolved collision group, the value the
+// budget is checked against.
 func groupWorstScore(keys []string, cand map[string]string, segs map[string][]string, d int) float64 {
 	worst := 0.0
 	for _, k := range keys {
@@ -314,15 +305,15 @@ func groupWorstScore(keys []string, cand map[string]string, segs map[string][]st
 	return worst
 }
 
-// resolveHierarchicalGroup picks, per key, the nested container path [parent…, leaf] used for the
-// hierarchical fail-safe — the same nearest package segments the flat concat would have joined,
-// kept as raw nesting levels instead.
+// resolveHierarchicalGroup picks, per key, the nested container path [parent…, leaf] used for the hierarchical
+// fail-safe — the same nearest package segments the flat concat would have joined, kept as raw nesting levels
+// instead.
 //
-// It uses the shallowest depth at which every path is mutually distinct AND no root container
-// clashes with an already-taken flat name; the full key path is the always-unique backstop.
+// It uses the shallowest depth at which every path is mutually distinct AND no root container clashes with an
+// already-taken flat name; the full key path is the always-unique backstop.
 //
-// Unlike the flat rung this never needs ToGoName (the segments stay raw JSON keys), so distinct
-// segment sequences always yield distinct pointers — no numeric-suffix fallback is required.
+// Unlike the flat rung this never needs ToGoName (the segments stay raw JSON keys), so distinct segment sequences
+// always yield distinct pointers — no numeric-suffix fallback is required.
 func resolveHierarchicalGroup(keys []string, taken, containerRoots map[string]struct{}) map[string][]string {
 	segs := make(map[string][]string, len(keys))
 	maxDepth := 0
@@ -359,8 +350,7 @@ func resolveHierarchicalGroup(keys []string, taken, containerRoots map[string]st
 		}
 	}
 
-	// Backstop: the full key path (pkg path + leaf) is unique by construction (DefKey is
-	// compiler-unique).
+	// Backstop: the full key path (pkg path + leaf) is unique by construction (DefKey is compiler-unique).
 	cand := make(map[string][]string, len(keys))
 	for _, k := range keys {
 		cand[k] = segs[k]
@@ -368,11 +358,11 @@ func resolveHierarchicalGroup(keys []string, taken, containerRoots map[string]st
 	return cand
 }
 
-// diagnoseCollision reports a cross-package definition-name collision and the distinct names the
-// reduce stage minted for it.
+// diagnoseCollision reports a cross-package definition-name collision and the distinct names the reduce stage minted
+// for it.
 //
-// Positionless: by reduce time the per-declaration source positions are gone (the spec is the only
-// memory), and the collision is a property of the global name set, not a single source line.
+// Positionless: by reduce time the per-declaration source positions are gone (the spec is the only memory), and the
+// collision is a property of the global name set, not a single source line.
 func (s *Builder) diagnoseCollision(leaf string, keys []string, chosen map[string]string) {
 	onDiag := s.ctx.OnDiagnostic()
 	if onDiag == nil {
@@ -394,8 +384,8 @@ func (s *Builder) diagnoseCollision(leaf string, keys []string, chosen map[strin
 
 // rekeyDefinitions moves each definition from its old key to its new name.
 //
-// A clash on the new name cannot occur for unique leaves; it is guarded defensively, skipping the
-// rekey rather than silently overwriting.
+// A clash on the new name cannot occur for unique leaves; it is guarded defensively, skipping the rekey rather than
+// silently overwriting.
 func (s *Builder) rekeyDefinitions(renames map[string]string) {
 	for old, nw := range renames {
 		if strings.Contains(nw, "/") {
@@ -415,8 +405,8 @@ func (s *Builder) rekeyDefinitions(renames map[string]string) {
 
 const extGoPackage = "x-go-package"
 
-// diagnoseHierarchical reports that a colliding name was emitted as nested container definitions
-// because its flat concat was over budget, listing the nested pointer minted for each package.
+// diagnoseHierarchical reports that a colliding name was emitted as nested container definitions because its flat
+// concat was over budget, listing the nested pointer minted for each package.
 //
 // Positionless, like diagnoseCollision.
 func (s *Builder) diagnoseHierarchical(leaf string, keys []string, paths map[string][]string) {
@@ -439,12 +429,11 @@ func (s *Builder) diagnoseHierarchical(leaf string, keys []string, paths map[str
 		leaf, len(keys), strings.Join(mappings, ", ")))
 }
 
-// placeHierarchical realises the nested-container definitions for the renames whose target is a
-// slash path (produced by resolveHierarchicalGroup).
+// placeHierarchical realises the nested-container definitions for the renames whose target is a slash path (produced by
+// resolveHierarchicalGroup).
 //
-// For each, it moves the model schema from its flat key into
-// definitions[<root>]…ExtraProps[<leaf>], creating the container chain
-// (additionalProperties:true, plus x-go-package on the innermost container) and merging into any
+// For each, it moves the model schema from its flat key into definitions[<root>]…ExtraProps[<leaf>], creating the
+// container chain (additionalProperties:true, plus x-go-package on the innermost container) and merging into any
 // container shared with another model.
 //
 // The matching $refs were already pointed at the slash path by the shared ref rewrite.
@@ -467,9 +456,8 @@ func (s *Builder) placeHierarchical(renames map[string]string) {
 	}
 }
 
-// placeNested inserts model at definitions[path[0]]…[path[n-1]] where the last segment is the
-// model's leaf key and the earlier segments are container schemas; pkgPath is stamped (unless
-// skipExt) on the innermost container.
+// placeNested inserts model at definitions[path[0]]…[path[n-1]] where the last segment is the model's leaf key and
+// the earlier segments are container schemas; pkgPath is stamped (unless skipExt) on the innermost container.
 //
 // Existing containers are merged into, not overwritten, so two models sharing a container coexist.
 func placeNested(defs oaispec.Definitions, path []string, model oaispec.Schema, pkgPath string, skipExt bool) {
@@ -485,8 +473,8 @@ func placeNested(defs oaispec.Definitions, path []string, model oaispec.Schema, 
 	defs[root] = container
 }
 
-// placeNestedExtra recurses into parent's ExtraProps to realise the remaining container chain. path
-// is [container…, leaf] with len >= 2.
+// placeNestedExtra recurses into parent's ExtraProps to realise the remaining container chain.
+// path is [container…, leaf] with len >= 2.
 func placeNestedExtra(parent *oaispec.Schema, path []string, model oaispec.Schema, pkgPath string, skipExt bool) {
 	head := path[0]
 	child := childSchema(parent, head)
@@ -500,8 +488,8 @@ func placeNestedExtra(parent *oaispec.Schema, path []string, model oaispec.Schem
 	setContainerChild(parent, head, child)
 }
 
-// ensureContainer marks a schema as a lenient container (W2: additional properties cover the nested
-// model so validation stays permissive).
+// ensureContainer marks a schema as a lenient container.
+// Additional properties cover the nested model so validation stays permissive.
 func ensureContainer(s *oaispec.Schema) {
 	if s.AdditionalProperties == nil {
 		s.AdditionalProperties = &oaispec.SchemaOrBool{Allows: true}
@@ -515,8 +503,8 @@ func stampGoPackage(s *oaispec.Schema, pkgPath string, skipExt bool) {
 	s.AddExtension(extGoPackage, pkgPath)
 }
 
-// setContainerChild stores child under key in parent's ExtraProps — the carrier go-openapi/spec
-// uses for nested-definition members (see W2).
+// setContainerChild stores child under key in parent's ExtraProps.
+// The carrier go-openapi/spec uses for nested-definition members.
 func setContainerChild(parent *oaispec.Schema, key string, child oaispec.Schema) {
 	if parent.ExtraProps == nil {
 		parent.ExtraProps = map[string]any{}
@@ -524,8 +512,8 @@ func setContainerChild(parent *oaispec.Schema, key string, child oaispec.Schema)
 	parent.ExtraProps[key] = child
 }
 
-// childSchema returns the existing container stored under key in parent's ExtraProps, or a zero
-// Schema when absent / of another type.
+// childSchema returns the existing container stored under key in parent's ExtraProps,
+// or a zero Schema when absent or of another type.
 func childSchema(parent *oaispec.Schema, key string) oaispec.Schema {
 	if parent.ExtraProps != nil {
 		if existing, ok := parent.ExtraProps[key].(oaispec.Schema); ok {
@@ -535,8 +523,7 @@ func childSchema(parent *oaispec.Schema, key string) oaispec.Schema {
 	return oaispec.Schema{}
 }
 
-// leafName returns the segment of a definition key after the last '/', or the whole key when there
-// is none.
+// leafName returns the segment of a definition key after the last '/', or the whole key when there is none.
 func leafName(key string) string {
 	if i := strings.LastIndex(key, "/"); i >= 0 {
 		return key[i+1:]
@@ -544,8 +531,8 @@ func leafName(key string) string {
 	return key
 }
 
-// repointer returns a function that rewrites a "#/definitions/<old>" reference to
-// "#/definitions/<new>" when <old> is in the rename map, and reports whether it changed.
+// repointer returns a function that rewrites a "#/definitions/<old>" reference to "#/definitions/<new>" when <old> is
+// in the rename map, and reports whether it changed.
 func repointer(renames map[string]string) func(oaispec.Ref) (oaispec.Ref, bool) {
 	const prefix = "#/definitions/"
 	return func(ref oaispec.Ref) (oaispec.Ref, bool) {
@@ -567,19 +554,17 @@ func repointer(renames map[string]string) func(oaispec.Ref) (oaispec.Ref, bool) 
 
 // rewriteAllRefs walks every schema-bearing node of the document and repoints its $ref in place.
 //
-// It covers the locations codescan actually emits definition refs: definitions, shared
-// parameters/responses schemas, and per-operation parameter / response schemas.
+// It covers the locations codescan actually emits definition refs: definitions, shared parameters/responses schemas,
+// and per-operation parameter / response schemas.
 //
-// Parameter, response and path-item self-$refs are skipped — codescan never points those at
-// #/definitions. (Walk structure mirrors go-openapi/analysis's analyzer, minus the parts we never
-// emit.)
+// Parameter, response and path-item self-$refs are skipped — codescan never points those at #/definitions.
+// Walk structure mirrors go-openapi/analysis's analyzer, minus the parts we never emit.
 func rewriteAllRefs(sw *oaispec.Swagger, repoint func(oaispec.Ref) (oaispec.Ref, bool)) {
 	for k, v := range sw.Definitions {
 		rewriteSchemaRefs(&v, repoint)
 		sw.Definitions[k] = v
 	}
-	// Shared parameters / responses carry their schema by pointer, so mutating through it needs no
-	// write-back to the map.
+	// Shared parameters / responses carry their schema by pointer, so mutating through it needs no write-back to the map.
 	for _, p := range sw.Parameters {
 		rewriteSchemaRefs(p.Schema, repoint)
 	}
@@ -622,11 +607,11 @@ func operationsOf(pi oaispec.PathItem) []*oaispec.Operation {
 
 // rewriteSchemaRefs repoints the $ref on sch and recurses into every sub-schema.
 //
-// Schema-by-value containers (Properties, nested Definitions, …) are written back after mutation;
-// pointer- and slice-addressable containers are mutated in place.
+// Schema-by-value containers (Properties, nested Definitions, …) are written back after mutation; pointer- and
+// slice-addressable containers are mutated in place.
 //
-// nil-guards and the SchemaOrArray (single vs tuple) / SchemaOrBool (.Schema may be nil) handling
-// follow the quirks documented in go-openapi/analysis.
+// nil-guards and the SchemaOrArray (single vs tuple) / SchemaOrBool (.Schema may be nil) handling follow the quirks
+// documented in go-openapi/analysis.
 func rewriteSchemaRefs(sch *oaispec.Schema, repoint func(oaispec.Ref) (oaispec.Ref, bool)) {
 	if sch == nil {
 		return

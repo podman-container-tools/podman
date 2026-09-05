@@ -94,7 +94,7 @@ func ({{ .ReceiverName }} {{ .GoType }}) Pointer() *{{ .GoType }} {
     {{ template "schemavalidator" . }}
   {{- else if not (or .IsInterface .IsStream) }}
 // Validate validates this {{ humanize .Name }}{{/* this schema implements the runtime.Validatable interface but has no validations to check */}}
-func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if or (not .IsExported) .Discriminates }}{{ camelize .Name }}{{ else }}{{ .GoName }}{{ end }}) Validate(formats strfmt.Registry) error {
+func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if or (not .IsExported) .Discriminates }}{{ camelize .Name }}{{ else }}{{ .GoName }}{{ end }}) Validate(_ strfmt.Registry) error {
   return nil
 }
   {{- else }}{{/* {{ .Name }} does not implement the runtime.Validatable interface: noop */}}
@@ -103,7 +103,7 @@ func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperti
     {{ template "schemacontextvalidator" . }}
   {{- else if not (or .IsInterface .IsStream) }}
 // ContextValidate validates this {{ humanize .Name }} based on context it is used {{/* this schema implements the runtime.ContextValidatable interface but has no validations to check */}}
-func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if or (not .IsExported) .Discriminates }}{{ camelize .Name }}{{ else }}{{ .GoName }}{{ end }}) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperties }}*{{ end }}{{ if or (not .IsExported) .Discriminates }}{{ camelize .Name }}{{ else }}{{ .GoName }}{{ end }}) ContextValidate(_ context.Context, _ strfmt.Registry) error {
   return nil
 }
   {{- else }}{{/* {{ .Name }} does not implement the runtime.Validatable interface: noop */}}
@@ -114,6 +114,17 @@ func ({{.ReceiverName}} {{ if or .IsTuple .IsComplexObject .IsAdditionalProperti
 {{- end }}
 {{- if .WantsStringer }}
   {{ template "stringerSerializer" . }}
+{{- end }}
+{{- if .WantsGetters }}
+  {{- range .Properties }}
+    {{- if not .IsBaseType }}
+
+// Get{{ .GoName }} gets the {{ humanize .Name }} of this {{ $.GoName }}
+func ({{ $.ReceiverName }} *{{ $.GoName }}) Get{{ .GoName }}() {{ template "schemaType" . }} {
+  return {{ $.ReceiverName }}.{{ .GoName }}
+}
+    {{- end }}
+  {{- end }}
 {{- end }}
 {{- define "mapOrSliceGetter" }}{{/* signature for AdditionalProperties and AdditionalItems getter funcs */}}
   {{- if not .IsBaseType }}

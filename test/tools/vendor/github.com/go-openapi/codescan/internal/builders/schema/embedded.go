@@ -4,7 +4,6 @@
 package schema
 
 import (
-	"go/ast"
 	"go/types"
 
 	"github.com/go-openapi/codescan/internal/builders/resolvers"
@@ -64,8 +63,12 @@ func (s *Builder) buildEmbedded(tpe types.Type, schema *oaispec.Schema, nameByJS
 
 // buildNamedEmbedded inlines an embedded named struct or interface into the outer schema.
 //
-// The interface arm runs `applyStdlibSpecials` so `error` etc. recognize cleanly; the struct arm
+// The interface arm runs `ApplyStdlibSpecials` so `error` etc. recognize cleanly; the struct arm
 // does not — the asymmetry is intentional, see README §embedded.
+//
+// Only an embed that PROMOTES reaches here: `embedPromotes` diverts a named type over a basic,
+// slice, array or map to the named-property path, since Go has no member to promote for it. The
+// default arm below is therefore a defensive guard rather than a live path.
 //
 // # Details
 //
@@ -83,6 +86,12 @@ func (s *Builder) buildNamedEmbedded(tpe *types.Named, schema *oaispec.Schema, n
 	case *types.Struct:
 		decl, found := s.Ctx.GetModel(tpe.Obj().Pkg().Path(), tpe.Obj().Name())
 		if !found {
+			// Nothing to promote from a struct whose declaration cannot be read: the embedding type keeps
+			// its own fields and loses the embedded ones, which is a smaller object rather than a wrong one.
+			if s.SourcelessFallback(tpe.Obj()) {
+				return nil
+			}
+
 			return missingSource(tpe)
 		}
 		s.Ctx.AddDiscoveredModel(decl)
@@ -95,13 +104,19 @@ func (s *Builder) buildNamedEmbedded(tpe *types.Named, schema *oaispec.Schema, n
 		}
 		o := tpe.Obj()
 		target := NewTypable(schema, 0, s.skipExtensions)
-		if applyStdlibSpecials(o, target, s.skipExtensions) {
+		if ApplyStdlibSpecials(o, target, s.skipExtensions) {
 			return nil
 		}
 
 		resolvers.MustNotBeABuiltinType(o)
 		decl, found := s.Ctx.GetModel(o.Pkg().Path(), o.Name())
 		if !found {
+			// As above: an embedded interface whose declaration is unreadable promotes no method-derived
+			// properties rather than taking the document with it.
+			if s.SourcelessFallback(o) {
+				return nil
+			}
+
 			return missingSource(tpe)
 		}
 		s.Ctx.AddDiscoveredModel(decl)
@@ -123,7 +138,7 @@ func (s *Builder) buildNamedEmbedded(tpe *types.Named, schema *oaispec.Schema, n
 //
 // See [§embedded](./README.md#embedded) — interface-side allOf composition rules and the
 // `Ref.String() != "" || Properties >0 || AllOf >0` non-empty guard rationale.
-func (s *Builder) processEmbeddedType(fld types.Type, flist []*ast.Field, decl *scanner.EntityDecl, schema *oaispec.Schema,
+func (s *Builder) processEmbeddedType(fld types.Type, embeds []resolvers.Embed, decl *scanner.EntityDecl, schema *oaispec.Schema,
 	nameByJSON map[string]propOwner,
 ) (fieldHasAllOf bool, err error) {
 	// Cross-ref linkage: interface-side embeds compose into allOf members (/allOf/{k}/…), an
@@ -135,10 +150,10 @@ func (s *Builder) processEmbeddedType(fld types.Type, flist []*ast.Field, decl *
 		o := ftpe.Obj()
 		var dummySchema oaispec.Schema
 		ps := NewTypable(&dummySchema, 0, s.skipExtensions)
-		if applyStdlibSpecials(o, ps, s.skipExtensions) {
+		if ApplyStdlibSpecials(o, ps, s.skipExtensions) {
 			return false, nil
 		}
-		return s.buildNamedInterface(ftpe, flist, decl, schema, nameByJSON)
+		return s.buildNamedInterface(ftpe, embeds, schema, nameByJSON)
 	case *types.Interface:
 		var aliasedSchema oaispec.Schema
 		ps := NewTypable(&aliasedSchema, 0, s.skipExtensions)

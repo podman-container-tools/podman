@@ -12,13 +12,11 @@ import (
 
 // emitDiagf forwards a CodeInvalidAnnotation diagnostic to the caller's sink.
 //
-// A nil sink silently drops the diagnostic — matches the optionality used by handlers'
-// dispatchers.
+// A nil sink silently drops the diagnostic — matches the optionality used by handlers' dispatchers.
 //
-// Routebody emits exactly one diagnostic code, so the helper bakes it in rather than accepting an
-// argument.
-// Future codes can be added by adding sibling helpers (emitShapeMismatchf, etc.) — keep the call
-// sites explicit about what code they ride on.
+// Routebody emits exactly one diagnostic code, so the helper bakes it in rather than accepting an argument.
+// Future codes can be added by adding sibling helpers (emitShapeMismatchf, etc.) — keep the call sites explicit about
+// what code they ride on.
 func emitDiagf(diag func(grammar.Diagnostic), pos token.Position, format string, args ...any) {
 	if diag == nil {
 		return
@@ -31,12 +29,10 @@ func emitDiagf(diag func(grammar.Diagnostic), pos token.Position, format string,
 	})
 }
 
-// offsetPos returns a new Position whose Line is base.Line + lineNo - 1 (1-indexed line numbers
-// within body).
+// offsetPos returns a new Position whose Line is base.Line + lineNo - 1 (1-indexed line numbers within body).
 //
 // Column and Filename are inherited from base.
-// Used to give per-line diagnostics a reasonable Pos when the body parser doesn't track precise lex
-// state.
+// Used to give per-line diagnostics a reasonable Pos when the body parser doesn't track precise lex state.
 func offsetPos(base token.Position, lineNo int) token.Position {
 	return token.Position{
 		Filename: base.Filename,

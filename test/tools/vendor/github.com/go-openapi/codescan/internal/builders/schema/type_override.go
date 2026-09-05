@@ -16,11 +16,88 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
+// refuseUnrepresentableOverride reports whether a `swagger:type` base must be IGNORED because the
+// location cannot carry what it resolves to.
+//
+// A non-body parameter or a response header is an OAS-2 SimpleSchema, where `type` is mandatory and
+// restricted to {string, number, integer, boolean, array} (plus `file`, formData-only). An override
+// resolving to an object has nowhere to go there.
+//
+// Ignoring beats applying: `type` is required, so the Go-derived type must survive. The alternative
+// outcomes were both invalid — a bare `object` base reached the target and was reset to `{}` by
+// validateSimpleSchemaOutcome, leaving the parameter untyped, while a type-name reference resolved
+// into paramTypable.Schema()'s nil and vanished with no diagnostic at all, the check never firing
+// because the illegal value never materialised to be checked.
+//
+// Side-effect free: it inspects, it does not build.
+func (s *Builder) refuseUnrepresentableOverride(arg string, ownType types.Type, pos token.Position) bool {
+	if !s.simpleSchema {
+		return false
+	}
+
+	base, depth := stripArrayPrefixes(arg)
+	if depth > 0 {
+		// `[]T` is an array, which SimpleSchema allows — but its items are a SimpleSchema too, so the
+		// element carries the same restriction.
+		return s.overrideYieldsObject(base, ownType)
+	}
+	if !s.overrideYieldsObject(base, ownType) {
+		return false
+	}
+
+	s.RecordDiagnostic(grammar.Warnf(pos, grammar.CodeUnsupportedInSimpleSchema,
+		"swagger:type %s resolves to an object, which an OAS v2 SimpleSchema (non-body parameter or "+
+			"response header, in=%q) cannot carry; the annotation is ignored and the Go type is used "+
+			"instead, since SimpleSchema requires a type", arg, s.paramIn))
+
+	return true
+}
+
+// overrideYieldsObject reports whether a swagger:type base resolves to an object-shaped schema.
+//
+// The four base kinds are answered without building: the `inline`/`array` keywords inline the
+// annotated Go type, a recognised scalar name is never an object except `object` itself, and
+// anything else is a reference to a scanned type whose underlying decides.
+func (s *Builder) overrideYieldsObject(base string, ownType types.Type) bool {
+	switch base {
+	case keywordInline, keywordArray:
+		return ownType != nil && isObjectLikeUnderlying(ownType)
+	case keywordFile:
+		return false // refused earlier, with its own diagnostic
+	case "object":
+		return true
+	}
+
+	// A recognised scalar / Go-builtin / OAS-2 name resolves without touching the scanned packages.
+	var probe oaispec.Schema
+	if err := resolvers.SwaggerSchemaForType(base, NewTypable(&probe, 0, true)); err == nil {
+		return len(probe.Type) > 0 && probe.Type[0] == "object"
+	}
+
+	// Otherwise a type-name reference: its underlying decides.
+	decl, found, ambiguous := s.resolveNamedTypeLeaf(base, token.Position{})
+	if ambiguous || !found {
+		return false // unknown name — resolveTypeBase reports it
+	}
+	t := declNamedType(decl)
+
+	return t != nil && isObjectLikeUnderlying(t)
+}
+
+// isObjectLikeUnderlying reports whether a Go type renders as a Swagger object.
+func isObjectLikeUnderlying(t types.Type) bool {
+	switch t.Underlying().(type) {
+	case *types.Struct, *types.Map, *types.Interface:
+		return true
+	default:
+		return false
+	}
+}
+
 // resolveTypeOverride applies a `swagger:type` argument onto tgt, ALWAYS producing an inline schema
 // (never a $ref).
 //
 // It is the single resolution point for the keyword consumed at every swagger:type site (the F3
-// reconciliation — see .claude/plans/quirks-F-series-fix.md).
 //
 //   - ownType is the annotated field/decl's Go type, consumed by the
 //     `inline` / `array` keywords (which expand that type in place). May be
@@ -41,10 +118,15 @@ import (
 //     items);
 //   - `array` — deprecated alias of `inline` for collections (warns,
 //     prefer `inline`);
-//   - `file` — unsupported here (diagnostic; use swagger:file);
+//   - `file` — valid only on a formData parameter or a response body, both handled by the
+//     parameters / responses builders; a diagnostic anywhere else;
 //   - any other token — a case-sensitive type-name reference, inlined from a
 //     known definition; unknown → diagnostic.
 func (s *Builder) resolveTypeOverride(arg string, tgt ifaces.SwaggerTypable, ownType types.Type, pos token.Position) (applied bool) {
+	if s.refuseUnrepresentableOverride(arg, ownType, pos) {
+		return false
+	}
+
 	base, depth := stripArrayPrefixes(arg)
 	if depth == 0 {
 		return s.resolveTypeBase(base, tgt, ownType, pos, false)
@@ -85,8 +167,13 @@ func (s *Builder) resolveTypeBase(base string, target ifaces.SwaggerTypable, own
 		}
 		return s.inlineGoType(ownType, target)
 	case keywordFile:
+		// `file` is an OAS v2 type, but only in two places: a formData parameter and a response body.
+		// Both are owned by the parameters / responses builders, which raise the file signal for this
+		// spelling and apply it behind their own location gates — so reaching here means the location
+		// is not one of them.
 		s.RecordDiagnostic(grammar.Warnf(pos, grammar.CodeUnsupportedType,
-			`swagger:type: "file" is not supported here — use the swagger:file annotation instead`))
+			`swagger:type: "file" is only valid on a formData parameter or a response body; ignored here`))
+
 		return false
 	}
 
@@ -170,8 +257,8 @@ func (s *Builder) inlineGoType(t types.Type, target ifaces.SwaggerTypable) bool 
 //   - several -> records an ambiguity diagnostic and returns (nil, false, true);
 //   - none -> (nil, false, false), leaving the caller to emit unknown-type.
 func (s *Builder) resolveNamedTypeLeaf(name string, pos token.Position) (decl *scanner.EntityDecl, found, ambiguous bool) {
-	if s.Decl != nil && s.Decl.Pkg != nil {
-		if d, ok := s.Ctx.FindDecl(s.Decl.Pkg.PkgPath, name); ok && d != nil {
+	if s.Decl != nil {
+		if d, ok := s.Ctx.FindDecl(s.Decl.PkgPath(), name); ok && d != nil {
 			return d, true, false
 		}
 	}

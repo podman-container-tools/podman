@@ -338,5 +338,5 @@ under the current dispatch.
   `buildFromType`'s default branch rejects anonymous types with
   `"anonymous types are currently not supported for responses"`. A
   top-level alias to an anonymous struct under default mode crashes
-  here. Reproduces in `fixtures/enhancements/alias-response-shapes`.
+  here. Reproduces in `testdata/enhancements/alias-response-shapes`.
   Out of scope for v1.

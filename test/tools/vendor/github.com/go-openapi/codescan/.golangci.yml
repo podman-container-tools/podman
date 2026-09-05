@@ -7,6 +7,7 @@ linters:
     - gomoddirectives # mono-repo, multi-modules (docs/examples): local replace directives are needed for proper releasing
     - goconst # disabled, perhaps temporarily as this linter has become way too pick and noisy
     - godox
+    - gomoddirectives
     - gomodguard
     - gomodguard_v2
     - exhaustruct
@@ -54,6 +55,36 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      # Copied verbatim from the Go distribution (BSD-3-Clause) so it stays
+      # diffable against upstream. Reformatting it to our house style would
+      # make every future re-sync a manual merge.
+      - internal/packages/list/pkgpattern.*\.go$
+      # we check some non-strictly conformant comments (e.g. "deprecated instead of Deprecated") on-purpose
+      - testdata
+    rules:
+      # hack/ holds developer tools, not library code: printing a report to
+      # stdout is what they are for.
+      - path: hack/
+        linters:
+          - forbidigo
+      # cmd/genspec-tui is a bubbletea front-end. These four disagree with the
+      # shape of TUI code rather than with the code itself, and each fires often
+      # enough (102 between them) that //nolint would be the scattering this
+      # repo's linting rule tells us to avoid. Scoped by path so the library
+      # keeps all four.
+      - path: cmd/genspec-tui/
+        linters:
+          # Layout arithmetic, where the number IS the explanation: w-2 is the
+          # two border columns, h-3 is border plus title row.
+          - mnd
+          # Key, mouse and message switches read open-ended INPUT, not a closed
+          # domain. Falling through to the code after the switch is the
+          # behaviour, so a required `default:` would be an empty statement
+          # asserting nothing. The scanner's go/types switches still get this.
+          - exhaustive
+          # clamp/clampInt keep a general (v, lo, hi) signature though every
+          # call site happens to pass lo=0.
+          - unparam
 formatters:
   enable:
     - gofmt
@@ -62,10 +93,12 @@ formatters:
   exclusions:
     generated: lax
     paths:
-      - fixtures
+      - testdata
       - third_party$
       - builtin$
       - examples$
+      # As above: derived from the Go distribution, kept byte-comparable.
+      - internal/packages/list/pkgpattern.*\.go$
 issues:
   # Maximum issues count per one linter.
   # Set to 0 to disable.

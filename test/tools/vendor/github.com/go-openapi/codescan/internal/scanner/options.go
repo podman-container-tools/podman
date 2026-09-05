@@ -4,6 +4,8 @@
 package scanner
 
 import (
+	"io/fs"
+
 	"github.com/go-openapi/codescan/internal/parsers/grammar"
 	"github.com/go-openapi/spec"
 )
@@ -19,11 +21,195 @@ import (
 // [§descwithref](./README.md#descwithref) and [§diagnostics](./README.md#diagnostics) for the two
 // fields with non-trivial semantics (DescWithRef and OnDiagnostic).
 type Options struct {
-	Packages                []string
-	InputSpec               *spec.Swagger
-	ScanModels              bool
-	WorkDir                 string
-	BuildTags               string
+	Packages   []string
+	InputSpec  *spec.Swagger
+	ScanModels bool
+	WorkDir    string
+	BuildTags  string
+
+	// GOOS and GOARCH select the platform the scanned code is built for.
+	//
+	// They decide which files each package is made of — //go:build lines and _linux.go / _amd64.go
+	// style filename suffixes resolve against them — so they change the emitted spec, in the same way
+	// BuildTags does.
+	//
+	// Empty (the default) means the platform codescan itself is running on, which is what the go
+	// command would assume. Set them to scan code for another platform, or wherever codescan's own
+	// platform is an accident of deployment rather than a statement about the code under scan.
+	GOOS   string
+	GOARCH string
+
+	// GOFLAGS, GOWORK and GOEXPERIMENT complete the picture GOOS/GOARCH starts: the go environment
+	// that decides WHAT is built, rather than where the output goes.
+	//
+	// They are options rather than inherited state for the same reason GOOS is. A scan that silently
+	// picks them up from whatever shell it started in is not reproducible, and an inherited value is
+	// easy to apply on one code path and forget on another.
+	//
+	// Empty means "whatever the process environment says", which is what the go command would do.
+	//
+	//   - GOFLAGS supplies default command-line flags ("-tags=integration"); flags given through
+	//     BuildTags win, as they do for the go command.
+	//   - GOWORK selects the workspace: "off" disables it, a path names a go.work, empty searches
+	//     upwards. Inside a workspace a sibling module resolves to the copy being worked on rather
+	//     than to the module cache — miss that and its types are read stale, or synthesized empty.
+	//   - GOEXPERIMENT enables toolchain experiments ("jsonv2"), each contributing a
+	//     goexperiment.<name> build tag.
+	GOFLAGS      string
+	GOWORK       string
+	GOEXPERIMENT string
+
+	// ToolchainFreeLoader runs the scan through codescan's own package loader (internal/packages)
+	// instead of golang.org/x/tools/go/packages.
+	//
+	// The two do the same job and, across codescan's fixture corpus, produce identical specs. They
+	// differ in what they need to run: go/packages resolves the package graph by executing `go list`,
+	// so it requires an installed toolchain and the ability to start a process; this one is pure Go and
+	// requires neither.
+	//
+	// False (the default) keeps the historic go/packages behaviour. Setting FS implies this regardless,
+	// since `go list` can only ever read the real filesystem.
+	//
+	// Experimental: the toolchain-free loader is younger than the go/packages path it stands in for,
+	// and its shape may change. Leaving it false is unaffected.
+	ToolchainFreeLoader bool
+
+	// FS makes the scan read its source through a virtual filesystem instead of the real one.
+	//
+	// This is what lets codescan scan a tree that was never written to disk: an in-memory tree in a
+	// WASI guest, an uploaded archive, a testing/fstest.MapFS.
+	//
+	// # FS is the whole world, not just the tree being scanned
+	//
+	// Dependencies and the standard library are read through it too. A filesystem holding only the
+	// module under scan resolves neither, since neither GOROOT nor the module cache lives inside a
+	// module — every import outside it is then synthesized from the names selected through it, and the
+	// spec comes out valid and quietly thinner (a lost format, a lost byte-array rendering). That is
+	// announced rather than fatal: one scan.synthesized-import per unresolved import, plus
+	// scan.degraded-load. Seeing those against a tree you expected to be complete means FS is missing
+	// something, not that the source is wrong.
+	//
+	// # Paths
+	//
+	// Packages, WorkDir and every path the scan derives are interpreted against the root of FS,
+	// following io/fs conventions: slash-separated and unrooted. An absolute path is mapped onto that
+	// convention by dropping its leading separator, which is what lets an unrooted tree be used at all.
+	// The corollary is that a tree meaning to serve GOROOT or the module cache must mirror their
+	// absolute layout beneath its own root — /usr/lib/go/src/... is looked up as usr/lib/go/src/... —
+	// and that such a tree is therefore tied to the host it was recorded from.
+	//
+	// # Supplying the half that is not the module under scan
+	//
+	// Three ways, in descending fidelity: mirror it in the tree, as above; ExportData, which carries
+	// the compiler's own types and costs no fidelity but is valid only for the toolchain that produced
+	// it; or StubStdlib, which trades fidelity for reach and needs nothing mounted. See each.
+	//
+	// For the case FS was built for — an embed.FS — what can be embedded decides the recipe. A module's
+	// own source and its vendor directory can, since both are inside the module; GOROOT cannot. So:
+	//
+	//	go mod vendor, then embed the module          source + non-stdlib dependencies, read as usual
+	//	ExportData alongside it                       the standard library
+	//
+	// ExportData is itself an fs.FS, so it embeds too, and the two halves ship as one binary. Vendoring
+	// preserves a dependency's own annotations — a vendored go-openapi/strfmt is read from inside
+	// the tree, marks and all. StubStdlib substitutes for the second line where no blob can be
+	// produced, at the fidelity cost documented there.
+	//
+	// Setting FS implies ToolchainFreeLoader: `go list` reaches the filesystem by running a process
+	// against the real one, so it could not honour FS even if asked.
+	//
+	// Experimental: see ToolchainFreeLoader.
+	FS fs.FS
+
+	// StubStdlib keeps the standard library out of the package graph, synthesizing its types from the
+	// names the scanned code selects through them rather than reading GOROOT.
+	//
+	// It applies only to the toolchain-free loader; the go/packages path ignores it.
+	//
+	// The trade is fidelity for reach. Recognition by type identity is unaffected — time.Time,
+	// json.RawMessage and the rest are matched on (package, name). Anything structural is lost: a
+	// synthesized type has no fields and no method set, so json.RawMessage no longer renders as a byte
+	// array, time.Duration no longer as an integer, and a type is no longer seen to implement
+	// encoding.TextMarshaler.
+	//
+	// It removes the need for GOROOT entirely, and shrinks the graph, which makes a scan viable in a
+	// WASI guest or a browser, where the standard library source would otherwise have to be shipped or
+	// mounted.
+	//
+	// It is not failsafe, and the failure mode is quiet: a spec comes out subtly thinner rather than
+	// erroring. Across codescan's own fixture corpus 133 of 138 scans are byte-identical; the rest lose
+	// a byte-array rendering, an integer format, or a TextMarshaler-derived string, and stdlib
+	// interfaces such as io.Reader have no identity recognizer to fall back on at all. Prefer a full
+	// graph wherever GOROOT is available.
+	//
+	// Experimental: see ToolchainFreeLoader.
+	StubStdlib bool
+
+	// CompiledDependencies takes dependency types from the compiler's export data, instead of reading
+	// every dependency from source.
+	//
+	// Unset, a scan parses and type-checks the whole dependency graph, which is most of what a load
+	// does. Set, that work is skipped for anything outside the scanned module: the compiler already did
+	// it, and `go list -export` hands the result over.
+	//
+	// Setting it costs no meaning. Export data carries the full exported type surface — fields,
+	// method sets, interface identity — but no syntax and no comments, and a scan wants two different
+	// things out of a dependency's source. Scanning its files for the annotation marker after the load
+	// recovers what a dependency says about its own types, so go-openapi's own strfmt marks keep giving
+	// a strfmt.DateTime field its date-time format. What a dependency DECLARES
+	// cannot be anticipated that way, since any package may declare a type the scanned code names as a
+	// model, so its declaration is fetched at the lookup that wants it. A dependency nothing reaches
+	// into is never read at all, and the document is the one the ordinary loader produces —
+	// pinned over the whole fixture corpus by internal/integration/loader_agreement_test.go.
+	//
+	// # When to set it
+	//
+	// Cost, and only cost — but the cost swings both ways, which is why this is a choice and not a
+	// default. On a warm build cache it is roughly 2.3x faster and holds a third of the memory. On a
+	// cold one it is an order of magnitude slower, since export data has to be compiled before it
+	// exists, and it writes around 229 MB of build cache on a large tree.
+	//
+	// So it pays where the cache is warm by construction: a developer's own machine, a watch loop, a
+	// pipeline that restores its cache. It loses badly on a clean checkout, which is what a CI runner
+	// usually is — and that is the case the default protects. Under a memory bound rather than a time
+	// one, ToolchainFreeLoader is the better answer than either: leaner than a source load and, unlike
+	// this, indifferent to the state of the cache.
+	//
+	// A closure that does not compile is NOT a reason to avoid it: the load is retried from source and
+	// the spec comes out the same.
+	//
+	// The option applies to the go/packages loader alone. The toolchain-free loader resolves imports
+	// itself and already decides per dependency whether to read its source, so it neither needs this
+	// nor honours it; ExportData below is the same idea supplied by hand for that loader.
+	//
+	// So there is nothing here to ask for wherever go/packages cannot run. A WebAssembly build has
+	// no process model and therefore no `go list`, and setting FS forces the same loader for the same
+	// reason — in both, dependency types come from source or from ExportData regardless of this field.
+	CompiledDependencies bool
+
+	// ExportData serves DEPENDENCIES from pre-computed export data instead of reading their source,
+	// under the toolchain-free loader.
+	//
+	// It holds one file per package, named by import path with a ".export" suffix. Unlike StubStdlib
+	// this costs no fidelity — the types are the ones the compiler computed, so fields, method sets
+	// and interface identity are all real — while avoiding the parsing and type-checking that
+	// dominate a full scan.
+	//
+	// The module under scan is never read this way: its comments are the annotations, and export data
+	// carries none. Neither is a dependency that has something to say — one whose source carries
+	// swagger annotations is read from source in the ordinary way, so a swagger:strfmt written in a
+	// library still counts. Export data serves everything else, which is where the time goes anyway.
+	//
+	// Only where a dependency's source cannot be found at all are its annotations lost, and that raises
+	// a scan.compiled-dependencies Hint naming the package.
+	//
+	// Prepare a tree with `go run ./hack/genexportdata`. See internal/scanner/README.md#export-data.
+	// The data is valid only for the toolchain that produced it, and a package it does not cover falls
+	// back to source, and then to synthesis.
+	//
+	// Experimental: see ToolchainFreeLoader.
+	ExportData fs.FS
+
 	ExcludeDeps             bool
 	Include                 []string
 	Exclude                 []string

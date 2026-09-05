@@ -16,8 +16,8 @@ import (
 
 // Parser is the consumer contract for the grammar parser.
 //
-// The package ships *DefaultParser; the interface exists so tests can substitute a mock that
-// fabricates Block values without running the full lex pipeline.
+// The package ships *DefaultParser; the interface exists so tests can substitute a mock that fabricates Block values
+// without running the full lex pipeline.
 //
 // # Details
 //
@@ -36,8 +36,8 @@ type DefaultParser struct {
 	singleLineAsDesc bool
 }
 
-// NewParser constructs a DefaultParser bound to a FileSet (needed to map *ast.CommentGroup
-// positions to absolute source positions).
+// NewParser constructs a DefaultParser bound to a FileSet (needed to map *ast.CommentGroup positions to absolute source
+// positions).
 func NewParser(fset *token.FileSet, opts ...Option) *DefaultParser {
 	p := &DefaultParser{fset: fset}
 	for _, o := range opts {
@@ -49,14 +49,13 @@ func NewParser(fset *token.FileSet, opts ...Option) *DefaultParser {
 // Option configures a DefaultParser.
 type Option func(*DefaultParser)
 
-// WithDiagnosticSink streams diagnostics to a callback in addition to accumulating them on the
-// returned Block.
+// WithDiagnosticSink streams diagnostics to a callback in addition to accumulating them on the returned Block.
 func WithDiagnosticSink(sink func(Diagnostic)) Option {
 	return func(p *DefaultParser) { p.sink = sink }
 }
 
-// WithSingleLineCommentAsDescription makes a single-line prose comment resolve to the block
-// Description instead of the Title, regardless of trailing punctuation.
+// WithSingleLineCommentAsDescription makes a single-line prose comment resolve to the block Description instead of the
+// Title, regardless of trailing punctuation.
 //
 // Multi-line comments keep the normal title/description split.
 // See go-swagger/go-swagger#2626.
@@ -73,24 +72,21 @@ func (p *DefaultParser) Parse(cg *ast.CommentGroup) Block {
 
 // ParseAll returns one Block per annotation in cg, in source order.
 //
-// A comment group with no annotation yields a single-element slice holding an UnboundBlock; a
-// single-annotation comment yields the same Block as Parse, wrapped in a slice; multi-annotation
-// comments yield one Block per annotation.
+// A comment group with no annotation yields a single-element slice holding an UnboundBlock; a single-annotation comment
+// yields the same Block as Parse, wrapped in a slice; multi-annotation comments yield one Block per annotation.
 //
-// Token partition: each annotation owns the slice of tokens from its index up to (but excluding)
-// the next annotation.
+// Token partition: each annotation owns the slice of tokens from its index up to (but excluding) the next annotation.
 //
-// The first annotation also owns the pre-annotation prose, so its PreambleTitle /
-// PreambleDescription match Parse(cg)'s. Body tokens between annotations attach to the *preceding*
-// annotation.
+// The first annotation also owns the pre-annotation prose, so its PreambleTitle / PreambleDescription match
+// Parse(cg)'s. Body tokens between annotations attach to the *preceding* annotation.
 //
 // Multi-annotation comments like.
 //
 //	// swagger:model
 //	// swagger:strfmt date-time
 //
-// pair a schema-family annotation with a classifier; the schema builder's Walker dispatches on each
-// Block's AnnotationKind() without further partitioning.
+// pair a schema-family annotation with a classifier; the schema builder's Walker dispatches on each Block's
+// AnnotationKind() without further partitioning.
 func (p *DefaultParser) ParseAll(cg *ast.CommentGroup) []Block {
 	lines := Preprocess(cg, p.fset)
 	tokens := Lex(lines)
@@ -158,12 +154,12 @@ func (p *DefaultParser) parseAllTokens(tokens []Token) []Block {
 
 // parseState holds per-block parsing state.
 //
-// Today's parsers walk s.tokens via range loops because the token classifier serialises the body
-// — order between annotation header and body items is flat, so a cursor adds no value.
+// Today's parsers walk s.tokens via range loops because the token classifier serialises the body — order between
+// annotation header and body items is flat, so a cursor adds no value.
 //
-// The `pos` field, `peek`, and `advance` below are scaffolding for future order-sensitive
-// productions (strict positional checks on EnumDeclBlock's annotation header → RAW_VALUE_ENUM
-// body, or LSP partial-parse resumption from a cursor).
+// The `pos` field, `peek`, and `advance` below are scaffolding for future order-sensitive productions (strict
+// positional checks on EnumDeclBlock's annotation header → RAW_VALUE_ENUM body, or LSP partial-parse resumption from
+// a cursor).
 // See README §parser-contract.
 //
 // To find every unused-on-purpose site:
@@ -246,8 +242,7 @@ func findAnnotation(tokens []Token) int {
 	return -1
 }
 
-// extractTitleDesc walks the prose tokens of a block (or a sub-slice such as the pre-annotation
-// preamble) and returns:
+// extractTitleDesc walks the prose tokens of a block (or a sub-slice such as the pre-annotation preamble) and returns:
 //
 //   - title — TokenTitle texts joined with "\n"
 //   - desc  — TokenDesc texts joined with "\n", with internal blank
@@ -256,8 +251,8 @@ func findAnnotation(tokens []Token) int {
 //     blanks rendered as "" — the ProseLines / PreambleLines shape
 //     consumers use
 //
-// Join semantics: a single trailing blank is dropped from each side, internal blanks are kept
-// verbatim so paragraph breaks survive.
+// Join semantics: a single trailing blank is dropped from each side, internal blanks are kept verbatim so paragraph
+// breaks survive.
 func extractTitleDesc(tokens []Token) (title, desc string, lines []string) {
 	var titleLines, descLines []string
 	const (
@@ -281,8 +276,7 @@ func extractTitleDesc(tokens []Token) (title, desc string, lines []string) {
 			lines = append(lines, "")
 			switch state {
 			case stateInTitle:
-				// Either an internal blank in a multi-paragraph title or a separator before the desc run
-				// starts.
+				// Either an internal blank in a multi-paragraph title or a separator before the desc run starts.
 				// The trailing-blank trim below resolves the latter.
 				titleLines = append(titleLines, "")
 			case stateInDesc:
@@ -303,9 +297,8 @@ func extractTitleDesc(tokens []Token) (title, desc string, lines []string) {
 
 // dropTrailingBlankLines drops every trailing whitespace-only line from ls.
 //
-// The state-machine in extractTitleDesc over-appends separator blanks (e.g. a TITLE → BLANK+BLANK
-// → DESC sequence pushes both blanks onto titleLines); trimming the whole tail lands on the
-// desired shape.
+// The state-machine in extractTitleDesc over-appends separator blanks (e.g. a TITLE → BLANK+BLANK → DESC sequence
+// pushes both blanks onto titleLines); trimming the whole tail lands on the desired shape.
 func dropTrailingBlankLines(ls []string) []string {
 	for len(ls) > 0 && strings.TrimSpace(ls[len(ls)-1]) == "" {
 		ls = ls[:len(ls)-1]
@@ -313,13 +306,12 @@ func dropTrailingBlankLines(ls []string) []string {
 	return ls
 }
 
-// finaliseBase populates Title/Description/ProseLines/PreambleLines and copies accumulated
-// diagnostics onto the base block.
+// finaliseBase populates Title/Description/ProseLines/PreambleLines and copies accumulated diagnostics onto the base
+// block.
 //
-// PreambleLines / PreambleTitle / PreambleDescription hold the subset of prose that appears BEFORE
-// the block's annotation.
-// Schema's top-level model builder consumes only pre-annotation prose so post-annotation text reads
-// as body content.
+// PreambleLines / PreambleTitle / PreambleDescription hold the subset of prose that appears BEFORE the block's
+// annotation.
+// Schema's top-level model builder consumes only pre-annotation prose so post-annotation text reads as body content.
 //
 // Routes / operations / meta consult Title() and Description(), which span the whole block.
 func (s *parseState) finaliseBase(base *baseBlock) {
@@ -342,12 +334,12 @@ func (s *parseState) finaliseBase(base *baseBlock) {
 	base.diagnostics = append(base.diagnostics, s.diags...)
 }
 
-// demoteSingleLineTitle implements the SingleLineCommentAsDescription option (go-swagger#2626):
-// when the prose resolved to a one-line title with no description, move that single line to the
-// description so a lone doc comment never becomes a title / summary.
+// demoteSingleLineTitle implements the SingleLineCommentAsDescription option (go-swagger#2626): when the prose resolved
+// to a one-line title with no description, move that single line to the description so a lone doc comment never becomes
+// a title / summary.
 //
-// A title spanning multiple lines, or any prose that already produced a description (i.e. a
-// multi-line comment), is left untouched.
+// A title spanning multiple lines, or any prose that already produced a description (i.e. a multi-line comment), is
+// left untouched.
 func (s *parseState) demoteSingleLineTitle(title, desc string) (string, string) {
 	if !s.singleLineAsDesc {
 		return title, desc
@@ -370,8 +362,7 @@ func (s *parseState) parseUnboundBlock() Block {
 	return &UnboundBlock{baseBlock: base}
 }
 
-// firstMeaningfulPos picks the first non-blank, non-EOF token's position so an UnboundBlock has a
-// sensible Pos().
+// firstMeaningfulPos picks the first non-blank, non-EOF token's position so an UnboundBlock has a sensible Pos().
 func firstMeaningfulPos(tokens []Token) token.Position {
 	for _, t := range tokens {
 		switch t.Kind {
@@ -390,8 +381,8 @@ func firstMeaningfulPos(tokens []Token) token.Position {
 func (s *parseState) parseSchemaBlock(annIdx int, annTok Token, kind AnnotationKind) Block {
 	base := newBaseBlock(kind, annTok.Pos)
 
-	// Validate annotation arguments before walking body tokens so any emitted diagnostics land on the
-	// block via finaliseBase.
+	// Validate annotation arguments before walking body tokens so any emitted diagnostics land on the block via
+	// finaliseBase.
 	switch kind {
 	case AnnParameters:
 		if len(annTok.Args) == 0 {
@@ -404,13 +395,12 @@ func (s *parseState) parseSchemaBlock(annIdx int, annTok Token, kind AnnotationK
 				"swagger:name requires a member name override argument"))
 		}
 	default:
-		// other schema-family annotations either accept no args (AnnModel) or accept an optional name
-		// (AnnResponse).
+		// other schema-family annotations either accept no args (AnnModel) or accept an optional name (AnnResponse).
 	}
 
-	// Walk pre + post tokens; pre-annotation prose contributes to Title/Description (already
-	// classified by the lexer); pre-annotation body tokens (rare, godoc-style "annotation at the
-	// bottom") are treated the same as post-annotation body tokens.
+	// Walk pre + post tokens; pre-annotation prose contributes to Title/Description (already classified by the lexer);
+	// pre-annotation body tokens (rare, godoc-style "annotation at the bottom") are treated the same as post-annotation
+	// body tokens.
 	for i, t := range s.tokens {
 		if i == annIdx {
 			continue
@@ -430,9 +420,9 @@ func (s *parseState) parseSchemaBlock(annIdx int, annTok Token, kind AnnotationK
 	case AnnName:
 		return &NameBlock{baseBlock: base, Name: firstIdentArg(annTok)}
 	case AnnTitle, AnnDescription:
-		// Override annotations dispatch through the schema parser (so co-located validation keywords
-		// surface as Properties) but carry no typed block of their own — a ClassifierBlock holds the
-		// free-text arg (AnnotationArg) plus any harvested body keywords.
+		// Override annotations dispatch through the schema parser (so co-located validation keywords surface as Properties)
+		// but carry no typed block of their own — a ClassifierBlock holds the free-text arg (AnnotationArg) plus any
+		// harvested body keywords.
 		return &ClassifierBlock{baseBlock: base, Args: annTok.Args}
 	default:
 		return &UnboundBlock{baseBlock: base}
@@ -540,6 +530,15 @@ func (s *parseState) parseMetaBlock(annIdx int, annTok Token) Block {
 
 // --- Classifier family -------------------------------------------------------
 
+// isStructuralKeyword reports whether a keyword is a field directive rather than part of the schema-body grammar.
+//
+// `in:` places a field (query / path / header / body / formData) and `name:` renames it.
+// Both are consumed by the parameters and responses builders directly from the doc text, so they may appear alongside
+// any annotation — including a classifier, whose body is otherwise prose-only.
+func isStructuralKeyword(name string) bool {
+	return name == KwIn || name == KwName
+}
+
 //nolint:ireturn // stable seam.
 func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind AnnotationKind) Block {
 	base := newBaseBlock(kind, annTok.Pos)
@@ -567,6 +566,15 @@ func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind Annotat
 			s.emit(Warnf(t.Pos, CodeContextInvalid,
 				"keyword %q not valid under swagger:%s", t.Keyword, kind))
 		case TokenKeyword:
+			if isStructuralKeyword(t.Name) {
+				// `in:` and `name:` are field directives, not schema-body keywords: they say WHERE a field goes and what it is
+				// CALLED, and the parameters / responses builders read them straight from the doc text rather than from this block.
+				//
+				// A parameter field may legitimately carry both a classifier annotation and `in:` — indeed `in:` is mandatory
+				// there — so rejecting it made the canonical file-upload idiom warn about its own required directive.
+				// The same field without the annotation never warned, so this was inconsistent as well as wrong.
+				continue
+			}
 			s.emit(Warnf(t.Pos, CodeContextInvalid,
 				"keyword %q not valid under swagger:%s", t.Name, kind))
 		case TokenOpaqueYaml:
@@ -580,10 +588,10 @@ func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind Annotat
 	// Argument validation runs before finaliseBase so its diagnostics reach the returned Block.
 	switch kind {
 	case AnnEnum:
-		// A bare `swagger:enum` (no name, no inline values, no body) is valid on a type declaration: the
-		// builder infers the enum name from the declared type and collects its consts (F4b).
-		// Only the grammar's structural shape is checked here, and the bare form is structurally fine —
-		// semantic resolution (does a type with consts exist?) is the builder's job.
+		// A bare `swagger:enum` (no name, no inline values, no body) is valid on a type declaration: the builder infers the
+		// enum name from the declared type and collects its consts (F4b).
+		// Only the grammar's structural shape is checked here, and the bare form is structurally fine — semantic resolution
+		// (does a type with consts exist?) is the builder's job.
 		form, name, _, valuesArgs := splitEnumArgs(annTok)
 		s.finaliseBase(base)
 		return &EnumDeclBlock{
@@ -599,15 +607,14 @@ func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind Annotat
 				"swagger:strfmt requires a name argument"))
 		}
 	case AnnDefaultName:
-		if !annTok.HasArg(1) {
-			s.emit(Errorf(annTok.Pos, CodeMissingRequiredArg,
-				"swagger:default requires a value argument"))
-		}
+		// No arg requirement: swagger:default is a deprecated no-op sink, and demanding a value for a value nothing reads
+		// would hard-error on the very spelling the annotation was documented with (the bare form).
+		// Both forms parse; the builder raises the deprecation.
 	case AnnType:
-		// Only the STRUCTURAL shape is checked here: a missing arg, or a malformed token (embedded
-		// spaces, bare `[]`, illegal chars).
-		// Whether the (well-formed) name is a known keyword / scanned type is resolved by the builder,
-		// which alone knows the scanned definitions and the annotated Go type (F3 reconciliation).
+		// Only the STRUCTURAL shape is checked here: a missing arg, or a malformed token (embedded spaces, bare `[]`, illegal
+		// chars).
+		// Whether the (well-formed) name is a known keyword / scanned type is resolved by the builder, which alone knows the
+		// scanned definitions and the annotated Go type (F3 reconciliation).
 		if len(annTok.Args) == 0 {
 			s.emit(Errorf(annTok.Pos, CodeMissingRequiredArg,
 				"swagger:type requires a type-reference argument"))
@@ -615,7 +622,7 @@ func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind Annotat
 			s.emit(Errorf(annTok.Args[0].Pos, CodeInvalidTypeRef,
 				"swagger:type: %q is not a well-formed type reference", annTok.Args[0].Text))
 		}
-	case AnnAllOf, AnnIgnore, AnnAlias, AnnFile:
+	case AnnAllOf, AnnIgnore, AnnAlias, AnnFile, AnnOmit:
 	// Optional / no args.
 	default:
 		// ignored annotation
@@ -624,8 +631,7 @@ func (s *parseState) parseClassifierBlock(annIdx int, annTok Token, kind Annotat
 	return &ClassifierBlock{baseBlock: base, Args: annTok.Args}
 }
 
-// splitEnumArgs reconstructs the (form, name, name-pos, value-tokens) from a TokenAnnotation
-// produced for swagger:enum.
+// splitEnumArgs reconstructs the (form, name, name-pos, value-tokens) from a TokenAnnotation produced for swagger:enum.
 func splitEnumArgs(annTok Token) (enumArgsForm, string, token.Position, []Token) {
 	if len(annTok.Args) == 0 {
 		return enumFormEmpty, "", annTok.Pos, nil
@@ -666,13 +672,11 @@ func firstIdentArg(annTok Token) string {
 	return ""
 }
 
-// parseParametersArgs classifies the arguments of a `swagger:parameters` marker into a target
-// (operations / shared `*` / `/path`) plus the remaining argument tokens, de-duplicated.
+// parseParametersArgs classifies the arguments of a `swagger:parameters` marker into a target (operations / shared `*`
+// / `/path`) plus the remaining argument tokens, de-duplicated.
 //
-// Dropped duplicates are returned separately so the builder can raise a duplicate-target /
-// duplicate-ref warning.
-// The definition-vs-reference reading of the args is the builder's, since it depends on the host
-// declaration.
+// Dropped duplicates are returned separately so the builder can raise a duplicate-target / duplicate-ref warning.
+// The definition-vs-reference reading of the args is the builder's, since it depends on the host declaration.
 func parseParametersArgs(annTok Token) (target ParametersTarget, path string, args, dups []string) {
 	target = ParamTargetOperations
 	rest := annTok.Args
@@ -709,8 +713,7 @@ func parseParametersArgs(annTok Token) (target ParametersTarget, path string, ar
 
 // consumeBodyToken folds one token from the stream into the block's state.
 //
-// Prose, blank, EOF, and the annotation are no-ops here (they are consumed by extractTitleDesc /
-// dispatch).
+// Prose, blank, EOF, and the annotation are no-ops here (they are consumed by extractTitleDesc / dispatch).
 func (s *parseState) consumeBodyToken(base *baseBlock, t Token, kind AnnotationKind) {
 	switch t.Kind {
 	case TokenEOF, TokenBlank, TokenTitle, TokenDesc, TokenAnnotation:
@@ -732,8 +735,7 @@ func (s *parseState) consumeBodyToken(base *baseBlock, t Token, kind AnnotationK
 				"YAML body opened with --- but never closed"))
 		}
 	default:
-		// Stray value-only tokens (e.g. trailing IDENT_NAME with no owning keyword) are not legal at the
-		// body level.
+		// Stray value-only tokens (e.g. trailing IDENT_NAME with no owning keyword) are not legal at the body level.
 		s.emit(Warnf(t.Pos, CodeUnexpectedToken,
 			"unexpected %s token", t.Kind))
 	}
@@ -761,11 +763,10 @@ func (s *parseState) emitInlineKeyword(base *baseBlock, t Token, kind Annotation
 	base.properties = append(base.properties, prop)
 }
 
-// typeInlineValue converts the typed argument token's payload into a TypedValue per the keyword's
-// declared shape.
+// typeInlineValue converts the typed argument token's payload into a TypedValue per the keyword's declared shape.
 //
-// Failures emit non-fatal diagnostics; on failure Typed.Type stays at ShapeNone so consumers can
-// distinguish "no conversion" from "zero converted".
+// Failures emit non-fatal diagnostics; on failure Typed.Type stays at ShapeNone so consumers can distinguish "no
+// conversion" from "zero converted".
 func (s *parseState) typeInlineValue(kw Keyword, t Token) TypedValue {
 	if len(t.Args) == 0 {
 		return TypedValue{}
@@ -815,8 +816,7 @@ func (s *parseState) typeInlineValue(kw Keyword, t Token) TypedValue {
 	return TypedValue{}
 }
 
-// emitRawBlock stores a multi-line raw-block body and, for extensions blocks, parses out the x-*
-// entries.
+// emitRawBlock stores a multi-line raw-block body and, for extensions blocks, parses out the x-* entries.
 func (s *parseState) emitRawBlock(base *baseBlock, t Token, kind AnnotationKind) {
 	kw, ok := Lookup(t.Keyword)
 	if !ok {
@@ -868,16 +868,14 @@ func (s *parseState) emitRawValue(base *baseBlock, t Token, kind AnnotationKind)
 	base.properties = append(base.properties, prop)
 }
 
-// collectExtensionsFromBody parses the body of an `extensions:` raw block via the typed-extensions
-// service and registers one Extension per top-level x-* entry on the block, carrying its YAML-typed
-// value (`bool` / `float64` / `string` / `[]any` / `map[string]any`).
+// collectExtensionsFromBody parses the body of an `extensions:` raw block via the typed-extensions service and
+// registers one Extension per top-level x-* entry on the block, carrying its YAML-typed value (`bool` / `float64` /
+// `string` / `[]any` / `map[string]any`).
 //
 // Non-x-* keys emit a CodeInvalidAnnotation warning and are dropped.
-// A YAML parse failure emits CodeInvalidYAMLExtensions and the block is skipped (no Extension
-// entries are registered).
+// A YAML parse failure emits CodeInvalidYAMLExtensions and the block is skipped (no Extension entries are registered).
 //
-// Position is currently coarse — every Extension shares t.Pos (the `extensions:` keyword's
-// position).
+// Position is currently coarse — every Extension shares t.Pos (the `extensions:` keyword's position).
 // See README §typed-extensions.
 func (s *parseState) collectExtensionsFromBody(base *baseBlock, t Token, source string) {
 	data, err := yaml.TypedExtensions(t.Body)
@@ -889,11 +887,11 @@ func (s *parseState) collectExtensionsFromBody(base *baseBlock, t Token, source 
 	for name, value := range data {
 		if !isExtensionName(name) {
 			// Non-x-* key — diagnose then drop.
-			// Authors who typo a vendor-extension key (e.g. `invalid-key:` under `Extensions:`) get a
-			// CodeInvalidAnnotation warning rather than silent loss.
+			// Authors who typo a vendor-extension key (e.g. `invalid-key:` under `Extensions:`) get a CodeInvalidAnnotation
+			// warning rather than silent loss.
 			//
-			// Builders that consume block.Extensions() never see the rejected entry; they observe the
-			// diagnostic via the Diagnostic Walker callback.
+			// Builders that consume block.Extensions() never see the rejected entry; they observe the diagnostic via the
+			// Diagnostic Walker callback.
 			s.emit(Warnf(t.Pos, CodeInvalidAnnotation,
 				"extensions block: %q is not a valid vendor-extension name (must start with x- or X-); dropped",
 				name))
@@ -924,8 +922,8 @@ func isExtensionName(s string) bool {
 
 // contextLegal reports whether kw may appear under the given annotation kind.
 //
-// Returns true when the keyword's contexts overlap with the kind's allowed contexts; returns true
-// unconditionally when the kind has no parser-layer policy (e.g. UnboundBlock).
+// Returns true when the keyword's contexts overlap with the kind's allowed contexts; returns true unconditionally when
+// the kind has no parser-layer policy (e.g. UnboundBlock).
 func contextLegal(kw Keyword, kind AnnotationKind) bool {
 	allowed := allowedContexts(kind)
 	if allowed == nil {
@@ -988,8 +986,8 @@ func splitCmpOperator(s string) (op, rest string) {
 	return "", s
 }
 
-// parseBool accepts only "true" or "false" (case-insensitive). stdlib strconv.ParseBool is too
-// lenient for the annotation grammar.
+// parseBool accepts only "true" or "false" (case-insensitive). stdlib strconv.ParseBool is too lenient for the
+// annotation grammar.
 func parseBool(s string) (bool, bool) {
 	s = strings.TrimSpace(s)
 	switch {

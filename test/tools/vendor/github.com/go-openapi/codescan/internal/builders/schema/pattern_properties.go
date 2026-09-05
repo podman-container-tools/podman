@@ -27,7 +27,7 @@ import (
 //
 // See [§pattern-properties](./README.md#pattern-properties).
 func (s *Builder) classifierPatternProperties(schema *oaispec.Schema, pos token.Position) {
-	arg, ok := s.findRawAnnotationArg(s.Decl.Comments, grammar.AnnPatternProperties)
+	arg, ok := s.findRawAnnotationArg(s.Decl.Comments(), grammar.AnnPatternProperties)
 	if !ok {
 		return
 	}

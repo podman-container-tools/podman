@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package yaml is a thin wrapper around go.yaml.in/yaml/v3 for consuming the RawYAML bodies that
-// internal/parsers/grammar/ isolates between `---` fences, plus the typed-extensions service the
-// grammar lexer calls for `extensions:` raw blocks.
+// internal/parsers/grammar/ isolates between `---` fences, plus the typed-extensions service the grammar lexer calls
+// for `extensions:` raw blocks.
 //
 // Importers:
 //
@@ -14,8 +14,7 @@
 //
 // The grammar import is the one carve-out from the "grammar stays YAML-free" architecture rule.
 //
-// See README.md for the long-form rationale (typed-extensions pipeline, dedent strategies,
-// sibling-sub-parser seam).
+// See README.md for the long-form rationale (typed-extensions pipeline, dedent strategies, sibling-sub-parser seam).
 package yaml
 
 import (
@@ -48,8 +47,8 @@ func Parse(body string) (any, error) {
 	return v, nil
 }
 
-// ParseInto unmarshals body into the given destination, typically a pointer to a struct the caller
-// defined to match an expected YAML shape (e.g., operation-body or extension-value).
+// ParseInto unmarshals body into the given destination, typically a pointer to a struct the caller defined to match an
+// expected YAML shape (e.g., operation-body or extension-value).
 //
 // Wraps the underlying error for uniform error reporting.
 func ParseInto(body string, dst any) error {
@@ -59,15 +58,14 @@ func ParseInto(body string, dst any) error {
 	return decodeYAMLBody([]byte(body), dst)
 }
 
-// TypedExtensions parses the body of an `extensions:` raw block and returns its top-level entries
-// as JSON-typed values (bool / float64 / string / []any / map[string]any).
+// TypedExtensions parses the body of an `extensions:` raw block and returns its top-level entries as JSON-typed values
+// (bool / float64 / string / []any / map[string]any).
 //
-// The body is dedented before parsing — the grammar lexer preserves godoc-level indentation per
-// line, but YAML refuses tab indentation and treats leading whitespace as structural.
+// The body is dedented before parsing — the grammar lexer preserves godoc-level indentation per line, but YAML
+// refuses tab indentation and treats leading whitespace as structural.
 //
-// The YAML → JSON normalisation enforces map[string]any with concrete leaf types via
-// swag/yamlutils.YAMLToJSON; downstream consumers (vendor-extension targets, code generators,
-// AddExtension surfaces) rely on that shape.
+// The YAML → JSON normalisation enforces map[string]any with concrete leaf types via swag/yamlutils.YAMLToJSON;
+// downstream consumers (vendor-extension targets, code generators, AddExtension surfaces) rely on that shape.
 //
 // No name filtering is applied here: the caller decides whether to accept only x-* keys (via
 // classify.IsAllowedExtension) or to consume the full mapping.
@@ -94,16 +92,14 @@ func TypedExtensions(body string) (map[string]any, error) {
 	return data, nil
 }
 
-// normaliseExtensionBody dedents an extensions-block body: strips the common leading-whitespace
-// prefix shared by every non-blank line and substitutes any residual leading tabs with two spaces
-// (YAML refuses tab indentation).
+// normaliseExtensionBody dedents an extensions-block body: strips the common leading-whitespace prefix shared by every
+// non-blank line and substitutes any residual leading tabs with two spaces (YAML refuses tab indentation).
 //
-// The grammar lexer preserves each line's original whitespace so that indentation survives for
-// nested YAML; the dedent therefore lives downstream of it.
+// The grammar lexer preserves each line's original whitespace so that indentation survives for nested YAML; the dedent
+// therefore lives downstream of it.
 //
-// Tab-and-space mixes in godoc-style sources parse identically after this pass — both petstore's
-// tab-indented Extensions block and the typed-nested case using two-space indentation round-trip
-// uniformly.
+// Tab-and-space mixes in godoc-style sources parse identically after this pass — both petstore's tab-indented
+// Extensions block and the typed-nested case using two-space indentation round-trip uniformly.
 func normaliseExtensionBody(body string) string {
 	lines := strings.Split(body, "\n")
 
@@ -122,8 +118,7 @@ func normaliseExtensionBody(body string) string {
 	return strings.Join(lines, "\n")
 }
 
-// commonLeadingWhitespace returns the length of the longest leading whitespace run shared by every
-// non-blank line.
+// commonLeadingWhitespace returns the length of the longest leading whitespace run shared by every non-blank line.
 //
 // Returns 0 when any non-blank line starts at column 0 (nothing to dedent).
 func commonLeadingWhitespace(lines []string) int {
@@ -149,8 +144,8 @@ func commonLeadingWhitespace(lines []string) int {
 	return prefix
 }
 
-// replaceLeadingTabs converts any tab characters in the leading whitespace run of a line into two
-// spaces, leaving the rest of the line untouched.
+// replaceLeadingTabs converts any tab characters in the leading whitespace run of a line into two spaces, leaving the
+// rest of the line untouched.
 func replaceLeadingTabs(line string) string {
 	n := 0
 	for n < len(line) && (line[n] == ' ' || line[n] == '\t') {

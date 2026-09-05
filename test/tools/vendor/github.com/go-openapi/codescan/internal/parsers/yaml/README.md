@@ -136,9 +136,9 @@ Two dedent strategies coexist in this package, chosen per call site:
   strips the first non-blank line's indent length from every line. The
   first-line strip width is preserved because the existing operation
   goldens depend on it. The up-front tab expansion (vs the older
-  retab-only-the-post-strip-remainder) is what lets a gofmt-canonical
-  swagger:operation body — 1-space prose keys interleaved with
-  tab-prefixed value blocks — keep its nesting; see `dedent.go`.
+  retab-only-the-post-strip-remainder) preserves the nesting of a
+  gofmt-canonical swagger:operation body — 1-space prose keys
+  interleaved with tab-prefixed value blocks; see `dedent.go`.
 - **`normaliseExtensionBody` (typed-extensions path)** — common-prefix
   dedent. Strips the longest leading-whitespace run shared by every
   non-blank line. Required because extension bodies arrive with the

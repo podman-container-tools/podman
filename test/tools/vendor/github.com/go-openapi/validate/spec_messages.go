@@ -132,6 +132,9 @@ const (
 
 	// RequiredButNotDefinedError ...
 	RequiredButNotDefinedError = "%q is present in required but not defined as property in definition %q"
+	// RequiredButNotDefinedInSchemaError is the same slip, in a schema a definition holds rather than
+	// in the definition itself.
+	RequiredButNotDefinedInSchemaError = "%q is present in required but not defined as property in schema %q"
 
 	// SomeParametersBrokenError indicates that some parameters could not be resolved, which might result in partial checks to be carried on.
 	SomeParametersBrokenError = "some parameters definitions are broken in %q.%s. Cannot carry on full checks on parameters for operation %s"
@@ -258,6 +261,10 @@ func invalidPatternMsg(pattern, path string) errors.Error {
 
 func requiredButNotDefinedMsg(path, definition string) errors.Error {
 	return errors.New(errors.CompositeErrorCode, RequiredButNotDefinedError, path, definition)
+}
+
+func requiredButNotDefinedInSchemaMsg(path, schema string) errors.Error {
+	return errors.New(errors.CompositeErrorCode, RequiredButNotDefinedInSchemaError, path, schema)
 }
 
 func pathParamGarbledMsg(path, param string) errors.Error {
