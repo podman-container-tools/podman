@@ -192,6 +192,73 @@ var _ = Describe("Podman start", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	It("podman start --pidfile", func() {
+		SkipIfRemote("pidfile not handled by remote")
+		pidfile := filepath.Join(tempdir, "start-pidfile")
+		ctrName := "pidfilectr"
+		podmanTest.PodmanExitCleanly("create", "--name", ctrName, ALPINE, "top")
+
+		podmanTest.PodmanExitCleanly("start", "--pidfile", pidfile, ctrName)
+
+		content, err := os.ReadFile(pidfile)
+		Expect(err).ToNot(HaveOccurred())
+		filePID, err := strconv.Atoi(string(content))
+		Expect(err).ToNot(HaveOccurred())
+
+		inspectOut := podmanTest.InspectContainer(ctrName)
+		Expect(inspectOut).To(HaveLen(1))
+		Expect(filePID).To(Equal(inspectOut[0].State.Pid))
+	})
+
+	It("podman start --pidfile with multiple containers fails", func() {
+		pidfile := filepath.Join(tempdir, "start-pidfile")
+		cid1 := podmanTest.PodmanExitCleanly("create", ALPINE, "top")
+		cid2 := podmanTest.PodmanExitCleanly("create", ALPINE, "top")
+
+		session := podmanTest.Podman([]string{"start", "--pidfile", pidfile, cid1.OutputToString(), cid2.OutputToString()})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "--pidfile can only be used with a single container"))
+	})
+
+	It("podman start --pidfile with --filter matching multiple containers fails", func() {
+		SkipIfRemote("pidfile not handled by remote")
+		pidfile := filepath.Join(tempdir, "start-pidfile")
+		for range 2 {
+			podmanTest.PodmanExitCleanly("create", "--label", "pidfiletest", ALPINE, "top")
+		}
+
+		session := podmanTest.Podman([]string{"start", "--pidfile", pidfile, "--filter", "label=pidfiletest"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "--pidfile can only be used with a single container"))
+	})
+
+	It("podman start --pidfile with --attach fails", func() {
+		pidfile := filepath.Join(tempdir, "start-pidfile")
+		cid := podmanTest.PodmanExitCleanly("create", ALPINE, "top").OutputToString()
+
+		session := podmanTest.Podman([]string{"start", "--pidfile", pidfile, "--attach", cid})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "--pidfile cannot be used with --attach"))
+	})
+
+	It("podman start --pidfile for an already running container", func() {
+		SkipIfRemote("pidfile not handled by remote")
+		pidfile := filepath.Join(tempdir, "start-pidfile")
+		ctrName := "pidfilerunning"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName, ALPINE, "top")
+
+		podmanTest.PodmanExitCleanly("start", "--pidfile", pidfile, ctrName)
+
+		content, err := os.ReadFile(pidfile)
+		Expect(err).ToNot(HaveOccurred())
+		filePID, err := strconv.Atoi(string(content))
+		Expect(err).ToNot(HaveOccurred())
+
+		inspectOut := podmanTest.InspectContainer(ctrName)
+		Expect(inspectOut).To(HaveLen(1))
+		Expect(filePID).To(Equal(inspectOut[0].State.Pid))
+	})
+
 	It("podman start container --filter", func() {
 		session1 := podmanTest.Podman([]string{"container", "create", ALPINE})
 		session1.WaitWithDefaultTimeout()

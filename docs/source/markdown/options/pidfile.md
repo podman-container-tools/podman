@@ -1,5 +1,5 @@
 ####> This option file is used in:
-####>   podman create, run
+####>   podman create, run, start
 ####> If file is edited, make sure the changes
 ####> are applicable to all of those.
 #### **--pidfile**=*path*
@@ -11,3 +11,5 @@ After the container is started, the location for the pidfile can be discovered w
 
     $ podman inspect --format '{{ .PidFile }}' $CID
     /run/containers/storage/${storage-driver}-containers/$CID/userdata/pidfile
+
+With **podman start**, the pidfile is written for that start only: the path is not saved to the container configuration, so `podman inspect` keeps reporting the path from **podman create** or **podman run** (or the default location) rather than the one given here.
