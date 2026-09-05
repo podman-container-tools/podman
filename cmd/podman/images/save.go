@@ -1,9 +1,11 @@
 package images
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -78,6 +80,8 @@ func init() {
 func saveFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 
+	flags.BoolVar(&saveOpts.Zip, "zip", false, "Compress the output image using gzip")
+
 	flags.BoolVar(&saveOpts.Compress, "compress", false, "Compress tarball image layers when saving to a directory using the 'dir' transport. (default is same compression type as source)")
 
 	flags.BoolVar(&saveOpts.OciAcceptUncompressedLayers, "uncompressed", false, "Accept uncompressed layers when copying OCI images")
@@ -104,6 +108,61 @@ func save(cmd *cobra.Command, args []string) (finalErr error) {
 		tags      []string
 		succeeded = false
 	)
+	// If --zip is used, we need to manually create a writer that gzips the content.
+	if saveOpts.Zip {
+		// Determine the final output writer (stdout or a file)
+		var out io.Writer = os.Stdout
+		if len(saveOpts.Output) > 0 {
+			f, err := os.Create(saveOpts.Output)
+			if err != nil {
+				return fmt.Errorf("could not create output file %s: %w", saveOpts.Output, err)
+			}
+			// Defer closing the file until the function returns
+			defer f.Close()
+			out = f
+		} else {
+			// Suppress progress output if writing to stdout
+			saveOpts.Quiet = true
+			if term.IsTerminal(int(os.Stdout.Fd())) {
+				return errors.New("refusing to save to terminal. Use -o flag or redirect")
+			}
+		}
+
+		// Create a temporary pipe. The image engine will write uncompressed data to the pipe's writer.
+		r, w, err := os.Pipe()
+		if err != nil {
+			return fmt.Errorf("could not create pipe: %w", err)
+		}
+		// Set the save operation's output to the pipe's writer end.
+		saveOpts.Output = w.Name()
+
+		// Create a gzip writer that writes to our final destination (file or stdout)
+		gzw := gzip.NewWriter(out)
+
+		// This goroutine will read from the pipe, compress the data, and write to the final destination.
+		done := make(chan error)
+		go func() {
+			defer r.Close()
+			defer gzw.Close()
+			_, err := io.Copy(gzw, r)
+			done <- err
+		}()
+
+		// Now, call the image engine. It will write the uncompressed tar to the pipe.
+		saveErr := registry.ImageEngine().Save(context.Background(), args[0], args[1:], saveOpts)
+
+		// Close the writer end of the pipe to signal EOF to the reader goroutine.
+		w.Close()
+
+		// Wait for the compression goroutine to finish and check for errors.
+		compressErr := <-done
+
+		if saveErr != nil {
+			return saveErr
+		}
+		return compressErr
+	}
+
 	if cmd.Flag("compress").Changed && saveOpts.Format != define.V2s2ManifestDir {
 		return errors.New("--compress can only be set when --format is 'docker-dir'")
 	}
