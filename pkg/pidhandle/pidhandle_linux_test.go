@@ -233,3 +233,68 @@ func TestPIDHandleKillPidfdNotSupportedStartTimeNotMatch(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, isAlive)
 }
+
+func TestProbeProcessGroupSignalSupportUnsupportedKernel(t *testing.T) {
+	original := pidfdSendSignal
+	defer func() { pidfdSendSignal = original }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		return unix.EINVAL
+	}
+
+	assert.False(t, probeProcessGroupSignalSupport())
+}
+
+func TestProbeProcessGroupSignalSupportSupportedKernel(t *testing.T) {
+	original := pidfdSendSignal
+	defer func() { pidfdSendSignal = original }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		return nil
+	}
+
+	assert.True(t, probeProcessGroupSignalSupport())
+}
+
+func TestPIDHandleKillProcessGroupFallsBackWhenUnsupported(t *testing.T) {
+	original := processGroupSignalSupported
+	defer func() { processGroupSignalSupported = original }()
+	processGroupSignalSupported = func() bool { return false }
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		t.Fatal("pidfdSendSignal should not be called when unsupported")
+		return nil
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	// Falls back to normalHandle, so the bogus start-time fails identity check with ESRCH.
+	err := h.KillProcessGroup(0)
+	assert.ErrorIs(t, err, unix.ESRCH)
+}
+
+func TestPIDHandleKillProcessGroupUsesFlagWhenSupported(t *testing.T) {
+	original := processGroupSignalSupported
+	defer func() { processGroupSignalSupported = original }()
+	processGroupSignalSupported = func() bool { return true }
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	var gotFlags int
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, flags int) error {
+		gotFlags = flags
+		return nil
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	err := h.KillProcessGroup(unix.SIGTERM)
+	assert.NoError(t, err)
+	assert.Equal(t, pidfdSignalProcessGroup, gotFlags)
+}

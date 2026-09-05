@@ -10,10 +10,28 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+// PIDFD_SIGNAL_PROCESS_GROUP, added in Linux 6.9, not yet in golang.org/x/sys/unix.
+const pidfdSignalProcessGroup = 1 << 2
+
+// processGroupSignalSupported probes once, using our own pidfd where EINVAL can only mean the flag is unsupported.
+var processGroupSignalSupported = sync.OnceValue(probeProcessGroupSignalSupport)
+
+func probeProcessGroupSignalSupport() bool {
+	fd, err := pidfdOpen(unix.Getpid(), 0)
+	if err != nil {
+		return false
+	}
+	defer unix.Close(fd)
+
+	err = pidfdSendSignal(fd, 0, nil, pidfdSignalProcessGroup)
+	return err == nil || !errors.Is(err, unix.EINVAL)
+}
 
 type pidfdHandle struct {
 	pidfd        int
@@ -158,6 +176,15 @@ func (h *pidfdHandle) Kill(signal unix.Signal) error {
 	}
 
 	return h.normalHandle.Kill(signal)
+}
+
+// Sends the signal to the process's entire process group.
+func (h *pidfdHandle) KillProcessGroup(signal unix.Signal) error {
+	if h.pidfd > -1 && processGroupSignalSupported() {
+		return pidfdSendSignal(h.pidfd, signal, nil, pidfdSignalProcessGroup)
+	}
+
+	return h.normalHandle.KillProcessGroup(signal)
 }
 
 // Returns true in case the process is still alive.

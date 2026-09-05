@@ -635,6 +635,15 @@ func (ic *ContainerEngine) ContainerExec(_ context.Context, nameOrID string, opt
 	if err != nil {
 		return 125, err
 	}
+	// Forward our signals on, so killing `podman exec` stops what it started,
+	// same as the local path does via ProxyExecSignals.
+	remoteProxySignals(sessionID, func(sigName string) error {
+		err := containers.ExecKill(ic.ClientCtx, sessionID, sigName, nil)
+		if err != nil {
+			logrus.Debugf("forwarding signal %q to exec session %s: %v", sigName, sessionID, err)
+		}
+		return err
+	})
 	defer func() {
 		if err := containers.ExecRemove(ic.ClientCtx, sessionID, nil); err != nil {
 			apiErr := new(bindings.APIVersionError)
