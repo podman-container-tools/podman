@@ -1,5 +1,10 @@
 package entities
 
+import (
+	"encoding/json"
+	"errors"
+)
+
 // QuadletInstallOptions contains options to the `podman quadlet install` command
 type QuadletInstallOptions struct {
 	// Whether to reload systemd after installation is completed
@@ -77,4 +82,64 @@ type QuadletRemoveReport struct {
 	Removed []string
 	// Errors is a map of Quadlet name to error that occurred during removal.
 	Errors map[string]error
+}
+
+func (r *QuadletInstallReport) MarshalJSON() ([]byte, error) {
+	helper := struct {
+		InstalledQuadlets map[string]string `json:"InstalledQuadlets"`
+		QuadletErrors     map[string]string `json:"QuadletErrors"`
+	}{
+		InstalledQuadlets: r.InstalledQuadlets,
+		QuadletErrors:     make(map[string]string, len(r.QuadletErrors)),
+	}
+	for k, v := range r.QuadletErrors {
+		helper.QuadletErrors[k] = v.Error()
+	}
+	return json.Marshal(helper)
+}
+
+func (r *QuadletInstallReport) UnmarshalJSON(data []byte) error {
+	var helper struct {
+		InstalledQuadlets map[string]string `json:"InstalledQuadlets"`
+		QuadletErrors     map[string]string `json:"QuadletErrors"`
+	}
+	if err := json.Unmarshal(data, &helper); err != nil {
+		return err
+	}
+	r.InstalledQuadlets = helper.InstalledQuadlets
+	r.QuadletErrors = make(map[string]error, len(helper.QuadletErrors))
+	for k, v := range helper.QuadletErrors {
+		r.QuadletErrors[k] = errors.New(v)
+	}
+	return nil
+}
+
+func (r *QuadletRemoveReport) MarshalJSON() ([]byte, error) {
+	helper := struct {
+		Removed []string          `json:"Removed"`
+		Errors  map[string]string `json:"Errors"`
+	}{
+		Removed: r.Removed,
+		Errors:  make(map[string]string, len(r.Errors)),
+	}
+	for k, v := range r.Errors {
+		helper.Errors[k] = v.Error()
+	}
+	return json.Marshal(helper)
+}
+
+func (r *QuadletRemoveReport) UnmarshalJSON(data []byte) error {
+	var helper struct {
+		Removed []string          `json:"Removed"`
+		Errors  map[string]string `json:"Errors"`
+	}
+	if err := json.Unmarshal(data, &helper); err != nil {
+		return err
+	}
+	r.Removed = helper.Removed
+	r.Errors = make(map[string]error, len(helper.Errors))
+	for k, v := range helper.Errors {
+		r.Errors[k] = errors.New(v)
+	}
+	return nil
 }
