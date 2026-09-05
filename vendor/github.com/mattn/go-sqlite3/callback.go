@@ -29,7 +29,6 @@ import (
 	"math"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -104,27 +103,28 @@ type handleVal struct {
 	val any
 }
 
-var handleLock sync.Mutex
-var handleVals atomic.Value // stores map[unsafe.Pointer]handleVal
+// handleVals maps unsafe.Pointer handles to handleVal. A sync.Map keeps
+// lookups lock-free on the hot callback path while insertion and removal
+// stay O(1); the previous copy-on-write map made every registration copy
+// the whole table, so opening N connections (each registering several
+// functions) was quadratic in time and allocation.
+var handleVals sync.Map
 
 func newHandle(db *SQLiteConn, v any) unsafe.Pointer {
-	val := handleVal{db: db, val: v}
 	var p unsafe.Pointer = C.malloc(C.size_t(1))
 	if p == nil {
 		panic("can't allocate 'cgo-pointer hack index pointer': ptr == nil")
 	}
-
-	handleLock.Lock()
-	defer handleLock.Unlock()
-
-	next := cloneHandleVals(len(loadHandleVals()) + 1)
-	next[p] = val
-	handleVals.Store(next)
+	handleVals.Store(p, handleVal{db: db, val: v})
 	return p
 }
 
 func lookupHandleVal(handle unsafe.Pointer) handleVal {
-	return loadHandleVals()[handle]
+	v, ok := handleVals.Load(handle)
+	if !ok {
+		return handleVal{}
+	}
+	return v.(handleVal)
 }
 
 func lookupHandle(handle unsafe.Pointer) any {
@@ -134,55 +134,20 @@ func lookupHandle(handle unsafe.Pointer) any {
 // deleteHandle releases a single handle created by newHandle. It is a no-op
 // if the handle is unknown (e.g. already released).
 func deleteHandle(handle unsafe.Pointer) {
-	handleLock.Lock()
-	defer handleLock.Unlock()
-
-	current := loadHandleVals()
-	if _, ok := current[handle]; !ok {
-		return
+	if _, ok := handleVals.LoadAndDelete(handle); ok {
+		C.free(handle)
 	}
-	next := make(map[unsafe.Pointer]handleVal, len(current)-1)
-	for h, v := range current {
-		if h == handle {
-			continue
-		}
-		next[h] = v
-	}
-	handleVals.Store(next)
-	C.free(handle)
 }
 
 func deleteHandles(db *SQLiteConn) {
-	handleLock.Lock()
-	defer handleLock.Unlock()
-
-	current := loadHandleVals()
-	if len(current) == 0 {
-		return
-	}
-
-	next := make(map[unsafe.Pointer]handleVal, len(current))
-	for handle, val := range current {
-		if val.db == db {
-			C.free(handle)
-			continue
+	handleVals.Range(func(handle, val any) bool {
+		if val.(handleVal).db == db {
+			if _, ok := handleVals.LoadAndDelete(handle); ok {
+				C.free(handle.(unsafe.Pointer))
+			}
 		}
-		next[handle] = val
-	}
-	handleVals.Store(next)
-}
-
-func loadHandleVals() map[unsafe.Pointer]handleVal {
-	m, _ := handleVals.Load().(map[unsafe.Pointer]handleVal)
-	return m
-}
-
-func cloneHandleVals(size int) map[unsafe.Pointer]handleVal {
-	next := make(map[unsafe.Pointer]handleVal, size)
-	for handle, val := range loadHandleVals() {
-		next[handle] = val
-	}
-	return next
+		return true
+	})
 }
 
 // This is only here so that tests can refer to it.

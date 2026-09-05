@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build !windows && sqlite_app_armor
-// +build !windows,sqlite_app_armor
 
 package sqlite3
 

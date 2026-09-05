@@ -220,6 +220,25 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
+// Steps a statement once and reports the post-step column count and the
+// cumulative re-prepare count, in a single CGO crossing. Used for the
+// eager first step of cached statements: only after the first step is an
+// expired statement guaranteed to have been re-prepared following a
+// schema change, so only then do the column count and metadata describe
+// the current schema.
+static int
+_sqlite3_step_columns(sqlite3_stmt* stmt, int* ncol, int* repreps)
+{
+  int rv = _sqlite3_step_internal(stmt);
+  *ncol = sqlite3_column_count(stmt);
+#ifdef SQLITE_STMTSTATUS_REPREPARE
+  *repreps = sqlite3_stmt_status(stmt, SQLITE_STMTSTATUS_REPREPARE, 0);
+#else
+  *repreps = -1;
+#endif
+  return rv;
+}
+
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
   sqlite3_result_text(ctx, s, n, &free);
 }
@@ -445,8 +464,11 @@ type SQLiteDriver struct {
 
 // SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
-	mu          sync.Mutex
-	db          *C.sqlite3
+	mu sync.Mutex
+	db *C.sqlite3
+	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
+	// It is guarded by mu so a stale cancellation cannot interrupt later work.
+	activeRows  *SQLiteRows
 	loc         *time.Location
 	txlock      string
 	funcs       []*functionInfo
@@ -477,6 +499,10 @@ type SQLiteStmt struct {
 	namedParams map[string][3]int
 	cacheKey    string
 	metadata    *sqliteStmtMetadata
+	// repreps is the statement's cumulative re-prepare count observed
+	// at the last eager first step; a change means SQLite re-prepared
+	// the statement after a schema change and metadata must be rebuilt.
+	repreps C.int
 }
 
 type sqliteStmtMetadata struct {
@@ -492,14 +518,18 @@ type SQLiteResult struct {
 
 // SQLiteRows implements driver.Rows.
 type SQLiteRows struct {
-	s        *SQLiteStmt
-	nc       int32 // Number of columns
-	cls      bool  // True if we need to close the parent statement in Close
-	cols     []string
-	decltype []string
-	colvals  *C.sqlite3_go_col
-	ctx      context.Context // no better alternative to pass context into Next() method
-	closemu  sync.Mutex
+	s                *SQLiteStmt
+	nc               int32 // Number of columns
+	cls              bool  // True if we need to close the parent statement in Close
+	cols             []string
+	decltype         []string
+	colvals          *C.sqlite3_go_col
+	ctx              context.Context // no better alternative to pass context into Next() method
+	stopCancellation func() bool
+	// pendingStep buffers the result of the eager first step taken for
+	// cached statements in query(); -1 when no step is buffered.
+	pendingStep C.int
+	closemu     sync.Mutex
 }
 
 type functionInfo struct {
@@ -968,7 +998,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 			na := s.NumInput()
 			if len(args)-start < na {
 				s.Close()
-				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
 			}
 			stmtArgs := stmtArgs(args, start, na)
 			res, err = s.(*SQLiteStmt).exec(ctx, stmtArgs)
@@ -1607,6 +1637,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	fail := func(err error) (driver.Conn, error) {
 		conn.Close()
 		return nil, err
+	}
+
+	if conn.stmtCacheEnabled && int(C.sqlite3_libversion_number()) < 3020000 {
+		// Schema-change detection for cached statements relies on
+		// SQLITE_STMTSTATUS_REPREPARE (3.20.0); with an older runtime
+		// library run without the cache rather than risk serving
+		// statements whose metadata a schema change has expired. The
+		// compile-time check in _sqlite3_step_columns is not enough:
+		// with USE_LIBSQLITE3 the header and the runtime library can
+		// differ.
+		conn.stmtCache = nil
+		conn.stmtCacheEnabled = false
 	}
 
 	exec := func(s string) error {
@@ -2354,13 +2396,24 @@ func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (drive
 	}
 
 	rows := &SQLiteRows{
-		s:        s,
-		nc:       int32(C.sqlite3_column_count(s.s)),
-		cls:      s.cls,
-		cols:     nil,
-		decltype: nil,
-		colvals:  nil,
-		ctx:      ctx,
+		s:           s,
+		cls:         s.cls,
+		ctx:         ctx,
+		pendingStep: -1,
+	}
+	if s.cacheKey != "" {
+		// A schema change expires cached statements and SQLite only
+		// re-prepares them on their next step, so the column count and
+		// metadata read before stepping could describe the old schema.
+		// Take the query's first step eagerly (it was going to run at
+		// the first Next anyway) and read them afterwards.
+		rv, err := rows.eagerFirstStepLocked()
+		if err != nil {
+			return nil, err
+		}
+		rows.pendingStep = rv
+	} else {
+		rows.nc = int32(C.sqlite3_column_count(s.s))
 	}
 	if rows.nc > 0 {
 		rows.colvals = (*C.sqlite3_go_col)(C.malloc(C.size_t(rows.nc) * C.size_t(unsafe.Sizeof(C.sqlite3_go_col{}))))
@@ -2466,6 +2519,7 @@ func (s *SQLiteStmt) Readonly() bool {
 func (rc *SQLiteRows) Close() error {
 	rc.closemu.Lock()
 	defer rc.closemu.Unlock()
+	rc.stopWatchingCancellation()
 	s := rc.s
 	if s == nil {
 		if rc.colvals != nil {
@@ -2495,6 +2549,40 @@ func (rc *SQLiteRows) Close() error {
 	}
 	s.mu.Unlock()
 	return nil
+}
+
+func (c *SQLiteConn) interruptActiveRows(rows *SQLiteRows) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.activeRows == rows && c.db != nil {
+		C.sqlite3_interrupt(c.db)
+	}
+}
+
+func (rc *SQLiteRows) stopWatchingCancellation() {
+	if rc.stopCancellation == nil {
+		return
+	}
+	// A false return is harmless: a callback already in progress can interrupt
+	// only while rc owns conn.activeRows, which is guarded by conn.mu.
+	rc.stopCancellation()
+	rc.stopCancellation = nil
+}
+
+func (rc *SQLiteRows) startStepping() {
+	conn := rc.s.c
+	conn.mu.Lock()
+	conn.activeRows = rc
+	conn.mu.Unlock()
+}
+
+func (rc *SQLiteRows) finishStepping() {
+	conn := rc.s.c
+	conn.mu.Lock()
+	if conn.activeRows == rc {
+		conn.activeRows = nil
+	}
+	conn.mu.Unlock()
 }
 
 func (s *SQLiteStmt) cacheMetadata() bool {
@@ -2583,33 +2671,88 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
-	if rc.ctx.Done() == nil {
-		return rc.nextSyncLocked(dest)
+	if rv := rc.pendingStep; rv >= 0 {
+		rc.pendingStep = -1
+		return rc.readStepResultLocked(dest, rv)
 	}
-	sema := make(chan struct{})
-	var err error
-	go func() {
-		err = rc.nextSyncLocked(dest)
-		close(sema)
-	}()
-	select {
-	case <-sema:
-		return err
-	case <-rc.ctx.Done():
-		select {
-		case <-sema: // no need to interrupt
-		default:
-			// this is still racy and can be no-op if executed between sqlite3_* calls in nextSyncLocked.
-			C.sqlite3_interrupt(rc.s.c.db)
-			<-sema // ensure goroutine completed
+
+	if rc.stopCancellation == nil {
+		if rc.ctx.Done() == nil {
+			rv := C._sqlite3_step_internal(rc.s.s)
+			return rc.readStepResultLocked(dest, rv)
 		}
-		return rc.ctx.Err()
+		conn := rc.s.c
+		rc.stopCancellation = context.AfterFunc(rc.ctx, func() {
+			conn.interruptActiveRows(rc)
+		})
 	}
+	if err := rc.ctx.Err(); err != nil {
+		return err
+	}
+	rv := rc.stepCancellableLocked()
+	err := rc.readStepResultLocked(dest, rv)
+	if ctxErr := rc.ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return err
 }
 
-// nextSyncLocked moves cursor to next; must be called with locked mutex.
-func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
-	rv := C._sqlite3_step_internal(rc.s.s)
+// eagerFirstStepLocked performs the first step of a cached statement
+// under the same cancellation rules as Next, records the post-step
+// column count, and drops the statement's cached metadata when SQLite
+// re-prepared it after a schema change. Note that this runs the first
+// step at query time, so a data-modifying statement issued through
+// Query executes even if Next is never called.
+func (rc *SQLiteRows) eagerFirstStepLocked() (C.int, error) {
+	s := rc.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if rc.ctx.Done() != nil && rc.stopCancellation == nil {
+		conn := s.c
+		rc.stopCancellation = context.AfterFunc(rc.ctx, func() {
+			conn.interruptActiveRows(rc)
+		})
+	}
+	if err := rc.ctx.Err(); err != nil {
+		rc.stopWatchingCancellation()
+		return 0, err
+	}
+	var ncol, repreps C.int
+	var rv C.int
+	if rc.ctx.Done() == nil {
+		rv = C._sqlite3_step_columns(s.s, &ncol, &repreps)
+	} else {
+		rc.startStepping()
+		rv = C._sqlite3_step_columns(s.s, &ncol, &repreps)
+		rc.finishStepping()
+	}
+	if err := rc.ctx.Err(); err != nil {
+		rc.stopWatchingCancellation()
+		C._sqlite3_reset_clear(s.s)
+		return 0, err
+	}
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_DONE {
+		rc.stopWatchingCancellation()
+		err := s.c.lastError()
+		C._sqlite3_reset_clear(s.s)
+		return 0, err
+	}
+	rc.nc = int32(ncol)
+	if repreps != s.repreps {
+		s.repreps = repreps
+		s.metadata = nil
+	}
+	return rv, nil
+}
+
+func (rc *SQLiteRows) stepCancellableLocked() C.int {
+	rc.startStepping()
+	defer rc.finishStepping()
+	return C._sqlite3_step_internal(rc.s.s)
+}
+
+func (rc *SQLiteRows) readStepResultLocked(dest []driver.Value, rv C.int) error {
 	if rv == C.SQLITE_DONE {
 		return io.EOF
 	}

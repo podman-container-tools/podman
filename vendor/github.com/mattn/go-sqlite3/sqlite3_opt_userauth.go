@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_userauth
-// +build sqlite_userauth
 
 package sqlite3
 

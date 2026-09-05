@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_vtable || vtable
-// +build sqlite_vtable vtable
 
 package sqlite3
 
