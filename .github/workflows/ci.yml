@@ -230,6 +230,7 @@ jobs:
         provider: [hyperv, wsl]
     env:
       PROVIDER: ${{ matrix.provider }}
+      PODMAN_CI: 1
     steps:
       - name: Configure git line endings
         shell: pwsh
@@ -504,6 +505,8 @@ jobs:
     runs-on: windows-2025-vs2026
     timeout-minutes: 20
     permissions: {}
+    env:
+      PODMAN_CI: 1
     steps:
       - name: Configure git line endings
         shell: pwsh
@@ -537,6 +540,8 @@ jobs:
     name: windows e2e
     runs-on: windows-2025-vs2026
     timeout-minutes: 20
+    env:
+      PODMAN_CI: 1
     steps:
       - name: Configure git line endings
         shell: pwsh
@@ -583,6 +588,7 @@ jobs:
         provider: [hyperv, wsl]
     env:
       CONTAINERS_MACHINE_PROVIDER: ${{ matrix.provider }}
+      PODMAN_CI: 1
     steps:
       - name: Configure git line endings
         shell: pwsh
