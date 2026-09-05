@@ -1,0 +1,5 @@
+## assert-failed
+
+[Container]
+Image=localhost/imagename
+Volume=missing-template@app-config.volume:/config
