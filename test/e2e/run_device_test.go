@@ -167,4 +167,32 @@ var _ = Describe("Podman run device", func() {
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithErrorRegex(1, "head: /dev-host/kmsg: (Operation not permitted|Permission denied)"))
 	})
+	It("podman rootless warns when device GID not in subgid", func() {
+		SkipIfNotRootless("This warning only applies to rootless mode")
+		SkipIfRemote("Warning check requires local execution")
+		// /dev/input devices are owned by 'input' group — typically not in /etc/subgid
+		// Skip if /dev/input does not exist on this machine
+		if _, err := os.Stat("/dev/input"); err != nil {
+			Skip("/dev/input not available on this host")
+		}
+		session := podmanTest.Podman([]string{
+			"run", "--rm",
+			"--group-add", "keep-groups",
+			"--device", "/dev/input/",
+			ALPINE, "true",
+		})
+		session.WaitWithDefaultTimeout()
+		// Container should run (exit 0) — warning does not block execution
+		Expect(session).Should(ExitCleanly())
+
+		// Warning should mention subgid OR user not being a member
+		// (depends on whether ubuntu is in input group)
+		errOut := session.ErrorToString()
+		Expect(errOut).To(
+			Or(
+				ContainSubstring("is not in /etc/subgid"),
+				ContainSubstring("You are not a member of this group"),
+			),
+		)
+	})
 })
