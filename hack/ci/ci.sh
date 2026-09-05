@@ -31,6 +31,12 @@ limactl copy -r "$REPO_DIR" $LIMA_VM_NAME:/var/tmp/podman-container-tools/podman
 
 echo "::endgroup::"
 
+# If binaries were downloaded/copied, make sure they are executable and have current timestamps
+# so make doesn't rebuild them inside the VM.
+if limactl shell $LIMA_VM_NAME test -d /var/tmp/podman/bin; then
+    limactl shell $LIMA_VM_NAME sh -c "find /var/tmp/podman/bin -type f -exec chmod +x {} + -exec touch {} +"
+fi
+
 set +e
 
 limactl shell --preserve-env --workdir /var/tmp/podman-container-tools/podman $LIMA_VM_NAME ./hack/ci/runner.sh "${@}"
@@ -40,10 +46,22 @@ echo "::group::Collecting logs"
 limactl copy -r $LIMA_VM_NAME:/var/tmp/podman-container-tools/podman/hack/ci/logs/ $SCRIPT_DIR/logs
 echo "::endgroup::"
 
-# TODO: figure out how to cache the binaries from the build job to the actual test tasks
+# Fix permissions of the cache directories so the host user can read/write them
+limactl shell $LIMA_VM_NAME sh -c "sudo chown -R --reference=/var/tmp/podman /var/tmp/podman/.gocache /var/tmp/podman/.gomodcache || true"
+
+# Copy the Go cache directories back to the host so they can be cached by Github Actions
+if [[ -n "$GITHUB_ACTIONS" ]]; then
+    if limactl shell $LIMA_VM_NAME test -d /var/tmp/podman/.gocache; then
+        limactl copy $LIMA_VM_NAME:/var/tmp/podman/.gocache "$REPO_DIR/.gocache" || true
+    fi
+    if limactl shell $LIMA_VM_NAME test -d /var/tmp/podman/.gomodcache; then
+        limactl copy $LIMA_VM_NAME:/var/tmp/podman/.gomodcache "$REPO_DIR/.gomodcache" || true
+    fi
+fi
+
 # Copy the binaries out of the VM in gh actions so we can upload them as artifact
-# if [[ -n "$GITHUB_ACTIONS" && "$TEST" == build ]]; then
-#    limactl copy $LIMA_VM_NAME:/var/tmp/podman-container-tools/podman/bin "$REPO_DIR/bin" || die "failed to copy binaries"
-# fi
+if [[ -n "$GITHUB_ACTIONS" && "$TEST" == build ]]; then
+    limactl copy $LIMA_VM_NAME:/var/tmp/podman/bin "$REPO_DIR/bin" || die "failed to copy binaries"
+fi
 
 exit $rc
