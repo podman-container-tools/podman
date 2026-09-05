@@ -87,7 +87,7 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//        - `network`=(`<network id>` or `<network name>`)
 	//        - `publish`=(`<port>[/<proto>]` or `<startport-endport>/[<proto>]`)
 	//        - `since`=(`<container id>` or `<container name>`)
-	//        - `status`=(`created`, `restarting`, `running`, `removing`, `paused`, `exited` or `dead`)
+	//        - `status`=(`created`, `restarting`, `running`, `removing`, `paused`, `exited` or `dead`). Note: `restarting` and `dead` have no equivalent in Podman and match no containers.
 	//        - `volume`=(`<volume name>` or `<mount point destination>`)
 	// produces:
 	// - application/json
@@ -832,7 +832,7 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//        - `pod`=(`<pod id>` or `<pod name>`)
 	//        - `publish`=(`<port>[/<proto>]` or `<startport-endport>/[<proto>]`)
 	//        - `since`=(`<container id>` or `<container name>`)
-	//        - `status`=(`created`, `restarting`, `running`, `removing`, `paused`, `exited` or `dead`)
+	//        - `status`=(`created`, `initialized`, `running`, `stopping`, `stopped`, `exited`, `paused`, `removing` or `unknown`)
 	//        - `volume`=(`<volume name>` or `<mount point destination>`)
 	// produces:
 	// - application/json
