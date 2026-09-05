@@ -437,8 +437,10 @@ func (c *Container) HTTPAttach(r *http.Request, w http.ResponseWriter, streams *
 	}
 
 	// We are NOT holding the lock for the duration of the function.
-	locked = false
-	c.lock.Unlock()
+	if locked {
+		locked = false
+		c.lock.Unlock()
+	}
 
 	logrus.Infof("Performing HTTP Hijack attach to container %s", c.ID())
 
@@ -666,9 +668,13 @@ func (c *Container) WaitForExit(ctx context.Context, pollInterval time.Duration)
 	}
 
 	// we cannot wait locked as we would hold the lock forever, so we unlock and then lock again
-	c.lock.Unlock()
+	if !c.batched {
+		c.lock.Unlock()
+	}
 	err := waitForConmonExit(ctx, conmonPID, conmonPidFd, pollInterval)
-	c.lock.Lock()
+	if !c.batched {
+		c.lock.Lock()
+	}
 	if err != nil {
 		return -1, fmt.Errorf("failed to wait for conmon to exit: %w", err)
 	}
