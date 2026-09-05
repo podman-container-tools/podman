@@ -59,6 +59,23 @@ func generateEventFilter(filter, filterValue string) (func(e *Event) bool, error
 			}
 			return strings.HasPrefix(e.ID, filterValue)
 		}, nil
+	case "NETWORK":
+		return func(e *Event) bool {
+			if e.Type != Network {
+				return false
+			}
+			if e.Network == filterValue {
+				return true
+			}
+			// For connect/disconnect events e.ID is the container ID, not
+			// the network ID, so ID-prefix matching would produce false
+			// positives.  Only fall back to HasPrefix for create/remove
+			// events where e.ID genuinely holds the network ID.
+			if e.Status == NetworkConnect || e.Status == NetworkDisconnect {
+				return false
+			}
+			return strings.HasPrefix(e.ID, filterValue)
+		}, nil
 	case "VOLUME":
 		return func(e *Event) bool {
 			if e.Type != Volume {

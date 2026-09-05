@@ -481,3 +481,24 @@ EOF
 
     run_podman pod rm -f $pname
 }
+
+# bats test_tags=ci:parallel
+@test "events - network filter" {
+    local netname=net-$(safename)
+
+    # Create and immediately remove a network so we have events to filter.
+    run_podman network create $netname
+    run_podman network rm $netname
+
+    # --filter network=<name> must return both create and remove events.
+    run_podman events --since=1m --stream=false --filter network=$netname
+    assert "${lines[0]}" =~ ".* network create .* name=$netname" \
+        "network create event returned by --filter network="
+    assert "${lines[1]}" =~ ".* network remove .* name=$netname" \
+        "network remove event returned by --filter network="
+    assert "${#lines[@]}" = "2" "exactly two network events for $netname"
+
+    # A different name must not match.
+    run_podman events --since=1m --stream=false --filter network=nosuchnetwork-$(safename)
+    assert "$output" = "" "no events for a non-existent network name"
+}

@@ -350,4 +350,25 @@ var _ = Describe("Podman events", func() {
 		Expect(events[2]).To(And(ContainSubstring("artifact remove"), ContainSubstring(artifactName)), "event log includes artifact remove")
 		Expect(events[3]).To(And(ContainSubstring("artifact pull"), ContainSubstring(artifactName)), "event log includes artifact pull")
 	})
+	It("podman events with a network filter", func() {
+		netName := "net-" + stringid.GenerateRandomID()[:10]
+		session := podmanTest.Podman([]string{"network", "create", netName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		defer podmanTest.Podman([]string{"network", "rm", "-f", netName}).WaitWithDefaultTimeout()
+
+		rm := podmanTest.Podman([]string{"network", "rm", netName})
+		rm.WaitWithDefaultTimeout()
+		Expect(rm).Should(ExitCleanly())
+
+		result := podmanTest.Podman([]string{"events", "--stream=false", "--since", "1m", "--filter", "network=" + netName})
+		result.WaitWithDefaultTimeout()
+		Expect(result).Should(ExitCleanly())
+		events := result.OutputToStringArray()
+		Expect(events).To(HaveLen(2), "number of network events")
+		Expect(events[0]).To(ContainSubstring("network create"), "first event is network create")
+		Expect(events[0]).To(ContainSubstring(netName), "create event includes network name")
+		Expect(events[1]).To(ContainSubstring("network remove"), "second event is network remove")
+		Expect(events[1]).To(ContainSubstring(netName), "remove event includes network name")
+	})
 })
