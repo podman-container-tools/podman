@@ -437,3 +437,18 @@ func (o *PlayOptions) GetNoPodPrefix() bool {
 	}
 	return *o.NoPodPrefix
 }
+
+// WithMultiplePods set field MultiplePods to given value
+func (o *PlayOptions) WithMultiplePods(value bool) *PlayOptions {
+	o.MultiplePods = &value
+	return o
+}
+
+// GetMultiplePods returns value of field MultiplePods
+func (o *PlayOptions) GetMultiplePods() bool {
+	if o.MultiplePods == nil {
+		var z bool
+		return z
+	}
+	return *o.MultiplePods
+}

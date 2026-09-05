@@ -525,6 +525,28 @@ spec:
           periodSeconds: 1
 `
 
+var replicasPodYaml = `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: replicas-pods-test
+  labels:
+    app: testimage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: testimage
+  template:
+    metadata:
+      labels:
+        app: testimage
+    spec:
+      containers:
+      - name: testimage
+        image: ` + NGINX_IMAGE + `
+`
+
 var selinuxLabelPodYaml = `
 apiVersion: v1
 kind: Pod
@@ -3961,7 +3983,7 @@ spec:
 		if IsRemote() {
 			Expect(kube.ErrorToString()).To(BeEmpty())
 		} else {
-			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, more than one replica is not supported by Podman"))
+			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica"))
 		}
 
 		podName := getPodNameInDeployment(deployment)
@@ -4018,7 +4040,7 @@ spec:
 		if IsRemote() {
 			Expect(kube.ErrorToString()).To(BeEmpty())
 		} else {
-			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, more than one replica is not supported by Podman"))
+			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica"))
 		}
 
 		podName := getPodNameInDeployment(deployment)
@@ -4523,7 +4545,7 @@ spec:
 		if IsRemote() {
 			Expect(kube.ErrorToString()).To(BeEmpty())
 		} else {
-			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, more than one replica is not supported by Podman"))
+			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica"))
 		}
 
 		correctLabels := expectedLabelKey + ":" + expectedLabelValue
@@ -4564,7 +4586,7 @@ spec:
 		if IsRemote() {
 			Expect(kube.ErrorToString()).To(BeEmpty())
 		} else {
-			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, more than one replica is not supported by Podman"))
+			Expect(kube.ErrorToString()).To(ContainSubstring("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica"))
 		}
 
 		pod := getPodNameInDeployment(deployment)
@@ -6184,7 +6206,7 @@ spec:
 
 		// warnings are only propagated to local clients
 		if !IsRemote() {
-			Expect(kube.ErrorToString()).Should(ContainSubstring("Limiting replica count to 1, more than one replica is not supported by Podman"))
+			Expect(kube.ErrorToString()).Should(ContainSubstring("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica"))
 		}
 
 		Expect(strings.Count(kube.OutputToString(), "Pod:")).To(Equal(1))
@@ -6891,5 +6913,67 @@ spec:
 		podmanTest.PodmanExitCleanly("kube", "play", "--no-pod-prefix", kubeYaml)
 		inspect := podmanTest.PodmanExitCleanly("inspect", "simpleWithoutPodPrefix")
 		Expect(inspect.InspectContainerToJSON()[0].Name).Should(Equal("simpleWithoutPodPrefix"))
+	})
+
+	It("multiple Pod replicas", func() {
+		err := writeYaml(replicasPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "play", "-q", "--multiple-pods", "--publish", "9991:80,9992:80", kubeYaml)
+
+		podsCount := podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(HaveLen(2))
+	})
+
+	It("multiple Pod replicas down", func() {
+		err := writeYaml(replicasPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "play", "-q", "--multiple-pods", "--publish", "9993:80,9994:80", kubeYaml)
+
+		podsCount := podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(HaveLen(2))
+
+		podmanTest.PodmanExitCleanly("kube", "down", kubeYaml)
+
+		podsCount = podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(BeEmpty())
+	})
+
+	It("single Pod down for multiple replicas in YAML", func() {
+		err := writeYaml(replicasPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "--log-level=error", "play", "-q", kubeYaml)
+
+		podsCount := podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(HaveLen(1))
+
+		podmanTest.PodmanExitCleanly("kube", "down", kubeYaml)
+
+		podsCount = podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(BeEmpty())
+	})
+
+	It("multiple Pods without publish ports", func() {
+		err := writeYaml(replicasPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "play", "-q", "--multiple-pods", kubeYaml)
+
+		podsCount := podmanTest.PodmanExitCleanly("pod", "ps", "-n")
+		Expect(podsCount.OutputToStringArray()).To(HaveLen(2))
+
+		portsCount := podmanTest.PodmanExitCleanly("port", "-a")
+		Expect(portsCount.OutputToStringArray()).To(BeEmpty())
+	})
+
+	It("Pods count is unequal to publish ports", func() {
+		err := writeYaml(replicasPodYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		session := podmanTest.Podman([]string{"kube", "play", "--multiple-pods", "--publish", "9991:80", kubeYaml})
+		session.WaitWithDefaultTimeout()
+		Expect(session).To(ExitWithError(125, `number of Pod replicas aren't equal to the number of published ports: 2 replicas, 1 published ports`))
 	})
 })

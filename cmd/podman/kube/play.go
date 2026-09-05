@@ -190,6 +190,9 @@ func playFlags(cmd *cobra.Command) {
 	noPodPrefix := "no-pod-prefix"
 	flags.BoolVar(&playOptions.NoPodPrefix, noPodPrefix, false, "Do not prefix container name with pod name")
 
+	multiplePods := "multiple-pods"
+	flags.BoolVar(&playOptions.MultiplePods, multiplePods, false, "Allow creation of multiple pod replicas from a Deployment")
+
 	if !registry.IsRemote() {
 		certDirFlagName := "cert-dir"
 		flags.StringVar(&playOptions.CertDir, certDirFlagName, "", "`Pathname` of a directory containing TLS certificates and keys")
