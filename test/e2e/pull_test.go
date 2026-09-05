@@ -325,6 +325,8 @@ var _ = Describe("Podman pull", func() {
 
 	pullChunkedTests()
 
+	pullMirrorFallbackTests()
+
 	It("podman pull from docker-archive", func() {
 		SkipIfNotAMD64() // https://github.com/containers/podman/issues/28273
 		SkipIfRemote("podman-remote does not support pulling from docker-archive")
