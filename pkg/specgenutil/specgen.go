@@ -394,6 +394,37 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 		s.StartupHealthConfig.Successes = int(c.StartupHCSuccesses)
 	}
 
+	// It is necessary to parse time values, as user can
+	// set either "0" or "0s" arguments
+	startupHCInterval, _ := time.ParseDuration(c.StartupHCInterval)
+	healthInterval, _ := time.ParseDuration(c.HealthInterval)
+
+	// To keep Docker compatibility, it is necessary
+	// to set health startup interval value to health interval one
+	if startupHCInterval == time.Duration(0) {
+		startupHCInterval = healthInterval
+	}
+	healthStartPeriod, _ := time.ParseDuration(c.HealthStartPeriod)
+
+	// This part of code has been created on response to the issue #27724:
+	if c.StartupHCCmd == "" &&
+		startupHCInterval != healthInterval &&
+		healthStartPeriod != time.Duration(0) &&
+		c.HealthCmd != "" {
+		tmpHcConfig, err := MakeHealthCheckFromCli(c.HealthCmd, startupHCInterval.String(), c.StartupHCRetries, c.HealthTimeout, healthStartPeriod.String(), true)
+		if err != nil {
+			return err
+		}
+
+		s.StartupHealthConfig = new(define.StartupHealthCheck)
+		s.StartupHealthConfig.Test = tmpHcConfig.Test
+		s.StartupHealthConfig.Interval = tmpHcConfig.Interval
+		s.StartupHealthConfig.StartPeriod = tmpHcConfig.StartPeriod
+		s.StartupHealthConfig.Timeout = tmpHcConfig.Timeout
+		s.StartupHealthConfig.Retries = tmpHcConfig.Retries
+		s.StartupHealthConfig.Successes = int(c.StartupHCSuccesses)
+	}
+
 	if len(s.Pod) == 0 || len(c.Pod) > 0 {
 		s.Pod = c.Pod
 	}

@@ -15,6 +15,7 @@ var (
 	BB                = "quay.io/libpod/busybox:latest"
 	HEALTHCHECK_IMAGE = "quay.io/libpod/alpine_healthcheck:latest"
 	FEDORA_MINIMAL    = "quay.io/libpod/systemd-image:20240124"
+	TESTIMAGE         = "quay.io/libpod/testimage:20241011"
 
 	// ImageCacheDir is initialized at runtime.
 	// e.g., filepath.Join(os.TempDir(), "imagecachedir")
