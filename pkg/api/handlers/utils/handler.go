@@ -293,3 +293,21 @@ func (b *ResponseSender) SendBuildError(message string) {
 func (b *ResponseSender) SendBuildAux(aux []byte) {
 	b.Send(images.BuildResponse{Aux: aux})
 }
+
+// WriteResponseWithContentType encodes the given value and renders it for http client
+func WriteResponseWithContentType(w http.ResponseWriter, code int, value io.Reader, contentType string) {
+	// RFC2616 explicitly states that the following status codes "MUST NOT
+	// include a message-body":
+	switch code {
+	case http.StatusNoContent, http.StatusNotModified: // 204, 304
+		w.WriteHeader(code)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(code)
+
+	if _, err := io.Copy(w, value); err != nil {
+		logrus.Errorf("Unable to copy to response: %q", err)
+	}
+}
