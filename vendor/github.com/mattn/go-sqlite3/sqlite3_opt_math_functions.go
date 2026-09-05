@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_math_functions
-// +build sqlite_math_functions
 
 package sqlite3
 

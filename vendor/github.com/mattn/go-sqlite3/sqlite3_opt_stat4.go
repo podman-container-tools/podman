@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_stat4
-// +build sqlite_stat4
 
 package sqlite3
 

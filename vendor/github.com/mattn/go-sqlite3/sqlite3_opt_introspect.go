@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_introspect
-// +build sqlite_introspect
 
 package sqlite3
 

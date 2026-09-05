@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_percentile
-// +build sqlite_percentile
 
 package sqlite3
 

@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_allow_uri_authority
-// +build sqlite_allow_uri_authority
 
 package sqlite3
 
