@@ -3,7 +3,9 @@
 package libpod
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"go.podman.io/podman/v6/libpod/define"
@@ -75,6 +77,23 @@ func (v *Volume) needsMount() bool {
 	}
 	// Local driver with options other than uid,gid needs mount
 	return len(v.config.Options) > index
+}
+
+func isDirEmpty(path string) (bool, error) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer dir.Close()
+
+	_, err = dir.Readdirnames(1)
+	if err == nil {
+		return false, nil
+	}
+	if errors.Is(err, io.EOF) {
+		return true, nil
+	}
+	return false, err
 }
 
 // update() updates the volume state from the DB.

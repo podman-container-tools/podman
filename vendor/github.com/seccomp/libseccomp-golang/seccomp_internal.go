@@ -22,67 +22,9 @@ import (
 
 // #cgo pkg-config: libseccomp
 /*
-#include <errno.h>
-#include <stdlib.h>
-#include <seccomp.h>
-
-#if (SCMP_VER_MAJOR < 2) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 3) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 3 && SCMP_VER_MICRO < 1)
-#error This package requires libseccomp >= v2.3.1
-#endif
-
-#define ARCH_BAD ~0
+#include "seccomp_compat.h"
 
 const uint32_t C_ARCH_BAD = ARCH_BAD;
-
-#ifndef SCMP_ARCH_PPC
-#define SCMP_ARCH_PPC ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PPC64
-#define SCMP_ARCH_PPC64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PPC64LE
-#define SCMP_ARCH_PPC64LE ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_S390
-#define SCMP_ARCH_S390 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_S390X
-#define SCMP_ARCH_S390X ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PARISC
-#define SCMP_ARCH_PARISC ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PARISC64
-#define SCMP_ARCH_PARISC64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_RISCV64
-#define SCMP_ARCH_RISCV64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_LOONGARCH64
-#define SCMP_ARCH_LOONGARCH64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_M68K
-#define SCMP_ARCH_M68K ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_SH
-#define SCMP_ARCH_SH ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_SHEB
-#define SCMP_ARCH_SHEB ARCH_BAD
-#endif
 
 const uint32_t C_ARCH_NATIVE       = SCMP_ARCH_NATIVE;
 const uint32_t C_ARCH_X86          = SCMP_ARCH_X86;
@@ -109,22 +51,6 @@ const uint32_t C_ARCH_M68K         = SCMP_ARCH_M68K;
 const uint32_t C_ARCH_SH           = SCMP_ARCH_SH;
 const uint32_t C_ARCH_SHEB         = SCMP_ARCH_SHEB;
 
-#ifndef SCMP_ACT_LOG
-#define SCMP_ACT_LOG 0x7ffc0000U
-#endif
-
-#ifndef SCMP_ACT_KILL_PROCESS
-#define SCMP_ACT_KILL_PROCESS 0x80000000U
-#endif
-
-#ifndef SCMP_ACT_KILL_THREAD
-#define SCMP_ACT_KILL_THREAD	0x00000000U
-#endif
-
-#ifndef SCMP_ACT_NOTIFY
-#define SCMP_ACT_NOTIFY 0x7fc00000U
-#endif
-
 const uint32_t C_ACT_KILL          = SCMP_ACT_KILL;
 const uint32_t C_ACT_KILL_PROCESS  = SCMP_ACT_KILL_PROCESS;
 const uint32_t C_ACT_KILL_THREAD   = SCMP_ACT_KILL_THREAD;
@@ -134,24 +60,6 @@ const uint32_t C_ACT_TRACE         = SCMP_ACT_TRACE(0);
 const uint32_t C_ACT_LOG           = SCMP_ACT_LOG;
 const uint32_t C_ACT_ALLOW         = SCMP_ACT_ALLOW;
 const uint32_t C_ACT_NOTIFY        = SCMP_ACT_NOTIFY;
-
-// The libseccomp SCMP_FLTATR_CTL_LOG member of the scmp_filter_attr enum was
-// added in v2.4.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-#define SCMP_FLTATR_CTL_LOG _SCMP_FLTATR_MIN
-#endif
-
-// The following SCMP_FLTATR_*  were added in libseccomp v2.5.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
-#define SCMP_FLTATR_CTL_SSB      _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_CTL_OPTIMIZE _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_API_SYSRAWRC _SCMP_FLTATR_MIN
-#endif
-
-// Added in libseccomp v2.6.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
-#define SCMP_FLTATR_CTL_WAITKILL _SCMP_FLTATR_MIN
-#endif
 
 const uint32_t C_ATTRIBUTE_DEFAULT  = (uint32_t)SCMP_FLTATR_ACT_DEFAULT;
 const uint32_t C_ATTRIBUTE_BADARCH  = (uint32_t)SCMP_FLTATR_ACT_BADARCH;
@@ -170,39 +78,6 @@ const int      C_CMP_EQ            = (int)SCMP_CMP_EQ;
 const int      C_CMP_GE            = (int)SCMP_CMP_GE;
 const int      C_CMP_GT            = (int)SCMP_CMP_GT;
 const int      C_CMP_MASKED_EQ     = (int)SCMP_CMP_MASKED_EQ;
-
-unsigned int get_major_version()
-{
-        return seccomp_version()->major;
-}
-
-unsigned int get_minor_version()
-{
-        return seccomp_version()->minor;
-}
-
-unsigned int get_micro_version()
-{
-        return seccomp_version()->micro;
-}
-
-// The libseccomp API level functions were added in v2.4.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-const unsigned int seccomp_api_get(void)
-{
-	// libseccomp-golang requires libseccomp v2.2.0, at a minimum, which
-	// supported API level 2. However, the kernel may not support API level
-	// 2 constructs which are the seccomp() system call and the TSYNC
-	// filter flag. Return the "reserved" value of 0 here to indicate that
-	// proper API level support is not available in libseccomp.
-	return 0;
-}
-
-int seccomp_api_set(unsigned int level)
-{
-	return -EOPNOTSUPP;
-}
-#endif
 
 typedef struct scmp_arg_cmp* scmp_cast_t;
 
@@ -229,49 +104,6 @@ void add_struct_arg_cmp(
         return;
 }
 
-// The seccomp notify API functions were added in v2.5.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
-
-struct seccomp_data {
-	int nr;
-	__u32 arch;
-	__u64 instruction_pointer;
-	__u64 args[6];
-};
-
-struct seccomp_notif {
-	__u64 id;
-	__u32 pid;
-	__u32 flags;
-	struct seccomp_data data;
-};
-
-struct seccomp_notif_resp {
-	__u64 id;
-	__s64 val;
-	__s32 error;
-	__u32 flags;
-};
-
-int seccomp_notify_alloc(struct seccomp_notif **req, struct seccomp_notif_resp **resp) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_fd(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_notify_free(struct seccomp_notif *req, struct seccomp_notif_resp *resp) {
-}
-int seccomp_notify_id_valid(int fd, uint64_t id) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_receive(int fd, struct seccomp_notif *req) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_respond(int fd, struct seccomp_notif_resp *resp) {
-	return -EOPNOTSUPP;
-}
-
-#endif
 */
 import "C"
 
@@ -310,24 +142,45 @@ var (
 	// errBadFilter is thrown on bad filter context.
 	errBadFilter = errors.New("filter is invalid or uninitialized")
 	errDefAction = errors.New("requested action matches default action of filter")
-	// Constants representing library major, minor, and micro versions
-	verMajor = uint(C.get_major_version())
-	verMinor = uint(C.get_minor_version())
-	verMicro = uint(C.get_micro_version())
+	// errAPIUnsupported is returned when the libseccomp used lacks the API
+	// level operations, added in v2.4.0.
+	errAPIUnsupported = errors.New("API level operations are not supported")
+	// libseccomp major, minor, and micro version numbers. Used by checkVersion.
+	verMajor, verMinor, verMicro = getMinVersion()
 )
+
+// versionGE reports whether (major1,minor1,micro1) >= (major2,minor2,micro2).
+func versionGE(major1, minor1, micro1, major2, minor2, micro2 uint) bool {
+	return (major1 > major2) ||
+		(major1 == major2 && minor1 > minor2) ||
+		(major1 == major2 && minor1 == minor2 && micro1 >= micro2)
+}
+
+func getMinVersion() (uint, uint, uint) {
+	runVer := C.seccomp_version()
+
+	cMajor, cMinor, cMicro := uint(C.SCMP_VER_MAJOR), uint(C.SCMP_VER_MINOR), uint(C.SCMP_VER_MICRO)
+	rMajor, rMinor, rMicro := uint(runVer.major), uint(runVer.minor), uint(runVer.micro)
+	if versionGE(rMajor, rMinor, rMicro, cMajor, cMinor, cMicro) {
+		return cMajor, cMinor, cMicro
+	}
+	return rMajor, rMinor, rMicro
+}
 
 // Nonexported functions
 
-// checkVersion returns an error if the libseccomp version being used
-// is less than the one specified by major, minor, and micro arguments.
+// checkVersion returns an error if the libseccomp version is less than the one
+// specified by major, minor, and micro arguments.
+//
+// Since this package may be compiled with one version of libseccomp and
+// used with another, we use the older one to be on the safe side.
+//
 // Argument op is an arbitrary non-empty operation description, which
 // is used as a part of the error message returned.
 //
 // Most users should use checkAPI instead.
 func checkVersion(op string, major, minor, micro uint) error {
-	if (verMajor > major) ||
-		(verMajor == major && verMinor > minor) ||
-		(verMajor == major && verMinor == minor && verMicro >= micro) {
+	if versionGE(verMajor, verMinor, verMicro, major, minor, micro) {
 		return nil
 	}
 	return &VersionError{
@@ -342,22 +195,44 @@ func ensureSupportedVersion() error {
 	return checkVersion("seccomp", 2, 3, 1)
 }
 
-// Get the API level
+// Get the API level, capped to the compile-time supported maximum (see
+// getMinVersion for why this cap is needed).
 func getAPI() (uint, error) {
-	api := C.seccomp_api_get()
-	if api == 0 {
-		return 0, errors.New("API level operations are not supported")
+	// The API level operations were added in libseccomp v2.4.0 and, like
+	// any other functionality, have to be available at both compile and
+	// run time. This is the one place that can not use checkAPI, the API
+	// level being the very thing the latter checks.
+	//
+	// Note that while the minimally required libseccomp v2.3.1 does support
+	// API level 2, the kernel may not support the API level 2 constructs
+	// (the seccomp() system call and the TSYNC filter flag), so no API
+	// level is assumed here.
+	if checkVersion("API level operations", 2, 4, 0) != nil {
+		return 0, errAPIUnsupported
 	}
 
-	return uint(api), nil
+	api := uint(C.compat_api_get())
+	if api == 0 {
+		return 0, errAPIUnsupported
+	}
+	if maxAPI := uint(C.SCMP_COMPAT_MAX_API_LEVEL); api > maxAPI {
+		api = maxAPI
+	}
+
+	return api, nil
 }
 
 // Set the API level
 func setAPI(api uint) error {
-	if retCode := C.seccomp_api_set(C.uint(api)); retCode != 0 {
+	// See the comment in getAPI.
+	if checkVersion("API level operations", 2, 4, 0) != nil {
+		return errAPIUnsupported
+	}
+
+	if retCode := C.compat_api_set(C.uint(api)); retCode != 0 {
 		e := errRc(retCode)
 		if e == syscall.EOPNOTSUPP {
-			return errors.New("API level operations are not supported")
+			return errAPIUnsupported
 		}
 
 		return fmt.Errorf("could not set API level: %w", e)
@@ -784,7 +659,8 @@ func checkAPI(op string, minLevel uint, major, minor, micro uint) error {
 }
 
 // Userspace Notification API
-// Calls to C.seccomp_notify* hidden from seccomp.go
+// Calls to C.compat_notify* (thin wrappers around the libseccomp
+// seccomp_notify* functions) hidden from seccomp.go
 
 func notifSupported() error {
 	return checkAPI("seccomp notification", 6, 2, 5, 0)
@@ -801,7 +677,7 @@ func (f *ScmpFilter) getNotifFd() (ScmpFd, error) {
 		return -1, err
 	}
 
-	fd := C.seccomp_notify_fd(f.filterCtx)
+	fd := C.compat_notify_fd(f.filterCtx)
 
 	return ScmpFd(fd), nil
 }
@@ -815,13 +691,13 @@ func notifReceive(fd ScmpFd) (*ScmpNotifReq, error) {
 	}
 
 	// we only use the request here; the response is unused
-	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
+	if retCode := C.compat_notify_alloc(&req, &resp); retCode != 0 {
 		return nil, errRc(retCode)
 	}
-	defer C.seccomp_notify_free(req, resp)
+	defer C.compat_notify_free(req, resp)
 
 	for {
-		retCode, errno := C.seccomp_notify_receive(C.int(fd), req)
+		retCode, errno := C.compat_notify_receive(C.int(fd), req)
 		if retCode == 0 {
 			break
 		}
@@ -849,15 +725,15 @@ func notifRespond(fd ScmpFd, scmpResp *ScmpNotifResp) error {
 	}
 
 	// we only use the response here; the request is discarded
-	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
+	if retCode := C.compat_notify_alloc(&req, &resp); retCode != 0 {
 		return errRc(retCode)
 	}
-	defer C.seccomp_notify_free(req, resp)
+	defer C.compat_notify_free(req, resp)
 
 	scmpResp.toNative(resp)
 
 	for {
-		retCode, errno := C.seccomp_notify_respond(C.int(fd), resp)
+		retCode, errno := C.compat_notify_respond(C.int(fd), resp)
 		if retCode == 0 {
 			break
 		}
@@ -882,7 +758,7 @@ func notifIDValid(fd ScmpFd, id uint64) error {
 	}
 
 	for {
-		retCode, errno := C.seccomp_notify_id_valid(C.int(fd), C.uint64_t(id))
+		retCode, errno := C.compat_notify_id_valid(C.int(fd), C.uint64_t(id))
 		if retCode == 0 {
 			break
 		}

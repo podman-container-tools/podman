@@ -147,7 +147,7 @@ func runStartVMCommand(cmd *exec.Cmd) error {
 
 func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
 	if err := q.setQEMUCommandLine(mc); err != nil {
-		return nil, nil, fmt.Errorf("unable to generate qemu command line: %q", err)
+		return nil, nil, fmt.Errorf("unable to generate qemu command line: %w", err)
 	}
 
 	readySocket, err := mc.ReadySocket()
@@ -283,7 +283,7 @@ func (q *QEMUStubber) resizeDisk(newSize strongunits.GiB, diskPath *define.VMFil
 	resize.Stdout = os.Stdout
 	resize.Stderr = os.Stderr
 	if err := resize.Run(); err != nil {
-		return fmt.Errorf("resizing image: %q", err)
+		return fmt.Errorf("resizing image: %w", err)
 	}
 
 	return nil

@@ -12,7 +12,7 @@ services:
   - docker
 
 go:
-  - "1.25.5"
+  - "1.25.9"
 
 before_install:
   - docker pull mirror.gcr.io/alpine

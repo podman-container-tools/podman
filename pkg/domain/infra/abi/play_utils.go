@@ -3,6 +3,7 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -48,7 +49,7 @@ func openPathSafely(root, unsafeName string) (*os.File, error) {
 	if err == nil {
 		return os.NewFile(uintptr(fd), unsafeName), nil
 	}
-	if err == unix.ELOOP {
+	if errors.Is(err, unix.ELOOP) {
 		return openSymlinkPath(fdDir, unsafeName, flags)
 	}
 	return nil, &os.PathError{Op: "openat", Path: unsafeName, Err: err}

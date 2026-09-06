@@ -297,7 +297,7 @@ func readStdio(conn *net.UnixConn, streams *define.AttachStreams, receiveStdoutE
 		}
 		return err
 	case err = <-stdinDone:
-		if err == define.ErrDetach {
+		if errors.Is(err, define.ErrDetach) {
 			if err := socketCloseWrite(conn); err != nil {
 				logrus.Errorf("Failed to close stdin: %v", err)
 			}

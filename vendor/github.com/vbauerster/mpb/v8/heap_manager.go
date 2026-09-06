@@ -92,7 +92,7 @@ func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, depleteHeap c
 			data.seqCh <- func(yield func(*Bar) bool) {
 				for bHeap.Len() != 0 {
 					if !yield(heap.Pop(&bHeap).(*Bar)) {
-						break
+						return
 					}
 				}
 			}
@@ -111,7 +111,7 @@ func (m heapManager) run(pwg *sync.WaitGroup, shutdown <-chan any, depleteHeap c
 				defer close(done)
 				for _, b := range bHeap {
 					if !yield(b) {
-						break
+						return
 					}
 				}
 			}

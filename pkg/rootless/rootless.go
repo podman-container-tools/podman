@@ -1,10 +1,12 @@
 package rootless
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 
@@ -167,8 +169,8 @@ func MaybeSplitMappings(mappings []spec.LinuxIDMapping, availableMappings []user
 	var overflow spec.LinuxIDMapping
 	overflow.Size = 0
 	consumed := 0
-	sort.Slice(availableMappings, func(i, j int) bool {
-		return availableMappings[i].ID > availableMappings[j].ID
+	slices.SortFunc(availableMappings, func(a, b user.IDMap) int {
+		return cmp.Compare(b.ID, a.ID)
 	})
 	for {
 		cur := overflow

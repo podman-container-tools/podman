@@ -423,8 +423,15 @@ func goVRelease(pVTab unsafe.Pointer, isDestroy C.int) *C.char {
 	} else {
 		err = vt.vTab.Disconnect()
 	}
-	// The vtab is gone as far as SQLite is concerned regardless of the
-	// callback result, so release the handle either way.
+	if err != nil && isDestroy == 1 {
+		// SQLite retains p->pVtab when xDestroy fails and later calls
+		// xDisconnect on the same object; keep the handle registered so
+		// that call can resolve it (a missing handle panics above).
+		return mPrintf("%s", err.Error())
+	}
+	// On xDisconnect (success or error) SQLite discards the vtab object,
+	// and on successful xDestroy it clears p->pVtab; release the handle
+	// in both cases.
 	deleteHandle(pVTab)
 	if err != nil {
 		return mPrintf("%s", err.Error())

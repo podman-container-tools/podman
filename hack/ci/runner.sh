@@ -186,9 +186,11 @@ function run_apiv2() {
     pip install --upgrade pip
     pip install --requirement ./test/apiv2/python/requirements.txt
     $SUDO sh -c "(
-        make localapiv2-bash
+        rc=0
+        make localapiv2-bash || rc=\$?
         source .venv/requests/bin/activate
-        make localapiv2-python
+        make localapiv2-python || rc=\$?
+        exit \$rc
     )" |& logformatter
 }
 
@@ -198,7 +200,11 @@ function run_bindings() {
 }
 
 function run_bud() {
-    $SUDO ./test/buildah-bud/run-buildah-bud-tests |& logformatter
+    local args=()
+    if [[ "$MODE" == "remote" ]]; then
+        args+=(--remote)
+    fi
+    $SUDO ./test/buildah-bud/run-buildah-bud-tests "${args[@]}" |& logformatter
 }
 
 function run_compose_v2() {

@@ -4,7 +4,7 @@ package integration
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -151,7 +151,7 @@ var _ = Describe("Podman ps", func() {
 
 		sortedArr := session.OutputToStringArray()
 
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool { return sortedArr[i] < sortedArr[j] })).To(BeTrue(), "slice is sorted")
+		Expect(slices.IsSorted(sortedArr)).To(BeTrue(), "slice is sorted")
 	})
 
 	It("podman pod ps --ctr-names", func() {

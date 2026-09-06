@@ -3,7 +3,9 @@
 package compat
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -45,31 +47,22 @@ func StatsContainer(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := ctnr.GetContainerStats(nil)
 	if err != nil {
-		utils.InternalServerError(w, fmt.Errorf("failed to obtain Container %s stats: %w", name, err))
+		err = fmt.Errorf("failed to obtain Container %s stats: %w", name, err)
+		utils.Error(w, statsErrorStatus(err), err)
 		return
 	}
-
-	coder := json.NewEncoder(w)
-	// Write header and content type.
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
+	onlineCPUs, err := libpod.GetOnlineCPUs(ctnr)
+	if err != nil {
+		utils.Error(w, statsErrorStatus(err), err)
+		return
 	}
+	wroteContent := false
 
-	// Set up JSON encoder for streaming.
-	coder.SetEscapeHTML(true)
 	var preRead time.Time
 	var preCPUStats CPUStats
 	if query.Stream {
 		preRead = time.Now()
 		preCPUStats = getPreCPUStats(stats)
-	}
-
-	onlineCPUs, err := libpod.GetOnlineCPUs(ctnr)
-	if err != nil {
-		utils.InternalServerError(w, err)
-		return
 	}
 
 streamLabel: // A label to flatten the scope
@@ -80,11 +73,20 @@ streamLabel: // A label to flatten the scope
 	default:
 		stats, err = ctnr.GetContainerStats(stats)
 		if err != nil {
-			logrus.Errorf("Unable to get container stats: %v", err)
+			if wroteContent {
+				logrus.Errorf("Unable to get container stats: %v", err)
+			} else {
+				utils.Error(w, statsErrorStatus(err), err)
+			}
 			return
 		}
 		s, err := statsContainerJSON(ctnr, stats, preCPUStats, onlineCPUs)
 		if err != nil {
+			if wroteContent {
+				logrus.Errorf("Unable to build container stats response: %v", err)
+			} else {
+				utils.Error(w, statsErrorStatus(err), err)
+			}
 			return
 		}
 		s.Stats.PreRead = preRead
@@ -96,10 +98,25 @@ streamLabel: // A label to flatten the scope
 			jsonOut = DockerStatsJSON(s)
 		}
 
-		if err := coder.Encode(jsonOut); err != nil {
-			logrus.Errorf("Unable to encode stats: %v", err)
+		var chunk bytes.Buffer
+		if err := json.NewEncoder(&chunk).Encode(jsonOut); err != nil {
+			if wroteContent {
+				logrus.Errorf("Unable to encode stats: %v", err)
+			} else {
+				utils.InternalServerError(w, err)
+			}
 			return
 		}
+
+		// Do not commit a successful response until the complete sample has
+		// been collected and encoded. For a stream, each write is one complete
+		// sample, so an error can only truncate the stream between samples.
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(chunk.Bytes()); err != nil {
+			logrus.Errorf("Unable to write stats: %v", err)
+			return
+		}
+		wroteContent = true
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}
@@ -112,11 +129,24 @@ streamLabel: // A label to flatten the scope
 		bits, err := json.Marshal(s.CPUStats)
 		if err != nil {
 			logrus.Errorf("Unable to marshal cpu stats: %q", err)
+			return
 		}
 		if err := json.Unmarshal(bits, &preCPUStats); err != nil {
 			logrus.Errorf("Unable to unmarshal previous stats: %q", err)
+			return
 		}
 		time.Sleep(defaultStatsPeriod)
 		goto streamLabel
+	}
+}
+
+func statsErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, define.ErrNoSuchCtr), errors.Is(err, define.ErrCtrRemoved):
+		return http.StatusNotFound
+	case errors.Is(err, define.ErrCtrStopped), errors.Is(err, define.ErrCtrStateInvalid), errors.Is(err, define.ErrNoCgroups):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
 	}
 }

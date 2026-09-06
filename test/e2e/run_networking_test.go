@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -741,7 +742,7 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 		_, ipnet, err := net.ParseCIDR(cidr)
 		Expect(err).ToNot(HaveOccurred())
 		addr := &netlink.Addr{IPNet: ipnet, Label: ""}
-		if err := netlink.AddrAdd(containerInterface, addr); err != nil && err != syscall.EEXIST {
+		if err := netlink.AddrAdd(containerInterface, addr); err != nil && !errors.Is(err, syscall.EEXIST) {
 			return err
 		}
 		return nil

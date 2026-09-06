@@ -92,7 +92,7 @@ func composeProvider() (string, error) {
 		lookupErrors = append(lookupErrors, err)
 	}
 
-	return "", fmt.Errorf("looking up compose provider failed\n%v", errorhandling.JoinErrors(lookupErrors))
+	return "", fmt.Errorf("looking up compose provider failed\n%w", errorhandling.JoinErrors(lookupErrors))
 }
 
 // composeDockerHost returns the value to be set in the DOCKER_HOST environment
@@ -219,7 +219,7 @@ func composeProviderExec(args []string, stdout io.Writer, stderr io.Writer, warn
 
 	if err := cmd.Run(); err != nil {
 		// Make sure podman returns with the same exit code as the compose provider.
-		if exitErr, isExit := err.(*exec.ExitError); isExit {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			registry.SetExitCode(exitErr.ExitCode())
 		}
 		// Format the error to make it explicit that error did not come

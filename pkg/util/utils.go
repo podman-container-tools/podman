@@ -1,6 +1,7 @@
 package util
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,7 +11,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -551,16 +552,16 @@ func breakInsert(mapping []idtools.IDMap, extension idtools.IDMap) (result []idt
 // containing all integers found in fullRanges and not found in usedRanges.
 func getAvailableIDRanges(fullRanges, usedRanges [][2]int) (availableRanges [][2]int) {
 	// Sort them
-	sort.Slice(fullRanges, func(i, j int) bool {
-		return fullRanges[i][0] < fullRanges[j][0]
+	slices.SortFunc(fullRanges, func(a, b [2]int) int {
+		return cmp.Compare(a[0], b[0])
 	})
 
 	if len(usedRanges) == 0 {
 		return fullRanges
 	}
 
-	sort.Slice(usedRanges, func(i, j int) bool {
-		return usedRanges[i][0] < usedRanges[j][0]
+	slices.SortFunc(usedRanges, func(a, b [2]int) int {
+		return cmp.Compare(a[0], b[0])
 	})
 
 	// To traverse usedRanges
@@ -637,8 +638,8 @@ func getAvailableIDRangesFromMappings(idmap []idtools.IDMap, parentMapping []rus
 // Returns the filled idmap.
 func fillIDMap(idmap []idtools.IDMap, availableRanges [][2]int) (output []idtools.IDMap) {
 	idmapByCid := append([]idtools.IDMap{}, idmap...)
-	sort.Slice(idmapByCid, func(i, j int) bool {
-		return idmapByCid[i].ContainerID < idmapByCid[j].ContainerID
+	slices.SortFunc(idmapByCid, func(a, b idtools.IDMap) int {
+		return cmp.Compare(a.ContainerID, b.ContainerID)
 	})
 
 	if len(availableRanges) == 0 {
@@ -778,8 +779,8 @@ func ParseIDMap(mapSpec []string, mapSetting string, parentMapping []ruser.IDMap
 // entries that are consecutive.
 func sortAndMergeConsecutiveMappings(idmap []idtools.IDMap) (finalIDMap []idtools.IDMap) {
 	idmapByCid := append([]idtools.IDMap{}, idmap...)
-	sort.Slice(idmapByCid, func(i, j int) bool {
-		return idmapByCid[i].ContainerID < idmapByCid[j].ContainerID
+	slices.SortFunc(idmapByCid, func(a, b idtools.IDMap) int {
+		return cmp.Compare(a.ContainerID, b.ContainerID)
 	})
 	for i, mapPiece := range idmapByCid {
 		if i == 0 {
@@ -1215,7 +1216,7 @@ func ParseRestartPolicy(policy string) (string, uint, error) {
 	case 1:
 		// No retries specified
 		policyType = splitRestart[0]
-		if strings.ToLower(splitRestart[0]) == "never" {
+		if strings.EqualFold(splitRestart[0], "never") {
 			policyType = define.RestartPolicyNo
 		}
 	case 2:

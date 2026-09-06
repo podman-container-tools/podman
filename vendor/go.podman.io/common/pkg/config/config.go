@@ -1222,7 +1222,7 @@ func (e *eventsLogMaxSize) UnmarshalText(text []byte) error {
 	if string(text) == "" {
 		return nil
 	}
-	val, err := units.FromHumanSize((string(text)))
+	val, err := units.FromHumanSize(string(text))
 	if err != nil {
 		return err
 	}

@@ -195,19 +195,15 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		podman.createArtifact(image)
 	}
 
-	if err := os.MkdirAll(filepath.Join(ImageCacheDir, podman.ImageCacheFS+"-images"), 0o777); err != nil {
-		GinkgoWriter.Printf("%q\n", err)
-		os.Exit(1)
-	}
+	err = os.MkdirAll(filepath.Join(ImageCacheDir, podman.ImageCacheFS+"-images"), 0o777)
+	Expect(err).ToNot(HaveOccurred())
 	podman.Root = ImageCacheDir
 	// If running localized tests, the cache dir is created and populated. if the
 	// tests are remote, this is a no-op
 	populateCache(podman)
 
-	if err := os.MkdirAll(filepath.Join(globalTmpDir, lockdir), 0o700); err != nil {
-		GinkgoWriter.Printf("%q\n", err)
-		os.Exit(1)
-	}
+	err = os.MkdirAll(filepath.Join(globalTmpDir, lockdir), 0o700)
+	Expect(err).ToNot(HaveOccurred())
 
 	// If running remote, we need to stop the associated podman system service
 	if podman.RemoteTest {
@@ -741,10 +737,7 @@ func processTestResult(r SpecReport) {
 func GetPortLock(port string) *lockfile.LockFile {
 	lockFile := filepath.Join(LockTmpDir, port)
 	lock, err := lockfile.GetLockFile(lockFile)
-	if err != nil {
-		GinkgoWriter.Println(err)
-		os.Exit(1)
-	}
+	Expect(err).ToNot(HaveOccurred())
 	lock.Lock()
 	return lock
 }
@@ -1122,7 +1115,7 @@ func SkipIfSystemdNotRunning(reason string) {
 	cmd := exec.Command("systemctl", "list-units")
 	err := cmd.Run()
 	if err != nil {
-		if _, ok := err.(*exec.Error); ok {
+		if _, ok := errors.AsType[*exec.Error](err); ok {
 			Skip("[notSystemd]: not running " + reason)
 		}
 		Expect(err).ToNot(HaveOccurred())

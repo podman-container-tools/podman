@@ -24,39 +24,35 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
-	"go.podman.io/common/pkg/config"
 )
 
-const PestoBinaryName = "pesto"
-
-// PestoAddPorts adds port forwarding rules to the running pasta instance
+// AddPorts adds port forwarding rules to the running pasta instance
 // via -A/--add. Idempotent: adding already-active ports is a no-op.
 // containerIPv4 and containerIPv6 are the container's addresses inside the
 // network namespace; they are embedded in the target side of each mapping.
-func PestoAddPorts(conf *config.Config, socketPath string, ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
-	if socketPath == "" {
-		return errors.New("pesto control socket not available")
-	}
+func (p *PestoClient) AddPorts(ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
 	logrus.Debugf("pesto: adding %d port mappings", len(ports))
-	return pestoModifyPorts(conf, socketPath, ports, "--add", containerIPv4, containerIPv6)
+	return p.modifyPorts(ports, "--add", containerIPv4, containerIPv6)
 }
 
-// PestoDeletePorts removes port forwarding rules from the running pasta
+// DeletePorts removes port forwarding rules from the running pasta
 // instance via -D/--delete.
 // containerIPv4 and containerIPv6 are the container's addresses inside the
 // network namespace; they are embedded in the target side of each mapping.
-func PestoDeletePorts(conf *config.Config, socketPath string, ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
-	if socketPath == "" {
+func (p *PestoClient) DeletePorts(ports []types.PortMapping, containerIPv4, containerIPv6 string) error {
+	if p.SocketPath == "" {
 		return nil
 	}
 	logrus.Debugf("pesto: deleting %d port mappings", len(ports))
-	return pestoModifyPorts(conf, socketPath, ports, "--delete", containerIPv4, containerIPv6)
+	return p.modifyPorts(ports, "--delete", containerIPv4, containerIPv6)
 }
 
-func pestoModifyPorts(conf *config.Config, socketPath string, ports []types.PortMapping, mode, containerIPv4, containerIPv6 string) error {
-	pestoPath, err := conf.FindHelperBinary(PestoBinaryName, true)
-	if err != nil {
-		return fmt.Errorf("could not find pesto binary: %w", err)
+func (p *PestoClient) modifyPorts(ports []types.PortMapping, mode, containerIPv4, containerIPv6 string) error {
+	if p.SocketPath == "" {
+		return errors.New("pesto control socket not available")
+	}
+	if p.Binary == "" {
+		return fmt.Errorf("could not find %s binary: %w", PestoBinaryName, p.BinaryErr)
 	}
 
 	pestoArgs, err := portMappingsToPestoArgs(ports, containerIPv4, containerIPv6)
@@ -66,11 +62,11 @@ func pestoModifyPorts(conf *config.Config, socketPath string, ports []types.Port
 	args := make([]string, 0, len(pestoArgs)+2) // +2 for mode and socket path
 	args = append(args, mode)
 	args = append(args, pestoArgs...)
-	args = append(args, socketPath)
+	args = append(args, p.SocketPath)
 
 	logrus.Debugf("pesto arguments: %s", strings.Join(args, " "))
 
-	out, err := exec.Command(pestoPath, args...).CombinedOutput()
+	out, err := exec.Command(p.Binary, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pesto failed: %w\noutput: %s", err, string(out))
 	}

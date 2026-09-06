@@ -46,7 +46,7 @@ func (c *Container) mountSHM(shmOptions string) error {
 
 func (c *Container) unmountSHM(mount string) error {
 	if err := unix.Unmount(mount, unix.MNT_DETACH); err != nil {
-		if err == syscall.EINVAL || err == syscall.ENOENT {
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOENT) {
 			logrus.Debugf("Container %s failed to unmount %s : %v", c.ID(), mount, err)
 			return nil
 		}

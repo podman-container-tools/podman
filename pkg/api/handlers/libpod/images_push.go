@@ -38,6 +38,9 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 		RetryDelay             string `schema:"retryDelay"`
 		TLSVerify              bool   `schema:"tlsVerify"`
 		Quiet                  bool   `schema:"quiet"`
+		OS                     string `schema:"os"`
+		Arch                   string `schema:"arch"`
+		Variant                string `schema:"variant"`
 	}{
 		TLSVerify: true,
 		// #14971: older versions did not sent *any* data, so we need
@@ -89,6 +92,9 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 		RemoveSignatures:       query.RemoveSignatures,
 		RetryDelay:             query.RetryDelay,
 		Username:               username,
+		OS:                     query.OS,
+		Arch:                   query.Arch,
+		Variant:                query.Variant,
 	}
 
 	if _, found := r.URL.Query()["retry"]; found {

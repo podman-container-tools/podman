@@ -58,6 +58,8 @@ type KubeVolume struct {
 	DefaultMode int32
 	// Used for volumes of type Image. Ignored for other volumes types.
 	ImagePullPolicy v1.PullPolicy
+	// Size limit in bytes, 0 when unset. Only used for EmptyDirTmpfs.
+	SizeLimit int64
 }
 
 // Create a KubeVolume from an HostPathVolumeSource
@@ -264,10 +266,14 @@ func VolumeFromConfigMap(configMapVolumeSource *v1.ConfigMapVolumeSource, config
 // Create a kubeVolume for an emptyDir volume
 func VolumeFromEmptyDir(emptyDirVolumeSource *v1.EmptyDirVolumeSource, name string) (*KubeVolume, error) {
 	if emptyDirVolumeSource.Medium == v1.StorageMediumMemory {
-		return &KubeVolume{
+		kv := &KubeVolume{
 			Type:   KubeVolumeTypeEmptyDirTmpfs,
 			Source: name,
-		}, nil
+		}
+		if emptyDirVolumeSource.SizeLimit != nil {
+			kv.SizeLimit = emptyDirVolumeSource.SizeLimit.Value()
+		}
+		return kv, nil
 	} else {
 		return &KubeVolume{
 			Type:   KubeVolumeTypeEmptyDir,

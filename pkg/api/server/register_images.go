@@ -106,6 +106,7 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//        - `label=key` or `label="key=value"` of an image label
 	//        - `reference`=(`<image-name>[:<tag>]`)
 	//        - `since`=(`<image-name>[:<tag>]`,  `<image id>` or `<image@digest>`)
+	//        - `until=<timestamp>` List images created before this timestamp. The `<timestamp>` can be Unix timestamps, date formatted timestamps, or Go duration strings (e.g. `10m`, `1h30m`) computed relative to the machine’s time.
 	//     type: string
 	//   - name: digests
 	//     in: query
@@ -313,6 +314,12 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    description: Require TLS verification.
 	//    type: boolean
 	//    default: true
+	//  - in: query
+	//    name: platform
+	//    type: string
+	//    description: |
+	//      JSON-encoded OCI platform object to select a specific platform from a manifest list.
+	//      For example, {"os":"linux","architecture":"amd64"}.
 	//  - in: header
 	//    name: X-Registry-Auth
 	//    type: string
@@ -851,6 +858,18 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    name: retryDelay
 	//    type: string
 	//    description: Delay between retries in case of push failures. Duration format such as "412ms", or "3.5h".
+	//  - in: query
+	//    name: os
+	//    type: string
+	//    description: OS to use for selecting a platform-specific image from a manifest list.
+	//  - in: query
+	//    name: arch
+	//    type: string
+	//    description: Architecture to use for selecting a platform-specific image from a manifest list.
+	//  - in: query
+	//    name: variant
+	//    type: string
+	//    description: Variant to use for selecting a platform-specific image from a manifest list.
 	//  - in: header
 	//    name: X-Registry-Auth
 	//    type: string
@@ -960,6 +979,7 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//        - `reference`=(`<image-name>[:<tag>]`)
 	//        - `id`=(`<image-id>`)
 	//        - `since`=(`<image-name>[:<tag>]`,  `<image id>` or `<image@digest>`)
+	//        - `until=<timestamp>` List images created before this timestamp. The `<timestamp>` can be Unix timestamps, date formatted timestamps, or Go duration strings (e.g. `10m`, `1h30m`) computed relative to the machine’s time.
 	//     type: string
 	// produces:
 	// - application/json

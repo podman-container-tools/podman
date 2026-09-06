@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"syscall"
 
 	"github.com/Microsoft/go-winio"
 	gvproxy "github.com/containers/gvisor-tap-vsock/pkg/types"
@@ -25,6 +26,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
 	"go.podman.io/podman/v6/pkg/machine/windows"
 	"go.podman.io/podman/v6/pkg/systemd/parser"
+	syswindows "golang.org/x/sys/windows"
 )
 
 type HyperVStubber struct {
@@ -124,7 +126,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 		}
 
 		if err := vsock.RemoveAllHVSockRegistryEntries(); err != nil {
-			return fmt.Errorf("unable to remove hvsock registry entries: %q", err)
+			return fmt.Errorf("unable to remove hvsock registry entries: %w", err)
 		}
 
 		return nil
@@ -159,8 +161,8 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 	}
 
 	builder.WithUnit(ignition.Unit{
-		Contents: ignition.StrToPtr(netUnitFile),
-		Enabled:  ignition.BoolToPtr(true),
+		Contents: new(netUnitFile),
+		Enabled:  new(true),
 		Name:     "vsock-network.service",
 	})
 
@@ -173,7 +175,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 			Contents: ignition.Resource{
 				Source: ignition.EncodeDataURLPtr(hyperVVsockNMConnection),
 			},
-			Mode: ignition.IntToPtr(0o600),
+			Mode: new(0o600),
 		},
 	})
 
@@ -271,6 +273,12 @@ func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) err
 	logrus.Debugf("Going to start 9p server using command: %s %v", executable, p9ServerArgs)
 
 	fsCmd := exec.Command(executable, p9ServerArgs...)
+	// Set SysProcAttr CREATE_NO_WINDOW or
+	// the server9p process will be killed
+	// when the parent window is closed
+	fsCmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syswindows.CREATE_NO_WINDOW,
+	}
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		log, err := logCommandToFile(fsCmd, "podman-machine-server9.log")
@@ -661,7 +669,7 @@ func (h HyperVStubber) StopHostNetworking(mc *vmconfigs.MachineConfig, vmType de
 	err := machine.StopWinProxy(mc.Name, vmType)
 	// in podman 4, this was a "soft" error; keeping behavior as such
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
 	return nil
@@ -796,7 +804,7 @@ func resizeDisk(newSize strongunits.GiB, imagePath *define.VMFile) error {
 	resize.Stderr = os.Stderr
 	resize.Env = append(os.Environ(), "IMAGE_PATH="+imagePath.GetPath())
 	if err := resize.Run(); err != nil {
-		return fmt.Errorf("resizing image: %q", err)
+		return fmt.Errorf("resizing image: %w", err)
 	}
 	return nil
 }

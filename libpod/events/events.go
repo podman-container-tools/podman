@@ -150,6 +150,8 @@ func StringToStatus(name string) (Status, error) {
 		return Cleanup, nil
 	case Commit.String():
 		return Commit, nil
+	case Copy.String():
+		return Copy, nil
 	case Create.String():
 		return Create, nil
 	case Exec.String():

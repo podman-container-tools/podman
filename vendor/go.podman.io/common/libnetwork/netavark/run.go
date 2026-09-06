@@ -162,7 +162,7 @@ func (n *netavarkNetwork) Setup(namespacePath string, options types.SetupOptions
 }
 
 // pestoSetup publishes port mappings via pesto with target address mapping.
-// PestoAddPorts is idempotent so this is safe to call on every Setup.
+// AddPorts is idempotent so this is safe to call on every Setup.
 func (n *netavarkNetwork) pestoSetup(opts types.NetworkOptions, newResult map[string]types.StatusBlock) error {
 	if n.rootlessNetns == nil {
 		return nil
@@ -191,7 +191,7 @@ func (n *netavarkNetwork) pestoSetup(opts types.NetworkOptions, newResult map[st
 		return nil
 	}
 
-	return pasta.PestoAddPorts(n.config, n.PestoSocketPath(), opts.PortMappings, ipv4, ipv6)
+	return n.pesto().AddPorts(opts.PortMappings, ipv4, ipv6)
 }
 
 // pestoTeardown handles pesto port mapping removal on network disconnect.
@@ -229,7 +229,7 @@ func (n *netavarkNetwork) pestoTeardown(opts types.NetworkOptions) error {
 
 	// Last network: remove all port mappings.
 	if len(remaining) == 0 {
-		return pasta.PestoDeletePorts(n.config, n.PestoSocketPath(), opts.PortMappings,
+		return n.pesto().DeletePorts(opts.PortMappings,
 			activeIPv4, activeIPv6)
 	}
 
@@ -244,14 +244,14 @@ func (n *netavarkNetwork) pestoTeardown(opts types.NetworkOptions) error {
 	}
 
 	// Remap: delete old mappings, pick new IPs from remaining networks, re-add.
-	if err := pasta.PestoDeletePorts(n.config, n.PestoSocketPath(), opts.PortMappings,
+	if err := n.pesto().DeletePorts(opts.PortMappings,
 		activeIPv4, activeIPv6); err != nil {
 		return fmt.Errorf("deleting port mappings for remap: %w", err)
 	}
 
 	newIPv4, _, newIPv6, _ := firstIPsFromStatus(remaining, opts.NetworkOrder)
 	if newIPv4 != "" || newIPv6 != "" {
-		if err := pasta.PestoAddPorts(n.config, n.PestoSocketPath(), opts.PortMappings,
+		if err := n.pesto().AddPorts(opts.PortMappings,
 			newIPv4, newIPv6); err != nil {
 			return fmt.Errorf("re-adding port mappings after remap: %w", err)
 		}
@@ -379,6 +379,14 @@ func (n *netavarkNetwork) PestoSocketPath() string {
 		return ""
 	}
 	return n.rootlessNetns.PestoSocketPath()
+}
+
+func (n *netavarkNetwork) pesto() *pasta.PestoClient {
+	return &pasta.PestoClient{
+		Binary:     n.pestoBinary,
+		BinaryErr:  n.pestoBinaryErr,
+		SocketPath: n.PestoSocketPath(),
+	}
 }
 
 // firstIPsFromStatus picks the first IPv4 and IPv6 container addresses from a

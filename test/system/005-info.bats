@@ -10,7 +10,8 @@ buildahVersion: *[0-9.]\\\+
 conmon:\\\s\\\+package:
 distribution:
 logDriver:
-ociRuntime:\\\s\\\+name:
+ociRuntime:\\\s\\\+features:
+ociRuntime:.* name: [a-z0-9]
 os:
 rootless:
 registries:

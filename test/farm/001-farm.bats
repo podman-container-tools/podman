@@ -8,7 +8,20 @@ load helpers.bash
 @test "farm - check farm has been created" {
     run_podman farm ls
     assert "$output" =~ $FARMNAME
-    assert "$output" =~ "test-node"
+    assert "$output" =~ ${CONNECTION_NAME}
+
+    #Confirm name header present on farm list output
+    assert "$output" =~ "Name"
+
+    #Test the farm list output for no headers
+    run_podman farm ls --noheading
+    assert "$output" !~ "Name"
+    assert "$output" =~ "$FARMNAME"
+
+    #Test the farm list noheading shorthand
+    run_podman farm ls -n
+    assert "$output" !~ "Name"
+    assert "$output" =~ "$FARMNAME"
 }
 
 @test "farm - build on local only" {
@@ -112,22 +125,44 @@ EOF
     run_podman image prune -f
 }
 
+# https://github.com/containers/podman/issues/25039
+@test "farm - build with a tagged reference" {
+    iname="test-image-6"
+    tag="mytag"
+    run_podman farm build --authfile $AUTHFILE --tls-verify=false -t $REGISTRY/$iname:$tag $FARM_TMPDIR
+    assert "$output" =~ "Farm \"$FARMNAME\" ready"
+
+    run_podman info --format '{{.Host.Arch}}'
+    ARCH=$output
+    run_podman manifest inspect $iname:$tag
+    assert "$output" =~ $ARCH
+
+    echo "# skopeo inspect ..."
+    run skopeo inspect "$@" --tls-verify=false --authfile $AUTHFILE docker://$REGISTRY/$iname:$tag
+    echo "$output"
+    is "$status" "0" "skopeo inspect - exit status"
+
+    run_podman manifest rm $iname:$tag
+    run_podman image prune -f
+}
+
 # Test out podman-remote
 
 @test "farm - build on farm node only (podman-remote)" {
     iname="test-image-5"
     # ManifestAdd only
     echo "Running test with ManifestAdd only..."
-    run_podman --remote farm build --authfile $AUTHFILE --tls-verify=false -t $REGISTRY/$iname $FARM_TMPDIR
+    # Now uses a explicit --connection, rather than relying on the default.
+    run_podman --remote --connection=${CONNECTION_NAME} farm build --authfile $AUTHFILE --tls-verify=false -t $REGISTRY/$iname $FARM_TMPDIR
     assert "$output" =~ "Farm \"$FARMNAME\" ready"
 
     # ManifestListClear and ManifestAdd
     echo "Running test with ManifestListClear and ManifestAdd..."
-    run_podman --remote farm build --authfile $AUTHFILE --tls-verify=false -t $REGISTRY/$iname $FARM_TMPDIR
+    run_podman --remote --connection=${CONNECTION_NAME} farm build --authfile $AUTHFILE --tls-verify=false -t $REGISTRY/$iname $FARM_TMPDIR
     assert "$output" =~ "Farm \"$FARMNAME\" ready"
 
     # get the system architecture
-    run_podman --remote info --format '{{.Host.Arch}}'
+    run_podman --remote --connection=${CONNECTION_NAME} info --format '{{.Host.Arch}}'
     ARCH=$output
     # inspect manifest list built and saved
     run_podman manifest inspect $iname

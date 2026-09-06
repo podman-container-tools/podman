@@ -29,21 +29,6 @@ const (
 	DefaultIgnitionUserName = "core"
 )
 
-// Convenience function to convert int to ptr
-func IntToPtr(i int) *int {
-	return &i
-}
-
-// Convenience function to convert string to ptr
-func StrToPtr(s string) *string {
-	return &s
-}
-
-// Convenience function to convert bool to ptr
-func BoolToPtr(b bool) *bool {
-	return &b
-}
-
 func GetNodeUsr(usrName string) NodeUser {
 	return NodeUser{Name: &usrName}
 }
@@ -85,7 +70,7 @@ func (ign *DynamicIgnition) getUsers() []PasswdUser {
 	if !isCoreUser {
 		coreUser := PasswdUser{
 			Name:        DefaultIgnitionUserName,
-			ShouldExist: BoolToPtr(false),
+			ShouldExist: new(false),
 		}
 		users = append(users, coreUser)
 	}
@@ -94,7 +79,7 @@ func (ign *DynamicIgnition) getUsers() []PasswdUser {
 	user := PasswdUser{
 		Name:              ign.Name,
 		SSHAuthorizedKeys: []SSHAuthorizedKey{SSHAuthorizedKey(ign.Key)},
-		UID:               IntToPtr(ign.UID),
+		UID:               new(ign.UID),
 	}
 
 	// If we are not using the core user, we need to make the user part
@@ -149,7 +134,7 @@ func (ign *DynamicIgnition) GenerateIgnitionConfig() error {
 			} else {
 				tz, err = getLocalTimeZone()
 				if err != nil {
-					return fmt.Errorf("error getting local timezone: %q", err)
+					return fmt.Errorf("error getting local timezone: %w", err)
 				}
 			}
 		}
@@ -162,11 +147,11 @@ func (ign *DynamicIgnition) GenerateIgnitionConfig() error {
 				Node: Node{
 					Group:     GetNodeGrp("root"),
 					Path:      "/etc/localtime",
-					Overwrite: BoolToPtr(false),
+					Overwrite: new(false),
 					User:      GetNodeUsr("root"),
 				},
 				LinkEmbedded1: LinkEmbedded1{
-					Hard: BoolToPtr(false),
+					Hard: new(false),
 					// We always want this value in unix form (../usr/share/zoneinfo) because this is being
 					// set in the machine OS (always Linux) and systemd needs the relative symlink.  However,
 					// filepath.join on windows will use a "\\" separator so use path.Join() which always
@@ -181,7 +166,7 @@ func (ign *DynamicIgnition) GenerateIgnitionConfig() error {
 	ignSystemd := Systemd{
 		Units: []Unit{
 			{
-				Enabled: BoolToPtr(true),
+				Enabled: new(true),
 				Name:    "podman.socket",
 			},
 			{
@@ -189,7 +174,7 @@ func (ign *DynamicIgnition) GenerateIgnitionConfig() error {
 				// updates given a certain configuration
 				// Disable auto-updating of fcos images
 				// https://github.com/containers/podman/issues/20122
-				Enabled: BoolToPtr(false),
+				Enabled: new(false),
 				Name:    "zincati.service",
 			},
 		},
@@ -200,7 +185,7 @@ func (ign *DynamicIgnition) GenerateIgnitionConfig() error {
 		rosettaUnit := Systemd{
 			Units: []Unit{
 				{
-					Enabled: BoolToPtr(true),
+					Enabled: new(true),
 					Name:    "rosetta-activation.service",
 				},
 			},
@@ -236,7 +221,7 @@ func getDirs(usrName string) []Directory {
 				Path:  d,
 				User:  GetNodeUsr(usrName),
 			},
-			DirectoryEmbedded1: DirectoryEmbedded1{Mode: IntToPtr(0o755)},
+			DirectoryEmbedded1: DirectoryEmbedded1{Mode: new(0o755)},
 		}
 		dirs[i] = newDir
 	}
@@ -254,13 +239,13 @@ func getFiles(usrName string, uid int, rootful bool, vmtype define.VMType, _ boo
 			Path:  "/var/lib/systemd/linger/" + usrName,
 			User:  GetNodeUsr("root"),
 			// the coreos image might already have this defined
-			Overwrite: BoolToPtr(true),
+			Overwrite: new(true),
 		},
 		FileEmbedded1: FileEmbedded1{
 			Contents: Resource{
 				Source: EncodeDataURLPtr(""),
 			},
-			Mode: IntToPtr(0o644),
+			Mode: new(0o644),
 		},
 	})
 
@@ -295,7 +280,7 @@ pids_limit=0
 			Contents: Resource{
 				Source: EncodeDataURLPtr(containers),
 			},
-			Mode: IntToPtr(0o744),
+			Mode: new(0o744),
 		},
 	})
 
@@ -306,14 +291,14 @@ pids_limit=0
 				Group:     GetNodeGrp("root"),
 				Path:      sub,
 				User:      GetNodeUsr("root"),
-				Overwrite: BoolToPtr(true),
+				Overwrite: new(true),
 			},
 			FileEmbedded1: FileEmbedded1{
 				Append: nil,
 				Contents: Resource{
 					Source: EncodeDataURLPtr(etcSubUID),
 				},
-				Mode: IntToPtr(0o744),
+				Mode: new(0o744),
 			},
 		})
 	}
@@ -332,7 +317,7 @@ pids_limit=0
 			Contents: Resource{
 				Source: EncodeDataURLPtr(fmt.Sprintf("%s\n", vmtype.String())),
 			},
-			Mode: IntToPtr(0o644),
+			Mode: new(0o644),
 		},
 	})
 
@@ -346,7 +331,7 @@ pids_limit=0
 			Contents: Resource{
 				Source: EncodeDataURLPtr(GetPodmanDockerTmpConfig(uid, rootful, true)),
 			},
-			Mode: IntToPtr(0o644),
+			Mode: new(0o644),
 		},
 	})
 
@@ -360,7 +345,7 @@ pids_limit=0
 				Contents: Resource{
 					Source: EncodeDataURLPtr(fmt.Sprintf("[zram0]\nzram-size=%d\n", swap)),
 				},
-				Mode: IntToPtr(0o644),
+				Mode: new(0o644),
 			},
 		})
 	}
@@ -374,28 +359,28 @@ func getLinks() []Link {
 			Group:     GetNodeGrp("root"),
 			Path:      "/etc/systemd/user/sockets.target.wants/podman.socket",
 			User:      GetNodeUsr("root"),
-			Overwrite: BoolToPtr(true),
+			Overwrite: new(true),
 		},
 		LinkEmbedded1: LinkEmbedded1{
-			Hard:   BoolToPtr(false),
+			Hard:   new(false),
 			Target: "/usr/lib/systemd/user/podman.socket",
 		},
 	}, {
 		Node: Node{
 			Group:     GetNodeGrp("root"),
 			Path:      "/usr/local/bin/docker",
-			Overwrite: BoolToPtr(true),
+			Overwrite: new(true),
 			User:      GetNodeUsr("root"),
 		},
 		LinkEmbedded1: LinkEmbedded1{
-			Hard:   BoolToPtr(false),
+			Hard:   new(false),
 			Target: "/usr/bin/podman",
 		},
 	}}
 }
 
 func EncodeDataURLPtr(contents string) *string {
-	return StrToPtr(fmt.Sprintf("data:,%s", url.PathEscape(contents)))
+	return new(fmt.Sprintf("data:,%s", url.PathEscape(contents)))
 }
 
 func GetPodmanDockerTmpConfig(uid int, rootful bool, newline bool) string {
@@ -471,7 +456,7 @@ func (i *IgnitionBuilder) AddPlaybook(contents string, destPath string, username
 			Contents: Resource{
 				Source: EncodeDataURLPtr(contents),
 			},
-			Mode: IntToPtr(0o744),
+			Mode: new(0o744),
 		},
 	}
 
@@ -494,7 +479,7 @@ func (i *IgnitionBuilder) AddPlaybook(contents string, destPath string, username
 
 	// create a systemd service
 	playbookUnit := Unit{
-		Enabled:  BoolToPtr(true),
+		Enabled:  new(true),
 		Name:     "playbook.service",
 		Contents: &unitContents,
 	}

@@ -136,7 +136,7 @@ type PushOptions struct {
 	All *bool
 	// Authfile is the path to the authentication file. Ignored for remote
 	// calls.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// Compress tarball image layers when pushing to a directory using the 'dir' transport.
 	Compress *bool
 	// CompressionFormat is the format to use for the compression of the blobs
@@ -170,6 +170,13 @@ type PushOptions struct {
 	// Quiet can be specified to suppress progress when pushing.
 	Quiet *bool
 
+	// OS to select a platform-specific image from a manifest list.
+	OS *string
+	// Arch to select a platform-specific image from a manifest list.
+	Arch *string
+	// Variant to select a platform-specific image from a manifest list.
+	Variant *string
+
 	// Manifest of the pushed image.  Set by images.Push.
 	ManifestDigest *string
 }
@@ -180,7 +187,7 @@ type PushOptions struct {
 type SearchOptions struct {
 	// Authfile is the path to the authentication file. Ignored for remote
 	// calls.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// Filters for the search results.
 	Filters map[string][]string
 	// Limit the number of results.
@@ -206,7 +213,7 @@ type PullOptions struct {
 	Arch *string
 	// Authfile is the path to the authentication file. Ignored for remote
 	// calls.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// OS will overwrite the local operating system (OS) for image
 	// pulls.
 	OS *string

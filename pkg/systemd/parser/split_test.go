@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -84,5 +85,61 @@ func TestExtractFirstWordUnescapes(t *testing.T) {
 
 		next = remaining
 		assert.Equal(t, expected[i], word)
+	}
+}
+
+func TestEscapeWords(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		words []string
+		want  string
+	}{
+		{"empty list", nil, ""},
+		{"single empty word", []string{""}, ""},
+		{"no escaping needed", []string{"foo"}, "foo"},
+		{"words are joined by a space", []string{"foo", "bar"}, "foo bar"},
+		{"a space forces quoting and is hex-escaped", []string{"foo bar"}, `"foo\x20bar"`},
+		{"tab", []string{"a\tb"}, `"a\tb"`},
+		{"newline", []string{"a\nb"}, `"a\nb"`},
+		{"backslash", []string{"a\\b"}, `"a\\b"`},
+		{"double quote", []string{"a\"b"}, `"a\"b"`},
+		{"single quote is kept as-is inside the quotes", []string{"a'b"}, `"a'b"`},
+		{"control character uses a hex escape", []string{"a\x01b"}, `"a\x01b"`},
+		{"non-ascii is left untouched", []string{"café"}, "café"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, test.want, escapeWords(test.words))
+		})
+	}
+}
+
+func TestEscapeString(t *testing.T) {
+	t.Parallel()
+
+	// The isPath variant treats '/' as a path separator: separators become
+	// '-', a leading '/' is dropped, and a literal '-' is hex-escaped so it is
+	// not mistaken for a separator.
+	tests := []struct {
+		name   string
+		in     string
+		isPath bool
+		want   string
+	}{
+		{"path separator becomes a dash", "a/b", true, "a-b"},
+		{"leading path separator is dropped", "/ab", true, "ab"},
+		{"literal dash in a path is hex-escaped", "a-b", true, `a\x2db`},
+		{"slash is untouched when not a path", "a/b", false, "a/b"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var b strings.Builder
+			escapeString(&b, test.in, test.isPath)
+			assert.Equal(t, test.want, b.String())
+		})
 	}
 }

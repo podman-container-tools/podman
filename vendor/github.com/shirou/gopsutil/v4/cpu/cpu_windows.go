@@ -524,18 +524,23 @@ func getSMBIOSProcessorInfo() (family uint8, processorId string, err error) {
 
 func getSystemLogicalProcessorInformationEx(relationship relationship) ([]systemLogicalProcessorInformationEx, error) {
 	var length uint32
-	// First call to determine the required buffer size
-	_, _, err := procGetLogicalProcessorInformationEx.Call(uintptr(relationship), 0, uintptr(unsafe.Pointer(&length)))
-	if err != nil && !errors.Is(err, windows.ERROR_INSUFFICIENT_BUFFER) {
+	// First call to determine the required buffer size. It is expected to
+	// fail with ERROR_INSUFFICIENT_BUFFER; the error returned by Call is
+	// only meaningful once the BOOL return value says the call failed.
+	ret, _, err := procGetLogicalProcessorInformationEx.Call(uintptr(relationship), 0, uintptr(unsafe.Pointer(&length)))
+	if ret == 0 && !errors.Is(err, windows.ERROR_INSUFFICIENT_BUFFER) {
 		return nil, fmt.Errorf("failed to get buffer size: %w", err)
+	}
+	if length == 0 {
+		return nil, errors.New("failed to get buffer size: reported size is zero")
 	}
 
 	// Allocate the buffer
 	buffer := make([]byte, length)
 
 	// Second call to retrieve the processor information
-	_, _, err = procGetLogicalProcessorInformationEx.Call(uintptr(relationship), uintptr(unsafe.Pointer(&buffer[0])), uintptr(unsafe.Pointer(&length)))
-	if err != nil && !errors.Is(err, windows.NTE_OP_OK) {
+	ret, _, err = procGetLogicalProcessorInformationEx.Call(uintptr(relationship), uintptr(unsafe.Pointer(&buffer[0])), uintptr(unsafe.Pointer(&length)))
+	if ret == 0 {
 		return nil, fmt.Errorf("failed to get logical processor information: %w", err)
 	}
 

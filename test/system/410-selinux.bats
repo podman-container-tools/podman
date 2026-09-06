@@ -258,7 +258,11 @@ function check_label() {
         # runc 1.3.3 (temporarily?) changed the error message because of the fix to CVE-2025-52881, see
         # https://github.com/opencontainers/runc/commit/2c5356e73f15b246729d03198bfb2c6c33454099
         #   to   write fsmount:fscontext:proc/self/attr/keycreate: invalid argument
-        runc) expect=".*: \(failed\|write\).*proc/self/attr/keycreate.*" ;;
+        # runc 1.5.0 changed the error message again because of the switch to a
+        # safe procfs API (reopened handles no longer carry a /proc/self path), see
+        # https://github.com/opencontainers/runc/commit/ed6b1693b8b3ae7eb0250a7e76fc888cdacf98c1
+        #   to   write /1/attr/keycreate: invalid argument
+        runc) expect=".*: \(failed\|write\).*attr/keycreate.*" ;;
         *)    skip "Unknown runtime '$runtime'";;
     esac
 

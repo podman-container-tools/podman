@@ -104,7 +104,7 @@ type VolumeState struct {
 	// a container, the container will chown the volume to the container process
 	// UID/GID.
 	NeedsChown bool `json:"notYetChowned,omitempty"`
-	// Indicates that a copy-up event occurred during the current mount of
+	// CopiedUp indicates that a copy-up event occurred during the current mount of
 	// the volume into a container.
 	// We use this to determine if a chown is appropriate.
 	CopiedUp bool `json:"copiedUp,omitempty"`
@@ -344,6 +344,23 @@ func (v *Volume) Import(r io.Reader) error {
 
 	if err := chrootarchive.Untar(r, mountPoint, nil); err != nil {
 		return fmt.Errorf("extracting into volume %s: %w", v.Name(), err)
+	}
+
+	empty, err := isDirEmpty(mountPoint)
+	if err != nil {
+		return fmt.Errorf("reading contents of imported volume %s: %w", v.Name(), err)
+	}
+	if !empty {
+		v.lock.Lock()
+		defer v.lock.Unlock()
+		if err := v.update(); err != nil {
+			return err
+		}
+		if v.state.NeedsCopyUp && v.state.NeedsChown {
+			v.state.NeedsCopyUp = false
+			v.state.CopiedUp = true
+			return v.save()
+		}
 	}
 
 	return nil

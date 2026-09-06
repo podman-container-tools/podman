@@ -909,7 +909,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 	}
 
-	seccompPaths, err := kube.InitializeSeccompPaths(podYAML.ObjectMeta.Annotations, options.SeccompProfileRoot)
+	seccompAnnotationPaths, err := kube.InitializeSeccompAnnotationPaths(podYAML.ObjectMeta.Annotations, options.SeccompProfileRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1043,28 +1043,29 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 
 		specgenOpts := kube.CtrSpecGenOptions{
-			Annotations:        annotations,
-			ConfigMaps:         configMaps,
-			Container:          initCtr,
-			Image:              pulledImage,
-			InitContainerType:  initCtrType,
-			Labels:             labels,
-			LogDriver:          options.LogDriver,
-			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
-			PodID:              pod.ID(),
-			PodInfraID:         podInfraID,
-			PodName:            podName,
-			PodSecurityContext: podYAML.Spec.SecurityContext,
-			ReadOnly:           readOnly,
-			RestartPolicy:      define.RestartPolicyNo,
-			SeccompPaths:       seccompPaths,
-			SecretsManager:     secretsManager,
-			UserNSIsHost:       p.Userns.IsHost(),
-			Volumes:            volumes,
-			VolumesFrom:        volumesFrom,
-			ImageVolumes:       automountImages,
-			UtsNSIsHost:        p.UtsNs.IsHost(),
+			Annotations:            annotations,
+			ConfigMaps:             configMaps,
+			Container:              initCtr,
+			Image:                  pulledImage,
+			InitContainerType:      initCtrType,
+			Labels:                 labels,
+			LogDriver:              options.LogDriver,
+			LogOptions:             options.LogOptions,
+			NetNSIsHost:            p.NetNS.IsHost(),
+			PodID:                  pod.ID(),
+			PodInfraID:             podInfraID,
+			PodName:                podName,
+			PodSecurityContext:     podYAML.Spec.SecurityContext,
+			ReadOnly:               readOnly,
+			RestartPolicy:          define.RestartPolicyNo,
+			SeccompAnnotationPaths: seccompAnnotationPaths,
+			SeccompProfileRoot:     options.SeccompProfileRoot,
+			SecretsManager:         secretsManager,
+			UserNSIsHost:           p.Userns.IsHost(),
+			Volumes:                volumes,
+			VolumesFrom:            volumesFrom,
+			ImageVolumes:           automountImages,
+			UtsNSIsHost:            p.UtsNs.IsHost(),
 		}
 		specGen, err := kube.ToSpecGen(ctx, &specgenOpts)
 		if err != nil {
@@ -1132,30 +1133,31 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 
 		specgenOpts := kube.CtrSpecGenOptions{
-			Annotations:        annotations,
-			ConfigMaps:         configMaps,
-			Container:          container,
-			Image:              pulledImage,
-			IpcNSIsHost:        p.Ipc.IsHost(),
-			Labels:             labels,
-			LogDriver:          options.LogDriver,
-			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
-			PidNSIsHost:        p.Pid.IsHost(),
-			PodID:              pod.ID(),
-			PodInfraID:         podInfraID,
-			PodName:            podName,
-			PodSecurityContext: podYAML.Spec.SecurityContext,
-			RestartPolicy:      podSpec.PodSpecGen.RestartPolicy, // pass the restart policy to the container (https://github.com/containers/podman/issues/20903)
-			ReadOnly:           readOnly,
-			SeccompPaths:       seccompPaths,
-			SecretsManager:     secretsManager,
-			UserNSIsHost:       p.Userns.IsHost(),
-			Volumes:            volumes,
-			VolumesFrom:        volumesFrom,
-			ImageVolumes:       automountImages,
-			UtsNSIsHost:        p.UtsNs.IsHost(),
-			NoPodPrefix:        options.NoPodPrefix,
+			Annotations:            annotations,
+			ConfigMaps:             configMaps,
+			Container:              container,
+			Image:                  pulledImage,
+			IpcNSIsHost:            p.Ipc.IsHost(),
+			Labels:                 labels,
+			LogDriver:              options.LogDriver,
+			LogOptions:             options.LogOptions,
+			NetNSIsHost:            p.NetNS.IsHost(),
+			PidNSIsHost:            p.Pid.IsHost(),
+			PodID:                  pod.ID(),
+			PodInfraID:             podInfraID,
+			PodName:                podName,
+			PodSecurityContext:     podYAML.Spec.SecurityContext,
+			RestartPolicy:          podSpec.PodSpecGen.RestartPolicy, // pass the restart policy to the container (https://github.com/containers/podman/issues/20903)
+			ReadOnly:               readOnly,
+			SeccompAnnotationPaths: seccompAnnotationPaths,
+			SeccompProfileRoot:     options.SeccompProfileRoot,
+			SecretsManager:         secretsManager,
+			UserNSIsHost:           p.Userns.IsHost(),
+			Volumes:                volumes,
+			VolumesFrom:            volumesFrom,
+			ImageVolumes:           automountImages,
+			UtsNSIsHost:            p.UtsNs.IsHost(),
+			NoPodPrefix:            options.NoPodPrefix,
 		}
 
 		if podYAML.Spec.TerminationGracePeriodSeconds != nil {
@@ -1630,7 +1632,7 @@ func splitMultiDocYAML(yamlContent []byte) ([][]byte, error) {
 		var o any
 		// read individual document
 		err := d.Decode(&o)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

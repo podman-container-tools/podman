@@ -383,6 +383,9 @@ func (ir *ImageEngine) Push(ctx context.Context, source string, destination stri
 	pushOptions.OciEncryptLayers = options.OciEncryptLayers
 	pushOptions.CompressionLevel = options.CompressionLevel
 	pushOptions.ForceCompressionFormat = options.ForceCompressionFormat
+	pushOptions.Architecture = options.Arch
+	pushOptions.OS = options.OS
+	pushOptions.Variant = options.Variant
 	pushOptions.MaxRetries = options.Retry
 	if options.RetryDelay != "" {
 		duration, err := time.ParseDuration(options.RetryDelay)
@@ -431,13 +434,15 @@ func (ir *ImageEngine) Push(ctx context.Context, source string, destination stri
 	// If the image could not be found, we may be referring to a manifest
 	// list but could not find a matching image instance in the local
 	// containers storage. In that case, fall back and attempt to push the
-	// (entire) manifest.
-	if _, err := ir.Libpod.LibimageRuntime().LookupManifestList(source); err == nil {
-		pushedManifestString, err := ir.ManifestPush(ctx, source, destination, options)
-		if err != nil {
-			return nil, err
+	// (entire) manifest. Don't fall back if a specific platform was requested.
+	if options.OS == "" && options.Arch == "" && options.Variant == "" {
+		if _, err := ir.Libpod.LibimageRuntime().LookupManifestList(source); err == nil {
+			pushedManifestString, err := ir.ManifestPush(ctx, source, destination, options)
+			if err != nil {
+				return nil, err
+			}
+			return &entities.ImagePushReport{ManifestDigest: pushedManifestString}, nil
 		}
-		return &entities.ImagePushReport{ManifestDigest: pushedManifestString}, nil
 	}
 	return nil, pushError
 }

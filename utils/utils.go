@@ -28,7 +28,7 @@ func ExecCmd(name string, args ...string) (string, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("`%v %v` failed: %v %v (%v)", name, strings.Join(args, " "), stderr.String(), stdout.String(), err)
+		return "", fmt.Errorf("`%v %v` failed: %v %v (%w)", name, strings.Join(args, " "), stderr.String(), stdout.String(), err)
 	}
 
 	return stdout.String(), nil
@@ -44,7 +44,7 @@ func ExecCmdWithStdStreams(stdin io.Reader, stdout, stderr io.Writer, env []stri
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("`%v %v` failed: %v", name, strings.Join(args, " "), err)
+		return fmt.Errorf("`%v %v` failed: %w", name, strings.Join(args, " "), err)
 	}
 
 	return nil

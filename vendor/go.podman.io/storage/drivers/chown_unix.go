@@ -19,7 +19,9 @@ type inode struct {
 }
 
 type platformChowner struct {
-	mutex  sync.Mutex
+	mutex sync.Mutex
+	// inodes to path map, so the chowner can reconstruct hard links
+	// To save memory only elements that are known to be hard links are added.
 	inodes map[inode]string
 }
 
@@ -40,16 +42,22 @@ func (c *platformChowner) LChown(path string, info os.FileInfo, toHost, toContai
 		Ino: st.Ino,
 	}
 
+	// Directories are assumed to never have hard links, they cannot be linked on Linux and the BSDs.
+	// Macos is the only one we know of that can but does not use the code here due "!darwin" build tag.
+	isHardLink := !info.IsDir() && st.Nlink > 1
+
 	c.mutex.Lock()
 
 	oldTarget, found := c.inodes[i]
-	if !found {
+	// Only add entries when we know hard links exists to safe memory allocations and
+	// the total map size. Otherwise we risk going out of memory for very large directory trees.
+	if !found && isHardLink {
 		c.inodes[i] = path
 	}
 
 	// If we are dealing with a file with multiple links then keep the lock until the file is
 	// chowned to avoid a race where we link to the old version if the file is copied up.
-	if found || st.Nlink > 1 {
+	if found || isHardLink {
 		defer c.mutex.Unlock()
 	} else {
 		c.mutex.Unlock()

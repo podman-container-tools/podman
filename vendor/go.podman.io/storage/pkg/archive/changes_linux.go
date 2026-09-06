@@ -92,6 +92,7 @@ func walkchunk(path string, fi os.FileInfo, dir string, root *FileInfo) error {
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err
 	}
+	info.capability = normalizeCapabilityRootID(root.idMappings, info.capability)
 	xattrs, err := system.Llistxattr(cpath)
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err

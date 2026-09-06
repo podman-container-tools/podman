@@ -12,11 +12,11 @@ Install a Quadlet file or an application (which may include multiple Quadlet fil
 
 This command allows you to:
 
-    * Install a single Quadlet file, optionally followed by additional non-Quadlet files.
+* Install a single Quadlet file, optionally followed by additional non-Quadlet files.
 
-    * Specify a directory containing multiple Quadlet files and other non-Quadlet files for installation (for example a config file for a quadlet container).
+* Specify a directory containing multiple Quadlet files and other non-Quadlet files for installation (for example a config file for a quadlet container).
 
-    * Install multiple Quadlets from a single file with the `.quadlets` extension, where each Quadlet is separated by a `---` delimiter. When using multiple quadlets in a single `.quadlets` file, each quadlet section must include a `# FileName=<name>` comment to specify the name for that quadlet.
+* Install multiple Quadlets from a single file with the `.quadlets` extension, where each Quadlet is separated by a `---` delimiter. When using multiple quadlets in a single `.quadlets` file, each quadlet section must include a `# FileName=<name>` comment to specify the name for that quadlet.
 
 Note: An application is a collection of files, quadlet and non-quadlets, that
 need to live together. As such, removing a quadlet that is part of an

@@ -90,7 +90,7 @@ func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.Stat
 	b := make([]byte, 16)
 	_, err := rand.Reader.Read(b)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate random vnet name: %v", err)
+		return "", nil, fmt.Errorf("failed to generate random vnet name: %w", err)
 	}
 	netns := fmt.Sprintf("vnet-%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 
@@ -177,7 +177,7 @@ func getContainerNetIO(ctr *Container) (map[string]define.ContainerNetworkStats,
 		out, err = cmd.Output()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to read network stats: %v", err)
+		return nil, fmt.Errorf("failed to read network stats: %w", err)
 	}
 	stats := Netstat{}
 	if err := jdec.Unmarshal(out, &stats); err != nil {

@@ -4,6 +4,7 @@
 package pidhandle
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -75,7 +76,7 @@ func (h *pidHandle) Kill(signal unix.Signal) error {
 	if found {
 		p, err := process.NewProcess(int32(h.pid))
 		if err != nil {
-			if err == process.ErrorProcessNotRunning {
+			if errors.Is(err, process.ErrorProcessNotRunning) {
 				return unix.ESRCH
 			}
 			return err
@@ -98,7 +99,7 @@ func (h *pidHandle) Kill(signal unix.Signal) error {
 func (h *pidHandle) IsAlive() (bool, error) {
 	err := h.Kill(0)
 	if err != nil {
-		if err == unix.ESRCH {
+		if errors.Is(err, unix.ESRCH) {
 			return false, nil
 		}
 		return false, err
@@ -117,7 +118,7 @@ func (h *pidHandle) String() (string, error) {
 	// Get the start-time of the process and return it as string.
 	p, err := process.NewProcess(int32(h.pid))
 	if err != nil {
-		if err == process.ErrorProcessNotRunning {
+		if errors.Is(err, process.ErrorProcessNotRunning) {
 			return noSuchProcessID, nil
 		}
 		return "", err

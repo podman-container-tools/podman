@@ -76,6 +76,13 @@ The [protocol:keyfile] specifies the encryption protocol, which can be JWE (RFC7
 
 Manifest Type (oci, v2s2, or v2s1) to use when pushing an image.
 
+#### **--platform**=*OS[/ARCH[/VARIANT]]*
+
+Specify the platform for selecting a specific image from a manifest list to push.
+When this option is specified and the source is a manifest list, only the image matching the
+specified platform will be pushed as a single-platform image rather than the entire manifest list.
+Architecture defaults to the runtime architecture if not specified.
+
 @@option quiet
 
 #### **--remove-signatures**

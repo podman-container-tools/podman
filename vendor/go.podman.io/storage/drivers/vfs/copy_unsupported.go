@@ -1,6 +1,6 @@
 //go:build !linux
 
-package vfs // import "go.podman.io/storage/drivers/vfs"
+package vfs
 
 import "go.podman.io/storage/pkg/chrootarchive"
 

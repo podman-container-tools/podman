@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -13,6 +14,8 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/define"
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
 )
+
+func setGvproxyProcessAttributes(_ *exec.Cmd) {}
 
 func setupMachineSockets(mc *vmconfigs.MachineConfig, dirs *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
 	hostSocket, err := mc.APISocket()
@@ -78,7 +81,7 @@ func setupForwardingLinks(hostSocket, dataDir *define.VMFile) (string, machine.A
 		_ = userGlobalSocket.Delete()
 
 		if err := os.Symlink(hostSocket.GetPath(), userGlobalSocket.GetPath()); err != nil {
-			logrus.Warnf("could not create user global API forwarding link: %s", err.Error())
+			logrus.Warnf("could not create user global API forwarding link: %v", err)
 			return hostSocket.GetPath(), machine.MachineLocal, nil
 		}
 	}

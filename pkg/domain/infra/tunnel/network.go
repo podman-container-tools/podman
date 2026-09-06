@@ -31,8 +31,8 @@ func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string
 	for _, name := range namesOrIds {
 		report, err := network.Inspect(ic.ClientCtx, name, options)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, nil, err
 			}
 			if errModel.ResponseCode == 404 {

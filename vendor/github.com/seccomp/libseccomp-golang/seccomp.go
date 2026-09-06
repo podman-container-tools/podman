@@ -18,26 +18,7 @@ import (
 )
 
 /*
-#include <errno.h>
-#include <stdlib.h>
-#include <seccomp.h>
-
-// The following functions were added in libseccomp v2.6.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
-int seccomp_precompute(scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_export_bpf_mem(const scmp_filter_ctx ctx, void *buf, size_t *len)  {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_start(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_commit(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_transaction_reject(const scmp_filter_ctx ctx) {}
-#endif
+#include "seccomp_compat.h"
 */
 import "C"
 
@@ -45,6 +26,10 @@ import "C"
 
 // VersionError represents an error when either the system libseccomp version
 // or the kernel version is too old to perform the operation requested.
+//
+// The libseccomp version it reports is the effective one, that is the lower of
+// the compile-time and the run-time versions (see [GetLibraryVersion]), since
+// an operation needs to be available in both.
 type VersionError struct {
 	op                  string // operation that failed or would fail
 	major, minor, micro uint   // minimally required libseccomp version
@@ -62,11 +47,11 @@ func init() {
 func (e VersionError) Error() string {
 	if e.minAPI != 0 {
 		return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d and API level >= %d "+
-			"(current version: %d.%d.%d, API level: %d)",
+			"(effective version: %d.%d.%d, API level: %d)",
 			e.op, e.major, e.minor, e.micro, e.minAPI,
 			verMajor, verMinor, verMicro, e.curAPI)
 	}
-	return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d (current version: %d.%d.%d)",
+	return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d (effective version: %d.%d.%d)",
 		e.op, e.major, e.minor, e.micro, verMajor, verMinor, verMicro)
 }
 
@@ -469,14 +454,15 @@ func (a ScmpAction) GetReturnCode() int16 {
 
 // General utility functions
 
-// GetLibraryVersion returns the version of the library the bindings are built
-// against.
+// GetLibraryVersion returns the version of the libseccomp library used,
+// which is the lower of the compile-time and run-time versions.
 // The version is formatted as follows: Major.Minor.Micro
 func GetLibraryVersion() (major, minor, micro uint) {
 	return verMajor, verMinor, verMicro
 }
 
-// GetAPI returns the API level supported by the system.
+// GetAPI returns the API level supported by the system, which is the lower of
+// the compile-time and run-time supported levels.
 // Returns a positive int containing the API level, or 0 with an error if the
 // API level could not be detected due to the library being older than v2.4.0.
 // See the seccomp_api_get(3) man page for details on available API levels:
@@ -851,7 +837,11 @@ func (f *ScmpFilter) Precompute() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_precompute(f.filterCtx); retCode != 0 {
+	if e := checkVersion("Precompute", 2, 6, 0); e != nil {
+		return e
+	}
+
+	if retCode := C.compat_precompute(f.filterCtx); retCode != 0 {
 		return errRc(retCode)
 	}
 
@@ -1262,14 +1252,18 @@ func (f *ScmpFilter) ExportBPFMem() ([]byte, error) {
 		return nil, errBadFilter
 	}
 
+	if e := checkVersion("ExportBPFMem", 2, 6, 0); e != nil {
+		return nil, e
+	}
+
 	var len C.size_t
 	// Get the size required.
-	if retCode := C.seccomp_export_bpf_mem(f.filterCtx, unsafe.Pointer(nil), &len); retCode < 0 {
+	if retCode := C.compat_export_bpf_mem(f.filterCtx, unsafe.Pointer(nil), &len); retCode < 0 {
 		return nil, errRc(retCode)
 	}
 	// Get the data.
 	buf := make([]byte, int(len))
-	if retCode := C.seccomp_export_bpf_mem(f.filterCtx, unsafe.Pointer(&buf[0]), &len); retCode < 0 {
+	if retCode := C.compat_export_bpf_mem(f.filterCtx, unsafe.Pointer(&buf[0]), &len); retCode < 0 {
 		return nil, errRc(retCode)
 	}
 
@@ -1324,7 +1318,11 @@ func (f *ScmpFilter) TransactionStart() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_transaction_start(f.filterCtx); retCode < 0 {
+	if e := checkVersion("TransactionStart", 2, 6, 0); e != nil {
+		return e
+	}
+
+	if retCode := C.compat_transaction_start(f.filterCtx); retCode < 0 {
 		return errRc(retCode)
 	}
 
@@ -1340,7 +1338,11 @@ func (f *ScmpFilter) TransactionReject() {
 		return
 	}
 
-	C.seccomp_transaction_reject(f.filterCtx)
+	if checkVersion("TransactionReject", 2, 6, 0) != nil {
+		return
+	}
+
+	C.compat_transaction_reject(f.filterCtx)
 }
 
 // TransactionCommit commits a transaction started by [TransactionStart].
@@ -1352,7 +1354,11 @@ func (f *ScmpFilter) TransactionCommit() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_transaction_commit(f.filterCtx); retCode < 0 {
+	if e := checkVersion("TransactionCommit", 2, 6, 0); e != nil {
+		return e
+	}
+
+	if retCode := C.compat_transaction_commit(f.filterCtx); retCode < 0 {
 		return errRc(retCode)
 	}
 

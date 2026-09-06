@@ -5,6 +5,7 @@ package libpod
 import (
 	"bufio"
 	"bytes"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -66,6 +67,7 @@ type ConmonOCIRuntime struct {
 	supportsNoCgroups bool
 	enableKeyring     bool
 	persistDir        string
+	featuresProvider  func() string
 }
 
 // Make a new Conmon-based OCI runtime with the given options.
@@ -137,6 +139,22 @@ func newConmonOCIRuntime(name string, paths []string, conmonPath string, runtime
 		return nil, fmt.Errorf("no valid executable found for OCI runtime %s: %w", name, define.ErrInvalidArg)
 	}
 
+	// Exec the "features" command lazily once.
+	runtime.featuresProvider = sync.OnceValue(func() string {
+		features, err := utils.ExecCmd(runtime.path, "features")
+		if err != nil {
+			logrus.Debugf("Failed to get features for OCI runtime %s: %v", name, err)
+			return ""
+		}
+		// Remove new lines and whitespace to match Docker output.
+		var buf bytes.Buffer
+		if err := stdjson.Compact(&buf, []byte(features)); err != nil {
+			logrus.Debugf("Failed to compact features output for OCI runtime %s: %v", name, err)
+			return ""
+		}
+		return buf.String()
+	})
+
 	runtime.exitsDir = filepath.Join(runtime.tmpDir, "exits")
 	// The persist-dir is where conmon writes the exit file and oom file (if oom killed), we join the container ID to this path later on
 	runtime.persistDir = filepath.Join(runtime.tmpDir, "persist")
@@ -159,6 +177,12 @@ func (r *ConmonOCIRuntime) Name() string {
 // Path returns the path of the OCI runtime being wrapped by Conmon.
 func (r *ConmonOCIRuntime) Path() string {
 	return r.path
+}
+
+// RuntimeFeatures returns the raw output of the runtime's "features"
+// command or an empty string if the runtime does not support it.
+func (r *ConmonOCIRuntime) RuntimeFeatures() string {
+	return r.featuresProvider()
 }
 
 // hasCurrentUserMapped checks whether the current user is mapped inside the container user namespace
@@ -321,7 +345,7 @@ func (r *ConmonOCIRuntime) StopContainer(ctr *Container, timeout uint, all bool)
 	// Ping the container to see if it's alive
 	// If it's not, it's already stopped, return
 	err := unix.Kill(ctr.state.PID, 0)
-	if err == unix.ESRCH {
+	if errors.Is(err, unix.ESRCH) {
 		return nil
 	}
 
@@ -672,8 +696,7 @@ func (r *ConmonOCIRuntime) HTTPAttach(ctr *Container, req *http.Request, w http.
 // isRetryable returns whether the error was caused by a blocked syscall or the
 // specified operation on a non blocking file descriptor wasn't ready for completion.
 func isRetryable(err error) bool {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		return errno == syscall.EINTR || errno == syscall.EAGAIN
 	}
 	return false
@@ -877,10 +900,11 @@ func (r *ConmonOCIRuntime) RuntimeInfo() (*define.ConmonInfo, *define.OCIRuntime
 		Version: conmonVersion,
 	}
 	ocirt := define.OCIRuntimeInfo{
-		Name:    r.name,
-		Path:    r.path,
-		Package: runtimePackage,
-		Version: runtimeVersion,
+		Name:     r.name,
+		Path:     r.path,
+		Package:  runtimePackage,
+		Version:  runtimeVersion,
+		Features: r.featuresProvider(),
 	}
 	return &conmon, &ocirt, nil
 }
@@ -1559,7 +1583,7 @@ func httpAttachTerminalCopy(container *net.UnixConn, http *bufio.ReadWriter, cid
 			}
 		}
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
@@ -1645,7 +1669,7 @@ func httpAttachNonTerminalCopy(container *net.UnixConn, http *bufio.ReadWriter, 
 			}
 		}
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 

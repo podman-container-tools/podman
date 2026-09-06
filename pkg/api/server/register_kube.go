@@ -79,6 +79,11 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    items:
 	//      type: string
 	//  - in: query
+	//    name: noHostname
+	//    type: boolean
+	//    default: false
+	//    description: Do not create /etc/hostname within the container, instead use the version from the image
+	//  - in: query
 	//    name: noHosts
 	//    type: boolean
 	//    default: false
@@ -152,6 +157,11 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    name: build
 	//    type: boolean
 	//    description: Build the images with corresponding context.
+	//  - in: query
+	//    name: noPodPrefix
+	//    type: boolean
+	//    default: false
+	//    description: Do not prefix container name with pod name
 	//  - in: body
 	//    name: request
 	//    description: Kubernetes YAML file.

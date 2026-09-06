@@ -31,10 +31,12 @@ import (
 	"go.podman.io/podman/v6/pkg/bindings"
 	"go.podman.io/podman/v6/pkg/bindings/play"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
+	metav1 "go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/apis/meta/v1"
 	"go.podman.io/podman/v6/pkg/util"
 	. "go.podman.io/podman/v6/test/utils"
 	"go.podman.io/podman/v6/utils"
 	"go.podman.io/storage/pkg/stringid"
+	"sigs.k8s.io/yaml"
 )
 
 var secretYaml = `
@@ -787,7 +789,12 @@ spec:
   {{ range . }}
   - name: {{ .Name }}
     {{- if (eq .VolumeType "EmptyDir") }}
+    {{- if .EmptyDir.Medium }}
+    emptyDir:
+      medium: {{ .EmptyDir.Medium }}
+    {{- else }}
     emptyDir: {}
+    {{- end }}
     {{- end }}
     {{- if (eq .VolumeType "HostPath") }}
     hostPath:
@@ -1571,6 +1578,15 @@ func generateKubeYaml(kind string, object any, pathname string) error {
 	return writeYaml(k, pathname)
 }
 
+// generateKubeObjectYaml marshals a kubernetes object and writes it as a YAML document.
+func generateKubeObjectYaml(object any, pathname string) error {
+	content, err := yaml.Marshal(object)
+	if err != nil {
+		return err
+	}
+	return writeYaml(string(content), pathname)
+}
+
 // generateMultiDocKubeYaml writes multiple kube objects in one Yaml document.
 func generateMultiDocKubeYaml(kubeObjects []string, pathname string) error {
 	var multiKube strings.Builder
@@ -2179,7 +2195,9 @@ type SecretVol struct {
 	DefaultMode int32
 }
 
-type EmptyDir struct{}
+type EmptyDir struct {
+	Medium string
+}
 
 type Volume struct {
 	VolumeType string
@@ -2257,6 +2275,14 @@ func getEmptyDirVolume() *Volume {
 		VolumeType: "EmptyDir",
 		Name:       defaultVolName,
 		EmptyDir:   EmptyDir{},
+	}
+}
+
+func getMemoryEmptyDirVolume() *Volume {
+	return &Volume{
+		VolumeType: "EmptyDir",
+		Name:       defaultVolName,
+		EmptyDir:   EmptyDir{Medium: "Memory"},
 	}
 }
 
@@ -3532,18 +3558,41 @@ spec:
 
 	It("seccomp container level", func() {
 		SkipIfRemote("podman-remote does not support --seccomp-profile-root flag")
-		// expect kube play is expected to set a seccomp label if it's applied as an annotation
 		jsonFile, err := podmanTest.CreateSeccompJSON(seccompLinkEPERM)
 		if err != nil {
 			GinkgoWriter.Println(err)
 			Skip("Failed to prepare seccomp.json for test.")
 		}
+		defer os.Remove(jsonFile)
 
-		ctrAnnotation := "container.seccomp.security.alpha.kubernetes.io/" + defaultCtrName
-		ctr := getCtr(withCmd([]string{"ln"}), withArg([]string{"/etc/motd", "/noneShallPass"}))
-
-		pod := getPod(withCtr(ctr), withAnnotation(ctrAnnotation, "localhost/"+filepath.Base(jsonFile)))
-		err = generateKubeYaml("pod", pod, kubeYaml)
+		profile := filepath.Base(jsonFile)
+		pod := &v1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Pod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultPodName,
+			},
+			Spec: v1.PodSpec{
+				RestartPolicy: v1.RestartPolicyNever,
+				Containers: []v1.Container{
+					{
+						Name:    defaultCtrName,
+						Image:   defaultCtrImage,
+						Command: []string{"ln"},
+						Args:    []string{"/etc/motd", "/noneShallPass"},
+						SecurityContext: &v1.SecurityContext{
+							SeccompProfile: &v1.SeccompProfile{
+								Type:             v1.SeccompProfileTypeLocalhost,
+								LocalhostProfile: &profile,
+							},
+						},
+					},
+				},
+			},
+		}
+		err = generateKubeObjectYaml(pod, kubeYaml)
 		Expect(err).ToNot(HaveOccurred())
 
 		// CreateSeccompJSON will put the profile into podmanTest.TempDir. Use --seccomp-profile-root to tell kube play where to look
@@ -3551,7 +3600,7 @@ spec:
 		kube.WaitWithDefaultTimeout()
 		Expect(kube).Should(ExitCleanly())
 
-		ctrName := getCtrNameInPod(pod)
+		ctrName := defaultPodName + "-" + defaultCtrName
 		wait := podmanTest.Podman([]string{"wait", ctrName})
 		wait.WaitWithDefaultTimeout()
 		Expect(wait).Should(Exit(0), "podman wait %s", ctrName)
@@ -3564,7 +3613,6 @@ spec:
 
 	It("seccomp pod level", func() {
 		SkipIfRemote("podman-remote does not support --seccomp-profile-root flag")
-		// expect kube play is expected to set a seccomp label if it's applied as an annotation
 		jsonFile, err := podmanTest.CreateSeccompJSON(seccompLinkEPERM)
 		if err != nil {
 			GinkgoWriter.Println(err)
@@ -3572,10 +3620,34 @@ spec:
 		}
 		defer os.Remove(jsonFile)
 
-		ctr := getCtr(withCmd([]string{"ln"}), withArg([]string{"/etc/motd", "/noPodsShallPass"}))
-
-		pod := getPod(withCtr(ctr), withAnnotation("seccomp.security.alpha.kubernetes.io/pod", "localhost/"+filepath.Base(jsonFile)))
-		err = generateKubeYaml("pod", pod, kubeYaml)
+		profile := filepath.Base(jsonFile)
+		pod := &v1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Pod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultPodName,
+			},
+			Spec: v1.PodSpec{
+				RestartPolicy: v1.RestartPolicyNever,
+				SecurityContext: &v1.PodSecurityContext{
+					SeccompProfile: &v1.SeccompProfile{
+						Type:             v1.SeccompProfileTypeLocalhost,
+						LocalhostProfile: &profile,
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:    defaultCtrName,
+						Image:   defaultCtrImage,
+						Command: []string{"ln"},
+						Args:    []string{"/etc/motd", "/noPodsShallPass"},
+					},
+				},
+			},
+		}
+		err = generateKubeObjectYaml(pod, kubeYaml)
 		Expect(err).ToNot(HaveOccurred())
 
 		// CreateSeccompJSON will put the profile into podmanTest.TempDir. Use --seccomp-profile-root to tell kube play where to look
@@ -3583,15 +3655,98 @@ spec:
 		kube.WaitWithDefaultTimeout()
 		Expect(kube).Should(ExitCleanly())
 
-		podName := getCtrNameInPod(pod)
-		wait := podmanTest.Podman([]string{"wait", podName})
+		ctrName := defaultPodName + "-" + defaultCtrName
+		wait := podmanTest.Podman([]string{"wait", ctrName})
 		wait.WaitWithDefaultTimeout()
 		Expect(wait).Should(ExitCleanly())
 
-		logs := podmanTest.Podman([]string{"logs", podName})
+		logs := podmanTest.Podman([]string{"logs", ctrName})
 		logs.WaitWithDefaultTimeout()
 		Expect(logs).Should(Exit(0))
 		Expect(logs.ErrorToString()).To(ContainSubstring("ln: /noPodsShallPass: Operation not permitted"))
+	})
+
+	It("rejects seccomp Localhost profile with backsteps", func() {
+		SkipIfRemote("podman-remote does not support --seccomp-profile-root flag")
+		profile := "profiles/../seccomp.json"
+
+		pod := &v1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Pod",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultPodName,
+			},
+			Spec: v1.PodSpec{
+				RestartPolicy: v1.RestartPolicyNever,
+				Containers: []v1.Container{
+					{
+						Name:  defaultCtrName,
+						Image: defaultCtrImage,
+						SecurityContext: &v1.SecurityContext{
+							SeccompProfile: &v1.SeccompProfile{
+								Type:             v1.SeccompProfileTypeLocalhost,
+								LocalhostProfile: &profile,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		err := generateKubeObjectYaml(pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		kube := podmanTest.Podman([]string{"kube", "play", "--seccomp-profile-root", podmanTest.TempDir, kubeYaml})
+		kube.WaitWithDefaultTimeout()
+
+		Expect(kube).Should(Exit(125))
+		Expect(kube.ErrorToString()).To(ContainSubstring("must not contain '..'"))
+	})
+
+	It("supports deprecated seccomp container annotation", func() {
+		SkipIfRemote("podman-remote does not support --seccomp-profile-root flag")
+
+		jsonFile, err := podmanTest.CreateSeccompJSON(seccompLinkEPERM)
+		if err != nil {
+			GinkgoWriter.Println(err)
+			Skip("Failed to prepare seccomp.json for test.")
+		}
+		defer os.Remove(jsonFile)
+
+		ctrAnnotation := "container.seccomp.security.alpha.kubernetes.io/" + defaultCtrName
+		ctr := getCtr(
+			withCmd([]string{"ln"}),
+			withArg([]string{"/etc/motd", "/annotationShallNotPass"}),
+		)
+
+		pod := getPod(
+			withCtr(ctr),
+			withAnnotation(
+				ctrAnnotation,
+				"localhost/"+filepath.Base(jsonFile),
+			),
+		)
+
+		err = generateKubeYaml("pod", pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		kube := podmanTest.Podman([]string{"kube", "play", "--seccomp-profile-root", podmanTest.TempDir, kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(Exit(0))
+		Expect(kube.ErrorToString()).To(ContainSubstring("seccomp annotation is deprecated"))
+
+		ctrName := getCtrNameInPod(pod)
+
+		wait := podmanTest.Podman([]string{"wait", ctrName})
+		wait.WaitWithDefaultTimeout()
+		Expect(wait).Should(ExitCleanly())
+
+		logs := podmanTest.Podman([]string{"logs", ctrName})
+		logs.WaitWithDefaultTimeout()
+		Expect(logs).Should(Exit(0))
+		Expect(logs.ErrorToString()).To(ContainSubstring("Operation not permitted"))
 	})
 
 	It("with pull policy of never should be 125", func() {
@@ -4325,6 +4480,30 @@ spec:
 		podmanTest.PodmanExitCleanly("pod", "rm", "-f", podName)
 		volList2 := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
 		Expect(volList2.OutputToString()).To(Equal(""))
+	})
+
+	It("with memory backed emptyDir volume shared between containers", func() {
+		podName := "test-pod"
+		ctrName1 := "vol-test-ctr"
+		ctrName2 := "vol-test-ctr-2"
+		ctr1 := getCtr(withVolumeMount("/test-emptydir", "", false), withImage(CITEST_IMAGE), withName(ctrName1))
+		ctr2 := getCtr(withVolumeMount("/test-emptydir", "", false), withImage(CITEST_IMAGE), withName(ctrName2))
+		pod := getPod(withPodName(podName), withVolume(getMemoryEmptyDirVolume()), withCtr(ctr1), withCtr(ctr2))
+		err = generateKubeYaml("pod", pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "play", kubeYaml)
+
+		fsType := podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName1, "stat", "-f", "-c", "%T", "/test-emptydir")
+		Expect(fsType.OutputToString()).To(Equal("tmpfs"))
+
+		podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName1, "sh", "-c", "echo shared-data > /test-emptydir/file")
+		data := podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName2, "cat", "/test-emptydir/file")
+		Expect(data.OutputToString()).To(Equal("shared-data"))
+
+		podmanTest.PodmanExitCleanly("pod", "rm", "-f", podName)
+		volList := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(volList.OutputToString()).To(Equal(""))
 	})
 
 	It("applies labels to pods", func() {
@@ -5712,7 +5891,7 @@ spec:
     spec:
       containers:
       - name: php-redis
-        image: quay.io/libpod/alpine_nginx:latest
+        image: ` + NGINX_IMAGE + `
         ports:
         - containerPort: 1234
           hostPort: 80

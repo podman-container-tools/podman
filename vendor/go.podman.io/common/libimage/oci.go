@@ -39,7 +39,7 @@ func historiesMatch(a, b []ociv1.History) int {
 			return i
 		}
 		if a[i].Created != nil && b[i].Created != nil {
-			if !a[i].Created.Equal(*(b[i].Created)) {
+			if !a[i].Created.Equal(*b[i].Created) {
 				return i
 			}
 		}

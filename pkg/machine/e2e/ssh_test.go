@@ -39,7 +39,7 @@ var _ = Describe("podman machine ssh", func() {
 
 		name := "podman-machine-default"
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow().withUpdateConnection(ptrBool(true))).run()
+		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow().withUpdateConnection(new(true))).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 

@@ -31,10 +31,11 @@ function setup_suite(){
     type -P podman || die "No 'podman' in \$PATH"
 
     export FARMNAME="test-farm-$(random_string 5)"
+    export CONNECTION_NAME="test-conn-$(random_string 5)"
 
     # only set up the podman farm before the first test
-    run_podman system connection add --identity $sshkey test-node $ROOTLESS_USER@localhost
-    run_podman farm create $FARMNAME test-node
+    run_podman system connection add --identity $sshkey ${CONNECTION_NAME} $ROOTLESS_USER@localhost
+    run_podman farm create $FARMNAME ${CONNECTION_NAME}
 
     export PODMAN_LOGIN_WORKDIR=$(mktemp -d --tmpdir=${BATS_TMPDIR:-${TMPDIR:-/tmp}} podman-bats-registry.XXXXXX)
 
@@ -60,4 +61,7 @@ function teardown_suite(){
     # clear out the farms after the last farm test
     run_podman farm rm --all
     stop_registry
+
+    # ...and the connection
+    run_podman system connection rm ${CONNECTION_NAME}
 }

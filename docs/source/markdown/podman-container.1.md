@@ -32,7 +32,7 @@ The container command allows management of containers
 | mount      | [podman-mount(1)](podman-mount.1.md)                | Mount a working container's root filesystem.                                 |
 | pause      | [podman-pause(1)](podman-pause.1.md)                | Pause one or more containers.                                                |
 | port       | [podman-port(1)](podman-port.1.md)                  | List port mappings for the container.                                        |
-| prune      | [podman-container-prune(1)](podman-container-prune.1.md)| Remove all stopped containers from local storage.                        |
+| prune      | [podman-container-prune(1)](podman-container-prune.1.md)| Remove all stopped containers not associated with pods from local storage. |
 | ps         | [podman-ps(1)](podman-ps.1.md)                      | Print out information about containers.                                      |
 | rename     | [podman-rename(1)](podman-rename.1.md)              | Rename an existing container.                                                |
 | restart    | [podman-restart(1)](podman-restart.1.md)            | Restart one or more containers.                                              |

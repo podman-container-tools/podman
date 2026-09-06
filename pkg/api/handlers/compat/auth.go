@@ -49,8 +49,7 @@ func Auth(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var msg string
 
-		var unauthErr DockerClient.ErrUnauthorizedForCredentials
-		if errors.As(err, &unauthErr) {
+		if _, ok := errors.AsType[DockerClient.ErrUnauthorizedForCredentials](err); ok {
 			msg = "401 Unauthorized"
 		} else {
 			msg = err.Error()

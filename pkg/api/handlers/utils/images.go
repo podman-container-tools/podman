@@ -47,7 +47,7 @@ func NormalizeToDockerHub(r *http.Request, nameOrID string) (string, error) {
 	img, candidate, err := runtime.LibimageRuntime().LookupImage(nameOrID, nil)
 	if err != nil {
 		if !errors.Is(err, storage.ErrImageUnknown) {
-			return "", fmt.Errorf("normalizing name for compat API: %v", err)
+			return "", fmt.Errorf("normalizing name for compat API: %w", err)
 		}
 		// If the image could not be resolved locally, set the
 		// candidate back to the input.
@@ -59,7 +59,7 @@ func NormalizeToDockerHub(r *http.Request, nameOrID string) (string, error) {
 	// No ID, so we can normalize.
 	named, err := reference.ParseNormalizedNamed(candidate)
 	if err != nil {
-		return "", fmt.Errorf("normalizing name %q (orig: %q) for compat API: %v", candidate, nameOrID, err)
+		return "", fmt.Errorf("normalizing name %q (orig: %q) for compat API: %w", candidate, nameOrID, err)
 	}
 
 	return named.String(), nil

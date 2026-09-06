@@ -156,8 +156,8 @@ func (n *IPNet) UnmarshalText(text []byte) error {
 // swagger:model MacAddress
 type HardwareAddr net.HardwareAddr
 
-func (h *HardwareAddr) String() string {
-	return (*net.HardwareAddr)(h).String()
+func (h HardwareAddr) String() string {
+	return net.HardwareAddr(h).String()
 }
 
 func (h HardwareAddr) MarshalText() ([]byte, error) {

@@ -34,6 +34,18 @@ EOF
     run_podman rmi -f $imgname
 }
 
+# 22642: a failed flag check used to leak the downloaded context directory
+@test "podman build - no tmpdir leak on early failure" {
+    tmpdir=$PODMAN_TMPDIR/build-tmp
+    mkdir -p $tmpdir
+
+    TMPDIR=$tmpdir run_podman 125 build --authfile=$PODMAN_TMPDIR/bogus-authfile - <<<"from scratch"
+    is "$output" ".*credential file is not accessible.*" "expected authfile error"
+
+    run ls -A $tmpdir
+    assert "$output" == "" "leftover files in TMPDIR after failed build"
+}
+
 @test "podman buildx - basic test" {
     rand_filename=$(random_string 20)
     rand_content=$(random_string 50)

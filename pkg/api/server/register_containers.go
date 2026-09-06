@@ -417,6 +417,8 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//       type: object
 	//   404:
 	//     $ref: "#/responses/containerNotFound"
+	//   409:
+	//     $ref: "#/responses/conflictError"
 	//   500:
 	//     $ref: "#/responses/internalError"
 	r.HandleFunc(VersionedPath("/containers/{name}/stats"), s.StreamBufferedAPIHandler(compat.StatsContainer)).Methods(http.MethodGet)

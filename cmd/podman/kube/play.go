@@ -316,7 +316,7 @@ func play(cmd *cobra.Command, args []string) error {
 	var teardownErr error
 	if playOptions.Wait {
 		// Stop the shutdown signal handler so we can actually clean up after a SIGTERM or interrupt
-		if err := shutdown.Stop(); err != nil && err != shutdown.ErrNotStarted {
+		if err := shutdown.Stop(); err != nil && !errors.Is(err, shutdown.ErrNotStarted) {
 			return err
 		}
 		// Create a channel to catch an interrupt or SIGTERM signal
@@ -337,7 +337,7 @@ func play(cmd *cobra.Command, args []string) error {
 			// clean up any volumes that were created as well
 			fmt.Println("\nCleaning up containers, pods, and volumes...")
 			if err := teardown(teardownReader, entities.PlayKubeDownOptions{Force: true}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
-				teardownErr = fmt.Errorf("error during cleanup: %v", err)
+				teardownErr = fmt.Errorf("error during cleanup: %w", err)
 			}
 		})
 	}

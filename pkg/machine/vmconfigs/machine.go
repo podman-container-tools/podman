@@ -342,7 +342,7 @@ func loadMachineFromFQPath(path *define.VMFile) (*MachineConfig, error) {
 	}
 
 	if err = json.Unmarshal(b, mc); err != nil {
-		return nil, fmt.Errorf("unable to load machine config file: %q", err)
+		return nil, fmt.Errorf("unable to load machine config file: %w", err)
 	}
 	lock, err := lock.GetMachineLock(mc.Name, filepath.Dir(path.GetPath()))
 	mc.lock = lock

@@ -118,10 +118,11 @@ type ConmonInfo struct {
 // OCIRuntimeInfo describes the runtime (crun or runc) being
 // used with podman
 type OCIRuntimeInfo struct {
-	Name    string `json:"name"`
-	Package string `json:"package"`
-	Path    string `json:"path"`
-	Version string `json:"version"`
+	Name     string `json:"name"`
+	Package  string `json:"package"`
+	Path     string `json:"path"`
+	Version  string `json:"version"`
+	Features string `json:"features,omitempty"`
 }
 
 // StoreInfo describes the container storage and its

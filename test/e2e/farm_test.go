@@ -80,6 +80,37 @@ farm3 [] false true
 			Expect(session).Should(Not(ExitCleanly()))
 		})
 
+		It("list farms quiet", func() {
+			// create farm with multiple system connections
+			cmd := []string{"farm", "create", "farm1", "QA", "QB"}
+			session := podmanTest.Podman(cmd)
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+
+			// create farm with only one system connection
+			cmd = []string{"farm", "create", "farm2", "QA"}
+			session = podmanTest.Podman(cmd)
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+
+			// --quiet should print only farm names, one per line
+			session = podmanTest.Podman([]string{"farm", "list", "--quiet"})
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+			Expect(string(session.Out.Contents())).To(Equal("farm1\nfarm2\n"))
+
+			// -q shorthand behaves the same as --quiet
+			session = podmanTest.Podman([]string{"farm", "list", "-q"})
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+			Expect(string(session.Out.Contents())).To(Equal("farm1\nfarm2\n"))
+
+			// --quiet and --format together should error
+			session = podmanTest.Podman([]string{"farm", "list", "--quiet", "--format", "{{.Name}}"})
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitWithError(125, "quiet and format flags cannot be used together"))
+		})
+
 		It("update existing farms", func() {
 			// create farm with multiple system connections
 			cmd := []string{"farm", "create", "farm1", "QA", "QB"}

@@ -244,6 +244,11 @@ func (r *MissingRuntime) RuntimeInfo() (*define.ConmonInfo, *define.OCIRuntimeIn
 	return nil, &ocirt, nil
 }
 
+// RuntimeFeatures returns an empty string on the missing runtime.
+func (r *MissingRuntime) RuntimeFeatures() string {
+	return ""
+}
+
 // Return an error indicating the runtime is missing
 func (r *MissingRuntime) printError() error {
 	return fmt.Errorf("runtime %s is missing: %w", r.name, define.ErrOCIRuntimeNotFound)

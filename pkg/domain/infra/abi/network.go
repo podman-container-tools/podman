@@ -68,10 +68,6 @@ func (ic *ContainerEngine) NetworkList(_ context.Context, options entities.Netwo
 
 func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string, _ entities.InspectOptions) ([]entities.NetworkInspectReport, []error, error) {
 	var errs []error
-	statuses, err := ic.GetContainerNetStatuses()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get network status for containers: %w", err)
-	}
 	networks := make([]entities.NetworkInspectReport, 0, len(namesOrIds))
 	for _, name := range namesOrIds {
 		net, err := ic.Libpod.Network().NetworkInspect(name)
@@ -83,23 +79,36 @@ func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string
 				return nil, nil, fmt.Errorf("inspecting network %s: %w", name, err)
 			}
 		}
-		containerMap := make(map[string]entities.NetworkContainerInfo)
-		for _, st := range statuses {
-			// Make sure to only show the info for the correct network
-			if sb, ok := st.Status[net.Name]; ok {
-				containerMap[st.ID] = entities.NetworkContainerInfo{
-					Name:       st.Name,
-					Interfaces: sb.Interfaces,
-				}
-			}
-		}
-
 		netReport := entities.NetworkInspectReport{
-			Network:    net,
-			Containers: containerMap,
+			Network: net,
 		}
 		networks = append(networks, netReport)
 	}
+
+	if len(networks) > 0 {
+		// The function has to walk and lock all containers, to avoid the extra
+		// work when no network is found only do this once we know we have at least
+		// one network: https://github.com/podman-container-tools/podman/issues/29647
+		statuses, err := ic.GetContainerNetStatuses()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get network status for containers: %w", err)
+		}
+
+		for i := range networks {
+			containerMap := make(map[string]entities.NetworkContainerInfo)
+			for _, st := range statuses {
+				// Make sure to only show the info for the correct network
+				if sb, ok := st.Status[networks[i].Name]; ok {
+					containerMap[st.ID] = entities.NetworkContainerInfo{
+						Name:       st.Name,
+						Interfaces: sb.Interfaces,
+					}
+				}
+			}
+			networks[i].Containers = containerMap
+		}
+	}
+
 	return networks, errs, nil
 }
 

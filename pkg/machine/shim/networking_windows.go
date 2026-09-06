@@ -2,13 +2,28 @@ package shim
 
 import (
 	"fmt"
+	"os/exec"
+	"syscall"
 
 	"go.podman.io/podman/v6/pkg/machine"
 	"go.podman.io/podman/v6/pkg/machine/define"
 	"go.podman.io/podman/v6/pkg/machine/env"
 	sc "go.podman.io/podman/v6/pkg/machine/sockets"
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
+	"golang.org/x/sys/windows"
 )
+
+func setGvproxyProcessAttributes(c *exec.Cmd) {
+	// Set SysProcAttr DETACHED_PROCESS or the gvproxy process may be killed
+	// when the parent window is closed.
+	// This should not happen because gvproxy is built as a Windows GUI application
+	// and doesn't inherit the parent console. But a console version of gvproxy is
+	// also available, and using DETACHED_PROCESS makes sure that the behavior
+	// is the same nevertheless.
+	c.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.DETACHED_PROCESS,
+	}
+}
 
 func setupMachineSockets(mc *vmconfigs.MachineConfig, _ *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
 	machinePipe := env.WithPodmanPrefix(mc.Name)

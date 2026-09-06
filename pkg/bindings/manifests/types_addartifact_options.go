@@ -212,6 +212,21 @@ func (o *AddArtifactOptions) GetSubject() string {
 	return *o.Subject
 }
 
+// WithIndexSubject set indexSubject is a subject value to set in the manifest list itself
+func (o *AddArtifactOptions) WithIndexSubject(value string) *AddArtifactOptions {
+	o.IndexSubject = &value
+	return o
+}
+
+// GetIndexSubject returns value of indexSubject is a subject value to set in the manifest list itself
+func (o *AddArtifactOptions) GetIndexSubject() string {
+	if o.IndexSubject == nil {
+		var z string
+		return z
+	}
+	return *o.IndexSubject
+}
+
 // WithAnnotations set field Annotations to given value
 func (o *AddArtifactOptions) WithAnnotations(value map[string]string) *AddArtifactOptions {
 	o.Annotations = value

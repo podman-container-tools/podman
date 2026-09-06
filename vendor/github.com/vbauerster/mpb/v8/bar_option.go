@@ -129,7 +129,7 @@ func BarPriority(priority int) BarOption {
 // BarExtender is deprecated use BarTopExtender or BarBtmExtender instead.
 func BarExtender(filler BarFiller, top bool) BarOption {
 	return func(s *bState) {
-		s.extender = makeRowExtender(top, filler)
+		s.rowProducers = makeRowProducers(s.draw, top, filler)
 	}
 }
 
@@ -140,7 +140,7 @@ func BarExtender(filler BarFiller, top bool) BarOption {
 // to be corrupted. This option cannot be used together with BarBtmExtender.
 func BarTopExtender(fillers ...BarFiller) BarOption {
 	return func(s *bState) {
-		s.extender = makeRowExtender(true, fillers...)
+		s.rowProducers = makeRowProducers(s.draw, true, fillers...)
 	}
 }
 
@@ -151,7 +151,7 @@ func BarTopExtender(fillers ...BarFiller) BarOption {
 // to be corrupted. This option cannot be used together with BarTopExtender.
 func BarBtmExtender(fillers ...BarFiller) BarOption {
 	return func(s *bState) {
-		s.extender = makeRowExtender(false, fillers...)
+		s.rowProducers = makeRowProducers(s.draw, false, fillers...)
 	}
 }
 

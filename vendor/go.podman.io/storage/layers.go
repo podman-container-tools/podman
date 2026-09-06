@@ -2707,7 +2707,7 @@ func applyDiff(layerOptions *LayerOptions, diff io.Reader, tarSplitFile *os.File
 		}
 		defer idLogger.Close() // This must happen before uidLog and gidLog is consumed.
 		uncompressedCounter = ioutils.NewWriteCounter(idLogger)
-		uncompressedWriter := (io.Writer)(uncompressedCounter)
+		uncompressedWriter := io.Writer(uncompressedCounter)
 		if uncompressedDigester != nil {
 			uncompressedWriter = io.MultiWriter(uncompressedWriter, uncompressedDigester.Hash())
 		}

@@ -804,7 +804,7 @@ func (ic *ContainerEngine) ContainerRestore(ctx context.Context, namesOrIds []st
 					// CRImportCheckpoint is expected to import exactly one container from checkpoint image
 					checkpointImageImportErrors = append(
 						checkpointImageImportErrors,
-						fmt.Errorf("unable to import checkpoint from image: %q: %v", nameOrID, err),
+						fmt.Errorf("unable to import checkpoint from image: %q: %w", nameOrID, err),
 					)
 				} else {
 					ctrs = append(ctrs, importedCtrs[0])

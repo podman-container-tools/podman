@@ -3,9 +3,10 @@
 package libpod
 
 import (
+	"cmp"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -337,9 +338,7 @@ func ocicniPortsToNetTypesPorts(ports []types.OCICNIPortMapping) []types.PortMap
 	newPorts := make([]types.PortMapping, 0, len(ports))
 
 	// first sort the ports
-	sort.Slice(ports, func(i, j int) bool {
-		return compareOCICNIPorts(ports[i], ports[j])
-	})
+	slices.SortFunc(ports, compareOCICNIPorts)
 
 	// we already check if the slice is empty so we can use the first element
 	currentPort := types.PortMapping{
@@ -378,18 +377,18 @@ func ocicniPortsToNetTypesPorts(ports []types.OCICNIPortMapping) []types.PortMap
 // 4) container port
 //
 //nolint:staticcheck // OCICNIPortMapping is deprecated; kept for backwards-compatible DB migration
-func compareOCICNIPorts(i, j types.OCICNIPortMapping) bool {
-	if i.HostIP != j.HostIP {
-		return i.HostIP < j.HostIP
+func compareOCICNIPorts(i, j types.OCICNIPortMapping) int {
+	if c := cmp.Compare(i.HostIP, j.HostIP); c != 0 {
+		return c
 	}
 
-	if i.Protocol != j.Protocol {
-		return i.Protocol < j.Protocol
+	if c := cmp.Compare(i.Protocol, j.Protocol); c != 0 {
+		return c
 	}
 
-	if i.HostPort != j.HostPort {
-		return i.HostPort < j.HostPort
+	if c := cmp.Compare(i.HostPort, j.HostPort); c != 0 {
+		return c
 	}
 
-	return i.ContainerPort < j.ContainerPort
+	return cmp.Compare(i.ContainerPort, j.ContainerPort)
 }

@@ -943,7 +943,7 @@ function skip_if_journald_unavailable {
 
 function skip_if_aarch64 {
     if is_aarch64; then
-        skip "${msg:-Cannot run this test on aarch64 systems}"
+        skip "${1:-Cannot run this test on aarch64 systems}"
     fi
 }
 

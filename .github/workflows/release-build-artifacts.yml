@@ -209,7 +209,7 @@ jobs:
         echo "TENANT_ID=${env:AZ_TENANT_ID}" | Out-File -FilePath $env:GITHUB_ENV -Append
         echo "CLIENT_SECRET=${env:AZ_CLIENT_SECRET}" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: Pandoc Setup
-      uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2.12.1
+      uses: r-lib/actions/setup-pandoc@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2.13.0
       with:
         pandoc-version: '3.1.11'
     # Note: Windows assigns a UUID to the installer at build time, it's assumed

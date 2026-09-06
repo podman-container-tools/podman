@@ -269,55 +269,14 @@ func (s *PodmanSession) ErrorToString() string {
 // ErrorToStringArray returns the stderr output as a []string
 // where each array item is a line split by newline
 func (s *PodmanSession) ErrorToStringArray() []string {
+	var results []string
 	output := string(s.Err.Contents())
-	return strings.Split(output, "\n")
-}
-
-// GrepString takes session output and behaves like grep. it returns a bool
-// if successful and an array of strings on positive matches
-func (s *PodmanSession) GrepString(term string) (bool, []string) {
-	var (
-		greps   []string
-		matches bool
-	)
-
-	for _, line := range s.OutputToStringArray() {
-		if strings.Contains(line, term) {
-			matches = true
-			greps = append(greps, line)
+	for line := range strings.SplitSeq(output, "\n") {
+		if line != "" {
+			results = append(results, line)
 		}
 	}
-	return matches, greps
-}
-
-// LineInOutputContains returns true if a line in a
-// session output contains the supplied string
-func (s *PodmanSession) LineInOutputContains(term string) bool {
-	for _, i := range s.OutputToStringArray() {
-		if strings.Contains(i, term) {
-			return true
-		}
-	}
-	return false
-}
-
-// LineInOutputContainsTag returns true if a line in the
-// session's output contains the repo-tag pair as returned
-// by podman-images(1).
-func (s *PodmanSession) LineInOutputContainsTag(repo, tag string) bool {
-	tagMap := tagOutputToMap(s.OutputToStringArray())
-	return tagMap[repo][tag]
-}
-
-// IsJSONOutputValid attempts to unmarshal the session buffer
-// and if successful, returns true, else false
-func (s *PodmanSession) IsJSONOutputValid() bool {
-	var i any
-	if err := json.Unmarshal(s.Out.Contents(), &i); err != nil {
-		GinkgoWriter.Println(err)
-		return false
-	}
-	return true
+	return results
 }
 
 // WaitWithDefaultTimeout waits for process finished with DefaultWaitTimeout
@@ -363,38 +322,6 @@ func StartSystemExec(command string, args []string) *PodmanSession {
 		Fail(fmt.Sprintf("unable to run command: %s %s", command, strings.Join(args, " ")))
 	}
 	return &PodmanSession{session}
-}
-
-// tagOutputToMap parses each string in imagesOutput and returns
-// a map whose key is a repo, and value is another map whose keys
-// are the tags found for that repo. Notice, the first array item will
-// be skipped as it's considered to be the header.
-func tagOutputToMap(imagesOutput []string) map[string]map[string]bool {
-	m := make(map[string]map[string]bool)
-	// imagesOutput[1:] panics (slice bounds out of range) when imagesOutput
-	// is empty, since there is no header line to skip in that case.
-	if len(imagesOutput) == 0 {
-		return m
-	}
-	// iterate over output but skip the header
-	for _, i := range imagesOutput[1:] {
-		tmp := []string{}
-		for x := range strings.SplitSeq(i, " ") {
-			if x != "" {
-				tmp = append(tmp, x)
-			}
-		}
-		// podman-images(1) return a list like output
-		// in the format of "Repository Tag [...]"
-		if len(tmp) < 2 {
-			continue
-		}
-		if m[tmp[0]] == nil {
-			m[tmp[0]] = map[string]bool{}
-		}
-		m[tmp[0]][tmp[1]] = true
-	}
-	return m
 }
 
 // GetHostDistributionInfo returns a struct with its distribution Name and version

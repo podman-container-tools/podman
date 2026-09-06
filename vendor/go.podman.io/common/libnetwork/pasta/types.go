@@ -2,7 +2,19 @@ package pasta
 
 import "net"
 
-const BinaryName = "pasta"
+const (
+	BinaryName      = "pasta"
+	PestoBinaryName = "pesto"
+)
+
+// PestoClient wraps the pesto binary path and control socket path,
+// providing methods to add and remove port forwarding rules.
+type PestoClient struct {
+	Binary string
+	// BinaryErr is the original error from FindHelperBinary if Binary is "".
+	BinaryErr  error
+	SocketPath string
+}
 
 type SetupResult struct {
 	// IpAddresses configured by pasta

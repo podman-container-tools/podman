@@ -2000,8 +2000,8 @@ func (s *store) CreateContainer(id string, names []string, image, layer, metadat
 
 	if options.AutoUserNs {
 		var err error
-		options.UIDMap, options.GIDMap, err = s.getAutoUserNS(&options.AutoUserNsOpts, cimage, rlstore, lstores)
-		if err != nil {
+		options.UIDMap, options.GIDMap, err = s.getAutoUserNS(&options.AutoUserNsOpts, cimage, rlstore, lstores) //nolint:staticcheck,nolintlint // SA4023: golangci-lint reports this line as the origin of the value below.
+		if err != nil {                                                                                          //nolint:staticcheck,nolintlint // SA4023: on non-Linux, this is always true.
 			return nil, err
 		}
 	}

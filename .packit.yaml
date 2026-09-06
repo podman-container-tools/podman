@@ -106,7 +106,8 @@ jobs:
     skip_missing_branched_composes: true
     notifications: *packit_generic_failure_notification
     targets:
-      - fedora-all
+      - fedora-all-x86_64
+      - fedora-all-aarch64
     tmt_plan: "/plans/system/*"
     tf_extra_params:
       environments:

@@ -27,3 +27,17 @@ podman rm -f testctr2
 
 podman network rm testnet1
 podman network rm testnet2
+
+# regression for https://github.com/containers/podman/issues/29627
+# stats should not panic when memory-reservation is set without memory-limit
+podman run -dt --name testctr3 --memory-reservation=10m $IMAGE top &>/dev/null
+t GET libpod/containers/testctr3/stats?stream=false 200
+podman rm -f testctr3
+
+# A stopped container cannot provide CPU stats. The handler must report the
+# error before committing a successful response.
+podman run --name stopped-stats $IMAGE true
+t GET libpod/containers/stopped-stats/stats?stream=false 409 \
+    .cause="container is stopped" \
+    .response=409
+podman rm stopped-stats

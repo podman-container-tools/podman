@@ -11,10 +11,6 @@ import (
 	"go.podman.io/podman/v6/pkg/bindings/internal/util"
 )
 
-func strp(s string) *string { return &s }
-func intp(i int) *int       { return &i }
-func boolp(b bool) *bool    { return &b }
-
 type changedOptions struct {
 	Set   *string
 	Unset *string
@@ -107,9 +103,9 @@ func TestToParamsUnsetFieldsAreSkipped(t *testing.T) {
 
 func TestToParamsSimpleFields(t *testing.T) {
 	params, err := util.ToParams(&toParamsOptions{
-		Name:    strp("foo"),
-		Count:   intp(5),
-		Enabled: boolp(true),
+		Name:    new("foo"),
+		Count:   new(5),
+		Enabled: new(true),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "foo", params.Get("name"))
@@ -146,8 +142,8 @@ func TestToParamsEmptyMap(t *testing.T) {
 
 func TestToParamsSchemaTag(t *testing.T) {
 	params, err := util.ToParams(&toParamsOptions{
-		Renamed: strp("here"),
-		Skipped: strp("gone"),
+		Renamed: new("here"),
+		Skipped: new("gone"),
 	})
 	require.NoError(t, err)
 	// "custom_name" (the schema rename) must be the only key: the field name

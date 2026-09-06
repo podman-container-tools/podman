@@ -483,3 +483,17 @@ ok 4 blah
 <span class="timestamp">         </span><span class='bats-failed'>FAILED (failures=1, skipped=1)</span>
 <span class="timestamp">         </span>make: *** [Makefile:616: localapiv2] Error 1
 <hr/><span class='bats-summary'>Summary: <span class='bats-passed'>28 Passed</span>, <span class='bats-failed'>1 Failed</span>, <span class='bats-skipped'>1 Skipped</span>. Total tests: 30 <span class='bats-failed'>(WARNING: expected 33)</span></span>
+
+== bats plan line at end of run
+
+<<<
+env PODMAN=./bin/podman stdbuf -o0 -e0 ./test/apiv2/test-apiv2
+ok 1 [00-TEMPLATE] check
+not ok 2 [10-images] GET /images/json
+1..2
+>>>
+env PODMAN=./bin/podman stdbuf -o0 -e0 ./test/apiv2/test-apiv2
+<span class='bats-passed'><a name='t--00001'>ok 1 [00-TEMPLATE] check</a></span>
+<span class='bats-failed'><a name='t--00002'>not ok 2 [10-images] GET /images/json</a></span>
+1..2
+<hr/><span class='bats-summary'>Summary: <span class='bats-passed'>1 Passed</span>, <span class='bats-failed'>1 Failed</span>. Total tests: 2</span>

@@ -81,6 +81,7 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 	}
 
 	c := cmd.Cmd(binary)
+	setGvproxyProcessAttributes(c)
 
 	logrus.Debugf("gvproxy command-line: %s %s", binary, strings.Join(cmd.ToCmdline(), " "))
 	if err := c.Start(); err != nil {
@@ -171,7 +172,7 @@ func reassignSSHPort(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider)
 	defer func() {
 		if !success {
 			if err := ports.ReleaseMachinePort(newPort); err != nil {
-				logrus.Warnf("could not release port allocation as part of failure rollback (%d): %s", newPort, err.Error())
+				logrus.Warnf("could not release port allocation as part of failure rollback (%d): %v", newPort, err)
 			}
 		}
 	}()
@@ -184,7 +185,7 @@ func reassignSSHPort(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider)
 	}
 
 	if err := ports.ReleaseMachinePort(oldPort); err != nil {
-		logrus.Warnf("could not release current ssh port allocation (%d): %s", oldPort, err.Error())
+		logrus.Warnf("could not release current ssh port allocation (%d): %v", oldPort, err)
 	}
 
 	// Update the backend's settings if relevant (e.g. WSL)

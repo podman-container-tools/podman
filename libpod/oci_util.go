@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
@@ -159,24 +160,30 @@ func bindPortV4Fallback(protocol string, sockType int, port uint16) (*os.File, e
 	return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
 }
 
+var (
+	regexPermissionDenied = regexp.Delayed("(?i).*permission denied.*|.*operation not permitted.*")
+	regexNotFound         = regexp.Delayed("(?i).*executable file not found in.*|.*no such file or directory.*|.*open executable.*")
+	regexProcAttr         = regexp.Delayed("`/proc/[a-z0-9-].+/attr.*`")
+)
+
 func getOCIRuntimeError(name, runtimeMsg string) error {
 	includeFullOutput := logrus.GetLevel() == logrus.DebugLevel
 
-	if match := regexp.MustCompile("(?i).*permission denied.*|.*operation not permitted.*").FindString(runtimeMsg); match != "" {
+	if match := regexPermissionDenied.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg
 		}
 		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimePermissionDenied)
 	}
-	if match := regexp.MustCompile("(?i).*executable file not found in.*|.*no such file or directory.*|.*open executable.*").FindString(runtimeMsg); match != "" {
+	if match := regexNotFound.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg
 		}
 		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimeNotFound)
 	}
-	if match := regexp.MustCompile("`/proc/[a-z0-9-].+/attr.*`").FindString(runtimeMsg); match != "" {
+	if match := regexProcAttr.FindString(runtimeMsg); match != "" {
 		errStr := match
 		if includeFullOutput {
 			errStr = runtimeMsg

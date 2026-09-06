@@ -12,7 +12,7 @@ import (
 )
 
 func IsSimpleType(f reflect.Value) bool {
-	if _, ok := f.Interface().(fmt.Stringer); ok {
+	if _, ok := reflect.TypeAssert[fmt.Stringer](f); ok {
 		return true
 	}
 
@@ -25,7 +25,7 @@ func IsSimpleType(f reflect.Value) bool {
 }
 
 func SimpleTypeToParam(f reflect.Value) string {
-	if s, ok := f.Interface().(fmt.Stringer); ok {
+	if s, ok := reflect.TypeAssert[fmt.Stringer](f); ok {
 		return s.String()
 	}
 

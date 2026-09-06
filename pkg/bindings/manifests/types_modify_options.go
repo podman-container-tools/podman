@@ -78,6 +78,21 @@ func (o *ModifyOptions) GetIndexAnnotations() map[string]string {
 	return o.IndexAnnotations
 }
 
+// WithIndexSubject set indexSubject is a subject value to set in the manifest list itself
+func (o *ModifyOptions) WithIndexSubject(value string) *ModifyOptions {
+	o.IndexSubject = &value
+	return o
+}
+
+// GetIndexSubject returns value of indexSubject is a subject value to set in the manifest list itself
+func (o *ModifyOptions) GetIndexSubject() string {
+	if o.IndexSubject == nil {
+		var z string
+		return z
+	}
+	return *o.IndexSubject
+}
+
 // WithArch set arch overrides the architecture for the image
 func (o *ModifyOptions) WithArch(value string) *ModifyOptions {
 	o.Arch = &value

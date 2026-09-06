@@ -331,8 +331,8 @@ func (ic *ContainerEngine) ContainerInspect(_ context.Context, namesOrIds []stri
 	for _, name := range namesOrIds {
 		inspect, err := containers.Inspect(ic.ClientCtx, name, options)
 		if err != nil {
-			errModel, ok := err.(*errorhandling.ErrorModel)
-			if !ok {
+			var errModel *errorhandling.ErrorModel
+			if !errors.As(err, &errModel) {
 				return nil, nil, err
 			}
 			if errModel.ResponseCode == 404 {
@@ -822,7 +822,7 @@ func (ic *ContainerEngine) ContainerStart(_ context.Context, namesOrIds []string
 		ctrRunning := ctr.State == define.ContainerStateRunning.String()
 		if options.Attach {
 			code, err := startAndAttach(ic, name, &options.DetachKeys, options.SigProxy, options.Stdin, options.Stdout, options.Stderr)
-			if err == define.ErrDetach {
+			if errors.Is(err, define.ErrDetach) {
 				// User manually detached
 				// Exit cleanly immediately
 				reports = append(reports, &report)
@@ -962,7 +962,7 @@ func (ic *ContainerEngine) ContainerRun(ctx context.Context, opts entities.Conta
 
 	code, err := startAndAttach(ic, con.ID, &opts.DetachKeys, opts.SigProxy, opts.InputStream, opts.OutputStream, opts.ErrorStream)
 	if err != nil {
-		if err == define.ErrDetach {
+		if errors.Is(err, define.ErrDetach) {
 			return &report, nil
 		}
 

@@ -85,6 +85,7 @@ jobs:
             libseccomp-dev \
             libsystemd-dev \
             libclone-perl \
+            libtest-differences-perl \
             man-db \
             podman \
             python3-pip

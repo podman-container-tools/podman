@@ -420,8 +420,8 @@ func (s *storageImageDestination) PutBlobPartial(ctx context.Context, chunkAcces
 		}
 	}()
 
-	differ, err := chunked.NewDiffer(ctx, s.imageRef.transport.store, srcInfo.Digest, srcInfo.Size, srcInfo.Annotations, &fetcher)
-	if err != nil {
+	differ, err := chunked.NewDiffer(ctx, s.imageRef.transport.store, srcInfo.Digest, srcInfo.Size, srcInfo.Annotations, &fetcher) //nolint:staticcheck // SA4023: golangci-lint reports this line as the origin of the value below.
+	if err != nil {                                                                                                                //nolint:staticcheck // SA4023: on non-Linux, this is always true.
 		return private.UploadedBlob{}, err
 	}
 	defer differ.Close()

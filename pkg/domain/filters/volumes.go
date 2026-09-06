@@ -120,7 +120,7 @@ func createAnonymousFilterVolumeFunction(filterValues []string) (libpod.VolumeFi
 	return func(v *libpod.Volume) bool {
 		for _, val := range filterValues {
 			anon := v.Anonymous()
-			invert := strings.ToLower(val) == "false" || val == "0"
+			invert := strings.EqualFold(val, "false") || val == "0"
 			if invert {
 				anon = !anon
 			}

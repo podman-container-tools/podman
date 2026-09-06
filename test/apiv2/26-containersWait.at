@@ -3,6 +3,10 @@
 # test more container-related endpoints
 #
 
+# Reset server to known good state
+stop_service
+start_service
+
 podman pull "${IMAGE}" &>/dev/null
 
 # Ensure clean slate
@@ -34,6 +38,37 @@ t POST "containers/${CTR}/wait?condition=next-exit" 200 \
   .StatusCode=3 \
   .Error=null
 wait "${child_pid}"
+
+# Regression test for #29664: a logs-only attach to an exited container must
+# not reinitialize it or discard its exit code.
+t POST "containers/${CTR}/attach?stream=false&logs=true&stdout=true&stderr=true" 200
+t GET "containers/${CTR}/json" 200 \
+  .State.Status="exited" \
+  .State.ExitCode=3
+t POST "containers/${CTR}/wait" 200 \
+  .StatusCode=3 \
+  .Error=null
+
+# Wait for streaming attach to initialize the exited container before restarting it.
+(
+  for _ in {1..100}; do
+    state=$($PODMAN_BIN --root "$WORKDIR/server_root" inspect --format '{{.State.Status}}' "${CTR}" 2>/dev/null) || true
+    if [[ "$state" == "initialized" ]]; then
+      podman start "${CTR}"
+      exit
+    fi
+    sleep 0.1
+  done
+  echo "Timed out waiting for ${CTR}: last state was '$state'" >&2
+  podman start "${CTR}" || true
+  exit 1
+) &
+child_pid=$!
+t POST "containers/${CTR}/attach?stream=true&logs=true&stdout=true&stderr=true" 200
+wait "${child_pid}"
+t GET "containers/${CTR}/json" 200 \
+  .State.Status="exited" \
+  .State.ExitCode=3
 
 # Test that headers are sent before body. (We should actually never get a body)
 APIV2_TEST_EXPECT_TIMEOUT=2 t POST "containers/${CTR}/wait?condition=next-exit" 999

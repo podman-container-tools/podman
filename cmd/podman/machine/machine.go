@@ -7,10 +7,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -151,13 +152,14 @@ func initMachineEvents() {
 	}
 }
 
+var eventsSockRegex = regexp.Delayed(`machine_events.*\.sock`)
+
 func resolveEventSock() ([]string, error) {
 	// Used mostly for testing
 	if sock, found := os.LookupEnv("PODMAN_MACHINE_EVENTS_SOCK"); found {
 		return []string{sock}, nil
 	}
 
-	re := regexp.MustCompile(`machine_events.*\.sock`)
 	sockPaths := make([]string, 0)
 	fn := func(path string, info os.DirEntry, err error) error {
 		switch {
@@ -167,7 +169,7 @@ func resolveEventSock() ([]string, error) {
 			return nil
 		case !isUnixSocket(info):
 			return nil
-		case !re.MatchString(info.Name()):
+		case !eventsSockRegex.MatchString(info.Name()):
 			return nil
 		}
 

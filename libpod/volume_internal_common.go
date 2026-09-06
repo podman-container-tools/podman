@@ -180,7 +180,7 @@ func (v *Volume) unmount(force bool) error {
 
 		// Unmount the volume
 		if err := detachUnmount(v.config.MountPoint); err != nil {
-			if err == unix.EINVAL {
+			if errors.Is(err, unix.EINVAL) {
 				// Ignore EINVAL - the mount no longer exists.
 				return nil
 			}

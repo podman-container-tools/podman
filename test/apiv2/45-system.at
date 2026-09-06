@@ -117,4 +117,22 @@ t POST 'libpod/system/prune?volumes=true' params='' 200 .VolumePruneReports[0].I
 
 # TODO add other system prune tests for pods / images
 
+# Default OCI runtime for tests.
+runtime=crun
+
+# Get libpod/info and check OCI runtime status (known fields).
+t GET libpod/info 200 \
+    .host.ociRuntime.name=$runtime \
+    ".host.ociRuntime.features | fromjson | has(\"ociVersionMin\")=true" \
+    ".host.ociRuntime.features | fromjson | has(\"ociVersionMax\")=true"
+
+# Get compat /info (v1.44+) - OCI runtime status.
+t GET info 200 \
+    ".Runtimes.$runtime.status[\"org.opencontainers.runtime-spec.features\"] | fromjson | has(\"ociVersionMin\")=true" \
+    ".Runtimes.$runtime.status[\"org.opencontainers.runtime-spec.features\"] | fromjson | has(\"ociVersionMax\")=true"
+
+# GET compat /info API versions older than v1.44 omit the status field.
+t GET /v1.43/info 200 \
+    ".Runtimes.$runtime | has(\"status\")=false"
+
 # vim: filetype=sh

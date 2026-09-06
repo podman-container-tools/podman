@@ -698,7 +698,7 @@ subdir**`
 		Expect(os.WriteFile(filepath.Join(subdirPath, "extra"), contents.Bytes(), 0o644)).
 			ToNot(HaveOccurred())
 		randomFile := filepath.Join(subdirPath, "randomFile")
-		dd := exec.Command("dd", "if=/dev/urandom", "of="+randomFile, "bs=1G", "count=1")
+		dd := exec.Command("dd", "if=/dev/urandom", "of="+randomFile, "bs=1M", "count=1024")
 		ddSession, err := Start(dd, GinkgoWriter, GinkgoWriter)
 		Expect(err).ToNot(HaveOccurred())
 		Eventually(ddSession, "30s", "1s").Should(Exit(0))

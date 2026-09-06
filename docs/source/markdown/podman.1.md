@@ -138,9 +138,7 @@ Name of the OCI runtime as specified in containers.conf or absolute path to the 
 #### **--runtime-flag**=*flag*
 
 Adds global flags for the container runtime. To list the supported flags, please
-consult the manpages of the selected container runtime (`runc` is the default
-runtime, the manpage to consult is `runc(8)`.  When the machine is configured
-for cgroup V2, the default runtime is `crun`, the manpage to consult is `crun(8)`.).
+consult the manpages of the selected container runtime (the default runtime is `crun`, the manpage to consult is `crun(8)`).
 
 Default runtime flags can be added in containers.conf.
 
@@ -428,41 +426,41 @@ the exit codes follow the `chroot` standard, see below:
 
 ## CONFIGURATION FILES
 
-**containers.conf** (`/usr/share/containers/containers.conf`, `/etc/containers/containers.conf`, `$HOME/.config/containers/containers.conf`)
+**containers.conf**
 
 Podman has builtin defaults for command line options. These defaults can be overridden using the containers.conf configuration files.
 
-Distributions ship the `/usr/share/containers/containers.conf` file with their default settings. Administrators can override fields in this file by creating the `/etc/containers/containers.conf` file.  Users can further modify defaults by creating the `$HOME/.config/containers/containers.conf` file. Podman merges its builtin defaults with the specified fields from these files, if they exist. Fields specified in the users file override the administrator's file, which overrides the distribution's file, which override the built-in defaults.
+For a complete list of supported paths and their override order, see **containers.conf(5)**. Podman merges its builtin defaults with the specified fields from these files, if they exist. Fields specified in the users file override the administrator's file, which overrides the distribution's file, which override the built-in defaults.
 
 Podman uses builtin defaults if no containers.conf file is found.
 
 If the **CONTAINERS_CONF** environment variable is set, then its value is used for the containers.conf file rather than the default.
 
-**mounts.conf** (`/usr/share/containers/mounts.conf`)
+**mounts.conf**
 
-The mounts.conf file specifies volume mount directories that are automatically mounted inside containers when executing the `podman run` or `podman start` commands. Administrators can override the defaults file by creating `/etc/containers/mounts.conf`.
+The mounts.conf file specifies volume mount directories that are automatically mounted inside containers when executing the `podman run` or `podman start` commands.
 
-When Podman runs in rootless mode, the file `$HOME/.config/containers/mounts.conf` overrides the default if it exists. For details, see containers-mounts.conf(5).
+For a complete list of supported paths and details, see **containers-mounts.conf(5)**.
 
-**policy.json** (`/etc/containers/policy.json`, `$HOME/.config/containers/policy.json`)
+**policy.json**
 
 Signature verification policy files are used to specify policy, e.g. trusted keys, applicable when deciding whether to accept an image, or individual signatures of that image, as valid. For details, see containers-policy.json(5).
 
-**registries.conf** (`/etc/containers/registries.conf`, `$HOME/.config/containers/registries.conf`)
+**registries.conf**
 
 registries.conf is the configuration file which specifies which container registries is consulted when completing image names which do not include a registry or domain portion.
 
-Non root users of Podman can create the `$HOME/.config/containers/registries.conf` file to be used instead of the system defaults.
+For a complete list of supported paths, including user-specific and system-wide defaults, see **containers-registries.conf(5)**.
 
 If the **CONTAINERS_REGISTRIES_CONF** environment variable is set, then its value is used for the registries.conf file rather than the default.
 
-**storage.conf** (`/etc/containers/storage.conf`, `$HOME/.config/containers/storage.conf`)
+**storage.conf**
 
 storage.conf is the storage configuration file for all tools using containers/storage
 
 The storage configuration file specifies all of the available container storage options for tools using shared container storage.
 
-When Podman runs in rootless mode, the file `$HOME/.config/containers/storage.conf` is used instead of the system defaults.
+When Podman runs in rootless mode, For a complete list of supported paths, including user-specific and system-wide defaults, see **containers-storage.conf(5)**.
 
 If the **CONTAINERS_STORAGE_CONF** environment variable is set, then its value is used for the storage.conf file rather than the default.
 

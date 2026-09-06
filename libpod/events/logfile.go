@@ -122,9 +122,15 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 			return err
 		}
 		go func() {
-			time.Sleep(time.Until(untilTime))
-			if err := t.Stop(); err != nil {
-				logrus.Errorf("Stopping logger: %v", err)
+			timer := time.NewTimer(time.Until(untilTime))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				if err := t.Stop(); err != nil {
+					logrus.Errorf("Stopping logger: %v", err)
+				}
+			case <-ctx.Done():
+				return
 			}
 		}()
 	}

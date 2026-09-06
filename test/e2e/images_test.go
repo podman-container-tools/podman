@@ -3,9 +3,10 @@
 package integration
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/docker/go-units"
@@ -49,13 +50,14 @@ var _ = Describe("Podman images", func() {
 		session = podmanTest.Podman([]string{"images"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.LineInOutputContainsTag("quay.io/libpod/alpine", "latest")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("quay.io/libpod/busybox", "latest")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("localhost/foo", "a")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("localhost/foo", "b")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("localhost/foo", "c")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("localhost/bar", "a")).To(BeTrue())
-		Expect(session.LineInOutputContainsTag("localhost/bar", "b")).To(BeTrue())
+		images := session.OutputToStringArray()
+		Expect(images).To(ContainElement(MatchRegexp(`^quay\.io/libpod/alpine\s+latest\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^quay\.io/libpod/busybox\s+latest\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^localhost/foo\s+a\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^localhost/foo\s+b\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^localhost/foo\s+c\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^localhost/bar\s+a\s`)))
+		Expect(images).To(ContainElement(MatchRegexp(`^localhost/bar\s+b\s`)))
 		session = podmanTest.Podman([]string{"images", "-qn"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
@@ -322,24 +324,22 @@ WORKDIR /test
 		}
 
 		sortedArr := sortValueTest("created", 0, "CreatedAt")
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool { return sortedArr[i] > sortedArr[j] })).To(BeTrue())
+		Expect(slices.IsSortedFunc(sortedArr, func(a, b string) int { return cmp.Compare(b, a) })).To(BeTrue())
 
 		sortedArr = sortValueTest("id", 0, "ID")
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool { return sortedArr[i] < sortedArr[j] })).To(BeTrue())
+		Expect(slices.IsSorted(sortedArr)).To(BeTrue())
 
 		sortedArr = sortValueTest("repository", 0, "Repository")
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool { return sortedArr[i] < sortedArr[j] })).To(BeTrue())
+		Expect(slices.IsSorted(sortedArr)).To(BeTrue())
 
 		sortedArr = sortValueTest("size", 0, "Size")
-		Expect(sort.SliceIsSorted(sortedArr, func(i, j int) bool {
-			size1, _ := units.FromHumanSize(sortedArr[i])
-			size2, _ := units.FromHumanSize(sortedArr[j])
-			return size1 < size2
+		Expect(slices.IsSortedFunc(sortedArr, func(a, b string) int {
+			size1, _ := units.FromHumanSize(a)
+			size2, _ := units.FromHumanSize(b)
+			return cmp.Compare(size1, size2)
 		})).To(BeTrue())
 		sortedArr = sortValueTest("tag", 0, "Tag")
-		Expect(sort.SliceIsSorted(sortedArr,
-			func(i, j int) bool { return sortedArr[i] < sortedArr[j] })).
-			To(BeTrue())
+		Expect(slices.IsSorted(sortedArr)).To(BeTrue())
 
 		sortValueTest("badvalue", 125, "Tag")
 		sortValueTest("id", 125, "badvalue")

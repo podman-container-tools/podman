@@ -14,8 +14,7 @@ The location is determined
 by the transport and the registry host of the image.  Using this container image `docker://docker.io/library/busybox`
 as an example, `docker` is the transport and `docker.io` is the registry host.
 
-Trust is defined in **/etc/containers/policy.json** and is enforced when a user attempts to pull
-a remote image from a registry.  The trust policy in policy.json describes a registry scope (registry and/or repository) for the trust.  This trust can use public keys for signed images.
+Trust is defined in **policy.json** (see **containers-policy.json(5)** for exact paths) and is enforced when a user attempts to pull a remote image from a registry.  The trust policy in policy.json describes a registry scope (registry and/or repository) for the trust.  This trust can use public keys for signed images.
 
 The scope of the trust is evaluated from most specific to the least specific. In other words, a policy may be:
 

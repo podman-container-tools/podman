@@ -90,10 +90,9 @@ func Inspect(ctx context.Context, name string, options *InspectOptions) (*manife
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 
@@ -128,10 +127,9 @@ func InspectListData(ctx context.Context, name string, options *InspectOptions) 
 	if err != nil {
 		return nil, err
 	}
-	// SkipTLSVerify is special.  We need to delete the param added by
-	// ToParams() and change the key and flip the bool
+	// SkipTLSVerify is not serialized by ToParams(); the server expects
+	// tlsVerify with the opposite meaning.
 	if options.SkipTLSVerify != nil {
-		params.Del("SkipTLSVerify")
 		params.Set("tlsVerify", strconv.FormatBool(!options.GetSkipTLSVerify()))
 	}
 
@@ -199,6 +197,8 @@ func AddArtifact(ctx context.Context, name string, options *AddArtifactOptions) 
 		ArtifactExcludeTitles: options.ExcludeTitles,
 		ArtifactSubject:       options.Subject,
 		ArtifactAnnotations:   options.Annotations,
+
+		IndexSubject: options.IndexSubject,
 	}
 	if len(options.Files) > 0 {
 		optionsv4.WithArtifactFiles(options.Files)
@@ -353,8 +353,7 @@ func Modify(ctx context.Context, name string, images []string, options *ModifyOp
 		// upload the files in another goroutine
 		writer := multipart.NewWriter(bodyWriter)
 		artifactContentType = writer.FormDataContentType()
-		artifactWriterGroup.Add(1)
-		go func() {
+		artifactWriterGroup.Go(func() {
 			defer bodyWriter.Close()
 			defer writer.Close()
 			// start with the body we would have uploaded if we weren't
@@ -364,11 +363,11 @@ func Modify(ctx context.Context, name string, images []string, options *ModifyOp
 			}
 			requestPartWriter, err := writer.CreatePart(headers)
 			if err != nil {
-				artifactWriterError = fmt.Errorf("creating form part for request: %v", err)
+				artifactWriterError = fmt.Errorf("creating form part for request: %w", err)
 				return
 			}
 			if _, err := io.Copy(requestPartWriter, requestBodyReader); err != nil {
-				artifactWriterError = fmt.Errorf("uploading request as form part: %v", err)
+				artifactWriterError = fmt.Errorf("uploading request as form part: %w", err)
 				return
 			}
 			// now walk the list of files we're attaching
@@ -402,7 +401,7 @@ func Modify(ctx context.Context, name string, images []string, options *ModifyOp
 					break
 				}
 			}
-		}()
+		})
 	}
 
 	header, err := auth.MakeXRegistryAuthHeader(&imageTypes.SystemContext{AuthFilePath: options.GetAuthfile()}, options.GetUsername(), options.GetPassword())

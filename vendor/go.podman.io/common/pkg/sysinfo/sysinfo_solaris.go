@@ -40,7 +40,7 @@ func IsCPUSharesAvailable() bool {
 	if err := cmd.Run(); err != nil {
 		return false
 	}
-	return (strings.Contains(outBuf.String(), "FSS"))
+	return strings.Contains(outBuf.String(), "FSS")
 }
 
 // New returns a new SysInfo, using the filesystem to detect which features

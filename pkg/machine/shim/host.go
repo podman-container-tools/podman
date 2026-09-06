@@ -275,9 +275,9 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 	}
 
 	readyUnit := ignition.Unit{
-		Enabled:  ignition.BoolToPtr(true),
+		Enabled:  new(true),
 		Name:     "ready.service",
-		Contents: ignition.StrToPtr(readyUnitFile),
+		Contents: new(readyUnitFile),
 	}
 	ignBuilder.WithUnit(readyUnit)
 
@@ -721,7 +721,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	if !connected {
 		msg := "machine did not transition into running state"
 		if sshError != nil {
-			return fmt.Errorf("%s: ssh error: %v", msg, sshError)
+			return fmt.Errorf("%s: ssh error: %w", msg, sshError)
 		}
 		return errors.New(msg)
 	}
@@ -1021,5 +1021,5 @@ func promptUpdateSystemConn() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.ToLower(answer)[0] == 'y', nil
+	return len(answer) > 0 && (answer[0] == 'y' || answer[0] == 'Y'), nil
 }

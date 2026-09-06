@@ -100,7 +100,13 @@ func parseUids(colonDelimitKeys []byte) []string {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "uid:") || strings.HasPrefix(line, "pub:") {
-			uid := strings.Split(line, ":")[9]
+			fields := strings.Split(line, ":")
+			// A well-formed uid/pub record has the user ID in field 10;
+			// skip malformed lines instead of panicking on a short slice.
+			if len(fields) < 10 {
+				continue
+			}
+			uid := fields[9]
 			if uid == "" {
 				continue
 			}

@@ -66,9 +66,9 @@ func GenerateSystemDFilesForVirtiofsMounts(mounts []VirtIoFs) ([]ignition.Unit, 
 		// On FCOS /home is a symlink to var/home; systemd rejects non-canonical paths.
 		canonicalTarget := canonicalizeFCOSMountTarget(mnt.Target)
 		virtiofsMount := ignition.Unit{
-			Enabled:  ignition.BoolToPtr(true),
+			Enabled:  new(true),
 			Name:     fmt.Sprintf("%s.mount", parser.PathEscape(canonicalTarget)),
-			Contents: ignition.StrToPtr(fmt.Sprintf(mountUnitFile, mnt.Tag, canonicalTarget)),
+			Contents: new(fmt.Sprintf(mountUnitFile, mnt.Tag, canonicalTarget)),
 		}
 
 		unitFiles = append(unitFiles, virtiofsMount)
@@ -90,9 +90,9 @@ func GenerateSystemDFilesForVirtiofsMounts(mounts []VirtIoFs) ([]ignition.Unit, 
 	}
 
 	immutableRootOffUnit := ignition.Unit{
-		Contents: ignition.StrToPtr(immutableRootOffFile),
+		Contents: new(immutableRootOffFile),
 		Name:     "immutable-root-off.service",
-		Enabled:  ignition.BoolToPtr(true),
+		Enabled:  new(true),
 	}
 	unitFiles = append(unitFiles, immutableRootOffUnit)
 
@@ -111,9 +111,9 @@ func GenerateSystemDFilesForVirtiofsMounts(mounts []VirtIoFs) ([]ignition.Unit, 
 	}
 
 	immutableRootOnUnit := ignition.Unit{
-		Contents: ignition.StrToPtr(immutableRootOnFile),
+		Contents: new(immutableRootOnFile),
 		Name:     "immutable-root-on.service",
-		Enabled:  ignition.BoolToPtr(true),
+		Enabled:  new(true),
 	}
 	unitFiles = append(unitFiles, immutableRootOnUnit)
 

@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"os"
 	"os/user"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -81,9 +80,7 @@ var _ = Describe("Podman top", func() {
 		Expect(result.OutputToStringArray()[1]).To(Equal("0"))
 
 		user, err := user.Current()
-		if err != nil {
-			os.Exit(1)
-		}
+		Expect(err).ToNot(HaveOccurred())
 
 		result = podmanTest.Podman([]string{"container", "top", session.OutputToString(), "huid"})
 		result.WaitWithDefaultTimeout()

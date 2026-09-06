@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -375,6 +376,14 @@ func (n *Netns) setupMounts() error {
 	// 2. /run/systemd -> XDG_RUNTIME_DIR/rootless-netns/run/systemd (only if it exists)
 	// 3. XDG_RUNTIME_DIR/rootless-netns/resolv.conf -> /etc/resolv.conf or XDG_RUNTIME_DIR/rootless-netns/run/symlink/target
 	// 4. XDG_RUNTIME_DIR/rootless-netns/run -> /run
+
+	// Keep this thread locked for good. ns.Do() saves and restores only the
+	// network namespace, so once we unshare below the mount namespace is never
+	// put back. Do() unlocks the thread on its way out, which would return it
+	// to the go scheduler still inside this namespace and later goroutines
+	// would run there. Taking a second lock here means Do()'s unlock leaves it
+	// locked, so the runtime scraps the thread when the goroutine ends.
+	runtime.LockOSThread()
 
 	// Create a new mount namespace,
 	// this must happen inside the netns thread.

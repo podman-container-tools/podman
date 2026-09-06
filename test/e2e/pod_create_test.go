@@ -1250,9 +1250,7 @@ ENTRYPOINT ["sleep","99999"]
 		run := podmanTest.Podman([]string{"run", "--pod", podCreate.OutputToString(), ALPINE, "mount"})
 		run.WaitWithDefaultTimeout()
 		Expect(run).Should(ExitCleanly())
-		t, strings := run.GrepString("shm on /dev/shm type tmpfs")
-		Expect(t).To(BeTrue(), "found /dev/shm")
-		Expect(strings[0]).Should(ContainSubstring("size=10240k"))
+		Expect(run.OutputToStringArray()).To(ContainElement(MatchRegexp(`shm on /dev/shm type tmpfs.*size=10240k`)))
 	})
 
 	It("podman pod create --shm-size and --ipc=host conflict", func() {
@@ -1304,9 +1302,7 @@ ENTRYPOINT ["sleep","99999"]
 		run := podmanTest.Podman([]string{"exec", ctrRun.OutputToString(), "mount"})
 		run.WaitWithDefaultTimeout()
 		Expect(run).Should(ExitCleanly())
-		t, strings := run.GrepString("tmpfs on /run/lock")
-		Expect(t).To(BeTrue(), "found /run/lock")
-		Expect(strings[0]).Should(ContainSubstring("size=10240k"))
+		Expect(run.OutputToStringArray()).To(ContainElement(MatchRegexp(`tmpfs on /run/lock.*size=10240k`)))
 	})
 
 	It("create pod with name subset of existing ID", func() {

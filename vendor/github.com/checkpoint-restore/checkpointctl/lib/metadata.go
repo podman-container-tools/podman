@@ -4,13 +4,17 @@ package metadata
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
 
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
+
+var errNotRegularFile = errors.New("not a regular file")
 
 const (
 	// container archive
@@ -79,6 +83,43 @@ type KubernetesContainerCheckpointMetadata struct {
 	Checkpoints   []KubernetesCheckpoint `json:"checkpoints"`
 }
 
+// CheckpointedPodOptions contains metadata about a checkpointed pod
+type CheckpointedPodOptions struct {
+	// Version is the version of the pod checkpoint format
+	Version int `json:"version"`
+	// Containers is a map with the short container name as key and the full name as value
+	Containers map[string]string `json:"containers"`
+	// Annotations stores checkpoint-related annotations (keys defined in annotations.go)
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// PodmanNetworkSubnet represents a single subnet entry in the Podman network status
+type PodmanNetworkSubnet struct {
+	IPNet   string `json:"ipnet"`
+	Gateway string `json:"gateway"`
+}
+
+// PodmanNetworkInterface represents a network interface in the Podman network status
+type PodmanNetworkInterface struct {
+	Subnets    []PodmanNetworkSubnet `json:"subnets"`
+	MacAddress string                `json:"mac_address"`
+}
+
+// PodmanNetworkResult represents the network status for a single CNI/netavark network
+type PodmanNetworkResult struct {
+	Interfaces map[string]PodmanNetworkInterface `json:"interfaces"`
+}
+
+// PodmanNetworkStatus maps network names to their results in the network.status file
+type PodmanNetworkStatus map[string]PodmanNetworkResult
+
+func ReadContainerCheckpointNetworkStatus(checkpointDirectory string) (*PodmanNetworkStatus, string, error) {
+	var networkStatus PodmanNetworkStatus
+	networkStatusFile, err := ReadJSONFile(&networkStatus, checkpointDirectory, NetworkStatusFile)
+
+	return &networkStatus, networkStatusFile, err
+}
+
 func ReadContainerCheckpointSpecDump(checkpointDirectory string) (*spec.Spec, string, error) {
 	var specDump spec.Spec
 	specDumpFile, err := ReadJSONFile(&specDump, checkpointDirectory, SpecDumpFile)
@@ -107,6 +148,13 @@ func ReadContainerCheckpointStatusFile(checkpointDirectory string) (*ContainerdS
 	return &containerdStatus, statusFile, err
 }
 
+func ReadCheckpointPodOptions(checkpointDirectory string) (*CheckpointedPodOptions, string, error) {
+	var podOptions CheckpointedPodOptions
+	podOptionsFile, err := ReadJSONFile(&podOptions, checkpointDirectory, PodOptionsFile)
+
+	return &podOptions, podOptionsFile, err
+}
+
 // WriteJSONFile marshalls and writes the given data to a JSON file
 func WriteJSONFile(v interface{}, dir, file string) (string, error) {
 	fileJSON, err := json.MarshalIndent(v, "", "  ")
@@ -121,9 +169,18 @@ func WriteJSONFile(v interface{}, dir, file string) (string, error) {
 	return file, nil
 }
 
+// ReadJSONFile reads JSON from a regular file in dir. On Unix, a symbolic link
+// in the final path component is rejected. On Linux, reopening the validated
+// file descriptor requires access to a usable procfs instance.
 func ReadJSONFile(v interface{}, dir, file string) (string, error) {
 	file = filepath.Join(dir, file)
-	content, err := os.ReadFile(file)
+	f, err := openRegularFile(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
 	if err != nil {
 		return "", err
 	}
@@ -132,6 +189,27 @@ func ReadJSONFile(v interface{}, dir, file string) (string, error) {
 	}
 
 	return file, nil
+}
+
+// openRegularFile applies platform-specific opening safeguards and verifies
+// the opened descriptor before returning it.
+func openRegularFile(file string) (*os.File, error) {
+	f, err := openFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, fmt.Errorf("%s is %w", file, errNotRegularFile)
+	}
+
+	return f, nil
 }
 
 func ByteToString(b int64) string {

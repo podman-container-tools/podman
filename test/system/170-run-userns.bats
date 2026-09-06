@@ -204,3 +204,28 @@ EOF
 
     run_podman rm -f $cname
 }
+
+# CANNOT BE PARALLELIZED: userns=auto, rootless, => not enough unused IDs in user namespace
+@test "podman :O overlay volume in a userns that does not map the storage owner" {
+    # An overlay volume (:O) must be read-write inside a userns that does not
+    # map the storage owner.  See containers/crun#2212.
+    skip_if_rootless "storage is not owned by an unmapped user when rootless"
+    grep -E -q "^containers:" /etc/subuid || skip "no IDs allocated for user 'containers'"
+
+    local volname="myvol_$(random_string)"
+    run_podman volume create $volname
+
+    run_podman run --rm -v $volname:/vol $IMAGE sh -c "echo lower > /vol/lower.txt"
+
+    # The lower content must be readable and writes (to the upper dir) must work.
+    run_podman run --rm --userns=auto -v $volname:/mnt:O $IMAGE sh -c \
+        "cat /mnt/lower.txt; echo upper > /mnt/new.txt && cat /mnt/new.txt"
+    assert "$output" =~ "lower" "overlay lower is readable under userns"
+    assert "$output" =~ "upper" "overlay upper is writable under userns"
+
+    # Writes are ephemeral: the named volume itself is untouched.
+    run_podman run --rm -v $volname:/vol $IMAGE ls /vol
+    assert "$output" = "lower.txt" "writes to a :O overlay do not leak into the volume"
+
+    run_podman volume rm $volname
+}

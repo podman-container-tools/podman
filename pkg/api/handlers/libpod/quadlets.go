@@ -6,7 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+ fix-quadlet-multipart-fd-leak
 	"mime/multipart"
+
+	"io/fs"
+ main
 	"net/http"
 	"os"
 	"path/filepath"
@@ -101,11 +105,11 @@ func extractQuadletFiles(tempDir string, r io.ReadCloser) ([]string, error) {
 
 	// Collect all files from the extracted directory
 	var filePaths []string
-	err = filepath.Walk(quadletDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(quadletDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
 			filePaths = append(filePaths, path)
 		}
 		return nil
@@ -130,7 +134,7 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 	var filePaths []string
 	for {
 		part, err := reader.NextPart()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

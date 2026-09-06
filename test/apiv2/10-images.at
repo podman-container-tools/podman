@@ -240,6 +240,18 @@ t GET images/json?filters='{"reference":["test1"]}' 200 length=1
 t POST images/prune?filters='{"until":["500000"]}' 200
 t GET images/json?filters='{"reference":["test1"]}' 200 length=1
 
+# Get number of images for verification.
+t GET images/json 200
+img_count=$(jq -r 'length' <<<"$output")
+
+# Test compat: GET images/json - until filter (distant future x past).
+t GET images/json?filters='{"until":["99999999999"]}' 200 length=$img_count
+t GET images/json?filters='{"until":["500000"]}' 200 length=0
+
+# Test libpod: GET images/json - until filter (distant future x past).
+t GET libpod/images/json?filters='{"until":["99999999999"]}' 200 length=$img_count
+t GET libpod/images/json?filters='{"until":["500000"]}' 200 length=0
+
 t DELETE libpod/images/test1:latest 200
 
 # to be used in prune until filter tests

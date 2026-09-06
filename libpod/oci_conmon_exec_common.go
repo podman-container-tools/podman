@@ -233,7 +233,7 @@ func (r *ConmonOCIRuntime) ExecStopContainer(ctr *Container, sessionID string, t
 		// Use SIGTERM by default, then SIGSTOP after timeout.
 		logrus.Debugf("Killing exec session %s (PID %d) of container %s with SIGTERM", sessionID, pid, ctr.ID())
 		if err := pidHandle.Kill(unix.SIGTERM); err != nil {
-			if err == unix.ESRCH {
+			if errors.Is(err, unix.ESRCH) {
 				return nil
 			}
 			return fmt.Errorf("killing container %s exec session %s PID %d with SIGTERM: %w", ctr.ID(), sessionID, pid, err)
@@ -251,7 +251,7 @@ func (r *ConmonOCIRuntime) ExecStopContainer(ctr *Container, sessionID string, t
 	// SIGTERM did not work. On to SIGKILL.
 	logrus.Debugf("Killing exec session %s (PID %d) of container %s with SIGKILL", sessionID, pid, ctr.ID())
 	if err := pidHandle.Kill(unix.SIGKILL); err != nil {
-		if err == unix.ESRCH {
+		if errors.Is(err, unix.ESRCH) {
 			return nil
 		}
 		return fmt.Errorf("killing container %s exec session %s PID %d with SIGKILL: %w", ctr.ID(), sessionID, pid, err)

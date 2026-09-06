@@ -1113,7 +1113,7 @@ RUN chmod 755 /test1 /test2 /test3`, ALPINE)
 		mkvol.WaitWithDefaultTimeout()
 		Expect(mkvol).Should(ExitCleanly())
 
-		subvol := "/test/test2/"
+		subvol := "/test/a=b/"
 		pathInCtr := "/mnt"
 		pathToCreate := filepath.Join(pathInCtr, subvol)
 		popvol := podmanTest.Podman([]string{"run", "-v", fmt.Sprintf("%s:/mnt", volName), ALPINE, "sh", "-c", fmt.Sprintf("mkdir -p %s; touch %s; touch %s", pathToCreate, filepath.Join(pathToCreate, "foo"), filepath.Join(pathToCreate, "bar"))})

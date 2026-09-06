@@ -81,7 +81,11 @@ func runDecompression(d decompressor, decompressedFilePath string) (retErr error
 		// Wait for bars to complete and then shut down the bars container
 		defer p.Wait()
 
-		compressedFileReader = bar.ProxyReader(compressedFileReader)
+		compressedFileReader, err = bar.ProxyReader(compressedFileReader)
+		if err != nil {
+			logrus.Errorf("Error creating progress bar %q", err)
+			return err
+		}
 		// Interrupts the bar goroutine. It's important that
 		// bar.Abort(false) is called before p.Wait(), otherwise
 		// can hang.
@@ -90,7 +94,12 @@ func runDecompression(d decompressor, decompressedFilePath string) (retErr error
 
 	var decompressedFileWriter *os.File
 
-	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, d.compressedFileMode()); err != nil {
+	mode := d.compressedFileMode()
+
+	// Ensure the owner always has write permission.
+	mode |= 0o200
+
+	if decompressedFileWriter, err = os.OpenFile(decompressedFilePath, decompressedFileFlag, mode); err != nil {
 		logrus.Errorf("Unable to open destination file %s for writing: %q", decompressedFilePath, err)
 		return err
 	}

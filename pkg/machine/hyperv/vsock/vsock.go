@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/sirupsen/logrus"
@@ -18,6 +19,17 @@ import (
 )
 
 var ErrVSockRegistryEntryExists = errors.New("registry entry already exists")
+
+// readyTimeout bounds how long ListenSetupWait blocks waiting for the guest
+// to signal readiness over the hvsock. Without it, a guest that stays alive
+// but never connects (stuck boot, corrupted image, ignition hang) hangs the
+// calling `podman machine init`/`start` command forever: sockets.
+// ListenAndWaitOnSocket, which this waits on, has no timeout of its own,
+// confirmed by testing it directly against a real, unconnected net.Listener.
+// 10 real successful `podman machine init --now` runs from Podman's own
+// Hyper-V CI clustered between 15.8s and 19.4s, so 30s is headroom over a
+// normal healthy boot without leaving a stuck wait hanging for minutes.
+const readyTimeout = 30 * time.Second
 
 const (
 	// HvsockMachineName is the string identifier for the machine name in a registry entry
@@ -308,7 +320,7 @@ func (hv *HVSockRegistryEntry) Listener() (net.Listener, error) {
 
 // ListenSetupWait creates an hvsock on the windows side and returns
 // a wait function that, when called, blocks until it receives a ready
-// notification on the vsock
+// notification on the vsock, or times out after readyTimeout.
 func (hv *HVSockRegistryEntry) ListenSetupWait() (func() error, io.Closer, error) {
 	listener, err := hv.Listener()
 	if err != nil {
@@ -318,8 +330,21 @@ func (hv *HVSockRegistryEntry) ListenSetupWait() (func() error, io.Closer, error
 	errChan := make(chan error)
 	go sockets.ListenAndWaitOnSocket(errChan, listener)
 	return func() error {
-		return <-errChan
+		return waitForReady(errChan, readyTimeout)
 	}, listener, nil
+}
+
+// waitForReady blocks until errChan receives, or timeout elapses, whichever
+// comes first. Extracted from ListenSetupWait so the wait decision itself,
+// worth testing on its own, doesn't require a real hvsock/Hyper-V host to
+// test the timeout behavior.
+func waitForReady(errChan <-chan error, timeout time.Duration) error {
+	select {
+	case err := <-errChan:
+		return err
+	case <-time.After(timeout):
+		return fmt.Errorf("timed out after %s waiting for the VM to become ready", timeout)
+	}
 }
 
 // loadAllHVSockRegistryEntries loads HVSock registry entries, filtered by purpose and optionally limited by size.

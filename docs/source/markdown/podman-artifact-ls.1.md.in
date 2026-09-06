@@ -8,7 +8,7 @@ podman\-artifact\-ls - List OCI artifacts in local store (alias list)
 
 ## DESCRIPTION
 
-List all local artifacts in your local store.
+List all local artifacts in your local store.  Outputs the following by default: repository name, tag, digest, created time and size.
 
 ## OPTIONS
 
@@ -29,6 +29,10 @@ Print results with a Go template.
 @@option no-trunc
 
 @@option noheading
+
+#### **--quiet**, **-q**
+
+Lists only the artifact digests.
 
 ## EXAMPLES
 
@@ -62,6 +66,26 @@ ab609fad386d 2.097GB
 cd734b558ceb 12.58MB
 ```
 
+List artifact details in json format
+```
+$ podman artifact ls --format json"
+[
+    {
+        "Repository": "quay.io/artifact/foobar1",
+        "CreatedAt": "2026-06-16T00:00:57Z",
+        "Size": 12580000,
+        "Tag": "special",
+        "Digest": "cd734b558ceb"
+    }
+]
+```
+
+List only artifact digests
+```
+$ podman artifact ls --quiet
+ab609fad386d
+cd734b558ceb
+```
 
 
 ## SEE ALSO

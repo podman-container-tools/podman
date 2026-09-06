@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
+
+	"go.podman.io/storage/pkg/regexp"
 
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/report"
@@ -258,6 +259,8 @@ func (i *inspector) inspectAll(ctx context.Context, namesOrIDs []string) ([]any,
 	return data, allErrs, nil
 }
 
+var idRegex = regexp.Delayed(`{{\s*\.Id\s*}}`)
+
 // InspectNormalize modifies a given row string based on the specified inspect type.
 // It replaces specific field names within the row string for standardization.
 // For the `image` inspect type, it includes additional field replacements like `.Config.Healthcheck`.
@@ -274,8 +277,7 @@ func (i *inspector) inspectAll(ctx context.Context, namesOrIDs []string) ([]any,
 // fetching it itself.
 // The reason why we did it in this way can be further read [here](https://github.com/containers/podman/pull/27182#issuecomment-3402465389).
 func InspectNormalize(row string, inspectType string) string {
-	m := regexp.MustCompile(`{{\s*\.Id\s*}}`)
-	row = m.ReplaceAllString(row, "{{.ID}}")
+	row = idRegex.ReplaceAllString(row, "{{.ID}}")
 
 	r := strings.NewReplacer(
 		".Src", ".Source",

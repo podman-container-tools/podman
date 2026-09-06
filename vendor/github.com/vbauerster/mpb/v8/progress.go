@@ -21,8 +21,12 @@ const defaultRefreshRate = 150 * time.Millisecond
 const defaultHmQueueLength = 64
 const defaultWidth = 80
 
-// ErrDone represents use after `(*Progress).Wait()` error.
-var ErrDone = fmt.Errorf("%T instance can't be reused after %[1]T.Wait()", (*Progress)(nil))
+// ErrDone represents use after `(T).Wait()` error.
+type ErrDone[T interface{ Wait() }] struct{ t T }
+
+func (e ErrDone[T]) Error() string {
+	return fmt.Sprintf("%T instance can't be reused after %[1]T.Wait()", e.t)
+}
 
 // Progress represents a container that renders one or more progress bars.
 type Progress struct {
@@ -30,7 +34,7 @@ type Progress struct {
 	Error error
 
 	ctx          context.Context
-	cancel       context.CancelCauseFunc
+	cancel       context.CancelFunc
 	pwg          *sync.WaitGroup
 	bwg          *sync.WaitGroup
 	operateState chan func(*pState)
@@ -66,19 +70,19 @@ type pState struct {
 }
 
 // New creates new Progress container instance. It's not possible to
-// reuse instance after `(*Progress).Wait` method has been called.
+// reuse instance after (*Progress).Wait method has been called.
 func New(options ...ContainerOption) *Progress {
 	return NewWithContext(context.Background(), options...)
 }
 
 // NewWithContext creates new Progress container instance with provided
-// context. It's not possible to reuse instance after `(*Progress).Wait`
+// context. It's not possible to reuse instance after (*Progress).Wait
 // method has been called.
 func NewWithContext(ctx context.Context, options ...ContainerOption) *Progress {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithCancelCause(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 
 	s := &pState{
 		popPriority: math.MinInt32,
@@ -161,7 +165,7 @@ func (p *Progress) New(total int64, builder BarFillerBuilder, options ...BarOpti
 
 // Add creates a bar which renders itself by provided BarFiller.
 // If `total <= 0` triggering complete event by increment methods is disabled.
-// If called after `(*Progress).Wait()` then `(nil, ErrDone)` is returned.
+// Returns (0, ErrDone[*Progress]) if called after (*Progress).Wait.
 func (p *Progress) Add(total int64, filler BarFiller, options ...BarOption) (*Bar, error) {
 	if filler == nil {
 		filler = NopStyle().Build()
@@ -190,12 +194,12 @@ func (p *Progress) Add(total int64, filler BarFiller, options ...BarOption) (*Ba
 	}:
 		return <-ch, nil
 	case <-p.done:
-		return nil, ErrDone
+		return nil, ErrDone[*Progress]{nil}
 	}
 }
 
 func (p *Progress) makeBar(bs *bState) *Bar {
-	ctx, cancel := context.WithCancelCause(p.ctx)
+	ctx, cancel := context.WithCancel(p.ctx)
 	bar := &Bar{
 		ctx:          ctx,
 		cancel:       cancel,
@@ -215,6 +219,7 @@ func (p *Progress) makeBar(bs *bState) *Bar {
 			}
 		}
 	}
+	bar.ewmaDecorators = slices.Clip(bar.ewmaDecorators)
 	return bar
 }
 
@@ -230,7 +235,7 @@ func (p *Progress) iterateBars(yield func(*Bar) bool) error {
 		}
 		return nil
 	case <-p.done:
-		return ErrDone
+		return ErrDone[*Progress]{nil}
 	}
 }
 
@@ -247,10 +252,9 @@ func (p *Progress) UpdateBarPriority(b *Bar, priority int, lazy bool) {
 	}
 }
 
-// Write is implementation of io.Writer.
-// Writing to `*Progress` will print lines above a running bar.
-// Writes aren't flushed immediately, but at next refresh cycle.
-// If called after `(*Progress).Wait()` then `(0, ErrDone)` is returned.
+// Write is implementation of io.Writer. Writing to `*Progress` will print lines
+// above a running bar. Writes aren't flushed immediately, but at next refresh
+// cycle. Returns (0, ErrDone[*Progress]) if called after (*Progress).Wait.
 func (p *Progress) Write(b []byte) (int, error) {
 	type result struct {
 		n   int
@@ -265,7 +269,7 @@ func (p *Progress) Write(b []byte) (int, error) {
 		res := <-ch
 		return res.n, res.err
 	case <-p.done:
-		return 0, ErrDone
+		return 0, ErrDone[*Progress]{nil}
 	}
 }
 
@@ -278,9 +282,9 @@ func (p *Progress) Wait() {
 
 // Shutdown cancels any running bar immediately and then shutdowns `*Progress`
 // instance. Normally this method shouldn't be called unless you know what you
-// are doing. Proper way to shutdown is to call `(*Progress).Wait()` instead.
+// are doing. Proper way to shutdown is to call (*Progress).Wait instead.
 func (p *Progress) Shutdown() {
-	p.cancel(nil)
+	p.cancel()
 	p.pwg.Wait()
 }
 
@@ -313,7 +317,7 @@ func (p *Progress) serve(s *pState) {
 			s.hasUnrendered = false
 			err := s.render()
 			if err != nil {
-				p.cancel(err)
+				p.cancel()
 				// refreshStrategy goroutine is sending to p.renderReq unbuffered chan
 				// without any select therefore p.renderReq must be depleted here
 				// otherwise refreshStrategy goroutine may block and leak.
@@ -400,7 +404,7 @@ func (s *pState) render() (err error) {
 	for b := range s.hm.render(width, offload) {
 		frame := <-b.frameCh
 		if frame.err != nil {
-			b.cancel(frame.err)
+			b.cancel()
 			return frame.err // b.frameCh is buffered it's ok to return here
 		}
 		var discarded int
@@ -416,7 +420,7 @@ func (s *pState) render() (err error) {
 
 		switch b.shutdown {
 		case 1:
-			b.cancel(nil)
+			b.cancel()
 			if q, ok := s.queueBars[b]; ok {
 				delete(s.queueBars, b)
 				q.priority = b.priority
@@ -466,14 +470,14 @@ func (s *pState) makeBarState(total int64, filler BarFiller, options ...BarOptio
 		filler:   filler,
 	}
 
-	bs.extender = func(base rowProducer) iter.Seq[rowProducer] {
-		return slices.Values([]rowProducer{base})
-	}
-
 	for _, opt := range options {
 		if opt != nil {
 			opt(bs)
 		}
+	}
+
+	if bs.rowProducers == nil {
+		bs.rowProducers = slices.Values([]rowProducer{bs.draw})
 	}
 
 	bs.buffers[0] = bytes.NewBuffer(make([]byte, 0, 256)) // filler

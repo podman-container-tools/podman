@@ -184,20 +184,20 @@ func chooseTimeProducer(style TimeStyle) func(time.Duration) string {
 	switch style {
 	case ET_STYLE_HHMMSS:
 		return func(remaining time.Duration) string {
-			hours := int64(remaining/time.Hour) % 60
+			hours := int64(remaining / time.Hour)
 			minutes := int64(remaining/time.Minute) % 60
 			seconds := int64(remaining/time.Second) % 60
 			return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 		}
 	case ET_STYLE_HHMM:
 		return func(remaining time.Duration) string {
-			hours := int64(remaining/time.Hour) % 60
+			hours := int64(remaining / time.Hour)
 			minutes := int64(remaining/time.Minute) % 60
 			return fmt.Sprintf("%02d:%02d", hours, minutes)
 		}
 	case ET_STYLE_MMSS:
 		return func(remaining time.Duration) string {
-			hours := int64(remaining/time.Hour) % 60
+			hours := int64(remaining / time.Hour)
 			minutes := int64(remaining/time.Minute) % 60
 			seconds := int64(remaining/time.Second) % 60
 			if hours > 0 {

@@ -317,6 +317,10 @@ END_HTML
         # BATS handling. This will recognize num_tests both at start and end
         if ($line =~ /^1\.\.(\d+)$/) {
             $looks_like_bats = 1;
+            # -1 is the "count unknown, expect it at the end" sentinel set
+            # below. It has to be replaced, not added to.
+            $bats_count{expected_total} = 0
+                if ($bats_count{expected_total} // 0) < 0;
             $bats_count{expected_total} += $1;
             undef $looks_like_python;
         }

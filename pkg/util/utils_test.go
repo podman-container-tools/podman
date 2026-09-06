@@ -13,6 +13,8 @@ import (
 	ruser "github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/storage/pkg/idtools"
 	stypes "go.podman.io/storage/types"
 )
@@ -891,6 +893,47 @@ func TestParseDockerignoreLeadingTrailingSlashes(t *testing.T) {
 			excludes, _, err := ParseDockerignore(nil, contextDir)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, excludes)
+		})
+	}
+}
+
+func TestParseRestartPolicy(t *testing.T) {
+	tests := []struct {
+		name        string
+		policy      string
+		wantPolicy  string
+		wantRetries uint
+		wantErr     string // substring to match; empty means no error expected
+	}{
+		{"empty policy", "", "", 0, ""},
+		{"no", "no", "no", 0, ""},
+		{"always", "always", "always", 0, ""},
+		{"unless-stopped", "unless-stopped", "unless-stopped", 0, ""},
+		{"on-failure without retries", "on-failure", "on-failure", 0, ""},
+		{"never is normalized to no", "never", define.RestartPolicyNo, 0, ""},
+		{"never is case-insensitive", "Never", define.RestartPolicyNo, 0, ""},
+		{"on-failure with retries", "on-failure:5", "on-failure", 5, ""},
+		{"on-failure with zero retries", "on-failure:0", "on-failure", 0, ""},
+		{"on-failure preserves original case", "ON-FAILURE:3", "ON-FAILURE", 3, ""},
+		{"retries with non on-failure policy", "always:5", "", 0, "can only be specified with on-failure"},
+		{"non-numeric retries", "on-failure:abc", "", 0, "parsing restart policy retry count"},
+		{"empty retries", "on-failure:", "", 0, "parsing restart policy retry count"},
+		{"negative retries", "on-failure:-1", "", 0, "greater than 0"},
+		{"too many fields", "on-failure:5:3", "", 0, "may specify retries at most once"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy, retries, err := ParseRestartPolicy(tt.policy)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				assert.Empty(t, policy)
+				assert.Zero(t, retries)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantPolicy, policy)
+			assert.Equal(t, tt.wantRetries, retries)
 		})
 	}
 }

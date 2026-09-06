@@ -53,9 +53,14 @@ func (r *Runtime) Push(ctx context.Context, source, destination string, options 
 		}
 	}
 
-	// Look up the local image.  Note that we need to ignore the platform
-	// and push what the user specified (containers/podman/issues/10344).
-	image, resolvedSource, err := r.LookupImage(source, nil)
+	// Look up the local image. If a specific platform is requested, use that
+	// to select a platform-specific image from a manifest list.
+	lookupOptions := &LookupImageOptions{
+		Architecture: options.Architecture,
+		OS:           options.OS,
+		Variant:      options.Variant,
+	}
+	image, resolvedSource, err := r.LookupImage(source, lookupOptions)
 	if err != nil {
 		return nil, err
 	}

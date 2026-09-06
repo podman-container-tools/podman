@@ -299,6 +299,50 @@ func Matches(file string, patterns []string) (bool, error) {
 	return pm.IsMatch(file)
 }
 
+// ShouldDescendExcludedDir checks whether an excluded directory should still be
+// descended into because a negation pattern might match files under it.
+// It handles literal prefix matches (e.g. !cmd/main.go for dir "cmd") and
+// wildcard negations (e.g. !**/*.go, !*/*.go). The wildcard check extracts
+// the literal prefix before the first wildcard and may intentionally
+// overmatch (descend into directories that won't ultimately contain matches),
+// which is safe because actual file-level matching happens later.
+func (pm *PatternMatcher) ShouldDescendExcludedDir(dirPath string) bool {
+	if !pm.exclusions {
+		return false
+	}
+	dir := filepath.ToSlash(strings.Trim(dirPath, string(os.PathSeparator)))
+	for _, pattern := range pm.patterns {
+		if !pattern.Exclusion() {
+			continue
+		}
+		slashPattern := filepath.ToSlash(strings.Trim(pattern.String(), string(os.PathSeparator)))
+
+		// Literal-prefix check: the negation spec starts with this
+		// directory path, for example: !cmd/main.go matches dir "cmd"
+		if strings.HasPrefix(slashPattern, dir+"/") {
+			return true
+		}
+
+		// Wildcard-aware check: extract the literal prefix before
+		// the first wildcard character (*, ?, [), for example: !cmd/**/*.go matches dir "cmd"
+		// if the directory is at or under that literal prefix, a file beneath this
+		// directory could match the negation, so keep descending.
+		if firstWild := strings.IndexAny(slashPattern, "*?["); firstWild >= 0 {
+			var literalPrefix string
+			if idx := strings.LastIndex(slashPattern[:firstWild], "/"); idx >= 0 {
+				literalPrefix = slashPattern[:idx]
+			}
+			if literalPrefix == "" {
+				return true
+			}
+			if dir == literalPrefix || strings.HasPrefix(dir, literalPrefix+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // CopyFile copies from src to dst until either EOF is reached
 // on src or an error occurs. It verifies src exists and removes
 // the dst if it exists.

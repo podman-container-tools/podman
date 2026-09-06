@@ -145,28 +145,31 @@ func GenVolumeMounts(volumeFlag []string) (map[string]spec.Mount, map[string]*Na
 		if strings.HasPrefix(src, "/") || strings.HasPrefix(src, ".") || IsHostWinPath(src) {
 			// This is not a named volume
 			overlayFlag := false
-			chownFlag := false
 			upperDirFlag := false
 			workDirFlag := false
 			for _, o := range options {
-				if o == "O" {
+				switch {
+				case o == "O":
 					overlayFlag = true
-
-					joinedOpts := strings.Join(options, "")
-					if strings.Contains(joinedOpts, "U") {
-						chownFlag = true
-					}
-					if strings.Contains(joinedOpts, "upperdir") {
-						upperDirFlag = true
-					}
-					if strings.Contains(joinedOpts, "workdir") {
-						workDirFlag = true
-					}
-					if (workDirFlag && !upperDirFlag) || (!workDirFlag && upperDirFlag) {
-						return nil, nil, nil, errors.New("must set both `upperdir` and `workdir`")
-					}
-					if len(options) > 2 && (len(options) != 3 || !upperDirFlag || !workDirFlag) || (len(options) == 2 && !chownFlag) {
-						return nil, nil, nil, errors.New("can't use 'O' with other options")
+				case strings.HasPrefix(o, "upperdir"):
+					upperDirFlag = true
+				case strings.HasPrefix(o, "workdir"):
+					workDirFlag = true
+				}
+			}
+			if overlayFlag {
+				if (workDirFlag && !upperDirFlag) || (!workDirFlag && upperDirFlag) {
+					return nil, nil, nil, errors.New("must set both `upperdir` and `workdir`")
+				}
+				// Only 'U', 'upperdir', 'workdir' and 'idmap' may be combined with 'O'.
+				for _, o := range options {
+					switch {
+					case o == "O", o == "U",
+						strings.HasPrefix(o, "upperdir"),
+						strings.HasPrefix(o, "workdir"),
+						strings.HasPrefix(o, "idmap"):
+					default:
+						return nil, nil, nil, errors.New("can't use 'O' with options other than 'U', 'upperdir', 'workdir' and 'idmap'")
 					}
 				}
 			}

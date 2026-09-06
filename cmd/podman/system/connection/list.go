@@ -1,10 +1,10 @@
 package connection
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"slices"
-	"sort"
 
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
@@ -105,8 +105,8 @@ func inspect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i].Name < rows[j].Name
+	slices.SortFunc(rows, func(a, b config.Connection) int {
+		return cmp.Compare(a.Name, b.Name)
 	})
 
 	rpt := report.New(os.Stdout, cmd.Name())

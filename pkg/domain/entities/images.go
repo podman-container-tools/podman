@@ -183,6 +183,12 @@ type ImagePushOptions struct {
 	// CompressionFormat is used exclusively, and blobs of other compression
 	// algorithms are not reused.
 	ForceCompressionFormat bool
+	// OS to use for platform selection when pushing a manifest list.
+	OS string
+	// Arch to use for platform selection when pushing a manifest list.
+	Arch string
+	// Variant to use for platform selection when pushing a manifest list.
+	Variant string
 }
 
 // ImagePushReport is the response from pushing an image.

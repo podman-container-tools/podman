@@ -34,7 +34,7 @@ func TestParseRoute(t *testing.T) {
 			want: &types.Route{
 				Destination: mustParseCIDR(t, "10.21.0.0/24"),
 				Gateway:     net.ParseIP("10.19.12.250"),
-				Metric:      uint32Ptr(100),
+				Metric:      new(uint32(100)),
 				RouteType:   types.RouteTypeUnicast,
 			},
 		},
@@ -53,7 +53,7 @@ func TestParseRoute(t *testing.T) {
 			routeStr: "10.21.0.0/24,blackhole,200",
 			want: &types.Route{
 				Destination: mustParseCIDR(t, "10.21.0.0/24"),
-				Metric:      uint32Ptr(200),
+				Metric:      new(uint32(200)),
 				RouteType:   types.RouteTypeBlackhole,
 			},
 		},
@@ -71,7 +71,7 @@ func TestParseRoute(t *testing.T) {
 			routeStr: "192.168.100.0/24,unreachable,150",
 			want: &types.Route{
 				Destination: mustParseCIDR(t, "192.168.100.0/24"),
-				Metric:      uint32Ptr(150),
+				Metric:      new(uint32(150)),
 				RouteType:   types.RouteTypeUnreachable,
 			},
 		},
@@ -89,7 +89,7 @@ func TestParseRoute(t *testing.T) {
 			routeStr: "172.16.0.0/16,prohibit,50",
 			want: &types.Route{
 				Destination: mustParseCIDR(t, "172.16.0.0/16"),
-				Metric:      uint32Ptr(50),
+				Metric:      new(uint32(50)),
 				RouteType:   types.RouteTypeProhibit,
 			},
 		},
@@ -215,8 +215,4 @@ func mustParseCIDR(t *testing.T, cidr string) types.IPNet {
 	ipnet, err := types.ParseCIDR(cidr)
 	require.NoError(t, err)
 	return ipnet
-}
-
-func uint32Ptr(v uint32) *uint32 {
-	return &v
 }

@@ -132,6 +132,9 @@ func getOnlineCPUs(container *Container) (int, error) {
 	}
 	var cpuSet unix.CPUSet
 	if err := unix.SchedGetaffinity(ctrPID, &cpuSet); err != nil {
+		if errors.Is(err, unix.ESRCH) {
+			return -1, fmt.Errorf("container %s exited while obtaining online cpus: %w", container.Name(), errors.Join(err, define.ErrCtrStopped))
+		}
 		return -1, fmt.Errorf("failed to obtain Container %s online cpus: %w", container.Name(), err)
 	}
 	return cpuSet.Count(), nil

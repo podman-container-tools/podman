@@ -419,17 +419,21 @@ func (c *Container) HTTPAttach(r *http.Request, w http.ResponseWriter, streams *
 			return err
 		}
 	}
-	// For Docker compatibility, we need to re-initialize containers in these states.
-	if c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited, define.ContainerStateStopped) {
-		if err := c.initUnlocked(r.Context(), c.config.Pod != ""); err != nil {
-			return fmt.Errorf("preparing container %s for attach: %w", c.ID(), err)
-		}
-	} else if !c.ensureState(define.ContainerStateCreated, define.ContainerStateRunning) {
-		return fmt.Errorf("can only attach to created or running containers - currently in state %s: %w", c.state.State.String(), define.ErrCtrStateInvalid)
-	}
-
 	if !streamAttach && !streamLogs {
 		return fmt.Errorf("must specify at least one of stream or logs: %w", define.ErrInvalidArg)
+	}
+
+	// A streaming attach requires conmon's attach socket. Initialize configured
+	// containers so clients can attach before starting them. Logs-only requests
+	// must not alter the container state.
+	if streamAttach {
+		if c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited, define.ContainerStateStopped) {
+			if err := c.initUnlocked(r.Context(), c.config.Pod != ""); err != nil {
+				return fmt.Errorf("preparing container %s for attach: %w", c.ID(), err)
+			}
+		} else if !c.ensureState(define.ContainerStateCreated, define.ContainerStateRunning) {
+			return fmt.Errorf("can only attach to created or running containers - currently in state %s: %w", c.state.State.String(), define.ErrCtrStateInvalid)
+		}
 	}
 
 	// We are NOT holding the lock for the duration of the function.

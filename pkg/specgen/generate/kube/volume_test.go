@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
+	"go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestVolumeFromEmptyDir(t *testing.T) {
@@ -21,4 +22,15 @@ func TestVolumeFromEmptyDir(t *testing.T) {
 	memEmptyDirVol, err := VolumeFromEmptyDir(&memEmptyDirSource, "emptydir")
 	assert.NoError(t, err)
 	assert.Equal(t, memEmptyDirVol.Type, KubeVolumeTypeEmptyDirTmpfs)
+	assert.Zero(t, memEmptyDirVol.SizeLimit)
+
+	sizeLimit := resource.MustParse("64Mi")
+	sizedEmptyDirSource := v1.EmptyDirVolumeSource{
+		Medium:    v1.StorageMediumMemory,
+		SizeLimit: &sizeLimit,
+	}
+	sizedEmptyDirVol, err := VolumeFromEmptyDir(&sizedEmptyDirSource, "emptydir")
+	assert.NoError(t, err)
+	assert.Equal(t, sizedEmptyDirVol.Type, KubeVolumeTypeEmptyDirTmpfs)
+	assert.Equal(t, int64(64*1024*1024), sizedEmptyDirVol.SizeLimit)
 }

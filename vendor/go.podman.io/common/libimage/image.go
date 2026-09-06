@@ -102,7 +102,7 @@ func (i *Image) isCorrupted(ctx context.Context, name string) error {
 		if name == "" {
 			name = i.ID()[:12]
 		}
-		return fmt.Errorf("Image %s exists in local storage but may be corrupted (remove the image to resolve the issue): %v", name, err)
+		return fmt.Errorf("Image %s exists in local storage but may be corrupted (remove the image to resolve the issue): %w", name, err)
 	}
 	return img.Close()
 }

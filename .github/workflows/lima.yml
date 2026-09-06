@@ -32,7 +32,7 @@ env:
   # CI automation repo release for the VM image downloads in ci.sh.
   # ENV is managed by renovate, do not change the name without
   # updating the renovate config in the automation repo.
-  AUTOMATION_RELEASE: 20260811t132028z
+  AUTOMATION_RELEASE: 20260902t121119z
   # Needed for logformatter
   PR_NUMBER: ${{ github.event.pull_request.number || '' }}
   PR_TITLE: ${{ github.event.pull_request.title || ''  }}

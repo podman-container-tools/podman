@@ -58,3 +58,18 @@ like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".*hello1$" "compat mount subpath 
 
 t DELETE containers/${cid}?v=true 204
 podman volume rm "$subpath_vol"
+
+# Compat API: HostConfig.Mounts with TmpfsOptions.Options (Docker API v1.46)
+tmpfs_name2="/mytmpfs2"
+t POST containers/create?name=compat_tmpfs_options_test \
+  Image=$IMAGE \
+  Cmd='["mount"]' \
+  HostConfig='{"Mounts":[{"Type":"tmpfs","Target":"/mytmpfs2","TmpfsOptions":{"Options":[["noexec"],["ro"],["tmpfs-size","67"]]}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t GET containers/${cid}/json 200 \
+  .HostConfig.Tmpfs.[\"$tmpfs_name2\"]="noexec,ro,size=67,rprivate,nosuid,nodev,tmpcopyup"
+
+t DELETE containers/${cid}?v=true 204

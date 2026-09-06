@@ -4,6 +4,7 @@ package libimage
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -73,6 +74,12 @@ func (r *Runtime) DiskUsage(ctx context.Context) ([]ImageDiskUsage, int64, error
 	for _, image := range images {
 		usages, err := diskUsageForImage(ctx, image, layerMap, layerCount, &totalSize)
 		if err != nil {
+			// The image can be removed by a parallel process between the
+			// listing above and reading it here. That is not a corruption,
+			// skip it instead of failing the whole disk usage.
+			if errors.Is(err, storage.ErrImageUnknown) {
+				continue
+			}
 			return nil, -1, err
 		}
 		allUsages = append(allUsages, usages...)

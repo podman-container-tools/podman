@@ -82,6 +82,41 @@ function validate_instance_compression {
     run_podman rmi $mname
 }
 
+@test "podman manifest annotate --subject" {
+    local mname="m-$(safename):1.0"
+
+    run_podman manifest create $mname
+
+    run_podman manifest inspect $mname
+    assert "$(jq -r '.subject' <<<"$output")" == "null" \
+           "index has no subject before it is annotated"
+
+    # The subject belongs to the index itself, hence --index
+    run_podman manifest annotate --index --subject containers-storage:$IMAGE $mname
+
+    run_podman manifest inspect $mname
+    assert "$(jq -r '.subject.digest' <<<"$output")" =~ '^sha256:[0-9a-f]{64}$' \
+           "index subject is set after it is annotated"
+
+    run_podman manifest rm $mname
+}
+
+@test "podman manifest add --artifact-subject" {
+    local mname="m-$(safename):1.0"
+    echo oh yeah > $PODMAN_TMPDIR/listed.txt
+
+    run_podman manifest create $mname
+    run_podman manifest add --artifact \
+               --artifact-subject=containers-storage:$IMAGE \
+               $mname $PODMAN_TMPDIR/listed.txt
+
+    run_podman manifest inspect $mname
+    assert "$(jq -r '.subject.digest' <<<"$output")" =~ '^sha256:[0-9a-f]{64}$' \
+           "index subject is set by --artifact-subject"
+
+    run_podman manifest rm $mname
+}
+
 @test "podman manifest --tls-verify and --authfile" {
     skip_if_remote "running a local registry doesn't work with podman-remote"
 

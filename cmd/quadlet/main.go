@@ -1,11 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -114,7 +116,7 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 				if prevError == nil {
 					prevError = err
 				} else {
-					prevError = fmt.Errorf("%s\n%s", prevError, err)
+					prevError = fmt.Errorf("%w\n%w", prevError, err)
 				}
 			} else {
 				seen[name] = void
@@ -130,7 +132,7 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 	var prevError error
 	reportError := func(err error) {
 		if prevError != nil {
-			err = fmt.Errorf("%s\n%s", prevError, err)
+			err = fmt.Errorf("%w\n%w", prevError, err)
 		}
 		prevError = err
 	}
@@ -510,16 +512,16 @@ func process() bool {
 
 	// Sort unit files according to potential inter-dependencies, with Volume and Network units
 	// taking precedence over all others.
-	sort.Slice(units, func(i, j int) bool {
-		getOrder := func(i int) int {
-			ext := filepath.Ext(units[i].Filename)
+	slices.SortFunc(units, func(a, b *parser.UnitFile) int {
+		getOrder := func(filename string) int {
+			ext := filepath.Ext(filename)
 			order, ok := quadlet.SupportedExtensions[ext]
 			if !ok {
 				return 0
 			}
 			return order
 		}
-		return getOrder(i) < getOrder(j)
+		return cmp.Compare(getOrder(a.Filename), getOrder(b.Filename))
 	})
 
 	// Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list

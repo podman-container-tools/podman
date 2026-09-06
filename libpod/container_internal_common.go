@@ -298,6 +298,10 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		return nil, nil, err
 	}
 
+	// If the storage owner is not mapped into the user namespace, the runtime
+	// cannot mount overlay volumes from inside it.
+	forceOverlayMount := !hasCurrentUserMapped(c)
+
 	// Add named volumes
 	for _, namedVol := range c.config.NamedVolumes {
 		volume, err := c.runtime.GetVolume(namedVol.Name)
@@ -335,17 +339,39 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		if overlayFlag {
 			var overlayMount spec.Mount
 			var overlayOpts *overlay.Options
-			contentDir, err := overlay.TempDir(c.config.StaticDir, c.RootUID(), c.RootGID())
+			// For idmapped volumes the backing dirs must be owned by real
+			// root (0) so the runtime's identity shift surfaces them as the
+			// container root.
+			backingUID, backingGID := c.RootUID(), c.RootGID()
+			if hasIdmapOption(namedVol.Options) {
+				backingUID, backingGID = 0, 0
+			}
+			contentDir, err := overlay.TempDir(c.config.StaticDir, backingUID, backingGID)
 			if err != nil {
 				return nil, nil, err
 			}
 
+			if forceOverlayMount {
+				if upperDir == "" {
+					upperDir = filepath.Join(contentDir, "upper")
+				}
+				if workDir == "" {
+					workDir = filepath.Join(contentDir, "work")
+				}
+			}
+
 			overlayOpts = &overlay.Options{
-				RootUID:                c.RootUID(),
-				RootGID:                c.RootGID(),
+				RootUID:                backingUID,
+				RootGID:                backingGID,
 				UpperDirOptionFragment: upperDir,
 				WorkDirOptionFragment:  workDir,
 				GraphOpts:              c.runtime.store.GraphOptions(),
+				ForceMount:             forceOverlayMount,
+			}
+			if forceOverlayMount {
+				// podman mounts the overlay itself, so it must apply the
+				// container mount label; otherwise the runtime would.
+				overlayOpts.MountLabel = c.MountLabel()
 			}
 
 			overlayMount, err = overlay.MountWithOptions(contentDir, mountPoint, namedVol.Dest, overlayOpts)
@@ -360,6 +386,12 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 					}
 
 					if err := c.ChangeHostPathOwnership(contentDir, true, int(hostUID), int(hostGID)); err != nil {
+						return nil, nil, err
+					}
+				}
+				if isIdmapOption(o) {
+					overlayMount.UIDMappings, overlayMount.GIDMappings, err = parseIDMapMountOption(c.config.IDMappings, o)
+					if err != nil {
 						return nil, nil, err
 					}
 				}
@@ -384,8 +416,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		m := &g.Config.Mounts[i]
 		var options []string
 		for _, o := range m.Options {
-			if strings.HasPrefix(o, "subpath=") {
-				subpath := strings.Split(o, "=")[1]
+			if subpath, ok := strings.CutPrefix(o, "subpath="); ok {
 				safeMount, err := c.safeMountSubPath(m.Source, subpath)
 				if err != nil {
 					return nil, nil, err
@@ -394,7 +425,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 				m.Source = safeMount.mountPoint
 				continue
 			}
-			if o == "idmap" || strings.HasPrefix(o, "idmap=") {
+			if isIdmapOption(o) {
 				var err error
 				m.UIDMappings, m.GIDMappings, err = parseIDMapMountOption(c.config.IDMappings, o)
 				if err != nil {
@@ -470,16 +501,33 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		if err != nil {
 			return nil, nil, err
 		}
-		contentDir, err := overlay.TempDir(c.config.StaticDir, c.RootUID(), c.RootGID())
+		// For idmapped volumes the backing dirs must be owned by real root
+		// (0) so the runtime's identity shift surfaces them as the container
+		// root.
+		backingUID, backingGID := c.RootUID(), c.RootGID()
+		if hasIdmapOption(overlayVol.Options) {
+			backingUID, backingGID = 0, 0
+		}
+		contentDir, err := overlay.TempDir(c.config.StaticDir, backingUID, backingGID)
 		if err != nil {
 			return nil, nil, err
 		}
+		if forceOverlayMount && upperDir == "" && workDir == "" {
+			upperDir = filepath.Join(contentDir, "upper")
+			workDir = filepath.Join(contentDir, "work")
+		}
 		overlayOpts := &overlay.Options{
-			RootUID:                c.RootUID(),
-			RootGID:                c.RootGID(),
+			RootUID:                backingUID,
+			RootGID:                backingGID,
 			UpperDirOptionFragment: upperDir,
 			WorkDirOptionFragment:  workDir,
 			GraphOpts:              c.runtime.store.GraphOptions(),
+			ForceMount:             forceOverlayMount,
+		}
+		if forceOverlayMount {
+			// podman mounts the overlay itself, so it must apply the
+			// container mount label; otherwise the runtime would.
+			overlayOpts.MountLabel = c.MountLabel()
 		}
 
 		overlayMount, err := overlay.MountWithOptions(contentDir, overlayVol.Source, overlayVol.Dest, overlayOpts)
@@ -495,6 +543,12 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 				}
 
 				if err := c.ChangeHostPathOwnership(contentDir, true, int(hostUID), int(hostGID)); err != nil {
+					return nil, nil, err
+				}
+			}
+			if isIdmapOption(o) {
+				overlayMount.UIDMappings, overlayMount.GIDMappings, err = parseIDMapMountOption(c.config.IDMappings, o)
+				if err != nil {
 					return nil, nil, err
 				}
 			}
@@ -533,11 +587,23 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		}
 
 		var overlayMount spec.Mount
-		if volume.ReadWrite {
-			overlayMount, err = overlay.Mount(contentDir, imagePath, volume.Dest, c.RootUID(), c.RootGID(), c.runtime.store.GraphOptions())
-		} else {
-			overlayMount, err = overlay.MountReadOnly(contentDir, imagePath, volume.Dest, c.RootUID(), c.RootGID(), c.runtime.store.GraphOptions())
+		overlayOpts := &overlay.Options{
+			RootUID:    c.RootUID(),
+			RootGID:    c.RootGID(),
+			GraphOpts:  c.runtime.store.GraphOptions(),
+			ReadOnly:   !volume.ReadWrite,
+			ForceMount: forceOverlayMount,
 		}
+		if forceOverlayMount {
+			// podman mounts the overlay itself, so it must apply the
+			// container mount label; otherwise the runtime would.
+			overlayOpts.MountLabel = c.MountLabel()
+		}
+		if forceOverlayMount && volume.ReadWrite {
+			overlayOpts.UpperDirOptionFragment = filepath.Join(contentDir, "upper")
+			overlayOpts.WorkDirOptionFragment = filepath.Join(contentDir, "work")
+		}
+		overlayMount, err = overlay.MountWithOptions(contentDir, imagePath, volume.Dest, overlayOpts)
 		if err != nil {
 			return nil, nil, fmt.Errorf("creating overlay mount for image %q failed: %w", volume.Source, err)
 		}
@@ -1001,12 +1067,12 @@ func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) e
 	// Get information about host environment
 	hostInfo, err := c.Runtime().hostInfo()
 	if err != nil {
-		return fmt.Errorf("getting host info: %v", err)
+		return fmt.Errorf("getting host info: %w", err)
 	}
 
 	criuVersion, err := criu.GetCriuVersion()
 	if err != nil {
-		return fmt.Errorf("getting criu version: %v", err)
+		return fmt.Errorf("getting criu version: %w", err)
 	}
 
 	rootfsImageID, rootfsImageName := c.Image()
@@ -2548,13 +2614,13 @@ func (c *Container) generateCurrentUserGroupEntry() (string, int, error) {
 
 	// Look up group name to see if it exists in the image.
 	_, err = lookup.GetGroup(c.state.Mountpoint, g.Name)
-	if err != runcuser.ErrNoGroupEntries {
+	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", 0, err
 	}
 
 	// Look up GID to see if it exists in the image.
 	_, err = lookup.GetGroup(c.state.Mountpoint, g.Gid)
-	if err != runcuser.ErrNoGroupEntries {
+	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", 0, err
 	}
 
@@ -2598,7 +2664,7 @@ func (c *Container) generateUserGroupEntry(addedGID int) (string, error) {
 
 	// Check if the group already exists
 	g, err := lookup.GetGroup(c.state.Mountpoint, group)
-	if err != runcuser.ErrNoGroupEntries {
+	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", err
 	}
 
@@ -2723,13 +2789,13 @@ func (c *Container) setHomeEnvIfNeeded() error {
 func (c *Container) userPasswdEntry(u *user.User) (string, error) {
 	// Look up the user to see if it exists in the container image.
 	_, err := lookup.GetUser(c.state.Mountpoint, u.Username)
-	if err != runcuser.ErrNoPasswdEntries {
+	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
 
 	// Look up the UID to see if it exists in the container image.
 	_, err = lookup.GetUser(c.state.Mountpoint, u.Uid)
-	if err != runcuser.ErrNoPasswdEntries {
+	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
 
@@ -2788,7 +2854,7 @@ func (c *Container) generateUserPasswdEntry(addedUID int) (string, error) {
 
 	// Look up the user to see if it exists in the container image
 	_, err = lookup.GetUser(c.state.Mountpoint, userspec)
-	if err != runcuser.ErrNoPasswdEntries {
+	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
 
@@ -3004,13 +3070,14 @@ func (c *Container) createSecretMountDir(runPath string) error {
 	return err
 }
 
+// isIdmapOption reports whether a single volume option requests idmapping
+// (the "idmap" or "idmap=..." option).
+func isIdmapOption(o string) bool {
+	return o == "idmap" || strings.HasPrefix(o, "idmap=")
+}
+
 func hasIdmapOption(options []string) bool {
-	for _, o := range options {
-		if o == "idmap" || strings.HasPrefix(o, "idmap=") {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(options, isIdmapOption)
 }
 
 // Fix ownership and permissions of the specified volume if necessary.
@@ -3035,12 +3102,12 @@ func (c *Container) fixVolumePermissionsUnlocked(v *ContainerNamedVolume, vol *V
 	// If the volume is not empty, and it is not the first copy-up event -
 	// we should not do a chown.
 	if vol.state.NeedsChown && !vol.state.CopiedUp {
-		contents, err := os.ReadDir(vol.mountPoint())
+		empty, err := isDirEmpty(vol.mountPoint())
 		if err != nil {
 			return fmt.Errorf("reading contents of volume %q: %w", vol.Name(), err)
 		}
 		// Not empty, do nothing and unset NeedsChown.
-		if len(contents) > 0 {
+		if !empty {
 			vol.state.NeedsChown = false
 			if err := vol.save(); err != nil {
 				return fmt.Errorf("saving volume %q state: %w", vol.Name(), err)

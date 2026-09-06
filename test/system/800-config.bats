@@ -5,6 +5,22 @@
 
 load helpers
 
+@test "podman --log-level applies while loading containers.conf" {
+    skip_if_remote "containers.conf is loaded by the server for remote connections"
+
+    conf_tmp="$PODMAN_TMPDIR/containers.conf"
+    cat >$conf_tmp <<EOF
+[engine]
+invalid_option_for_test=true
+EOF
+
+    for log_arg in --log-level=debug --log-level=trace --debug; do
+        CONTAINERS_CONF_OVERRIDE="$conf_tmp" run_podman "$log_arg" version
+        assert "$output" =~ "Failed to decode the keys" "unknown containers.conf key is logged with $log_arg"
+        assert "$output" =~ "$conf_tmp" "diagnostic identifies containers.conf with $log_arg"
+    done
+}
+
 @test "podman CONTAINERS_CONF - CONTAINERS_CONF in conmon" {
     skip_if_remote "can't check conmon environment over remote"
 
@@ -204,12 +220,28 @@ EOF
 
     m1=m1odule_$(random_string)
     m2=m2$(random_string)
+    bad_module=zz-invalid-$(random_string)
 
     touch $fake_modules_dir/{$m2,$m1}
+    cat >"$fake_modules_dir/$bad_module" <<EOF
+[containers]
+sdf=
+EOF
+
+    # The incomplete flag makes the early parser return an error, which
+    # initialization must ignore while Cobra completes the flag name.
+    XDG_CONFIG_HOME=$fake_home run_podman __completeNoDesc --module
+    assert "${lines[0]}" = "--module" "completion ignores the incomplete early flag"
+
     XDG_CONFIG_HOME=$fake_home run_podman __completeNoDesc --module ""
     # Even if there are modules in /etc or elsewhere, these will be first
     assert "${lines[0]}" = "$m1" "completion finds module 1"
     assert "${lines[1]}" = "$m2" "completion finds module 2"
+
+    # A parsed module must not be loaded during completion. The invalid module
+    # would make configuration initialization fail if it were loaded.
+    XDG_CONFIG_HOME=$fake_home run_podman __completeNoDesc --module="$bad_module" ""
+    assert "$output" !~ "Failed to obtain podman configuration" "completion does not load modules"
 }
 
 @test "podman --module - supported fields" {

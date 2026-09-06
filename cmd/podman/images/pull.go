@@ -188,14 +188,7 @@ func imagePull(cmd *cobra.Command, args []string) error {
 			return errors.New("--platform option can not be specified with --arch or --os")
 		}
 
-		specs := strings.Split(platform, "/")
-		pullOptions.OS = specs[0] // may be empty
-		if len(specs) > 1 {
-			pullOptions.Arch = specs[1]
-			if len(specs) > 2 {
-				pullOptions.Variant = specs[2]
-			}
-		}
+		pullOptions.OS, pullOptions.Arch, pullOptions.Variant = parsePlatform(platform)
 	}
 
 	if pullOptions.CredentialsCLI != "" {
@@ -231,4 +224,18 @@ func imagePull(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return errs.PrintErrors()
+}
+
+func parsePlatform(platform string) (string, string, string) {
+	specs := strings.Split(platform, "/")
+	os := specs[0] // may be empty
+	var arch string
+	var variant string
+	if len(specs) > 1 {
+		arch = specs[1]
+		if len(specs) > 2 {
+			variant = specs[2]
+		}
+	}
+	return os, arch, variant
 }

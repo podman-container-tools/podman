@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -506,7 +506,7 @@ func (p *Pod) initContainers() ([]*Container, error) {
 		return nil, err
 	}
 	// Sort the pod containers by created time
-	sort.Slice(cons, func(i, j int) bool { return cons[i].CreatedTime().Before(cons[j].CreatedTime()) })
+	slices.SortFunc(cons, func(a, b *Container) int { return a.CreatedTime().Compare(b.CreatedTime()) })
 	// Iterate sorted containers and add ids for any init containers
 	for _, c := range cons {
 		if len(c.config.InitContainerType) > 0 {

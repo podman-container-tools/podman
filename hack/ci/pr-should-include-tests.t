@@ -89,6 +89,12 @@ function run_test_script() {
 rc=0
 testnum=0
 
+# This harness may run in CI, where PR_NUMBER is set in the environment. The
+# cases below only exercise the local git-diff logic, not the github override-
+# label lookup (which needs real credentials), so ensure the script under test
+# never enters that path.
+unset PR_NUMBER
+
 while read expected_rc parent_sha  commit_sha pr rest; do
     # Skip blank lines
     test -z "$expected_rc" && continue

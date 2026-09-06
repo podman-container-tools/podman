@@ -7,10 +7,10 @@ import "io"
 //go:generate go run ../generator/generator.go InspectOptions
 type InspectOptions struct {
 	// Authfile - path to an authentication file.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// SkipTLSVerify - skip https and certificate validation when
 	// contacting container registries.
-	SkipTLSVerify *bool
+	SkipTLSVerify *bool `schema:"-"`
 }
 
 // CreateOptions are optional options for creating manifests
@@ -43,10 +43,10 @@ type AddOptions struct {
 	Variant    *string
 
 	Images        []string
-	Authfile      *string
-	Password      *string
-	Username      *string
-	SkipTLSVerify *bool `schema:"-"`
+	Authfile      *string `schema:"-"`
+	Password      *string `schema:"-"`
+	Username      *string `schema:"-"`
+	SkipTLSVerify *bool   `schema:"-"`
 }
 
 // AddArtifactOptions are optional options for adding artifact manifests
@@ -67,6 +67,7 @@ type AddArtifactOptions struct {
 	LayerType     *string           `json:"artifact_layer_type,omitempty"`
 	ExcludeTitles *bool             `json:"artifact_exclude_titles,omitempty"`
 	Subject       *string           `json:"artifact_subject,omitempty"`
+	IndexSubject  *string           `json:"subject,omitempty"` // IndexSubject is a subject value to set in the manifest list itself
 	Annotations   map[string]string `json:"artifact_annotations,omitempty"`
 	Files         []string          `json:"artifact_files,omitempty"`
 }
@@ -87,6 +88,7 @@ type ModifyOptions struct {
 
 	Annotations      map[string]string // Annotations to add to the entries for Images in the manifest list
 	IndexAnnotations map[string]string `json:"index_annotations" schema:"index_annotations"` // Annotations to add to the manifest list as a whole
+	IndexSubject     *string           `json:"subject" schema:"subject"`                     // IndexSubject is a subject value to set in the manifest list itself
 	Arch             *string           // Arch overrides the architecture for the image
 	Features         []string          // Feature list for the image
 	OS               *string           // OS overrides the operating system for the image
@@ -95,10 +97,10 @@ type ModifyOptions struct {
 	Variant          *string           // Variant overrides the architecture variant for the image
 
 	Images        []string // Images is an optional list of images to add/remove to/from manifest list depending on operation
-	Authfile      *string
-	Password      *string
-	Username      *string
-	SkipTLSVerify *bool `schema:"-"`
+	Authfile      *string  `schema:"-"`
+	Password      *string  `schema:"-"`
+	Username      *string  `schema:"-"`
+	SkipTLSVerify *bool    `schema:"-"`
 
 	ArtifactType          **string          `json:"artifact_type"`           // the ArtifactType in an artifact manifest being created
 	ArtifactConfigType    *string           `json:"artifact_config_type"`    // the config.MediaType in an artifact manifest being created

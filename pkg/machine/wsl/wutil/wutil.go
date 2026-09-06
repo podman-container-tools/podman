@@ -67,8 +67,7 @@ func parseWSLStatus() wslStatus {
 		var outputErr error
 		status, outputErr = matchOutputLine(out)
 		err = cmd.Wait()
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			// If `wsl --status` returns an exit error
 			// we assume that WSL isn't installed and
 			// override whatever was returned by

@@ -133,7 +133,7 @@ func GetInternalServerError(err error) *BuildError {
 }
 
 func ProcessBuildError(w http.ResponseWriter, err error) {
-	if buildErr, ok := err.(*BuildError); ok {
+	if buildErr, ok := errors.AsType[*BuildError](err); ok {
 		Error(w, buildErr.code, buildErr.err)
 		return
 	}

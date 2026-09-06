@@ -42,7 +42,10 @@ func (ic *imageCopier) copyBlobFromStream(ctx context.Context, srcReader io.Read
 	stream.reader = digestingReader
 
 	// === Update progress bars
-	stream.reader = bar.ProxyReader(stream.reader)
+	stream.reader, err = bar.ProxyReader(stream.reader)
+	if err != nil {
+		return types.BlobInfo{}, err
+	}
 
 	// === Decrypt the stream, if required.
 	decryptionStep, err := ic.blobPipelineDecryptionStep(&stream, srcInfo)

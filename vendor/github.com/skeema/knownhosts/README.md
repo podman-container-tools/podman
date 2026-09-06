@@ -115,7 +115,7 @@ config := &ssh.ClientConfig{
 
 ## License
 
-**Source code copyright 2025 Skeema LLC and the Skeema Knownhosts authors**
+**Source code copyright 2026 Skeema LLC and the Skeema Knownhosts authors**
 
 ```text
 Licensed under the Apache License, Version 2.0 (the "License");

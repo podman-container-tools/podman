@@ -22,6 +22,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/env"
 	"go.podman.io/podman/v6/pkg/machine/sockets"
 	"go.podman.io/storage/pkg/fileutils"
+	"golang.org/x/sys/windows"
 )
 
 const (
@@ -106,7 +107,7 @@ func LaunchWinProxy(opts WinProxyOpts, noInfo bool) {
 	if !noInfo {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "API forwarding for Docker API clients is not available due to the following startup failures.")
-			fmt.Fprintf(os.Stderr, "\t%s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "\t%v\n", err)
 			fmt.Fprintln(os.Stderr, "\nPodman clients are still able to connect.")
 		} else {
 			fmt.Printf("API forwarding listening on: %s\n", pipeName)
@@ -128,7 +129,7 @@ func LaunchWinProxy(opts WinProxyOpts, noInfo bool) {
 func launchWinProxy(opts WinProxyOpts) (bool, string, error) {
 	machinePipe := env.WithPodmanPrefix(opts.Name)
 	if !PipeNameAvailable(machinePipe, MachineNameWait) {
-		return false, "", fmt.Errorf("could not start api proxy since expected pipe is not available: %s", machinePipe)
+		return false, "", fmt.Errorf("could not start api proxy since expected pipe is not available: %s (an existing proxy process like win-sshproxy or gvproxy may still be running from a previous machine session; try terminating it and retrying)", machinePipe)
 	}
 
 	globalName := PipeNameAvailable(GlobalNamedPipe, GlobalNameWait)
@@ -170,6 +171,9 @@ func launchWinProxy(opts WinProxyOpts) (bool, string, error) {
 	args = append(args, hostURL.String(), dest, opts.IdentityPath)
 
 	cmd := exec.Command(command, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.DETACHED_PROCESS,
+	}
 	logrus.Debugf("winssh command: %s %v", command, args)
 	if err := cmd.Start(); err != nil {
 		return globalName, "", err

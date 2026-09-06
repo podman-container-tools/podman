@@ -1,7 +1,7 @@
 % podman-volume-ls 1
 
 ## NAME
-podman\-volume\-ls - List all the available volumes
+podman\-volume\-ls - List all the available volumes (alias list)
 
 ## SYNOPSIS
 **podman volume ls** [*options*]

@@ -146,7 +146,7 @@ var _ = Describe("podman machine rm", func() {
 
 		barName := "bar"
 		bar := new(initMachine)
-		session, err = mb.setName(barName).setCmd(bar.withUpdateConnection(ptrBool(false)).withImage(mb.imagePath).withNow()).run()
+		session, err = mb.setName(barName).setCmd(bar.withUpdateConnection(new(false)).withImage(mb.imagePath).withNow()).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 

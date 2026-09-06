@@ -281,7 +281,7 @@ func (p *Process) PercentWithContext(ctx context.Context, interval time.Duration
 	}
 
 	numcpu := runtime.NumCPU()
-	delta := (now.Sub(p.lastCPUTime).Seconds()) * float64(numcpu)
+	delta := now.Sub(p.lastCPUTime).Seconds() * float64(numcpu)
 	ret := calculatePercent(p.lastCPUTimes, cpuTimes, delta, numcpu)
 	p.lastCPUTimes = cpuTimes
 	p.lastCPUTime = now

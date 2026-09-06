@@ -390,8 +390,7 @@ func PushArtifact(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var notFoundErr layout.ImageNotFoundError
-		if errors.As(err, &notFoundErr) {
+		if notFoundErr, ok := errors.AsType[layout.ImageNotFoundError](err); ok {
 			utils.ArtifactNotFound(w, name, notFoundErr)
 			return
 		}

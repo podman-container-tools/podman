@@ -99,6 +99,37 @@ t DELETE libpod/images/$IMAGE 200 \
 # Clean up
 podman system connection rm $conn
 
+# Test platform selection on push (libpod and compat endpoints)
+# Use $PODMAN_BIN --root instead of the podman wrapper because we need to capture the image id
+img_amd64=$(echo "FROM $IMAGE" | $PODMAN_BIN --root $WORKDIR/server_root build -q --platform linux/amd64 -)
+img_arm64=$(echo "FROM $IMAGE" | $PODMAN_BIN --root $WORKDIR/server_root build -q --platform linux/arm64 -)
+podman manifest create mlist
+podman manifest add mlist containers-storage:$img_amd64
+podman manifest add mlist containers-storage:$img_arm64
+t POST "libpod/images/mlist/tag?repo=localhost:$REGISTRY_PORT/mtest&tag=latest" 201
+
+# Libpod: push single platform from manifest list
+t POST "libpod/images/localhost:$REGISTRY_PORT/mtest:latest/push?tlsVerify=false&os=linux&arch=arm64" 200
+# Note: skopeo inspect resolves manifest lists to the host platform,
+# so this doesn't strictly verify we pushed a single manifest. TO get around this,
+# we check both arm64 and amd64, which cannot be both be the host.
+
+is "$(skopeo inspect --tls-verify=false docker://localhost:$REGISTRY_PORT/mtest:latest | jq -r .Architecture)" \
+   "arm64" "libpod push with platform selects correct arch"
+
+# Compat: JSON-encoded platform parameter
+# Need to tag the manifest list first so compat endpoint can find it
+t POST "libpod/images/mlist/tag?repo=localhost:$REGISTRY_PORT/mtest&tag=amd64tag" 201
+t POST "images/localhost:$REGISTRY_PORT/mtest/push?tlsVerify=false&tag=amd64tag&platform=%7B%22os%22%3A%22linux%22%2C%22architecture%22%3A%22amd64%22%7D" 200
+is "$(skopeo inspect --tls-verify=false docker://localhost:$REGISTRY_PORT/mtest:amd64tag | jq -r .Architecture)" \
+   "amd64" "compat push with platform selects correct arch"
+
+# Non-existent platform fails
+t POST "libpod/images/localhost:$REGISTRY_PORT/mtest:latest/push?tlsVerify=false&os=linux&arch=s390x" 400
+
+podman manifest rm mlist
+podman rmi -af
+
 stop_registry
 
 # if an image is a manifest list, it should not have

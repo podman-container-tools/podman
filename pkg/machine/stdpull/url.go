@@ -109,7 +109,11 @@ func (d *DiskFromURL) pull() error {
 
 	p, bar := utils.ProgressBar(prefix, size, onComplete)
 
-	proxyReader := bar.ProxyReader(resp.Body)
+	proxyReader, err := bar.ProxyReader(resp.Body)
+	if err != nil {
+		logrus.Errorf("Error creating progress bar %q", err)
+		return err
+	}
 	defer func() {
 		if err := proxyReader.Close(); err != nil {
 			logrus.Error(err)

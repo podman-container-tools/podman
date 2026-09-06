@@ -11,13 +11,13 @@ type PlayOptions struct {
 	// Annotations - Annotations to add to Pods
 	Annotations map[string]string
 	// Authfile - path to an authentication file.
-	Authfile *string
+	Authfile *string `schema:"-"`
 	// CertDir - to a directory containing TLS certifications and keys.
 	CertDir *string
 	// Username for authenticating against the registry.
-	Username *string
+	Username *string `schema:"-"`
 	// Password for authenticating against the registry.
-	Password *string
+	Password *string `schema:"-"`
 	// Network - name of the networks to connect to.
 	Network *[]string
 	// NoHostname - do not generate /etc/hostname file in pod's containers

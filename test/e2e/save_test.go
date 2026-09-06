@@ -122,6 +122,7 @@ var _ = Describe("Podman save", func() {
 	It("podman save remove signature", func() {
 		podmanTest.AddImageToRWStore(ALPINE)
 		SkipIfRootless("FIXME: Need get in rootless push sign")
+		SkipIfRemote("Signing is not supported for remote clients")
 		if runtime.GOARCH == "ppc64le" {
 			Skip("No registry image for ppc64le")
 		}

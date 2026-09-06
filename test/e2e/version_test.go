@@ -68,7 +68,11 @@ var _ = Describe("Podman version", func() {
 
 			desc := fmt.Sprintf("JSON test(%q)", tt.input)
 			Expect(session).Should(Exit(tt.exitCode), desc)
-			Expect(session.IsJSONOutputValid()).To(Equal(tt.success), desc)
+			if tt.success {
+				Expect(session.OutputToString()).To(BeValidJSON(), desc)
+			} else {
+				Expect(session.OutputToString()).ToNot(BeValidJSON(), desc)
+			}
 		}
 	})
 

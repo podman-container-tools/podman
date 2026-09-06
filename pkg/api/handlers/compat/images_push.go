@@ -11,6 +11,7 @@ import (
 
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/common/libimage"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod"
 	handlers "go.podman.io/podman/v6/pkg/api/handlers"
@@ -39,6 +40,7 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 		Format      string `schema:"format"`
 		TLSVerify   bool   `schema:"tlsVerify"`
 		Tag         string `schema:"tag"`
+		Platform    string `schema:"platform"`
 	}{
 		// This is where you can override the golang default value for one of fields
 		TLSVerify: true,
@@ -47,6 +49,22 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
 		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
 		return
+	}
+
+	var platformOS, platformArch, platformVariant string
+	if query.Platform != "" {
+		var platform struct {
+			OS           string `json:"os"`
+			Architecture string `json:"architecture"`
+			Variant      string `json:"variant,omitempty"`
+		}
+		if err := json.Unmarshal([]byte(query.Platform), &platform); err != nil {
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("invalid platform JSON: %w", err))
+			return
+		}
+		platformOS = platform.OS
+		platformArch = platform.Architecture
+		platformVariant = platform.Variant
 	}
 
 	// Note that Docker's docs state "Image name or ID" to be in the path
@@ -68,7 +86,12 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	imageName = possiblyNormalizedName
-	localImage, _, err := runtime.LibimageRuntime().LookupImage(possiblyNormalizedName, nil)
+	lookupOptions := &libimage.LookupImageOptions{
+		OS:           platformOS,
+		Architecture: platformArch,
+		Variant:      platformVariant,
+	}
+	localImage, _, err := runtime.LibimageRuntime().LookupImage(possiblyNormalizedName, lookupOptions)
 	if err != nil {
 		utils.ImageNotFound(w, imageName, fmt.Errorf("failed to find image %s: %w", imageName, err))
 		return
@@ -99,6 +122,9 @@ func PushImage(w http.ResponseWriter, r *http.Request) {
 		Username: username,
 		Quiet:    true,
 		Progress: make(chan types.ProgressProperties),
+		OS:       platformOS,
+		Arch:     platformArch,
+		Variant:  platformVariant,
 	}
 	if _, found := r.URL.Query()["tlsVerify"]; found {
 		options.SkipTLSVerify = types.NewOptionalBool(!query.TLSVerify)

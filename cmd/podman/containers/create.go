@@ -161,6 +161,8 @@ func create(cmd *cobra.Command, args []string) error {
 	}
 	s.RawImageName = rawImageName
 
+	s.Passwd = &cliVals.Passwd
+
 	// Include the command used to create the container.
 	s.ContainerCreateCommand = os.Args
 

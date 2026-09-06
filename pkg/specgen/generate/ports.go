@@ -3,10 +3,10 @@
 package generate
 
 import (
+	"cmp"
 	"fmt"
 	"net"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -228,17 +228,17 @@ func ParsePortMapping(portMappings []types.PortMapping, exposePorts map[uint16][
 			}
 			// 1. sort the ports by host port
 			// use a small hack to make sure ports with host port 0 are sorted last
-			sort.Slice(ports, func(i, j int) bool {
-				if ports[i].hostPort == ports[j].hostPort {
-					return ports[i].containerPort < ports[j].containerPort
+			slices.SortFunc(ports, func(a, b tempMapping) int {
+				if a.hostPort == b.hostPort {
+					return cmp.Compare(a.containerPort, b.containerPort)
 				}
-				if ports[i].hostPort == 0 {
-					return false
+				if a.hostPort == 0 {
+					return 1
 				}
-				if ports[j].hostPort == 0 {
-					return true
+				if b.hostPort == 0 {
+					return -1
 				}
-				return ports[i].hostPort < ports[j].hostPort
+				return cmp.Compare(a.hostPort, b.hostPort)
 			})
 
 			allUsedContainerPorts := allUsedContainerPortsMap[protocol]

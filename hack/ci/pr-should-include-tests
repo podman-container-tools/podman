@@ -40,7 +40,7 @@ if [[ -n "$PR_NUMBER" ]]; then
     for var in GITHUB_TOKEN GITHUB_REPOSITORY; do
         if [[ -z "${!var}" ]]; then
             echo "$ME: cannot query github: \$$var is undefined" >&2
-            return 1
+            exit 1
         fi
     done
 
