@@ -19,6 +19,7 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	envLib "go.podman.io/podman/v6/pkg/env"
 	"go.podman.io/podman/v6/pkg/namespaces"
+	"go.podman.io/podman/v6/pkg/seccomp"
 	"go.podman.io/podman/v6/pkg/specgen"
 	systemdDefine "go.podman.io/podman/v6/pkg/systemd/define"
 	"go.podman.io/podman/v6/pkg/util"
@@ -739,7 +740,9 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 			convertedPath := val
 			// Do not try to convert special value "unconfined",
 			// https://github.com/containers/podman/issues/26855
-			if val != "unconfined" {
+			// or inline JSON seccomp profile,
+			// https://github.com/containers/podman/issues/27710
+			if val != "unconfined" && !seccomp.IsProfileInline(val) {
 				convertedPath, err = specgen.ConvertWinMountPath(val)
 				if err != nil {
 					// If the conversion fails, use the original path

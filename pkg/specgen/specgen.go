@@ -412,7 +412,7 @@ type ContainerSecurityConfig struct {
 	// the container. valid values: empty,default,image
 	SeccompPolicy string `json:"seccomp_policy,omitempty"`
 	// SeccompProfilePath is the path to a JSON file containing the
-	// container's Seccomp profile.
+	// container's Seccomp profile, or the JSON profile itself.
 	// If not specified, no Seccomp profile will be used.
 	// Optional.
 	SeccompProfilePath string `json:"seccomp_profile_path,omitempty"`

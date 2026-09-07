@@ -33,6 +33,8 @@ func TestSeccompProfilePath(t *testing.T) {
 		{`\\computer\loc`, `\\computer\loc`},
 		{`\\.\drive\loc`, "/mnt/wsl/drive/loc"},
 		{"unconfined", "unconfined"},
+		{`{"defaultAction":"SCMP_ACT_ALLOW"}`, `{"defaultAction":"SCMP_ACT_ALLOW"}`},
+		{" \n{\"defaultAction\":\"SCMP_ACT_ALLOW\"}", " \n{\"defaultAction\":\"SCMP_ACT_ALLOW\"}"},
 	}
 
 	f := func(secopt string) (*specgen.SpecGenerator, error) {
