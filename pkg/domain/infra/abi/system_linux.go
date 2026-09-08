@@ -71,6 +71,11 @@ func (ic *ContainerEngine) SetupRootless(_ context.Context, noMoveProcess bool, 
 		return fmt.Errorf("could not get rootless state directory: %w", err)
 	}
 
+	// Save device GIDs from --device flags before entering user namespace.
+	// This runs on every container invocation so device_gids file is always
+	// up to date regardless of whether a new namespace is created or joined.
+	rootless.SaveDeviceGIDsFromArgs(stateDir)
+
 	became, ret, err := rootless.TryJoinPauseProcess(stateDir)
 	if err != nil {
 		return err
