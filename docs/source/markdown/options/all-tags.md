@@ -10,4 +10,6 @@
 
 All tagged images in the repository are pulled.
 
+The SOURCE must reference a repository without a tag or digest (for example `alpine`, not `alpine:latest`). If SOURCE includes a tag or digest, only that specific image is pulled and **--all-tags** has no effect.
+
 *IMPORTANT: When using the all-tags flag, Podman does not iterate over the search registries in the **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)** but always uses docker.io for unqualified image names.*

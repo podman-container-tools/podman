@@ -223,6 +223,23 @@ Never pull the image, only use local version.
 $ podman pull --policy never alpine:latest
 ```
 
+Pull all tagged images in a repository. SOURCE must not include a tag or digest.
+```
+$ podman pull --all-tags alpine
+Trying to pull docker.io/library/alpine:latest...
+Getting image source signatures
+Copying blob 5843afab3874 done
+Copying config d4ff818577 done
+Writing manifest to image destination
+Storing signatures
+Trying to pull docker.io/library/alpine:3.19...
+Getting image source signatures
+Copying blob 91ef9543149d done
+Copying config 05455a08881 done
+Writing manifest to image destination
+Storing signatures
+```
+
 Always pull the image even if present locally.
 ```
 $ podman pull --policy always alpine:latest
