@@ -17,7 +17,9 @@ import (
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/transports/alltransports"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	ann "go.podman.io/podman/v6/pkg/annotations"
@@ -41,9 +43,18 @@ func getImageFromSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGen
 		return image, resolvedName, inspectData, nil
 	}
 
-	// Need to look up image.
+	// Need to look up image.  The docker transport identifies a registry
+	// image, but local lookups need the normalized image name.  A pull may
+	// have just stored the image under that name, so strip the transport
+	// before looking it up.
 	lookupOptions := &libimage.LookupImageOptions{ManifestList: true}
-	image, resolvedName, err := r.LibimageRuntime().LookupImage(s.Image, lookupOptions)
+	imageName := s.Image
+	if imageRef, parseErr := alltransports.ParseImageName(imageName); parseErr == nil && imageRef.Transport().Name() == docker.Transport.Name() {
+		if named := imageRef.DockerReference(); named != nil {
+			imageName = named.String()
+		}
+	}
+	image, resolvedName, err := r.LibimageRuntime().LookupImage(imageName, lookupOptions)
 	if err != nil {
 		return nil, "", nil, err
 	}

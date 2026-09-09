@@ -56,7 +56,9 @@ is a non-standardized format, primarily useful for debugging or noninvasive cont
   **docker://**_docker-reference_ (Default)
   An image reference stored in a remote container image registry. Example: "quay.io/podman/stable:latest".
 The reference can include a path to a specific registry; if it does not, the
-registries listed in registries.conf are queried to find a matching image.
+registries listed in registries.conf are queried to find a matching image. If the
+image is already present in local storage, Podman uses that image instead of
+requiring a separate local-storage transport prefix.
 By default, credentials from `podman login` (stored at
 $XDG_RUNTIME_DIR/containers/auth.json by default) are used to authenticate;
 otherwise it falls back to using credentials in $HOME/.docker/config.json.

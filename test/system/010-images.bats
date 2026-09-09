@@ -18,6 +18,12 @@ load helpers
     fi
 }
 
+# Regression test for using a docker transport reference with a local image.
+@test "podman run accepts docker transport references" {
+    run_podman run --pull=never --rm docker://$PODMAN_TEST_IMAGE_FQN true
+    is "$output" "" "run image referenced with docker transport"
+}
+
 # CANNOT BE PARALLELIZED: relies on exact output from podman images
 @test "podman images - custom formats" {
     tests="
