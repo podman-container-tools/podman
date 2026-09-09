@@ -2573,6 +2573,34 @@ Options=iam_role,endpoint=${AWS_REGION},use_xattr,listobjectsv2,del_cache,use_ca
 # `iam_role` assumes inside EC2, if not, Use `profile=` instead
 ```
 
+Starting a service defined as a `.container` file:
+
+1. Create a Quadlet file named `myservice.container` in `~/.config/containers/systemd/` for a rootless service, or in `/etc/containers/systemd/` for a system service:
+
+```ini
+[Unit]
+Description=My Service
+
+[Container]
+Image=quay.io/centos/centos:latest
+Exec=sleep 60
+
+[Install]
+WantedBy=multi-user.target default.target
+```
+
+2. Reload systemd to generate the service unit:
+
+```bash
+systemctl --user daemon-reload
+```
+
+3. Start the service:
+
+```bash
+systemctl --user start myservice.service
+```
+
 For more examples, please see the [podman-quadlet-basic-usage.7](podman-quadlet-basic-usage.7.md).
 
 ## SEE ALSO
