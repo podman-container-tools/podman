@@ -36,6 +36,17 @@ func TestValidateScpCompression(t *testing.T) {
 			opts: entities.ScpCompressionOptions{},
 		},
 		{
+			name: "none is an explicit no compression",
+			opts: entities.ScpCompressionOptions{CompressionFormat: ScpCompressionNone},
+		},
+		{
+			name: "level with none",
+			opts: entities.ScpCompressionOptions{CompressionFormat: ScpCompressionNone, CompressionLevel: level(9)},
+			// none compresses nothing, so a level attached to it is as pointless
+			// as one with no format at all.
+			wantErr: "a compression level requires a compression format",
+		},
+		{
 			name: "level without a format",
 			opts: entities.ScpCompressionOptions{CompressionLevel: level(9)},
 			// A level on its own would be silently ignored, so reject it.
@@ -93,12 +104,25 @@ func TestValidateScpCompression(t *testing.T) {
 	}
 }
 
-// The list is part of the command's interface: it drives the flag's choices.
 func TestScpCompressionFormatsAreUsable(t *testing.T) {
 	assert.Equal(t, []string{"gzip", "zstd"}, ScpCompressionFormats())
 	for _, format := range ScpCompressionFormats() {
 		assert.NoError(t, ValidateScpCompression(entities.ScpCompressionOptions{CompressionFormat: format}))
+		assert.True(t, ScpCompressionRequested(format))
 	}
+}
+
+// The list is part of the command's interface: it drives the flag's choices.
+func TestScpCompressionValuesAreAccepted(t *testing.T) {
+	assert.Equal(t, []string{"gzip", "zstd", "none"}, ScpCompressionValues())
+	for _, value := range ScpCompressionValues() {
+		assert.NoError(t, ValidateScpCompression(entities.ScpCompressionOptions{CompressionFormat: value}))
+	}
+}
+
+func TestScpCompressionRequested(t *testing.T) {
+	assert.False(t, ScpCompressionRequested(""))
+	assert.False(t, ScpCompressionRequested(ScpCompressionNone))
 }
 
 // The feature rests on podman load recognising the compression unaided, and the
@@ -327,21 +351,27 @@ func TestSaveToRemoteCompressesBeforeCopying(t *testing.T) {
 		assert.Equal(t, "/local/archive", remote.scpOpts[0].Destination)
 	})
 
-	t.Run("without a format the archive is copied as saved", func(t *testing.T) {
-		remote := &fakeRemote{out: []string{"/tmp/tmp.XXXX\n"}}
+	// The flag's "none" has to end up where the omission an empty format stands
+	// for does: the archive copied exactly as podman save wrote it.
+	for _, format := range []string{"", ScpCompressionNone} {
+		t.Run(fmt.Sprintf("format %q copies the archive as saved", format), func(t *testing.T) {
+			remote := &fakeRemote{out: []string{"/tmp/tmp.XXXX\n"}}
+			opts := baseOpts
+			opts.ScpCompressionOptions = entities.ScpCompressionOptions{CompressionFormat: format}
 
-		_, err := saveToRemote(remote.runner(), baseOpts)
-		require.NoError(t, err)
+			_, err := saveToRemote(remote.runner(), opts)
+			require.NoError(t, err)
 
-		assert.Equal(t, [][]string{
-			{"mktemp"},
-			{"podman", "image", "save", "alpine", "--output", "/tmp/tmp.XXXX"},
-			{"rm", "-f", "/tmp/tmp.XXXX"},
-		}, remote.argv)
+			assert.Equal(t, [][]string{
+				{"mktemp"},
+				{"podman", "image", "save", "alpine", "--output", "/tmp/tmp.XXXX"},
+				{"rm", "-f", "/tmp/tmp.XXXX"},
+			}, remote.argv)
 
-		require.Len(t, remote.scpOpts, 1)
-		assert.Equal(t, "ssh://root@example.test:/tmp/tmp.XXXX", remote.scpOpts[0].Source)
-	})
+			require.Len(t, remote.scpOpts, 1)
+			assert.Equal(t, "ssh://root@example.test:/tmp/tmp.XXXX", remote.scpOpts[0].Source)
+		})
+	}
 
 	t.Run("a compressor that fails stops the transfer before anything is copied", func(t *testing.T) {
 		remote := &fakeRemote{
@@ -568,13 +598,17 @@ func TestLoadToRemoteCompressesTheStream(t *testing.T) {
 	// The remote to remote path will rely on this: once the archive has been
 	// compressed on the source host, this leg has to stream it untouched rather
 	// than compress it a second time.
-	t.Run("without a format the file is streamed as it is", func(t *testing.T) {
-		remote := &fakeRemote{out: []string{"Loaded image: quay.io/libpod/alpine:latest"}}
+	for _, format := range []string{"", ScpCompressionNone} {
+		t.Run(fmt.Sprintf("format %q streams the file as it is", format), func(t *testing.T) {
+			remote := &fakeRemote{out: []string{"Loaded image: quay.io/libpod/alpine:latest"}}
+			opts := baseOpts
+			opts.ScpCompressionOptions = entities.ScpCompressionOptions{CompressionFormat: format}
 
-		_, err := loadToRemote(remote.runner(), baseOpts)
-		require.NoError(t, err)
-		assert.Equal(t, payload, remote.input)
-	})
+			_, err := loadToRemote(remote.runner(), opts)
+			require.NoError(t, err)
+			assert.Equal(t, payload, remote.input)
+		})
+	}
 }
 
 var errRead = errors.New("read failed")

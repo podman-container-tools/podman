@@ -68,11 +68,19 @@ var _ = Describe("podman image scp", func() {
 		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "bzip2", ALPINE, "QA::"})
 		scp.WaitWithDefaultTimeout()
 		// Single space: ErrorToString collapses whitespace, the message has two.
-		Expect(scp).Should(ExitWithError(125, `"bzip2" is not a valid value. Choose from: "gzip, zstd"`))
+		Expect(scp).Should(ExitWithError(125, `"bzip2" is not a valid value. Choose from: "gzip, zstd, none"`))
 	})
 
 	It("podman image scp rejects a compression level without a format", func() {
 		scp := podmanTest.Podman([]string{"image", "scp", "--compression-level", "9", ALPINE, "QA::"})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, "a compression level requires a compression format: invalid argument"))
+	})
+
+	It("podman image scp rejects a compression level with the none format", func() {
+		// none is accepted as a format but compresses nothing, so a level with it
+		// is as pointless as one on its own.
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "none", "--compression-level", "9", ALPINE, "QA::"})
 		scp.WaitWithDefaultTimeout()
 		Expect(scp).Should(ExitWithError(125, "a compression level requires a compression format: invalid argument"))
 	})
@@ -93,5 +101,16 @@ var _ = Describe("podman image scp", func() {
 		Expect(scp).Should(ExitWithError(125, "unknown user user@domain"))
 		// Loose around the format name: logrus escapes the quotes it puts round it.
 		Expect(scp.ErrorToString()).To(MatchRegexp(`Ignoring compression format .*zstd.*: it only applies to transfers over ssh`))
+	})
+
+	It("podman image scp says nothing about compression for the none format", func() {
+		SkipIfRootless("the local user lookup only happens during a rootful transfer")
+
+		// none asks for the default, so it has nothing to ignore and nothing to
+		// warn about. The bogus user fails the transfer as above.
+		scp := podmanTest.Podman([]string{"image", "scp", "--compression-format", "none", "user@domain@localhost::" + ALPINE})
+		scp.WaitWithDefaultTimeout()
+		Expect(scp).Should(ExitWithError(125, "unknown user user@domain"))
+		Expect(scp.ErrorToString()).NotTo(ContainSubstring("Ignoring compression format"))
 	})
 })

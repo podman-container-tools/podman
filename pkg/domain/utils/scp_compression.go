@@ -40,9 +40,27 @@ var scpCompressionFormats = map[string]scpCompressionFormat{
 	"zstd": {bin: "zstd", args: []string{"-f", "-q", "--rm"}, ext: ".zst", minLevel: 1, maxLevel: 19},
 }
 
-// ScpCompressionFormats lists the accepted --compression-format values.
+// ScpCompressionNone asks for no compression, which is what omitting the format
+// does too. It exists so the default can be spelled out rather than only
+// expressed by leaving the option off.
+const ScpCompressionNone = "none"
+
+// ScpCompressionFormats lists the algorithms the archive can be compressed with.
 func ScpCompressionFormats() []string {
 	return slices.Sorted(maps.Keys(scpCompressionFormats))
+}
+
+// ScpCompressionValues lists the accepted --compression-format values: every
+// algorithm plus the explicit opt out, kept last so it reads as an aside to the
+// algorithms rather than one of them.
+func ScpCompressionValues() []string {
+	return append(ScpCompressionFormats(), ScpCompressionNone)
+}
+
+// ScpCompressionRequested reports whether format asks for the archive to be
+// compressed. An empty format and ScpCompressionNone both say it does not.
+func ScpCompressionRequested(format string) bool {
+	return format != "" && format != ScpCompressionNone
 }
 
 // scpCompressionFormatByName gives every caller the same rejection wording.
@@ -50,7 +68,7 @@ func scpCompressionFormatByName(name string) (scpCompressionFormat, error) {
 	format, ok := scpCompressionFormats[name]
 	if !ok {
 		return scpCompressionFormat{}, fmt.Errorf("unsupported compression format %q, choose from: %s: %w",
-			name, strings.Join(ScpCompressionFormats(), ", "), define.ErrInvalidArg)
+			name, strings.Join(ScpCompressionValues(), ", "), define.ErrInvalidArg)
 	}
 	return format, nil
 }
@@ -59,7 +77,7 @@ func scpCompressionFormatByName(name string) (scpCompressionFormat, error) {
 // that the level, if any, is in range. The errors avoid flag names because this
 // also runs on the API path.
 func ValidateScpCompression(opts entities.ScpCompressionOptions) error {
-	if opts.CompressionFormat == "" {
+	if !ScpCompressionRequested(opts.CompressionFormat) {
 		if opts.CompressionLevel != nil {
 			return fmt.Errorf("a compression level requires a compression format: %w", define.ErrInvalidArg)
 		}

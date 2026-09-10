@@ -9,7 +9,8 @@ import (
 // ScpCompressionOptions describes how the transfer archive should be compressed.
 type ScpCompressionOptions struct {
 	// CompressionFormat is the algorithm used to compress the archive before it
-	// is sent over the network. An empty string disables compression.
+	// is sent over the network. An empty string and "none" both disable
+	// compression.
 	CompressionFormat string `json:"compressionFormat,omitempty"`
 	// CompressionLevel is the level handed to the compressor. A nil value uses
 	// the algorithm's default.

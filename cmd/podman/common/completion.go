@@ -1707,7 +1707,7 @@ func AutocompleteImageScpFormat(_ *cobra.Command, _ []string, _ string) ([]strin
 
 // AutocompleteImageScpCompressionFormat - Autocomplete image scp compression-format options.
 func AutocompleteImageScpCompressionFormat(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	return utils.ScpCompressionFormats(), cobra.ShellCompDirectiveNoFileComp
+	return utils.ScpCompressionValues(), cobra.ShellCompDirectiveNoFileComp
 }
 
 // AutocompleteWaitCondition - Autocomplete wait condition options.

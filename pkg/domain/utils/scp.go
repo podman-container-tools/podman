@@ -184,7 +184,7 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			return nil, err
 		}
 	default: // else native load, both source and dest are local and transferring between users
-		if opts.CompressionFormat != "" {
+		if ScpCompressionRequested(opts.CompressionFormat) {
 			// Nothing crosses the network here, so compressing would only burn CPU.
 			logrus.Warnf("Ignoring compression format %q: it only applies to transfers over ssh", opts.CompressionFormat)
 		}
@@ -285,7 +285,7 @@ func loadToRemote(run remoteRunner, opts entities.ScpLoadToRemoteOptions) (*enti
 	defer input.Close()
 
 	var stream io.Reader = input
-	if opts.CompressionFormat != "" {
+	if ScpCompressionRequested(opts.CompressionFormat) {
 		// The remote podman load detects the compression itself.
 		compressed, err := compressReader(input, opts.ScpCompressionOptions)
 		if err != nil {
@@ -391,7 +391,7 @@ func saveToRemote(run remoteRunner, opts entities.ScpSaveToRemoteOptions) (*enti
 		return nil, err
 	}
 
-	if opts.CompressionFormat != "" {
+	if ScpCompressionRequested(opts.CompressionFormat) {
 		// Compress it where it is, so only compressed bytes are copied over the
 		// network.
 		compressedFile, err := compressRemoteFile(run.exec, execOpts, opts.SSHMode, remoteFile, opts.ScpCompressionOptions)

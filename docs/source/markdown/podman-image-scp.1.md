@@ -22,9 +22,9 @@ This is not a direct storage-to-storage copy. The image is saved to an archive (
 
 ## OPTIONS
 
-#### **--compression-format**=**gzip** | **zstd**
+#### **--compression-format**=**gzip** | **zstd** | **none**
 
-Compress the transfer archive with the given algorithm before it is sent over the network. Supported values are `gzip` and `zstd`. The default is no compression: the archive is transferred as **podman save** wrote it.
+Compress the transfer archive with the given algorithm before it is sent over the network. Supported values are `gzip` and `zstd`. The default is **none**, which transfers the archive as **podman save** wrote it.
 
 Because **podman save** writes docker-archive layers uncompressed, compressing the archive typically cuts the transferred data to around half its original size or less. The receiving **podman load** detects the compression and decompresses the archive itself, so nothing has to be configured on the destination.
 
@@ -36,7 +36,7 @@ This option has no effect on a transfer between two users on the same machine, b
 
 #### **--compression-level**=*level*
 
-Compression level to use, **1**-**9** for **gzip** and **1**-**19** for **zstd**. The default is whatever the chosen algorithm defaults to, as no level is passed to it. Requires **--compression-format**.
+Compression level to use, **1**-**9** for **gzip** and **1**-**19** for **zstd**. The default is whatever the chosen algorithm defaults to, as no level is passed to it. Requires **--compression-format** to name an algorithm.
 
 The accepted range for **zstd** stops at **19** rather than the **20** accepted by **podman push**, because levels above that need the compressor's *--ultra* mode when the archive is compressed on a remote host.
 

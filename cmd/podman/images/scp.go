@@ -55,8 +55,8 @@ func scpFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("format", common.AutocompleteImageScpFormat)
 
 	compFormatFlagName := "compression-format"
-	compFormatChoice := validate.Value(&scpCompressFormat, utils.ScpCompressionFormats()...)
-	flags.Var(compFormatChoice, compFormatFlagName, "Compress the transfer archive with the given algorithm ("+compFormatChoice.Choices()+"). Default is no compression.")
+	compFormatChoice := validate.Value(&scpCompressFormat, utils.ScpCompressionValues()...)
+	flags.Var(compFormatChoice, compFormatFlagName, "Compress the transfer archive with the given algorithm ("+compFormatChoice.Choices()+"). Default is none.")
 	_ = cmd.RegisterFlagCompletionFunc(compFormatFlagName, common.AutocompleteImageScpCompressionFormat)
 
 	compLevelFlagName := "compression-level"

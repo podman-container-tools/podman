@@ -2289,7 +2289,7 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//   - in: query
 	//     name: compressionFormat
 	//     required: false
-	//     description: compress the transfer archive with this algorithm (gzip, zstd)
+	//     description: compress the transfer archive with this algorithm (gzip, zstd, none)
 	//     type: string
 	//   - in: query
 	//     name: compressionLevel
