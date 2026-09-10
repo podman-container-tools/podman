@@ -58,7 +58,7 @@ func (ic *ContainerEngine) SecretCreate(_ context.Context, name string, reader i
 		return nil, err
 	}
 
-	ic.Libpod.NewSecretEvent(events.Create, secretID)
+	ic.Libpod.NewSecretEvent(events.Create, secretID, name)
 
 	return &entities.SecretCreateReport{
 		ID: secretID,
@@ -145,13 +145,18 @@ func (ic *ContainerEngine) SecretRm(_ context.Context, nameOrIDs []string, optio
 		}
 	}
 	for _, nameOrID := range toRemove {
+		var secretName string
+		secr, _ := manager.Lookup(nameOrID)
+		if secr != nil {
+			secretName = secr.Name
+		}
 		deletedID, err := manager.Delete(nameOrID)
 		if options.Ignore && errors.Is(err, secrets.ErrNoSuchSecret) {
 			continue
 		}
 		reports = append(reports, &entities.SecretRmReport{Err: err, ID: deletedID})
 		if err == nil {
-			ic.Libpod.NewSecretEvent(events.Remove, deletedID)
+			ic.Libpod.NewSecretEvent(events.Remove, deletedID, secretName)
 		}
 	}
 
