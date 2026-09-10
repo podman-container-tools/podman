@@ -34,3 +34,8 @@ func TestVolumeFromEmptyDir(t *testing.T) {
 	assert.Equal(t, sizedEmptyDirVol.Type, KubeVolumeTypeEmptyDirTmpfs)
 	assert.Equal(t, int64(64*1024*1024), sizedEmptyDirVol.SizeLimit)
 }
+
+func TestMemoryEmptyDirOptions(t *testing.T) {
+	assert.Equal(t, []string{"volume-opt=type=tmpfs"}, MemoryEmptyDirOptions(0))
+	assert.Equal(t, []string{"volume-opt=type=tmpfs", "volume-opt=o=size=67108864"}, MemoryEmptyDirOptions(64*1024*1024))
+}

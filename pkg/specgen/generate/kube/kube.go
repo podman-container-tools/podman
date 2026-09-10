@@ -610,10 +610,7 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 			s.Volumes = append(s.Volumes, &emptyDirVolume)
 		case KubeVolumeTypeEmptyDirTmpfs:
 			// A named volume, so the tmpfs is shared by every container in the pod.
-			tmpfsOptions := append(slices.Clone(options), "volume-opt=type="+define.TypeTmpfs)
-			if volumeSource.SizeLimit > 0 {
-				tmpfsOptions = append(tmpfsOptions, fmt.Sprintf("volume-opt=o=size=%d", volumeSource.SizeLimit))
-			}
+			tmpfsOptions := append(slices.Clone(options), MemoryEmptyDirOptions(volumeSource.SizeLimit)...)
 			memVolume := specgen.NamedVolume{
 				Dest:        volume.MountPath,
 				Name:        volumeSource.Source,

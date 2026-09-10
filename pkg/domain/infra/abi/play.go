@@ -948,6 +948,22 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		if err != nil {
 			return nil, nil, err
 		}
+
+		// A memory-backed emptyDir belongs to the pod, not to an individual
+		// container. Keep the tmpfs mounted through the infra container so it
+		// survives the gap between one-shot init and regular containers.
+		for _, volume := range volumes {
+			if volume.Type != kube.KubeVolumeTypeEmptyDirTmpfs {
+				continue
+			}
+			podSpec.PodSpecGen.InfraContainerSpec.Volumes = append(podSpec.PodSpecGen.InfraContainerSpec.Volumes, &specgen.NamedVolume{
+				Name:        volume.Source,
+				Dest:        "/run/podman/emptydir/" + volume.Source,
+				Options:     kube.MemoryEmptyDirOptions(volume.SizeLimit),
+				IsAnonymous: true,
+				NoInherit:   true,
+			})
+		}
 	}
 
 	// Add the original container names from the kube yaml as aliases for it. This will allow network to work with
