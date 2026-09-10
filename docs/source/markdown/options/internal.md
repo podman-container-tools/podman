@@ -8,8 +8,7 @@
 #### **--internal**
 << endif >>
 
-Restrict external access of this network when using a `bridge` network. Note when using the CNI backend
-DNS will be automatically disabled, see **--disable-dns**.
+Restrict external access of this network when using a `bridge` network.
 
 When using the `macvlan` or `ipvlan` driver with this option, no default route will be added to the container.
 Because it bypasses the host network stack, no additional restrictions can be set by Podman, and if a
