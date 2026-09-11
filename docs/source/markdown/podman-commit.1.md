@@ -55,7 +55,7 @@ Write the image ID to the file.
 #### **--include-volumes**
 
 Include in the committed image any volumes added to the container by the **--volume** or **--mount** OPTIONS to the **[podman create](podman-create.1.md)** and **[podman run](podman-run.1.md)** commands.\
-The default is **false**.
+This only takes effect when set to **true**. The default is **false** (volume contents are not copied into the image).
 
 #### **--message**, **-m**=*message*
 
