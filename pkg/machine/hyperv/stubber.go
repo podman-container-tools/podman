@@ -159,8 +159,8 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 	}
 
 	builder.WithUnit(ignition.Unit{
-		Contents: ignition.StrToPtr(netUnitFile),
-		Enabled:  ignition.BoolToPtr(true),
+		Contents: new(netUnitFile),
+		Enabled:  new(true),
 		Name:     "vsock-network.service",
 	})
 
@@ -173,7 +173,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 			Contents: ignition.Resource{
 				Source: ignition.EncodeDataURLPtr(hyperVVsockNMConnection),
 			},
-			Mode: ignition.IntToPtr(0o600),
+			Mode: new(0o600),
 		},
 	})
 

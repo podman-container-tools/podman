@@ -2,4 +2,4 @@
 
 package integration
 
-var volumeTest = "quay.io/libpod/volume-plugin-test-img:20220623"
+var volumeTest = "quay.io/libpod/volume-plugin-test-img:20260807"

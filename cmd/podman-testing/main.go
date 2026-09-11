@@ -101,8 +101,7 @@ func main() {
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		}
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 			if w, ok := ee.Sys().(syscall.WaitStatus); ok {
 				exitCode = w.ExitStatus()
 			}

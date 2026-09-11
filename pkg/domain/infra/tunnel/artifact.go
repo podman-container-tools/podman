@@ -118,8 +118,7 @@ func (ir *ImageEngine) ArtifactAdd(_ context.Context, name string, artifactBlob 
 				if err == nil {
 					continue
 				}
-				var errModel *errorhandling.ErrorModel
-				if errors.As(err, &errModel) {
+				if errModel, ok := errors.AsType[*errorhandling.ErrorModel](err); ok {
 					switch errModel.ResponseCode {
 					case http.StatusNotFound, http.StatusMethodNotAllowed:
 					default:

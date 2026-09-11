@@ -1122,7 +1122,7 @@ func SkipIfSystemdNotRunning(reason string) {
 	cmd := exec.Command("systemctl", "list-units")
 	err := cmd.Run()
 	if err != nil {
-		if _, ok := err.(*exec.Error); ok {
+		if _, ok := errors.AsType[*exec.Error](err); ok {
 			Skip("[notSystemd]: not running " + reason)
 		}
 		Expect(err).ToNot(HaveOccurred())
@@ -1366,7 +1366,8 @@ func (p *PodmanTestIntegration) makeOptions(args []string, options PodmanExecOpt
 		eventsType = "none"
 	}
 
-	podmanOptions = append(podmanOptions,
+	podmanOptions = append(
+		podmanOptions,
 		"--root", p.Root,
 		"--runroot", p.RunRoot,
 		"--runtime", p.OCIRuntime,

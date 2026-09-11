@@ -60,8 +60,7 @@ func HandleOSExecError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
 		// the user command inside the unshare/ssh env has failed
 		// we set the exit code, do not return the error to the user
 		// otherwise "exit status X" will be printed

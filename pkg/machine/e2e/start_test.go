@@ -195,7 +195,7 @@ var _ = Describe("podman machine start", func() {
 			defer GinkgoRecover()
 			defer wg.Done()
 			s := &startMachine{}
-			startSession1, err = mb.setName(machine1).setCmd(s.withUpdateConnection(ptrBool(false))).setTimeout(time.Minute * 10).run()
+			startSession1, err = mb.setName(machine1).setCmd(s.withUpdateConnection(new(false))).setTimeout(time.Minute * 10).run()
 			Expect(err).ToNot(HaveOccurred())
 		}()
 		go func() {
@@ -208,7 +208,7 @@ var _ = Describe("podman machine start", func() {
 			// second run.
 			nmb, err := newMB()
 			Expect(err).ToNot(HaveOccurred())
-			startSession2, err = nmb.setName(machine2).setCmd(s.withUpdateConnection(ptrBool(false))).setTimeout(time.Minute * 10).run()
+			startSession2, err = nmb.setName(machine2).setCmd(s.withUpdateConnection(new(false))).setTimeout(time.Minute * 10).run()
 			Expect(err).ToNot(HaveOccurred())
 		}()
 		wg.Wait()
@@ -249,7 +249,7 @@ var _ = Describe("podman machine start", func() {
 
 		// Start the new machine with --update-connection=false
 		s := startMachine{}
-		startSession, err := mb.setName(machineName).setCmd(s.withUpdateConnection(ptrBool(false))).run()
+		startSession, err := mb.setName(machineName).setCmd(s.withUpdateConnection(new(false))).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
@@ -265,7 +265,7 @@ var _ = Describe("podman machine start", func() {
 		Expect(stopSession).To(Exit(0))
 
 		// Start the new machine with --update-connection
-		startSession, err = mb.setName(machineName).setCmd(s.withUpdateConnection(ptrBool(true))).run()
+		startSession, err = mb.setName(machineName).setCmd(s.withUpdateConnection(new(true))).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
@@ -287,7 +287,7 @@ var _ = Describe("podman machine start", func() {
 		// Create a new machine
 		i := initMachine{}
 		machineName1 := randomString()
-		initSession, err := mb.setName(machineName1).setCmd(i.withImage(mb.imagePath).withUpdateConnection(ptrBool(false)).withNow()).run()
+		initSession, err := mb.setName(machineName1).setCmd(i.withImage(mb.imagePath).withUpdateConnection(new(false)).withNow()).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
@@ -304,7 +304,7 @@ var _ = Describe("podman machine start", func() {
 
 		// Create another machine
 		machineName2 := randomString()
-		initSession2, err := mb.setName(machineName2).setCmd(i.withImage(mb.imagePath).withUpdateConnection(ptrBool(true)).withNow()).run()
+		initSession2, err := mb.setName(machineName2).setCmd(i.withImage(mb.imagePath).withUpdateConnection(new(true)).withNow()).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession2).To(Exit(0))
 

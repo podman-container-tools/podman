@@ -333,7 +333,7 @@ func launchElevate(operation string) error {
 	}
 	err := winutil.RelaunchElevatedWait()
 	if err != nil {
-		if eerr, ok := err.(*winutil.ExitCodeError); ok {
+		if eerr, ok := errors.AsType[*winutil.ExitCodeError](err); ok {
 			if eerr.Code == ErrorSuccessRebootRequired {
 				fmt.Println("Reboot is required to continue installation, please reboot at your convenience")
 				return define.ErrRelaunchSucceeded
@@ -374,7 +374,7 @@ func isMsiError(err error) bool {
 		return false
 	}
 
-	if eerr, ok := err.(*exec.ExitError); ok {
+	if eerr, ok := errors.AsType[*exec.ExitError](err); ok {
 		switch eerr.ExitCode() {
 		case 0:
 			fallthrough

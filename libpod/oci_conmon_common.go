@@ -673,8 +673,7 @@ func (r *ConmonOCIRuntime) HTTPAttach(ctr *Container, req *http.Request, w http.
 // isRetryable returns whether the error was caused by a blocked syscall or the
 // specified operation on a non blocking file descriptor wasn't ready for completion.
 func isRetryable(err error) bool {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		return errno == syscall.EINTR || errno == syscall.EAGAIN
 	}
 	return false

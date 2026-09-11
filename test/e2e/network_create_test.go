@@ -21,10 +21,6 @@ func removeNetworkDevice(name string) {
 	session.WaitWithDefaultTimeout()
 }
 
-func uintPtr(u uint32) *uint32 {
-	return &u
-}
-
 var _ = Describe("Podman network create", func() {
 	It("podman network create with name and subnet", func() {
 		netName := "subnet-" + stringid.GenerateRandomID()
@@ -710,6 +706,6 @@ var _ = Describe("Podman network create", func() {
 		Entry("blackhole route", "10.19.20.0/24", "10.21.10.0/24,blackhole", "10.21.10.0/24", types.RouteTypeBlackhole, nil),
 		Entry("unreachable route", "10.19.21.0/24", "10.21.11.0/24,unreachable", "10.21.11.0/24", types.RouteTypeUnreachable, nil),
 		Entry("prohibit route", "10.19.22.0/24", "10.21.12.0/24,prohibit", "10.21.12.0/24", types.RouteTypeProhibit, nil),
-		Entry("blackhole route with metric", "10.19.23.0/24", "10.21.13.0/24,blackhole,250", "10.21.13.0/24", types.RouteTypeBlackhole, uintPtr(250)),
+		Entry("blackhole route with metric", "10.19.23.0/24", "10.21.13.0/24,blackhole,250", "10.21.13.0/24", types.RouteTypeBlackhole, new(uint32(250))),
 	)
 })

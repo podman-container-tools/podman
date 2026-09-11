@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -128,7 +129,7 @@ func convertTimeString(query string) reflect.Value {
 			return reflect.ValueOf(t)
 		}
 
-		if _, isParseError := err.(*time.ParseError); isParseError {
+		if _, ok := errors.AsType[*time.ParseError](err); ok {
 			// Try next format
 			continue
 		} else {

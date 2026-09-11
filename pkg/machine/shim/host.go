@@ -275,9 +275,9 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 	}
 
 	readyUnit := ignition.Unit{
-		Enabled:  ignition.BoolToPtr(true),
+		Enabled:  new(true),
 		Name:     "ready.service",
-		Contents: ignition.StrToPtr(readyUnitFile),
+		Contents: new(readyUnitFile),
 	}
 	ignBuilder.WithUnit(readyUnit)
 

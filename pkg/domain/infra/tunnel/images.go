@@ -225,8 +225,7 @@ func (ir *ImageEngine) Load(_ context.Context, opts entities.ImageLoadOptions) (
 		if err == nil {
 			return report, nil
 		}
-		var errModel *errorhandling.ErrorModel
-		if errors.As(err, &errModel) {
+		if errModel, ok := errors.AsType[*errorhandling.ErrorModel](err); ok {
 			switch errModel.ResponseCode {
 			case http.StatusNotFound, http.StatusMethodNotAllowed:
 			default:
@@ -420,8 +419,7 @@ func (ir *ImageEngine) Build(_ context.Context, containerFiles []string, opts en
 			}
 			logrus.Debugf("BuildLocal failed: %v", err)
 
-			var errModel *errorhandling.ErrorModel
-			if errors.As(err, &errModel) {
+			if errModel, ok := errors.AsType[*errorhandling.ErrorModel](err); ok {
 				switch errModel.ResponseCode {
 				case http.StatusNotFound, http.StatusMethodNotAllowed:
 				default:

@@ -45,7 +45,3 @@ func (s *startMachine) withUpdateConnection(value *bool) *startMachine {
 	s.updateConnection = value
 	return s
 }
-
-func ptrBool(v bool) *bool {
-	return &v
-}
