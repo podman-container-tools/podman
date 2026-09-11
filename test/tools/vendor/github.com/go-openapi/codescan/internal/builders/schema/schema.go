@@ -48,6 +48,13 @@ type Builder struct {
 	// The mechanism is shared with the parameters and responses builders via common.EmbedInheritance;
 	// the schema builder consumes only Required (it has no `in:` location concept).
 	embedInherited common.EmbedInheritance
+
+	// omitted is the set of struct fields the active `swagger:omit` scope filters out of the
+	// promotion walk, keyed by field object (see omit.go).
+	//
+	// Pushed around each embed walk and popped after it, so sibling embeds never leak into one
+	// another.
+	omitted map[*types.Var]struct{}
 }
 
 // NewBuilder constructs an initialized [Builder].
@@ -94,14 +101,16 @@ func (s *Builder) Build(opts ...Option) error {
 		// schema, or warn-and-drop on a non-object.
 		//
 		// See classifierAdditionalProperties.
-		s.classifierAdditionalProperties(&schema, s.Ctx.PosOf(s.Decl.Ident.Pos()))
-		s.classifierPatternProperties(&schema, s.Ctx.PosOf(s.Decl.Ident.Pos()))
+		s.classifierAdditionalProperties(&schema, s.Ctx.PosOf(s.Decl.Pos()))
+		s.classifierPatternProperties(&schema, s.Ctx.PosOf(s.Decl.Pos()))
 
 		// The decl-comment block is dispatched before the Go type is resolved onto the schema (see
 		// buildFromDecl), so the inline checkShape ran against an empty type.
-		// Re-gate now that the type is known: strip validations illegal for the resolved type and warn.
+		// Re-gate now that the type is known: strip validations illegal for the resolved type and warn,
+		// and re-type the value keywords that were coerced against nothing.
 		// See [§decl-shape-recheck](./README.md#decl-shape-recheck).
-		handlers.RecheckSchemaShape(&schema, s.Ctx.PosOf(s.Decl.Spec.Pos()), s.RecordDiagnostic)
+		handlers.RecoerceDeclValues(&schema, s.Ctx.PosOf(s.Decl.Pos()), s.RecordDiagnostic)
+		handlers.RecheckSchemaShape(&schema, s.Ctx.PosOf(s.Decl.Pos()), s.RecordDiagnostic)
 
 		s.definitions[defKey] = schema
 
@@ -127,11 +136,11 @@ func (s *Builder) SetDiscovered(discovered []*scanner.EntityDecl) {
 //
 // Returns the zero Position when unavailable.
 func (s *Builder) declPos() token.Position {
-	if s.Decl == nil || s.Decl.Ident == nil {
+	if s.Decl == nil {
 		return token.Position{}
 	}
 
-	return s.Ctx.PosOf(s.Decl.Ident.Pos())
+	return s.Ctx.PosOf(s.Decl.Pos())
 }
 
 // warnUnsupportedGoType records a [grammar.CodeUnsupportedGoType] Warning that tpe could not be
@@ -163,14 +172,14 @@ func (s *Builder) buildFromDecl(schema *oaispec.Schema) error {
 	// chain).
 	// See [§special-types](./README.md#special-types).
 	ps := NewTypable(schema, 0, s.skipExtensions)
-	if applyStdlibSpecials(s.Decl.Obj(), ps, s.skipExtensions) {
+	if ApplyStdlibSpecials(s.Decl.Obj(), ps, s.skipExtensions) {
 		return nil
 	}
 
 	// Decl-site swagger:type override wins over type-driven default.
 	// See [§user-overrides](./README.md#user-overrides) for the (handled, recurse) contract and the
 	// Underlying() fallback rationale.
-	if handled, recurse := s.classifierNamedTypeOverride(s.Decl.Comments, ps, s.Decl.ObjType(), s.Ctx.PosOf(s.Decl.Ident.Pos())); handled {
+	if handled, recurse := s.classifierNamedTypeOverride(s.Decl.Comments(), ps, s.Decl.ObjType(), s.Ctx.PosOf(s.Decl.Pos())); handled {
 		if !recurse {
 			return nil
 		}
@@ -195,17 +204,57 @@ func (s *Builder) buildFromDecl(schema *oaispec.Schema) error {
 		defTgt := NewTypable(schema, 0, s.skipExtensions)
 		switch ut := tpe.Underlying().(type) {
 		case *types.Struct:
-			if s.classifierNamedStructStrfmt(s.Decl.Comments, defTgt) {
+			if s.classifierNamedStructStrfmt(s.Decl.Comments(), defTgt) {
 				return nil
 			}
 		case *types.Basic:
-			if s.classifierNamedBasic(s.Decl.Comments, s.Decl.Pkg, ut, defTgt, tpe.Obj().Name()) {
+			// EnumSourcePkg names the package a swagger:enum's const values are read from. A miss means the
+			// declaration has no source — so it carries no annotation for this cascade to honour
+			// either, and falling through is the same answer applyNamedShapeClassifier gives when
+			// PkgForType misses.
+			if pkg, hasSource := s.Decl.EnumSourcePkg(); hasSource {
+				if s.classifierNamedBasic(s.Decl.Comments(), pkg, tpe, ut, defTgt) {
+					return nil
+				}
+			}
+		case *types.Array:
+			if handled, _ := s.classifierNamedArrayLike(s.Decl.Comments(), defTgt, ut.Elem()); handled {
+				return nil
+			}
+		case *types.Slice:
+			// Array and slice were missing from this switch, so a swagger:model sequence carrying a
+			// `swagger:strfmt` published a definition with the format dropped — and nothing downstream
+			// compensates, because buildNamedType's refModel gate skips the inline classifiers precisely
+			// on the assumption that the declaration already applied the override.
+			if handled, _ := s.classifierNamedArrayLike(s.Decl.Comments(), defTgt, ut.Elem()); handled {
 				return nil
 			}
 		}
-		ti := s.Decl.Pkg.TypesInfo.Types[s.Decl.Spec.Type]
-		resolvers.MustBeAType(ti) // invariant
-		return s.buildFromType(ti.Type, NewTypable(schema, 0, s.skipExtensions))
+		// Build over what the declaration was WRITTEN over, not over the peeled underlying: the named
+		// layer in `type Stamp time.Time` is the one the stdlib recognizers key on, and peeling discards
+		// it.
+		//
+		// WrittenRHS declines for two unrelated reasons and only one of them has a fallback:
+		//
+		//   - the right-hand side is a shape it will not guess at (a generic instantiation, a
+		//     dot-imported name). Underlying is honest there — it is what the written form denotes for
+		//     every shape but a named one;
+		//   - there is no source to read at all. Underlying is a WRONG answer there: it peels exactly
+		//     the layer the recognizers key on, so `type Stamp time.Time` in a syntax-less package
+		//     would render as a struct instead of `format: date-time`. Refuse rather than guess.
+		//
+		// The second branch is unreachable today — every EntityDecl is built from an AST walk, so
+		// HasSource always holds — and is written out so it cannot start springing quietly the day one
+		// is not. See [§declaration](../../scanner/README.md#declaration).
+		rhs, ok := s.Decl.WrittenRHS()
+		if !ok {
+			if !s.Decl.HasSource() {
+				return missingSource(tpe)
+			}
+			rhs = tpe.Underlying()
+		}
+
+		return s.buildFromType(rhs, NewTypable(schema, 0, s.skipExtensions))
 	case *types.Alias:
 		if s.guardDecl(tpe) {
 			return nil
@@ -238,8 +287,11 @@ func (s *Builder) buildDeclAlias(tpe *types.Alias, target ifaces.SwaggerTypable)
 	// `swagger:strfmt` on a Named decl is unaffected — that path is covered by
 	// `classifierNamedStructStrfmt` (struct underlying) and `classifierNamedBasic` (primitive
 	// underlying), both fired from `buildNamedType` after the underlying-kind switch.
-	if name, ok := s.findAnnotationArg(s.Decl.Comments, grammar.AnnStrfmt); ok {
-		target.Typed("string", name)
+	s.warnUnfixableAliasEnum(s.Decl.Comments(), tpe, s.Ctx.PosOf(s.Decl.Pos()))
+
+	// Detection is symmetric with the named decl arm above: the same element-driven items-vs-whole
+	// rule, so `type ID = [16]byte` and `type ID [16]byte` publish the same definition.
+	if s.classifierAliasStrfmt(s.Decl.Comments(), tpe, target) {
 		return nil
 	}
 
@@ -269,7 +321,7 @@ func (s *Builder) buildDeclAlias(tpe *types.Alias, target ifaces.SwaggerTypable)
 		// The TransparentAliases path at line 156 already gets this right via buildFromType(rhs); Expand
 		// needs the same recognizer call before its Underlying fallthrough.
 		if obj := rhsTypeName(rhs); obj != nil &&
-			applyStdlibSpecials(obj, target, s.skipExtensions) {
+			ApplyStdlibSpecials(obj, target, s.skipExtensions) {
 			return nil
 		}
 		return s.buildFromType(tpe.Underlying(), target)
@@ -284,15 +336,16 @@ func (s *Builder) buildDeclAlias(tpe *types.Alias, target ifaces.SwaggerTypable)
 		// shape on the alias's OWN definition rather than chaining a $ref to a separately-built
 		// definition.
 		//
-		// This matches what the sibling *types.Alias branch already does, what TransparentAliases mode
-		// already does for stdlib decls, and eliminates the Q30 noise from stdlib godocs landing on the
-		// chain targets (Time / RawMessage) — those targets no longer exist in the spec when the alias
-		// inlines the canonical shape directly.
+		// This matches what the sibling *types.Alias branch already does, and what TransparentAliases
+		// mode already does for stdlib decls. It also keeps the standard library's prose out of the
+		// document: chaining published a definition for the target (Time / RawMessage) carrying whatever
+		// godoc that stdlib declaration happened to have, and the target does not exist at all once the
+		// alias inlines the canonical shape directly.
 		//
 		// For predeclared `error`, this is also the only safe path: it has no package, so the GetModel
 		// lookup below would nil-panic on Pkg().Path().
 		// User-defined named types (non-stdlib) fall through to the GetModel + MakeRef chain as before.
-		if applyStdlibSpecials(ro, target, s.skipExtensions) {
+		if ApplyStdlibSpecials(ro, target, s.skipExtensions) {
 			return nil
 		}
 		if ro.Pkg() == nil {
@@ -314,7 +367,7 @@ func (s *Builder) buildDeclAlias(tpe *types.Alias, target ifaces.SwaggerTypable)
 			return nil
 		}
 
-		if applyStdlibSpecials(ro, target, s.skipExtensions) {
+		if ApplyStdlibSpecials(ro, target, s.skipExtensions) {
 			return nil
 		}
 
@@ -396,16 +449,57 @@ func (s *Builder) buildAlias(tpe *types.Alias, target ifaces.SwaggerTypable) err
 	}
 
 	o := tpe.Obj()
-	if applyStdlibSpecials(o, target, s.skipExtensions) {
+	if ApplyStdlibSpecials(o, target, s.skipExtensions) {
 		return nil
 	}
 	resolvers.MustNotBeABuiltinType(o)
+
+	// Look the declaration up BEFORE any dissolve, so the alias's own classifier annotations are
+	// honoured in all three modes.
+	//
+	// The lookup used to sit below the TransparentAliases return, which meant that mode dissolved
+	// without ever reading the declaration — and a `swagger:strfmt` on the alias was lost. Not found
+	// is only an error on the paths that need the decl to emit a $ref; TransparentAliases dissolves
+	// regardless, as it did before.
+	decl, ok := s.Ctx.GetModel(o.Pkg().Path(), o.Name())
+
+	// refModel mirrors buildNamedType's gate: a swagger:model alias publishes its override on its OWN
+	// definition (buildDeclAlias) and is referenced here, so the inline classifier is skipped.
+	//
+	// Not under SimpleSchema, where $ref is illegal in OAS v2 and the override must inline; and not
+	// under TransparentAliases, which never emits the $ref this defers to.
+	refModel := ok && decl.HasModelAnnotation() && !s.simpleSchema && !s.Ctx.TransparentAliases()
+
+	if ok {
+		// `swagger:enum` on an alias is unfixable rather than merely unimplemented — report it wherever
+		// the alias is reached, since that is where the members go missing.
+		s.warnUnfixableAliasEnum(decl.Comments(), tpe, s.Ctx.PosOf(decl.Pos()))
+	}
+
+	if ok && !refModel {
+		// `swagger:type` first, then `swagger:strfmt` — the same precedence the named side applies at
+		// buildNamedType, where classifierNamedTypeOverride runs ahead of the underlying-kind classifiers
+		// and rides a co-present format as an advisory hint.
+		//
+		// ownType is the alias's right-hand side: that is what `inline` should inline.
+		if handled, recurse := s.classifierNamedTypeOverride(
+			decl.Comments(), target, tpe.Rhs(), s.Ctx.PosOf(decl.Pos()),
+		); handled {
+			if recurse {
+				return s.buildFromType(tpe.Rhs(), target)
+			}
+
+			return nil
+		}
+		if s.classifierAliasStrfmt(decl.Comments(), tpe, target) {
+			return nil
+		}
+	}
 
 	if s.Ctx.TransparentAliases() {
 		return s.buildFromType(tpe.Rhs(), target)
 	}
 
-	decl, ok := s.Ctx.GetModel(o.Pkg().Path(), o.Name())
 	if !ok {
 		return fmt.Errorf("can't find source file for aliased type: %v: %w", tpe, ErrSchema)
 	}
@@ -436,24 +530,22 @@ func (s *Builder) buildNamedType(titpe *types.Named, target ifaces.SwaggerTypabl
 	}
 
 	tio := titpe.Obj()
-	if applyStdlibSpecials(tio, target, s.skipExtensions) {
+	if ApplyStdlibSpecials(tio, target, s.skipExtensions) {
 		return nil
 	}
 
 	// PkgForType-miss catches types we can't anchor to a scanned package (predeclared `comparable`,
 	// generic type params, compiler-internal shapes).
 	//
-	// Complementary to the UnsupportedBuiltin guard above; also yields `pkg` for the Basic classifier
-	// below.
-	pkg, found := s.Ctx.PkgForType(titpe)
-	if !found {
+	// Complementary to the UnsupportedBuiltin guard above.
+	if _, found := s.Ctx.PkgForType(titpe); !found {
 		return nil
 	}
 
 	var cmt *ast.CommentGroup
 	var isModel bool
 	if decl, ok := s.Ctx.DeclForType(titpe); ok && decl != nil {
-		cmt = decl.Comments
+		cmt = decl.Comments()
 		isModel = decl.HasModelAnnotation()
 	}
 
@@ -481,17 +573,27 @@ func (s *Builder) buildNamedType(titpe *types.Named, target ifaces.SwaggerTypabl
 	//   - generic instantiation (Underlying carries substituted args).
 	//
 	// See [§dissolve-named](./README.md#dissolve-named).
-	if s.Decl.Spec.Assign.IsValid() || (titpe.TypeArgs() != nil && titpe.TypeArgs().Len() > 0) {
+	if s.Decl.IsAlias() || (titpe.TypeArgs() != nil && titpe.TypeArgs().Len() > 0) {
 		return s.buildFromType(titpe.Underlying(), target)
+	}
+
+	// The shape-aware half of the classifier cascade, shared with the composition arm
+	// (buildNamedAllOf) so the two cannot answer a `swagger:strfmt` / `swagger:enum` differently.
+	// Skipped for a swagger:model type, whose overrides ride on its own definition.
+	if !refModel {
+		if handled, recurse := s.applyNamedShapeClassifier(cmt, titpe, target); handled {
+			if recurse != nil {
+				return recurse()
+			}
+
+			return nil
+		}
 	}
 
 	// Underlying-shape table.
 	// See [§dispatch-table](./README.md#dispatch-table).
 	switch utitpe := titpe.Underlying().(type) {
 	case *types.Struct:
-		if !refModel && s.classifierNamedStructStrfmt(cmt, target) {
-			return nil
-		}
 		return s.resolveRefOr(tio, target, nil)
 
 	case *types.Interface:
@@ -502,17 +604,14 @@ func (s *Builder) buildNamedType(titpe *types.Named, target ifaces.SwaggerTypabl
 			s.warnUnsupportedGoType("buildNamedType", tio)
 			return nil
 		}
-		if !refModel && s.classifierNamedBasic(cmt, pkg, utitpe, target, tio.Name()) {
-			return nil
-		}
 		return s.resolveRefOr(tio, target, func() error {
 			return resolvers.SwaggerSchemaForType(utitpe.String(), target)
 		})
 
 	case *types.Array:
-		return s.buildNamedArrayLike(tio, cmt, utitpe.Elem(), target, false, refModel)
+		return s.buildNamedArrayLike(tio, utitpe.Elem(), target)
 	case *types.Slice:
-		return s.buildNamedArrayLike(tio, cmt, utitpe.Elem(), target, true, refModel)
+		return s.buildNamedArrayLike(tio, utitpe.Elem(), target)
 
 	case *types.Map:
 		return s.resolveRefOr(tio, target, nil)
@@ -523,21 +622,11 @@ func (s *Builder) buildNamedType(titpe *types.Named, target ifaces.SwaggerTypabl
 	}
 }
 
-// buildNamedArrayLike is the unified Array/Slice arm. forSlice toggles the slice-only
-// "bsonobjectid" special case in classifierNamedArrayLike. isModel skips the inline override
-// classifier so a swagger:model array/slice type is referenced by $ref (its override schema lives
-// on its own definition).
-func (s *Builder) buildNamedArrayLike(tio *types.TypeName, cmt *ast.CommentGroup, elem types.Type, tgt ifaces.SwaggerTypable, forSlice, isModel bool) error {
-	if !isModel {
-		if handled, recurse := s.classifierNamedArrayLike(cmt, tgt, forSlice); handled {
-			if recurse {
-				defer s.descend("items")()
-				return s.buildFromType(elem, tgt.Items())
-			}
-			return nil
-		}
-	}
-
+// buildNamedArrayLike is the unified Array/Slice arm.
+//
+// The author's classifiers ran in applyNamedShapeClassifier before this point, so what remains is
+// the $ref-or-inline decision and the items build.
+func (s *Builder) buildNamedArrayLike(tio *types.TypeName, elem types.Type, tgt ifaces.SwaggerTypable) error {
 	return s.resolveRefOr(tio, tgt, func() error {
 		defer s.descend("items")()
 		return s.buildFromType(elem, tgt.Items())
@@ -562,7 +651,7 @@ func (s *Builder) buildFromMap(titpe *types.Map, tgt ifaces.SwaggerTypable) erro
 	key := titpe.Key()
 	if !resolvers.IsJSONMapKey(key) {
 		s.RecordDiagnostic(grammar.Warnf(
-			s.Ctx.PosOf(s.Decl.Spec.Pos()),
+			s.Ctx.PosOf(s.Decl.Pos()),
 			grammar.CodeUnsupportedType,
 			"map key type %s does not marshal to a JSON object key "+
 				"(encoding/json supports string, integer kinds, or encoding.TextMarshaler); "+
@@ -636,10 +725,10 @@ func hasNamedCore(tpe types.Type) bool {
 }
 
 // rhsTypeName extracts the *types.TypeName from an alias RHS when it is one of the two kinds
-// applyStdlibSpecials accepts: *types.Named (the direct stdlib reference, e.g. `Timestamp =
+// ApplyStdlibSpecials accepts: *types.Named (the direct stdlib reference, e.g. `Timestamp =
 // time.Time`) or *types.Alias (the chained reference, e.g. `Wrap = Timestamp`).
 //
-// Returns nil for anonymous and other RHS kinds — applyStdlibSpecials has nothing to recognize on
+// Returns nil for anonymous and other RHS kinds — ApplyStdlibSpecials has nothing to recognize on
 // those.
 //
 // Used by buildDeclAlias's Expand branch to consult the stdlib recognizers before walking

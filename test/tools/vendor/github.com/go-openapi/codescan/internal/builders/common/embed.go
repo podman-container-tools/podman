@@ -13,9 +13,10 @@ import (
 // EmbedInheritance carries the doc-comment directives an embedded (anonymous) struct field passes
 // down to the members it promotes: the `in:` location and the `required:` flag.
 //
-// It is the shared kernel of the "annotations on an embed apply to its promoted members" rule, used
-// by the schema, parameters, and responses builders so the behaviour is identical everywhere.
-// See go-swagger#2701.
+// It is the shared kernel of the "annotations on an embed apply to its promoted members" rule,
+// used by the schema, parameters, and responses builders so the behaviour is identical everywhere.
+//
+// See also go-swagger/go-swagger#2701.
 //
 // Semantics:
 //   - A member's own `in:`/`required:` always wins; the inherited value is
@@ -60,15 +61,14 @@ func (s *Builder) ReadEmbedInheritance(doc *ast.CommentGroup, current EmbedInher
 }
 
 // ScanInLocation finds the first `in: X` line in text and returns the canonical OAS v2 form of X
-// (when recognised, case-insensitive via [grammar.NormalizeIn]) or the raw candidate (when present
-// but out-of-vocabulary).
+// (when recognised, case-insensitive via [grammar.NormalizeIn]) or the raw candidate
+// (when present but out-of-vocabulary).
 //
 // The `form` alias is NOT accepted here — it is contained to the routes inline-param path.
 //
 // Shared by the parameters and responses field-signal scanners and by
 // [Builder.ReadEmbedInheritance]; `in:` is line-scanned rather than read as a grammar Property
-// because grammar attaches pre-annotation lines to the following annotation's prose, not its
-// property list.
+// because grammar attaches pre-annotation lines to the following annotation's prose, not its property list.
 func ScanInLocation(text string) (value string, valid bool, invalid string) {
 	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimSpace(line)
@@ -87,10 +87,12 @@ func ScanInLocation(text string) (value string, valid bool, invalid string) {
 		if canonical, ok := grammar.NormalizeIn(v, false); ok {
 			return canonical, true, ""
 		}
+
 		// First `in:` line with a non-vocab value — record so the caller can diagnose.
 		// Don't keep scanning: a later valid `in:` after an invalid one would be a bizarre input we don't
 		// need to model.
 		return "", false, v
 	}
+
 	return "", false, ""
 }

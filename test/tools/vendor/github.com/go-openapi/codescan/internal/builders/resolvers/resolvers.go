@@ -149,14 +149,121 @@ func UnsupportedBasic(tpe *types.Basic) bool {
 	return found
 }
 
-func FindASTField(file *ast.File, pos token.Pos) *ast.Field {
+// FindASTFieldFor returns the struct field or interface method declaring obj in file, or nil when there is none.
+//
+// Position first, and for a package read from source that is the whole story: the object and the syntax came out of
+// the same type-check, so obj.Pos() indexes straight into file.
+//
+// A package whose types were read from compiled export data and whose source was parsed separately
+// is the case the name fallback exists for.
+//
+// The two halves reach the same FileSet by different routes and get a [token.File] each,
+// so the same declaration holds two unrelated [token.Pos] values and the position lookup finds nothing at all.
+// Without the fallback every field of such a type is silently skipped,
+// which renders the type as an empty object rather than failing.
+//
+// Export data preserves the filename and the LINE, not the column. The importer fabricates a line table
+// in which every position sits in column 1, so a column comparison is always wrong.
+//
+// Line plus the object's own name identifies the field, since a struct cannot declare a name twice and the file is
+// already known.
+//
+// NOTE: the pathological miss is two types declaring the same field name on one physical line,
+// which costs one field the prose from the other.
+//
+// Reached only when the position lookup fails, so an ordinary scan never walks the file twice.
+func FindASTFieldFor(file *ast.File, obj types.Object, posOf func(token.Pos) token.Position) *ast.Field {
+	// The object and the syntax share a token.File whenever they came out of the same type-check.
+	if fld := findASTField(file, obj.Pos()); fld != nil {
+		return fld
+	}
+
+	if file == nil || posOf == nil {
+		return nil
+	}
+
+	// The syntax is here, its positions just do not index the object's. Fall back to filename, line and name.
+	want := posOf(obj.Pos())
+	if !want.IsValid() {
+		return nil
+	}
+
+	var found *ast.Field
+	ast.Inspect(file, func(n ast.Node) bool {
+		if found != nil {
+			return false
+		}
+
+		fld, isField := n.(*ast.Field)
+		if !isField || !fieldDeclares(fld, obj.Name(), want.Line, posOf) {
+			return true
+		}
+		found = fld
+
+		return false
+	})
+
+	return found
+}
+
+// findASTField returns the struct or interface field declared at pos in file, or nil when there is none.
+//
+// A nil file input is legitimate and just returns nil.
+// Typically, a package whose types were read from compiled export data has none,
+// so it yields no field rather than panicking.
+func findASTField(file *ast.File, pos token.Pos) *ast.Field {
+	if file == nil {
+		// Not defensive padding: astutil.PathEnclosingInterval dereferences its root to bound the search.
+		return nil
+	}
+
 	ans, _ := astutil.PathEnclosingInterval(file, pos, pos)
 	for _, an := range ans {
 		if at, valid := an.(*ast.Field); valid {
 			return at
 		}
 	}
+
 	return nil
+}
+
+// fieldDeclares reports whether fld declares name on line.
+//
+// An embedded field has no name of its own — the field IS its type — and go/types names the object after that type,
+// so the comparison has to reach into the type expression to find the identifier the two halves share.
+func fieldDeclares(fld *ast.Field, name string, line int, posOf func(token.Pos) token.Position) bool {
+	if len(fld.Names) == 0 {
+		return embeddedFieldName(fld.Type) == name && posOf(fld.Pos()).Line == line
+	}
+
+	for _, ident := range fld.Names {
+		if ident.Name == name && posOf(ident.Pos()).Line == line {
+			return true
+		}
+	}
+
+	return false
+}
+
+// embeddedFieldName is the name an embedded field is known by: the last identifier of its type expression, with the
+// pointer, qualifier and type-argument layers peeled off (`*pkg.T[int]` embeds `T`).
+func embeddedFieldName(expr ast.Expr) string {
+	for {
+		switch e := expr.(type) {
+		case *ast.StarExpr:
+			expr = e.X
+		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.IndexListExpr:
+			expr = e.X
+		case *ast.SelectorExpr:
+			return e.Sel.Name
+		case *ast.Ident:
+			return e.Name
+		default:
+			return ""
+		}
+	}
 }
 
 type tagOptions []string
@@ -172,6 +279,15 @@ func (t tagOptions) Contain(option string) bool {
 
 func (t tagOptions) Name() string {
 	return t[0]
+}
+
+// jsonTagIgnores reports whether a json struct tag skips the field entirely.
+//
+// encoding/json compares the WHOLE tag to "-": `json:"-"` ignores the field, while `json:"-,"` and
+// `json:"-,omitempty"` name it literally "-". Splitting on the comma first conflates the two, which
+// dropped a field Go does marshal.
+func jsonTagIgnores(st reflect.StructTag) bool {
+	return st.Get("json") == "-"
 }
 
 // ParseFieldTag derives the emitted name and the encoding/json directives for a struct field.
@@ -221,7 +337,7 @@ func ParseFieldTag(field *ast.Field, goName string, nameTags []string) (name str
 		isString = IsFieldStringable(field.Type)
 	}
 	omitEmpty = jsonParts.Contain("omitempty")
-	if jsonParts.Name() == "-" {
+	if jsonTagIgnores(st) {
 		return name, true, isString, omitEmpty, nil
 	}
 
@@ -229,10 +345,19 @@ func ParseFieldTag(field *ast.Field, goName string, nameTags []string) (name str
 	// A rename can't name N members of a multi-name group, so each keeps its own Go name.
 	if len(field.Names) <= 1 {
 		for _, tagType := range nameTags {
-			if candidate := tagOptions(strings.Split(st.Get(tagType), ",")).Name(); candidate != "" && candidate != "-" {
-				name = candidate
-				break
+			candidate := tagOptions(strings.Split(st.Get(tagType), ",")).Name()
+			if candidate == "" {
+				continue
 			}
+			// "-" is a legitimate name only from the json tag, and only because the whole-tag ignore case
+			// returned above: `json:"-,"` names the field literally "-". For any other tag type there is
+			// no encoding rule to appeal to, so "-" stays "no usable name".
+			if candidate == "-" && tagType != "json" {
+				continue
+			}
+			name = candidate
+
+			break
 		}
 	}
 
@@ -255,9 +380,11 @@ func ExplicitJSONName(field *ast.Field) string {
 	if err != nil || strings.TrimSpace(tv) == "" {
 		return ""
 	}
-	name := tagOptions(strings.Split(reflect.StructTag(tv).Get("json"), ",")).Name()
-	if name == "-" {
+	st := reflect.StructTag(tv)
+	if jsonTagIgnores(st) {
 		return ""
 	}
-	return name
+
+	// A remaining "-" is the literal name (`json:"-,"`), not an ignore.
+	return tagOptions(strings.Split(st.Get("json"), ",")).Name()
 }

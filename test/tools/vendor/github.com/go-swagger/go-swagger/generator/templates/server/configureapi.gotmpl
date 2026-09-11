@@ -17,13 +17,12 @@ import (
   "github.com/go-openapi/runtime/middleware"
   "github.com/go-openapi/runtime/security"
   "github.com/go-openapi/swag/cmdutils"
-
   {{ imports .DefaultImports }}
   {{ imports .Imports }}
 )
 
 {{ with .GenOpts }}
-//go:generate swagger generate server --target {{ .TargetPath }} --name {{ .Name }} --spec {{ .SpecPath }}
+//go:generate {{ .GoGenerateCommand }} generate server --target {{ .TargetPath }} --name {{ .Name }} --spec {{ .SpecPath }}
 {{- if .APIPackage }}{{ if ne .APIPackage "operations" }} --api-package {{ .APIPackage }}{{ end }}{{ end }}
 {{- if .ModelPackage }}{{ if ne .ModelPackage "models" }} --model-package {{ .ModelPackage }}{{ end }}{{ end }}
 {{- if .ServerPackage }}{{ if ne .ServerPackage "restapi"}} --server-package {{ .ServerPackage }}{{ end }}{{ end }}
@@ -128,7 +127,10 @@ func configureAPI(api *{{.APIPackageAlias}}.{{ pascalize .Name }}API) http.Handl
   {{- $package := .Package }}
   {{- $apipackagealias := .APIPackageAlias }}
   {{- range .Operations }}
-    {{- if .HasFormParams }}
+    {{- if .HasStreamingForm }}
+  // You may change here the maximum body size for this streaming multipart form. Below is the default (32 MB).
+  // {{ if ne .Package $package }}{{ .PackageAlias }}{{ else }}{{ $apipackagealias }}{{ end }}.{{ pascalize .Name }}MaxBodySize = 32 << 20
+    {{- else if .HasFormParams }}
   // You may change here the memory limit for this multipart form parser. Below is the default (32 MB).
   // {{ if ne .Package $package }}{{ .PackageAlias }}{{ else }}{{ $apipackagealias }}{{ end }}.{{ pascalize .Name }}MaxParseMemory = 32 << 20
     {{- end }}

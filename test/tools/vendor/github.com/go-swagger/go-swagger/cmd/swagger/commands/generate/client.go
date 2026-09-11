@@ -31,9 +31,14 @@ type Client struct {
 	Name string `description:"the name of the application, defaults to a mangled value of info.title" long:"name" short:"A"`
 }
 
+// Usage documents the spec argument in the help message.
+func (c Client) Usage() string {
+	return usageWithSpec("client")
+}
+
 // Execute runs this command.
-func (c *Client) Execute(_ []string) error {
-	return createSwagger(c)
+func (c *Client) Execute(args []string) error {
+	return createSwagger(c, args)
 }
 
 // apply options.

@@ -6,6 +6,8 @@ package generator
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,8 +23,8 @@ import (
 // It is the single entry point that turns a freshly populated GenOpts into a
 // fully usable one: it validates the inputs, builds the derived machinery
 // (language options, template func map, templates repository), resolves the
-// render plan (sections), normalizes paths and loads any user-provided
-// templates.
+// render plan (sections), normalizes paths, checks the generation target
+// and loads any user-provided templates.
 //
 // Because every input is known by the time Prepare runs, the derived state is
 // built exactly once, in a deterministic order — which removes the historical
@@ -47,6 +49,12 @@ func (g *GenOpts) Prepare() error {
 	}
 
 	if err := g.normalize(); err != nil {
+		return err
+	}
+
+	// the target is checked after the spec has been resolved,
+	// so a run that fails early doesn't leave an empty target tree behind.
+	if err := g.ensureTarget(); err != nil {
 		return err
 	}
 
@@ -90,7 +98,7 @@ func (g *GenOpts) validate() error {
 // times it is reached (the second call is a no-op).
 //
 // Failure to load the embedded default assets is a build-time impossibility and
-// is treated as fatal, hence the absence of an error return.
+// is treated as a panic, hence the absence of an error return.
 func (g *GenOpts) buildMachinery() {
 	if g.machineryBuilt {
 		return
@@ -103,7 +111,9 @@ func (g *GenOpts) buildMachinery() {
 	g.funcMap = DefaultFuncMap(g.LanguageOpts)
 	g.templates = templatesrepo.NewRepository(g.funcMap)
 	if err := g.templates.LoadDefaults(defaultAssets()); err != nil {
-		fatal(err)
+		panic(
+			fmt.Errorf("cannot load default assets: %w", err),
+		)
 	}
 	g.templates.SetProtectedTemplates(defaultProtectedTemplates())
 
@@ -181,8 +191,16 @@ func (g *GenOpts) resolveSections() error {
 //
 // Remote specs (http/https) are left untouched. Local specs are located on
 // disk and rewritten to an absolute path.
+//
+// It is guarded so the spec is resolved exactly once.
 func (g *GenOpts) normalize() error {
+	if g.specNormalized {
+		return nil
+	}
+
 	if strings.HasPrefix(g.Spec, "http://") || strings.HasPrefix(g.Spec, "https://") {
+		g.specNormalized = true
+
 		return nil
 	}
 
@@ -196,6 +214,65 @@ func (g *GenOpts) normalize() error {
 	if err != nil {
 		return fmt.Errorf("could not locate spec: %s", g.Spec)
 	}
+
+	g.specNormalized = true
+
+	return nil
+}
+
+// ensureTarget checks that the generation target is a directory this process may write to.
+//
+// An empty target means the current directory. A target that does not exist is an error,
+// unless [GenOpts.EnsureTarget] is set: the directory is then created, with its parents.
+//
+// The check is skipped when dumping the template data ([GenOpts.DumpData]),
+// since nothing is written to the target then.
+//
+// It is guarded so the target is checked exactly once.
+func (g *GenOpts) ensureTarget() error {
+	if g.targetEnsured {
+		return nil
+	}
+
+	if g.Target == "" {
+		g.Target = "."
+	}
+
+	if g.DumpData {
+		return nil
+	}
+
+	info, err := os.Stat(g.Target)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) || !g.EnsureTarget {
+			return fmt.Errorf("could not open target dir %q. Make sure it exists or use --ensure-target: %w", g.Target, err)
+		}
+
+		if err = os.MkdirAll(g.Target, readAllDir); err != nil {
+			return fmt.Errorf("could not create target directory %q: %w", g.Target, err)
+		}
+
+		g.targetEnsured = true
+
+		return nil
+	}
+
+	if !info.IsDir() { // Stat resolves symlinks
+		return fmt.Errorf("target %q already exists and is not a directory. The target must be a writable directory", g.Target)
+	}
+
+	// check that this process may write files there
+	probe, err := os.CreateTemp(g.Target, ".probe-")
+	if err != nil {
+		return fmt.Errorf(
+			"target %q is not writeable. Make sure your command has the proper permissions to write in this folder: %w",
+			g.Target, err,
+		)
+	}
+	_ = probe.Close()
+	_ = os.Remove(probe.Name())
+
+	g.targetEnsured = true
 
 	return nil
 }

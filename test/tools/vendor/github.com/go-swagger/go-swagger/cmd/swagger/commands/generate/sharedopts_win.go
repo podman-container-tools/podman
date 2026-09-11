@@ -6,6 +6,10 @@
 
 package generate
 
-type sharedOptions struct {
-	sharedOptionsCommon
-}
+import "github.com/go-swagger/go-swagger/generator"
+
+// pluginOptions exposes no option on windows: the template plugin relies on go plugins,
+// which windows does not support.
+type pluginOptions struct{}
+
+func (p pluginOptions) apply(_ *generator.GenOpts) {}

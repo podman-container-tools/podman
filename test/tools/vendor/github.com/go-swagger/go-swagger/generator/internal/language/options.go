@@ -78,7 +78,7 @@ func FormatOptsWithDefault(opts []FormatOption) FormatOpts {
 // Options describes a target language to the code generator.
 type Options struct {
 	ReservedWords        []string
-	BaseImportFunc       MangleFunc                     `json:"-"`
+	BaseImportFunc       func(string) (string, error)   `json:"-"`
 	ImportsFunc          func(map[string]string) string `json:"-"`
 	ArrayInitializerFunc func(any) (string, error)      `json:"-"`
 	FormatOnly           bool
@@ -200,12 +200,12 @@ func (l *Options) ArrayInitializer(data any) (string, error) {
 }
 
 // BaseImport figures out the base path to generate import statements.
-func (l *Options) BaseImport(tgt string) string {
+func (l *Options) BaseImport(tgt string) (string, error) {
 	if l.BaseImportFunc != nil {
 		return l.BaseImportFunc(tgt)
 	}
 
-	return ""
+	return "", nil
 }
 
 // importAlias extracts the last path component from a package import path.

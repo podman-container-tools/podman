@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 
@@ -20,33 +18,43 @@ import (
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/spec"
-	"github.com/go-openapi/swag/jsonutils"
-	"github.com/go-openapi/swag/stringutils"
 )
 
-type respSort struct {
-	Code     int
-	Response spec.Response
-}
+const (
+	timeoutName = "timeout"
+	contextName = "context"
+)
 
-type responses []respSort
-
-func (s responses) Len() int           { return len(s) }
-func (s responses) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s responses) Less(i, j int) bool { return s[i].Code < s[j].Code }
-
-// sortedResponses produces a sorted list of responses.
-// TODO: this is redundant with the definition given in struct.go.
-func sortedResponses(input map[int]spec.Response) responses {
-	var res responses
-	for k, v := range input {
-		if k > 0 {
-			res = append(res, respSort{k, v})
-		}
+var (
+	timeoutVarNamePreferences = []string{
+		timeoutName,
+		"requestTimeout",
+		"httpRequestTimeout",
+		"swaggerTimeout",
+		"operationTimeout",
+		"opTimeout",
+		"operTimeout",
 	}
-	sort.Sort(res)
-	return res
-}
+
+	contextVarNamePreferences = []string{
+		contextName,
+		"requestContext",
+		"httpRequestContext",
+		"swaggerContext",
+		"operationContext",
+		"opContext",
+		"operContext",
+	}
+
+	multipartFormNamePreferences = []string{
+		"MultipartForm",
+		"RequestMultipartForm",
+		"HTTPMultipartForm",
+		"SwaggerMultipartForm",
+		"OperationMultipartForm",
+		"OpMultipartForm",
+	}
+)
 
 // GenerateServerOperation generates a parameter model, parameter validator, http handler implementations for a given operation.
 //
@@ -63,47 +71,35 @@ func GenerateServerOperation(operationNames []string, opts *GenOpts) error {
 	}
 
 	ops := gatherOperations(opts, analyzed, operationNames)
-
 	if len(ops) == 0 {
 		return errors.New("no operations were selected")
 	}
 
 	for operationName, opRef := range ops {
 		method, path, operation := opRef.Method, opRef.Path, opRef.Op
-
 		serverPackage := opts.LanguageOpts.ManglePackagePath(opts.ServerPackage, defaultServerTarget)
 		generator := operationGenerator{
 			Name:                 operationName,
 			Method:               method,
 			Path:                 path,
 			BasePath:             specDoc.BasePath(),
-			APIPackage:           opts.LanguageOpts.ManglePackagePath(opts.APIPackage, defaultOperationsTarget),
-			ModelsPackage:        opts.LanguageOpts.ManglePackagePath(opts.ModelPackage, defaultModelsTarget),
-			ClientPackage:        opts.LanguageOpts.ManglePackagePath(opts.ClientPackage, defaultClientTarget),
 			ServerPackage:        serverPackage,
 			Operation:            *operation,
 			SecurityRequirements: analyzed.SecurityRequirementsFor(operation),
 			SecurityDefinitions:  analyzed.SecurityDefinitionsFor(operation),
-			Principal:            principalAlias(opts.Principal),
 			Target:               filepath.Join(opts.Target, filepath.FromSlash(serverPackage)),
-			Base:                 opts.Target,
-			Tags:                 opts.Tags,
-			IncludeHandler:       opts.IncludeHandler,
-			IncludeParameters:    opts.IncludeParameters,
-			IncludeResponses:     opts.IncludeResponses,
-			IncludeValidator:     opts.IncludeValidator,
-			DumpData:             opts.DumpData,
-			DefaultScheme:        opts.DefaultScheme,
-			DefaultProduces:      opts.DefaultProduces,
-			DefaultConsumes:      opts.DefaultConsumes,
 			Doc:                  specDoc,
 			Analyzed:             analyzed,
-			GenOpts:              opts,
 		}
+		// injects inherited global options into the generator.
+		generator.applyOptions(opts)
+
+		// build the data model and render the operation.
 		if err := generator.Generate(); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -140,38 +136,31 @@ type operationGenerator struct {
 
 // Generate a single operation.
 func (o *operationGenerator) Generate() error {
-	defaultImports := newImportsBuilder(o.GenOpts).defaultImports()
-
-	apiPackage := o.GenOpts.LanguageOpts.ManglePackagePath(o.GenOpts.APIPackage, defaultOperationsTarget)
-	imports := newImportsBuilder(o.GenOpts).initImports(
-		filepath.Join(o.GenOpts.LanguageOpts.ManglePackagePath(o.GenOpts.ServerPackage, defaultServerTarget), apiPackage))
-
-	bldr := codeGenOpBuilder{
-		ModelsPackage:       o.ModelsPackage,
-		Principal:           principalAlias(o.GenOpts.Principal),
-		Target:              o.Target,
-		DefaultImports:      defaultImports,
-		Imports:             imports,
-		DefaultScheme:       o.DefaultScheme,
-		Doc:                 o.Doc,
-		PristineDefs:        o.Doc.Pristine(),
-		Analyzed:            o.Analyzed,
-		BasePath:            o.BasePath,
-		GenOpts:             o.GenOpts,
-		Name:                o.Name,
-		Operation:           o.Operation,
-		Method:              o.Method,
-		Path:                o.Path,
-		IncludeValidator:    o.IncludeValidator,
-		APIPackage:          o.APIPackage, // defaults to main operations package
-		DefaultProduces:     o.DefaultProduces,
-		DefaultConsumes:     o.DefaultConsumes,
-		Authed:              len(o.Analyzed.SecurityRequirementsFor(&o.Operation)) > 0,
-		Security:            o.Analyzed.SecurityRequirementsFor(&o.Operation),
-		SecurityDefinitions: o.Analyzed.SecurityDefinitionsFor(&o.Operation),
-		RootAPIPackage:      o.GenOpts.LanguageOpts.ManglePackageName(o.ServerPackage, defaultServerTarget),
+	defaultImports, err := newImportsBuilder(o.GenOpts).defaultImports()
+	if err != nil {
+		return err
 	}
 
+	apiPackage := o.GenOpts.LanguageOpts.ManglePackagePath(o.GenOpts.APIPackage, defaultOperationsTarget)
+	imports, err := newImportsBuilder(o.GenOpts).initImports(
+		filepath.Join(o.GenOpts.LanguageOpts.ManglePackagePath(o.GenOpts.ServerPackage, defaultServerTarget), apiPackage),
+	)
+	if err != nil {
+		return err
+	}
+
+	if err = ensureDedupedImports(defaultImports, imports); err != nil {
+		// check the imports map against internal mistakes, e.g. 2 aliases pointing to the same package, same alias
+		// pointing to different package. Errors detected here are necessarily go-swagger bugs.
+		return err
+	}
+
+	bldr := codeGenOpBuilder{
+		DefaultImports: defaultImports,
+		Imports:        imports,
+	}
+	// The operation builder inherits most of its settings from the parent generator.
+	bldr.applyGeneratorSettings(o)
 	_, tags, _ := bldr.analyzeTags()
 
 	op, err := bldr.MakeOperation()
@@ -184,24 +173,40 @@ func (o *operationGenerator) Generate() error {
 	operations = append(operations, op)
 	sort.Sort(operations)
 
+	if o.GenOpts.DumpData {
+		// short-circuit when dumping the data model for debugging or introspection purpose
+		// (e.g. for users trying to construct custom templates).
+		return dumpOperations(operations)
+	}
+
+	renderer := newRenderer(o.GenOpts)
 	for _, pp := range operations {
 		op := pp
-		if o.GenOpts.DumpData {
-			var dynamicOp any
-			if err := jsonutils.FromDynamicJSON(op, &dynamicOp); err != nil {
-				return err
-			}
-
-			_ = dumpData(os.Stdout, dynamicOp)
-
-			continue
-		}
-		if err := newRenderer(o.GenOpts).renderOperation(&op); err != nil {
+		if err := renderer.renderOperation(&op); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// applyOptions propagates all relevant top-level options to the generator.
+func (o *operationGenerator) applyOptions(opts *GenOpts) {
+	o.APIPackage = opts.LanguageOpts.ManglePackagePath(opts.APIPackage, defaultOperationsTarget)
+	o.ModelsPackage = opts.LanguageOpts.ManglePackagePath(opts.ModelPackage, defaultModelsTarget)
+	o.ClientPackage = opts.LanguageOpts.ManglePackagePath(opts.ClientPackage, defaultClientTarget)
+	o.Principal = principalAlias(opts.Principal)
+	o.Base = opts.Target
+	o.Tags = opts.Tags
+	o.IncludeHandler = opts.IncludeHandler
+	o.IncludeParameters = opts.IncludeParameters
+	o.IncludeResponses = opts.IncludeResponses
+	o.IncludeValidator = opts.IncludeValidator
+	o.DumpData = opts.DumpData
+	o.DefaultScheme = opts.DefaultScheme
+	o.DefaultProduces = opts.DefaultProduces
+	o.DefaultConsumes = opts.DefaultConsumes
+	o.GenOpts = opts
 }
 
 type codeGenOpBuilder struct {
@@ -233,9 +238,7 @@ type codeGenOpBuilder struct {
 	GenOpts             *GenOpts
 }
 
-//nolint:gocognit,gocyclo,cyclop,maintidx // TODO(fredbi): refactor
 func (b *codeGenOpBuilder) MakeOperation() (GenOperation, error) {
-	debugLogf("[%s %s] parsing operation (id: %q)", b.Method, b.Path, b.Operation.ID)
 	// NOTE: we assume flatten is enabled by default (i.e. complex constructs are resolved from the models package),
 	// but do not assume the spec is necessarily fully flattened (i.e. all schemas moved to definitions).
 	//
@@ -253,153 +256,45 @@ func (b *codeGenOpBuilder) MakeOperation() (GenOperation, error) {
 		b.GenOpts,
 	)
 	receiver := "o"
-	mangler := b.GenOpts.LanguageOpts.Mangler
-
 	operation := b.Operation
-	var params, qp, pp, hp, fp GenParameters
-	var hasQueryParams, hasPathParams, hasHeaderParams, hasFormParams, hasFileParams, hasFormValueParams, hasBodyParams bool
+
+	// handle the parameters for this operation
 	paramsForOperation := b.Analyzed.ParamsFor(b.Method, b.Path)
 
+	// sanitize & deconflict names
 	idMapping, timeoutName, ctxName, err := b.paramMappings(paramsForOperation)
 	if err != nil {
 		return GenOperation{}, err
 	}
 
-	for _, p := range paramsForOperation {
-		cp, err := b.MakeParameter(receiver, resolver, p, idMapping)
-		if err != nil {
-			return GenOperation{}, err
-		}
-		if cp.IsQueryParam() {
-			hasQueryParams = true
-			qp = append(qp, cp)
-		}
-		if cp.IsFormParam() {
-			if p.Type == file {
-				hasFileParams = true
-			}
-			if p.Type != file {
-				hasFormValueParams = true
-			}
-			hasFormParams = true
-			fp = append(fp, cp)
-		}
-		if cp.IsPathParam() {
-			hasPathParams = true
-			pp = append(pp, cp)
-		}
-		if cp.IsHeaderParam() {
-			hasHeaderParams = true
-			hp = append(hp, cp)
-		}
-		if cp.IsBodyParam() {
-			hasBodyParams = true
-		}
-		params = append(params, cp)
-	}
-	sort.Sort(params)
-	sort.Sort(qp)
-	sort.Sort(pp)
-	sort.Sort(hp)
-	sort.Sort(fp)
-
-	var srs responses
-	if operation.Responses != nil {
-		srs = sortedResponses(operation.Responses.StatusCodeResponses)
-	}
-	responses := make([]GenResponse, 0, len(srs))
-	var defaultResponse *GenResponse
-	var successResponses []GenResponse
-	if operation.Responses != nil {
-		for _, v := range srs {
-			name, ok := v.Response.Extensions.GetString(xGoName)
-			if !ok {
-				// look for name of well-known codes
-				name = runtime.Statuses[v.Code]
-				if name == "" {
-					// non-standard codes deserve some name
-					name = fmt.Sprintf("Status %d", v.Code)
-				}
-			}
-			name = mangler.ToJSONName(b.Name + " " + name)
-			const (
-				httpStatusCodeDivider = 100
-				httpStatusCodeSuccess = 2
-			)
-			isSuccess := v.Code/httpStatusCodeDivider == httpStatusCodeSuccess
-			gr, err := b.MakeResponse(receiver, name, isSuccess, resolver, v.Code, v.Response)
-			if err != nil {
-				return GenOperation{}, err
-			}
-			if isSuccess {
-				successResponses = append(successResponses, gr)
-			}
-			responses = append(responses, gr)
-		}
-
-		if operation.Responses.Default != nil {
-			gr, err := b.MakeResponse(receiver, b.Name+" default", false, resolver, -1, *operation.Responses.Default)
-			if err != nil {
-				return GenOperation{}, err
-			}
-			defaultResponse = &gr
-		}
+	// categorize all parameters with all characteristics that matter to code generation.
+	splitParams := newParamFlags(b, receiver, resolver, idMapping, len(paramsForOperation))
+	err = splitParams.handleParameters(paramsForOperation)
+	if err != nil {
+		return GenOperation{}, err
 	}
 
-	// Always render a default response, even when no responses were defined
-	if operation.Responses == nil || (operation.Responses.Default == nil && len(srs) == 0) {
-		gr, err := b.MakeResponse(receiver, b.Name+" default", false, resolver, -1, spec.Response{})
-		if err != nil {
-			return GenOperation{}, err
-		}
-		defaultResponse = &gr
+	// handle responses: categorize responses with all characteristics that matter to code generation.
+	splitResponses := newResponseFlags(b, receiver, resolver)
+	if errResp := splitResponses.handleResponses(operation.Responses); errResp != nil {
+		return GenOperation{}, errResp
 	}
 
-	swsp := resolver.Doc.Spec()
-
-	schemes, extraSchemes := gatherURISchemes(swsp, operation)
+	swaggerSpec := resolver.Doc.Spec()
+	schemes, extraSchemes := gatherURISchemes(swaggerSpec, operation)
 	originalSchemes := operation.Schemes
 	originalExtraSchemes := getExtraSchemes(operation.Extensions)
-
-	produces := producesOrDefault(operation.Produces, swsp.Produces, b.DefaultProduces)
-	consumes := producesOrDefault(operation.Consumes, swsp.Consumes, b.DefaultConsumes)
-
-	var successResponse *GenResponse
-	for _, resp := range successResponses {
-		sr := resp
-		if sr.IsSuccess {
-			successResponse = &sr
-			break
-		}
-	}
-
-	var hasStreamingResponse bool
-	if defaultResponse != nil && defaultResponse.Schema != nil && defaultResponse.Schema.IsStream {
-		hasStreamingResponse = true
-	}
-
-	if !hasStreamingResponse {
-		for _, sr := range successResponses {
-			if !hasStreamingResponse && sr.Schema != nil && sr.Schema.IsStream {
-				hasStreamingResponse = true
-				break
-			}
-		}
-	}
-
-	if !hasStreamingResponse {
-		for _, r := range responses {
-			if r.Schema != nil && r.Schema.IsStream {
-				hasStreamingResponse = true
-				break
-			}
-		}
+	produces := producesOrDefault(operation.Produces, swaggerSpec.Produces, b.DefaultProduces)
+	consumes := producesOrDefault(operation.Consumes, swaggerSpec.Consumes, b.DefaultConsumes)
+	importTarget, err := b.GenOpts.LanguageOpts.BaseImport(b.GenOpts.Target)
+	if err != nil {
+		return GenOperation{}, errTarget(b.GenOpts.Target, err)
 	}
 
 	return GenOperation{
 		GenCommon: GenCommon{
 			Copyright:        b.GenOpts.Copyright,
-			TargetImportPath: b.GenOpts.LanguageOpts.BaseImport(b.GenOpts.Target),
+			TargetImportPath: importTarget,
 		},
 		Package:              b.GenOpts.LanguageOpts.ManglePackageName(b.APIPackage, defaultOperationsTarget),
 		PackageAlias:         b.APIPackageAlias,
@@ -414,29 +309,32 @@ func (b *codeGenOpBuilder) MakeOperation() (GenOperation, error) {
 		ReceiverName:         receiver,
 		DefaultImports:       b.DefaultImports,
 		Imports:              b.Imports,
-		Params:               params,
+		Params:               splitParams.params,
+		ServerParams:         splitParams.serverParams,
 		Summary:              trimBOM(operation.Summary),
-		QueryParams:          qp,
-		PathParams:           pp,
-		HeaderParams:         hp,
-		FormParams:           fp,
-		HasQueryParams:       hasQueryParams,
-		HasPathParams:        hasPathParams,
-		HasHeaderParams:      hasHeaderParams,
-		HasFormParams:        hasFormParams,
-		HasFormValueParams:   hasFormValueParams,
-		HasFileParams:        hasFileParams,
-		HasBodyParams:        hasBodyParams,
-		HasStreamingResponse: hasStreamingResponse,
+		QueryParams:          splitParams.qp,
+		PathParams:           splitParams.pp,
+		HeaderParams:         splitParams.hp,
+		FormParams:           splitParams.fp,
+		HasQueryParams:       splitParams.hasQueryParams,
+		HasPathParams:        splitParams.hasPathParams,
+		HasHeaderParams:      splitParams.hasHeaderParams,
+		HasFormParams:        splitParams.hasFormParams,
+		HasFormValueParams:   splitParams.hasFormValueParams,
+		HasFileParams:        splitParams.hasFileParams,
+		HasBodyParams:        splitParams.hasBodyParams,
+		HasStreamingForm:     splitParams.hasStreamingForm,
+		HasStreamingResponse: splitResponses.hasStreamingResponse,
+		MultipartFormName:    splitParams.multipartFormName,
 		Authorized:           b.Authed,
 		Security:             b.makeSecurityRequirements(receiver), // resolved security requirements, for codegen
 		SecurityDefinitions:  b.makeSecuritySchemes(receiver),
 		SecurityRequirements: securityRequirements(operation.Security), // raw security requirements, for doc
 		Principal:            b.Principal,
-		Responses:            responses,
-		DefaultResponse:      defaultResponse,
-		SuccessResponse:      successResponse,
-		SuccessResponses:     successResponses,
+		Responses:            splitResponses.responses,
+		DefaultResponse:      splitResponses.defaultResponse,
+		SuccessResponse:      splitResponses.successResponse,
+		SuccessResponses:     splitResponses.successResponses,
 		ExtraSchemas:         gatherExtraSchemas(b.ExtraSchemas),
 		Schemes:              schemeOrDefault(schemes, b.DefaultScheme),
 		SchemeOverrides:      originalSchemes,      // raw operation schemes, for doc
@@ -450,16 +348,13 @@ func (b *codeGenOpBuilder) MakeOperation() (GenOperation, error) {
 		ContextName:          ctxName,
 		Extensions:           operation.Extensions,
 		StrictResponders:     b.GenOpts.StrictResponders,
-
-		PrincipalIsNullable: principalIsNullable(b.GenOpts.Principal, b.GenOpts.PrincipalCustomIface),
-		ExternalDocs:        trimExternalDoc(operation.ExternalDocs),
-		ReturnErrors:        b.GenOpts.ReturnErrors,
+		PrincipalIsNullable:  principalIsNullable(b.GenOpts.Principal, b.GenOpts.PrincipalCustomIface),
+		ExternalDocs:         trimExternalDoc(operation.ExternalDocs),
+		ReturnErrors:         b.GenOpts.ReturnErrors,
 	}, nil
 }
 
 func (b *codeGenOpBuilder) MakeResponse(receiver, name string, isSuccess bool, resolver *typeResolver, code int, resp spec.Response) (GenResponse, error) {
-	debugLogf("[%s %s] making id %q", b.Method, b.Path, b.Operation.ID)
-
 	// assume minimal flattening has been carried on, so there is not $ref in response (but some may remain in response schema)
 	examples := make(GenResponseExamples, 0, len(resp.Examples))
 	for k, v := range resp.Examples {
@@ -506,6 +401,19 @@ func (b *codeGenOpBuilder) MakeResponse(receiver, name string, isSuccess bool, r
 		}
 		res.Schema = &schema
 	}
+
+	if headersNeedStrfmt(res.Headers) {
+		// Register the strfmt import on a response-scoped copy of the imports
+		// map. Mutating the shared b.Imports would leak the import into the
+		// parameters template, which already declares strfmt on its own (#1769).
+		imports := maps.Clone(b.Imports)
+		if imports == nil {
+			imports = make(map[string]string)
+		}
+		imports["strfmt"] = "github.com/go-openapi/strfmt"
+		res.Imports = imports
+	}
+
 	return res, nil
 }
 
@@ -558,7 +466,6 @@ func (b *codeGenOpBuilder) MakeHeaderItem(receiver, paramName, indexVar, path, v
 	var res GenItems
 	mangler := b.GenOpts.LanguageOpts.Mangler
 	res.resolvedType = simpleResolvedType(items.Type, items.Format, items.Items, &items.CommonValidations)
-
 	res.sharedValidations = sharedValidations{
 		Required:          false,
 		SchemaValidations: items.Validations(),
@@ -574,18 +481,22 @@ func (b *codeGenOpBuilder) MakeHeaderItem(receiver, paramName, indexVar, path, v
 	res.HasValidations, res.HasSliceValidations = b.HasValidations(items.CommonValidations, res.resolvedType)
 	res.IsEnumCI = b.GenOpts.AllowEnumCI || hasEnumCI(items.Extensions)
 
-	if items.Items != nil {
-		// Recursively follows nested arrays
-		// IMPORTANT! transmitting a ValueExpression consistent with the parent's one
-		hi, err := b.MakeHeaderItem(receiver, paramName+" "+indexVar, indexVar+"i", "fmt.Sprintf(\"%s.%v\", \"header\", "+indexVar+")", res.ValueExpression+"I", items.Items, items)
-		if err != nil {
-			return GenItems{}, err
-		}
-		res.Child = &hi
-		hi.Parent = &res
-		// Propagates HasValidations flag to outer Items definition (currently not in use: done to remain consistent with parameters)
-		res.HasValidations = res.HasValidations || hi.HasValidations
+	if items.Items == nil {
+		return res, nil
 	}
+
+	// resolve items in header
+
+	// Recursively follows nested arrays
+	// IMPORTANT! transmitting a ValueExpression consistent with the parent's one
+	hi, err := b.MakeHeaderItem(receiver, paramName+" "+indexVar, indexVar+"i", "fmt.Sprintf(\"%s.%v\", \"header\", "+indexVar+")", res.ValueExpression+"I", items.Items, items)
+	if err != nil {
+		return GenItems{}, err
+	}
+	res.Child = &hi
+	hi.Parent = &res
+	// Propagates HasValidations flag to outer Items definition (currently not in use: done to remain consistent with parameters)
+	res.HasValidations = res.HasValidations || hi.HasValidations
 
 	return res, nil
 }
@@ -599,7 +510,6 @@ func (b *codeGenOpBuilder) HasValidations(sh spec.CommonValidations, rt resolved
 }
 
 func (b *codeGenOpBuilder) MakeParameterItem(receiver, paramName, indexVar, path, valueExpression, location string, resolver *typeResolver, items, _ *spec.Items) (GenItems, error) {
-	debugLogf("making parameter item recv=%s param=%s index=%s valueExpr=%s path=%s location=%s", receiver, paramName, indexVar, valueExpression, path, location)
 	var res GenItems
 	mangler := b.GenOpts.LanguageOpts.Mangler
 	res.resolvedType = simpleResolvedType(items.Type, items.Format, items.Items, &items.CommonValidations)
@@ -621,34 +531,39 @@ func (b *codeGenOpBuilder) MakeParameterItem(receiver, paramName, indexVar, path
 	res.IsEnumCI = b.GenOpts.AllowEnumCI || hasEnumCI(items.Extensions)
 	res.NeedsIndex = res.HasValidations || res.Converter != "" || (res.IsCustomFormatter && !res.SkipParse)
 
-	if items.Items != nil {
-		// Recursively follows nested arrays
-		// IMPORTANT! transmitting a ValueExpression consistent with the parent's one
-		pi, err := b.MakeParameterItem(receiver, paramName+" "+indexVar, indexVar+"i", "fmt.Sprintf(\"%s.%v\", "+path+", "+indexVar+")", res.ValueExpression+"I", location, resolver, items.Items, items)
-		if err != nil {
-			return GenItems{}, err
-		}
-		res.Child = &pi
-		pi.Parent = &res
-		// Propagates HasValidations flag to outer Items definition
-		res.HasValidations = res.HasValidations || pi.HasValidations
-		res.NeedsIndex = res.NeedsIndex || pi.NeedsIndex
+	if items.Items == nil {
+		return res, nil
 	}
+
+	// recurse over items in parameter
+
+	// Recursively follows nested arrays
+	// IMPORTANT! transmitting a ValueExpression consistent with the parent's one
+	pi, err := b.MakeParameterItem(receiver, paramName+" "+indexVar, indexVar+"i", "fmt.Sprintf(\"%s.%v\", "+path+", "+indexVar+")", res.ValueExpression+"I", location, resolver, items.Items, items)
+	if err != nil {
+		return GenItems{}, err
+	}
+	res.Child = &pi
+	pi.Parent = &res
+	// Propagates HasValidations flag to outer Items definition
+	res.HasValidations = res.HasValidations || pi.HasValidations
+	res.NeedsIndex = res.NeedsIndex || pi.NeedsIndex
 
 	return res, nil
 }
 
 func (b *codeGenOpBuilder) MakeParameter(receiver string, resolver *typeResolver, param spec.Parameter, idMapping map[string]map[string]string) (GenParameter, error) {
-	debugLogf("[%s %s] making parameter %q", b.Method, b.Path, param.Name)
-
 	var child *GenItems
+	// id, err:= b.inferParameterID(param, idMapping)
+	// if err != nil {
+	//	return GenParameter{},err
+	// }
 	var id string
 	if len(idMapping) > 0 {
 		var ok bool
 		id, ok = idMapping[param.In][param.Name]
 		if !ok {
-			return GenParameter{}, fmt.Errorf(`%s %s, %q has an invalid parameter definition`,
-				b.Method, b.Path, param.Name)
+			return GenParameter{}, fmt.Errorf(`%s %s, %q has an invalid parameter definition`, b.Method, b.Path, param.Name)
 		}
 	} else {
 		var err error
@@ -677,6 +592,8 @@ func (b *codeGenOpBuilder) MakeParameter(receiver string, resolver *typeResolver
 		Extensions:       param.Extensions,
 	}
 
+	// res.CustomTag, err = b.inferCustomTag(param)
+	// if err != nil { ...}
 	if goCustomTag, ok := param.Extensions["x-go-custom-tag"]; ok {
 		customTag, ok := goCustomTag.(string)
 		if !ok {
@@ -755,12 +672,12 @@ func (b *codeGenOpBuilder) MakeBodyParameter(res *GenParameter, resolver *typeRe
 	// templates assume at least one .Child != nil
 	res.Child = items
 	schema.HasValidations = schema.HasValidations || items.HasValidations
-
 	res.resolvedType = schema.resolvedType
 
 	// simple and schema views share the same validations
 	res.sharedValidations = schema.sharedValidations
 	res.ZeroValue = schema.Zero()
+
 	return nil
 }
 
@@ -773,6 +690,7 @@ func (b *codeGenOpBuilder) MakeBodyParameter(res *GenParameter, resolver *typeRe
 func (b *codeGenOpBuilder) MakeBodyParameterItemsAndMaps(res *GenParameter, it *GenSchema) *GenItems {
 	mangler := b.GenOpts.LanguageOpts.Mangler
 	items := new(GenItems)
+
 	if it != nil {
 		var prev *GenItems
 		next := items
@@ -781,11 +699,13 @@ func (b *codeGenOpBuilder) MakeBodyParameterItemsAndMaps(res *GenParameter, it *
 		} else if res.Schema.IsMap {
 			next.Path = "fmt.Sprintf(\"%s.%v\", " + res.Path + ", " + res.KeyVar + ")"
 		}
+
 		next.Name = res.Name + " " + res.Schema.IndexVar
 		next.IndexVar = res.Schema.IndexVar + "i"
 		next.KeyVar = res.Schema.KeyVar + "k"
 		next.ValueExpression = mangler.ToVarName(res.Name + "I")
 		next.Location = "body"
+
 		for it != nil {
 			next.resolvedType = it.resolvedType
 			next.sharedValidations = it.sharedValidations
@@ -837,6 +757,7 @@ func (b *codeGenOpBuilder) MakeBodyParameterItemsAndMaps(res *GenParameter, it *
 				it = nil
 			}
 		}
+
 		// propagate HasValidations
 		var propag func(child *GenItems) (bool, bool)
 		propag = func(child *GenItems) (bool, bool) {
@@ -871,7 +792,33 @@ func (b *codeGenOpBuilder) MakeBodyParameterItemsAndMaps(res *GenParameter, it *
 		}
 		fixNullable(items)
 	}
+
 	return items
+}
+
+// applyGeneratorSettings inherits the generator settings into the operation builder.
+func (b *codeGenOpBuilder) applyGeneratorSettings(o *operationGenerator) {
+	b.ModelsPackage = o.ModelsPackage
+	b.Principal = principalAlias(o.GenOpts.Principal)
+	b.Target = o.Target
+	b.DefaultScheme = o.DefaultScheme
+	b.Doc = o.Doc
+	b.PristineDefs = o.Doc.Pristine()
+	b.Analyzed = o.Analyzed
+	b.BasePath = o.BasePath
+	b.GenOpts = o.GenOpts
+	b.Name = o.Name
+	b.Operation = o.Operation
+	b.Method = o.Method
+	b.Path = o.Path
+	b.IncludeValidator = o.IncludeValidator
+	b.APIPackage = o.APIPackage // defaults to main operations package
+	b.DefaultProduces = o.DefaultProduces
+	b.DefaultConsumes = o.DefaultConsumes
+	b.Authed = len(o.Analyzed.SecurityRequirementsFor(&o.Operation)) > 0
+	b.Security = o.Analyzed.SecurityRequirementsFor(&o.Operation)
+	b.SecurityDefinitions = o.Analyzed.SecurityDefinitionsFor(&o.Operation)
+	b.RootAPIPackage = o.GenOpts.LanguageOpts.ManglePackageName(o.ServerPackage, defaultServerTarget)
 }
 
 // paramMappings yields a map of safe parameter names for an operation.
@@ -883,7 +830,6 @@ func (b *codeGenOpBuilder) paramMappings(params map[string]spec.Parameter) (map[
 		"header":   make(map[string]string, len(params)),
 		"body":     make(map[string]string, len(params)),
 	}
-	debugLogf("paramMappings: map=%v", params)
 
 	// In order to avoid unstable generation, adopt same naming convention
 	// for all parameters with same name across locations.
@@ -891,7 +837,6 @@ func (b *codeGenOpBuilder) paramMappings(params map[string]spec.Parameter) (map[
 
 	seenIDs := make(map[string]any, len(params))
 	for id, p := range params {
-		debugLogf("paramMappings: params: id=%s, In=%q, Name=%q", id, p.In, p.Name)
 		// guard against possible validation failures and/or skipped issues
 		if _, found := idMapping[p.In]; !found {
 			log.Printf(`warning: parameter named %q has an invalid "in": %q. Skipped`, p.Name, p.In)
@@ -939,78 +884,6 @@ func (b *codeGenOpBuilder) paramMappings(params map[string]spec.Parameter) (map[
 	return idMapping, timeoutName, ctxName, nil
 }
 
-const (
-	timeoutName = "timeout"
-	contextName = "context"
-)
-
-var (
-	timeoutVarNamePreferences = []string{
-		timeoutName,
-		"requestTimeout",
-		"httpRequestTimeout",
-		"swaggerTimeout",
-		"operationTimeout",
-		"opTimeout",
-		"operTimeout",
-	}
-
-	contextVarNamePreferences = []string{
-		contextName,
-		"requestContext",
-		"httpRequestContext",
-		"swaggerContext",
-		"operationContext",
-		"opContext",
-		"operContext",
-	}
-)
-
-// rename the variable in use by client template to avoid conflicting
-// with param names.
-//
-// NOTE: this merely protects the timeout field in the client parameter struct,
-// fields "Context" and "HTTPClient" remain exposed to name conflicts.
-func rename(preferences []string) func(map[string]any, string, int) string {
-	return func(seenIDs map[string]any, previous string, index int) string {
-		if seenIDs == nil {
-			return previous
-		}
-
-		current := strings.ToLower(previous)
-		if _, ok := seenIDs[current]; !ok {
-			return previous
-		}
-
-		var next string
-		if index < len(preferences)-1 {
-			index++
-			next = preferences[index]
-		} else {
-			next = previous + "1"
-		}
-
-		return rename(preferences)(seenIDs, next, index)
-	}
-}
-
-func producesOrDefault(produces []string, fallback []string, defaultProduces string) []string {
-	if len(produces) > 0 {
-		return produces
-	}
-	if len(fallback) > 0 {
-		return fallback
-	}
-	return []string{defaultProduces}
-}
-
-func schemeOrDefault(schemes []string, defaultScheme string) []string {
-	if len(schemes) == 0 {
-		return []string{defaultScheme}
-	}
-	return schemes
-}
-
 func (b *codeGenOpBuilder) setBodyParamValidation(p *GenParameter) {
 	// Determine validation strategy for body param.
 	//
@@ -1020,39 +893,41 @@ func (b *codeGenOpBuilder) setBodyParamValidation(p *GenParameter) {
 	// - the body parameter is a map of model objects => iterate and delegate
 	// - the body parameter is an array of simple objects (including maps)
 	// - the body parameter is a map of simple objects (including arrays)
-	if p.IsBodyParam() {
-		var hasSimpleBodyParams, hasSimpleBodyItems, hasSimpleBodyMap, hasModelBodyParams, hasModelBodyItems, hasModelBodyMap bool
-		s := p.Schema
-		if s != nil {
-			doNot := s.IsInterface || s.IsStream || s.IsBase64
-			// composition of primitive fields must be properly identified: hack this through
-			_, isPrimitive := primitives[s.GoType]
-			_, isFormatter := customFormatters[s.GoType]
-			isComposedPrimitive := s.IsPrimitive && !isPrimitive && !isFormatter
-
-			hasSimpleBodyParams = !s.IsComplexObject && !s.IsAliased && !isComposedPrimitive && !doNot
-			hasModelBodyParams = (s.IsComplexObject || s.IsAliased || isComposedPrimitive) && !doNot
-
-			if s.IsArray && s.Items != nil {
-				it := s.Items
-				doNot = it.IsInterface || it.IsStream || it.IsBase64
-				hasSimpleBodyItems = !it.IsComplexObject && !it.IsAliased && !doNot
-				hasModelBodyItems = (it.IsComplexObject || it.IsAliased) && !doNot
-			}
-			if s.IsMap && s.AdditionalProperties != nil {
-				it := s.AdditionalProperties
-				hasSimpleBodyMap = !it.IsComplexObject && !it.IsAliased && !doNot
-				hasModelBodyMap = !hasSimpleBodyMap && !doNot
-			}
-		}
-		// set validation strategy for body param
-		p.HasSimpleBodyParams = hasSimpleBodyParams
-		p.HasSimpleBodyItems = hasSimpleBodyItems
-		p.HasModelBodyParams = hasModelBodyParams
-		p.HasModelBodyItems = hasModelBodyItems
-		p.HasModelBodyMap = hasModelBodyMap
-		p.HasSimpleBodyMap = hasSimpleBodyMap
+	if !p.IsBodyParam() {
+		return
 	}
+
+	var hasSimpleBodyParams, hasSimpleBodyItems, hasSimpleBodyMap, hasModelBodyParams, hasModelBodyItems, hasModelBodyMap bool
+	s := p.Schema
+	if s != nil {
+		doNot := s.IsInterface || s.IsStream || s.IsBase64
+		// composition of primitive fields must be properly identified: hack this through
+		_, isPrimitive := primitives[s.GoType]
+		_, isFormatter := customFormatters[s.GoType]
+		isComposedPrimitive := s.IsPrimitive && !isPrimitive && !isFormatter
+
+		hasSimpleBodyParams = !s.IsComplexObject && !s.IsAliased && !isComposedPrimitive && !doNot
+		hasModelBodyParams = (s.IsComplexObject || s.IsAliased || isComposedPrimitive) && !doNot
+
+		if s.IsArray && s.Items != nil {
+			it := s.Items
+			doNot = it.IsInterface || it.IsStream || it.IsBase64
+			hasSimpleBodyItems = !it.IsComplexObject && !it.IsAliased && !doNot
+			hasModelBodyItems = (it.IsComplexObject || it.IsAliased) && !doNot
+		}
+		if s.IsMap && s.AdditionalProperties != nil {
+			it := s.AdditionalProperties
+			hasSimpleBodyMap = !it.IsComplexObject && !it.IsAliased && !doNot
+			hasModelBodyMap = !hasSimpleBodyMap && !doNot
+		}
+	}
+	// set validation strategy for body param
+	p.HasSimpleBodyParams = hasSimpleBodyParams
+	p.HasSimpleBodyItems = hasSimpleBodyItems
+	p.HasModelBodyParams = hasModelBodyParams
+	p.HasModelBodyItems = hasModelBodyItems
+	p.HasModelBodyMap = hasModelBodyMap
+	p.HasSimpleBodyMap = hasSimpleBodyMap
 }
 
 // makeSecuritySchemes produces a sorted list of security schemes for this operation.
@@ -1081,10 +956,12 @@ func (b *codeGenOpBuilder) makeSecurityRequirements(_ string) []GenSecurityRequi
 				Scopes: scopes,
 			})
 		}
+
 		// sort joint requirements (come from a map in spec)
 		sort.Sort(jointReq)
 		securityRequirements = append(securityRequirements, jointReq)
 	}
+
 	return securityRequirements
 }
 
@@ -1093,12 +970,12 @@ func (b *codeGenOpBuilder) cloneSchema(schema *spec.Schema) *spec.Schema {
 	savedSchema := &spec.Schema{}
 	schemaRep, err := json.Marshal(schema)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("internal error: cannot json marshal a schema: %w", err))
 	}
 
 	err = json.Unmarshal(schemaRep, savedSchema)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("internal error: cannot json unmarshal a schema: %w", err))
 	}
 
 	return savedSchema
@@ -1151,17 +1028,21 @@ func (b *codeGenOpBuilder) liftExtraSchemas(resolver, rslv *typeResolver, bs *sp
 	if b.ExtraSchemas == nil {
 		b.ExtraSchemas = make(map[string]GenSchema, len(pg.ExtraSchemas))
 	}
+
 	for _, v := range pg.ExtraSchemas {
 		vv := v
 		if !v.IsStream {
 			b.ExtraSchemas[vv.Name] = vv
 		}
 	}
+
 	schema = &pg.GenSchema
+
 	return schema, nil
 }
 
 // buildOperationSchema constructs a schema for an operation (for body params or responses).
+//
 // It determines if the schema is readily available from the models package,
 // or if a schema has to be generated in the operations package (i.e. is anonymous).
 // Whenever an anonymous schema needs some extra schemas, we also determine if these extras are
@@ -1240,64 +1121,54 @@ func (b *codeGenOpBuilder) buildOperationSchema(schemaPath, containerName, schem
 	schemaPkg := b.GenOpts.LanguageOpts.ManglePackageName(b.APIPackage, "")
 	schema.Pkg = schemaPkg
 
-	if schema.IsAnonymous {
-		// a generated name for anonymous schema
-		// TODO: support x-go-name
-		hasProperties := len(schema.Properties) > 0
-		isAllOf := len(schema.AllOf) > 0
-		isInterface := schema.IsInterface
-		hasValidations := schema.HasValidations
-
-		// for complex anonymous objects, produce an extra schema
-		if hasProperties || isAllOf {
-			if b.ExtraSchemas == nil {
-				b.ExtraSchemas = make(map[string]GenSchema)
-			}
-			schema.Name = schemaName
-			schema.GoName = schemaName
-			schema.GoType = schemaName
-			schema.IsAnonymous = false
-			b.ExtraSchemas[schemaName] = schema
-
-			// constructs new schema to refer to the newly created type
-			schema = GenSchema{}
-			schema.IsAnonymous = false
-			schema.IsComplexObject = true
-			schema.SwaggerType = schemaName
-			schema.HasValidations = hasValidations
-			schema.GoType = schemaName
-			schema.Pkg = schemaPkg
-		} else if isInterface {
-			schema = GenSchema{}
-			schema.IsAnonymous = false
-			schema.IsComplexObject = false
-			schema.IsInterface = true
-			schema.HasValidations = false
-			schema.GoType = iface
-		}
+	if !schema.IsAnonymous {
+		// we're done with a named schema
+		return schema, nil
 	}
 
-	return schema, nil
-}
+	// a generated name for anonymous schema
+	// TODO: support x-go-name
+	hasProperties := len(schema.Properties) > 0
+	isAllOf := len(schema.AllOf) > 0
+	isInterface := schema.IsInterface
+	hasValidations := schema.HasValidations
 
-func intersectTags(left, right []string) []string {
-	// dedupe
-	uniqueTags := make(map[string]struct{}, maxInt(len(left), len(right)))
-	for _, l := range left {
-		if len(right) == 0 || slices.Contains(right, l) {
-			uniqueTags[l] = struct{}{}
+	// for complex anonymous objects, produce an extra schema
+	switch {
+	case hasProperties || isAllOf:
+		if b.ExtraSchemas == nil {
+			b.ExtraSchemas = make(map[string]GenSchema)
 		}
+		schema.Name = schemaName
+		schema.GoName = schemaName
+		schema.GoType = schemaName
+		schema.IsAnonymous = false
+		b.ExtraSchemas[schemaName] = schema
+
+		// constructs new schema to refer to the newly created type
+		schema = GenSchema{}
+		schema.IsAnonymous = false
+		schema.IsComplexObject = true
+		schema.SwaggerType = schemaName
+		schema.HasValidations = hasValidations
+		schema.GoType = schemaName
+		schema.Pkg = schemaPkg
+
+		return schema, nil
+
+	case isInterface:
+		schema = GenSchema{}
+		schema.IsAnonymous = false
+		schema.IsComplexObject = false
+		schema.IsInterface = true
+		schema.HasValidations = false
+		schema.GoType = iface
+
+		return schema, nil
+
+	default:
+		return schema, nil
 	}
-	filtered := make([]string, 0, len(uniqueTags))
-	// stable output across generations, preserving original order
-	for _, k := range left {
-		if _, ok := uniqueTags[k]; !ok {
-			continue
-		}
-		filtered = append(filtered, k)
-		delete(uniqueTags, k)
-	}
-	return filtered
 }
 
 // analyze tags for an operation.
@@ -1310,8 +1181,11 @@ func (b *codeGenOpBuilder) analyzeTags() (string, []string, bool) {
 	if b.GenOpts != nil {
 		filter = b.GenOpts.Tags
 	}
+
 	intersected := intersectTags(pruneEmpty(b.Operation.Tags), filter)
 	if !b.GenOpts.SkipTagPackages && len(intersected) > 0 {
+		// tag = b.inferTagFromExt(intersected)
+		//
 		// override generation with: x-go-operation-tag
 		tag, hasTagOverride = b.Operation.Extensions.GetString(xGoOperationTag)
 		if !hasTagOverride {
@@ -1333,6 +1207,7 @@ func (b *codeGenOpBuilder) analyzeTags() (string, []string, bool) {
 					tag = name
 					break
 				}
+
 				//  honor x-go-operation-tag in tag
 				if name, hasOpName := gtag.Extensions.GetString(xGoOperationTag); hasOpName {
 					tag = name
@@ -1341,6 +1216,7 @@ func (b *codeGenOpBuilder) analyzeTags() (string, []string, bool) {
 			}
 		}
 	}
+
 	if tag == b.APIPackage {
 		// conflict with "operations" package is handled separately
 		tag = renameOperationPackage(intersected, tag)
@@ -1354,79 +1230,262 @@ func (b *codeGenOpBuilder) analyzeTags() (string, []string, bool) {
 
 	b.APIPackage = b.GenOpts.LanguageOpts.ManglePackageName(tag, b.APIPackage) // actual package name
 	b.APIPackageAlias = deconflictTag(intersected, b.APIPackage)               // deconflicted import alias
+
 	return tag, intersected, len(filter) == 0 || len(filter) > 0 && len(intersected) > 0
 }
 
 var versionedPkgRex = regexp.MustCompile(`(?i)^(v)([0-9]+)$`)
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
+// paramFlags holds parameters categorized by their location and characteristics.
+//
+// This is a helper type the codegen operation builder delegates the parameters categorization to.
+type paramFlags struct {
+	hasQueryParams     bool
+	hasFileParams      bool
+	hasFormValueParams bool
+	hasPathParams      bool
+	hasHeaderParams    bool
+	hasBodyParams      bool
+	hasFormParams      bool
+	hasStreamingForm   bool
+
+	// all parameters, then parameters by location type (query, path, header, form-data)
+	params, qp, pp, hp, fp GenParameters
+	serverParams           GenParameters
+	multipartFormName      string
+	receiver               string
+	builder                *codeGenOpBuilder
+	resolver               *typeResolver
+	paramMappings          map[string]map[string]string
+}
+
+func newParamFlags(builder *codeGenOpBuilder, receiver string, resolver *typeResolver, paramMappings map[string]map[string]string, numParams int) *paramFlags {
+	return &paramFlags{
+		builder:       builder,
+		receiver:      receiver,
+		resolver:      resolver,
+		paramMappings: paramMappings,
+		params:        make(GenParameters, 0, numParams),
+		qp:            make(GenParameters, 0, numParams),
+		pp:            make(GenParameters, 0, numParams),
+		hp:            make(GenParameters, 0, numParams),
+		fp:            make(GenParameters, 0, numParams),
 	}
-	return b
 }
 
-// deconflictTag ensures generated packages for operations based on tags do not conflict
-// with other imports.
-func deconflictTag(seenTags []string, pkg string) string {
-	return deconflictPkg(pkg, func(pkg string) string { return renameOperationPackage(seenTags, pkg) })
+// handleParameters categorizes the parameters for an operation.
+func (f *paramFlags) handleParameters(params map[string]spec.Parameter) error {
+	for _, param := range params {
+		if err := f.handleParameter(param); err != nil {
+			return err
+		}
+	}
+
+	// make rendering stable across generations.
+	f.sortAll()
+
+	// filter out self-managed parameters for server-side generation: optional streaming form-data parameters
+	// for which the generated server does only minimal binding.
+	if f.hasStreamingForm {
+		f.serverParams = filterServerParameters(f.params)
+		f.multipartFormName = deconflictMultipartFormName(f.serverParams)
+	} else {
+		f.serverParams = f.params
+	}
+
+	return nil
 }
 
-// deconflictPrincipal ensures that whenever an external principal package is added, it doesn't conflict
-// with standard imports.
-func deconflictPrincipal(pkg string) string {
-	switch pkg {
-	case "principal":
-		return renamePrincipalPackage(pkg)
-	default:
-		return deconflictPkg(pkg, renamePrincipalPackage)
+// handleParameter builds the parameter and categorizes it.
+func (f *paramFlags) handleParameter(p spec.Parameter) error {
+	cp, err := f.builder.MakeParameter(f.receiver, f.resolver, p, f.paramMappings)
+	if err != nil {
+		return err
+	}
+
+	if cp.IsQueryParam() {
+		f.hasQueryParams = true
+		f.qp = append(f.qp, cp)
+	}
+
+	if cp.IsFormParam() {
+		if p.Type == file {
+			f.hasFileParams = true
+		}
+		if p.Type != file {
+			f.hasFormValueParams = true
+		}
+		f.hasFormParams = true
+		f.fp = append(f.fp, cp)
+	}
+
+	if cp.IsPathParam() {
+		f.hasPathParams = true
+		f.pp = append(f.pp, cp)
+	}
+
+	if cp.IsHeaderParam() {
+		f.hasHeaderParams = true
+		f.hp = append(f.hp, cp)
+	}
+
+	if cp.IsBodyParam() {
+		f.hasBodyParams = true
+	}
+
+	if !f.hasStreamingForm {
+		f.hasStreamingForm, err = hasStreamingFormEnabled(p, f.builder.Method, f.builder.Path)
+		if err != nil {
+			return err
+		}
+	}
+
+	f.params = append(f.params, cp)
+
+	return nil
+}
+
+// sortAll sorts all parameters so as to produce a stable rendering.
+func (f *paramFlags) sortAll() {
+	sort.Sort(f.params)
+	sort.Sort(f.qp)
+	sort.Sort(f.pp)
+	sort.Sort(f.hp)
+	sort.Sort(f.fp)
+}
+
+// responseFlags holds responses categorized by their characteristics (success, streaming, default).
+//
+// This is a helper type the codegen operation builder delegates the responses categorization to.
+type responseFlags struct {
+	responses, successResponses []GenResponse
+	successResponse             *GenResponse
+	defaultResponse             *GenResponse
+	hasStreamingResponse        bool
+	receiver                    string
+	builder                     *codeGenOpBuilder
+	resolver                    *typeResolver
+}
+
+func newResponseFlags(builder *codeGenOpBuilder, receiver string, resolver *typeResolver) *responseFlags {
+	return &responseFlags{
+		builder:  builder,
+		receiver: receiver,
+		resolver: resolver,
 	}
 }
 
-// deconflictPkg renames package names which conflict with standard imports.
-func deconflictPkg(pkg string, renamer func(string) string) string {
-	switch pkg {
-	// package conflict with variables
-	case "api", "httptransport", "formats", "server":
-		fallthrough
-	// package conflict with go-openapi imports
-	case "conv", "errors", "runtime", "middleware", "security", "spec", "strfmt", "jsonutils", "loads", "netutils", "stringutils", "typeutils", "validate":
-		fallthrough
-	// package conflict with stdlib/other lib imports
-	case "tls", "http", "fmt", "strings", "log", "flags", "pflag", "json", "time":
-		return renamer(pkg)
+// makeFallbackDefaultResponse produces a fallback response when nothing is available in the spec.
+func (f *responseFlags) makeFallbackDefaultResponse() error {
+	defaultResponse, err := f.builder.MakeResponse(f.receiver, f.builder.Name+" default", false, f.resolver, -1, spec.Response{})
+	if err != nil {
+		return err
 	}
 
-	return pkg
+	f.defaultResponse = &defaultResponse
+
+	return nil
 }
 
-func renameOperationPackage(seenTags []string, pkg string) string {
-	current := strings.ToLower(pkg) + "ops"
-	if len(seenTags) == 0 {
-		return current
+// handleResponses walks the responses in the spec and catagorizes them.
+//
+// A generated default response may be added when none is provided.
+func (f *responseFlags) handleResponses(responses *spec.Responses) error {
+	if responses == nil {
+		// no response defined - propose a default response whatsoever
+		return f.makeFallbackDefaultResponse()
 	}
-	for stringutils.ContainsStringsCI(seenTags, current) {
-		current += "1"
+
+	// sort responses to guarantee stable rendering across generations.
+	sorted := sortedResponses(responses.StatusCodeResponses)
+	f.responses = make([]GenResponse, 0, len(sorted))
+	f.successResponses = make([]GenResponse, 0, len(sorted))
+
+	for _, v := range sorted {
+		if err := f.handleResponse(v); err != nil {
+			return err
+		}
 	}
-	return current
+
+	if responses.Default != nil {
+		defaultResponse, err := f.builder.MakeResponse(f.receiver, f.builder.Name+" default", false, f.resolver, -1, *responses.Default)
+		if err != nil {
+			return err
+		}
+		f.defaultResponse = &defaultResponse
+	} else if len(sorted) == 0 {
+		// always render a default response when no responses at all are found.
+		//
+		// NOTE: a fallback default response is not guaranteed - if there are responses and no default one, then no fallback is added.
+		if err := f.makeFallbackDefaultResponse(); err != nil {
+			return err
+		}
+	}
+
+	// spot the first success response.
+	for _, resp := range f.successResponses {
+		sr := resp
+		if sr.IsSuccess {
+			f.successResponse = &sr
+			break
+		}
+	}
+
+	// explore responses and determine if at least one is a stream.
+	if f.defaultResponse != nil && f.defaultResponse.Schema != nil && f.defaultResponse.Schema.IsStream {
+		f.hasStreamingResponse = true
+	}
+
+	if !f.hasStreamingResponse {
+		for _, sr := range f.successResponses {
+			if sr.Schema != nil && sr.Schema.IsStream {
+				f.hasStreamingResponse = true
+				break
+			}
+		}
+
+		if !f.hasStreamingResponse {
+			for _, r := range f.responses {
+				if r.Schema != nil && r.Schema.IsStream {
+					f.hasStreamingResponse = true
+					break
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
-func renamePrincipalPackage(_ string) string {
-	// favors readability over perfect deconfliction
-	return "auth"
-}
+func (f *responseFlags) handleResponse(v respSort) error {
+	// honor x-go-name in response.
+	name, ok := v.Response.Extensions.GetString(xGoName)
+	if !ok {
+		// look for name of well-known codes.
+		name = runtime.Statuses[v.Code]
+		if name == "" {
+			// non-standard codes deserve some name.
+			name = fmt.Sprintf("Status %d", v.Code)
+		}
+	}
 
-func renameServerPackage(pkg string) string {
-	// favors readability over perfect deconfliction
-	return "swagger" + pkg + "srv"
-}
+	mangler := f.builder.GenOpts.LanguageOpts.Mangler
+	name = mangler.ToJSONName(f.builder.Name + " " + name)
+	const (
+		httpStatusCodeDivider = 100
+		httpStatusCodeSuccess = 2
+	)
+	isSuccess := v.Code/httpStatusCodeDivider == httpStatusCodeSuccess
+	gr, err := f.builder.MakeResponse(f.receiver, name, isSuccess, f.resolver, v.Code, v.Response)
+	if err != nil {
+		return err
+	}
 
-func renameAPIPackage(pkg string) string {
-	// favors readability over perfect deconfliction
-	return "swagger" + pkg
-}
+	if isSuccess {
+		f.successResponses = append(f.successResponses, gr)
+	}
 
-func renameImplementationPackage(pkg string) string {
-	// favors readability over perfect deconfliction
-	return "swagger" + pkg + "impl"
+	f.responses = append(f.responses, gr)
+
+	return nil
 }

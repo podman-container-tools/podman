@@ -14,9 +14,14 @@ type Cli struct {
 	CliPackage string `default:"cli" description:"the package to save the cli specific code"                   long:"cli-package"`
 }
 
+// Usage documents the spec argument in the help message.
+func (c Cli) Usage() string {
+	return usageWithSpec("cli")
+}
+
 // Execute runs this command.
-func (c *Cli) Execute(_ []string) error {
-	return createSwagger(c)
+func (c *Cli) Execute(args []string) error {
+	return createSwagger(c, args)
 }
 
 // apply options.

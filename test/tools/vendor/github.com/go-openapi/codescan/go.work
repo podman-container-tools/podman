@@ -1,0 +1,22 @@
+go 1.25.0
+
+// Workspace for the codescan monorepo: the main library module (.) and the
+// genspec-tui front-end module (./cmd/genspec-tui), kept in separate go.mod
+// files so the TUI's bubbletea dependency tree never pollutes the lean library.
+//
+// The workspace is what lets CI test every module in one pass (`go test work
+// ./...`, via the shared go-test-monorepo workflow) — the TUI has no CI of its
+// own. `go install .../cmd/genspec-tui@latest` ignores this file, so the TUI
+// module's own go.mod carries the real `require` on the library.
+//
+// Keep the `go` directive above in step with the modules (all 1.25.0): raising
+// it past them imposes a toolchain floor the code does not need, and would take
+// the oldstable CI job out.
+use (
+	.
+	./cmd/genspec
+	./cmd/genspec-tui
+	./docs/examples
+	./hack/genexportdata/bundle
+	./testdata
+)

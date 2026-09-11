@@ -151,7 +151,14 @@ orchestrator level.
 
 ## <a id="quirks-open"></a>§quirks-open — deferred follow-ups
 
-- **Column tracking.** routebody does not track per-line column
+> **Where open quirks live.** This section documents caveats *of this package*.
+> The project-wide register of what is actually open — verified, with the stale
+> historical registers called out — is `.claude/plans/quirks-open.md`.
+
+- **Column tracking** (owned by
+  `.claude/plans/features/column-precision-unicode.md` — an LSP prerequisite,
+  paired there with the multi-byte column question since both touch the same
+  `Line.Pos` contract). routebody does not track per-line column
   information; diagnostics inherit `basePos.Column`. If the LSP
   integration needs per-token positions on body sub-language
   diagnostics, the body parser will need to track lex state more

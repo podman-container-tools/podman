@@ -28,7 +28,7 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(data []byte) error {
     result := make(map[string]{{ template "schemaType" .AdditionalProperties }})
     for k, v := range stage2 {
       var toadd {{ template "schemaType" .AdditionalProperties }}
-      if err := json.Unmarshal(v, {{if not .AdditionalProperties.IsNullable }}&{{ end }}toadd); err != nil {
+      if err := json.Unmarshal(v, &toadd); err != nil {
         return err
       }
       result[k] = toadd

@@ -470,6 +470,12 @@ re-decides.
 
 ### `swagger:default` value
 
+The annotation is a DEPRECATED no-op — the builder raises
+`validate.deprecated` and ignores it — but the lexer still types its
+argument, so existing source keeps parsing. The argument is optional:
+requiring it would hard-error on the bare form the annotation was
+documented with for years.
+
 `classifyDefaultValue` tries `JSON_VALUE` first (full JSON
 validation via the stdlib decoder), falling back to `RAW_VALUE`.
 A leading quote / bracket / brace / sign / digit is the quick
@@ -499,7 +505,7 @@ identifier (`string`, `integer`, `int64`, `[]string`, `[][]int64`,
 `Custom`, `pkg.Type`, `inline`, …) — as `TokenTypeRef`. The grammar no
 longer owns a closed type vocabulary: semantic validity (known keyword /
 scanned type, format compatibility, `[]T` element resolution) is the
-builder's job, since only it knows the scanned definitions and the
+builder's job, since only it holds the scanned definitions and the
 annotated Go type (the F3 reconciliation). A **structurally malformed**
 token (embedded spaces, bare `[]`, illegal chars, leading digit) falls
 back to `TokenIdentName`, and the parser flags it `CodeInvalidTypeRef`

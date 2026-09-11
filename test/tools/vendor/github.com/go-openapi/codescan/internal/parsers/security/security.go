@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: Copyright 2015-2025 go-swagger maintainers
 // SPDX-License-Identifier: Apache-2.0
 
-// Package security is the sub-parser for the `Security:` block body that appears under
-// `swagger:meta`, `swagger:route` and `swagger:operation`.
+// Package security is the sub-parser for the `Security:` block body that appears under `swagger:meta`, `swagger:route`
+// and `swagger:operation`.
 //
-// The body is parsed as genuine YAML — the same path `securityDefinitions` already takes — and
-// normalised into the OpenAPI 2.0 shape `[]map[string][]string`: an array of Security Requirement
-// Objects.
+// The body is parsed as genuine YAML — the same path `securityDefinitions` already takes — and normalised into the
+// OpenAPI 2.0 shape `[]map[string][]string`: an array of Security Requirement Objects.
 //
 // Supported forms (all idiomatic YAML):
 //
@@ -25,18 +24,17 @@
 //	security: [petstore_auth, api_key]   # flow form of the shorthand
 //	security: []                          # explicit opt-out (see below)
 //
-// An explicit empty sequence (`[]`) is distinct from an absent block: it is the OAS 2.0 idiom for
-// opting OUT of security and returns a non-nil empty list, so the spec marshals `"security": []`
-// (overriding any global requirement) rather than omitting the key. go-swagger#2479.
+// An explicit empty sequence (`[]`) is distinct from an absent block: it is the OAS 2.0 idiom for opting OUT of
+// security and returns a non-nil empty list, so the spec marshals `"security": []` (overriding any global requirement)
+// rather than omitting the key. go-swagger#2479.
 //
-// Legacy form (preserved, NOT idiomatic YAML): a bare top-level mapping with one scheme per line is
-// read as a list of single-scheme requirements (OR), and a scalar scope value is comma-split:
+// Legacy form (preserved, NOT idiomatic YAML): a bare top-level mapping with one scheme per line is read as a list of
+// single-scheme requirements (OR), and a scalar scope value is comma-split:
 //
 //	api_key:
 //	oauth: read, write   # → {oauth: [read, write]}
 //
-// Note this is the one shape whose meaning diverges from YAML — a YAML mapping is a single object
-// (AND).
+// Note this is the one shape whose meaning diverges from YAML — a YAML mapping is a single object (AND).
 // It is kept working for back-compat; new specs should use the sequence form above.
 package security
 
@@ -49,22 +47,21 @@ import (
 
 // Requirement is one Security Requirement Object: a map from scheme name to its scope list.
 //
-// Multiple keys in one Requirement are AND-combined; multiple Requirements in the returned slice
-// are OR-combined.
+// Multiple keys in one Requirement are AND-combined; multiple Requirements in the returned slice are OR-combined.
 type Requirement = map[string][]string
 
 // Parse decodes a `Security:` block body into its requirement list.
 //
-// An empty body returns nil (block absent → inherit); an explicit empty YAML sequence returns a
-// non-nil empty list (opt-out).
+// An empty body returns nil (block absent → inherit); an explicit empty YAML sequence returns a non-nil empty list
+// (opt-out).
 // Malformed YAML returns nil rather than failing the whole scan.
 func Parse(body string) []Requirement {
 	if strings.TrimSpace(body) == "" {
 		return nil
 	}
 
-	// Dedent (and expand leading tabs) so the godoc-preserved indentation becomes YAML-legal, exactly
-	// as the securityDefinitions / Tags bodies do.
+	// Dedent (and expand leading tabs) so the godoc-preserved indentation becomes YAML-legal, exactly as the
+	// securityDefinitions / Tags bodies do.
 	normalised := strings.Join(yamlparser.RemoveIndent(strings.Split(body, "\n")), "\n")
 
 	var doc yaml.Node
@@ -105,8 +102,8 @@ func fromRoot(root *yaml.Node) []Requirement {
 	}
 }
 
-// requirementFromItem builds one Requirement from a sequence item: either a mapping (one or more
-// AND-combined schemes) or a bare scalar scheme name.
+// requirementFromItem builds one Requirement from a sequence item: either a mapping (one or more AND-combined schemes)
+// or a bare scalar scheme name.
 func requirementFromItem(item *yaml.Node) Requirement {
 	switch item.Kind {
 	case yaml.ScalarNode:
@@ -133,8 +130,8 @@ func requirementFromItem(item *yaml.Node) Requirement {
 	}
 }
 
-// legacyMapping turns a bare top-level mapping into one single-scheme requirement per key, in
-// document order (OR semantics).
+// legacyMapping turns a bare top-level mapping into one single-scheme requirement per key, in document order (OR
+// semantics).
 func legacyMapping(node *yaml.Node) []Requirement {
 	var result []Requirement
 	for i := 0; i+1 < len(node.Content); i += 2 {
@@ -147,9 +144,8 @@ func legacyMapping(node *yaml.Node) []Requirement {
 	return result
 }
 
-// coerceScopes extracts the scope list from a requirement value: a YAML sequence (flow or block)
-// yields its scalar items; a scalar value is treated as the legacy comma-separated list; null/empty
-// yields no scopes.
+// coerceScopes extracts the scope list from a requirement value: a YAML sequence (flow or block) yields its scalar
+// items; a scalar value is treated as the legacy comma-separated list; null/empty yields no scopes.
 //
 // The result is always non-nil so an empty scope list marshals as `[]`.
 func coerceScopes(node *yaml.Node) []string {

@@ -319,6 +319,7 @@ import (
 )
 
 {{- if .HasFormParams }}
+{{- if not .HasStreamingForm }}
 
 // {{ pascalize .Name }}MaxParseMemory sets the maximum size in bytes for
 // the multipart form parser for this operation.
@@ -326,6 +327,7 @@ import (
 // The default value is 32 MB.
 // The multipart parser stores up to this + 10MB.
 var {{ pascalize .Name }}MaxParseMemory int64 = 32 << 20
+{{- end }}
 
 // {{ pascalize .Name }}MaxBodySize caps the size of the form body.
 //
@@ -334,17 +336,17 @@ var {{ pascalize .Name }}MaxBodySize int64 = 32 << 20
 {{- end }}
 
 // New{{ pascalize .Name }}Params creates a new {{ pascalize .Name }}Params object
-{{- if .Params.HasSomeDefaults }}
+{{- if .ServerParams.HasSomeDefaults }}
 // with the default values initialized.
 {{- else }}
 //
 // There are no default values defined in the spec.
 {{- end }}
 func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
-{{ if .Params.HasSomeDefaults }}
+{{ if .ServerParams.HasSomeDefaults }}
   var (
   // initialize parameters with default values
-  {{ range .Params }}
+  {{ range .ServerParams }}
       {{ if .HasDefault -}}
           {{ if not .IsFileParam }}{{ varname .ID}}Default =
               {{- if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"" )) }}{{ .Zero }}{{/* strfmt type initializer requires UnmarshalText(), e.g. Date, Datetime, Duration */}}
@@ -363,7 +365,7 @@ func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
   {{- end }}
   )
 
-{{ range .Params }}{{ if .HasDefault -}}{{- /* carry out UnmarshalText initialization strategy */ -}}
+{{ range .ServerParams }}{{ if .HasDefault -}}{{- /* carry out UnmarshalText initialization strategy */ -}}
       {{ if and .IsPrimitive .IsCustomFormatter (not (stringContains .Zero "(\"")) }}{{ varname .ID}}Default.UnmarshalText([]byte({{ printf "%q" .Default }}))
       {{ else if .IsArray -}}
           {{ if or ( and .Child.IsPrimitive .Child.IsCustomFormatter ) .Child.IsArray -}}
@@ -377,7 +379,7 @@ func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
   {{ end -}}
 {{- end }}
 {{ end }}
-  return {{ pascalize .Name }}Params{ {{ range .Params }}{{ if .HasDefault }}
+  return {{ pascalize .Name }}Params{ {{ range .ServerParams }}{{ if .HasDefault }}
     {{ .ID}}: {{ if and (not .IsArray) (not .HasDiscriminator) (not .IsInterface) (not .IsStream) .IsNullable }}&{{ end }}{{ varname .ID }}Default,
   {{ end }}{{ end }} }
 }
@@ -389,7 +391,14 @@ func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
 type {{ pascalize .Name }}Params struct {
   // HTTP Request Object
   HTTPRequest *http.Request `json:"-"`
-  {{- range .Params }}
+  {{- if .HasStreamingForm }}
+
+  // {{ .MultipartFormName }} is the lazily consumed multipart form stream.
+  //
+  // The handler owns traversal, validation and closing or draining this stream.
+  {{ .MultipartFormName }} *runtime.MultipartFormStream `json:"-"`
+  {{- end }}
+  {{- range .ServerParams }}
 
   {{- if .Description }}
 {{ lineComment .Description }}
@@ -422,11 +431,11 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
 {{- if .HasQueryParams }}
   qs := runtime.Values(r.URL.Query())
 {{- end }}
-{{- if .HasFormParams }}
+{{- if and .HasFormParams (not .HasStreamingForm) }}
   isBlocking, err := runtime.BindForm(r,
     runtime.BindFormMaxParseMemory({{ pascalize .Name }}MaxParseMemory),
     runtime.BindFormMaxBody({{ pascalize .Name }}MaxBodySize),
-  {{- range .Params }}
+  {{- range .ServerParams }}
     {{- if .IsFileParam }}
     runtime.BindFormFile({{ .Path }}, {{ or .Required (not .IsNullable) }}, {{ .ReceiverName }}.bind{{ .ID }}),
     {{- end }}
@@ -445,7 +454,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
   {{- end }}
 {{- end }}
 
-{{ range .Params }}
+{{ range .ServerParams }}
   {{- if not .IsArray }}
     {{- if .IsQueryParam }}
 
@@ -542,11 +551,22 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) BindRequest(r *http.Requ
   if len(res) > 0 {
     return errors.CompositeValidationError(res...)
   }
+{{- if .HasStreamingForm }}
+
+  multipartForm, err := runtime.NewMultipartFormStream(
+    r,
+    runtime.MultipartFormStreamMaxBody({{ pascalize .Name }}MaxBodySize),
+  )
+  if err != nil {
+    return err
+  }
+  {{ .ReceiverName }}.{{ .MultipartFormName }} = multipartForm
+{{- end }}
   return nil
 }
 
 {{- $className := (pascalize .Name) }}
-{{ range .Params }}
+{{ range .ServerParams }}
   {{- if .IsFileParam }}
 // bind{{ .ID }} validates file parameter File1 and assigns it as a *runtime.File on success.
 //

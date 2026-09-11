@@ -9,22 +9,43 @@ import (
 	"github.com/go-swagger/go-swagger/generator"
 )
 
-type operationOptions struct {
-	Operations []string `description:"specify an operation to include, repeat for multiple (defaults to all)" long:"operation"                                 short:"O"`
-	Tags       []string `description:"the tags to include, if not specified defaults to all"                  group:"operations"                               long:"tags"`
-	APIPackage string   `default:"operations"                                                                 description:"the package to save the operations" long:"api-package" short:"a"`
-	WithEnumCI bool     `description:"allow case-insensitive enumerations"                                    long:"with-enum-ci"`
+// operationOptionsCommon selects the operations to render and how they are grouped.
+//
+// These options bear on any rendering of the operations, go code or not.
+type operationOptionsCommon struct {
+	Operations []string `description:"specify an operation to include, repeat for multiple (defaults to all)" long:"operation"   short:"O"`
+	Tags       []string `description:"the tags to include, if not specified defaults to all"                  group:"operations" long:"tags"`
 
 	// tags handling
 	SkipTagPackages bool `description:"skips the generation of tag-based operation packages, resulting in a flat generation" long:"skip-tag-packages"`
 }
 
-func (oo operationOptions) apply(opts *generator.GenOpts) {
+func (oo operationOptionsCommon) apply(opts *generator.GenOpts) {
 	opts.Operations = oo.Operations
 	opts.Tags = oo.Tags
+	opts.SkipTagPackages = oo.SkipTagPackages
+}
+
+// operationCodegenOptions only bear on the go code generated for operations, starting with
+// the package this code is written to.
+type operationCodegenOptions struct {
+	APIPackage string `default:"operations"                              description:"the package to save the operations" long:"api-package" short:"a"`
+	WithEnumCI bool   `description:"allow case-insensitive enumerations" long:"with-enum-ci"`
+}
+
+func (oo operationCodegenOptions) apply(opts *generator.GenOpts) {
 	opts.APIPackage = oo.APIPackage
 	opts.AllowEnumCI = oo.WithEnumCI
-	opts.SkipTagPackages = oo.SkipTagPackages
+}
+
+type operationOptions struct {
+	operationOptionsCommon
+	operationCodegenOptions
+}
+
+func (oo operationOptions) apply(opts *generator.GenOpts) {
+	oo.operationOptionsCommon.apply(opts)
+	oo.operationCodegenOptions.apply(opts)
 }
 
 // WithOperations adds the operations options group.
@@ -52,13 +73,18 @@ type Operation struct {
 	Name []string `description:"the operations to generate, repeat for multiple (defaults to all). Same as --operations" long:"name" short:"n"`
 }
 
+// Usage documents the spec argument in the help message.
+func (o Operation) Usage() string {
+	return usageWithSpec("operation")
+}
+
 // Execute generates a model file.
-func (o *Operation) Execute(_ []string) error {
+func (o *Operation) Execute(args []string) error {
 	if o.Shared.DumpData && len(append(o.Name, o.Operations.Operations...)) > 1 {
 		return errors.New("only 1 operation at a time is supported for dumping data")
 	}
 
-	return createSwagger(o)
+	return createSwagger(o, args)
 }
 
 // apply options.

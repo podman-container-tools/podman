@@ -585,6 +585,20 @@ func (s *Spec) AllRefs() (result []spec.Ref) {
 	return
 }
 
+// AllRefsByLocation returns all the references found in the document, keyed by
+// where each one is declared.
+//
+// Keys are local JSON references into the analyzed document, with tokens
+// escaped as per RFC 6901, e.g. "#/paths/~1pets/get/responses/200/schema".
+//
+// Unlike [Spec.AllRefs], the result is not deduplicated: the same reference
+// declared in several places appears under each of its locations.
+//
+// The map is cloned to avoid accidental changes.
+func (s *Spec) AllRefsByLocation() map[string]spec.Ref {
+	return cloneRefMap(s.references.allRefs)
+}
+
 // ParameterPatterns returns all the patterns found in parameters
 // the map is cloned to avoid accidental changes.
 func (s *Spec) ParameterPatterns() map[string]string {
@@ -1048,6 +1062,13 @@ func (s *Spec) analyzeSchema(name string, schema *spec.Schema, prefix string) {
 
 func cloneStringMap(source map[string]string) map[string]string {
 	res := make(map[string]string, len(source))
+	maps.Copy(res, source)
+
+	return res
+}
+
+func cloneRefMap(source map[string]spec.Ref) map[string]spec.Ref {
+	res := make(map[string]spec.Ref, len(source))
 	maps.Copy(res, source)
 
 	return res

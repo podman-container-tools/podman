@@ -21,9 +21,14 @@ type Support struct {
 	Name string `description:"the name of the application, defaults to a mangled value of info.title" long:"name" short:"A"`
 }
 
+// Usage documents the spec argument in the help message.
+func (s Support) Usage() string {
+	return usageWithSpec("support")
+}
+
 // Execute generates the supporting files file.
-func (s *Support) Execute(_ []string) error {
-	return createSwagger(s)
+func (s *Support) Execute(args []string) error {
+	return createSwagger(s, args)
 }
 
 // apply options.
