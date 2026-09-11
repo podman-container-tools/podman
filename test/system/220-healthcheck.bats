@@ -96,18 +96,18 @@ Log[-1].ExitCode | 1
 Log[-1].Output   | \"Uh-oh on stdout!\\\nUh-oh on stderr!\\\n\"
 " "$current_time" "healthy"
 
-    # Check that we now we do have valid podman units with this
+    # Check that we now have valid podman units with this
     # name so that the leak check below does not turn into a NOP without noticing.
     run -0 systemctl list-units
     cidmatch=$(grep "$cid" <<<"$output")
     echo "$cidmatch"
-    assert "$cidmatch" =~ " $cid-[0-9a-f]+\.timer  *.*/podman .* healthcheck run --ignore-result $cid" \
-           "Healthcheck systemd unit exists"
+    assert "$cidmatch" =~ " libpod-healthcheck-$cid-[0-9a-f]+\.timer  *.*/podman .* healthcheck run --ignore-result $cid" \
+       "Healthcheck systemd unit uses the expected name"
 
     # Check that the right service option is applied so we don't hit the systemd restart limit.
     # Even though the code sets StartLimitIntervalSec the systemd command prints StartLimitInterval*U*Sec
     # Use show --all otherwise the glob might not match the already inactive transient unit.
-    run -0 systemctl show --all "$cid-*.service"
+    run -0 systemctl show --all "libpod-healthcheck-$cid-*.service"
     assert "$output" =~ "StartLimitIntervalUSec=0" "The hc service has the right interval set"
 
     # After three successive failures, container should no longer be healthy.

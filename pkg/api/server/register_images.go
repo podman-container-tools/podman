@@ -1351,6 +1351,31 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//   500:
 	//     $ref: '#/responses/internalError'
 	r.Handle(VersionedPath("/libpod/images/{name:.*}/get"), s.APIHandler(libpod.ExportImage)).Methods(http.MethodGet)
+	// swagger:operation GET /libpod/images/{name}/rootfs libpod ImageRootfs
+	// ---
+	// tags:
+	//  - images
+	// summary: Export an image rootfs
+	// description: Export an image's root filesystem as a tar archive
+	// parameters:
+	//  - in: path
+	//    name: name
+	//    type: string
+	//    required: true
+	//    description: the name or ID of the image
+	// produces:
+	// - application/x-tar
+	// responses:
+	//   200:
+	//     description: no error
+	//     schema:
+	//       type: string
+	//       format: binary
+	//   404:
+	//     $ref: '#/responses/imageNotFound'
+	//   500:
+	//     $ref: '#/responses/internalError'
+	r.Handle(VersionedPath("/libpod/images/{name:.*}/rootfs"), s.APIHandler(libpod.ExportImageRootfs)).Methods(http.MethodGet)
 	// swagger:operation GET /libpod/images/export libpod ImageExportLibpod
 	// ---
 	// tags:

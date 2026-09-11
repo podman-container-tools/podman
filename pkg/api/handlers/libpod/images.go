@@ -37,6 +37,8 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/infra/abi"
 	domainUtils "go.podman.io/podman/v6/pkg/domain/utils"
 	"go.podman.io/podman/v6/pkg/errorhandling"
+	"go.podman.io/podman/v6/pkg/specgen"
+	"go.podman.io/podman/v6/pkg/specgen/generate"
 	"go.podman.io/podman/v6/pkg/util"
 	utils2 "go.podman.io/podman/v6/utils"
 	"go.podman.io/storage"
@@ -251,6 +253,70 @@ func ExportImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rdr.Close()
 	utils.WriteResponse(w, http.StatusOK, rdr)
+}
+
+func ExportImageRootfs(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	name := utils.GetName(r)
+
+	// 1. Look up the image
+	image, _, err := runtime.LibimageRuntime().LookupImage(name, nil)
+	if err != nil {
+		utils.ImageNotFound(w, name, err)
+		return
+	}
+
+	// 2. In rootless mode, image.Mount() often fails with "layer not known"
+	// because the API server isn't running in a user namespace.
+	// To bypass this, we create a temporary dummy container from the image.
+	ctx := r.Context()
+	sg := specgen.NewSpecGenerator(image.ID(), false)
+	// Disable networking to make creation instant
+	sg.NetNS.NSMode = specgen.NoNetwork
+
+	spec, sgOut, options, err := generate.MakeContainer(ctx, runtime, sg, false, nil)
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+
+	ctr, err := runtime.NewContainer(ctx, spec, sgOut, false, options...)
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+
+	// Guarantee the container is deleted even if the download is cancelled
+	defer func() {
+		if err := runtime.RemoveContainer(ctx, ctr, true, true, nil); err != nil {
+			logrus.Errorf("failed to remove temporary export container %s: %v", ctr.ID(), err)
+		}
+	}()
+
+	// 3. Mount the temporary container
+	mountPoint, err := ctr.Mount()
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+	defer func() {
+		if err := ctr.Unmount(false); err != nil {
+			logrus.Errorf("failed to unmount temporary export container %s: %v", ctr.ID(), err)
+		}
+	}()
+
+	// 4. Tar the rootfs and stream it
+	input, err := chrootarchive.Tar(mountPoint, nil, mountPoint)
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+	defer input.Close()
+
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.Copy(w, input); err != nil {
+		logrus.Errorf("failed to stream image rootfs to client: %v", err)
+	}
 }
 
 func ExportImages(w http.ResponseWriter, r *http.Request) {

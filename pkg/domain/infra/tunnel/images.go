@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -417,6 +418,7 @@ func (ir *ImageEngine) Build(_ context.Context, containerFiles []string, opts en
 	if err != nil {
 		logrus.Debugf("IsHyperVProvider check failed: %v", err)
 	}
+
 	// Local api is not supported on Windows Hyper-V, because 9p mounts don't translate all file attributes correctly.
 	// So we skip trying to use localapi in that case.
 	if !isHyperV {
@@ -439,6 +441,12 @@ func (ir *ImageEngine) Build(_ context.Context, containerFiles []string, opts en
 		}
 	}
 
+	// Capture and strip BuildOutputs before sending to server
+	// The server should do normal image build; the client handlees
+	// The --output extraction afterward
+	buildOutputs := opts.BuildOutputs
+	opts.BuildOutputs = nil
+
 	report, err := images.Build(ir.ClientCtx, containerFiles, opts)
 	if err != nil {
 		return nil, err
@@ -447,7 +455,116 @@ func (ir *ImageEngine) Build(_ context.Context, containerFiles []string, opts en
 	if opts.OutputFormat == bdefine.Dockerv2ImageManifest {
 		report.SaveFormat = define.V2s2Archive
 	}
+
+	// Handle --output extraction if requested
+	if len(buildOutputs) > 0 {
+		if err := ir.handleBuildOutputs(buildOutputs, report.ID); err != nil {
+			return nil, err
+		}
+	}
 	return report, nil
+}
+
+// handleBuildOutputs downloads the rootfs of a built image and writes it
+// to the local destinations specified by the --output flag(s).
+func (ir *ImageEngine) handleBuildOutputs(buildOutputs []string, imageID string) error {
+	// Guarantee cleanup of the temporary image on the server, even if extraction fails
+	defer func() {
+		rmOptions := new(images.RemoveOptions).WithForce(true).WithIgnore(true)
+		_, _ = images.Remove(ir.ClientCtx, []string{imageID}, rmOptions)
+	}()
+	for _, buildOutput := range buildOutputs {
+		buildOutputOption, err := parseBuildOutput(buildOutput)
+		if err != nil {
+			return err
+		}
+		switch buildOutputOption.outputType {
+		case "tar":
+			var w io.Writer
+			var f *os.File
+			// Handle stdout "-"
+			if buildOutputOption.path == "" || buildOutputOption.path == "-" {
+				w = os.Stdout
+			} else {
+				f, err = os.Create(buildOutputOption.path)
+				if err != nil {
+					return fmt.Errorf("creating output file %s: %w", buildOutputOption.path, err)
+				}
+				w = f
+			}
+
+			err = images.ExportRootfs(ir.ClientCtx, imageID, w)
+
+			if f != nil {
+				f.Close()
+			}
+			if err != nil {
+				return fmt.Errorf("exporting image rootfs: %w", err)
+			}
+		case "local":
+			// Create a pipe: ExportRootfs writes the tar stream into pw,
+			// archive.Untar reads from pr and extracts to the directory.
+			pr, pw := io.Pipe()
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- images.ExportRootfs(ir.ClientCtx, imageID, pw)
+				pw.Close()
+			}()
+			if err := archive.Untar(pr, buildOutputOption.path, &archive.TarOptions{NoLchown: true}); err != nil {
+				return fmt.Errorf("extracting rootfs to %s: %w", buildOutputOption.path, err)
+			}
+			if err := <-errCh; err != nil {
+				return fmt.Errorf("exporting image rootfs: %w", err)
+			}
+		default:
+			return fmt.Errorf("unsupported build output type %q for remote builds", buildOutputOption.outputType)
+		}
+	}
+	return nil
+}
+
+// parseBuildOutput is a simple parser for --output flag values like
+// "type=tar,dest=/path" or "type=local,dest=/path" or just "/path".
+type buildOutputResult struct {
+	outputType string // "tar", "local"
+	path       string
+}
+
+func parseBuildOutput(buildOutput string) (buildOutputResult, error) {
+	// Simple form: --output /mydir (defaults to type=local)
+	if !strings.Contains(buildOutput, ",") && !strings.Contains(buildOutput, "=") {
+		if buildOutput == "-" {
+			return buildOutputResult{outputType: "tar", path: "-"}, nil
+		}
+		return buildOutputResult{outputType: "local", path: buildOutput}, nil
+	}
+
+	// Complex form: --output type=tar,dest=/path
+	result := buildOutputResult{}
+	for _, option := range strings.Split(buildOutput, ",") {
+		key, value, found := strings.Cut(option, "=")
+		if !found {
+			return buildOutputResult{}, fmt.Errorf("invalid build output option %q", buildOutput)
+		}
+		switch key {
+		case "type":
+			result.outputType = value
+		case "dest":
+			result.path = value
+		}
+	}
+
+	// FIX: Must throw an error if type is missing, NO FALLBACK
+	if result.outputType == "" {
+		return buildOutputResult{}, fmt.Errorf("missing required key %q in build output option: %q", "type", buildOutput)
+	}
+
+	// FIX: Must throw an error if dest is missing
+	if result.path == "" {
+		return buildOutputResult{}, fmt.Errorf("missing required key %q in build output option: %q", "dest", buildOutput)
+	}
+
+	return result, nil
 }
 
 func (ir *ImageEngine) Tree(_ context.Context, nameOrID string, opts entities.ImageTreeOptions) (*entities.ImageTreeReport, error) {
