@@ -1,0 +1,6 @@
+## assert-podman-args -v volume.template-instance-percentn-config:/config
+## assert-key-is "Unit" "Requires" "volume-template-volume@volume.template-instance-percentn-config.service"
+
+[Container]
+Image=localhost/imagename
+Volume=volume-template@%N-config.volume:/config

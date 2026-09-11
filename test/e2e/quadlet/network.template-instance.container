@@ -1,0 +1,7 @@
+## assert-podman-args "--network" "app-net"
+## assert-key-is "Unit" "Requires" "network-template-network@app-net.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "network-template-network@app-net.service"
+
+[Container]
+Image=localhost/imagename
+Network=network-template@app-net.network

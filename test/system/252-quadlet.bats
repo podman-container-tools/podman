@@ -574,6 +574,63 @@ EOF
     run_podman network rm $network_name_instance
 }
 
+# A plain container references specific instances of a generic volume template
+@test "quadlet - volume template instance reference" {
+    local vol_base=voltpl_$(safename)
+    local quadlet_vol_file=$PODMAN_TMPDIR/${vol_base}@.volume
+    cat > $quadlet_vol_file <<EOF
+[Volume]
+VolumeName=%i
+EOF
+
+    local quadlet_tmpdir=$(mktemp -d --tmpdir=$PODMAN_TMPDIR quadlet.XXXXXX)
+    # Generate the volume template unit so systemd can instantiate it
+    run_quadlet "$quadlet_vol_file" "$quadlet_tmpdir"
+
+    local vol_service=$QUADLET_SERVICE_NAME
+    local vol_service_base=${vol_service%@*}
+
+    local config_instance="cfg-$(safename)"
+    local data_instance="data-$(safename)"
+    local vol_config_service="${vol_service_base}@${config_instance}.service"
+    local vol_data_service="${vol_service_base}@${data_instance}.service"
+
+    local quadlet_file=$PODMAN_TMPDIR/app_$(safename).container
+    cat > $quadlet_file <<EOF
+[Container]
+Image=$IMAGE
+Exec=top
+Volume=${vol_base}@${config_instance}.volume:/config
+Volume=${vol_base}@${data_instance}.volume:/data
+EOF
+
+    # Container conversion must see the volume template unit file
+    run_quadlet "$quadlet_file" "$quadlet_tmpdir"
+    local container_service=$QUADLET_SERVICE_NAME
+
+    run_podman 1 volume exists ${config_instance}
+    run_podman 1 volume exists ${data_instance}
+
+    service_setup $container_service
+
+    SERVICES_TO_STOP+=("$vol_config_service")
+    SERVICES_TO_STOP+=("$vol_data_service")
+
+    run systemctl show --property=ActiveState "$vol_config_service"
+    assert "$output" = "ActiveState=active" \
+           "volume template instance (config) should be active via dependency"
+
+    run systemctl show --property=ActiveState "$vol_data_service"
+    assert "$output" = "ActiveState=active" \
+           "volume template instance (data) should be active via dependency"
+
+    run_podman volume exists ${config_instance}
+    run_podman volume exists ${data_instance}
+
+    service_cleanup $container_service failed
+    run_podman volume rm ${config_instance} ${data_instance}
+}
+
 # A quadlet container depends on a named quadlet volume
 @test "quadlet - named volume dependency" {
     local volume_name="v-$(safename)"

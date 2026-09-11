@@ -1,0 +1,6 @@
+## assert-podman-args -v systemd-volume-template-default-app-config:/config
+## assert-key-is "Unit" "Requires" "volume-template-default-volume@app-config.service"
+
+[Container]
+Image=localhost/imagename
+Volume=volume-template-default@app-config.volume:/config
