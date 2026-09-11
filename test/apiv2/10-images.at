@@ -74,6 +74,28 @@ t GET /v1.44/images/$iid/json 200 \
 t GET /v1.45/images/$iid/json 200 \
   .ContainerConfig=null
 
+# Create a modified image with the Created field removed.
+NOCREATED=$(mktemp -d podman-apiv2-test.nocreated.XXXXXXXX)
+podman save --format docker-archive -o $NOCREATED/img.tar $IMAGE
+tar -C $NOCREATED -xf $NOCREATED/img.tar manifest.json
+config=$(jq -r '.[0].Config' $NOCREATED/manifest.json)
+layers=$(jq -r '.[0].Layers[]' $NOCREATED/manifest.json)
+tar -C $NOCREATED -xf $NOCREATED/img.tar $config $layers
+jq 'del(.created)' $NOCREATED/$config > $NOCREATED/c && mv $NOCREATED/c $NOCREATED/$config
+jq '.[0].RepoTags=["localhost/nocreated:latest"]' $NOCREATED/manifest.json > $NOCREATED/m && mv $NOCREATED/m $NOCREATED/manifest.json
+tar -C $NOCREATED -cf $NOCREATED/img.tar manifest.json $config $layers
+podman load -i $NOCREATED/img.tar
+
+# Test that the Created field is omitted when empty for the compat API v1.44+.
+t GET /v1.44/images/localhost/nocreated:latest/json 200 .Created=null
+
+# Test that the Created field has the zero value when empty for the compat API before v1.44.
+t GET /v1.43/images/localhost/nocreated:latest/json 200 .Created="0001-01-01T00:00:00Z"
+
+# Cleanup the image after the Created tests.
+podman rmi -f localhost/nocreated:latest
+rm -rf $NOCREATED
+
 t POST "images/create?fromImage=alpine" 200 .error~null .status~".*Download complete.*"
 t POST "libpod/images/pull?reference=alpine&compatMode=true" 200 .error~null .status~".*Download complete.*"
 
