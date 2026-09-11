@@ -189,6 +189,7 @@ func CheckIfImageBuildPathsOnRunningMachine(ctx context.Context, containerFiles 
 		logrus.Debugf("Path %q is not available on the running machine", options.ContextDirectory)
 		return nil, options, false
 	}
+	options.ClientContextDirectory = mapping.ClientPath
 	options.ContextDirectory = mapping.RemotePath
 
 	// Containerfiles

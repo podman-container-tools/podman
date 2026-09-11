@@ -3,6 +3,7 @@
 package localapi
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,6 +160,7 @@ func TestIsPathAvailableOnMachine_Windows(t *testing.T) {
 
 			if tt.wantFound {
 				require.NotNil(t, result, "result should not be nil when found is true")
+				assert.Equal(t, filepath.Clean(tt.localPath), result.ClientPath, "ClientPath mismatch")
 				assert.Equal(t, tt.wantRemotePath, result.RemotePath, "RemotePath mismatch")
 			} else {
 				assert.Nil(t, result, "result should be nil when found is false")
