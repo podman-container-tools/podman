@@ -21,6 +21,7 @@ like "$output" ".*apiVersion:.*" "Check generated kube yaml - apiVersion"
 like "$output" ".*kind:\\sPod.*" "Check generated kube yaml - kind: Pod"
 like "$output" ".*metadata:.*" "Check generated kube yaml - metadata"
 like "$output" ".*spec:.*" "Check generated kube yaml - spec"
+is "$response_content_type" "text/vnd.yaml" "Check response Content-Type is text/vnd.yaml"
 
 t GET "libpod/generate/kube?service=true&names=$cid" 200
 like "$output" ".*apiVersion:.*" "Check generated kube yaml(service=true) - apiVersion"

@@ -138,7 +138,5 @@ func GenerateKube(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FIXME: Content-Type is being set as application/x-tar NOT text/vnd.yaml
-	// https://mailarchive.ietf.org/arch/msg/media-types/e9ZNC0hDXKXeFlAVRWxLCCaG9GI/
-	utils.WriteResponse(w, http.StatusOK, report.Reader)
+	utils.WriteResponseWithContentType(w, http.StatusOK, report.Reader, "text/vnd.yaml")
 }

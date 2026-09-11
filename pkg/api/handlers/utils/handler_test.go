@@ -3,6 +3,7 @@
 package utils
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
@@ -414,4 +415,16 @@ func (t *testResponseWriter) Flush() {
 	if t.onFlush != nil {
 		t.onFlush()
 	}
+}
+
+func TestWriteResponseWithContentType(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	content := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: test-pod\n"
+	value := strings.NewReader(content)
+
+	WriteResponseWithContentType(recorder, http.StatusOK, value, "text/vnd.yaml")
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "text/vnd.yaml", recorder.Header().Get("Content-Type"))
+	assert.Equal(t, content, recorder.Body.String())
 }
