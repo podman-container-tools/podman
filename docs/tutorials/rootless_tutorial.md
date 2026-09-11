@@ -205,6 +205,30 @@ Another consideration in regards to volumes:
 - When providing the path of a directory you'd like to bind-mount, the path needs to be provided as an absolute path
   or a relative path that starts with `.` (a dot), otherwise the string will be interpreted as the name of a named volume.
 
+#### Permission denied on a bind-mount source
+
+Inside the user namespace the process setting up the mount is `root`, but `CAP_DAC_OVERRIDE` only bypasses a file's mode when that file's user ID and group ID both have valid mappings in the namespace. That is the rule under "Operation of file-related capabilities" in **[user_namespaces(7)](https://man7.org/linux/man-pages/man7/user_namespaces.7.html)**. A directory owned by an unmapped ID is reported with the overflow ID, 65534 by default, and nothing overrides its mode.
+
+World permissions are checked first, so this only comes up when the mode alone does not let you through. In each case below the parent is owned as shown, the bind mount source is the child inside it, and `/etc/subuid` has `johndoe:100000:65536`:
+
+```
+# parent mode 755, owned by root: the mode already allows it, mapping never comes up
+host$ podman run --rm -v /tmp/open/child:/mnt alpine echo ok
+ok
+
+# parent mode 700, owned by root: root is not mapped, so nothing overrides the mode
+host$ podman run --rm -v /tmp/private/child:/mnt alpine echo ok
+Error: statfs /tmp/private/child: permission denied
+
+# parent mode 700, owned by 100999, which the range maps to UID 1000 in the namespace
+host$ podman run --rm -v /tmp/mapped/child:/mnt alpine echo ok
+ok
+```
+
+`podman unshare ls -ldn` on the parent shows which case you are in: an owner of 65534 there means the ID is not mapped. `--userns=keep-id` does not change this, it changes which UID you are inside the container rather than which host IDs the namespace maps.
+
+This is the file side of the warning above about subordinating active user ids: a range that covers UIDs real accounts use gives that user the override on their files in any namespace they create, which is why default ranges start at 100000.
+
 ## More information
 
 If you are still experiencing problems running Podman in a rootless environment, please refer to the [Shortcomings of Rootless Podman](https://github.com/containers/podman/blob/main/rootless.md) page which lists known issues and solutions to known issues in this environment.
