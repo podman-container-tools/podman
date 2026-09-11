@@ -325,6 +325,23 @@ func getDBState(runtime *Runtime) (State, error) {
 	}
 }
 
+// shutdownStoreOnError shuts the containers/storage store down again when the
+// runtime could not be created.  It is a no-op when the runtime was created
+// successfully or when no store was configured at all (e.g. rootless without
+// CAP_SYS_ADMIN).  Taking the store from the receiver rather than from a local
+// variable is what makes the cleanup effective: configureStore() stores the
+// handle on the runtime, not in makeRuntime's scope.
+func (r *Runtime) shutdownStoreOnError(retErr error) {
+	if retErr == nil || r.store == nil {
+		return
+	}
+	// Don't forcibly shut down
+	// We could be opening a store in use by another libpod
+	if _, err := r.store.Shutdown(false); err != nil {
+		logrus.Errorf("Removing store for partially-created runtime: %s", err)
+	}
+}
+
 // Make a new runtime based on the given configuration
 // Sets up containers/storage, state store, OCI runtime
 func makeRuntime(ctx context.Context, runtime *Runtime) (retErr error) {
@@ -473,7 +490,6 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (retErr error) {
 		needsUserns = !hasCapSysAdmin
 	}
 	// Set up containers/storage
-	var store storage.Store
 	if needsUserns {
 		logrus.Debug("Not configuring container store")
 	} else if err := runtime.configureStore(); err != nil {
@@ -488,13 +504,7 @@ func makeRuntime(ctx context.Context, runtime *Runtime) (retErr error) {
 		return fmt.Errorf("configure storage: %w", err)
 	}
 	defer func() {
-		if retErr != nil && store != nil {
-			// Don't forcibly shut down
-			// We could be opening a store in use by another libpod
-			if _, err := store.Shutdown(false); err != nil {
-				logrus.Errorf("Removing store for partially-created runtime: %s", err)
-			}
-		}
+		runtime.shutdownStoreOnError(retErr)
 	}()
 
 	// Set up containers/image
