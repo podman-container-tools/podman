@@ -251,25 +251,33 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	// the main goroutine completes.
 	term := make(chan os.Signal, 1)
 	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+	// done is closed by waitForReadyFunc (via defer) to give the signal
+	// forwarding goroutine a clean exit path once the VM has started or
+	// failed to start. Without this the goroutine leaks on every call.
+	done := make(chan struct{})
 	// Get the PID first because cmd.Process will
 	// be released in the main thread
 	pid := cmd.Process.Pid
 	go func() {
-		<-term
-		logrus.Debugf("Termination signal forwarded to the VM process (PID: %d)\n", pid)
-		p, err := os.FindProcess(pid)
-		if err != nil {
-			logrus.Errorf("Failed to find process %d: %v", pid, err)
-			return
-		}
-		err = p.Signal(os.Interrupt)
-		if err != nil {
-			logrus.Errorf("Termination signal received, but terminating the VM process (PID: %d) failed: %v", pid, err)
-			return
-		}
-		// Wait and release the resources associated with the process
-		if _, err := p.Wait(); err != nil {
-			logrus.Debugf("Failed waiting for the process after terminating it: %v", err)
+		select {
+		case <-term:
+			logrus.Debugf("Termination signal forwarded to the VM process (PID: %d)\n", pid)
+			p, err := os.FindProcess(pid)
+			if err != nil {
+				logrus.Errorf("Failed to find process %d: %v", pid, err)
+				return
+			}
+			err = p.Signal(os.Interrupt)
+			if err != nil {
+				logrus.Errorf("Termination signal received, but terminating the VM process (PID: %d) failed: %v", pid, err)
+				return
+			}
+			// Wait and release the resources associated with the process
+			if _, err := p.Wait(); err != nil {
+				logrus.Debugf("Failed waiting for the process after terminating it: %v", err)
+			}
+		case <-done:
+			logrus.Debug("VM signal-forwarding goroutine: done")
 		}
 	}()
 
@@ -277,6 +285,12 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	// uses to block its execution until the the VM is ready or an error
 	// occurs
 	waitForReadyFunc := func() error {
+		// Stop signal forwarding and unblock the goroutine regardless of
+		// whether the VM started successfully or returned an error.
+		defer func() {
+			signal.Stop(term)
+			close(done)
+		}()
 		processErrChan := make(chan error)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
