@@ -495,10 +495,32 @@ t GET containers/json?filters='garb1age}' 500 \
 t GET containers/json?filters='{"label":["testl' 500 \
     .cause="unexpected end of JSON input"
 
+# "dead" and "restarting" are documented Docker status values with no Podman
+# equivalent; the compat endpoint accepts them and they match no containers #28904
+podman run --name statusfilter-exited $IMAGE true
+t GET containers/json?filters='{"status":["dead"]}' 200 '[]'
+t GET containers/json?filters='{"status":["restarting"]}' 200 length=0
+t GET containers/json?filters='{"status":["dead","running"]}' 200 length=2
+t GET containers/json?filters='{"status":["dead","exited"]}' 200 \
+  length=1 \
+  .[0].Names[0]="/statusfilter-exited"
+t GET containers/json?filters='{"status":["dead"],"label":["slartibart=fast"]}' 200 length=0
+t GET containers/json?filters='{"status":["bogus"]}' 500 \
+    .cause="invalid argument"
+# other filters must still be validated when the status filter matches nothing
+t GET containers/json?filters='{"status":["dead"],"bogusfilter":["x"]}' 500 \
+    .cause="bogusfilter is an invalid filter"
+podman rm statusfilter-exited
 
 #libpod api list containers sanity checks
 t GET libpod/containers/json?filters='{"status":["removing"]}' 200 length=0
 t GET libpod/containers/json?filters='{"status":["bogus"]}' 500 \
+    .cause="invalid argument"
+# unlike the compat endpoint, the libpod endpoint does not accept Docker-only
+# status values
+t GET libpod/containers/json?filters='{"status":["dead"]}' 500 \
+    .cause="invalid argument"
+t GET libpod/containers/json?filters='{"status":["restarting"]}' 500 \
     .cause="invalid argument"
 t GET libpod/containers/json?filters='garb1age}' 500 \
     .cause="invalid character 'g' looking for beginning of value"
