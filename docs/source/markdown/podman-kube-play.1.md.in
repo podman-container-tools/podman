@@ -245,6 +245,10 @@ Set logging driver for all created containers.
 Assign a static mac address to the pod. This option can be specified several times when kube play creates more than one pod.
 Note: When joining multiple networks use the **--network name:mac=\<mac\>** syntax.
 
+#### **--multiple-pods**
+
+Only one Pod replica is created by default, despite the desired number of Pods in the Kubernetes Deployment resource. This setting overrides the default behavior, allowing the desired number of Pods to be created.
+
 @@option network
 
 When no network option is specified and *host* network mode is not configured in the YAML file, a new network stack is created and pods are attached to it making possible pod to pod communication.
@@ -265,6 +269,8 @@ Define or override a port definition in the YAML file.
 
 The lists of ports in the YAML file and the command line are merged. Matching is done by using the **containerPort** field.
 If **containerPort** exists in both the YAML file and the option, the latter takes precedence.
+
+In case this options is used with **--multiple-pods** option then number of published ports should be equal to the number of replicas in container spec, e.g. Deployment.spec.replicas is 3, then **--publish** is set to "8080:80,8081:80,8082:80"
 
 #### **--publish-all**
 
