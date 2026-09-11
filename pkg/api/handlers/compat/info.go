@@ -66,7 +66,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			CPUCfsQuota:         sysInfo.CPUCfsQuota,
 			CPUSet:              sysInfo.Cpuset,
 			CPUShares:           sysInfo.CPUShares,
-			CgroupDriver:        configInfo.Engine.CgroupManager,
+			CgroupDriver:        getCgroupDriver(configInfo.Engine.CgroupManager, rootless.IsRootless()),
 			CDISpecDirs:         infoData.Host.CDISpecDirs,
 			ContainerdCommit:    dockerSystem.Commit{},
 			Containers:          infoData.Store.ContainerStore.Number,
@@ -192,6 +192,21 @@ func getGraphStatus(storeInfo map[string]string) [][2]string {
 		graphStatus = append(graphStatus, [2]string{k, v})
 	}
 	return graphStatus
+}
+
+// getCgroupDriver returns the cgroup driver reported to Docker API clients.
+//
+// Rootless Podman using the cgroupfs manager cannot honor a cgroup parent
+// chosen by the client: only the delegated subtree is writable, and container
+// creation deliberately leaves the parent unset in that case.  Reporting
+// "cgroupfs" leads clients to assume a rootful daemon and ask for a parent that
+// cannot be created, so report "none" instead, matching what rootless Docker
+// does.
+func getCgroupDriver(cgroupManager string, isRootless bool) string {
+	if isRootless && cgroupManager == config.CgroupfsCgroupsManager {
+		return "none"
+	}
+	return cgroupManager
 }
 
 func getSecOpts(sysInfo *sysinfo.SysInfo, c *config.Config) []string {
