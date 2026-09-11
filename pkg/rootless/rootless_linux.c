@@ -647,16 +647,17 @@ can_use_shortcut (char **argv)
 static int
 is_pause_process (long pid)
 {
+  const char marker[] = "_PODMAN_PAUSE=1";
   cleanup_free char *environ_path = NULL;
   cleanup_free char *buf = NULL;
   cleanup_close int fd = -1;
-  const size_t buf_size = 4096;
-  ssize_t n;
+  size_t allocated = 4096;
+  size_t size = 0;
 
   if (asprintf (&environ_path, "/proc/%ld/environ", pid) < 0)
     return 0;
 
-  buf = malloc (buf_size);
+  buf = malloc (allocated);
   if (buf == NULL)
     return 0;
 
@@ -664,17 +665,46 @@ is_pause_process (long pid)
   if (fd < 0)
     return 0;
 
-  /* Read in chunks and search for the null-delimited key=value entry.  */
-  n = TEMP_FAILURE_RETRY (read (fd, buf, buf_size));
-  if (n <= 0)
-    return 0;
-
-  /* environ entries are separated by '\0'.  Search for "_PODMAN_PAUSE=1".  */
-  for (char *p = buf; p < buf + n; )
+  /* setenv() appends, so the marker is at the end of the block.  procfs
+     reports st_size 0 here, so keep reading until EOF instead of assuming
+     the environment fits in one chunk.  */
+  for (;;)
     {
-      if (strcmp (p, "_PODMAN_PAUSE=1") == 0)
+      ssize_t n;
+
+      if (size == allocated)
+        {
+          char *tmp;
+
+          /* An environment block cannot legitimately get this big; give up
+             rather than grow without bound if procfs misbehaves.  */
+          if (allocated >= 16 * 1024 * 1024)
+            return 0;
+          allocated *= 2;
+          tmp = realloc (buf, allocated);
+          if (tmp == NULL)
+            return 0;
+          buf = tmp;
+        }
+
+      n = TEMP_FAILURE_RETRY (read (fd, buf + size, allocated - size));
+      if (n < 0)
+        return 0;
+      if (n == 0)
+        break;
+      size += (size_t) n;
+    }
+
+  /* environ entries are separated by '\0'.  The final one can be missing its
+     terminator if the process was changing its environment while we read, so
+     bound every comparison by what was actually read.  */
+  for (size_t i = 0; i < size; )
+    {
+      size_t len = strnlen (buf + i, size - i);
+
+      if (len == sizeof (marker) - 1 && memcmp (buf + i, marker, len) == 0)
         return 1;
-      p += strlen (p) + 1;
+      i += len + 1;
     }
   return 0;
 }
