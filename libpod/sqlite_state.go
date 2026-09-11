@@ -42,6 +42,11 @@ const (
 	sqliteOptionTXLock = "&_txlock=exclusive"
 	// Enforce case sensitivity for LIKE
 	sqliteOptionCaseSensitiveLike = "&_cslike=TRUE"
+	// Enable WAL (Write-Ahead Logging) mode to prevent freelist corruption under high concurrency
+	// and enable SQLite's broken-lock defenses (#29721).
+	// NOTE: WAL mode requires a local POSIX filesystem (ext4, xfs, btrfs) since the -shm shared
+	// memory sidecar file relies on POSIX mmap, which is not supported on network filesystems (NFS/SMB).
+	sqliteOptionJournalMode = "&_journal_mode=WAL"
 
 	// Assembled sqlite options used when opening the database.
 	sqliteOptions = "?" +
@@ -49,7 +54,8 @@ const (
 		sqliteOptionSynchronous +
 		sqliteOptionForeignKeys +
 		sqliteOptionTXLock +
-		sqliteOptionCaseSensitiveLike
+		sqliteOptionCaseSensitiveLike +
+		sqliteOptionJournalMode
 )
 
 // NewSqliteState creates a new SQLite-backed state database.
@@ -107,6 +113,15 @@ func (s *SQLiteState) Name() string {
 
 // Close closes the state and prevents further use
 func (s *SQLiteState) Close() error {
+	if s.conn != nil && s.valid {
+		// Best-effort WAL truncate checkpoint before closing connection.
+		// If another process holds a read lock, this may return SQLITE_BUSY, which we log at debug level
+		// so that s.conn.Close() is always called cleanly.
+		if _, err := s.conn.Exec("PRAGMA wal_checkpoint(TRUNCATE);"); err != nil {
+			logrus.Debugf("SQLite WAL truncate checkpoint on DB close: %v", err)
+		}
+	}
+
 	if err := s.conn.Close(); err != nil {
 		return err
 	}
