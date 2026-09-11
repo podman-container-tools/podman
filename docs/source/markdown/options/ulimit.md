@@ -15,6 +15,27 @@ Ulimit options. Sets the ulimits values inside of the container.
 $ podman run --ulimit nofile=1024:1024 --rm ubi9 ulimit -n
 1024
 
+Limits are passed to the container unchanged, in the units used by **setrlimit(2)**.
+Size limits are given in bytes, not in the units that the **ulimit** shell builtin
+displays. The shell scales several of those values when printing them, so the value
+reported inside the container may differ from the value given on the command line:
+
+| Type                                           | Unit of the value given to --ulimit | Unit used by ulimit -a |
+|:-----------------------------------------------|:------------------------------------|:-----------------------|
+| core, fsize                                    | bytes                                   | 512-byte blocks          |
+| data, memlock, rss, stack                      | bytes                                   | kbytes                   |
+| msgqueue                                       | bytes                                   | bytes                    |
+| rttime                                         | microseconds                            | microseconds             |
+| cpu                                            | seconds                                 | seconds                  |
+| locks, nice, nofile, nproc, rtprio, sigpending | count                                   | count                    |
+
+For example, a locked memory limit of 4096 kbytes is set in bytes:
+
+$ podman run --ulimit memlock=4194304 --rm ubi9 ulimit -l
+4096
+
+Unit suffixes such as *k* or *m* are not accepted.
+
 Set -1 for the soft or hard limit to set the limit to the maximum limit of the current
 process. In rootful mode this is often unlimited.
 
