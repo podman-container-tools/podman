@@ -162,6 +162,9 @@ fi
 t POST "/images/create?fromImage=quay.io/idonotexist/idonotexist:dummy" $expect_code \
   .message="$expect_msg"
 
+# compat api pull image with fromImage and Tag
+t GET "/images/create?fromImage=alpine:latest&tag=latest" 200 .error~null .status~".*Download complete.*"
+
 # Export an image on the local
 t GET libpod/images/nonesuch/get 404
 t GET libpod/images/$iid/get?format=foo 500

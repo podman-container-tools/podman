@@ -47,6 +47,11 @@ func mergeNameAndTagOrDigest(name, tagOrDigest string) string {
 		// We have a digest, so let's change the separator.
 		separator = "@"
 	}
+	// if both name and tagOrDigest are defined we try to use the tagOrDigest image part and override the tag/digest
+	if len(name) > 0 && strings.Contains(name, separator) {
+		index := strings.LastIndex(name, separator)
+		return fmt.Sprintf("%s%s%s", name[:index], separator, tagOrDigest)
+	}
 	return fmt.Sprintf("%s%s%s", name, separator, tagOrDigest)
 }
 
