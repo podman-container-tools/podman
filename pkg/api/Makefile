@@ -1,4 +1,5 @@
 SWAGGER_OUT ?= swagger.yaml
+SWAGGER_TMP = ${SWAGGER_OUT}.tmp.yaml
 
 SWAGGER ?= ../../test/tools/build/swagger
 
@@ -11,5 +12,7 @@ serve: ${SWAGGER_OUT}
 .PHONY: ${SWAGGER_OUT}
 ${SWAGGER_OUT}:
 	# generate doesn't remove file on error
-	rm -f ${SWAGGER_OUT}
-	$(SWAGGER) generate spec -c go.podman.io/podman -x github.com/sigstore/rekor -x github.com/moby/moby/api/types/network -x github.com/docker/docker/api/types/network -x github.com/moby/moby/api -o ${SWAGGER_OUT} -i tags.yaml -w ./ -m
+	rm -f ${SWAGGER_OUT} ${SWAGGER_TMP}
+	$(SWAGGER) generate spec -c go.podman.io/podman -x github.com/sigstore/rekor -x github.com/moby/moby/api/types/network -x github.com/docker/docker/api/types/network -x github.com/moby/moby/api -o ${SWAGGER_TMP} -i tags.yaml -w ./ -m
+	go run ../../hack/swagger-version-paths -input ${SWAGGER_TMP} -output ${SWAGGER_OUT}
+	rm -f ${SWAGGER_TMP}
