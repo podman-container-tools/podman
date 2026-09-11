@@ -3,20 +3,66 @@
 package compat
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
 	runccgroups "github.com/opencontainers/cgroups"
 	"github.com/sirupsen/logrus"
+	"github.com/tklauser/go-sysconf"
 	"go.podman.io/common/pkg/cgroups"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/storage/pkg/system"
 )
 
+// getSystemCPUUsage returns total CPU time (including idle) in nanoseconds,
+// matching Docker's system_cpu_usage semantics.
+func getSystemCPUUsage() (uint64, error) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return 0, fmt.Errorf("unable to open /proc/stat: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	if !scanner.Scan() {
+		return 0, fmt.Errorf("unable to read /proc/stat")
+	}
+
+	parts := strings.Fields(scanner.Text())
+	if len(parts) < 2 || parts[0] != "cpu" {
+		return 0, fmt.Errorf("unexpected /proc/stat format")
+	}
+
+	var totalTicks uint64
+	for _, s := range parts[1:] {
+		v, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			break
+		}
+		totalTicks += v
+	}
+
+	clkTck, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	if err != nil {
+		return 0, fmt.Errorf("unable to get clock ticks per second: %w", err)
+	}
+
+	const nsPerSecond = 1_000_000_000
+	return totalTicks * uint64(nsPerSecond/clkTck), nil
+}
+
 func getPreCPUStats(stats *define.ContainerStats) CPUStats {
-	systemUsage, _ := cgroups.SystemCPUUsage()
+	systemUsage, err := getSystemCPUUsage()
+	if err != nil {
+		logrus.Errorf("Unable to get system CPU usage: %v", err)
+	}
 	return CPUStats{
 		CPUUsage: container.CPUUsage{
 			TotalUsage:        stats.CPUNano,
@@ -31,13 +77,14 @@ func getPreCPUStats(stats *define.ContainerStats) CPUStats {
 }
 
 func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, preCPUStats CPUStats, onlineCPUs int) (StatsJSON, error) {
-	// Container stats
 	inspect, err := ctnr.Inspect(false)
 	if err != nil {
 		logrus.Errorf("Unable to inspect container: %v", err)
 		return StatsJSON{}, err
 	}
-	// Cgroup stats
+	// Second cgroup read for memory (MaxUsage), blkio, and PIDs details
+	// not available in define.ContainerStats. CPU values come from stats
+	// (populated by GetContainerStats above) to avoid a timing gap.
 	cgroupPath, err := ctnr.CgroupPath()
 	if err != nil {
 		logrus.Errorf("Unable to get cgroup path of container: %v", err)
@@ -78,7 +125,7 @@ func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, pr
 
 	memInfo, err := system.ReadMemInfo()
 	if err != nil {
-		logrus.Errorf("Unable to get cgroup stats: %v", err)
+		logrus.Errorf("Unable to get memory info: %v", err)
 		return StatsJSON{}, err
 	}
 	// cap the memory limit to the available memory.
@@ -86,7 +133,11 @@ func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, pr
 		memoryLimit = uint64(memInfo.MemTotal)
 	}
 
-	systemUsage, _ := cgroups.SystemCPUUsage()
+	systemUsage, err := getSystemCPUUsage()
+	if err != nil {
+		logrus.Errorf("Unable to get system CPU usage: %v", err)
+	}
+
 	return StatsJSON{
 		Stats: Stats{
 			Read: time.Now(),
@@ -106,10 +157,10 @@ func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, pr
 			},
 			CPUStats: CPUStats{
 				CPUUsage: container.CPUUsage{
-					TotalUsage:        cgroupStat.CpuStats.CpuUsage.TotalUsage,
+					TotalUsage:        stats.CPUNano,
 					PercpuUsage:       cgroupStat.CpuStats.CpuUsage.PercpuUsage,
-					UsageInKernelmode: cgroupStat.CpuStats.CpuUsage.UsageInKernelmode,
-					UsageInUsermode:   cgroupStat.CpuStats.CpuUsage.TotalUsage - cgroupStat.CpuStats.CpuUsage.UsageInKernelmode,
+					UsageInKernelmode: stats.CPUSystemNano,
+					UsageInUsermode:   stats.CPUNano - stats.CPUSystemNano,
 				},
 				CPU:         stats.CPU,
 				SystemUsage: systemUsage,
