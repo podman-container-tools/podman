@@ -1041,6 +1041,25 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 	if err != nil {
 		return nil, err
 	}
+	if options.PIDFile != "" && len(containers) > 1 {
+		return nil, errors.New("--pidfile can only be used with a single container")
+	}
+	// writePIDFile writes the running container's PID to options.PIDFile.
+	// PID() reports 0 once the container has exited; treat that as an error
+	// rather than writing a bogus pidfile.
+	writePIDFile := func(c *libpod.Container) error {
+		pid, err := c.PID()
+		if err != nil {
+			return fmt.Errorf("retrieving PID of container %q: %w", c.ID(), err)
+		}
+		if pid == 0 {
+			return fmt.Errorf("container %q exited before its PID could be written to the pidfile", c.ID())
+		}
+		if err := util.CreateIDFile(options.PIDFile, strconv.Itoa(pid)); err != nil {
+			return fmt.Errorf("writing pidfile for container %q: %w", c.ID(), err)
+		}
+		return nil
+	}
 	// There can only be one container if attach was used
 	for i := range containers {
 		ctr := containers[i]
@@ -1118,6 +1137,15 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 				// If all is set we only want to output the actual started containers
 				// so do not include the entry in the result.
 				if !options.All {
+					// start is idempotent, so still honor --pidfile for an
+					// already-running container.
+					if options.PIDFile != "" {
+						if err := writePIDFile(ctr.Container); err != nil {
+							report.Err = err
+							reports = append(reports, report)
+							continue
+						}
+					}
 					report.ExitCode = 0
 					reports = append(reports, report)
 				}
@@ -1136,6 +1164,13 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 			}
 			reports = append(reports, report)
 			continue
+		}
+		if options.PIDFile != "" {
+			if err := writePIDFile(ctr.Container); err != nil {
+				report.Err = err
+				reports = append(reports, report)
+				continue
+			}
 		}
 		// no error set exit code to 0
 		report.ExitCode = 0
