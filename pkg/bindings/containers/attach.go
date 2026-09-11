@@ -275,6 +275,30 @@ func ResizeExecTTY(ctx context.Context, sessionID string, options *ResizeExecTTY
 	return resizeTTY(ctx, bindings.JoinURL("exec", sessionID, "resize"), options.Height, options.Width)
 }
 
+// ExecKill sends a signal to a running exec session's process group.
+func ExecKill(ctx context.Context, sessionID string, signal string, options *ExecKillOptions) error {
+	if options == nil {
+		options = new(ExecKillOptions)
+	}
+	conn, err := bindings.GetClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	params, err := options.ToParams()
+	if err != nil {
+		return err
+	}
+	params.Set("signal", signal)
+	rsp, err := conn.DoRequest(ctx, nil, http.MethodPost, bindings.JoinURL("exec", sessionID, "kill"), params, nil)
+	if err != nil {
+		return err
+	}
+	defer rsp.Body.Close()
+
+	return rsp.Process(nil)
+}
+
 // resizeTTY set size of TTY of container
 func resizeTTY(ctx context.Context, endpoint string, height *int, width *int) error {
 	conn, err := bindings.GetClient(ctx)

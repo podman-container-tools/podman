@@ -233,3 +233,85 @@ func TestPIDHandleKillPidfdNotSupportedStartTimeNotMatch(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, isAlive)
 }
+
+func TestPIDHandleKillProcessGroupUsesFlagWhenSupported(t *testing.T) {
+	processGroupSignalUnsupported.Store(false)
+	defer processGroupSignalUnsupported.Store(false)
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	var gotFlags int
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, flags int) error {
+		gotFlags = flags
+		return nil
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	err := h.KillProcessGroup(unix.SIGTERM)
+	assert.NoError(t, err)
+	assert.Equal(t, pidfdSignalProcessGroup, gotFlags)
+}
+
+func TestPIDHandleKillProcessGroupFallsBackOnEinval(t *testing.T) {
+	processGroupSignalUnsupported.Store(false)
+	defer processGroupSignalUnsupported.Store(false)
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		return unix.EINVAL
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	err := h.KillProcessGroup(0)
+	assert.ErrorIs(t, err, unix.ESRCH)
+	assert.True(t, processGroupSignalUnsupported.Load())
+}
+
+func TestPIDHandleKillProcessGroupSkipsFlagOnceCached(t *testing.T) {
+	processGroupSignalUnsupported.Store(true)
+	defer processGroupSignalUnsupported.Store(false)
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		t.Fatal("pidfdSendSignal should not be called once cached as unsupported")
+		return nil
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	err := h.KillProcessGroup(0)
+	assert.ErrorIs(t, err, unix.ESRCH)
+}
+
+func TestPIDHandleKillProcessGroupPropagatesRealError(t *testing.T) {
+	processGroupSignalUnsupported.Store(false)
+	defer processGroupSignalUnsupported.Store(false)
+
+	originalSend := pidfdSendSignal
+	defer func() { pidfdSendSignal = originalSend }()
+	pidfdSendSignal = func(_ int, _ unix.Signal, _ *unix.Siginfo, _ int) error {
+		return unix.EPERM
+	}
+
+	h := &pidfdHandle{
+		pidfd:        123,
+		normalHandle: pidHandle{pid: os.Getpid(), pidData: "start-time:1234567890"},
+	}
+
+	err := h.KillProcessGroup(unix.SIGTERM)
+	assert.ErrorIs(t, err, unix.EPERM)
+	assert.False(t, processGroupSignalUnsupported.Load())
+}

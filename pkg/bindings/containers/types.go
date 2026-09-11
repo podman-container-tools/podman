@@ -293,6 +293,11 @@ type ResizeExecTTYOptions struct {
 	Width  *int
 }
 
+// ExecKillOptions are optional options for signalling an exec session.
+//
+//go:generate go run ../generator/generator.go ExecKillOptions
+type ExecKillOptions struct{}
+
 // ExecStartAndAttachOptions are optional options for resizing
 // container ExecTTYs
 //

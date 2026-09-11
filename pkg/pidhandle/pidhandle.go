@@ -29,6 +29,8 @@ type PIDHandle interface {
 	Close() error
 	// Sends the signal to process.
 	Kill(signal unix.Signal) error
+	// Sends the signal to the process's entire process group.
+	KillProcessGroup(signal unix.Signal) error
 	// Returns true in case the process is still alive.
 	IsAlive() (bool, error)
 	// Returns a serialized representation of the PIDHandle.
@@ -61,8 +63,8 @@ func (h *pidHandle) Close() error {
 	return nil
 }
 
-// Sends the signal to process.
-func (h *pidHandle) Kill(signal unix.Signal) error {
+// Returns ESRCH if the process is gone or its PID was recycled.
+func (h *pidHandle) checkIdentity() error {
 	if h.pidData == noSuchProcessID {
 		// The process did not exist when we created the PIDHandle, so return
 		// ESRCH error.
@@ -92,7 +94,23 @@ func (h *pidHandle) Kill(signal unix.Signal) error {
 		}
 	}
 
+	return nil
+}
+
+// Sends the signal to process.
+func (h *pidHandle) Kill(signal unix.Signal) error {
+	if err := h.checkIdentity(); err != nil {
+		return err
+	}
 	return unix.Kill(h.pid, signal)
+}
+
+// Sends the signal to the process's entire process group.
+func (h *pidHandle) KillProcessGroup(signal unix.Signal) error {
+	if err := h.checkIdentity(); err != nil {
+		return err
+	}
+	return unix.Kill(-h.pid, signal)
 }
 
 // Returns true in case the process is still alive.
