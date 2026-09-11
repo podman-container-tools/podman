@@ -93,6 +93,16 @@ podman system connection add --default $conn \
 # cirrus weirdness with exec.Command. All of the args have been parsed successfully.
 t POST "libpod/images/scp/$IMAGE?destination=QA::" 500 \
     .cause="exit status 125"
+
+# Bad compression options are the caller's mistake, so they must come back as 400
+# rather than 500, and be rejected before the transfer is attempted at all.
+t POST "libpod/images/scp/$IMAGE?destination=QA::&compressionFormat=bzip2" 400 \
+    .cause="invalid argument"
+t POST "libpod/images/scp/$IMAGE?destination=QA::&compressionFormat=gzip&compressionLevel=10" 400 \
+    .cause="invalid argument"
+t POST "libpod/images/scp/$IMAGE?destination=QA::&compressionLevel=9" 400 \
+    .cause="invalid argument"
+
 t DELETE libpod/images/$IMAGE 200 \
   .ExitCode=0
 
