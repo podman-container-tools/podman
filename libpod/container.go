@@ -36,7 +36,7 @@ const SystemdDefaultCgroupParent = "machine.slice"
 
 // SystemdDefaultRootlessCgroupParent is the cgroup parent for the systemd cgroup
 // manager in libpod when running as rootless
-const SystemdDefaultRootlessCgroupParent = "user.slice"
+const SystemdDefaultRootlessCgroupParent = "containers.slice"
 
 // DefaultWaitInterval is the default interval between container status checks
 // while waiting.
