@@ -45,7 +45,7 @@ Valid options for `[Build]` section are listed below:
 |-------------------------------------|---------------------------------------------|
 | Annotation=annotation=value         | --annotation=annotation=value               |
 | Arch=aarch64                        | --arch=aarch64                              |
-| AuthFile=/etc/registry/auth\.json   | --authfile=/etc/registry/auth\.json         |
+| AuthFile=/etc/registry/auth\.json   | --auth-file=/etc/registry/auth\.json        |
 | ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                     |
 | DNS=192.168.55.1                    | --dns=192.168.55.1                          |
 | DNSOption=ndots:1                   | --dns-option=ndots:1                        |

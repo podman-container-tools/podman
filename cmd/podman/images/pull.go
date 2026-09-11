@@ -80,6 +80,7 @@ func init() {
 // pullFlags set the flags for the pull command.
 func pullFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	flags.BoolVarP(&pullOptions.AllTags, "all-tags", "a", false, "All tagged images in the repository will be pulled")
 
@@ -112,7 +113,7 @@ func pullFlags(cmd *cobra.Command) {
 	flags.BoolVarP(&pullOptions.Quiet, "quiet", "q", false, "Suppress output information when pulling images")
 	flags.BoolVar(&pullOptions.TLSVerifyCLI, "tls-verify", true, "Require HTTPS and verify certificates when contacting registries")
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&pullOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = cmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -174,7 +175,7 @@ func imagePull(cmd *cobra.Command, args []string) error {
 		pullOptions.RetryDelay = val
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(pullOptions.Authfile); err != nil {
 			return err
 		}

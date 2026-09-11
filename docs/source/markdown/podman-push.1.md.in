@@ -138,7 +138,7 @@ Push the specified image into the local Docker daemon container store:
 
 Push the specified image with a different image name using credentials from an alternate authfile path:
 ```
-# podman push --authfile temp-auths/myauths.json alpine docker://docker.io/umohnani/alpine
+# podman push --auth-file temp-auths/myauths.json alpine docker://docker.io/umohnani/alpine
 Getting image source signatures
 Copying blob sha256:5bef08742407efd622d243692b79ba0055383bbce12900324f75e56f589aedb0
  4.03 MB / 4.03 MB [========================================================] 1s

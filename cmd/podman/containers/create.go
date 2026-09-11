@@ -149,7 +149,7 @@ func create(cmd *cobra.Command, args []string) error {
 		imageName = name
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(cliVals.Authfile); err != nil {
 			return err
 		}

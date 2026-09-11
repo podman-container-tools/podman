@@ -14,6 +14,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/util"
 )
@@ -52,6 +53,7 @@ func init() {
 		Parent:  manifestCmd,
 	})
 	flags := addCmd.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 	flags.BoolVar(&manifestAddOpts.All, "all", false, "add all of the list's images if the image is a list")
 
 	annotationFlagName := "annotation"
@@ -88,7 +90,7 @@ func init() {
 	flags.StringVar(&manifestAddOpts.IndexSubject, artifactSubjectFlagName, "", "artifact subject reference")
 	_ = addCmd.RegisterFlagCompletionFunc(artifactSubjectFlagName, completion.AutocompleteNone)
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&manifestAddOpts.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = addCmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -126,7 +128,7 @@ func init() {
 }
 
 func add(cmd *cobra.Command, args []string) error {
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(manifestAddOpts.Authfile); err != nil {
 			return err
 		}

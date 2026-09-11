@@ -50,7 +50,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		)
 		_ = cmd.RegisterFlagCompletionFunc(attachFlagName, AutocompleteCreateAttach)
 
-		authfileFlagName := "authfile"
+		authfileFlagName := "auth-file"
 		createFlags.StringVar(
 			&cf.Authfile,
 			authfileFlagName, auth.GetDefaultAuthFile(),

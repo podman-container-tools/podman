@@ -13,6 +13,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
 
@@ -32,7 +33,7 @@ var (
 		ValidArgsFunction: common.AutocompleteRegistries,
 		Example: `podman login quay.io
 podman login --username ... --password ... quay.io
-podman login --authfile dir/auth.json quay.io`,
+podman login --auth-file dir/auth.json quay.io`,
 	}
 )
 
@@ -44,6 +45,7 @@ func init() {
 		Command: loginCommand,
 	})
 	flags := loginCommand.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	// Flags from the auth package.
 	flags.AddFlagSet(auth.GetLoginFlags(&loginOptions.LoginOptions))

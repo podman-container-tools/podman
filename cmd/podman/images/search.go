@@ -13,6 +13,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/util"
 )
@@ -82,6 +83,7 @@ func init() {
 // searchFlags set the flags for the pull command.
 func searchFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	filterFlagName := "filter"
 	flags.StringArrayVarP(&searchOptions.Filters, filterFlagName, "f", []string{}, "Filter output based on conditions provided (default [])")
@@ -98,7 +100,7 @@ func searchFlags(cmd *cobra.Command) {
 	flags.BoolVar(&searchOptions.NoTrunc, "no-trunc", false, "Do not truncate the output")
 	flags.BoolVar(&searchOptions.Compatible, "compatible", false, "List stars, official and automated columns (Docker compatibility)")
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&searchOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = cmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -138,7 +140,7 @@ func imageSearch(cmd *cobra.Command, args []string) error {
 		searchOptions.SkipTLSVerify = types.NewOptionalBool(!searchOptions.TLSVerifyCLI)
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(searchOptions.Authfile); err != nil {
 			return err
 		}

@@ -565,7 +565,7 @@ $ podman build --runtime-flag debug .
 
 Build image using specified registry attributes when pulling images from the selected Containerfile:
 ```
-$ podman build --authfile /tmp/auths/myauths.json --cert-dir $HOME/auth --tls-verify=true --creds=username:password -t imageName -f Containerfile.simple .
+$ podman build --auth-file /tmp/auths/myauths.json --cert-dir $HOME/auth --tls-verify=true --creds=username:password -t imageName -f Containerfile.simple .
 ```
 
 Build image using specified resource controls when running containers during the build:
