@@ -76,7 +76,7 @@ jobs:
           log-output: true
       - if: failure()
         name: Send job failure notification e-mail
-        uses: dawidd6/action-send-mail@ca8dbb4d4f91ca7f75e7f2feea5339e76ce70c90 # v20
+        uses: dawidd6/action-send-mail@03a02a49409134de07636216fb379a026c52991e # v21
         with:
           server_address: ${{secrets.ACTION_MAIL_SERVER}}
           server_port: 465
