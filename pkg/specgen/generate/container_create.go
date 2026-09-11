@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jinzhu/copier"
@@ -587,7 +588,49 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		if len(s.LogConfiguration.Driver) > 0 {
 			options = append(options, libpod.WithLogDriver(s.LogConfiguration.Driver))
 		}
+		// Log rotation options: accepted as --log-opt max-file=<n> or
+		// --log-opt log-rotate=true|false from the CLI or REST API.
+		if len(s.LogConfiguration.Options) > 0 {
+			var logMaxFiles uint
+			var logRotate *bool
+
+			if rotateStr, ok := s.LogConfiguration.Options["log-rotate"]; ok {
+				rotate, err := strconv.ParseBool(rotateStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid log option log-rotate %q: %w", rotateStr, err)
+				}
+				logRotate = &rotate
+			}
+
+			if maxFileStr, ok := s.LogConfiguration.Options["max-file"]; ok {
+				n, err := strconv.ParseUint(maxFileStr, 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid log option max-file %q: %w", maxFileStr, err)
+				}
+				if n == 0 {
+					return nil, fmt.Errorf("invalid log option max-file %q: must be greater than 0", maxFileStr)
+				}
+				logMaxFiles = uint(n)
+			}
+
+			if logMaxFiles > 0 {
+				if logRotate != nil && !*logRotate {
+					return nil, fmt.Errorf("conflicting log options: max-file cannot be set when log-rotate is false")
+				}
+				options = append(options, libpod.WithLogMaxFiles(logMaxFiles))
+				// Setting max-file implicitly enables log rotation unless explicitly specified.
+				if logRotate == nil {
+					trueVal := true
+					logRotate = &trueVal
+				}
+			}
+
+			if logRotate != nil {
+				options = append(options, libpod.WithLogRotate(*logRotate))
+			}
+		}
 	}
+
 	if s.LabelNested != nil {
 		options = append(options, libpod.WithLabelNested(*s.LabelNested))
 	}
