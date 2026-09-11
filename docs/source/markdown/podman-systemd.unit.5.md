@@ -1675,7 +1675,8 @@ This key can be listed multiple times.
 
 Volume files are named with a `.volume` extension and contain a section `[Volume]` describing the
 named Podman volume. The generated service is a one-time command that ensures that the volume
-exists on the host, creating it if needed.
+exists on the host, creating it if needed. Unlike `.network`, `.image`, and `.artifact` oneshot units,
+the generated service for `.volume` units does not set `RemainAfterExit=yes` by default.
 
 By default, the Podman volume has the same name as the unit, but with a `systemd-` prefix, i.e. for
 a volume file named `$NAME.volume`, the generated Podman volume is called `systemd-$NAME`, and the
