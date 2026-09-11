@@ -192,6 +192,21 @@ t DELETE libpod/networks/macvlan1 200 \
   .[0].Name~macvlan1 \
   .[0].Err=null
 
+# test IPRange in Docker-compat IPAM config (#28378)
+t POST networks/create Name='"iprange-net"' \
+  IPAM='{"Config":[{"Subnet":"10.10.200.0/24","Gateway":"10.10.200.1","IPRange":"10.10.200.128/25"}]}' 201 \
+  .Id~[0-9a-f]\\{64\\}
+
+# inspect should return the IPRange field in IPAM.Config
+t GET networks/iprange-net 200 \
+  .Name=iprange-net \
+  .IPAM.Config[0].Subnet=10.10.200.0/24 \
+  .IPAM.Config[0].Gateway=10.10.200.1 \
+  .IPAM.Config[0].IPRange=10.10.200.128/25
+
+# clean up
+t DELETE networks/iprange-net 204
+
 #
 # test networks with containers
 #
