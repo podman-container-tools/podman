@@ -101,7 +101,11 @@ function Run-Command {
 
     $exitCode = $LASTEXITCODE
 
-    if ($Env:CIRRUS_CI -eq "true") {
+    # Only our own CI has perl and the logformatter script available, and only
+    # there is the HTML log worth generating. PODMAN_CI is set by the workflow
+    # rather than read from GITHUB_ACTIONS, so a fork running winmake.ps1 in
+    # its own workflow does not get this.
+    if ($Env:PODMAN_CI) {
         Invoke-Logformatter $unformattedLog
     }
 
