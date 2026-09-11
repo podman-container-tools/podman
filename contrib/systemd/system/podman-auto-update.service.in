@@ -10,4 +10,4 @@ ExecStart=@@PODMAN@@ auto-update
 ExecStartPost=@@PODMAN@@ image prune -f
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

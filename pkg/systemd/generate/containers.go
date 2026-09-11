@@ -116,7 +116,7 @@ NotifyAccess={{{{.NotifyAccess}}}}
 {{{{- end}}}}
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 `
 
 // ContainerUnit generates a systemd unit for the specified container.  Based

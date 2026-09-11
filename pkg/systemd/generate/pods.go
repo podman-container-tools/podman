@@ -125,7 +125,7 @@ PIDFile={{{{.PIDFile}}}}
 Type=forking
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 `
 
 // PodUnits generates systemd units for the specified pod and its containers.

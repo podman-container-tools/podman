@@ -13,4 +13,4 @@ ExecStart=@@PODMAN@@ $LOGGING start --all --filter should-start-on-boot=true
 ExecStop=@@PODMAN@@  $LOGGING stop --service --all
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
