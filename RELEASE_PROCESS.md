@@ -148,8 +148,8 @@ spelled with complete minutiae.
    1. In the PR, under the *Checks* tab, a GitHub Actions [workflow](https://github.com/podman-container-tools/podman/actions/workflows/machine-os-pr.yml) will run.
       This workflow opens a PR on the [podman-machine-os repo](https://github.com/podman-container-tools/podman-machine-os)
       to build VM images for the release, links that PR in a comment on the Podman PR,
-      and applies the `do-not-merge/wait-machine-os-build` label until the images are built
-      and published.
+      and applies the `do-not-merge/wait-machine-os-build` label while the machine-os
+      release is still pending.
    1. Go to the `podman-machine-os` bump PR, by clicking the link in the comment, or by finding it in the [podman-machine-os repo](https://github.com/podman-container-tools/podman-machine-os/pulls).
       1. Wait for automation to finish running
       1. Once you are sure that there will be no more force pushes on the Podman release PR, merge the `podman-machine-os` bump PR
@@ -160,9 +160,13 @@ spelled with complete minutiae.
          GitHub Actions workflow. It publishes the images to Quay and creates a
          GitHub release in the `podman-machine-os` repository. Wait for this
          workflow to complete successfully.
-   1. Return to the Podman repo
-   1. The `do-not-merge/wait-machine-os-build` label should be automatically
-      un-set once the `podman-machine-os` release is finished.
+   1. Return to the Podman repo.
+   1. Once the `podman-machine-os` release completes, remove the
+      `do-not-merge/wait-machine-os-build` label before merging the Podman bump PR.
+      The Podman [release workflow](https://github.com/podman-container-tools/podman/actions/workflows/release.yml)
+      runs only after the Podman tag is pushed, so this matching-release check is a
+      secondary failsafe before the artifact build or release jobs start.
+      Build-only dispatches skip this check.
    1. Wait for all other PR checks to pass.
    1. Wait for other maintainers to merge the PR.
    1. Tag the `Bump to vX.Y.Z` commit as a release by running
