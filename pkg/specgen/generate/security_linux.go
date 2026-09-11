@@ -211,7 +211,7 @@ func securityConfigureGenerator(s *specgen.SpecGenerator, g *generate.Generator,
 
 	// Clear default Seccomp profile from Generator for unconfined containers
 	// and privileged containers which do not specify a seccomp profile.
-	if s.SeccompProfilePath == "unconfined" || (s.IsPrivileged() && (s.SeccompProfilePath == "" || s.SeccompProfilePath == config.SeccompOverridePath || s.SeccompProfilePath == config.SeccompDefaultPath)) {
+	if s.SeccompProfilePath == "unconfined" || (s.IsPrivileged() && s.SeccompProfile == "" && (s.SeccompProfilePath == "" || s.SeccompProfilePath == config.SeccompOverridePath || s.SeccompProfilePath == config.SeccompDefaultPath)) {
 		configSpec.Linux.Seccomp = nil
 	}
 

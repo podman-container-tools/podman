@@ -312,7 +312,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	maps.Copy(annotations, s.Annotations)
 	s.Annotations = annotations
 
-	if len(s.SeccompProfilePath) < 1 {
+	if len(s.SeccompProfilePath) < 1 && len(s.SeccompProfile) < 1 {
 		p, err := libpod.DefaultSeccompPath()
 		if err != nil {
 			return nil, err

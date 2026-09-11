@@ -91,6 +91,9 @@ func (s *SpecGenerator) Validate() error {
 	if s.UserNS.IsPrivate() && s.IDMappings == nil {
 		return fmt.Errorf("IDMappings are required when not creating a User namespace: %w", ErrInvalidSpecConfig)
 	}
+	if len(s.SeccompProfilePath) > 0 && len(s.SeccompProfile) > 0 {
+		return exclusiveOptions("SeccompProfilePath", "SeccompProfile")
+	}
 
 	//
 	// ContainerCgroupConfig

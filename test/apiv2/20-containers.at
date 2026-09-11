@@ -339,6 +339,29 @@ t GET    libpod/containers/${cid}/json 200 \
 
 t DELETE containers/$cid 204
 
+# Regression test for #27710. Docker clients send the seccomp profile JSON
+# itself in HostConfig.SecurityOpt (the docker CLI reads the file client-side
+# and inlines it). Pad with enough whitespace to exceed NAME_MAX so treating
+# the value as a path cannot accidentally succeed.
+SECCOMP_TMPD=$(mktemp -d podman-apiv2-test.seccomp.XXXXXXXX)
+seccomp_profile=$(printf '\n  {"defaultAction":"SCMP_ACT_ALLOW","syscalls":[{"names":["link","linkat"],"action":"SCMP_ACT_ERRNO"}]}%300s' '')
+jq -cn --arg image "$IMAGE" --arg profile "$seccomp_profile" \
+  '{Image:$image,
+    Cmd:["sh","-c","echo test > /tmp/link-src && ln /tmp/link-src /tmp/link-not-allowed"],
+    HostConfig:{SecurityOpt:["seccomp=" + $profile]}}' \
+  >$SECCOMP_TMPD/create.json
+t POST containers/create $SECCOMP_TMPD/create.json 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+# the inline profile must round-trip through inspect like docker does
+t GET containers/$cid/json 200 \
+  .HostConfig.SecurityOpt[0]~seccomp=.*SCMP_ACT_ERRNO.*
+t POST containers/$cid/start 204
+t POST containers/$cid/wait 200 \
+  .StatusCode=1
+t DELETE containers/$cid 204
+rm -rf $SECCOMP_TMPD
+
 # test only set the entrypoint, Cmd should be []
 t POST containers/create \
   Image=$IMAGE \

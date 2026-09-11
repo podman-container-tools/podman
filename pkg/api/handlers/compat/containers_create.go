@@ -94,6 +94,11 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Docker clients send the seccomp profile JSON inline in
+	// HostConfig.SecurityOpt, FillOutSpecGen would treat it as a path.
+	var inlineSeccompProfile string
+	inlineSeccompProfile, body.HostConfig.SecurityOpt = extractInlineSeccompProfile(body.HostConfig.SecurityOpt)
+
 	// Take body structure and convert to cliopts
 	cliOpts, args, err := cliOpts(body, rtc)
 	if err != nil {
@@ -116,6 +121,12 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	if err := specgenutil.FillOutSpecGen(sg, cliOpts, args); err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("fill out specgen: %w", err))
 		return
+	}
+
+	if inlineSeccompProfile != "" {
+		sg.SeccompProfile = inlineSeccompProfile
+		// keep SecurityOpt in inspect output matching what the client sent
+		sg.Annotations[define.InspectAnnotationSeccomp] = inlineSeccompProfile
 	}
 
 	// empty test command means inherit the image healthcheck, but we need to preserve the other health config fields if provided
@@ -162,6 +173,50 @@ func stringMaptoArray(m map[string]string) []string {
 		a = append(a, fmt.Sprintf("%s=%s", k, v))
 	}
 	return a
+}
+
+// cutSecurityOpt splits a security option into key and value.
+// Docker deprecated the ":" separator but still supports it.
+func cutSecurityOpt(opt string) (key, val string, hasVal bool) {
+	if strings.Contains(opt, "=") {
+		return strings.Cut(opt, "=")
+	}
+	return strings.Cut(opt, ":")
+}
+
+// extractInlineSeccompProfile splits an inline JSON seccomp profile out of
+// securityOpts, returning the profile (or "") and the remaining options.
+// Only values starting with "{" are treated as inline profiles so that
+// path-based values keep working. Duplicate seccomp options resolve
+// last-one-wins, like docker, and only the winner is kept in the
+// remaining options.
+func extractInlineSeccompProfile(securityOpts []string) (string, []string) {
+	lastIdx := -1
+	lastVal := ""
+	for i, opt := range securityOpts {
+		if key, val, hasVal := cutSecurityOpt(opt); hasVal && key == "seccomp" {
+			lastIdx = i
+			lastVal = val
+		}
+	}
+	if lastIdx == -1 {
+		return "", securityOpts
+	}
+	inline := strings.HasPrefix(strings.TrimSpace(lastVal), "{")
+	rest := make([]string, 0, len(securityOpts))
+	for i, opt := range securityOpts {
+		if key, _, hasVal := cutSecurityOpt(opt); hasVal && key == "seccomp" {
+			// drop all seccomp options except a path-valued winner
+			if inline || i != lastIdx {
+				continue
+			}
+		}
+		rest = append(rest, opt)
+	}
+	if !inline {
+		return "", rest
+	}
+	return lastVal, rest
 }
 
 // cliOpts converts a compat input struct to cliopts
