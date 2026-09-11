@@ -19,7 +19,10 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
 )
 
-const apiUpTimeout = 20 * time.Second
+const (
+	apiUpTimeout        = 20 * time.Second
+	GvProxyReadyTimeout = 5 * time.Second
+)
 
 var ForwarderBinaryName = "gvproxy"
 
