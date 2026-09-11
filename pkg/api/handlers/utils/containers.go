@@ -163,7 +163,7 @@ func createContainerWaitFn(ctx context.Context, containerName string, interval t
 	var containerEngine entities.ContainerEngine = &abi.ContainerEngine{Libpod: runtime}
 
 	return func(conditions ...define.ContainerStatus) (int32, error) {
-		var rawConditions []string
+		rawConditions := make([]string, 0, len(conditions))
 		for _, con := range conditions {
 			rawConditions = append(rawConditions, con.String())
 		}

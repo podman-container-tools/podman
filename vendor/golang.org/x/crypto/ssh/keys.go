@@ -182,13 +182,18 @@ func ParseKnownHosts(in []byte) (marker string, hosts []string, pubKey PublicKey
 		}
 
 		hosts := string(keyFields[0])
-		// keyFields[1] contains the key type (e.g. “ssh-rsa”).
-		// However, that information is duplicated inside the
-		// base64-encoded key and so is ignored here.
+		// keyFields[1] contains the key type (e.g. "ssh-rsa"). This information
+		// is duplicated within the base64-encoded key blob. As OpenSSH's
+		// sshkey_read does, we verify that the declared key type matches the
+		// type embedded in the key blob.
+		wantType := string(keyFields[1])
 
 		key := bytes.Join(keyFields[2:], []byte(" "))
 		if pubKey, comment, err = parseAuthorizedKey(key); err != nil {
 			return "", nil, nil, "", nil, err
+		}
+		if pubKey.Type() != wantType {
+			return "", nil, nil, "", nil, fmt.Errorf("ssh: known hosts key type mismatch: human-readable type %q, encoded type %q", wantType, pubKey.Type())
 		}
 
 		return marker, strings.Split(hosts, ","), pubKey, comment, rest, nil
@@ -228,10 +233,17 @@ func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []str
 		}
 
 		if out, comment, err = parseAuthorizedKey(in[i:]); err == nil {
-			return out, comment, options, rest, nil
-		} else {
-			lastErr = err
+			// The first field contains the declared key type. As OpenSSH's
+			// sshkey_read does, we verify that it matches the type embedded in
+			// the key blob. Without this check, a single-token option (e.g.
+			// "restrict") appearing in the key type position could be silently
+			// discarded along with its intended effect.
+			if string(in[:i]) == out.Type() {
+				return out, comment, options, rest, nil
+			}
+			err = fmt.Errorf("ssh: authorized keys key type mismatch: human-readable type %q, encoded type %q", in[:i], out.Type())
 		}
+		lastErr = err
 
 		// No key type recognised. Maybe there's an options field at
 		// the beginning.
@@ -271,11 +283,15 @@ func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []str
 		}
 
 		if out, comment, err = parseAuthorizedKey(in[i:]); err == nil {
-			options = candidateOptions
-			return out, comment, options, rest, nil
-		} else {
-			lastErr = err
+			// As above, the declared key type (here following the options
+			// field) must match the type embedded in the key blob.
+			if string(in[:i]) == out.Type() {
+				options = candidateOptions
+				return out, comment, options, rest, nil
+			}
+			err = fmt.Errorf("ssh: authorized keys key type mismatch: human-readable type %q, encoded type %q", in[:i], out.Type())
 		}
+		lastErr = err
 
 		in = rest
 		continue
@@ -469,10 +485,11 @@ func parseRSA(in []byte) (out PublicKey, rest []byte, err error) {
 		return nil, nil, err
 	}
 
-	// 8192 bits is also the maximum RSA key size accepted by crypto/tls for
-	// signature verification:
-	// https://github.com/golang/go/blob/69801b25/src/crypto/tls/handshake_client.go#L1096
-	if w.N.BitLen() > 8192 {
+	// 16384 bits is the largest RSA key OpenSSH will generate (ssh-keygen
+	// caps -b at 16384), so it is the practical upper bound for keys seen on
+	// the wire. Rejecting anything larger bounds the CPU spent verifying an
+	// attacker-supplied key and signature, mitigating a denial of service.
+	if w.N.BitLen() > 16384 {
 		return nil, nil, errors.New("ssh: rsa modulus too large")
 	}
 	if w.E.BitLen() > 24 {
@@ -1653,13 +1670,13 @@ func parseOpenSSHPrivateKey(key []byte, decrypt openSSHDecryptFunc) (crypto.Priv
 		}
 
 		// Mirror the validation done in parseRSA for public keys: cap the
-		// modulus at the same limit enforced by crypto/tls, reject oversized
-		// or invalid exponents, and additionally bound the prime factors to
+		// modulus at the OpenSSH-generated maximum, reject oversized or
+		// invalid exponents, and additionally bound the prime factors to
 		// avoid the expensive CRT coefficient recomputation in pk.Precompute.
-		if key.N.BitLen() > 8192 {
+		if key.N.BitLen() > 16384 {
 			return nil, errors.New("ssh: rsa modulus too large")
 		}
-		if key.P.BitLen() > 4096 || key.Q.BitLen() > 4096 {
+		if key.P.BitLen() > 8192 || key.Q.BitLen() > 8192 {
 			return nil, errors.New("ssh: rsa prime too large")
 		}
 		if key.E.BitLen() > 24 {

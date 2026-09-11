@@ -85,6 +85,9 @@ linters:
       - linters:
           - recvcheck
         path: pkg/k8s.io/
+      - path: _test\.go
+        linters:
+          - prealloc
 
 issues:
   max-issues-per-linter: 0

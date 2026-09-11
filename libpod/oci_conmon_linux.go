@@ -263,7 +263,7 @@ func GetLimits(resource *spec.LinuxResources) (runcconfig.Resources, error) {
 	final.Devices = devs
 
 	// HugepageLimits
-	pageLimits := []*runcconfig.HugepageLimit{}
+	pageLimits := make([]*runcconfig.HugepageLimit, 0, len(resource.HugepageLimits))
 	for _, entry := range resource.HugepageLimits {
 		pageLimits = append(pageLimits, &runcconfig.HugepageLimit{
 			Pagesize: entry.Pagesize,

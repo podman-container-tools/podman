@@ -1463,6 +1463,7 @@ const (
 	PodFailed PodPhase = "Failed"
 	// PodUnknown means that for some reason the state of the pod could not be obtained, typically due
 	// to an error in communicating with the host of the pod.
+	//
 	// Deprecated: It isn't being set since 2015 (74da3b14b0c0f658b3bb8d2def5094686d0e9095)
 	PodUnknown PodPhase = "Unknown"
 )
@@ -1882,6 +1883,7 @@ type PodSpec struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 	// DeprecatedServiceAccount is a depreciated alias for ServiceAccountName.
+	//
 	// Deprecated: Use serviceAccountName instead.
 	// +k8s:conversion-gen=false
 	// +optional
@@ -4272,6 +4274,7 @@ type ComponentCondition struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ComponentStatus (and ComponentStatusList) holds the cluster validation info.
+//
 // Deprecated: This API is deprecated in v1.19+
 type ComponentStatus struct {
 	metav1.TypeMeta `json:",inline"`
@@ -4290,6 +4293,7 @@ type ComponentStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Status of all the conditions for the component as a list of ComponentStatus objects.
+//
 // Deprecated: This API is deprecated in v1.19+
 type ComponentStatusList struct {
 	metav1.TypeMeta `json:",inline"`

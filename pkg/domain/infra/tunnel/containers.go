@@ -604,7 +604,7 @@ func (ic *ContainerEngine) ContainerAttach(ctx context.Context, nameOrID string,
 }
 
 func makeExecConfig(options entities.ExecOptions) *handlers.ExecCreateConfig {
-	env := []string{}
+	env := make([]string, 0, len(options.Envs))
 	for k, v := range options.Envs {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}

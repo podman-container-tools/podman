@@ -139,8 +139,8 @@ func CRImportCheckpoint(ctx context.Context, runtime *libpod.Runtime, restoreOpt
 				opts.StaticMAC = nil
 				ctrConfig.Networks[net] = opts
 			}
-			ctrConfig.StaticIP = nil
-			ctrConfig.StaticMAC = nil
+			ctrConfig.StaticIP = nil  //nolint:staticcheck // deprecated field kept for DB backwards compat
+			ctrConfig.StaticMAC = nil //nolint:staticcheck // deprecated field kept for DB backwards compat
 		}
 
 		if ctrConfig.PIDNsCtr != "" {
@@ -211,7 +211,7 @@ func CRImportCheckpoint(ctx context.Context, runtime *libpod.Runtime, restoreOpt
 		return nil, err
 	}
 
-	var containers []*libpod.Container
+	containers := make([]*libpod.Container, 0, 1)
 	if container == nil {
 		return nil, nil
 	}

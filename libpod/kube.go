@@ -441,7 +441,7 @@ type YAMLContainer struct {
 
 // ConvertV1PodToYAMLPod takes k8s API core Pod and returns a pointer to YAMLPod
 func ConvertV1PodToYAMLPod(pod *v1.Pod) *YAMLPod {
-	cs := []*YAMLContainer{}
+	cs := make([]*YAMLContainer, 0, len(pod.Spec.Containers))
 	for _, cc := range pod.Spec.Containers {
 		var res *v1.ResourceRequirements
 		if len(cc.Resources.Limits) > 0 || len(cc.Resources.Requests) > 0 {

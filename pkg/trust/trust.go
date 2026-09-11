@@ -78,7 +78,7 @@ func getPolicyShowOutput(policyContentStruct policyContent, systemRegistriesDirP
 
 // descriptionsOfPolicyRequirements turns reqs into user-readable policy entries, with Transport/Name/Reponame coming from template, potentially looking up scope (which may be "") in registryConfigs.
 func descriptionsOfPolicyRequirements(reqs []repoContent, template Policy, registryConfigs *registryConfiguration, scope string, idReader gpgIDReader) []*Policy {
-	res := []*Policy{}
+	res := make([]*Policy, 0, len(reqs))
 
 	var lookasidePath string
 	registryNamespace := registriesDConfigurationForScope(registryConfigs, scope)

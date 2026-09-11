@@ -843,8 +843,10 @@ func makeHealthCheck(inCmd string, interval int32, retries int32, timeout int32,
 		err := json.Unmarshal([]byte(inCmd), &cmd)
 		if err != nil {
 			// ...otherwise pass it to "/bin/sh -c" inside the container
-			cmd = []string{define.HealthConfigTestCmdShell}
-			cmd = append(cmd, strings.Split(inCmd, " ")...)
+			parts := strings.Split(inCmd, " ")
+			cmd = make([]string, 0, 1+len(parts))
+			cmd = append(cmd, define.HealthConfigTestCmdShell)
+			cmd = append(cmd, parts...)
 		} else {
 			cmd = append([]string{define.HealthConfigTestCmd}, cmd...)
 		}

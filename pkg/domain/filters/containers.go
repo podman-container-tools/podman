@@ -37,7 +37,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 	case "name":
 		// we only have to match one name
 		return func(c *libpod.Container) bool {
-			var filters []string
+			filters := make([]string, 0, len(filterValues))
 			for _, f := range filterValues {
 				filters = append(filters, strings.ReplaceAll(f, "/", ""))
 			}
@@ -48,7 +48,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 		for _, exitCode := range filterValues {
 			ec, err := strconv.ParseInt(exitCode, 10, 32)
 			if err != nil {
-				return nil, fmt.Errorf("exited code out of range %q: %w", ec, err)
+				return nil, fmt.Errorf("exited code invalid: %w", err)
 			}
 			exitCodes = append(exitCodes, int32(ec))
 		}
@@ -467,7 +467,7 @@ func GenerateExternalContainerFilterFuncs(filter string, filterValues []string, 
 		for _, exitCode := range filterValues {
 			ec, err := strconv.ParseInt(exitCode, 10, 32)
 			if err != nil {
-				return nil, fmt.Errorf("exited code out of range %q: %w", ec, err)
+				return nil, fmt.Errorf("exited code invalid: %w", err)
 			}
 			exitCodes = append(exitCodes, int32(ec))
 		}

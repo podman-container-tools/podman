@@ -106,7 +106,8 @@ func (r *storageService) CreateContainerStorage(ctx context.Context, systemConte
 	}
 
 	// Build the container.
-	names := []string{containerName}
+	names := make([]string, 0, 2)
+	names = append(names, containerName)
 
 	container, err := r.store.CreateContainer(containerID, names, imageID, "", string(mdata), &options)
 	if err != nil {

@@ -246,7 +246,7 @@ func (r *ConmonOCIRuntime) UpdateContainer(ctr *Container, resources *spec.Linux
 }
 
 func generateResourceFile(res *spec.LinuxResources) (string, []string, error) {
-	flags := []string{}
+	flags := make([]string, 0, 1)
 	if res == nil {
 		return "", flags, nil
 	}

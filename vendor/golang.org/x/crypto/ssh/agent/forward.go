@@ -41,6 +41,7 @@ func ForwardToAgent(client *ssh.Client, keyring Agent) error {
 				continue
 			}
 			go ssh.DiscardRequests(reqs)
+			go io.Copy(io.Discard, channel.Stderr())
 			go func() {
 				ServeAgent(keyring, channel)
 				channel.Close()
@@ -72,6 +73,7 @@ func ForwardToRemote(client *ssh.Client, addr string) error {
 				continue
 			}
 			go ssh.DiscardRequests(reqs)
+			go io.Copy(io.Discard, channel.Stderr())
 			go forwardUnixSocket(channel, addr)
 		}
 	}()

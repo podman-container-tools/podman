@@ -362,10 +362,10 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		// if no network was specified use add the default
 		if len(s.Networks) == 0 {
 			// backwards config still allow the old cni networks list and convert to new format
-			if len(s.CNINetworks) > 0 {
+			if len(s.CNINetworks) > 0 { //nolint:staticcheck // deprecated field kept for backwards compat
 				logrus.Warn(`specgen "cni_networks" option is deprecated use the "networks" map instead`)
-				networks := make(map[string]types.PerNetworkOptions, len(s.CNINetworks))
-				for _, net := range s.CNINetworks {
+				networks := make(map[string]types.PerNetworkOptions, len(s.CNINetworks)) //nolint:staticcheck // deprecated field kept for backwards compat
+				for _, net := range s.CNINetworks {                                      //nolint:staticcheck // deprecated field kept for backwards compat
 					networks[net] = types.PerNetworkOptions{}
 				}
 				s.Networks = networks

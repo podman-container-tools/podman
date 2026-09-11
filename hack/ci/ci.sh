@@ -6,7 +6,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )
 
 source "$SCRIPT_DIR/lib.sh"
 
-AUTOMATION_RELEASE="20260616t073924z" # TODO should be renovate managed
+AUTOMATION_RELEASE="20260902t121119z" # TODO should be renovate managed
 LIMA_VM_NAME=podman-ci
 
 REPO_DIR="$SCRIPT_DIR/../.."

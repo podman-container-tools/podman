@@ -50,6 +50,7 @@ import (
 	cutil "go.podman.io/common/pkg/util"
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/chrootarchive"
+	"go.podman.io/storage/pkg/directory"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idmap"
 	"go.podman.io/storage/pkg/idtools"
@@ -100,8 +101,8 @@ func (c *Container) rootFsSize() (int64, error) {
 // for a given container.
 func (c *Container) rwSize() (int64, error) {
 	if c.config.Rootfs != "" {
-		size, err := util.SizeOfPath(c.config.Rootfs)
-		return int64(size), err
+		size, err := directory.Size(c.config.Rootfs)
+		return size, err
 	}
 
 	layerSize, err := c.runtime.store.ContainerSize(c.ID())

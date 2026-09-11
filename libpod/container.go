@@ -464,7 +464,7 @@ func (c *Container) StaticDir() string {
 // The name of each is guaranteed to point to a valid libpod Volume present in
 // the state.
 func (c *Container) NamedVolumes() []*ContainerNamedVolume {
-	volumes := []*ContainerNamedVolume{}
+	volumes := make([]*ContainerNamedVolume, 0, len(c.config.NamedVolumes))
 	for _, vol := range c.config.NamedVolumes {
 		newVol := new(ContainerNamedVolume)
 		newVol.Name = vol.Name

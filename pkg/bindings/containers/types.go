@@ -239,6 +239,7 @@ type WaitOptions struct {
 	// Time interval to wait before polling for completion.
 	Interval *string
 	// Container status to wait on.
+	//
 	// Deprecated: use Conditions instead.
 	Condition []define.ContainerStatus
 }
