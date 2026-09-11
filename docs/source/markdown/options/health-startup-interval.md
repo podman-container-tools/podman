@@ -8,4 +8,4 @@
 #### **--health-startup-interval**=*interval*
 << endif >>
 
-Set an interval for the startup healthcheck. An _interval_ of **disable** results in no automatic timer setup. The default is **30s**.
+Set an interval for the startup healthcheck. An _interval_ of **disable** results in no automatic timer setup. The default is **0s**.

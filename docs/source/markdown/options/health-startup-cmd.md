@@ -13,4 +13,5 @@ healthcheck. When the startup command succeeds, the regular healthcheck begins a
 if the command fails a set number of times, the container is restarted. A startup healthcheck can be used to ensure that
 containers with an extended startup period are not marked as unhealthy until they are fully started. Startup healthchecks can only be
 used when a regular healthcheck (from the container's image or the
-<< '`HealthCmd=`' if is_quadlet else '`--health-cmd`' >> option) is also set.
+`--health-cmd` option) is also set.
+If `--health-cmd` option was set, but `--health-startup-cmd` one was missed, then value of `--health-cmd` option is used for startup health check.

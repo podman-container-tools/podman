@@ -675,10 +675,18 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		startupHCIntervalFlagName := "health-startup-interval"
 		createFlags.StringVar(
 			&cf.StartupHCInterval,
-			startupHCIntervalFlagName, define.DefaultHealthCheckInterval,
+			startupHCIntervalFlagName, define.DefaultHealthCheckStartInterval,
 			"Set an interval for the startup healthcheck. "+info,
 		)
 		_ = cmd.RegisterFlagCompletionFunc(startupHCIntervalFlagName, completion.AutocompleteNone)
+
+		startHCIntervalFlagName := "health-start-interval"
+		createFlags.StringVar(
+			&cf.StartupHCInterval,
+			startHCIntervalFlagName, define.DefaultHealthCheckStartInterval,
+			"The alias of --health-startup-interval option",
+		)
+		_ = cmd.RegisterFlagCompletionFunc(startHCIntervalFlagName, completion.AutocompleteNone)
 
 		startupHCRetriesFlagName := "health-startup-retries"
 		createFlags.UintVar(
