@@ -403,6 +403,76 @@ LISTEN_FDNAMES=listen_fdnames" | sort)
     service_cleanup
 }
 
+# Helper for the --sdnotify=healthy timeout-extension tests below.
+# Writes a Type=notify unit with a TimeoutStartSec shorter than the
+# container's time-to-healthy, starts it, and asserts that it turns active.
+#
+#  $1 - container name
+#  $2 - extra podman-run healthcheck arguments
+function _test_sdnotify_healthy_extends_timeout() {
+    local cname="$1"
+    local hc_args="$2"
+
+    local runtime=$(podman_runtime)
+    if [[ "$runtime" != "crun" ]]; then
+        skip "this test only works with crun, not $runtime"
+    fi
+
+    # The container turns healthy after ~15 seconds, past the 10-second
+    # TimeoutStartSec.
+    cat > $UNIT_FILE <<EOF
+[Unit]
+Description=Podman sdnotify=healthy test
+
+[Service]
+Type=notify
+NotifyAccess=all
+TimeoutStartSec=10
+ExecStart=$PODMAN run -d --name $cname --rm --sdnotify=healthy $hc_args \
+    $IMAGE sh -c "sleep 15; touch /ready; sleep infinity"
+ExecStop=$PODMAN stop -t0 $cname
+TimeoutStopSec=30
+EOF
+    systemctl daemon-reload
+
+    # Start must survive past TimeoutStartSec=10 and succeed once healthy.
+    systemctl_start "$SERVICE_NAME"
+
+    run systemctl show --value --property=ActiveState "$SERVICE_NAME"
+    assert "$output" = "active" "service active after container turned healthy"
+
+    run_podman healthcheck run $cname
+
+    service_cleanup
+}
+
+# https://github.com/containers/podman/issues/27290
+@test "podman --sdnotify=healthy - HealthStartPeriod larger than TimeoutStartSec" {
+    # With --sdnotify=healthy, the READY message is only sent once the
+    # container turns healthy.  Podman must extend the systemd start timeout
+    # (EXTEND_TIMEOUT_USEC) while waiting, otherwise a health-start-period
+    # larger than the unit's TimeoutStartSec= makes systemd kill the service
+    # before the container can turn healthy.
+    _test_sdnotify_healthy_extends_timeout c-$(safename) \
+        "--health-cmd \"test -f /ready\" \
+         --health-interval 2s \
+         --health-retries 1 \
+         --health-start-period 2m"
+}
+
+# https://github.com/containers/podman/issues/27290
+@test "podman --sdnotify=healthy - startup healthcheck longer than TimeoutStartSec" {
+    # Same as above, but here the time-to-healthy is dominated by a startup
+    # healthcheck while the health-start-period is short: the start timeout
+    # must keep being extended for as long as the container is "starting".
+    _test_sdnotify_healthy_extends_timeout c-$(safename) \
+        "--health-cmd \"test -f /ready\" \
+         --health-interval 2s \
+         --health-start-period 1s \
+         --health-startup-cmd \"test -f /ready\" \
+         --health-startup-interval 2s"
+}
+
 @test "podman-kube@.service template" {
     install_kube_template
     # Create the YAMl file
