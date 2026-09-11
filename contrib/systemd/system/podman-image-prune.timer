@@ -1,0 +1,10 @@
+[Unit]
+Description=Podman image prune timer
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target
