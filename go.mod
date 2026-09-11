@@ -65,9 +65,9 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
 	go.podman.io/buildah v1.45.0
-	go.podman.io/common v0.69.2-0.20260908235901-274c303c4db8
-	go.podman.io/image/v5 v5.41.2-0.20260908235901-274c303c4db8
-	go.podman.io/storage v1.64.1-0.20260908235901-274c303c4db8
+	go.podman.io/common v0.69.2-0.20260909161734-49fe7190f3ec
+	go.podman.io/image/v5 v5.41.2-0.20260909161734-49fe7190f3ec
+	go.podman.io/storage v1.64.1-0.20260909161734-49fe7190f3ec
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	golang.org/x/sync v0.23.0

@@ -13,6 +13,21 @@ const (
 	UnknownPackage = "Unknown"
 )
 
+// parseDlocateList extracts "<package>_<version>" from the output of
+// `dlocate -P <regexp> -l`, which lists one package per line in dpkg's format.
+// It reports false if the output does not have the expected shape.
+func parseDlocateList(out []byte) (string, bool) {
+	lines := strings.Split(string(out), "\n")
+	if len(lines) < 2 {
+		return "", false
+	}
+	f := strings.Fields(lines[len(lines)-2]) // the last line before the trailing newline
+	if len(f) < 3 {
+		return "", false
+	}
+	return f[1] + "_" + f[2], true
+}
+
 // Note: This function is copied from containers/podman libpod/util.go
 // Please see https://github.com/containers/common/pull/1460
 func queryPackageVersion(cmdArg ...string) string {
@@ -35,13 +50,8 @@ func queryPackageVersion(cmdArg ...string) string {
 				cmd.Env = []string{"COLUMNS=160"} // show entire value
 				// dlocate always returns exit code 1 for list command
 				if outp, _ = cmd.Output(); len(outp) > 0 {
-					lines := strings.Split(string(outp), "\n")
-					if len(lines) > 1 {
-						line := lines[len(lines)-2] // trailing newline
-						f := strings.Fields(line)
-						if len(f) >= 2 {
-							return f[1] + "_" + f[2]
-						}
+					if pkg, ok := parseDlocateList(outp); ok {
+						return pkg
 					}
 				}
 			case "/usr/bin/dpkg":

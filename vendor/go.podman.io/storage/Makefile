@@ -24,7 +24,7 @@ NATIVETAGS :=
 AUTOTAGS := $(shell ./hack/btrfs_tag.sh) $(shell ./hack/libsubid_tag.sh)
 BUILDFLAGS := -tags "$(AUTOTAGS) $(TAGS)" $(FLAGS)
 GO ?= go
-TESTFLAGS := $(shell $(GO) test -race $(BUILDFLAGS) ./pkg/stringutils 2>&1 > /dev/null && echo -race)
+TESTFLAGS ?=
 
 default all: local-binary docs local-cross ## build and cross-build\nbinaries and docs
 
@@ -56,7 +56,7 @@ docs: ## build the docs on the host
 local-test: local-binary local-test-unit local-test-integration ## build the binaries and run the tests
 
 local-test-unit test-unit: local-binary ## run the unit tests on the host (requires\nsuperuser privileges)
-	@$(GO) test -count 1 $(BUILDFLAGS) $(TESTFLAGS) ./...
+	$(GO) test -count 1 $(BUILDFLAGS) $(TESTFLAGS) ./...
 
 local-test-integration test-integration: local-binary ## run the integration tests on the host (requires\nsuperuser privileges)
 	@cd tests; ./test_runner.bash
