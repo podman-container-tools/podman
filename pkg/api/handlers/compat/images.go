@@ -389,12 +389,22 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 	cc.Hostname = info.ID[0:11] // short ID is the hostname
 	cc.Volumes = info.Config.Volumes
 
+	// Since Docker Engine API v1.44 the Created field is omitted when it is
+	// missing from the image config.
+	// Older API versions still return the zero value.
+	var created string
+	if info.Created != nil {
+		created = info.Created.Format(time.RFC3339Nano)
+	} else if _, err := apiutil.SupportedVersion(r, "<1.44.0"); err == nil {
+		created = time.Time{}.Format(time.RFC3339Nano)
+	}
+
 	dockerImageInspect := dockerImage.InspectResponse{
 		Architecture: info.Architecture,
 		Author:       info.Author,
 		Comment:      info.Comment,
 		Config:       &config,
-		Created:      l.Created().Format(time.RFC3339Nano),
+		Created:      created,
 		GraphDriver:  &graphDriver,
 		ID:           "sha256:" + l.ID(),
 		Metadata:     dockerImage.Metadata{},
