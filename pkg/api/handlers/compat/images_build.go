@@ -337,12 +337,21 @@ func processBuildContext(query url.Values, r *http.Request, buildContext *BuildC
 }
 
 // processSecrets processes build secrets for podman-remote operations.
-// Moves secrets outside build context to prevent accidental inclusion in images.
-func processSecrets(query *BuildQuery, contextDirectory string, queryValues url.Values) ([]string, error) {
+// It moves each secret out of the build context so COPY cannot pick it up,
+// into a file under the host temp directory (not the context's parent).
+// The caller must remove the returned temp files when the build finishes.
+func processSecrets(query *BuildQuery, contextDirectory string, queryValues url.Values) ([]string, []string, error) {
 	secrets := []string{}
+	relocated := []string{}
 	m := []string{}
 	if err := utils.ParseOptionalJSONField(query.Secrets, "secrets", queryValues, &m); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	cleanupRelocated := func() {
+		for _, path := range relocated {
+			os.Remove(path)
+		}
 	}
 
 	// for podman-remote all secrets must be picked from context director
@@ -357,14 +366,13 @@ func processSecrets(query *BuildQuery, contextDirectory string, queryValues url.
 					if key == "src" {
 						/* move secret away from contextDir */
 						/* to make sure we dont accidentally commit temporary secrets to image*/
-						builderDirectory, _ := filepath.Split(contextDirectory)
-						// following path is outside build context
-						newSecretPath := filepath.Join(builderDirectory, val)
 						oldSecretPath := filepath.Join(contextDirectory, val)
-						err := os.Rename(oldSecretPath, newSecretPath)
+						newSecretPath, err := relocateSecretToTemp(oldSecretPath)
 						if err != nil {
-							return nil, err
+							cleanupRelocated()
+							return nil, nil, err
 						}
+						relocated = append(relocated, newSecretPath)
 
 						modifiedSrc := fmt.Sprintf("src=%s", newSecretPath)
 						modifiedOpt = append(modifiedOpt, modifiedSrc)
@@ -376,7 +384,33 @@ func processSecrets(query *BuildQuery, contextDirectory string, queryValues url.
 			secrets = append(secrets, strings.Join(modifiedOpt, ","))
 		}
 	}
-	return secrets, nil
+	return secrets, relocated, nil
+}
+
+// relocateSecretToTemp copies the secret to a temp file and removes the original
+// from the build context. Temp dir is used instead of the context parent so
+// local-API builds do not leave plaintext next to user files (#29687).
+func relocateSecretToTemp(oldSecretPath string) (string, error) {
+	contents, err := os.ReadFile(oldSecretPath)
+	if err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(parse.GetTempDir(), "podman-build-secret-*")
+	if err != nil {
+		return "", err
+	}
+	newSecretPath := tmp.Name()
+	_, writeErr := tmp.Write(contents)
+	closeErr := tmp.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
+		os.Remove(newSecretPath)
+		return "", err
+	}
+	if err := os.Remove(oldSecretPath); err != nil {
+		os.Remove(newSecretPath)
+		return "", err
+	}
+	return newSecretPath, nil
 }
 
 // createBuildOptions creates a buildah BuildOptions struct from query parameters and build context.
@@ -413,11 +447,6 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 	dnssearch, err := utils.ParseJSONOptionalSlice(query.DNSSearch, queryValues, "dnssearch")
 	if err != nil {
 		return nil, nil, utils.GetBadRequestError("dnssearch", query.DNSSearch, err)
-	}
-
-	secrets, err := processSecrets(query, buildCtx.ContextDirectory, queryValues)
-	if err != nil {
-		return nil, nil, utils.GetBadRequestError("secrets", query.Secrets, err)
 	}
 
 	addhosts, err := utils.ParseJSONOptionalSlice(query.AddHosts, queryValues, "extrahosts")
@@ -660,6 +689,12 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 			return "", err
 		}
 		return filename, nil
+	}
+
+	secrets, secretTemps, err := processSecrets(query, buildCtx.ContextDirectory, queryValues)
+	temporaryFiles = append(temporaryFiles, secretTemps...)
+	if err != nil {
+		return nil, cleanup, utils.GetBadRequestError("secrets", query.Secrets, err)
 	}
 
 	// Process from image
