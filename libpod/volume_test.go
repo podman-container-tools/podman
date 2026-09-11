@@ -3,11 +3,14 @@
 package libpod
 
 import (
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/podman/v6/libpod/lock"
 )
 
 // Regression test for issue #27858.
@@ -127,4 +130,52 @@ func TestVolumeLocalDriverDoesNotUseVolumeDriver(t *testing.T) {
 	assert.False(t, vol.UsesVolumeDriver())
 	result := vol.mountPoint()
 	assert.Equal(t, vol.config.MountPoint, result)
+}
+
+type dummyReadCloser struct {
+	closed bool
+}
+
+func (d *dummyReadCloser) Read(_ []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (d *dummyReadCloser) Close() error {
+	d.closed = true
+	return nil
+}
+
+func TestVolumeExportReadCloserDelaysUnmount(t *testing.T) {
+	t.Parallel()
+
+	lockManager, err := lock.NewInMemoryManager(16)
+	require.NoError(t, err)
+	volLock, err := lockManager.AllocateLock()
+	require.NoError(t, err)
+
+	dummy := &dummyReadCloser{}
+	vol := &Volume{
+		config: &VolumeConfig{
+			Name:    "export-test-vol",
+			Driver:  define.VolumeDriverLocal,
+			Options: map[string]string{"type": "tmpfs"},
+		},
+		state: &VolumeState{
+			MountCount: 1,
+		},
+		lock: volLock,
+	}
+
+	wrapper := &volumeExportReadCloser{
+		ReadCloser: dummy,
+		vol:        vol,
+	}
+
+	assert.Equal(t, uint(1), vol.state.MountCount)
+	assert.False(t, dummy.closed)
+
+	closeErr := wrapper.Close()
+	assert.Error(t, closeErr)
+	assert.True(t, dummy.closed)
+	assert.Equal(t, uint(0), vol.state.MountCount)
 }
