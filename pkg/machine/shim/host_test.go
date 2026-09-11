@@ -47,6 +47,16 @@ func Test_validateDestinationPaths(t *testing.T) {
 			dest:    "/foobar",
 			wantErr: false,
 		},
+		{
+			name:    "/var/lib/containers/storage/ should fail",
+			dest:    "/var/lib/containers/storage/",
+			wantErr: true,
+		},
+		{
+			name:    "/var/lib/containers/storage should fail",
+			dest:    "/var/lib/containers/storage",
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
