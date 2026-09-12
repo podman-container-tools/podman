@@ -362,7 +362,7 @@ loop:
 				break loop
 			}
 		case '#':
-			if p.ParseComment && len(buf) == 0 && !(escaped || singleQuoted || doubleQuoted || backQuote || dollarQuote) {
+			if p.ParseComment && got == argNo && !(escaped || singleQuoted || doubleQuoted || backQuote || dollarQuote) {
 				comment = true
 				continue loop
 			}
