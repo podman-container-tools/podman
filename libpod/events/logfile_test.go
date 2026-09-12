@@ -3,9 +3,12 @@
 package events
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -171,4 +174,121 @@ func TestRenameLog(t *testing.T) {
 	require.Error(t, os.Remove(source.Name()))
 	require.NoError(t, os.Remove(target.Name()))
 	require.Equal(t, beforeRename, afterRename)
+}
+
+// writeTestEvent writes a single container event with the given name and
+// timestamp to the event log file at logPath.
+func writeTestEvent(t *testing.T, logPath string, name string, ts time.Time) {
+	t.Helper()
+	e := Event{
+		Status: Start,
+		Time:   ts,
+		Type:   Container,
+		Name:   name,
+		ID:     fmt.Sprintf("id-%s", name),
+	}
+	jsonStr, err := e.ToJSONString()
+	require.NoError(t, err)
+
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	require.NoError(t, err)
+	defer f.Close()
+	_, err = f.WriteString(jsonStr + "\n")
+	require.NoError(t, err)
+}
+
+func TestReadEventsWithPastUntil(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := tmpDir + "/events.log"
+
+	// Create three events at known timestamps.
+	now := time.Now()
+	t1 := now.Add(-30 * time.Minute)
+	t2 := now.Add(-20 * time.Minute)
+	t3 := now.Add(-10 * time.Minute)
+
+	writeTestEvent(t, logPath, "container-1", t1)
+	writeTestEvent(t, logPath, "container-2", t2)
+	writeTestEvent(t, logPath, "container-3", t3)
+
+	// Set "until" between t2 and t3 so that only container-1 and
+	// container-2 should be returned.  Critically, this until time
+	// is in the past, which used to kill the reader immediately
+	// before any events could be read.
+	untilTime := now.Add(-15 * time.Minute)
+
+	eventer := EventLogFile{
+		options: EventerOptions{
+			LogFilePath:    logPath,
+			LogFileMaxSize: 0,
+		},
+	}
+
+	ch := make(chan ReadResult, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := eventer.Read(ctx, ReadOptions{
+		EventChannel: ch,
+		FromStart:    true,
+		Stream:       false,
+		Until:        untilTime.Format(time.RFC3339Nano),
+	})
+	require.NoError(t, err)
+
+	// Collect all events from the channel.
+	var receivedNames []string
+	for result := range ch {
+		require.NoError(t, result.Error)
+		if result.Event != nil {
+			receivedNames = append(receivedNames, result.Event.Name)
+		}
+	}
+
+	// We should have received exactly the two events that fall before untilTime.
+	require.Equal(t, []string{"container-1", "container-2"}, receivedNames,
+		"should only return events before the until boundary")
+}
+
+func TestReadEventsWithUntilBeforeAllEvents(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := tmpDir + "/events.log"
+
+	now := time.Now()
+	writeTestEvent(t, logPath, "container-1", now.Add(-10*time.Minute))
+	writeTestEvent(t, logPath, "container-2", now.Add(-5*time.Minute))
+
+	// Set until to a time before all events.
+	untilTime := now.Add(-60 * time.Minute)
+
+	eventer := EventLogFile{
+		options: EventerOptions{
+			LogFilePath:    logPath,
+			LogFileMaxSize: 0,
+		},
+	}
+
+	ch := make(chan ReadResult, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := eventer.Read(ctx, ReadOptions{
+		EventChannel: ch,
+		FromStart:    true,
+		Stream:       false,
+		Until:        untilTime.Format(time.RFC3339Nano),
+	})
+	require.NoError(t, err)
+
+	// Collect results — there should be none since all events are
+	// after the until boundary.
+	var count int
+	for result := range ch {
+		require.NoError(t, result.Error)
+		if result.Event != nil {
+			count++
+		}
+	}
+
+	require.Equal(t, 0, count, "no events should be returned when until is before all events")
 }
