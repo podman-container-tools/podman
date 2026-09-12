@@ -12,6 +12,7 @@ import (
 	"go.podman.io/common/pkg/parse"
 	"go.podman.io/common/pkg/secrets"
 	"go.podman.io/podman/v6/libpod"
+	"go.podman.io/podman/v6/libpod/define"
 	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
 	"go.podman.io/storage/pkg/fileutils"
 
@@ -60,6 +61,17 @@ type KubeVolume struct {
 	ImagePullPolicy v1.PullPolicy
 	// Size limit in bytes, 0 when unset. Only used for EmptyDirTmpfs.
 	SizeLimit int64
+}
+
+// MemoryEmptyDirOptions returns the volume options for a memory-backed
+// emptyDir. These options must be used by every container that can create the
+// underlying named volume.
+func MemoryEmptyDirOptions(sizeLimit int64) []string {
+	options := []string{"volume-opt=type=" + define.TypeTmpfs}
+	if sizeLimit > 0 {
+		options = append(options, fmt.Sprintf("volume-opt=o=size=%d", sizeLimit))
+	}
+	return options
 }
 
 // Create a KubeVolume from an HostPathVolumeSource
