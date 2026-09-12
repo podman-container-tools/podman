@@ -40,11 +40,6 @@ function teardown() {
     skip_if_rootless "Quotas are only possible with root"
     skip_if_remote "Requires --root flag, not possible w/ remote"
 
-    OS_RELEASE_ID="${OS_RELEASE_ID:-$(source /etc/os-release; echo $ID)}"
-    if [[ "$OS_RELEASE_ID" == "fedora" ]]; then
-        skip "FIXME #27759: There is a selinux problem with this test"
-    fi
-
     # Minimum XFS filesystem size is 300mb
     loop=$PODMAN_TMPDIR/disk.img
     fallocate -l 300m  ${loop}
@@ -72,7 +67,12 @@ function teardown() {
 
     ctrname="testctr"
     # pull never to ensure the prefetch works correctly
-    run_podman $safe_opts run -d --pull=never --name=$ctrname -i -v $vol_one:/one -v $vol_two:/two $IMAGE top
+    # #27759: Disable SELinux labeling: custom --root (via podman_isolation_opts)
+    # places the container rootfs under /tmp which gets labeled as
+    # container_var_run_t instead of container_file_t, causing the
+    # container process (container_t) to be denied access to its own
+    # binaries. This test is about XFS quotas, not SELinux.
+    run_podman $safe_opts run -d --pull=never --security-opt label=disable --name=$ctrname -i -v $vol_one:/one -v $vol_two:/two $IMAGE top
 
     run_podman $safe_opts exec $ctrname dd if=/dev/zero of=/one/oneMB bs=1M count=1
     run_podman 1 $safe_opts exec $ctrname dd if=/dev/zero of=/one/twoMB bs=1M count=1
