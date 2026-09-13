@@ -3,12 +3,66 @@
 package machine
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"testing"
 
+	winio "github.com/Microsoft/go-winio"
 	"github.com/stretchr/testify/require"
 )
+
+func testNamedPipe(t *testing.T) (string, func() error) {
+	t.Helper()
+
+	pipeName := fmt.Sprintf("podman-machine-test-%d", os.Getpid())
+	listener, err := winio.ListenPipe(`\\.\pipe\`+pipeName, nil)
+	require.NoError(t, err)
+
+	closeConnection := make(chan struct{})
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			<-closeConnection
+			_ = conn.Close()
+		}
+	}()
+
+	return pipeName, func() error {
+		close(closeConnection)
+		return listener.Close()
+	}
+}
+
+// A stale proxy is cleaned up only when it owns the named pipe.
+func TestCleanupStaleProxy(t *testing.T) {
+	t.Run("matching PID is cleaned up", func(t *testing.T) {
+		pipeName, closePipe := testNamedPipe(t)
+
+		cleaned := false
+		err := cleanupStaleProxy(pipeName, uint32(os.Getpid()), func() error {
+			cleaned = true
+			return closePipe()
+		})
+
+		require.NoError(t, err)
+		require.True(t, cleaned)
+	})
+
+	t.Run("mismatched PID is not cleaned up", func(t *testing.T) {
+		pipeName, closePipe := testNamedPipe(t)
+		defer func() { _ = closePipe() }()
+
+		cleaned := false
+		err := cleanupStaleProxy(pipeName, uint32(os.Getpid())+1, func() error {
+			cleaned = true
+			return nil
+		})
+
+		require.ErrorContains(t, err, "refusing to terminate the process")
+		require.False(t, cleaned)
+	})
+}
 
 // CreateNewItemWithPowerShell creates a new item using PowerShell.
 // It's an helper to easily create junctions on Windows (as well as other file types).

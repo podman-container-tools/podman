@@ -17,6 +17,10 @@ import (
 
 func setGvproxyProcessAttributes(_ *exec.Cmd) {}
 
+func cleanupStaleHostForwarder(_ *vmconfigs.MachineConfig, _ vmconfigs.VMProvider) error {
+	return nil
+}
+
 func setupMachineSockets(mc *vmconfigs.MachineConfig, dirs *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
 	hostSocket, err := mc.APISocket()
 	if err != nil {
