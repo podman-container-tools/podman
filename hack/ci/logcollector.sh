@@ -57,6 +57,7 @@ packages)
         PKG_NAMES+=(
             container-selinux
             containers-common
+            conmon-v3
             libseccomp
         )
         ;;
