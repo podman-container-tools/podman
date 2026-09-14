@@ -13,7 +13,7 @@ echo "::group::Test Setup"
 
 parse_args "$@"
 
-PRESERVE_ENVS="PODMAN_CI,CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,CI_DESIRED_STORAGE,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM,CONMON_BINARY"
+PRESERVE_ENVS="PODMAN_CI,CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,CI_DESIRED_STORAGE,CI_DESIRED_CONMON,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM,CONMON_BINARY"
 # run as root or or not
 SUDO=""
 if [[ "$PRIV" == "root" ]]; then
@@ -34,7 +34,8 @@ fedora-rawhide)
     # Enable sequoia testing
     TEST_BUILD_TAGS="containers_image_sequoia"
 
-    # Use conmon-v3 by default on Rawhide (https://github.com/containers/conmon-v3)
+    # Use conmon-v3 by default on Rawhide (https://github.com/containers/conmon-v3).
+    # CI_DESIRED_CONMON is asserted by system/e2e info tests via `podman info`.
     sudo dnf install -y conmon-v3
     sudo mkdir -p /etc/containers/containers.conf.d
     sudo tee /etc/containers/containers.conf.d/90-conmon-v3.conf << EOF
@@ -43,7 +44,8 @@ conmon_path = [
   "/usr/bin/conmon-v3"
 ]
 EOF
-    export CONMON_BINARY=/usr/bin/conmon-v3
+    export CI_DESIRED_CONMON=/usr/bin/conmon-v3
+    export CONMON_BINARY=$CI_DESIRED_CONMON
     version=$("$CONMON_BINARY" --version)
     echo "$version"
     grep -qE '^conmon version 3(\.|$)' <<< "$version"
@@ -73,6 +75,10 @@ fi
 
 ## Used in tests so we need to export them
 export CI_DESIRED_STORAGE
+# CI_DESIRED_CONMON is only set on fedora-rawhide; export when present so sudo preserves it.
+if [[ -n "${CI_DESIRED_CONMON:-}" ]]; then
+    export CI_DESIRED_CONMON
+fi
 
 # Marker for the tests so they can insist the CI_DESIRED_* values are set
 # instead of silently skipping. GITHUB_ACTIONS is no use here, it is not

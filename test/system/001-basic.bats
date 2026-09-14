@@ -43,6 +43,7 @@ function setup() {
         'Arch:{{.Host.Arch}}'
         'OS:{{.Host.Distribution.Distribution}}{{.Host.Distribution.Version}}'
         'Runtime:{{.Host.OCIRuntime.Name}}'
+        'Conmon:{{.Host.Conmon.Path}}'
         'Rootless:{{.Host.Security.Rootless}}'
         'Events:{{.Host.EventLogger}}'
         'Logdriver:{{.Host.LogDriver}}'

@@ -235,6 +235,20 @@ var _ = Describe("Podman Info", func() {
 		}
 	})
 
+	It("Podman info: check desired conmon", func() {
+		// Set by hack/ci/runner.sh on fedora-rawhide.
+		want := os.Getenv("CI_DESIRED_CONMON")
+		if want == "" {
+			Skip("CI_DESIRED_CONMON is unset--OK outside Rawhide CI")
+		}
+		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.Conmon.Path}}")
+		Expect(session.OutputToString()).To(Equal(want), ".Host.Conmon.Path from podman info")
+
+		session = podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.Conmon.Version}}")
+		Expect(session.OutputToString()).To(ContainSubstring("version 3"),
+			".Host.Conmon.Version should be conmon v3: %s", session.OutputToString())
+	})
+
 	It("Podman info: check host.memAvailable is sane", func() {
 		session := podmanTest.PodmanExitCleanly("info", "--format", "{{.Host.MemTotal}} {{.Host.MemAvailable}}")
 		var total, avail int64
