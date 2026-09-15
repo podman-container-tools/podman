@@ -118,7 +118,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logrus.Warnf("The input device is not a TTY. The --tty and --interactive flags might not work properly")
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(cliVals.Authfile); err != nil {
 			return err
 		}

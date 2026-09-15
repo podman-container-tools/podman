@@ -12,6 +12,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/errorhandling"
 )
@@ -38,7 +39,7 @@ var (
 		RunE:              autoUpdate,
 		ValidArgsFunction: completion.AutocompleteNone,
 		Example: `podman auto-update
-podman auto-update --authfile ~/authfile.json`,
+podman auto-update --auth-file ~/authfile.json`,
 	}
 )
 
@@ -48,8 +49,9 @@ func init() {
 	})
 
 	flags := autoUpdateCommand.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&autoUpdateOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path to the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = autoUpdateCommand.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -68,7 +70,7 @@ func autoUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("`%s` takes no arguments", cmd.CommandPath())
 	}
 
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(autoUpdateOptions.Authfile); err != nil {
 			return err
 		}

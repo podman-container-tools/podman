@@ -11,7 +11,7 @@ podman\-login - Log in to a container registry
 and password. If the registry is not specified, the first registry under [registries.search]
 from registries.conf is used. **podman login** reads in the username and password from STDIN.
 The username and password can also be set using the **username** and **password** flags.
-The path of the authentication file can be specified by the user by setting the **authfile**
+The path of the authentication file can be specified by the user by setting the **auth-file**
 flag. The default path for reading and writing credentials is **${XDG\_RUNTIME\_DIR}/containers/auth.json**.
 Podman uses existing credentials if the user does not pass in a username.
 Podman first searches for the username and password in the **${XDG\_RUNTIME\_DIR}/containers/auth.json**, if they are not valid,
@@ -82,7 +82,7 @@ To explicitly preserve credentials across reboot, you will need to specify
 the default persistent path:
 
 ```
-$ podman login --authfile ~/.config/containers/auth.json quay.io
+$ podman login --auth-file ~/.config/containers/auth.json quay.io
 Username: umohnani
 Password:
 Login Succeeded!
@@ -96,7 +96,7 @@ Login Succeeded!
 
 Add login credentials for alternate authfile path for the specified registry.
 ```
-$ podman login --authfile authdir/myauths.json quay.io
+$ podman login --auth-file authdir/myauths.json quay.io
 Username: umohnani
 Password:
 Login Succeeded!

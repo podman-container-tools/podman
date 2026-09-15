@@ -10,6 +10,7 @@ import (
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
 
@@ -33,8 +34,9 @@ func init() {
 		Parent:  manifestCmd,
 	})
 	flags := inspectCmd.Flags()
+	flags.SetNormalizeFunc(utils.AliasFlags)
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&inspectOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = inspectCmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 	flags.BoolP("verbose", "v", false, "Added for Docker compatibility")
@@ -45,7 +47,7 @@ func init() {
 }
 
 func inspect(cmd *cobra.Command, args []string) error {
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(inspectOptions.Authfile); err != nil {
 			return err
 		}

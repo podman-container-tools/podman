@@ -52,7 +52,7 @@ func init() {
 	flags.BoolVarP(&manifestPushOpts.Rm, "purge", "p", false, "remove the local manifest list after push")
 	_ = flags.MarkHidden("purge")
 
-	authfileFlagName := "authfile"
+	authfileFlagName := "auth-file"
 	flags.StringVar(&manifestPushOpts.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = pushCmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
@@ -109,7 +109,7 @@ func init() {
 }
 
 func push(cmd *cobra.Command, args []string) error {
-	if cmd.Flags().Changed("authfile") {
+	if cmd.Flags().Changed("auth-file") {
 		if err := auth.CheckAuthFile(manifestPushOpts.Authfile); err != nil {
 			return err
 		}

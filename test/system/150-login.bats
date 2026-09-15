@@ -53,7 +53,7 @@ function setup() {
 
     registry=localhost:${PODMAN_LOGIN_REGISTRY_PORT}
 
-    run_podman login --authfile=$authfile \
+    run_podman login --auth-file=$authfile \
         --tls-verify=false \
         --username ${PODMAN_LOGIN_USER} \
         --password ${PODMAN_LOGIN_PASS} \
@@ -73,11 +73,30 @@ function setup() {
 
 
     # Now log out and make sure credentials are removed
-    run_podman logout --authfile=$authfile $registry
+    run_podman logout --auth-file=$authfile $registry
 
     run jq -r '.auths' <$authfile
     is "$status" "0" "jq from $authfile"
     is "$output" "{}" "credentials removed from $authfile"
+}
+
+@test "podman login - --authfile is accepted as alias for --auth-file" {
+    authfile=${PODMAN_LOGIN_WORKDIR}/auth-$(random_string 10).json
+    rm -f $authfile
+
+    registry=localhost:${PODMAN_LOGIN_REGISTRY_PORT}
+
+    # Verify that the old --authfile form still works as a backwards-compatible alias
+    run_podman login --authfile=$authfile \
+        --tls-verify=false \
+        --username ${PODMAN_LOGIN_USER} \
+        --password ${PODMAN_LOGIN_PASS} \
+        $registry
+
+    test -e $authfile || \
+        die "podman login --authfile alias did not create authfile $authfile"
+
+    run_podman logout --authfile=$authfile $registry
 }
 
 @test "podman login inconsistent authfiles" {
@@ -141,7 +160,7 @@ function setup() {
 }
 EOF
 
-    run_podman 125 push --authfile=$authfile \
+    run_podman 125 push --auth-file=$authfile \
         --tls-verify=false $IMAGE \
         localhost:${PODMAN_LOGIN_REGISTRY_PORT}/badpush:1
     is "$output" ".* checking whether a blob .* exists in localhost:${PODMAN_LOGIN_REGISTRY_PORT}/badpush: authentication required" \
@@ -333,14 +352,14 @@ function _test_skopeo_credential_sharing() {
     run_podman login --tls-verify=false \
                --username ${PODMAN_LOGIN_USER} \
                --password-stdin \
-               --authfile=$authfile \
+               --auth-file=$authfile \
                localhost:${PODMAN_LOGIN_REGISTRY_PORT} <<<"${PODMAN_LOGIN_PASS}"
     is "$output" "Login Succeeded!" "output from podman login"
 
     image1="localhost:${PODMAN_LOGIN_REGISTRY_PORT}/test:1.0"
 
     run_podman tag $IMAGE $image1
-    run_podman push --authfile=$authfile \
+    run_podman push --auth-file=$authfile \
         --tls-verify=false $mid \
         $image1
     run_podman rmi $image1
@@ -348,7 +367,7 @@ function _test_skopeo_credential_sharing() {
     run_podman images $IMAGE --format {{.ID}}
     local podman_image_id=$output
 
-    run_podman pull -q --retry 4 --retry-delay "0s" --authfile=$authfile \
+    run_podman pull -q --retry 4 --retry-delay "0s" --auth-file=$authfile \
         --tls-verify=false $image1
     assert "${output:0:12}" = "$podman_image_id" "First pull (before stopping registry)"
     run_podman rmi $image1
@@ -357,7 +376,7 @@ function _test_skopeo_credential_sharing() {
     pause_registry
     # ...then, in eight seconds, we start it again
     (sleep 8; unpause_registry) &
-    run_podman 0+w pull -q --retry 4 --retry-delay "5s" --authfile=$authfile \
+    run_podman 0+w pull -q --retry 4 --retry-delay "5s" --auth-file=$authfile \
             --tls-verify=false $image1
     assert "$output" =~ "Failed, retrying in 5s.*Error: initializing.* connection refused"
     assert "${lines[-1]:0:12}" = "$podman_image_id" "push should succeed via retry"
