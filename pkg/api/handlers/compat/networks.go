@@ -5,6 +5,7 @@ package compat
 import (
 	"errors"
 	"fmt"
+	"math/bits"
 	"net"
 	"net/http"
 	"net/netip"
@@ -22,6 +23,100 @@ import (
 	dockerNetwork "github.com/moby/moby/api/types/network"
 	"github.com/sirupsen/logrus"
 )
+
+// leaseRangeToDockerIPRange maps a Libpod LeaseRange back to the Docker IPAM
+// IPRange it was derived from, or the zero Prefix when the range is not exactly
+// the usable span of a CIDR.
+//
+// CreateNetwork builds the lease range with FirstIPInSubnet/LastIPInSubnet, so
+// StartIP is the network address plus one and EndIP is the broadcast address.
+// XORing the network address with EndIP yields the host mask, which identifies
+// the prefix length in a single step; requiring that mask to be a run of
+// trailing ones, and the network address to be aligned to it, is what rejects
+// partial ranges such as 10.0.0.5-10.0.0.99.
+func leaseRangeToDockerIPRange(lr *nettypes.LeaseRange) netip.Prefix {
+	if lr == nil || lr.StartIP == nil || lr.EndIP == nil {
+		return netip.Prefix{}
+	}
+
+	start, ok := netip.AddrFromSlice(lr.StartIP)
+	if !ok {
+		return netip.Prefix{}
+	}
+	end, ok := netip.AddrFromSlice(lr.EndIP)
+	if !ok {
+		return netip.Prefix{}
+	}
+
+	// Collapse 4-in-6 so both addresses agree on a family and bit length.
+	start = start.Unmap()
+	end = end.Unmap()
+	if start.Is4() != end.Is4() {
+		return netip.Prefix{}
+	}
+	bitLen := start.BitLen()
+
+	// A single-address range is a host route; there is no network address below it.
+	if start == end {
+		return netip.PrefixFrom(start, bitLen)
+	}
+	if start.Compare(end) > 0 {
+		return netip.Prefix{}
+	}
+
+	network := start.Prev()
+	if !network.IsValid() {
+		// start was the all-zero address, so no network address precedes it.
+		return netip.Prefix{}
+	}
+
+	netBytes := network.AsSlice()
+	endBytes := end.AsSlice()
+
+	host := make([]byte, len(netBytes))
+	for i := range netBytes {
+		host[i] = netBytes[i] ^ endBytes[i]
+	}
+
+	hostBits, ok := trailingOnes(host)
+	if !ok {
+		return netip.Prefix{}
+	}
+
+	// The network address must have every host bit clear, which also confirms the
+	// prefix bytes of both ends match.
+	for i := range netBytes {
+		if netBytes[i]&host[i] != 0 {
+			return netip.Prefix{}
+		}
+	}
+
+	return netip.PrefixFrom(network, bitLen-hostBits)
+}
+
+// trailingOnes counts the trailing one bits of mask and reports whether mask is
+// a contiguous run of them, i.e. of the form 0...01...1.
+func trailingOnes(mask []byte) (int, bool) {
+	count := 0
+	i := len(mask) - 1
+	for i >= 0 && mask[i] == 0xff {
+		count += 8
+		i--
+	}
+	if i >= 0 {
+		ones := bits.TrailingZeros8(^mask[i])
+		if mask[i] != byte(1<<ones)-1 {
+			return 0, false
+		}
+		count += ones
+		for j := i - 1; j >= 0; j-- {
+			if mask[j] != 0 {
+				return 0, false
+			}
+		}
+	}
+	return count, true
+}
 
 func normalizeNetworkName(rt *libpod.Runtime, name string) (string, bool) {
 	if name == nettypes.BridgeNetworkDriver {
@@ -121,7 +216,7 @@ func convertLibpodNetworktoDockerNetwork(runtime *libpod.Runtime, statuses []abi
 		ipamConfig := dockerNetwork.IPAMConfig{
 			Subnet:  subnet,
 			Gateway: gateway,
-			// TODO add range
+			IPRange: leaseRangeToDockerIPRange(sub.LeaseRange),
 		}
 		ipamConfigs = append(ipamConfigs, ipamConfig)
 	}
