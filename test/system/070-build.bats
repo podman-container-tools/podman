@@ -1346,3 +1346,40 @@ EOF
 }
 
 # vim: filetype=sh
+
+@test "podman build --output type=local" {
+    tmpdir=$PODMAN_TMPDIR/build-output
+    mkdir -p $tmpdir/build
+
+    cat >$tmpdir/build/Containerfile <<EOF
+FROM $IMAGE
+RUN echo "hello from output" > /testfile.txt
+EOF
+    imgname="b-$(safename)"
+    run_podman build -t $imgname -f $tmpdir/build/Containerfile --output type=local,dest=$tmpdir/output $tmpdir/build
+    assert "$output" =~ "COMMIT" "build output should contain COMMIT"
+
+    # Verify the rootfs was extracted
+    test -d "$tmpdir/output"
+    test -f "$tmpdir/output/testfile.txt"
+    is "$(< $tmpdir/output/testfile.txt)" "hello from output" "file content from build output"
+    run_podman rmi -f $imgname
+}
+
+@test "podman build --output type=tar" {
+    tmpdir=$PODMAN_TMPDIR/build-output-tar
+    mkdir -p $tmpdir/build
+
+    cat >$tmpdir/build/Containerfile <<EOF
+FROM $IMAGE
+RUN echo "hello tar" > /tartest.txt
+EOF
+    imgname="b-$(safename)"
+    run_podman build -t $imgname -f $tmpdir/build/Containerfile --output type=tar,dest=$tmpdir/output.tar $tmpdir/build
+
+    # Verify the tar file exists and contains our file
+    test -f "$tmpdir/output.tar"
+    run tar tf $tmpdir/output.tar
+    assert "$output" =~ "tartest.txt" "tar should contain tartest.txt"
+    run_podman rmi -f $imgname
+}

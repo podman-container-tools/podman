@@ -19,6 +19,7 @@ import (
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
+	"go.podman.io/buildah/copier"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/pkg/ssh"
 	"go.podman.io/image/v5/manifest"
@@ -43,6 +44,7 @@ import (
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chrootarchive"
 	"go.podman.io/storage/pkg/idtools"
+	"go.podman.io/storage/pkg/unshare"
 )
 
 // Commit
@@ -251,6 +253,44 @@ func ExportImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rdr.Close()
 	utils.WriteResponse(w, http.StatusOK, rdr)
+}
+
+func ExportImageRootfs(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	name := utils.GetName(r)
+
+	image, _, err := runtime.LibimageRuntime().LookupImage(name, nil)
+	if err != nil {
+		utils.ImageNotFound(w, name, err)
+		return
+	}
+
+	ctx := r.Context()
+	mountPoint, err := image.Mount(ctx, nil, "")
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+	defer func() {
+		if err := image.Unmount(false); err != nil {
+			logrus.Errorf("failed to unmount image %s: %v", image.ID(), err)
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/x-tar")
+	w.WriteHeader(http.StatusOK)
+
+	getOptions := copier.GetOptions{}
+	if unshare.IsRootless() {
+		getOptions.StripSetuidBit = true
+		getOptions.StripSetgidBit = true
+		getOptions.StripXattrs = true
+	}
+
+	err = copier.Get(mountPoint, mountPoint, getOptions, []string{"."}, w)
+	if err != nil {
+		logrus.Errorf("failed to stream image rootfs to client: %v", err)
+	}
 }
 
 func ExportImages(w http.ResponseWriter, r *http.Request) {
