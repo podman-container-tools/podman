@@ -10,8 +10,36 @@ import (
 	"go.podman.io/image/v5/types"
 )
 
-// This file is named reader.go for consistency with other transports’
-// handling of “image containers”, but we don’t actually need a stateful reader object.
+// Reader manages an OCI layout.
+//
+// Many users don’t need this and can use NewReference… to the directory directly.
+type Reader struct {
+	root *os.Root
+}
+
+// NewReaderWithRoot creates a Reader where all ImageSource operations are restricted to the given root.
+//
+// The root must not be closed as long as references created by this Reader exist.
+func NewReaderWithRoot(root *os.Root) *Reader {
+	return &Reader{root: root}
+}
+
+// NewReference returns an OCI reference for a directory and an optional image name annotation (if not "").
+//
+// dir must match Reader’s root (as determined by root.Name()). This may be relaxed in the future.
+func (r *Reader) NewReference(dir, image string) (types.ImageReference, error) {
+	return newReference(dir, image, -1, r)
+}
+
+// NewIndexReference returns an OCI reference for a directory and a zero-based source manifest index.
+//
+// dir must match Reader’s root (as determined by root.Name()). This may be relaxed in the future.
+func (r *Reader) NewIndexReference(dir string, sourceIndex int) (types.ImageReference, error) {
+	if sourceIndex < 0 {
+		return nil, fmt.Errorf("invalid call to NewIndexReference with negative index %d", sourceIndex)
+	}
+	return newReference(dir, "", sourceIndex, r)
+}
 
 // ListResult wraps the image reference and the manifest for loading
 type ListResult struct {
@@ -38,7 +66,7 @@ func List(dir string) ([]ListResult, error) {
 		if refName == "" {
 			index = manifestIndex
 		}
-		ref, err := newReference(dir, refName, index)
+		ref, err := newReference(dir, refName, index, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating image reference: %w", err)
 		}

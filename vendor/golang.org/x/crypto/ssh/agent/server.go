@@ -246,10 +246,10 @@ func setConstraints(key *AddedKey, constraintBytes []byte) error {
 // on arbitrary inputs; the CRT coefficient recomputation is cubic in
 // |p| and can consume excessive CPU on oversized keys.
 func checkRSAKeyParams(N, E, P, Q *big.Int) error {
-	if N.BitLen() > 8192 {
+	if N.BitLen() > 16384 {
 		return errors.New("agent: RSA modulus too large")
 	}
-	if P.BitLen() > 4096 || Q.BitLen() > 4096 {
+	if P.BitLen() > 8192 || Q.BitLen() > 8192 {
 		return errors.New("agent: RSA prime too large")
 	}
 	if E.BitLen() > 24 {
@@ -304,19 +304,60 @@ func parseEd25519Key(req []byte) (*AddedKey, error) {
 	return addedKey, nil
 }
 
+func checkDSAParams(param *dsa.Parameters) error {
+	// SSH specifies FIPS 186-2, which only provided a single size
+	// (1024 bits) DSA key. FIPS 186-3 allows for larger key
+	// sizes, which would confuse SSH.
+	if l := param.P.BitLen(); l != 1024 {
+		return fmt.Errorf("ssh: unsupported DSA key size %d", l)
+	}
+
+	// FIPS 186-2 specifies that Q must be exactly 160 bits. We must enforce
+	// this to prevent DoS attacks where an attacker sends a huge Q which makes
+	// verification slow.
+	if l := param.Q.BitLen(); l != 160 {
+		return fmt.Errorf("ssh: unsupported DSA sub-prime size %d", l)
+	}
+
+	// The generator G is an element of the group, so it must be strictly less
+	// than the modulus P.
+	if param.G.Cmp(param.P) >= 0 {
+		return errors.New("ssh: DSA generator larger than modulus")
+	}
+
+	// G must be positive.
+	if param.G.Sign() <= 0 {
+		return errors.New("ssh: DSA generator must be positive")
+	}
+
+	return nil
+}
+
 func parseDSAKey(req []byte) (*AddedKey, error) {
 	var k dsaKeyMsg
 	if err := ssh.Unmarshal(req, &k); err != nil {
 		return nil, err
 	}
+	params := dsa.Parameters{
+		P: k.P,
+		Q: k.Q,
+		G: k.G,
+	}
+	if err := checkDSAParams(&params); err != nil {
+		return nil, err
+	}
+
+	// The public value Y must be a non-zero element of the group, i.e. strictly
+	// between 0 and P, to prevent a maliciously oversized Y from slowing
+	// signature operations.
+	if k.Y.Sign() <= 0 || k.Y.Cmp(k.P) >= 0 {
+		return nil, errors.New("agent: DSA public value Y out of range")
+	}
+
 	priv := &dsa.PrivateKey{
 		PublicKey: dsa.PublicKey{
-			Parameters: dsa.Parameters{
-				P: k.P,
-				Q: k.Q,
-				G: k.G,
-			},
-			Y: k.Y,
+			Parameters: params,
+			Y:          k.Y,
 		},
 		X: k.X,
 	}

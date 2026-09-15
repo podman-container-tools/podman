@@ -167,7 +167,7 @@ func (p *NotifyProxy) listen() {
 					}
 					for _, fd := range fds {
 						if err := unix.Close(fd); err != nil {
-							logrus.Errorf("closing fd passed on socket %q: %v", fd, err)
+							logrus.Errorf("closing fd passed on socket %d: %v", fd, err)
 							continue
 						}
 					}

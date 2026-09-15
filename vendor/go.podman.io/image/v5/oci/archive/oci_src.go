@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 
 	digest "github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -13,8 +15,10 @@ import (
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
+	"go.podman.io/image/v5/internal/tmpdir"
 	ocilayout "go.podman.io/image/v5/oci/layout"
 	"go.podman.io/image/v5/types"
+	"go.podman.io/storage/pkg/archive"
 )
 
 // ImageNotFoundError is used when the OCI structure, in principle, exists and seems valid enough,
@@ -43,34 +47,34 @@ func (e ArchiveFileNotFoundError) Error() string {
 type ociArchiveImageSource struct {
 	impl.Compat
 
-	ref         ociArchiveReference
-	unpackedSrc private.ImageSource
-	tempDirRef  tempDirOCIRef
+	ref             ociArchiveReference
+	unpackedSrc     private.ImageSource
+	unpackedArchive *unpackedArchive
 }
 
 // newImageSource returns an ImageSource for reading from an existing directory.
 // newImageSource untars the file and saves it in a temp directory
 func newImageSource(ctx context.Context, sys *types.SystemContext, ref ociArchiveReference) (private.ImageSource, error) {
-	tempDirRef, err := createUntarTempDir(sys, ref)
+	unpackedArchive, err := unpackArchive(sys, ref)
 	if err != nil {
 		return nil, fmt.Errorf("creating temp directory: %w", err)
 	}
 
-	unpackedSrc, err := tempDirRef.ociRefExtracted.NewImageSource(ctx, sys)
+	unpackedSrc, err := unpackedArchive.ociRefExtracted.NewImageSource(ctx, sys)
 	if err != nil {
 		var notFound ocilayout.ImageNotFoundError
 		if errors.As(err, &notFound) {
 			err = ImageNotFoundError{ref: ref}
 		}
-		if err := tempDirRef.deleteTempDir(); err != nil {
-			return nil, fmt.Errorf("deleting temp directory %q: %w", tempDirRef.tempDirectory, err)
+		if err := unpackedArchive.Close(); err != nil {
+			return nil, fmt.Errorf("deleting temp directory %q: %w", unpackedArchive.tempDirectory, err)
 		}
 		return nil, err
 	}
 	s := &ociArchiveImageSource{
-		ref:         ref,
-		unpackedSrc: imagesource.FromPublic(unpackedSrc),
-		tempDirRef:  tempDirRef,
+		ref:             ref,
+		unpackedSrc:     imagesource.FromPublic(unpackedSrc),
+		unpackedArchive: unpackedArchive,
 	}
 	s.Compat = impl.AddCompat(s)
 	return s, nil
@@ -88,16 +92,16 @@ func LoadManifestDescriptorWithContext(sys *types.SystemContext, imgRef types.Im
 	if !ok {
 		return imgspecv1.Descriptor{}, errors.New("error typecasting, need type ociArchiveReference")
 	}
-	tempDirRef, err := createUntarTempDir(sys, ociArchRef)
+	unpacked, err := unpackArchive(sys, ociArchRef)
 	if err != nil {
 		return imgspecv1.Descriptor{}, fmt.Errorf("creating temp directory: %w", err)
 	}
 	defer func() {
-		err := tempDirRef.deleteTempDir()
+		err := unpacked.Close()
 		logrus.Debugf("Error deleting temporary directory: %v", err)
 	}()
 
-	descriptor, err := ocilayout.LoadManifestDescriptor(tempDirRef.ociRefExtracted)
+	descriptor, err := ocilayout.LoadManifestDescriptor(unpacked.ociRefExtracted)
 	if err != nil {
 		return imgspecv1.Descriptor{}, fmt.Errorf("loading index: %w", err)
 	}
@@ -113,7 +117,7 @@ func (s *ociArchiveImageSource) Reference() types.ImageReference {
 // Close deletes the temporary directory at dst
 func (s *ociArchiveImageSource) Close() error {
 	defer func() {
-		err := s.tempDirRef.deleteTempDir()
+		err := s.unpackedArchive.Close()
 		logrus.Debugf("error deleting tmp dir: %v", err)
 	}()
 	return s.unpackedSrc.Close()
@@ -173,4 +177,77 @@ func (s *ociArchiveImageSource) GetSignaturesWithFormat(ctx context.Context, ins
 // WARNING: The list may contain duplicates, and they are semantically relevant.
 func (s *ociArchiveImageSource) LayerInfosForCopy(ctx context.Context, instanceDigest *digest.Digest) ([]types.BlobInfo, error) {
 	return s.unpackedSrc.LayerInfosForCopy(ctx, instanceDigest)
+}
+
+// unpackedArchive owns a temporary directory with extracted contents of an archive
+type unpackedArchive struct {
+	tempDirectory   string // May contain escaping symlinks, so it SHOULD NOT be used for direct filesystem accesses. Use root instead.
+	root            *os.Root
+	ociRefExtracted types.ImageReference
+}
+
+// Close deletes the temporary directory and releases other state.
+func (t *unpackedArchive) Close() (retErr error) {
+	if err := t.root.Close(); err != nil {
+		defer func() {
+			if retErr == nil {
+				retErr = err
+			}
+		}()
+	}
+	return os.RemoveAll(t.tempDirectory)
+}
+
+// unpackArchive sets up a temporary directory with extracted contents of the archive containing ref.
+// The caller must call unpackedArchive.Close() to delete the temporary directory and release state.
+func unpackArchive(sys *types.SystemContext, ref ociArchiveReference) (*unpackedArchive, error) {
+	src := ref.resolvedFile
+	arch, err := os.Open(src)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, ArchiveFileNotFoundError{ref: ref, path: src}
+		} else {
+			return nil, err
+		}
+	}
+	defer arch.Close()
+
+	tempDir, err := tmpdir.MkDirBigFileTemp(sys, "oci")
+	if err != nil {
+		return nil, fmt.Errorf("creating temp directory: %w", err)
+	}
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			os.RemoveAll(tempDir)
+		}
+	}()
+
+	root, err := os.OpenRoot(tempDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if !succeeded {
+			root.Close()
+		}
+	}()
+
+	reader := ocilayout.NewReaderWithRoot(root)
+	ociRef, err := reader.NewReference(tempDir, ref.image)
+	if err != nil {
+		return nil, fmt.Errorf("creating oci reference: %w", err)
+	}
+
+	// TODO: This can take quite some time, and should ideally be cancellable using a context.Context.
+	if err := archive.NewDefaultArchiver().Untar(arch, tempDir, &archive.TarOptions{NoLchown: true}); err != nil {
+		return nil, fmt.Errorf("untarring file %q: %w", tempDir, err)
+	}
+
+	succeeded = true
+	return &unpackedArchive{
+		tempDirectory:   tempDir,
+		root:            root,
+		ociRefExtracted: ociRef,
+	}, nil
 }

@@ -123,9 +123,11 @@ func localhostSSHCopy(opts *cpOptions) error {
 		destPath = username + destPath
 	}
 
-	args := []string{"-r", "-i", sshConfig.IdentityPath, "-P", strconv.Itoa(sshConfig.Port)}
-	args = append(args, machine.LocalhostSSHArgs()...) // Warning: This MUST NOT be generalized to allow communication over untrusted networks.
-	args = append(args, []string{srcPath, destPath}...)
+	sshArgs := machine.LocalhostSSHArgs()
+	args := make([]string, 0, 7+len(sshArgs))
+	args = append(args, "-r", "-i", sshConfig.IdentityPath, "-P", strconv.Itoa(sshConfig.Port))
+	args = append(args, sshArgs...) // Warning: This MUST NOT be generalized to allow communication over untrusted networks.
+	args = append(args, srcPath, destPath)
 
 	cmd := exec.Command("scp", args...)
 	if !opts.Quiet {

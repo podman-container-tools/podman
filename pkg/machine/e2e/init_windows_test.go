@@ -27,15 +27,8 @@ var _ = Describe("podman machine init - windows only", func() {
 		Expect(session).To(Exit(0))
 
 		defer func() {
-			_, err := runWslCommand([]string{"--terminate", "podman-net-usermode"})
-			if err != nil {
-				fmt.Println("unable to terminate podman-net-usermode")
-			}
-
-			_, err = runWslCommand([]string{"--unregister", "podman-net-usermode"})
-			if err != nil {
-				fmt.Println("unable to unregister podman-net-usermode")
-			}
+			runWslCommand([]string{"--terminate", "podman-net-usermode"})
+			runWslCommand([]string{"--unregister", "podman-net-usermode"})
 		}()
 
 		inspect := new(inspectMachine)
@@ -105,20 +98,15 @@ var _ = Describe("podman machine init - windows only", func() {
 		// a vm outside the context of podman-machine and also
 		// so we dont have to download a distribution from microsoft
 		// servers
-		exportSession, err := runWslCommand([]string{"--export", "podman-foobarexport", exportedPath})
-		Expect(err).ToNot(HaveOccurred())
+		exportSession := runWslCommand([]string{"--export", "podman-foobarexport", exportedPath})
 		Expect(exportSession).To(Exit(0))
 
 		// importing the machine and creating a vm
-		importSession, err := runWslCommand([]string{"--import", distName, distrDir, exportedPath})
-		Expect(err).ToNot(HaveOccurred())
+		importSession := runWslCommand([]string{"--import", distName, distrDir, exportedPath})
 		Expect(importSession).To(Exit(0))
 
 		defer func() {
-			_, err := runWslCommand([]string{"--unregister", distName})
-			if err != nil {
-				fmt.Println("unable to remove bogus wsl instance")
-			}
+			runWslCommand([]string{"--unregister", distName})
 		}()
 
 		// Trying to make a vm with the same name as an existing name should result in a 125

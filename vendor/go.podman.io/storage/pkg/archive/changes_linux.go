@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
 	"unsafe"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/system"
@@ -26,12 +29,10 @@ import (
 // directly. Eliminating stat calls in this way can save up to seconds on large
 // images.
 type walker struct {
-	dir1   string
-	dir2   string
-	root1  *FileInfo
-	root2  *FileInfo
-	idmap1 *idtools.IDMappings //nolint:unused
-	idmap2 *idtools.IDMappings //nolint:unused
+	root1         *os.Root
+	root2         *os.Root
+	rootFileInfo1 *FileInfo
+	rootFileInfo2 *FileInfo
 }
 
 // collectFileInfoForChanges returns a complete representation of the trees
@@ -41,66 +42,83 @@ type walker struct {
 // to generating a list of changes between the two directories, as it does not
 // reflect the full contents.
 func collectFileInfoForChanges(dir1, dir2 string, idmap1, idmap2 *idtools.IDMappings) (*FileInfo, *FileInfo, error) {
+	// WARNING: This is called in contexts where the contents of dir2 may be maliciously
+	// concurrently modified.
+
+	root1, err := os.OpenRoot(dir1)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer root1.Close()
+	root2, err := os.OpenRoot(dir2)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer root2.Close()
+
 	w := &walker{
-		dir1:  dir1,
-		dir2:  dir2,
-		root1: newRootFileInfo(idmap1),
-		root2: newRootFileInfo(idmap2),
+		root1:         root1,
+		root2:         root2,
+		rootFileInfo1: newRootFileInfo(idmap1),
+		rootFileInfo2: newRootFileInfo(idmap2),
 	}
 
-	i1, err := os.Lstat(w.dir1)
+	i1, err := root1.Lstat(".")
 	if err != nil {
 		return nil, nil, err
 	}
-	i2, err := os.Lstat(w.dir2)
+	i2, err := root2.Lstat(".")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := w.walk("/", i1, i2); err != nil {
+	if err := w.walk(".", i1, i2); err != nil {
 		return nil, nil, err
 	}
 
-	return w.root1, w.root2, nil
+	return w.rootFileInfo1, w.rootFileInfo2, nil
 }
 
 // Given a FileInfo, its path info, and a reference to the root of the tree
 // being constructed, register this file with the tree.
-func walkchunk(path string, fi os.FileInfo, dir string, root *FileInfo) error {
+func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) error {
+	// WARNING: This is called in contexts where the contents of root may be maliciously
+	// concurrently modified.
+
 	if fi == nil {
 		return nil
 	}
-	parent := root.LookUp(filepath.Dir(path))
+	filepathPath := filepath.FromSlash("/" + fsPath) // This is never called with fsPath == ".", so blindly prepending "/" is safe.
+	parent := rootFI.LookUp(filepath.Dir(filepathPath))
 	if parent == nil {
-		return fmt.Errorf("walkchunk: Unexpectedly no parent for %s", path)
+		return fmt.Errorf("walkchunk: Unexpectedly no parent for %s", filepathPath)
 	}
 	info := &FileInfo{
-		name:       filepath.Base(path),
+		name:       filepath.Base(filepathPath),
 		children:   make(map[string]*FileInfo),
 		parent:     parent,
-		idMappings: root.idMappings,
+		idMappings: rootFI.idMappings,
 		target:     "",
 	}
-	cpath := filepath.Join(dir, path)
 	stat, err := system.FromStatT(fi.Sys().(*syscall.Stat_t))
 	if err != nil {
 		return err
 	}
 	info.stat = stat
-	info.capability, err = system.Lgetxattr(cpath, "security.capability") // lgetxattr(2): fs access
+	info.capability, err = system.RootLgetxattr(root, fsPath, "security.capability") // lgetxattr(2): fs access
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err
 	}
-	xattrs, err := system.Llistxattr(cpath)
+	xattrs, err := system.RootLlistxattr(root, fsPath)
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err
 	}
 	for _, key := range xattrs {
 		if strings.HasPrefix(key, "user.") {
-			value, err := system.Lgetxattr(cpath, key)
+			value, err := system.RootLgetxattr(root, fsPath, key)
 			if err != nil {
 				if errors.Is(err, system.E2BIG) {
-					logrus.Errorf("archive: Skipping xattr for file %s since value is too big: %s", cpath, key)
+					logrus.Errorf("archive: Skipping xattr for file %q in %q since value is too big: %s", fsPath, root.Name(), key)
 					continue
 				}
 				return err
@@ -112,7 +130,7 @@ func walkchunk(path string, fi os.FileInfo, dir string, root *FileInfo) error {
 		}
 	}
 	if fi.Mode()&os.ModeSymlink != 0 {
-		info.target, err = os.Readlink(cpath)
+		info.target, err = root.Readlink(fsPath)
 		if err != nil {
 			return err
 		}
@@ -123,14 +141,17 @@ func walkchunk(path string, fi os.FileInfo, dir string, root *FileInfo) error {
 
 // Walk a subtree rooted at the same path in both trees being iterated. For
 // example, /docker/overlay/1234/a/b/c/d and /docker/overlay/8888/a/b/c/d
-func (w *walker) walk(path string, i1, i2 os.FileInfo) (err error) {
+func (w *walker) walk(fsPath string, i1, i2 os.FileInfo) (err error) {
+	// WARNING: This is called in contexts where the contents of w.root1 or w.root2 may be maliciously
+	// concurrently modified.
+
 	// Register these nodes with the return trees, unless we're still at the
 	// (already-created) roots:
-	if path != "/" {
-		if err := walkchunk(path, i1, w.dir1, w.root1); err != nil {
+	if fsPath != "." {
+		if err := walkchunk(w.root1, fsPath, i1, w.rootFileInfo1); err != nil {
 			return err
 		}
-		if err := walkchunk(path, i2, w.dir2, w.root2); err != nil {
+		if err := walkchunk(w.root2, fsPath, i2, w.rootFileInfo2); err != nil {
 			return err
 		}
 	}
@@ -155,13 +176,13 @@ func (w *walker) walk(path string, i1, i2 os.FileInfo) (err error) {
 	// Fetch the names of all the files contained in both directories being walked:
 	var names1, names2 []nameIno
 	if is1Dir {
-		names1, err = readdirnames(filepath.Join(w.dir1, path)) // getdents(2): fs access
+		names1, err = readdirnames(w.root1, fsPath) // getdents(2): fs access
 		if err != nil {
 			return err
 		}
 	}
 	if is2Dir {
-		names2, err = readdirnames(filepath.Join(w.dir2, path)) // getdents(2): fs access
+		names2, err = readdirnames(w.root2, fsPath) // getdents(2): fs access
 		if err != nil {
 			return err
 		}
@@ -207,21 +228,21 @@ func (w *walker) walk(path string, i1, i2 os.FileInfo) (err error) {
 	// For each of the names present in either or both of the directories being
 	// iterated, stat the name under each root, and recurse the pair of them:
 	for _, name := range names {
-		fname := filepath.Join(path, name)
+		fsFname := path.Join(fsPath, name)
 		var cInfo1, cInfo2 os.FileInfo
 		if is1Dir {
-			cInfo1, err = os.Lstat(filepath.Join(w.dir1, fname)) // lstat(2): fs access
+			cInfo1, err = w.root1.Lstat(fsFname) // lstat(2): fs access
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
 		}
 		if is2Dir {
-			cInfo2, err = os.Lstat(filepath.Join(w.dir2, fname)) // lstat(2): fs access
+			cInfo2, err = w.root2.Lstat(fsFname) // lstat(2): fs access
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
 		}
-		if err = w.walk(fname, cInfo1, cInfo2); err != nil {
+		if err = w.walk(fsFname, cInfo1, cInfo2); err != nil {
 			return err
 		}
 	}
@@ -242,9 +263,9 @@ func (s nameInoSlice) Less(i, j int) bool { return s[i].name < s[j].name }
 
 // readdirnames is a hacked-apart version of the Go stdlib code, exposing inode
 // numbers further up the stack when reading directory contents. Unlike
-// os.Readdirnames, which returns a list of filenames, this function returns a
+// root.Readdirnames, which returns a list of filenames, this function returns a
 // list of {filename,inode} pairs.
-func readdirnames(dirname string) (names []nameIno, err error) {
+func readdirnames(root *os.Root, fsDirname string) (names []nameIno, err error) {
 	var (
 		size = 100
 		buf  = make([]byte, 4096)
@@ -253,7 +274,7 @@ func readdirnames(dirname string) (names []nameIno, err error) {
 		nb   int
 	)
 
-	f, err := os.Open(dirname)
+	f, err := root.Open(fsDirname)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +336,11 @@ func parseDirent(buf []byte, names []nameIno) (consumed int, newnames []nameIno)
 // OverlayChanges walks the path rw and determines changes for the files in the path,
 // with respect to the parent layers
 func OverlayChanges(layers []string, rw string) ([]Change, error) {
-	dc := func(root, path string, fi os.FileInfo) (string, error) {
-		r, err := overlayDeletedFile(layers, root, path, fi)
+	// WARNING: This is called in contexts where the contents of rw (but not layers) may be maliciously
+	// concurrently modified.
+
+	dc := func(root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
+		r, err := overlayDeletedFile(layers, root, fsPath, fi)
 		if err != nil {
 			return "", fmt.Errorf("overlay deleted file query: %w", err)
 		}
@@ -325,10 +349,14 @@ func OverlayChanges(layers []string, rw string) ([]Change, error) {
 	return changes(layers, rw, dc, nil, overlayLowerContainsWhiteout)
 }
 
-func overlayLowerContainsWhiteout(root, path string) (bool, error) {
+func overlayLowerContainsWhiteout(root, fsPath string) (bool, error) {
 	// Whiteout for a file or directory has the same name, but is for a character
 	// device with major/minor of 0/0.
-	stat, err := os.Stat(filepath.Join(root, path))
+	pathInLayer, err := securejoin.SecureJoin(root, filepath.FromSlash(fsPath))
+	if err != nil {
+		return false, err
+	}
+	stat, err := os.Lstat(pathInLayer)
 	if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
 		// Not sure what happened here.
 		return false, err
@@ -341,11 +369,11 @@ func overlayLowerContainsWhiteout(root, path string) (bool, error) {
 	return false, nil
 }
 
-func overlayDeletedFile(layers []string, root, path string, fi os.FileInfo) (string, error) {
+func overlayDeletedFile(layers []string, root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
 	// If it's a whiteout item, then a file or directory with that name is removed by this layer.
 	if fi.Mode()&os.ModeCharDevice != 0 {
 		if isWhiteOut(fi) {
-			return path, nil
+			return fsPath, nil
 		}
 	}
 	// After this we only need to pay attention to directories.
@@ -353,52 +381,85 @@ func overlayDeletedFile(layers []string, root, path string, fi os.FileInfo) (str
 		return "", nil
 	}
 	// If the directory isn't marked as opaque, then it's just a normal directory.
-	opaque, err := system.Lgetxattr(filepath.Join(root, path), getOverlayOpaqueXattrName())
+	opaque, err := system.RootLgetxattr(root, fsPath, getOverlayOpaqueXattrName())
 	if err != nil {
 		return "", fmt.Errorf("failed querying overlay opaque xattr: %w", err)
 	}
 	if len(opaque) != 1 || opaque[0] != 'y' {
 		return "", err
 	}
+	// FIXME: test coverage from here on.
 	// If there are no lower layers, then it can't have been deleted and recreated in this layer.
 	if len(layers) == 0 {
 		return "", err
 	}
 	// At this point, we have a directory that's opaque.  If it appears in one of the lower
 	// layers, then it was newly-created here, so it wasn't also deleted here.
+	filepathPath := filepath.FromSlash(fsPath)
 	for _, layer := range layers {
-		stat, err := os.Stat(filepath.Join(layer, path))
-		if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
-			// Not sure what happened here.
-			return "", err
-		}
-		if err == nil {
-			if stat.Mode()&os.ModeCharDevice != 0 {
-				if isWhiteOut(stat) {
-					return "", nil
-				}
+		// FIXME: This resolves symlinks for fsPath within layer; presumably paths with symlinks
+		// don’t participate in whiteout lookups?!
+		//
+		// For now, just use securejoin/pathrs to restrict the paths to be within the layer.
+		// (We can’t use os.Root because that one fails with an untyped error if it encounters a symlink to a parent to the root,
+		// and those symlinks are valid inside containers.)
+		// This should, almost certainly, instead do the checks for parent directories
+		// in the parent->child order, and stop if it encounters a symlink.
+		//
+		// Also seriously look at deduplicating this with overlayWhiteoutConverter.convertWriteWithGetxattr.
+		if done, ret, err := func() (bool, string, error) { // A scope for defer
+			layerRoot, err := os.Open(layer)
+			if err != nil {
+				return true, "", err
 			}
-			// It's not whiteout, so it was there in the older layer, so it has to be
-			// marked as deleted in this layer.
-			return path, nil
-		}
-		for dir := filepath.Dir(path); dir != "" && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
-			// Check for whiteout for a parent directory.
-			stat, err := os.Stat(filepath.Join(layer, dir))
-			if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
+			defer layerRoot.Close()
+
+			stat, err := pathrsStat(layerRoot, filepathPath)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 				// Not sure what happened here.
-				return "", err
+				return true, "", err
 			}
 			if err == nil {
 				if stat.Mode()&os.ModeCharDevice != 0 {
 					if isWhiteOut(stat) {
-						return "", nil
+						return true, "", nil
+					}
+				}
+				// It's not whiteout, so it was there in the older layer, so it has to be
+				// marked as deleted in this layer.
+				return true, fsPath, nil
+			}
+			for dir := filepath.Dir(filepathPath); dir != "" && dir != "."; dir = filepath.Dir(dir) {
+				// Check for whiteout for a parent directory.
+				stat, err := pathrsStat(layerRoot, dir)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+					// Not sure what happened here.
+					return true, "", err
+				}
+				if err == nil {
+					if stat.Mode()&os.ModeCharDevice != 0 {
+						if isWhiteOut(stat) {
+							return true, "", nil
+						}
 					}
 				}
 			}
+			return false, "", nil
+		}(); done {
+			return ret, err
 		}
 	}
 
 	// We didn't find the same path in any older layers, so it was new in this one.
 	return "", nil
+}
+
+// pathrsStat is os.Stat relative to root.
+func pathrsStat(root *os.File, path string) (os.FileInfo, error) {
+	fd, err := securejoin.OpenatInRoot(root, path)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	return fd.Stat()
 }

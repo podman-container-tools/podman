@@ -34,7 +34,7 @@ func (n *NamespaceOptions) Find(namespace string) *NamespaceOption {
 	for i := range *n {
 		j := len(*n) - 1 - i
 		if (*n)[j].Name == namespace {
-			return &((*n)[j])
+			return &(*n)[j]
 		}
 	}
 	return nil

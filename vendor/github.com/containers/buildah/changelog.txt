@@ -1,3 +1,65 @@
+- Changelog for v1.43.4 (2026-09-15)
+  * Bump go.podman.io/storage, go.podman.io/image/v5, and go.podman.io/common
+  * Add FIXMEs for the read path
+  * Split insecureResolvePath from resolvePath
+  * Fix root escapes in copier.Put
+  * Fix escaping symlinks in Ensure
+  * Fix symlink escapes in ConditionalRemove
+  * Remove unnecessary filepath.FromSlash
+  * Use a separate hdrErr variable for the loop condition
+  * Improve test coverage
+  * Decrease size of the test archives
+  * Remove rawhide from test matrix
+  * integration tests: set $CONTAINERS_POLICY_JSON
+  * test/conformance: update heredoc dockerfile frontend
+  * ci: install networking packages for integration tests
+  * copier.copierHandlerPut(): run each path to extract through os.Root.Lstat()
+  * linter(staticcheck): don't set deprecated fields when setting up overlay
+  * Fix a few format-specifier warnings
+  * linter(gofumpt): update formatting to pass gofumpt
+  * Update dependency golangci/golangci-lint to v2.13.2
+  * chroot.mountFlagMap: change keys from int to uintptr
+  * vendor: bump golang.org/x/crypto to v0.56.0
+  * ci: use latest AUTOMATION_RELEASE from main
+
+- Changelog for v1.43.3 (2026-08-04)
+  * Bump golang.org/x/crypto to v0.53.0
+  * conformance test cases: add a fsSkipCompatVolumesTrue field
+  * TestCommit: expect EXPOSEd ports to have the implicit "/tcp" added
+  * tests/conformance: identify ourselves as "current" clients to dockerd
+  * update golangci-lint to v2.12.2
+  * copier: fix linter warnings
+  * Address warnings from the new linter
+  * ci: also run on release branches
+  * ci: do not duplicate job names
+  * runner.sh: do not make all for integration
+  * remove hack/check_vendor_toolchain.sh
+  * Makefile: simplify go.mod go version query
+  * Makefile: add binaries target
+  * Makefile: split install.tools
+  * Makefile: run lint as part of validate
+  * Makefile: run codespell as part of validate
+  * tests/bud.bats: fix typo
+  * validate: add custom commit length check
+  * ci: check vendor in test/tools as well
+  * run make -C tests/tools vendor
+  * ci: rename smoke to validate task and run without VM
+  * ci: Use the GitHub action grouping syntax
+  * run codespell
+  * .github/workflows/ci.yml: run make vendor directly on runner
+  * .github/workflows/lima.yml: do not clone 50 commits
+  * .github/filters.yaml: remove non relevant files
+  * remove tests/validate/buildahimages-are-sane
+  * tests/NEW-IMAGES: do not pull ubi10
+  * ci: rename contrib/ci to hack/ci
+  * runner.sh: do not install packages at runtime
+  * Update automation image to 2026-06-16
+  * CI: Use -U when running apt-get to install util-linux-extra
+  * ci: install cached Docker debs for debian conformance
+  * new gha ci with lima
+  * rpm/buildah.spec tests: require xz and /usr/bin/selinuxenabled
+  * Packit/TMT: remove podman-next copr config
+
 - Changelog for v1.43.2 (2026-05-29)
   * Bump opencontainers/cgroups to v0.0.6
   * bud with ADD with git repository source integration test: go local

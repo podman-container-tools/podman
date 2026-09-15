@@ -8,7 +8,7 @@ const (
 	// VersionMinor is for functionality in a backwards-compatible manner
 	VersionMinor = 39
 	// VersionPatch is for backwards-compatible bug fixes
-	VersionPatch = 2
+	VersionPatch = 3
 
 	// VersionDev indicates development branch. Releases will be empty string.
 	VersionDev = ""

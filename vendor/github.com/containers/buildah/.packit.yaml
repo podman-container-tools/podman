@@ -49,8 +49,8 @@ jobs:
     # Fedora aliases documentation: https://packit.dev/docs/configuration#aliases
     # python3-fedora-distro-aliases provides `resolve-fedora-aliases` command
     targets: &fedora_copr_targets
-      - fedora-all-x86_64
-      - fedora-all-aarch64
+      - fedora-stable-x86_64
+      - fedora-stable-aarch64
     enable_net: true
     # Disable osh diff scan until Go support is available
     # Ref: https://github.com/openscanhub/known-false-positives/pull/30#issuecomment-2858698495
@@ -99,12 +99,7 @@ jobs:
     trigger: pull_request
     packages: [buildah-fedora]
     targets:
-      - fedora-all-x86_64
-    tf_extra_params:
-      environments:
-        - artifacts:
-          - type: repository-file
-            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
+      - fedora-stable-x86_64
 
   # Ignore until golang is updated in distro buildroot to 1.23.3+
   # Tests on CentOS Stream for main branch PRs
@@ -114,11 +109,6 @@ jobs:
     targets:
       - centos-stream-9-x86_64
       - centos-stream-10-x86_64
-    tf_extra_params:
-      environments:
-        - artifacts:
-          - type: repository-file
-            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/centos-stream-$releasever/rhcontainerbot-podman-next-centos-stream-$releasever.repo
 
   # Sync to Fedora
   - job: propose_downstream
@@ -126,7 +116,7 @@ jobs:
     packages: [buildah-fedora]
     update_release: false
     dist_git_branches: &fedora_targets
-      - fedora-all
+      - fedora-stable
 
   # Sync to CentOS Stream
   - job: propose_downstream

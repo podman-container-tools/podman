@@ -79,10 +79,8 @@ func (c *Container) Top(descriptors []string) ([]string, error) {
 		return nil, fmt.Errorf("getting jail name: %w", err)
 	}
 
-	args := []string{
-		"-J",
-		jailName,
-	}
+	args := make([]string, 0, 2+len(psDescriptors))
+	args = append(args, "-J", jailName)
 	args = append(args, psDescriptors...)
 
 	output, err := execPS(args)

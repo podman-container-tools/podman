@@ -144,8 +144,6 @@ func removePathFromRegistry(path string) error {
 		return err
 	}
 
-	// No point preallocating we can't know how big the array needs to be.
-	//nolint:prealloc
 	var elements []string
 	for element := range strings.SplitSeq(existing, ";") {
 		if strings.EqualFold(element, path) {

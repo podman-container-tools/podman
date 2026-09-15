@@ -30,6 +30,8 @@ RACEFLAGS ?= $(shell $(GO_TEST) -race ./pkg/dummy > /dev/null 2>&1 && echo -race
 COMMIT_NO ?= $(shell git rev-parse HEAD 2> /dev/null || true)
 GIT_COMMIT ?= $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
 SOURCE_DATE_EPOCH ?= $(if $(shell date +%s),$(shell date +%s),$(error "date failed"))
+EPOCH_TEST_COMMIT ?= $(shell git merge-base $${DEST_BRANCH:-main} HEAD)
+HEAD ?= HEAD
 
 # we get GNU make 3.x in MacOS build envs, which wants # to be escaped in
 # strings, while the 4.x we have on Linux doesn't. this is the documented
@@ -54,13 +56,15 @@ ifeq ($(BUILDDEBUG), 1)
 endif
 
 # Managed by renovate.
-export GOLANGCI_LINT_VERSION := 2.1.0
+export GOLANGCI_LINT_VERSION := 2.13.2
 
 #   make all BUILDDEBUG=1
 #     Note: Uses the -N -l go compiler options to disable compiler optimizations
 #           and inlining. Using these build options allows you to subsequently
 #           use source debugging tools like delve.
-all: bin/buildah bin/imgtype bin/copy bin/inet bin/tutorial bin/dumpspec bin/passwd bin/crash bin/wait docs
+all: binaries docs
+
+binaries: bin/buildah bin/imgtype bin/copy bin/inet bin/tutorial bin/dumpspec bin/passwd bin/crash bin/wait
 
 bin/buildah: $(SOURCES) internal/mkcw/embed/entrypoint_amd64.gz
 	$(GO_BUILD) $(BUILDAH_LDFLAGS) $(GO_GCFLAGS) "$(GOGCFLAGS)" -o $@ $(BUILDFLAGS) ./cmd/buildah
@@ -122,21 +126,26 @@ clean:
 	$(MAKE) -C docs clean
 
 .PHONY: docs
-docs: install.tools ## build the docs on the host
+docs: install.go-md2man ## build the docs on the host
 	$(MAKE) -C docs
 
 codespell:
 	codespell -w
 
 .PHONY: validate
-validate: install.tools
+validate: all lint codespell
 	./tests/validate/whitespace.sh
 	./hack/xref-helpmsgs-manpages
 	./tests/validate/pr-should-include-tests
+	./tests/validate/commit-subject-check.sh $(EPOCH_TEST_COMMIT)..$(HEAD)
 
-.PHONY: install.tools
-install.tools:
-	$(MAKE) -C tests/tools
+.PHONY: install.go-md2man
+install.go-md2man:
+	$(MAKE) -C tests/tools build/go-md2man
+
+.PHONY: install.golangci-lint
+install.golangci-lint:
+	$(MAKE) -C tests/tools build/golangci-lint
 
 .PHONY: install
 install:
@@ -160,7 +169,7 @@ test-conformance: tests/conformance/testdata/mount-targets/true
 	$(GO_TEST) -v -tags "$(STORAGETAGS) $(SECURITYTAGS)" -cover -timeout 60m ./tests/conformance
 
 .PHONY: test-integration
-test-integration: install.tools
+test-integration: binaries
 	cd tests; ./test_runner.sh
 
 tests/testreport/testreport: tests/testreport/testreport.go
@@ -178,7 +187,7 @@ test-unit: tests/testreport/testreport
 	$(GO_TEST) -v -tags "$(STORAGETAGS) $(SECURITYTAGS)" -cover $(RACEFLAGS) ./cmd/buildah -args --root $$tmp/root --runroot $$tmp/runroot --storage-driver vfs --signature-policy $(shell pwd)/tests/policy.json --registries-conf $(shell pwd)/tests/registries.conf
 
 vendor-in-container:
-	goversion=$(shell sed -e '/^go /!d' -e '/^go /s,.* ,,g' go.mod) ; \
+	goversion=$(shell $(GO) list -m -f {{.GoVersion}}) ; \
 	if test -d `$(GO) env GOCACHE` && test -w `$(GO) env GOCACHE` ; then \
 		podman run --privileged --rm --env HOME=/root -v `$(GO) env GOCACHE`:/root/.cache/go-build --env GOCACHE=/root/.cache/go-build -v `pwd`:/src -w /src docker.io/library/golang:$$goversion make vendor ; \
 	else \
@@ -193,9 +202,13 @@ vendor:
 	if test -n "$(strip $(shell $(GO) env GOTOOLCHAIN))"; then go mod edit -toolchain none ; fi
 
 .PHONY: lint
-lint: install.tools
+lint: install.golangci-lint
 	./tests/tools/build/golangci-lint run $(LINTFLAGS)
 	./tests/tools/build/golangci-lint run --tests=false $(LINTFLAGS)
+
+.PHONY: fmt
+fmt: install.golangci-lint
+	./tests/tools/build/golangci-lint fmt $(LINTFLAGS)
 
 # CAUTION: This is not a replacement for RPMs provided by your distro.
 # Only intended to build and test the latest unreleased changes.

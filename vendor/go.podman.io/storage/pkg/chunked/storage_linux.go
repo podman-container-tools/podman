@@ -29,6 +29,7 @@ import (
 	tsStorage "github.com/vbatts/tar-split/tar/storage"
 	storage "go.podman.io/storage"
 	graphdriver "go.podman.io/storage/drivers"
+	"go.podman.io/storage/internal/createpath"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chunked/compressor"
 	"go.podman.io/storage/pkg/chunked/internal/minimal"
@@ -1667,10 +1668,10 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 			}
 		}
 
-		r.Name = path.CleanAbsPath(r.Name)
+		r.Name = createpath.CleanAbsPath(r.Name)
 		// do not modify the value of symlinks
 		if r.Linkname != "" && t != tar.TypeSymlink {
-			r.Linkname = path.CleanAbsPath(r.Linkname)
+			r.Linkname = createpath.CleanAbsPath(r.Linkname)
 		}
 
 		if whiteoutConverter != nil {

@@ -25,7 +25,6 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/types"
-	"go.podman.io/storage/pkg/directory"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/unshare"
@@ -613,13 +612,13 @@ func getAvailableIDRanges(fullRanges, usedRanges [][2]int) (availableRanges [][2
 // multirange of unassigned subordinated ids.
 func getAvailableIDRangesFromMappings(idmap []idtools.IDMap, parentMapping []ruser.IDMap) (availableRanges [][2]int) {
 	// Get all subordinated ids from parentMapping:
-	fullRanges := [][2]int{} // {Multirange: [start, end), [start, end), ...}
+	fullRanges := make([][2]int, 0, len(parentMapping)) // {Multirange: [start, end), [start, end), ...}
 	for _, mapPiece := range parentMapping {
 		fullRanges = append(fullRanges, [2]int{int(mapPiece.ID), int(mapPiece.ID + mapPiece.Count)})
 	}
 
 	// Get the ids already mapped:
-	usedRanges := [][2]int{}
+	usedRanges := make([][2]int, 0, len(idmap))
 	for _, mapPiece := range idmap {
 		usedRanges = append(usedRanges, [2]int{mapPiece.HostID, mapPiece.HostID + mapPiece.Size})
 	}
@@ -1196,14 +1195,6 @@ func LookupUser(name string) (*user.User, error) {
 		return u, nil
 	}
 	return user.Lookup(name)
-}
-
-// SizeOfPath determines the file usage of a given path. it was called volumeSize in v1
-// and now is made to be generic and take a path instead of a libpod volume
-// Deprecated: use github.com/containers/storage/pkg/directory.Size() instead.
-func SizeOfPath(path string) (uint64, error) {
-	size, err := directory.Size(path)
-	return uint64(size), err
 }
 
 // ParseRestartPolicy parses the value given to the --restart flag and returns the policy

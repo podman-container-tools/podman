@@ -116,7 +116,7 @@ func doCopy(funcA func() error, funcB func() error) error {
 	go func() {
 		errChan <- funcA()
 	}()
-	var copyErrors []error
+	copyErrors := make([]error, 0, 2)
 	copyErrors = append(copyErrors, funcB())
 	copyErrors = append(copyErrors, <-errChan)
 	return errorhandling.JoinErrors(copyErrors)

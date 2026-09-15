@@ -16,9 +16,9 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/vbatts/tar-split/archive/tar"
 	driversCopy "go.podman.io/storage/drivers/copy"
+	"go.podman.io/storage/internal/createpath"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chunked/internal/minimal"
-	storagePath "go.podman.io/storage/pkg/chunked/internal/path"
 	"golang.org/x/sys/unix"
 )
 
@@ -50,32 +50,8 @@ type fileMetadata struct {
 	skipSetAttrs bool
 }
 
-// splitPath takes a file path as input and returns two components: dir and base.
-// Differently than filepath.Split(), this function handles some edge cases.
-// If the path refers to a file in the root directory, the returned dir is "/".
-// The returned base value is never empty, it never contains any slash and the
-// value "..".
-func splitPath(path string) (string, string, error) {
-	path = storagePath.CleanAbsPath(path)
-	dir, base := filepath.Split(path)
-	if base == "" {
-		base = "."
-	}
-	// Remove trailing slashes from dir, but make sure that "/" is preserved.
-	dir = strings.TrimSuffix(dir, "/")
-	if dir == "" {
-		dir = "/"
-	}
-
-	if strings.Contains(base, "/") {
-		// This should never happen, but be safe as the base is passed to *at syscalls.
-		return "", "", fmt.Errorf("internal error: splitPath(%q) contains a slash", path)
-	}
-	return dir, base, nil
-}
-
 func doHardLink(dirfd, srcFd int, destFile string) error {
-	destDir, destBase, err := splitPath(destFile)
+	destDir, destBase, err := createpath.SplitPath(destFile)
 	if err != nil {
 		return err
 	}
@@ -309,7 +285,7 @@ func openFileUnderRootFallback(dirfd int, name string, flags uint64, mode os.Fil
 	// If O_NOFOLLOW is specified in the flags, then resolve only the parent directory and use the
 	// last component as the path to openat().
 	if hasNoFollow {
-		dirName, baseName, err := splitPath(name)
+		dirName, baseName, err := createpath.SplitPath(name)
 		if err != nil {
 			return -1, err
 		}
@@ -480,7 +456,7 @@ func appendHole(fd int, name string, size int64) error {
 }
 
 func safeMkdir(dirfd int, mode os.FileMode, name string, metadata *fileMetadata, options *archive.TarOptions) error {
-	parent, base, err := splitPath(name)
+	parent, base, err := createpath.SplitPath(name)
 	if err != nil {
 		return err
 	}
@@ -541,7 +517,7 @@ func safeLink(dirfd int, mode os.FileMode, metadata *fileMetadata, options *arch
 }
 
 func safeSymlink(dirfd int, metadata *fileMetadata) error {
-	destDir, destBase, err := splitPath(metadata.Name)
+	destDir, destBase, err := createpath.SplitPath(metadata.Name)
 	if err != nil {
 		return err
 	}
@@ -580,7 +556,7 @@ func (d whiteoutHandler) Setxattr(path, name string, value []byte) error {
 }
 
 func (d whiteoutHandler) Mknod(path string, mode uint32, dev int) error {
-	dir, base, err := splitPath(path)
+	dir, base, err := createpath.SplitPath(path)
 	if err != nil {
 		return err
 	}

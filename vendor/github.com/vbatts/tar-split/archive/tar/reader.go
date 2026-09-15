@@ -537,7 +537,8 @@ func (tr *Reader) readOldGNUSparseMap(hdr *Header, blk *block) (sparseDatas, err
 	}
 	s := blk.GNU().Sparse()
 	spd := make(sparseDatas, 0, s.MaxEntries())
-	for {
+	totalSize := len(s)
+	for totalSize < maxSpecialFileSize {
 		for i := 0; i < s.MaxEntries(); i++ {
 			// This termination condition is identical to GNU and BSD tar.
 			if s.Entry(i).Offset()[0] == 0x00 {
@@ -548,7 +549,11 @@ func (tr *Reader) readOldGNUSparseMap(hdr *Header, blk *block) (sparseDatas, err
 			if p.err != nil {
 				return nil, p.err
 			}
-			spd = append(spd, sparseEntry{Offset: offset, Length: length})
+			var err error
+			spd, err = appendSparseEntry(spd, sparseEntry{Offset: offset, Length: length})
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if s.IsExtended()[0] > 0 {
@@ -560,10 +565,12 @@ func (tr *Reader) readOldGNUSparseMap(hdr *Header, blk *block) (sparseDatas, err
 				tr.rawBytes.Write(blk[:])
 			}
 			s = blk.Sparse()
+			totalSize += len(s)
 			continue
 		}
 		return spd, nil // Done
 	}
+	return nil, errSparseTooLong
 }
 
 // readGNUSparseMap1x0 reads the sparse map as stored in GNU's PAX sparse format
@@ -581,12 +588,17 @@ func readGNUSparseMap1x0(r io.Reader) (sparseDatas, error) {
 		cntNewline int64
 		buf        bytes.Buffer
 		blk        block
+		totalSize  int
 	)
 
 	// feedTokens copies data in blocks from r into buf until there are
 	// at least cnt newlines in buf. It will not read more blocks than needed.
 	feedTokens := func(n int64) error {
 		for cntNewline < n {
+			totalSize += len(blk)
+			if totalSize > maxSpecialFileSize {
+				return errSparseTooLong
+			}
 			if _, err := mustReadFull(r, blk[:]); err != nil {
 				return err
 			}
@@ -619,8 +631,8 @@ func readGNUSparseMap1x0(r io.Reader) (sparseDatas, error) {
 	}
 
 	// Parse for all member entries.
-	// numEntries is trusted after this since a potential attacker must have
-	// committed resources proportional to what this library used.
+	// numEntries is trusted after this since feedTokens limits the number of
+	// tokens based on maxSpecialFileSize.
 	if err := feedTokens(2 * numEntries); err != nil {
 		return nil, err
 	}
@@ -631,7 +643,10 @@ func readGNUSparseMap1x0(r io.Reader) (sparseDatas, error) {
 		if err1 != nil || err2 != nil {
 			return nil, ErrHeader
 		}
-		spd = append(spd, sparseEntry{Offset: offset, Length: length})
+		spd, err = appendSparseEntry(spd, sparseEntry{Offset: offset, Length: length})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return spd, nil
 }
@@ -665,10 +680,20 @@ func readGNUSparseMap0x1(paxHdrs map[string]string) (sparseDatas, error) {
 		if err1 != nil || err2 != nil {
 			return nil, ErrHeader
 		}
-		spd = append(spd, sparseEntry{Offset: offset, Length: length})
+		spd, err = appendSparseEntry(spd, sparseEntry{Offset: offset, Length: length})
+		if err != nil {
+			return nil, err
+		}
 		sparseMap = sparseMap[2:]
 	}
 	return spd, nil
+}
+
+func appendSparseEntry(spd sparseDatas, ent sparseEntry) (sparseDatas, error) {
+	if len(spd) >= maxSparseFileEntries {
+		return nil, errSparseTooLong
+	}
+	return append(spd, ent), nil
 }
 
 // Read reads from the current file in the tar archive.

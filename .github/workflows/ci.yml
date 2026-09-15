@@ -199,7 +199,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [fedora-current, fedora-prior, fedora-rawhide, debian-sid]
+        distro: [fedora-current, fedora-prior, debian-sid]
     uses: ./.github/workflows/lima.yml
     with:
       runner: cncf-ubuntu-8-32-x86

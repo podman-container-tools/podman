@@ -511,6 +511,7 @@ type ContainerNetworkConfig struct {
 	// default network (unless it is part of this list).
 	// Only available if NetNS is set to bridge.
 	// Optional.
+	//
 	// Deprecated: as of podman 4.0 use "Networks" instead.
 	CNINetworks []string `json:"cni_networks,omitempty"`
 	// UseImageResolvConf indicates that resolv.conf should not be managed

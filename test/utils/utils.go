@@ -44,7 +44,7 @@ func (n NetworkBackend) ToString() string {
 	case Netavark:
 		return "netavark"
 	}
-	logrus.Errorf("unknown network backend: %q", n)
+	logrus.Errorf("unknown network backend: %d", n)
 	return ""
 }
 
@@ -240,7 +240,8 @@ func (p *PodmanTest) NumberOfPods() int {
 // GetContainerStatus returns the containers state.
 // This function assumes only one container is active.
 func (p *PodmanTest) GetContainerStatus() string {
-	podmanArgs := []string{"ps"}
+	podmanArgs := make([]string, 0, 3)
+	podmanArgs = append(podmanArgs, "ps")
 	podmanArgs = append(podmanArgs, "--all", "--format={{.Status}}")
 	session := p.PodmanExecBaseWithOptions(podmanArgs, PodmanExecOptions{
 		NoCache: true,

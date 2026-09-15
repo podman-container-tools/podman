@@ -361,8 +361,9 @@ func (q *QEMUStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, quiet bool) 
 		// but we ignore it now because we want the mount type to be dynamic, not static.  Or
 		// in other words we don't want to make people unnecessarily reprovision their machines
 		// to upgrade from 9p to virtiofs.
-		mountOptions := []string{"-t", "virtiofs"}
-		mountOptions = append(mountOptions, []string{mount.Tag, strconv.Quote(mount.Target)}...)
+		mountOptions := make([]string, 0, 6)
+		mountOptions = append(mountOptions, "-t", "virtiofs")
+		mountOptions = append(mountOptions, mount.Tag, strconv.Quote(mount.Target))
 		mountFlags := fmt.Sprintf("context=\"%s\"", machine.NFSSELinuxContext)
 		if mount.ReadOnly {
 			mountFlags += ",ro"

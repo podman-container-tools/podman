@@ -37,6 +37,7 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 		for annKeyValue, seccomp := range annotations {
 			// check if it is prefaced with container.seccomp.security.alpha.kubernetes.io/
 			prefixAndCtr := strings.Split(annKeyValue, "/")
+			//nolint:staticcheck // deprecated k8s annotation constant
 			if prefixAndCtr[0]+"/" != v1.SeccompContainerAnnotationKeyPrefix {
 				continue
 			} else if len(prefixAndCtr) != 2 {
@@ -53,6 +54,7 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 			seccompPaths.containerPaths[prefixAndCtr[1]] = path
 		}
 
+		//nolint:staticcheck // deprecated k8s annotation constant
 		podSeccomp, ok := annotations[v1.SeccompPodAnnotationKey]
 		if ok {
 			seccompPaths.podPath, err = verifySeccompPath(podSeccomp, profileRoot)
@@ -70,8 +72,10 @@ func InitializeSeccompPaths(annotations map[string]string, profileRoot string) (
 // the available options are parsed as defined in https://kubernetes.io/docs/concepts/policy/pod-security-policy/#seccomp
 func verifySeccompPath(path string, profileRoot string) (string, error) {
 	switch path {
+	//nolint:staticcheck // deprecated k8s seccomp constant
 	case v1.DeprecatedSeccompProfileDockerDefault:
 		fallthrough
+	//nolint:staticcheck // deprecated k8s seccomp constant
 	case v1.SeccompProfileRuntimeDefault:
 		return libpod.DefaultSeccompPath()
 	case "unconfined":

@@ -43,7 +43,7 @@ var (
 		"RLIMIT_STACK":      unix.RLIMIT_STACK,
 	}
 	rlimitsReverseMap = map[int]string{}
-	mountFlagMap      = map[int]string{
+	mountFlagMap      = map[uintptr]string{
 		unix.MS_ACTIVE:       "MS_ACTIVE",
 		unix.MS_BIND:         "MS_BIND",
 		unix.MS_BORN:         "MS_BORN",
@@ -91,9 +91,9 @@ var (
 func mountFlagNames(flags uintptr) []string {
 	var names []string
 	for flag, name := range mountFlagMap {
-		if int(flags)&flag == flag {
+		if flags&flag == flag {
 			names = append(names, name)
-			flags = flags &^ (uintptr(flag))
+			flags = flags &^ flag
 		}
 	}
 	if flags != 0 { // got some unknown leftovers
@@ -109,7 +109,7 @@ func statFlagNames(flags uintptr) []string {
 	for flag, name := range statFlagMap {
 		if int(flags)&flag == flag {
 			names = append(names, name)
-			flags = flags &^ (uintptr(flag))
+			flags = flags &^ uintptr(flag)
 		}
 	}
 	if flags != 0 { // got some unknown leftovers

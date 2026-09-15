@@ -69,10 +69,10 @@ func df(cmd *cobra.Command, _ []string) error {
 
 func printSummary(cmd *cobra.Command, reports *entities.SystemDfReport) error {
 	var (
-		dfSummaries []*dfSummary
-		active      int
-		used        int64
+		active int
+		used   int64
 	)
+	dfSummaries := make([]*dfSummary, 0, 3)
 
 	visitedImages := make(map[string]bool)
 	for _, i := range reports.Images {

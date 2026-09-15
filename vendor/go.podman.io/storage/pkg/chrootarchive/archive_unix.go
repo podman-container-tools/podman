@@ -225,6 +225,13 @@ func invokePack(srcPath string, options *archive.TarOptions, root string) (io.Re
 		relSrc += "/"
 	}
 
+	var optionsCopy archive.TarOptions
+	if options != nil {
+		optionsCopy = *options
+	}
+	optionsCopy.InternalRunningInMinimalChroot = true
+	options = &optionsCopy
+
 	cmd := reexec.Command("storage-tar", relSrc, root)
 
 	errBuff := bytes.NewBuffer(nil)

@@ -1513,7 +1513,7 @@ func (s *StageExecutor) Execute(ctx context.Context, base string) (imgID string,
 		// Only attempt to find cache if its needed, this part is needed
 		// so that if a step is using RUN --mount and mounts content from
 		// previous stages then it uses the freshly built stage instead
-		// of re-using the older stage from the store.
+		// of reusing the older stage from the store.
 		avoidLookingCache := false
 		var mounts []string
 		for _, a := range node.Flags {

@@ -212,7 +212,7 @@ func (ic *ContainerEngine) VolumeMounted(_ context.Context, nameOrID string) (*e
 }
 
 func (ic *ContainerEngine) VolumeMount(_ context.Context, nameOrIDs []string) ([]*entities.VolumeMountReport, error) {
-	reports := []*entities.VolumeMountReport{}
+	reports := make([]*entities.VolumeMountReport, 0, len(nameOrIDs))
 	for _, name := range nameOrIDs {
 		report := entities.VolumeMountReport{Id: name}
 		vol, err := ic.Libpod.LookupVolume(name)
@@ -228,7 +228,7 @@ func (ic *ContainerEngine) VolumeMount(_ context.Context, nameOrIDs []string) ([
 }
 
 func (ic *ContainerEngine) VolumeUnmount(_ context.Context, nameOrIDs []string) ([]*entities.VolumeUnmountReport, error) {
-	reports := []*entities.VolumeUnmountReport{}
+	reports := make([]*entities.VolumeUnmountReport, 0, len(nameOrIDs))
 	for _, name := range nameOrIDs {
 		report := entities.VolumeUnmountReport{Id: name}
 		vol, err := ic.Libpod.LookupVolume(name)

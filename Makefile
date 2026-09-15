@@ -71,7 +71,7 @@ BUILDTAGS += ${EXTRA_BUILDTAGS}
 # N/B: This value is managed by Renovate, manual changes are
 # possible, as long as they don't disturb the formatting
 # (i.e. DO NOT ADD A 'v' prefix!)
-GOLANGCI_LINT_VERSION := 2.5.0
+GOLANGCI_LINT_VERSION := 2.9.0
 PYTHON ?= $(shell command -v python3 python|head -n1)
 PKG_MANAGER ?= $(shell command -v dnf yum|head -n1)
 # ~/.local/bin is not in PATH on all systems

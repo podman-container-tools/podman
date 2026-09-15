@@ -37,7 +37,8 @@ func newVirtiofsdSpawner(runtimeDir *define.VMFile) (*virtiofsdSpawner, error) {
 
 // createVirtiofsCmd returns a new command instance configured to launch virtiofsd.
 func (v *virtiofsdSpawner) createVirtiofsCmd(directory, socketPath string) *exec.Cmd {
-	args := []string{"--sandbox", "none", "--socket-path", socketPath, "--shared-dir", "."}
+	args := make([]string, 0, 7)
+	args = append(args, "--sandbox", "none", "--socket-path", socketPath, "--shared-dir", ".")
 	// We don't need seccomp filtering; we trust our workloads. This incidentally
 	// works around issues like https://gitlab.com/virtio-fs/virtiofsd/-/merge_requests/200.
 	args = append(args, "--seccomp=none")
@@ -73,7 +74,7 @@ func (v *virtiofsdSpawner) spawnForMount(hostmnt *vmconfigs.Mount) ([]string, *v
 		return nil, nil, err
 	}
 
-	qemuCommand := []string{}
+	qemuCommand := make([]string, 0, 4)
 
 	qemuCommand = append(qemuCommand, "-chardev", fmt.Sprintf("socket,id=%s,path=%s", virtiofsChar, virtiofsCharPath.Path))
 	qemuCommand = append(qemuCommand, "-device", fmt.Sprintf("vhost-user-fs-pci,queue-size=1024,chardev=%s,tag=%s", virtiofsChar, hostmnt.Tag))

@@ -143,7 +143,7 @@ func jsonOut(responses []entities.ListContainer) error {
 		entities.ListContainer
 		Created int64
 	}
-	r := make([]jsonFormat, 0)
+	r := make([]jsonFormat, 0, len(responses))
 	for _, con := range responses {
 		con.CreatedAt = units.HumanDuration(time.Since(con.Created)) + " ago"
 		con.Status = psReporter{con}.Status()
