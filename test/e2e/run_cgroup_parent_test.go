@@ -31,7 +31,7 @@ var _ = Describe("Podman run with --cgroup-parent", func() {
 		cgroup := "/libpod_parent"
 		if !Containerized() && podmanTest.CgroupManager != "cgroupfs" {
 			if isRootless() {
-				cgroup = "/user.slice"
+				cgroup = "/containers.slice"
 			} else {
 				cgroup = "/machine.slice"
 			}
