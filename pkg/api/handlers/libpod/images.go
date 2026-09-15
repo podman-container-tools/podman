@@ -746,8 +746,10 @@ func ImagesRemove(w http.ResponseWriter, r *http.Request) {
 func ImageScp(w http.ResponseWriter, r *http.Request) {
 	decoder := r.Context().Value(api.DecoderKey).(*schema.Decoder)
 	query := struct {
-		Destination string `schema:"destination"`
-		Quiet       bool   `schema:"quiet"`
+		Destination       string `schema:"destination"`
+		Quiet             bool   `schema:"quiet"`
+		CompressionFormat string `schema:"compressionFormat"`
+		CompressionLevel  *int   `schema:"compressionLevel"`
 	}{
 		// This is where you can override the golang default value for one of fields
 	}
@@ -761,8 +763,16 @@ func ImageScp(w http.ResponseWriter, r *http.Request) {
 	opts := entities.ScpExecuteTransferOptions{}
 	opts.Quiet = query.Quiet
 	opts.SSHMode = ssh.GolangMode
+	opts.CompressionFormat = query.CompressionFormat
+	opts.CompressionLevel = query.CompressionLevel
 	report, err := domainUtils.ExecuteTransfer(sourceArg, query.Destination, opts)
 	if err != nil {
+		// The transfer validates its options, so a rejected compression format or
+		// level is the caller's mistake rather than a fault on this end.
+		if errors.Is(err, define.ErrInvalidArg) {
+			utils.Error(w, http.StatusBadRequest, err)
+			return
+		}
 		utils.Error(w, http.StatusInternalServerError, err)
 		return
 	}

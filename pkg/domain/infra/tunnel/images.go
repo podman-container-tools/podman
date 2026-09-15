@@ -472,6 +472,12 @@ func (ir *ImageEngine) Scp(_ context.Context, src, dst string, opts entities.Ima
 	}
 	options.Quiet = &opts.Quiet
 	options.Destination = destination
+	// "none" is only spelled out for the CLI; leaving it off the request keeps a
+	// service that predates these options from rejecting it.
+	if utils.ScpCompressionRequested(opts.CompressionFormat) {
+		options.CompressionFormat = &opts.CompressionFormat
+	}
+	options.CompressionLevel = opts.CompressionLevel
 
 	rep, err := images.Scp(ir.ClientCtx, &src, destination, *options)
 	if err != nil {
