@@ -863,6 +863,24 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 				return err
 			}
 			s.LogConfiguration.Size = logSize
+		case "max-file":
+			// Validate that the value is a positive integer greater than 0,
+			// then store it under the canonical key so container_create.go can consume it.
+			maxFiles, err := strconv.ParseUint(val, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid value for log option %q: must be a positive integer: %w", key, err)
+			}
+			if maxFiles == 0 {
+				return fmt.Errorf("invalid value for log option %q: must be greater than 0", key)
+			}
+			logOpts["max-file"] = val
+		case "log-rotate":
+			// Validate that the value is a boolean, then store it under the
+			// canonical key so container_create.go can consume it.
+			if _, err := strconv.ParseBool(val); err != nil {
+				return fmt.Errorf("invalid value for log option %q: must be true or false: %w", key, err)
+			}
+			logOpts["log-rotate"] = val
 		case "label":
 			labelKey, labelVal, hasVal := strings.Cut(val, "=")
 			if !hasVal {
@@ -875,6 +893,11 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	}
 
 	if len(s.LogConfiguration.Options) == 0 || len(c.LogOptions) != 0 {
+		if mf, ok := logOpts["max-file"]; ok && mf != "" {
+			if lr, ok := logOpts["log-rotate"]; ok && lr == "false" {
+				return fmt.Errorf("conflicting log options: max-file cannot be set when log-rotate is false")
+			}
+		}
 		s.LogConfiguration.Options = logOpts
 	}
 	if len(s.LogConfiguration.Labels) == 0 || len(c.LogOptions) != 0 {

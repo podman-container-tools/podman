@@ -1169,9 +1169,9 @@ func AutocompleteLogDriver(_ *cobra.Command, _ []string, _ string) ([]string, co
 }
 
 // AutocompleteLogOpt - Autocomplete log-opt options.
-// -> "path=", "tag="
+// -> "path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label="
 func AutocompleteLogOpt(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	logOptions := []string{"path=", "tag=", "max-size=", "label="}
+	logOptions := []string{"path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label="}
 	if strings.HasPrefix(toComplete, "path=") {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
