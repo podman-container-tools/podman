@@ -43,3 +43,7 @@ Learn how to run containers that support socket activation.
 **[Performance](performance.md)**
 
 Performance guide regarding Podman configuration and usage.
+
+**[Complete Uninstall & Cleanup](uninstall.md)**
+
+Reset Podman state and uninstall Podman using supported installation methods.
