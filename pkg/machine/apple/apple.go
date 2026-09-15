@@ -25,11 +25,7 @@ import (
 
 const applehvMACAddress = "5a:94:ef:e4:0c:ee"
 
-var (
-	gvProxyWaitBackoff        = 500 * time.Millisecond
-	gvProxyMaxBackoffAttempts = 6
-	ignitionSocketName        = "ignition.sock"
-)
+var ignitionSocketName = "ignition.sock"
 
 // ResizeDisk uses os truncate to resize (only larger) a raw disk.  the input size
 // is assumed GiB
@@ -75,10 +71,6 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	// Set user networking with gvproxy
 	gvproxySocket, err := mc.GVProxySocket()
 	if err != nil {
-		return nil, nil, err
-	}
-	// Wait on gvproxy to be running and aware
-	if err := sockets.WaitForSocketWithBackoffs(gvProxyMaxBackoffAttempts, gvProxyWaitBackoff, gvproxySocket.GetPath(), "gvproxy"); err != nil {
 		return nil, nil, err
 	}
 	netDevice.SetUnixSocketPath(gvproxySocket.GetPath())
