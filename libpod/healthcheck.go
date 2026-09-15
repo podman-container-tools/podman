@@ -375,6 +375,7 @@ func (c *Container) isUnhealthy() (bool, error) {
 // NOTE: The caller must lock the container.
 func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult define.HealthCheckStatus, inStartPeriod bool) (define.HealthCheckResults, error) {
 	healthCheck, err := c.readHealthCheckLog()
+	oldHCStatus := healthCheck.Status
 	if err != nil {
 		// If the log is corrupted, use an empty result and eventually overwrite it.
 		if !errors.Is(err, define.ErrHealthCheckLogCorrupted) {
@@ -401,6 +402,7 @@ func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult def
 			}
 		}
 	}
+	healthCheck.IsStatusChanged = oldHCStatus != healthCheck.Status
 	healthCheck.Log = append(healthCheck.Log, hcl)
 	if c.HealthCheckMaxLogCount() != 0 && len(healthCheck.Log) > int(c.HealthCheckMaxLogCount()) {
 		healthCheck.Log = healthCheck.Log[1:]
