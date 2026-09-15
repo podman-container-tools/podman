@@ -106,7 +106,11 @@ func (p *PodmanTestIntegration) StartRemoteService() {
 }
 
 func (p *PodmanTestIntegration) StopRemoteService() {
-	if err := p.RemoteSession.Signal(syscall.SIGTERM); err != nil {
+	p.stopRemoteService(syscall.SIGTERM)
+}
+
+func (p *PodmanTestIntegration) stopRemoteService(signal syscall.Signal) {
+	if err := p.RemoteSession.Signal(signal); err != nil {
 		GinkgoWriter.Printf("unable to clean up service %d, %v\n", p.RemoteSession.Pid, err)
 	}
 	if _, err := p.RemoteSession.Wait(); err != nil {
