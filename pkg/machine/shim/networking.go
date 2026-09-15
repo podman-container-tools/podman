@@ -92,6 +92,13 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 }
 
 func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, error) {
+	// An externally stopped VM can leave its host proxy behind. On Windows,
+	// clean up a verified orphan before checking the SSH port; otherwise the
+	// orphan itself can cause an unnecessary port reassignment.
+	if err := cleanupStaleHostForwarder(mc, provider); err != nil {
+		return "", 0, err
+	}
+
 	// Check if SSH port is in use, and reassign if necessary
 	if !ports.IsLocalPortAvailable(mc.SSH.Port) {
 		logrus.Warnf("detected port conflict on machine ssh port [%d], reassigning", mc.SSH.Port)

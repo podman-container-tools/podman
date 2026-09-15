@@ -102,6 +102,95 @@ func DialNamedPipe(ctx context.Context, path string) (net.Conn, error) {
 	return winio.DialPipeContext(ctx, path)
 }
 
+func namedPipeServerPID(pipeName string) (uint32, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), MachineNameWait)
+	defer cancel()
+
+	conn, err := winio.DialPipeContext(ctx, `\\.\pipe\`+pipeName)
+	if err != nil {
+		return 0, fmt.Errorf("connecting to named pipe %q: %w", pipeName, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	handleConn, ok := conn.(interface{ Fd() uintptr })
+	if !ok {
+		return 0, fmt.Errorf("getting handle for named pipe %q", pipeName)
+	}
+
+	var pid uint32
+	if err := windows.GetNamedPipeServerProcessId(windows.Handle(handleConn.Fd()), &pid); err != nil {
+		return 0, fmt.Errorf("getting server process for named pipe %q: %w", pipeName, err)
+	}
+	return pid, nil
+}
+
+func cleanupStaleProxy(pipeName string, recordedPID uint32, cleanup func() error) error {
+	ownerPID, err := namedPipeServerPID(pipeName)
+	if err != nil {
+		// The pipe may have disappeared between the availability check and dial.
+		if PipeNameAvailable(pipeName, 0) {
+			return nil
+		}
+		return err
+	}
+	if ownerPID != recordedPID {
+		return fmt.Errorf("named pipe %q is owned by PID %d, but the proxy state file records PID %d; refusing to terminate the process", pipeName, ownerPID, recordedPID)
+	}
+
+	if err := cleanup(); err != nil {
+		return fmt.Errorf("cleaning up stale proxy process %d: %w", recordedPID, err)
+	}
+	if !PipeNameAvailable(pipeName, MachineNameWait) {
+		return fmt.Errorf("named pipe %q is still in use after cleaning up stale proxy process %d", pipeName, recordedPID)
+	}
+	return nil
+}
+
+// CleanupStaleGVProxy stops a gvproxy process left behind by an externally
+// stopped VM, but only when its PID file matches the process serving the
+// machine's named pipe.
+func CleanupStaleGVProxy(pipeName string, pidFile define.VMFile) error {
+	if PipeNameAvailable(pipeName, 0) {
+		return nil
+	}
+
+	pid, err := pidFile.ReadPIDFrom()
+	if err != nil {
+		return fmt.Errorf("reading gvproxy PID file while named pipe %q is in use: %w", pipeName, err)
+	}
+	// ReadPIDFrom returns an int, while GetNamedPipeServerProcessId returns a uint32.
+	// Accept proxy PIDs from 1 through 2^32-1 (4,294,967,295) to avoid truncation or invalidation during conversion.
+	if pid <= 0 || uint64(pid) > uint64(^uint32(0)) {
+		return fmt.Errorf("invalid gvproxy PID %d while named pipe %q is in use", pid, pipeName)
+	}
+
+	return cleanupStaleProxy(pipeName, uint32(pid), func() error {
+		return cleanupGVProxy(pid, pidFile)
+	})
+}
+
+// CleanupStaleWinProxy stops a win-sshproxy process left behind by an
+// externally stopped WSL VM, but only when its recorded PID matches the
+// process serving the machine's named pipe.
+func CleanupStaleWinProxy(name string, vmtype define.VMType) error {
+	pipeName := env.WithPodmanPrefix(name)
+	if PipeNameAvailable(pipeName, 0) {
+		return nil
+	}
+
+	pid, tid, tidFile, err := readWinProxyTid(name, vmtype)
+	if err != nil {
+		return fmt.Errorf("reading win-sshproxy state while named pipe %q is in use: %w", pipeName, err)
+	}
+	if pid == 0 || tid == 0 {
+		return fmt.Errorf("invalid win-sshproxy state %d:%d while named pipe %q is in use", pid, tid, pipeName)
+	}
+
+	return cleanupStaleProxy(pipeName, pid, func() error {
+		return stopWinProxy(pid, tid, tidFile)
+	})
+}
+
 func LaunchWinProxy(opts WinProxyOpts, noInfo bool) {
 	globalName, pipeName, err := launchWinProxy(opts)
 	if !noInfo {
@@ -194,7 +283,10 @@ func StopWinProxy(name string, vmtype define.VMType) error {
 	if err != nil {
 		return err
 	}
+	return stopWinProxy(pid, tid, tidFile)
+}
 
+func stopWinProxy(pid, tid uint32, tidFile string) error {
 	proc, err := os.FindProcess(int(pid))
 	if err != nil {
 		//nolint:nilerr

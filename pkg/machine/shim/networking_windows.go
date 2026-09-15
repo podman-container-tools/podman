@@ -25,6 +25,33 @@ func setGvproxyProcessAttributes(c *exec.Cmd) {
 	}
 }
 
+func cleanupStaleHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
+	if provider.VMType() == define.WSLVirt {
+		if err := machine.CleanupStaleWinProxy(mc.Name, provider.VMType()); err != nil {
+			return fmt.Errorf("could not recover api proxy for %s: %w", env.WithPodmanPrefix(mc.Name), err)
+		}
+		return nil
+	}
+	if provider.UseProviderNetworkSetup() {
+		return nil
+	}
+
+	dirs, err := env.GetMachineDirs(provider.VMType())
+	if err != nil {
+		return err
+	}
+	pidFile, err := dirs.RuntimeDir.AppendToNewVMFile("gvproxy.pid", nil)
+	if err != nil {
+		return err
+	}
+
+	pipeName := env.WithPodmanPrefix(mc.Name)
+	if err := machine.CleanupStaleGVProxy(pipeName, *pidFile); err != nil {
+		return fmt.Errorf("could not recover api proxy for %s: %w", pipeName, err)
+	}
+	return nil
+}
+
 func setupMachineSockets(mc *vmconfigs.MachineConfig, _ *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
 	machinePipe := env.WithPodmanPrefix(mc.Name)
 	if !machine.PipeNameAvailable(machinePipe, machine.MachineNameWait) {
