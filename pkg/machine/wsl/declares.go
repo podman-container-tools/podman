@@ -49,6 +49,15 @@ or type exit. This also means to log out you need to exit twice.
 
 const sysdpid = "SYSDPID=`ps -eo cmd,pid | grep -m 1 ^/lib/systemd/systemd | awk '{print $2}'`"
 
+const systemdRunning = `
+if [ "$(cat /proc/1/comm 2>/dev/null)" = "systemd" ]; then
+    echo 1
+else
+    ` + sysdpid + `
+    echo $SYSDPID
+fi
+`
+
 const profile = sysdpid + `
 if [ ! -z "$SYSDPID" ] && [ "$SYSDPID" != "1" ]; then
     cat /etc/wslmotd
