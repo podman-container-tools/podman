@@ -1344,6 +1344,51 @@ func (c *Container) waitForHealthy(ctx context.Context) error {
 		c.lock.Unlock()
 		defer c.lock.Lock()
 	}
+	if c.config.SdNotifySocket != "" {
+		// While waiting for the container to turn healthy, keep
+		// extending the start timeout of the systemd unit so that a
+		// time-to-healthy larger than systemd's TimeoutStartSec is
+		// respected, whether it is dominated by a large
+		// HealthStartPeriod or by a long-running startup healthcheck.
+		// The health status remains "starting" during that entire
+		// window, so extensions stop as soon as the container turns
+		// healthy (the wait below returns), unhealthy or stopped,
+		// letting systemd's own timeout kick back in.
+		const (
+			extendInterval = 25 * time.Second
+			extendAmount   = 30 * time.Second
+		)
+
+		extendCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		ticker := time.NewTicker(extendInterval)
+		defer ticker.Stop()
+
+		msg := fmt.Sprintf("EXTEND_TIMEOUT_USEC=%d", extendAmount.Microseconds())
+
+		// Send the first extension immediately.
+		// systemd.service(5): "The first receipt of this message must occur before TimeoutStartSec= is exceeded."
+		if err := notifyproxy.SendMessage(c.config.SdNotifySocket, msg); err != nil {
+			logrus.Errorf("Sending EXTEND_TIMEOUT_USEC failed: %v", err)
+		}
+		go func() {
+			for {
+				select {
+				case <-extendCtx.Done():
+					return
+				case <-ticker.C:
+					status, err := c.HealthCheckStatus()
+					if err != nil || status != define.HealthCheckStarting {
+						return
+					}
+					if err := notifyproxy.SendMessage(c.config.SdNotifySocket, msg); err != nil {
+						logrus.Errorf("Sending EXTEND_TIMEOUT_USEC failed: %v", err)
+					}
+				}
+			}
+		}()
+	}
 
 	if _, err := c.WaitForConditionWithInterval(ctx, DefaultWaitInterval, define.HealthCheckHealthy); err != nil {
 		if errors.Is(err, define.ErrNoSuchCtr) {
