@@ -20,3 +20,7 @@ Specifies resource limits to apply to processes launched when processing `RUN` i
   "rttime": maximum amount of real-time execution between blocking syscalls
   "sigpending": maximum number of pending signals (ulimit -i)
   "stack": maximum stack size (ulimit -s)
+
+Size limits ("core", "data", "fsize", "memlock", "msgqueue", "rss" and "stack") are given in bytes,
+not in the units that the **ulimit** shell builtin displays. See the **--ulimit** option in
+**[podman-run(1)](podman-run.1.md)** for the units used by each type.
