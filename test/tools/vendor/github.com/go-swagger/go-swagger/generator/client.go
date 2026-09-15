@@ -70,20 +70,25 @@ type clientGenerator struct {
 }
 
 func (c *clientGenerator) Generate() error {
+	importTarget, err := c.GenOpts.LanguageOpts.BaseImport(c.Target)
+	if err != nil {
+		return errTarget(c.Target, err)
+	}
+
 	app, err := c.makeCodegenApp()
 	if err != nil {
 		return err
 	}
 	app.DefaultImports["cli"] = path.Join(
-		c.GenOpts.LanguageOpts.BaseImport(c.Target),
+		importTarget,
 		"cli",
 	)
 	app.DefaultImports["client"] = path.Join(
-		c.GenOpts.LanguageOpts.BaseImport(c.Target),
+		importTarget,
 		"client",
 	)
 	app.DefaultImports["operations"] = path.Join(
-		c.GenOpts.LanguageOpts.BaseImport(c.Target),
+		importTarget,
 		"client",
 		"operations",
 	)
@@ -91,11 +96,11 @@ func (c *clientGenerator) Generate() error {
 	for i := range app.Models {
 		di := app.Models[i].DefaultImports
 		di["models"] = path.Join(
-			c.GenOpts.LanguageOpts.BaseImport(c.Target),
+			importTarget,
 			"models",
 		)
 		di["client"] = path.Join(
-			c.GenOpts.LanguageOpts.BaseImport(c.Target),
+			importTarget,
 			"client",
 		)
 	}

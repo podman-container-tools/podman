@@ -37,7 +37,7 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
       buf = bytes.NewBuffer(val)
       dec := json.NewDecoder(buf)
       dec.UseNumber()
-      if err := dec.Decode({{ if not .AdditionalItems.IsNullable }}&{{ end }}toadd); err != nil {
+      if err := dec.Decode(&toadd); err != nil {
         return err
       }
       {{- with .AdditionalItems }}

@@ -7,6 +7,8 @@ linters:
     - gochecknoglobals
     - gochecknoinits
     - godox
+    - gomodguard
+    - gomodguard_v2
     - exhaustruct
     - ireturn
     - nlreturn

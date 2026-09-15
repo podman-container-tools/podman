@@ -97,8 +97,8 @@ func paramRequiredBool(param *oaispec.Parameter) func(grammar.Property, bool) {
 // Handler wiring is the SimpleSchema surface:
 // Number/Integer/UniqueBool+RequiredBool/Pattern+CollectionFmt/ Raw-with-errSink/Extension.
 //
-// firstErr captures the first parse error from default/example coercion; callers surface it as a
-// build error. diag may be nil (parser diagnostics dropped when so).
+// firstErr captures the first parse error from default/example coercion; callers surface it as a build error.
+// diag may be nil (parser diagnostics dropped when so).
 func DispatchParamLevel0(block grammar.Block, param *oaispec.Parameter, diag func(grammar.Diagnostic)) error {
 	valid := paramValidations{param}
 	scheme := &param.SimpleSchema
@@ -131,8 +131,7 @@ func DispatchParamLevel0(block grammar.Block, param *oaispec.Parameter, diag fun
 // DispatchHeaderLevel0 routes every level-0 Property in block onto header via the grammar Walker.
 //
 // Mirrors DispatchParamLevel0 minus `required:` (headers don't carry it) and wires errSink=nil so
-// malformed default/example values on a header don't fail the build — see
-// [§raw-errsink](./README.md#raw-errsink).
+// malformed default/example values on a header don't fail the build — see [§raw-errsink](./README.md#raw-errsink).
 //
 // diag may be nil; when nil, parser diagnostics are dropped.
 func DispatchHeaderLevel0(block grammar.Block, header *oaispec.Header, diag func(grammar.Diagnostic)) {

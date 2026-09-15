@@ -1,8 +1,24 @@
+{{- /*
+  A nullable schema renders as a pointer, unless the Go type is already a reference type.
+
+  Interfaces are never pointed to: *Iface cannot carry the method set, so any generated
+  call on the element (e.g. Validate) fails to compile.
+
+  Catching every interface takes two flags: IsInterface covers "any" and external types
+  hinted "kind: interface", while discriminated base types are never marked IsInterface
+  and are only detectable through HasDiscriminator.
+
+  Streams are NOT excluded here, even though io.ReadCloser is an interface too:
+  a stream is never nullable in its own right (IsNullable=false when IsStream=true),
+  so this rule never yields *io.ReadCloser.
+  Caveat: a named definition that aliases a stream and carries x-nullable, e.g. *AliasedNullableFile
+  may still pass through however. This output is pinned by testdata/bugs/1487.
+*/ -}}
 {{ define "schemaType" }}
   {{- if and (or (gt (len .AllOf) 0) .IsAnonymous) ( not .IsMap) }}
     {{- template "schemaBody" . }}
   {{- else }}
-    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) }}*{{ end }}
+    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) (not .IsInterface) (not .HasDiscriminator) }}*{{ end }}
     {{- if .IsSuperAlias }} = {{ end }}
     {{- .GoType }}
   {{- end}}
@@ -22,7 +38,7 @@
   {{- else if and .IsSubType ( not .IsSuperAlias ) }}
     {{- template "subTypeBody" . }}
   {{- else }}
-    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) }}*{{ end }}
+    {{- if and (not .IsMap) .IsNullable (not .IsSuperAlias) (not .IsInterface) (not .HasDiscriminator) }}*{{ end }}
     {{- if .IsSuperAlias }} = {{ end }}
     {{- if .AliasedType }}{{ .AliasedType }}{{ else }}{{ .GoType }}{{ end }}
   {{- end}}

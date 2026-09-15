@@ -26,8 +26,8 @@ import (
 //
 // # Details
 //
-// See README §lexer-contract for the per-stage rules, §raw-block-terminators for body-termination
-// rules, and §prose-classification for the TITLE / DESC split heuristics.
+// See README §lexer-contract for the per-stage rules, §raw-block-terminators for body-termination rules, and
+// §prose-classification for the TITLE / DESC split heuristics.
 func Lex(lines []Line) []Token {
 	raw := classifyLines(lines)
 	bodied := accumulateBodies(raw)
@@ -38,18 +38,18 @@ func Lex(lines []Line) []Token {
 
 // classifyLines emits one preliminary token per line.
 //
-// The state it carries between lines is whether the cursor sits between matching `---` fences (so
-// YAML bodies survive verbatim); body accumulation happens later, in stage 2.
+// The state it carries between lines is whether the cursor sits between matching `---` fences (so YAML bodies survive
+// verbatim); body accumulation happens later, in stage 2.
 func classifyLines(lines []Line) []Token {
 	out := make([]Token, 0, len(lines)+1)
 	inFence := false
 	inLiteralDesc := false
 	for _, line := range lines {
 		if inLiteralDesc {
-			// Inside a `swagger:description |` literal block, every line is captured verbatim until the next
-			// annotation or EOF — no `---` fence toggling, no blank-line or keyword termination.
-			// This MUST happen here (stage 1) because a lone `---` in the body would otherwise flip inFence
-			// and swallow a following annotation as raw YAML.
+			// Inside a `swagger:description |` literal block, every line is captured verbatim until the next annotation or EOF
+			// — no `---` fence toggling, no blank-line or keyword termination.
+			// This MUST happen here (stage 1) because a lone `---` in the body would otherwise flip inFence and swallow a
+			// following annotation as raw YAML.
 			//
 			// See README §literal-description.
 			tok := lexLine(line, false)
@@ -57,8 +57,8 @@ func classifyLines(lines []Line) []Token {
 				out = append(out, Token{Kind: tokenRawLine, Pos: line.Pos, Text: line.Raw, Raw: line.Raw})
 				continue
 			}
-			// An annotation terminates the block; re-process it normally so a back-to-back
-			// `swagger:description |` re-opens literal mode.
+			// An annotation terminates the block; re-process it normally so a back-to-back `swagger:description |` re-opens
+			// literal mode.
 			inLiteralDesc = false
 			out = append(out, tok)
 			if isLiteralDescMarker(tok) {
@@ -79,11 +79,11 @@ func classifyLines(lines []Line) []Token {
 	return out
 }
 
-// isLiteralDescMarker reports whether tok is a `swagger:description |` annotation: a description
-// override whose sole inline argument is the YAML literal block-scalar marker `|`.
+// isLiteralDescMarker reports whether tok is a `swagger:description |` annotation: a description override whose sole
+// inline argument is the YAML literal block-scalar marker `|`.
 //
-// The marker opts the body into verbatim capture (blank lines and indentation preserved) instead of
-// the default blank-terminated Option B fold.
+// The marker opts the body into verbatim capture (blank lines and indentation preserved) instead of the default
+// blank-terminated Option B fold.
 func isLiteralDescMarker(tok Token) bool {
 	return tok.Kind == TokenAnnotation &&
 		tok.Name == labelDescription &&
@@ -121,12 +121,11 @@ func lexLine(line Line, inFence bool) Token {
 		pos.Offset += pfxLen
 		return lexAnnotation(text[pfxLen:], pos)
 	}
-	// Go compiler / linter directives (`//go:generate`, `//nolint:foo`, `//lint:ignore`, …) —
-	// recognise on Raw (which preserves the post-`//` spacing) and drop from the prose surface so they
-	// never land in TITLE / DESC.
+	// Go compiler / linter directives (`//go:generate`, `//nolint:foo`, `//lint:ignore`, …) — recognise on Raw (which
+	// preserves the post-`//` spacing) and drop from the prose surface so they never land in TITLE / DESC.
 	//
-	// Must run after the swagger-prefix check so `//swagger:model` (legal but non-idiomatic, no
-	// leading space) is not mistaken for a directive.
+	// Must run after the swagger-prefix check so `//swagger:model` (legal but non-idiomatic, no leading space) is not
+	// mistaken for a directive.
 	if isGoDirective(line.Raw) {
 		return Token{Kind: tokenDirective, Pos: line.Pos, Raw: line.Raw}
 	}
@@ -147,12 +146,11 @@ func lexLine(line Line, inFence bool) Token {
 //     character** with no whitespace between the colon and the
 //     argument.
 //
-// The "no whitespace after colon" rule separates directives from keyword lines: `maximum: 10`
-// (space → keyword), `pattern:` (empty → block head), `nolint:foo` (immediate arg →
-// directive).
+// The "no whitespace after colon" rule separates directives from keyword lines: `maximum: 10` (space → keyword),
+// `pattern:` (empty → block head), `nolint:foo` (immediate arg → directive).
 //
-// Note: `swagger:<name>` matches this shape; lexLine runs the swagger check before the directive
-// check so swagger annotations are never dropped.
+// Note: `swagger:<name>` matches this shape; lexLine runs the swagger check before the directive check so swagger
+// annotations are never dropped.
 func isGoDirective(raw string) bool {
 	if raw == "" || raw[0] < 'a' || raw[0] > 'z' {
 		return false
@@ -174,19 +172,16 @@ func isGoDirective(raw string) bool {
 	return true
 }
 
-// isDirectiveMarker reports whether text is a Go "marker" comment of the kind emitted by Kubernetes
-// code-generation tooling (kubebuilder, controller-gen, k8s deepcopy-gen, genclient): a line whose
-// content begins with `+` immediately followed by an ASCII letter, e.g. `+genclient`,
-// `+kubebuilder:validation:Required`, `+k8s:deepcopy-gen=…`.
+// isDirectiveMarker reports whether text is a Go "marker" comment of the kind emitted by Kubernetes code-generation
+// tooling (kubebuilder, controller-gen, k8s deepcopy-gen, genclient): a line whose content begins with `+` immediately
+// followed by an ASCII letter, e.g. `+genclient`, `+kubebuilder:validation:Required`, `+k8s:deepcopy-gen=…`.
 //
-// These markers are not part of the swagger annotation grammar and must not leak into model /
-// property descriptions (go-swagger#2687, the residual of #3007); lexLine drops them from the prose
-// surface exactly like Go directives.
+// These markers are not part of the swagger annotation grammar and must not leak into model / property descriptions
+// (go-swagger#2687, the residual of #3007); lexLine drops them from the prose surface exactly like Go directives.
 //
-// text is the godoc-stripped Line.Text, so both the common kubebuilder form `// +marker` (space
-// after the comment marker) and the bare `//+marker` arrive here as `+marker`.
-// Requiring a letter after the `+` avoids eating prose that merely opens with a sign (e.g. "+1 for
-// …").
+// text is the godoc-stripped Line.Text, so both the common kubebuilder form `// +marker` (space after the comment
+// marker) and the bare `//+marker` arrive here as `+marker`.
+// Requiring a letter after the `+` avoids eating prose that merely opens with a sign (e.g. "+1 for …").
 func isDirectiveMarker(text string) bool {
 	if len(text) < 2 || text[0] != '+' {
 		return false
@@ -195,11 +190,11 @@ func isDirectiveMarker(text string) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// hasSwaggerPrefix is the case-insensitive match on the first char of AnnotationPrefix — only the
-// first character is permissive.
+// hasSwaggerPrefix is the case-insensitive match on the first char of AnnotationPrefix — only the first character is
+// permissive.
 //
-// AnnotationPrefix is fixed at "swagger:" so the case-insensitive fallback is tied to ASCII letter
-// casing of its first byte.
+// AnnotationPrefix is fixed at "swagger:" so the case-insensitive fallback is tied to ASCII letter casing of its first
+// byte.
 // See README §quirks-open.
 func hasSwaggerPrefix(s string) bool {
 	if len(s) < len(AnnotationPrefix) {
@@ -250,8 +245,7 @@ func matchGodocRoutePrefix(s string) (int, bool) {
 	return wsEnd, true
 }
 
-// scanGoIdentifier returns the byte length of a leading Go identifier: Letter followed by Letter |
-// Digit | _ | -.
+// scanGoIdentifier returns the byte length of a leading Go identifier: Letter followed by Letter | Digit | _ | -.
 //
 // Returns 0 if s does not start with a letter.
 func scanGoIdentifier(s string) int {
@@ -279,15 +273,15 @@ func scanGoIdentifier(s string) int {
 // Args are returned pre-classified via classifyAnnotationArgs.
 func lexAnnotation(text string, pos token.Position) Token {
 	rawRest := strings.TrimRightFunc(text[len(AnnotationPrefix):], unicode.IsSpace)
-	// Classify the kind from a dot-stripped view so a bare `swagger:model.` (and likewise
-	// `swagger:description.`) still resolves to its kind.
+	// Classify the kind from a dot-stripped view so a bare `swagger:model.` (and likewise `swagger:description.`) still
+	// resolves to its kind.
 	name, _ := splitFirstField(stripTrailingDot(rawRest))
 	if name == "" {
 		return Token{Kind: tokenText, Pos: pos, Text: text}
 	}
 	kind := AnnotationKindFromName(name)
-	// Free-text overrides (swagger:title / swagger:description) keep a trailing "." — it is sentence
-	// content, not punctuation noise.
+	// Free-text overrides (swagger:title / swagger:description) keep a trailing "." — it is sentence content, not
+	// punctuation noise.
 	// Every other annotation elides a single trailing dot (e.g. `swagger:model Pet.`).
 	rest := rawRest
 	if kind != AnnTitle && kind != AnnDescription {
@@ -306,8 +300,7 @@ func stripTrailingDot(s string) string {
 	return strings.TrimSuffix(s, ".")
 }
 
-// splitFirstField returns the first whitespace-delimited token and the remainder (with leading
-// whitespace stripped).
+// splitFirstField returns the first whitespace-delimited token and the remainder (with leading whitespace stripped).
 func splitFirstField(s string) (head, rest string) {
 	s = strings.TrimLeft(s, " \t")
 	if s == "" {
@@ -322,13 +315,13 @@ func splitFirstField(s string) (head, rest string) {
 	return head, rest
 }
 
-// classifyAnnotationArgs converts the post-name remainder of an annotation line into the typed
-// argument tokens per annotation kind.
+// classifyAnnotationArgs converts the post-name remainder of an annotation line into the typed argument tokens per
+// annotation kind.
 //
 // See README §annotation-args.
 //
-// The byte-offset baseColumn is the column at which `rest` begins inside the source line; positions
-// are computed relative to that.
+// The byte-offset baseColumn is the column at which `rest` begins inside the source line; positions are computed
+// relative to that.
 func classifyAnnotationArgs(kind AnnotationKind, rest string, linePos token.Position, baseColumn int) []Token {
 	rest = strings.TrimLeft(rest, " \t")
 	if rest == "" {
@@ -344,19 +337,21 @@ func classifyAnnotationArgs(kind AnnotationKind, rest string, linePos token.Posi
 	case AnnDefaultName:
 		return []Token{argDefaultValue(rest, pos)}
 	case AnnType, AnnAdditionalProperties:
-		// Both take a swagger:type-style spec as a single ref token (true / false / primitive / []T /
-		// type-name).
+		// Both take a swagger:type-style spec as a single ref token (true / false / primitive / []T / type-name).
 		// The builder does the semantic resolution.
 		return []Token{argTypeRef(rest, pos)}
+	case AnnOmit:
+		// The arg is a comma-separated list of Go field names / dotted embed paths, which may carry spaces after the commas
+		// — capture the whole remainder verbatim; the builder splits it.
+		return []Token{{Kind: TokenRawValue, Pos: pos, Text: strings.TrimSpace(rest)}}
 	case AnnPatternProperties:
-		// The arg is a `"<re>": <spec>, …` pair list that may contain spaces/colons/commas inside
-		// quoted regexes — capture the whole remainder verbatim; the builder parses the pairs.
+		// The arg is a `"<re>": <spec>, …` pair list that may contain spaces/colons/commas inside quoted regexes —
+		// capture the whole remainder verbatim; the builder parses the pairs.
 		return []Token{{Kind: TokenRawValue, Pos: pos, Text: strings.TrimSpace(rest)}}
 	case AnnTitle, AnnDescription:
-		// Free-text override: the arg is the whole rest of the line, verbatim (a title/description
-		// sentence with spaces).
-		// Captured as one TokenRawValue so ClassifierBlock.AnnotationArg() returns it intact. (Multi-line
-		// description bodies are folded in a later phase.)
+		// Free-text override: the arg is the whole rest of the line, verbatim (a title/description sentence with spaces).
+		// Captured as one TokenRawValue so ClassifierBlock.AnnotationArg() returns it intact. (Multi-line description bodies
+		// are folded in a later phase.)
 		return []Token{{Kind: TokenRawValue, Pos: pos, Text: strings.TrimSpace(rest)}}
 	case AnnEnum:
 		return classifyEnumAnnotationArgs(rest, pos)
@@ -364,8 +359,8 @@ func classifyAnnotationArgs(kind AnnotationKind, rest string, linePos token.Posi
 		return classifyParametersArgs(rest, pos)
 	case AnnResponse:
 		// `swagger:response *` is a synonym for the bare form (a shared response keyed by the type name).
-		// The wildcard carries no trailing tokens — responses have no op-id injection (unlike
-		// parameters) and no /path form.
+		// The wildcard carries no trailing tokens — responses have no op-id injection (unlike parameters) and no /path
+		// form.
 		// Any other argument is the explicit response name.
 		if head, _ := splitFirstField(rest); head == "*" {
 			return []Token{{Kind: TokenWildcard, Pos: pos, Text: "*"}}
@@ -384,8 +379,8 @@ func classifyAnnotationArgs(kind AnnotationKind, rest string, linePos token.Posi
 
 // classifyOperationArgs extracts METHOD, /path, [tags...], and the trailing operationID.
 //
-// The trailing IDENT_NAME is the OpID; everything between path and the trailing ident is treated as
-// a (potentially space-separated) tag list.
+// The trailing IDENT_NAME is the OpID; everything between path and the trailing ident is treated as a (potentially
+// space-separated) tag list.
 // See README §annotation-args.
 func classifyOperationArgs(rest string, basePos token.Position) []Token {
 	fields := splitFields(rest, basePos)
@@ -407,8 +402,8 @@ func classifyOperationArgs(rest string, basePos token.Position) []Token {
 		fields = fields[1:]
 	}
 
-	// Remaining fields: every IDENT_NAME — the parser layer marks the trailing one as the OpID;
-	// everything before it is a tag.
+	// Remaining fields: every IDENT_NAME — the parser layer marks the trailing one as the OpID; everything before it is
+	// a tag.
 	for _, f := range fields {
 		out = append(out, Token{Kind: TokenIdentName, Pos: f.pos, Text: f.text})
 	}
@@ -423,11 +418,10 @@ func argDefaultValue(rest string, pos token.Position) Token {
 	return Token{Kind: kind, Pos: pos, Text: strings.TrimSpace(rest)}
 }
 
-// argTypeRef tags a well-formed `swagger:type` argument as TYPE_REF and leaves the semantic check
-// (known keyword / scanned type, format compatibility) to the builder.
+// argTypeRef tags a well-formed `swagger:type` argument as TYPE_REF and leaves the semantic check (known keyword /
+// scanned type, format compatibility) to the builder.
 //
-// A structurally malformed token falls back to TokenIdentName so the parser can flag it (see
-// looksLikeTypeRef).
+// A structurally malformed token falls back to TokenIdentName so the parser can flag it (see looksLikeTypeRef).
 func argTypeRef(rest string, pos token.Position) Token {
 	rest = strings.TrimSpace(rest)
 	if looksLikeTypeRef(rest) {
@@ -438,8 +432,8 @@ func argTypeRef(rest string, pos token.Position) Token {
 
 // classifyEnumAnnotationArgs implements the four-step EnumArgs dispatch rule.
 //
-// The values fragment, when present, is emitted as a single token whose kind reflects the
-// bracketed-vs-plain decision; downstream parsing of the list items lives in the parser/analyzer.
+// The values fragment, when present, is emitted as a single token whose kind reflects the bracketed-vs-plain decision;
+// downstream parsing of the list items lives in the parser/analyzer.
 // See README §disambiguation.
 func classifyEnumAnnotationArgs(rest string, pos token.Position) []Token {
 	form, name, values := classifyEnumArgs(rest)
@@ -475,12 +469,11 @@ func classifyEnumAnnotationArgs(rest string, pos token.Position) []Token {
 
 // classifyParametersArgs tokenises `swagger:parameters` arguments.
 //
-// The FIRST token may be the shared-namespace wildcard `*` (TokenWildcard) or a `/path`
-// (TokenURLPath); every other token (and any first token that is neither) is an IDENT_NAME — an
-// operation id or a shared-parameter name, disambiguated downstream by the parser/builder.
+// The FIRST token may be the shared-namespace wildcard `*` (TokenWildcard) or a `/path` (TokenURLPath); every other
+// token (and any first token that is neither) is an IDENT_NAME — an operation id or a shared-parameter name,
+// disambiguated downstream by the parser/builder.
 //
-// `*` and `/path` are only recognised in first position, so `*blah` / a mid-list `/x` fall through
-// to IDENT_NAME.
+// `*` and `/path` are only recognised in first position, so `*blah` / a mid-list `/x` fall through to IDENT_NAME.
 // See README §annotation-args.
 func classifyParametersArgs(rest string, basePos token.Position) []Token {
 	fields := splitFields(rest, basePos)
@@ -525,8 +518,7 @@ type field struct {
 	pos  token.Position
 }
 
-// splitFields breaks s into whitespace-separated fields, advancing the position by byte offset for
-// each field.
+// splitFields breaks s into whitespace-separated fields, advancing the position by byte offset for each field.
 func splitFields(s string, basePos token.Position) []field {
 	const sensibleAllocs = 4
 	out := make([]field, 0, sensibleAllocs)
@@ -595,10 +587,10 @@ func lexKeyword(text, raw string, pos token.Position) (Token, bool) {
 	value := strings.TrimSpace(after)
 	value = stripTrailingDot(value)
 
-	// A `deprecated:` line whose argument is not a bool is the godoc "Deprecated: <reason>"
-	// convention, not the bool keyword.
-	// Leave it as prose (Block.IsDeprecated detects it via the godoc regexp) instead of forcing a bool
-	// parse that would spuriously error and strip the reason from the description.
+	// A `deprecated:` line whose argument is not a bool is the godoc "Deprecated: <reason>" convention, not the bool
+	// keyword.
+	// Leave it as prose (Block.IsDeprecated detects it via the godoc regexp) instead of forcing a bool parse that would
+	// spuriously error and strip the reason from the description.
 	//
 	// The bool form keeps being a keyword (and drives the native operation `deprecated` field).
 	// See go-swagger/go-swagger#3138.
@@ -621,8 +613,7 @@ func lexKeyword(text, raw string, pos token.Position) (Token, bool) {
 	}, true
 }
 
-// lowerFirst applies first-character lowercase; only the first character is case-permissive on
-// keyword recognition.
+// lowerFirst applies first-character lowercase; only the first character is case-permissive on keyword recognition.
 //
 // See README §lexer-contract ("First-character case insensitivity on keywords").
 func lowerFirst(s string) string {
@@ -672,8 +663,8 @@ func stripOneItemsPrefix(s string) (string, bool) {
 
 // ----- Stage 2 — body accumulator -------------------------------------------
 
-// accumulateBodies folds multi-line bodies into single body tokens and finalises inline-value
-// keywords by typing the value per the keyword's declared shape.
+// accumulateBodies folds multi-line bodies into single body tokens and finalises inline-value keywords by typing the
+// value per the keyword's declared shape.
 //
 // The output stream contains only tokens the parser actually consumes (no internal kinds).
 func accumulateBodies(in []Token) []Token {
@@ -704,8 +695,8 @@ func accumulateBodies(in []Token) []Token {
 			// Drop silently.
 			i++
 		case tokenDirective:
-			// Go directives (//go:, //nolint:, …) are dropped from the stream — they have no role in the
-			// swagger annotation grammar and must not contaminate TITLE / DESC.
+			// Go directives (//go:, //nolint:, …) are dropped from the stream — they have no role in the swagger annotation
+			// grammar and must not contaminate TITLE / DESC.
 			i++
 		case TokenAnnotation:
 			switch {
@@ -729,14 +720,13 @@ func accumulateBodies(in []Token) []Token {
 	return out
 }
 
-// collectDescriptionBody folds the contiguous prose lines following a `swagger:description`
-// annotation into its argument (Option B, blank-line terminator): the body runs to the first blank
-// line, keyword, annotation, or EOF — anything that is not a plain prose line ends it (so a
-// following `maximum:` keyword or `swagger:*` annotation is never swallowed).
+// collectDescriptionBody folds the contiguous prose lines following a `swagger:description` annotation into its
+// argument (Option B, blank-line terminator): the body runs to the first blank line, keyword, annotation, or EOF —
+// anything that is not a plain prose line ends it (so a following `maximum:` keyword or `swagger:*` annotation is never
+// swallowed).
 //
-// The combined inline-plus-body text becomes the annotation's single raw arg, so AnnotationArg()
-// returns the whole multi-line description and the folded lines never reach the prose (TITLE/DESC)
-// surface.
+// The combined inline-plus-body text becomes the annotation's single raw arg, so AnnotationArg() returns the whole
+// multi-line description and the folded lines never reach the prose (TITLE/DESC) surface.
 // Returns the index past the folded lines.
 //
 // `swagger:title` is single-line and is not handled here.
@@ -755,11 +745,10 @@ func collectDescriptionBody(in []Token, i int, out *[]Token) int {
 	return j
 }
 
-// collectDescriptionLiteral folds the verbatim body of a `swagger:description |` literal block into
-// the annotation's single raw argument. classifyLines' literal mode has already emitted the body as
-// a contiguous run of tokenRawLine (every source line after the marker, until the next annotation
-// or EOF), so the body is preserved exactly — indentation, blank lines, table pipes, and `---`
-// all intact.
+// collectDescriptionLiteral folds the verbatim body of a `swagger:description |` literal block into the annotation's
+// single raw argument. classifyLines' literal mode has already emitted the body as a contiguous run of tokenRawLine
+// (every source line after the marker, until the next annotation or EOF), so the body is preserved exactly —
+// indentation, blank lines, table pipes, and `---` all intact.
 //
 // Trailing blank lines are clipped (bare-`|` semantics) and the `|` marker itself is dropped.
 // Returns the index past the folded body.
@@ -768,10 +757,9 @@ func collectDescriptionLiteral(in []Token, i int, out *[]Token) int {
 	j := i + 1
 	var body []string
 	for j < len(in) && in[j].Kind == tokenRawLine {
-		// Drop the single godoc convention space after `//` (gofmt-canonical `// text`); it is comment
-		// decoration, not body.
-		// Author indentation beyond it, trailing whitespace (markdown hard breaks), pipes, and blank
-		// lines are all preserved verbatim.
+		// Drop the single godoc convention space after `//` (gofmt-canonical `// text`); it is comment decoration, not body.
+		// Author indentation beyond it, trailing whitespace (markdown hard breaks), pipes, and blank lines are all preserved
+		// verbatim.
 		body = append(body, strings.TrimPrefix(in[j].Raw, " "))
 		j++
 	}
@@ -783,9 +771,8 @@ func collectDescriptionLiteral(in []Token, i int, out *[]Token) int {
 	return j
 }
 
-// combineDescriptionArg joins the inline argument (if any) with the folded body lines using "\n"
-// — the same join the prose Description() accumulator uses — preserving the inline arg's
-// position when present.
+// combineDescriptionArg joins the inline argument (if any) with the folded body lines using "\n" — the same join the
+// prose Description() accumulator uses — preserving the inline arg's position when present.
 func combineDescriptionArg(ann Token, body []string) Token {
 	pos := ann.Pos
 	var parts []string
@@ -837,15 +824,15 @@ func collectFencedYAML(in []Token, i int, out *[]Token) int {
 	return i
 }
 
-// collectRawBlock accumulates the body of a RAW_BLOCK_<KW> keyword (consumes / produces / responses
-// / parameters / extensions / …).
+// collectRawBlock accumulates the body of a RAW_BLOCK_<KW> keyword (consumes / produces / responses / parameters /
+// extensions / …).
 //
 // Stops at the next sibling structural item or EOF; blank lines do not terminate.
 //
 // # Details
 //
-// See README §raw-block-terminators for the sibling-terminator rule, the inline-value capture on
-// the head, and the per-body indentation handling.
+// See README §raw-block-terminators for the sibling-terminator rule, the inline-value capture on the head, and the
+// per-body indentation handling.
 func collectRawBlock(in []Token, i int, kw Keyword, out *[]Token) int {
 	head := in[i]
 	headPos := head.Pos
@@ -854,22 +841,22 @@ func collectRawBlock(in []Token, i int, kw Keyword, out *[]Token) int {
 	pendingBlanks := 0
 
 	// Inline-value capture.
-	// `Consumes: application/json` on a single line carries the value on head.Text; prepending it as
-	// the first body line keeps the inline-plus-indented-continuation form working uniformly.
+	// `Consumes: application/json` on a single line carries the value on head.Text; prepending it as the first body line
+	// keeps the inline-plus-indented-continuation form working uniformly.
 	// Without the prepend the post-colon payload would be silently lost.
 	if head.Text != "" {
 		bodyText = append(bodyText, head.Text)
 		bodyRaw = append(bodyRaw, head.Text)
 	}
 
-	// extensions / infoExtensions / securityDefinitions / Tags / security bodies are YAML-parsed
-	// downstream (yaml.TypedExtensions, yaml.UnmarshalBody via the meta walker, or security.Parse), so
-	// every body line MUST preserve its original indentation — Tags in particular is a sequence of
-	// mappings whose nesting collapses if the per-item indent is dropped, and a `Security:`
-	// requirement with block-style scopes (`- name:` then indented `- scope`) needs the same.
+	// extensions / infoExtensions / securityDefinitions / Tags / security bodies are YAML-parsed downstream
+	// (yaml.TypedExtensions, yaml.UnmarshalBody via the meta walker, or security.Parse), so every body line MUST preserve
+	// its original indentation — Tags in particular is a sequence of mappings whose nesting collapses if the per-item
+	// indent is dropped, and a `Security:` requirement with block-style scopes (`- name:` then indented `- scope`) needs
+	// the same.
 	//
-	// Flat raw blocks (consumes / produces / …) use the Text view (leading whitespace dropped,
-	// recognised keywords reformatted).
+	// Flat raw blocks (consumes / produces / …) use the Text view (leading whitespace dropped, recognised keywords
+	// reformatted).
 	// Both branches converge on the same bodyText slice.
 	yamlBody := kw.Name == "extensions" ||
 		kw.Name == "infoExtensions" ||
@@ -901,21 +888,18 @@ func collectRawBlock(in []Token, i int, kw Keyword, out *[]Token) int {
 			return i
 		case tokenKeywordPre:
 			// Sibling structural keyword? — terminate.
-			// Keywords that could legitimately appear inside the body (e.g. nested `default:` under a
-			// `Parameters:` block) are absorbed as body text.
+			// Keywords that could legitimately appear inside the body (e.g. nested `default:` under a `Parameters:` block) are
+			// absorbed as body text.
 			//
-			// Rule: same family / a sub-context keyword is body; another route/operation/meta-context
-			// keyword is a sibling.
+			// Rule: same family / a sub-context keyword is body; another route/operation/meta-context keyword is a sibling.
 			//
-			// Indentation override (YAML-bodied blocks only): inside a YAML body — Tags /
-			// securityDefinitions / extensions — a same-family keyword indented strictly deeper than the
-			// head is a nested YAML key, not a sibling (e.g. `externalDocs:` under a `Tags:` list item, both
-			// meta-family).
+			// Indentation override (YAML-bodied blocks only): inside a YAML body — Tags / securityDefinitions / extensions —
+			// a same-family keyword indented strictly deeper than the head is a nested YAML key, not a sibling (e.g.
+			// `externalDocs:` under a `Tags:` list item, both meta-family).
 			//
 			// Absorb it so the YAML structure survives.
-			// Flat raw blocks (TOS / consumes / …) do NOT apply this: their keyword indentation is
-			// cosmetic — the petstore meta indents Schemes/Host deeper than a column-0 `Terms Of
-			// Service:`, yet they are siblings.
+			// Flat raw blocks (TOS / consumes / …) do NOT apply this: their keyword indentation is cosmetic — the petstore
+			// meta indents Schemes/Host deeper than a column-0 `Terms Of Service:`, yet they are siblings.
 			sibling := isSiblingTerminatorFor(kw, next.Name)
 			if sibling && yamlBody &&
 				leadingIndentWidth(next.Raw) > leadingIndentWidth(head.Raw) {
@@ -934,8 +918,7 @@ func collectRawBlock(in []Token, i int, kw Keyword, out *[]Token) int {
 			bodyRaw = append(bodyRaw, next.Raw)
 			i++
 		case tokenYAMLFence:
-			// extensions blocks may decorate the body with a `---` fence; absorb its contents and drop the
-			// fence markers.
+			// extensions blocks may decorate the body with a `---` fence; absorb its contents and drop the fence markers.
 			// See README §yaml-fence-handling.
 			if kw.Name == "extensions" {
 				i = absorbDecorativeFenceInto(in, i+1, &bodyText, &bodyRaw)
@@ -969,8 +952,7 @@ func collectRawBlock(in []Token, i int, kw Keyword, out *[]Token) int {
 	return i
 }
 
-// absorbDecorativeFenceInto consumes raw lines until the matching closing fence and appends them
-// into the active body.
+// absorbDecorativeFenceInto consumes raw lines until the matching closing fence and appends them into the active body.
 //
 // Fences themselves are dropped.
 // Returns the index past the closing fence (or len(in) on truncation).
@@ -990,12 +972,11 @@ func absorbDecorativeFenceInto(in []Token, i int, bodyText, bodyRaw *[]string) i
 	return i
 }
 
-// emitRawBlock writes one TokenRawBlockBody to out. headPos/head carry items-depth and source-name
-// details forwarded onto the body token.
+// emitRawBlock writes one TokenRawBlockBody to out. headPos/head carry items-depth and source-name details forwarded
+// onto the body token.
 //
-// A RAW_BLOCK has no closing delimiter — its body ends at the next sibling structural keyword or
-// EOF — so there is no truncation condition (unlike OPAQUE_YAML, where a missing closing `---` is
-// a real failure mode).
+// A RAW_BLOCK has no closing delimiter — its body ends at the next sibling structural keyword or EOF — so there is
+// no truncation condition (unlike OPAQUE_YAML, where a missing closing `---` is a real failure mode).
 func emitRawBlock(out *[]Token, headPos token.Position, head Token, kw Keyword, body, raw []string) {
 	*out = append(*out, Token{
 		Kind:       TokenRawBlockBody,
@@ -1011,8 +992,8 @@ func emitRawBlock(out *[]Token, headPos token.Position, head Token, kw Keyword, 
 
 // collectRawValue handles RAW_VALUE_<KW> body keywords (default / example / enum).
 //
-// Single-line case (head with non-empty inline value) emits one body token immediately; multi-line
-// case scans subsequent lines until a sibling terminator.
+// Single-line case (head with non-empty inline value) emits one body token immediately; multi-line case scans
+// subsequent lines until a sibling terminator.
 func collectRawValue(in []Token, i int, kw Keyword, out *[]Token) int {
 	head := in[i]
 	headPos := head.Pos
@@ -1096,8 +1077,8 @@ func emitRawValue(out *[]Token, headPos token.Position, head Token, kw Keyword, 
 	})
 }
 
-// formatKeywordLine recreates the textual `<name>: <value>` line for a keyword token absorbed into
-// a raw body — line-preserving rendering for downstream consumers that read the body as text.
+// formatKeywordLine recreates the textual `<name>: <value>` line for a keyword token absorbed into a raw body —
+// line-preserving rendering for downstream consumers that read the body as text.
 func formatKeywordLine(t Token) string {
 	name := t.SourceName
 	if name == "" {
@@ -1109,9 +1090,8 @@ func formatKeywordLine(t Token) string {
 	return name + ": " + t.Text
 }
 
-// isSiblingTerminatorFor decides whether a keyword named `next`, encountered while accumulating a
-// body opened by `kw`, is a sibling structural terminator (true) or a sub-context keyword that
-// should be absorbed as body text (false).
+// isSiblingTerminatorFor decides whether a keyword named `next`, encountered while accumulating a body opened by `kw`,
+// is a sibling structural terminator (true) or a sub-context keyword that should be absorbed as body text (false).
 //
 // Rule:
 //
@@ -1123,15 +1103,15 @@ func formatKeywordLine(t Token) string {
 //     terminate on any sibling that is a schema-context keyword.
 //
 // Look-up uses the keyword table's Contexts.
-// See README §raw-block-terminators. tabStopWidth is the column width a tab advances to when
-// measuring leading indentation — the conventional 8-column tab stop.
+// See README §raw-block-terminators. tabStopWidth is the column width a tab advances to when measuring leading
+// indentation — the conventional 8-column tab stop.
 const tabStopWidth = 8
 
-// leadingIndentWidth measures the visual width of raw's leading whitespace run, expanding tabs to
-// 8-column tab stops and counting spaces as one column each.
+// leadingIndentWidth measures the visual width of raw's leading whitespace run, expanding tabs to 8-column tab stops
+// and counting spaces as one column each.
 //
-// Used by the raw-block terminator to tell a nested YAML key (indented deeper than its block head)
-// from a true sibling keyword at the same indentation.
+// Used by the raw-block terminator to tell a nested YAML key (indented deeper than its block head) from a true sibling
+// keyword at the same indentation.
 // Non-whitespace ends the run.
 func leadingIndentWidth(raw string) int {
 	w := 0
@@ -1179,12 +1159,11 @@ func familyOf(kw Keyword) []KeywordContext {
 	return out
 }
 
-// finaliseInlineKeyword converts a tokenKeywordPre into a TokenKeyword carrying the lexer-typed
-// value via its Args field.
+// finaliseInlineKeyword converts a tokenKeywordPre into a TokenKeyword carrying the lexer-typed value via its Args
+// field.
 //
-// Emitting a single TokenKeyword (rather than two adjacent tokens) keeps the body accumulator's
-// output atomic — exactly one token per keyword regardless of how many sub-tokens the value
-// carries.
+// Emitting a single TokenKeyword (rather than two adjacent tokens) keeps the body accumulator's output atomic —
+// exactly one token per keyword regardless of how many sub-tokens the value carries.
 // The parser unpacks Args to read the typed value.
 func finaliseInlineKeyword(t Token, kw Keyword) Token {
 	value := t.Text
@@ -1207,8 +1186,8 @@ func finaliseInlineKeyword(t Token, kw Keyword) Token {
 	case ShapeEnumOption:
 		argTok = Token{Kind: TokenEnumOption, Pos: valuePos, Text: value}
 	case ShapeNone, ShapeRawBlock, ShapeRawValue:
-		// Body keywords reach finaliseInlineKeyword only on the pathological "head with no inline value
-		// but no following body" case.
+		// Body keywords reach finaliseInlineKeyword only on the pathological "head with no inline value but no following
+		// body" case.
 		// Treat the value, if any, as a string token.
 		argTok = Token{Kind: TokenStringValue, Pos: valuePos, Text: value}
 	default:
@@ -1232,13 +1211,12 @@ func finaliseInlineKeyword(t Token, kw Keyword) Token {
 // classifyProse re-types tokenText tokens as TITLE / DESC.
 //
 // The function preserves all non-text tokens and the relative order of text tokens.
-// Blank tokens within a prose run are preserved so downstream consumers can reproduce paragraph
-// structure.
+// Blank tokens within a prose run are preserved so downstream consumers can reproduce paragraph structure.
 //
 // # Details
 //
-// See README §prose-classification for the four heuristics and the rationale for applying them to
-// unbound (no-annotation) comments as well as annotated ones.
+// See README §prose-classification for the four heuristics and the rationale for applying them to unbound
+// (no-annotation) comments as well as annotated ones.
 func classifyProse(in []Token) []Token {
 	hasAnnotation := false
 	for _, t := range in {
@@ -1260,14 +1238,12 @@ func classifyProse(in []Token) []Token {
 			}
 			continue
 		}
-		// Drop Kubernetes-style marker comments (`+kubebuilder:…`, `+genclient`, `+k8s:…`) from the
-		// prose surface so they never leak into model / property descriptions (go-swagger#2687, the
-		// residual of #3007).
+		// Drop Kubernetes-style marker comments (`+kubebuilder:…`, `+genclient`, `+k8s:…`) from the prose surface so they
+		// never leak into model / property descriptions (go-swagger#2687, the residual of #3007).
 		//
-		// Done here (Stage 3) rather than at line classification so annotation bodies are untouched —
-		// the inline swagger:route parameters grammar uses `+name:` as a parameter separator
-		// (go-swagger#3100), and by this stage that body has already been folded into its keyword token
-		// by accumulateBodies.
+		// Done here (Stage 3) rather than at line classification so annotation bodies are untouched — the inline
+		// swagger:route parameters grammar uses `+name:` as a parameter separator (go-swagger#3100), and by this stage that
+		// body has already been folded into its keyword token by accumulateBodies.
 		if t.Kind == tokenText && isDirectiveMarker(t.Text) {
 			continue
 		}
@@ -1276,9 +1252,9 @@ func classifyProse(in []Token) []Token {
 		_ = state
 	}
 
-	// Always classify — UnboundBlock-style comments (no swagger annotation) still need title/desc
-	// classification because the schema builder consumes their PreambleTitle/PreambleDescription when
-	// an interface or alias is referenced indirectly.
+	// Always classify — UnboundBlock-style comments (no swagger annotation) still need title/desc classification because
+	// the schema builder consumes their PreambleTitle/PreambleDescription when an interface or alias is referenced
+	// indirectly.
 	return classifyProseRunsInPlace(out, hasAnnotation)
 }
 
@@ -1290,15 +1266,13 @@ const (
 	proseInBody
 )
 
-// classifyProseRunsInPlace walks `out` and re-types contiguous runs of (tokenText / TokenBlank)
-// into TITLE / DESC.
+// classifyProseRunsInPlace walks `out` and re-types contiguous runs of (tokenText / TokenBlank) into TITLE / DESC.
 //
 // The first prose run is split into title + description; later prose runs become DESC.
 //
-// The annotation flag is no longer consulted — heuristics fire on UnboundBlock-style comments (no
-// swagger annotation) too, because such comments render as schemas through indirect references
-// (e.g. a non-annotated interface embedded by a swagger:model parent) and the consumer still wants
-// the title/description split.
+// The annotation flag is no longer consulted — heuristics fire on UnboundBlock-style comments (no swagger annotation)
+// too, because such comments render as schemas through indirect references (e.g. a non-annotated interface embedded by
+// a swagger:model parent) and the consumer still wants the title/description split.
 func classifyProseRunsInPlace(out []Token, _ bool) []Token {
 	firstRun := true
 	for i := 0; i < len(out); {
@@ -1321,8 +1295,7 @@ func classifyProseRunsInPlace(out []Token, _ bool) []Token {
 	return out
 }
 
-// classifyTitleDescRun applies the four prose heuristics to a single contiguous prose run [start,
-// end).
+// classifyTitleDescRun applies the four prose heuristics to a single contiguous prose run [start, end).
 //
 // See README §prose-classification.
 func classifyTitleDescRun(out []Token, start, end int) {
@@ -1341,11 +1314,11 @@ func classifyTitleDescRun(out []Token, start, end int) {
 	}
 
 	// Heuristic 1: blank inside the run splits title (before) / desc (after).
-	// Only fires when the blank has text AFTER it — a trailing blank is a separator between the
-	// prose run and the next non-prose token (annotation / EOF), not an internal title/desc divide.
+	// Only fires when the blank has text AFTER it — a trailing blank is a separator between the prose run and the next
+	// non-prose token (annotation / EOF), not an internal title/desc divide.
 	//
-	// On a heuristic-1 split, also strip an ATX heading marker from the first title line so the
-	// rendered title doesn't carry the `#`+ prefix.
+	// On a heuristic-1 split, also strip an ATX heading marker from the first title line so the rendered title doesn't
+	// carry the `#`+ prefix.
 	for k := firstText + 1; k < end; k++ {
 		if out[k].Kind != TokenBlank {
 			continue
@@ -1390,8 +1363,8 @@ func classifyTitleDescRun(out []Token, start, end int) {
 
 // retypeRunAs re-types the (text, blank) tokens in [start, end) so that text becomes `kind`.
 //
-// Blanks are preserved (kept as TokenBlank) because consumers may want paragraph breaks intact
-// between TITLE / DESC runs.
+// Blanks are preserved (kept as TokenBlank) because consumers may want paragraph breaks intact between TITLE / DESC
+// runs.
 func retypeRunAs(out []Token, start, end int, kind TokenKind) {
 	for k := start; k < end; k++ {
 		if out[k].Kind == tokenText {
@@ -1400,8 +1373,8 @@ func retypeRunAs(out []Token, start, end int, kind TokenKind) {
 	}
 }
 
-// stripATXHeading recognises a markdown ATX-style heading prefix — one or more leading `#`
-// followed by at least one whitespace character — and returns the trimmed remainder.
+// stripATXHeading recognises a markdown ATX-style heading prefix — one or more leading `#` followed by at least one
+// whitespace character — and returns the trimmed remainder.
 //
 // Reports false when the input doesn't open with `#`.
 // Replaces a regexp.
@@ -1425,8 +1398,8 @@ func stripATXHeading(s string) (rest string, ok bool) {
 	return strings.TrimSpace(s[i+1:]), true
 }
 
-// endsWithPunct reports whether s ends in Unicode punctuation other than dash/connector —
-// implementation looks for category Po ("punctuation, other") on the last rune.
+// endsWithPunct reports whether s ends in Unicode punctuation other than dash/connector — implementation looks for
+// category Po ("punctuation, other") on the last rune.
 func endsWithPunct(s string) bool {
 	s = strings.TrimRightFunc(s, unicode.IsSpace)
 	if s == "" {
