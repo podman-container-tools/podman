@@ -32,15 +32,16 @@ func (v *Volume) Inspect() (*define.InspectVolumeData, error) {
 		logrus.Debugf("Querying volume plugin %s for status", v.config.Driver)
 		data.Mountpoint = v.state.MountPoint
 
-		if v.plugin == nil {
-			return nil, fmt.Errorf("volume %s uses volume plugin %s but it is not available, cannot inspect: %w", v.Name(), v.config.Driver, define.ErrMissingPlugin)
+		plugin, err := v.volumePlugin()
+		if err != nil {
+			return nil, fmt.Errorf("volume %s uses volume plugin %s but it is not available, cannot inspect: %w", v.Name(), v.config.Driver, err)
 		}
 
 		// Retrieve status for the volume.
 		// Need to query the volume driver.
 		req := new(pluginapi.GetRequest)
 		req.Name = v.Name()
-		resp, err := v.plugin.GetVolume(req)
+		resp, err := plugin.GetVolume(req)
 		if err != nil {
 			return nil, fmt.Errorf("retrieving volume %s information from plugin %s: %w", v.Name(), v.Driver(), err)
 		}
