@@ -1,0 +1,9 @@
+## assert-podman-args -v app-config:/config
+## assert-podman-args -v app-data:/data
+## assert-key-is "Unit" "Requires" "volume-template-volume@app-config.service" "volume-template-volume@app-data.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "volume-template-volume@app-config.service" "volume-template-volume@app-data.service"
+
+[Container]
+Image=localhost/imagename
+Volume=volume-template@app-config.volume:/config
+Volume=volume-template@app-data.volume:/data

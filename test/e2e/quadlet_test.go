@@ -1229,6 +1229,7 @@ BOGUS=foo
 		Entry("emptyline.container", "emptyline.container", "converting \"emptyline.container\": no Image or Rootfs key specified"),
 
 		Entry("Mount - Missing source=...", "mount-source-missing.container", "converting \"mount-source-missing.container\": source parameter is required for mount type image"),
+		Entry("Volume - Template instance not found", "volume.template-instance-not-found.container", "converting \"volume.template-instance-not-found.container\": requested Quadlet source missing-template@app-config.volume was not found"),
 	)
 
 	DescribeTable("Running success quadlet with ServiceName test case",
@@ -1290,6 +1291,31 @@ BOGUS=foo
 				"template-dependency@.volume",
 				"template-dependency@.network",
 			},
+		),
+		Entry(
+			"Container - Volume template instance reference",
+			"volume.template-instance.container",
+			[]string{"volume-template@.volume"},
+		),
+		Entry(
+			"Container - Volume template instance default name",
+			"volume.template-instance-default.container",
+			[]string{"volume-template-default@.volume"},
+		),
+		Entry(
+			"Container - Volume template instance with %N",
+			"volume.template-instance-percentn.container",
+			[]string{"volume-template@.volume"},
+		),
+		Entry(
+			"Container - Mount volume template instance",
+			"mount.template-instance.container",
+			[]string{"volume-template@.volume"},
+		),
+		Entry(
+			"Container - Network template instance reference",
+			"network.template-instance.container",
+			[]string{"network-template@.network"},
 		),
 
 		Entry("Volume - Quadlet image (.build)", "build.quadlet.volume", []string{"basic.build"}),
