@@ -1002,6 +1002,41 @@ t POST containers/create?platform=linux/aarch64 \
   Image=$IMAGE \
   404
 
+# 28193: podman --remote exec ignores empty detach keys (explicitly disable detach).
+# Previously the JSON decoder could not distinguish an absent field from an
+# explicitly-empty one, so DetachKeys:"" was silently ignored.
+podman run -d --name exec-detach-keys-test $IMAGE top
+
+# Without DetachKeys the system default must be preserved (non-empty).
+t POST containers/exec-detach-keys-test/exec \
+  Cmd='["true"]' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t GET exec/$eid/json 200
+jq -e '.DetachKeys != ""' <<<"$output"
+
+# Explicitly empty DetachKeys disables detach - exec create must accept it.
+t POST containers/exec-detach-keys-test/exec \
+  Cmd='["true"]' \
+  DetachKeys='' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t GET exec/$eid/json 200 .DetachKeys=''
+
+# A non-empty DetachKeys must be stored and returned by inspect.
+t POST containers/exec-detach-keys-test/exec \
+  Cmd='["true"]' \
+  DetachKeys='ctrl-c' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+eid=$(jq -r '.Id' <<<"$output")
+t GET exec/$eid/json 200 .DetachKeys='ctrl-c'
+
+podman rm -f exec-detach-keys-test
+
+
 # test apiv2 create container with oci_runtime option :- https://github.com/containers/podman/issues/28429
 oci_runtimes=('runc' 'crun')
 
