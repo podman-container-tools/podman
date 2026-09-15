@@ -10,6 +10,8 @@ import (
 type PlayOptions struct {
 	// Annotations - Annotations to add to Pods
 	Annotations map[string]string
+	// Labels - labels to add to created resources
+	Labels map[string]string
 	// Authfile - path to an authentication file.
 	Authfile *string `schema:"-"`
 	// CertDir - to a directory containing TLS certifications and keys.
