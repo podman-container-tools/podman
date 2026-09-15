@@ -1375,7 +1375,7 @@ EOF
     service_setup $QUADLET_SERVICE_NAME
 
     run_podman pod ps --format "{{.Name}}--{{.Status}}"
-    assert "$output" =~ "$pod_name--Running" "pod is running"
+    assert "$output" =~ "$pod_name--running" "pod is running"
 
     service_cleanup $QUADLET_SERVICE_NAME inactive
 }

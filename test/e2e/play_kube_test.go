@@ -2462,7 +2462,7 @@ var _ = Describe("Podman kube play", func() {
 			output := inspect.OutputToString()
 			id, state, found := strings.Cut(output, "@")
 			Expect(found).To(BeTrue())
-			Expect(state).To(Equal(name + ":Running"))
+			Expect(state).To(Equal(name + ":running"))
 			ids = append(ids, id)
 
 		}
@@ -4836,7 +4836,7 @@ spec:
 		Expect(inspectVolume.OutputToString()).To(ContainSubstring(volName))
 
 		inspectPod := podmanTest.PodmanExitCleanly("inspect", podName+"-pod", "--format", "'{{ .State }}'")
-		Expect(inspectPod.OutputToString()).To(ContainSubstring(`Running`))
+		Expect(inspectPod.OutputToString()).To(ContainSubstring(`running`))
 
 		inspectMounts := podmanTest.PodmanExitCleanly("inspect", podName+"-pod-"+ctrName, "--format", "{{ (index .Mounts 0).Type }}:{{ (index .Mounts 0).Name }}")
 
@@ -4898,7 +4898,7 @@ spec:
 		podmanTest.PodmanExitCleanly("kube", "play", kubeYaml)
 		for _, n := range podNames {
 			inspect := podmanTest.PodmanExitCleanly("inspect", n, "--format", "'{{ .State }}'")
-			Expect(inspect.OutputToString()).To(ContainSubstring(`Running`))
+			Expect(inspect.OutputToString()).To(ContainSubstring(`running`))
 		}
 	})
 
