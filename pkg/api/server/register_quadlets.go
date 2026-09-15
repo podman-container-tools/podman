@@ -176,6 +176,11 @@ func (s *APIServer) registerQuadletHandlers(r *mux.Router) error {
 	//    type: boolean
 	//    default: true
 	//    description: Reload systemd after removing quadlets
+	//  - in: query
+	//    name: recursive
+	//    type: boolean
+	//    default: false
+	//    description: Remove all quadlets belonging to the specified application and its directory
 	// responses:
 	//   200:
 	//     $ref: "#/responses/quadletRemoveResponse"
@@ -214,6 +219,11 @@ func (s *APIServer) registerQuadletHandlers(r *mux.Router) error {
 	//    type: boolean
 	//    default: true
 	//    description: Reload systemd after removing the quadlet
+	//  - in: query
+	//    name: recursive
+	//    type: boolean
+	//    default: false
+	//    description: Remove all quadlets belonging to the specified application and its directory
 	// responses:
 	//   200:
 	//     $ref: "#/responses/quadletRemoveResponse"
