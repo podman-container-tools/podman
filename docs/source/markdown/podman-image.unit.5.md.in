@@ -45,6 +45,7 @@ Valid options for `[Image]` are listed below:
 | Policy=always                          | --policy=always                                  |
 | Retry=5                                | --retry=5                                        |
 | RetryDelay=10s                         | --retry-delay=10s                                |
+| ServiceName=name                       | Name the systemd unit `name.service`             |
 | TLSVerify=false                        | --tls-verify=false                               |
 | Variant=arm/v7                         | --variant=arm/v7                                 |
 
@@ -95,6 +96,13 @@ requires setting
 @@option quadlet:retry
 
 @@option quadlet:retry-delay
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit by appending `-image` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 @@option quadlet:tls-verify
 
