@@ -675,6 +675,13 @@ spec:
     {{ end }}
     image: {{ .Image }}
     name: {{ .Name }}
+    {{ if .VolumeMount }}
+    volumeMounts:
+    - name: {{ .VolumeName }}
+      mountPath: {{ .VolumeMountPath }}
+      subPath: {{ .VolumeSubPath }}
+      readOnly: {{ .VolumeReadOnly }}
+    {{ end }}
   {{ end }}
 {{ end }}
 {{ if .SecurityContext }}
@@ -4500,6 +4507,32 @@ spec:
 		podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName1, "sh", "-c", "echo shared-data > /test-emptydir/file")
 		data := podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName2, "cat", "/test-emptydir/file")
 		Expect(data.OutputToString()).To(Equal("shared-data"))
+
+		podmanTest.PodmanExitCleanly("pod", "rm", "-f", podName)
+		volList := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
+		Expect(volList.OutputToString()).To(Equal(""))
+	})
+
+	It("with memory backed emptyDir volume shared from init container", func() {
+		podName := "test-pod"
+		initCtrName := "vol-test-init"
+		ctrName := "vol-test-ctr"
+		initCtr := getCtr(withVolumeMount("/test-emptydir", "", false), withImage(CITEST_IMAGE), withName(initCtrName), withCmd([]string{"sh", "-c", "echo shared-data > /test-emptydir/file"}), withInitCtr())
+		ctr := getCtr(withVolumeMount("/test-emptydir", "", false), withImage(CITEST_IMAGE), withName(ctrName))
+		pod := getPod(withPodName(podName), withVolume(getMemoryEmptyDirVolume()), withPodInitCtr(initCtr), withCtr(ctr))
+		err = generateKubeYaml("pod", pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		podmanTest.PodmanExitCleanly("kube", "play", kubeYaml)
+
+		fsType := podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName, "stat", "-f", "-c", "%T", "/test-emptydir")
+		Expect(fsType.OutputToString()).To(Equal("tmpfs"))
+
+		data := podmanTest.PodmanExitCleanly("exec", podName+"-"+ctrName, "cat", "/test-emptydir/file")
+		Expect(data.OutputToString()).To(Equal("shared-data"))
+
+		mounts := podmanTest.PodmanExitCleanly("inspect", podName+"-"+ctrName, "--format", "{{range .Mounts}}{{println .Destination}}{{end}}")
+		Expect(strings.Fields(mounts.OutputToString())).To(ConsistOf("/test-emptydir"))
 
 		podmanTest.PodmanExitCleanly("pod", "rm", "-f", podName)
 		volList := podmanTest.PodmanExitCleanly("volume", "ls", "-q")
