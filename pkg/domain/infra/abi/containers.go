@@ -1041,6 +1041,15 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 	if err != nil {
 		return nil, err
 	}
+	if options.PIDFile != "" && len(containers) > 1 {
+		return nil, errors.New("--pidfile can only be used with a single container")
+	}
+	writePIDFile := func(id string, pid int) error {
+		if err := util.CreateIDFile(options.PIDFile, strconv.Itoa(pid)); err != nil {
+			return fmt.Errorf("writing pidfile for container %q: %w", id, err)
+		}
+		return nil
+	}
 	// There can only be one container if attach was used
 	for i := range containers {
 		ctr := containers[i]
@@ -1112,12 +1121,22 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 			RawInput: ctr.rawInput,
 			ExitCode: 125,
 		}
-		if err := ctr.Start(ctx, true); err != nil {
+		pid, err := ctr.Start(ctx, true)
+		if err != nil {
 			// Already running is no error for the start command as it is idempotent.
 			if errors.Is(err, define.ErrCtrStateRunning) {
 				// If all is set we only want to output the actual started containers
 				// so do not include the entry in the result.
 				if !options.All {
+					// start is idempotent, so still honor --pidfile for an
+					// already-running container.
+					if options.PIDFile != "" {
+						if err := writePIDFile(ctr.ID(), pid); err != nil {
+							report.Err = err
+							reports = append(reports, report)
+							continue
+						}
+					}
 					report.ExitCode = 0
 					reports = append(reports, report)
 				}
@@ -1136,6 +1155,13 @@ func (ic *ContainerEngine) ContainerStart(ctx context.Context, namesOrIds []stri
 			}
 			reports = append(reports, report)
 			continue
+		}
+		if options.PIDFile != "" {
+			if err := writePIDFile(ctr.ID(), pid); err != nil {
+				report.Err = err
+				reports = append(reports, report)
+				continue
+			}
 		}
 		// no error set exit code to 0
 		report.ExitCode = 0
@@ -1262,7 +1288,7 @@ func (ic *ContainerEngine) ContainerRun(ctx context.Context, opts entities.Conta
 	}
 	if opts.Detach {
 		// if the container was created as part of a pod, also start its dependencies, if any.
-		if err := ctr.Start(ctx, true); err != nil {
+		if _, err := ctr.Start(ctx, true); err != nil {
 			// This means the command did not exist
 			report.ExitCode = define.ExitCode(err)
 			if opts.Rm {
@@ -1861,7 +1887,7 @@ func (ic *ContainerEngine) ContainerClone(ctx context.Context, ctrCloneOpts enti
 	}
 
 	if ctrCloneOpts.Run {
-		if err := ctr.Start(ctx, true); err != nil {
+		if _, err := ctr.Start(ctx, true); err != nil {
 			return nil, err
 		}
 	}
