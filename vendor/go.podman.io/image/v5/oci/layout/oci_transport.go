@@ -2,14 +2,10 @@ package layout
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/directory/explicitfilepath"
 	"go.podman.io/image/v5/docker/reference"
@@ -70,6 +66,8 @@ type ociReference struct {
 	// If not -1, a zero-based index of an image in the manifest index. Valid only for sources.
 	// Must not be set if image is set.
 	sourceIndex int
+
+	reader *Reader // If not nil, must be rooted at dir.
 }
 
 // ParseReference converts a string, which should not start with the ImageTransport.Name prefix, into an OCI ImageReference.
@@ -78,7 +76,7 @@ func ParseReference(reference string) (types.ImageReference, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newReference(dir, image, index)
+	return newReference(dir, image, index, nil)
 }
 
 // newReference returns an OCI reference for a directory, and an image name annotation or sourceIndex.
@@ -86,7 +84,7 @@ func ParseReference(reference string) (types.ImageReference, error) {
 // If sourceIndex==-1, the index will not be valid to point out the source image, only image will be used.
 // We do not expose an API supplying the resolvedDir; we could, but recomputing it
 // is generally cheap enough that we prefer being confident about the properties of resolvedDir.
-func newReference(dir, image string, sourceIndex int) (types.ImageReference, error) {
+func newReference(dir, image string, sourceIndex int, reader *Reader) (types.ImageReference, error) {
 	resolved, err := explicitfilepath.ResolvePathToFullyExplicit(dir)
 	if err != nil {
 		return nil, err
@@ -106,7 +104,16 @@ func newReference(dir, image string, sourceIndex int) (types.ImageReference, err
 	if sourceIndex != -1 && image != "" {
 		return nil, fmt.Errorf("Invalid oci: layout reference: cannot use both an image %s and a source index @%d", image, sourceIndex)
 	}
-	return ociReference{dir: dir, resolvedDir: resolved, image: image, sourceIndex: sourceIndex}, nil
+	if reader != nil && reader.root.Name() != dir {
+		return nil, fmt.Errorf("OCI layout directory %q does not match Reader’s root %q", dir, reader.root.Name())
+	}
+	return ociReference{
+		dir:         dir,
+		resolvedDir: resolved,
+		image:       image,
+		sourceIndex: sourceIndex,
+		reader:      reader,
+	}, nil
 }
 
 // NewIndexReference returns an OCI reference for a path and a zero-based source manifest index.
@@ -114,12 +121,12 @@ func NewIndexReference(dir string, sourceIndex int) (types.ImageReference, error
 	if sourceIndex < 0 {
 		return nil, fmt.Errorf("invalid call to NewIndexReference with negative index %d", sourceIndex)
 	}
-	return newReference(dir, "", sourceIndex)
+	return newReference(dir, "", sourceIndex, nil)
 }
 
 // NewReference returns an OCI reference for a directory and an optional image name annotation (if not "").
 func NewReference(dir, image string) (types.ImageReference, error) {
-	return newReference(dir, image, -1)
+	return newReference(dir, image, -1, nil)
 }
 
 func (ref ociReference) Transport() types.ImageTransport {
@@ -189,36 +196,7 @@ func (ref ociReference) NewImage(ctx context.Context, sys *types.SystemContext) 
 	return image.FromReference(ctx, sys, ref)
 }
 
-// getIndex returns a pointer to the index references by this ociReference. If an error occurs opening an index nil is returned together
-// with an error.
-func (ref ociReference) getIndex() (*imgspecv1.Index, error) {
-	return parseIndex(ref.indexPath())
-}
-
-func parseIndex(path string) (*imgspecv1.Index, error) {
-	return parseJSON[imgspecv1.Index](path)
-}
-
-func parseJSON[T any](path string) (*T, error) {
-	content, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer content.Close()
-
-	obj := new(T)
-	if err := json.NewDecoder(content).Decode(obj); err != nil {
-		return nil, err
-	}
-	return obj, nil
-}
-
-func (ref ociReference) getManifestDescriptor() (imgspecv1.Descriptor, int, error) {
-	index, err := ref.getIndex()
-	if err != nil {
-		return imgspecv1.Descriptor{}, -1, err
-	}
-
+func (ref ociReference) getManifestDescriptor(index *imgspecv1.Index) (imgspecv1.Descriptor, int, error) {
 	switch {
 	case ref.image != "" && ref.sourceIndex != -1: // Coverage: newReference refuses to create such references.
 		return imgspecv1.Descriptor{}, -1, fmt.Errorf("Internal error: Cannot have both ref %s and source index @%d",
@@ -256,17 +234,6 @@ func (ref ociReference) getManifestDescriptor() (imgspecv1.Descriptor, int, erro
 	}
 }
 
-// LoadManifestDescriptor loads the manifest descriptor to be used to retrieve the image name
-// when pulling an image
-func LoadManifestDescriptor(imgRef types.ImageReference) (imgspecv1.Descriptor, error) {
-	ociRef, ok := imgRef.(ociReference)
-	if !ok {
-		return imgspecv1.Descriptor{}, errors.New("error typecasting, need type ociRef")
-	}
-	md, _, err := ociRef.getManifestDescriptor()
-	return md, err
-}
-
 // NewImageSource returns a types.ImageSource for this reference.
 // The caller must call .Close() on the returned ImageSource.
 func (ref ociReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
@@ -277,28 +244,4 @@ func (ref ociReference) NewImageSource(ctx context.Context, sys *types.SystemCon
 // The caller must call .Close() on the returned ImageDestination.
 func (ref ociReference) NewImageDestination(ctx context.Context, sys *types.SystemContext) (types.ImageDestination, error) {
 	return newImageDestination(sys, ref)
-}
-
-// ociLayoutPath returns a path for the oci-layout within a directory using OCI conventions.
-func (ref ociReference) ociLayoutPath() string {
-	return filepath.Join(ref.dir, imgspecv1.ImageLayoutFile)
-}
-
-// indexPath returns a path for the index.json within a directory using OCI conventions.
-func (ref ociReference) indexPath() string {
-	return filepath.Join(ref.dir, imgspecv1.ImageIndexFile)
-}
-
-// blobPath returns a path for a blob within a directory using OCI image-layout conventions.
-func (ref ociReference) blobPath(digest digest.Digest, sharedBlobDir string) (string, error) {
-	if err := digest.Validate(); err != nil {
-		return "", fmt.Errorf("unexpected digest reference %s: %w", digest, err)
-	}
-	var blobDir string
-	if sharedBlobDir != "" {
-		blobDir = sharedBlobDir
-	} else {
-		blobDir = filepath.Join(ref.dir, imgspecv1.ImageBlobsDir)
-	}
-	return filepath.Join(blobDir, digest.Algorithm().String(), digest.Encoded()), nil
 }

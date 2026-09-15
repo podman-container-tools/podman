@@ -5,7 +5,7 @@ package directory
 import (
 	"errors"
 	"io/fs"
-	"path/filepath"
+	"os"
 	"syscall"
 )
 
@@ -20,13 +20,29 @@ func Size(dir string) (size int64, err error) {
 
 // Usage walks a directory tree and returns its total size in bytes and the number of inodes.
 func Usage(dir string) (*DiskUsage, error) {
+	// WARNING: This is called in contexts where the contents of dir may be maliciously
+	// concurrently modified.
+
+	// os.OpenRoot requires the root to be a directory, and fails with an untyped error otherwise.
+	// It also follows symlinks.
+	fileInfo, err := os.Lstat(dir)
+	if err == nil && !fileInfo.IsDir() {
+		return &DiskUsage{
+			Size:       fileInfo.Size(),
+			InodeCount: 1,
+		}, nil
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
 	usage := &DiskUsage{}
 	data := make(map[uint64]struct{})
-	err := filepath.WalkDir(dir, func(d string, entry fs.DirEntry, err error) error {
+	err = fs.WalkDir(root.FS(), ".", func(fsPath string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			// if dir does not exist, Usage() returns the error.
-			// if dir/x disappeared while walking, Usage() ignores dir/x.
-			if errors.Is(err, fs.ErrNotExist) && d != dir {
+			if errors.Is(err, fs.ErrNotExist) {
 				return nil
 			}
 			return err

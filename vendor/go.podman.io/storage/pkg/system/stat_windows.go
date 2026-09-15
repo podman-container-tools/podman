@@ -52,6 +52,10 @@ func (s StatT) IsDir() bool {
 	return s.Mode().IsDir()
 }
 
+func (s StatT) IsSymlink() bool {
+	return s.Mode()&os.ModeSymlink != 0
+}
+
 // Stat takes a path to a file and returns
 // a system.StatT type pertaining to that file.
 //

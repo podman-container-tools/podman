@@ -21,3 +21,8 @@ const WhiteoutLinkDir = WhiteoutMetaPrefix + "plnk"
 // WhiteoutOpaqueDir file means directory has been made opaque - meaning
 // readdir calls to this directory do not follow to lower layers.
 const WhiteoutOpaqueDir = WhiteoutMetaPrefix + ".opq"
+
+// isInvalidWhiteoutTargetBaseName returns true a whiteout target base name (without WhiteoutPrefix) is invalid.
+func isInvalidWhiteoutTargetBaseName(baseName string) bool {
+	return baseName == "" || baseName == "." || baseName == ".."
+}

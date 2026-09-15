@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"go.podman.io/storage/internal/createpath"
 	"go.podman.io/storage/pkg/chunked/internal/minimal"
 	storagePath "go.podman.io/storage/pkg/chunked/internal/path"
 	"golang.org/x/sys/unix"
@@ -106,7 +107,7 @@ func getStMode(mode uint32, typ string) (uint32, error) {
 }
 
 func dumpNode(out io.Writer, added map[string]*minimal.FileMetadata, links map[string]int, verityDigests map[string]string, entry *minimal.FileMetadata) error {
-	path := storagePath.CleanAbsPath(entry.Name)
+	path := createpath.CleanAbsPath(entry.Name)
 
 	parent := filepath.Dir(path)
 	if _, found := added[parent]; !found && path != "/" {
@@ -164,7 +165,7 @@ func dumpNode(out io.Writer, added map[string]*minimal.FileMetadata, links map[s
 		if entry.Type == minimal.TypeSymlink {
 			payload = entry.Linkname
 		} else {
-			payload = storagePath.CleanAbsPath(entry.Linkname)
+			payload = createpath.CleanAbsPath(entry.Linkname)
 		}
 	} else if entry.Digest != "" {
 		d, err := digest.Parse(entry.Digest)

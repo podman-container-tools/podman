@@ -25,7 +25,7 @@ func syscallMode(i os.FileMode) (o uint32) {
 	return o
 }
 
-func handleLChmod(_ *tar.Header, path string, hdrInfo os.FileInfo, forceMask *os.FileMode) error {
+func handleLChmod(_ *tar.Header, path, _ string, hdrInfo os.FileInfo, forceMask *os.FileMode) error {
 	permissionsMask := hdrInfo.Mode()
 	if forceMask != nil {
 		permissionsMask = *forceMask
