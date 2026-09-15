@@ -186,6 +186,8 @@ See [**Environment**](#environment) note below for precedence and examples.
 
 @@option health-retries
 
+@@option health-start-interval
+
 @@option health-start-period
 
 @@option health-startup-cmd

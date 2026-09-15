@@ -62,6 +62,8 @@ Warning: Changing this setting may cause the loss of previous logs.
 
 @@option health-retries
 
+@@option health-start-interval
+
 @@option health-start-period
 
 @@option health-startup-cmd

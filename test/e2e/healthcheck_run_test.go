@@ -425,4 +425,49 @@ HEALTHCHECK CMD ls -l / 2>&1`, ALPINE)
 		hc.WaitWithTimeout(10)
 		Expect(hc).Should(ExitWithError(125, "Error: healthcheck command exceeded timeout of 3s"))
 	})
+
+	It("podman healthcheck startup command is not set with startup period", func() {
+		ctrName := "hc-" + RandomString(6)
+		session := podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName, "--health-cmd", "stat /tmp/health", "--health-start-period=15s", "--health-startup-interval=5s", ALPINE, "top")
+		session.WaitWithTimeout(10)
+
+		hc := podmanTest.Podman([]string{"healthcheck", "run", ctrName})
+		hc.WaitWithTimeout(10)
+		Expect(hc.OutputToString()).Should(BeEquivalentTo("starting"))
+	})
+
+	It("podman healthcheck startup command is set with startup period", func() {
+		ctrName := "test-regression"
+		session := podmanTest.Podman([]string{
+			"run", "-d",
+			"--name", ctrName,
+			"--health-cmd", "stat /tmp/ready",
+			"--health-startup-cmd", "stat /tmp/ready",
+			"--health-start-period=2s",
+			"--health-startup-interval=500ms",
+			"--health-retries=3",
+			TESTIMAGE,
+			"sh", "-c",
+			"sleep 3 && touch /tmp/ready && sleep infinity",
+		})
+		session.WaitWithTimeout(2)
+
+		// Check the status of container, it is starting within the start period
+		hc := podmanTest.Podman([]string{"healthcheck", "run", ctrName})
+		hc.WaitWithTimeout(1)
+		Expect(hc.OutputToString()).Should(BeEquivalentTo("starting"))
+
+		// Check the status of container, it has to be unhealthy after start period
+		Eventually(func() string {
+			hc := podmanTest.Podman([]string{"healthcheck", "run", ctrName})
+			hc.WaitWithTimeout(1)
+			return hc.OutputToString()
+		}, 3*time.Second, 200*time.Millisecond).Should(BeEquivalentTo("unhealthy"))
+
+		Eventually(func() int {
+			hc := podmanTest.Podman([]string{"healthcheck", "run", ctrName})
+			hc.WaitWithTimeout(1)
+			return hc.ExitCode()
+		}, 5*time.Second, 200*time.Millisecond).Should(Equal(0))
+	})
 })
