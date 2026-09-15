@@ -116,7 +116,7 @@ $c2[ ]\+tcp://localhost:54321[ ]\+true[ ]\+true" \
     # Start service. Now podman info should work fine. The %%-remote*
     # converts "podman-remote --opts" to just "podman", which is what
     # we need for the server.
-    ${PODMAN%%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
+    ${PODMAN%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
                         system service -t 99 tcp://localhost:$_SERVICE_PORT &
     _SERVICE_PID=$!
     # Wait for the port and the podman-service to be ready.
@@ -174,7 +174,7 @@ $c2[ ]\+tcp://localhost:54321[ ]\+true[ ]\+true" \
     # Start service. Now podman info should work fine. The %%-remote*
     # converts "podman-remote --opts" to just "podman", which is what
     # we need for the server.
-    ${PODMAN%%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
+    ${PODMAN%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
                         system service -t 99 \
                         --tls-cert="${REMOTESYSTEM_TLS_SERVER_CRT}" \
                         --tls-key="${REMOTESYSTEM_TLS_SERVER_KEY}" \
@@ -238,7 +238,7 @@ $c2[ ]\+tcp://localhost:54321[ ]\+true[ ]\+true" \
     # Start service. Now podman info should work fine. The %%-remote*
     # converts "podman-remote --opts" to just "podman", which is what
     # we need for the server.
-    ${PODMAN%%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
+    ${PODMAN%-remote*} $(podman_isolation_opts ${PODMAN_TMPDIR}) \
                         system service -t 99 \
                         --tls-client-ca="${REMOTESYSTEM_TLS_CA_CRT}" \
                         --tls-cert="${REMOTESYSTEM_TLS_SERVER_CRT}" \

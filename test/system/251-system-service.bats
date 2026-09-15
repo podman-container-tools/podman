@@ -16,7 +16,7 @@ function teardown() {
 }
 
 function _podman_system_service {
-  systemd-run --unit=$SERVICE_NAME ${PODMAN%%-remote} system service "$@"
+  systemd-run --unit=$SERVICE_NAME ${PODMAN%-remote} system service "$@"
 }
 
 @test "podman system service <bad_scheme_uri> returns error" {

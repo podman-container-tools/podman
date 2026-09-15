@@ -1470,8 +1470,8 @@ function start-suite-podman-system-service {
     esac
 
     # TODO: In the future, use systemd if possible
-    # systemd-run-user --unit=$SUITE_SERVICE_NAME ${PODMAN%%-remote*} system service "${service_args[@]}" --time=0
-    ${PODMAN%%-remote*} system service "${service_args[@]}" --time=0 &> "${PODMAN_SERVER_LOG:-/dev/null}" &
+    # systemd-run-user --unit=$SUITE_SERVICE_NAME ${PODMAN%-remote*} system service "${service_args[@]}" --time=0
+    ${PODMAN%-remote*} system service "${service_args[@]}" --time=0 &> "${PODMAN_SERVER_LOG:-/dev/null}" &
     echo $! > "${SUITE_PIDFILE}"
 
     retry=5

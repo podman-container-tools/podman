@@ -25,7 +25,7 @@ function teardown() {
 
   URL=unix:$PODMAN_TMPDIR/myunix.sock
 
-  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%%-remote*} system service $URL --time=0
+  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%-remote*} system service $URL --time=0
   wait_for_file $PODMAN_TMPDIR/myunix.sock
 
   # Variable works
@@ -54,7 +54,7 @@ function teardown() {
   port=$(random_free_port)
   URL=tcp://127.0.0.1:$port
 
-  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%%-remote*} system service $URL --time=0
+  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%-remote*} system service $URL --time=0
   wait_for_port 127.0.0.1 $port
 
   # Variable works
@@ -82,7 +82,7 @@ function teardown() {
   port=$(random_free_port)
   URL=tcp://127.0.0.1:$port
 
-  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%%-remote*} system service $URL --time=0 \
+  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%-remote*} system service $URL --time=0 \
     --tls-key="${REMOTESYSTEM_TLS_SERVER_KEY}" \
     --tls-cert="${REMOTESYSTEM_TLS_SERVER_CRT}"
   wait_for_port 127.0.0.1 $port
@@ -115,7 +115,7 @@ function teardown() {
   port=$(random_free_port)
   URL=tcp://127.0.0.1:$port
 
-  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%%-remote*} system service $URL --time=0 \
+  systemd-run-user --unit=$SERVICE_NAME ${PODMAN%-remote*} system service $URL --time=0 \
     --tls-client-ca="${REMOTESYSTEM_TLS_CA_CRT}" \
     --tls-key="${REMOTESYSTEM_TLS_SERVER_KEY}" \
     --tls-cert="${REMOTESYSTEM_TLS_SERVER_CRT}"
