@@ -3,12 +3,16 @@ package layout
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/docker/go-connections/tlsconfig"
@@ -41,11 +45,14 @@ type ociImageSource struct {
 	impl.DoesNotAffectLayerInfosForCopy
 	stubs.NoGetBlobAtInitialize
 
-	ref           ociReference
-	index         *imgspecv1.Index
-	descriptor    imgspecv1.Descriptor
-	client        *http.Client
-	sharedBlobDir string
+	ref              ociReference
+	fs               fs.FS // For accessing the OCI structure
+	blobFS           fs.FS // May be equal to fs, or point to OCISharedBlobDirPath
+	useSharedBlobDir bool
+	blobFSLocalPath  string // The base of blobFS IF it is safe to access using ordinary filepath.Join().
+	index            *imgspecv1.Index
+	descriptor       imgspecv1.Descriptor
+	client           *http.Client
 }
 
 // newImageSource returns an ImageSource for reading from an existing directory.
@@ -70,32 +77,44 @@ func newImageSource(sys *types.SystemContext, ref ociReference) (private.ImageSo
 		}
 		tr.TLSClientConfig.InsecureSkipVerify = sys.OCIInsecureSkipTLSVerify
 	}
-
 	client := &http.Client{}
 	client.Transport = tr
-	descriptor, _, err := ref.getManifestDescriptor()
-	if err != nil {
-		return nil, err
-	}
-	index, err := ref.getIndex()
-	if err != nil {
-		return nil, err
-	}
+
 	s := &ociImageSource{
 		PropertyMethodsInitialize: impl.PropertyMethods(impl.Properties{
 			HasThreadSafeGetBlob: false,
 		}),
 		NoGetBlobAtInitialize: stubs.NoGetBlobAt(ref),
 
-		ref:        ref,
-		index:      index,
-		descriptor: descriptor,
-		client:     client,
+		ref:    ref,
+		client: client,
 	}
-	if sys != nil {
+	if ref.reader != nil {
+		s.fs = ref.reader.root.FS()
+	} else {
+		s.fs = os.DirFS(ref.dir)
+	}
+	if sys != nil && sys.OCISharedBlobDirPath != "" {
 		// TODO(jonboulle): check dir existence?
-		s.sharedBlobDir = sys.OCISharedBlobDirPath
+		s.blobFS = os.DirFS(sys.OCISharedBlobDirPath)
+		s.useSharedBlobDir = true
+		s.blobFSLocalPath = sys.OCISharedBlobDirPath
+	} else {
+		s.blobFS = s.fs
+		if ref.reader == nil {
+			s.blobFSLocalPath = s.ref.dir
+		}
 	}
+	index, err := srcGetIndex(s.fs)
+	if err != nil {
+		return nil, err
+	}
+	s.index = index
+	s.descriptor, _, err = ref.getManifestDescriptor(index)
+	if err != nil {
+		return nil, err
+	}
+
 	s.Compat = impl.AddCompat(s)
 	return s, nil
 }
@@ -109,6 +128,21 @@ func (s *ociImageSource) Reference() types.ImageReference {
 func (s *ociImageSource) Close() error {
 	s.client.CloseIdleConnections()
 	return nil
+}
+
+// srcGetIndex reads an index within the OCI layout used in ref.
+func srcGetIndex(ociFS fs.FS) (*imgspecv1.Index, error) {
+	content, err := ociFS.Open(indexFSPath())
+	if err != nil {
+		return nil, err
+	}
+	defer content.Close()
+
+	var index imgspecv1.Index
+	if err := json.NewDecoder(content).Decode(&index); err != nil {
+		return nil, err
+	}
+	return &index, nil
 }
 
 // GetManifest returns the image's manifest along with its MIME type (which may be empty when it can't be determined but the manifest is available).
@@ -133,15 +167,15 @@ func (s *ociImageSource) GetManifest(ctx context.Context, instanceDigest *digest
 		}
 	}
 
-	manifestPath, err := s.ref.blobPath(dig, s.sharedBlobDir)
+	manifestFSPath, err := blobFSPath(dig, s.useSharedBlobDir)
+	if err != nil {
+		return nil, "", err
+	}
+	m, err := fs.ReadFile(s.blobFS, manifestFSPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	m, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return nil, "", err
-	}
 	if mimeType == "" {
 		mimeType = manifest.GuessMIMEType(m)
 	}
@@ -162,12 +196,11 @@ func (s *ociImageSource) GetBlob(ctx context.Context, info types.BlobInfo, cache
 		}
 	}
 
-	path, err := s.ref.blobPath(info.Digest, s.sharedBlobDir)
+	blobFSPath, err := blobFSPath(info.Digest, s.useSharedBlobDir)
 	if err != nil {
 		return nil, 0, err
 	}
-
-	r, err := os.Open(path)
+	r, err := s.blobFS.Open(blobFSPath)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -240,13 +273,60 @@ func GetLocalBlobPath(ctx context.Context, src types.ImageSource, digest digest.
 		return "", errors.New("caller error: GetLocalBlobPath called with a non-oci: source")
 	}
 
-	path, err := s.ref.blobPath(digest, s.sharedBlobDir)
+	if s.blobFSLocalPath == "" {
+		return "", errors.New("GetLocalBlobPath is not supported in root-restricted configurations")
+	}
+
+	fsPath, err := blobFSPath(digest, s.useSharedBlobDir)
 	if err != nil {
 		return "", err
 	}
+	path := filepath.Join(s.blobFSLocalPath, filepath.FromSlash(fsPath))
 	if err := fileutils.Exists(path); err != nil {
 		return "", err
 	}
 
 	return path, nil
+}
+
+// LoadManifestDescriptor loads the manifest descriptor to be used to retrieve the image name
+// when pulling an image
+func LoadManifestDescriptor(imgRef types.ImageReference) (imgspecv1.Descriptor, error) {
+	ociRef, ok := imgRef.(ociReference)
+	if !ok {
+		return imgspecv1.Descriptor{}, errors.New("error typecasting, need type ociRef")
+	}
+
+	var ociFS fs.FS
+	if ociRef.reader != nil {
+		ociFS = ociRef.reader.root.FS()
+	} else {
+		ociFS = os.DirFS(ociRef.dir)
+	}
+
+	index, err := srcGetIndex(ociFS)
+	if err != nil {
+		return imgspecv1.Descriptor{}, err
+	}
+	md, _, err := ociRef.getManifestDescriptor(index)
+	return md, err
+}
+
+// indexFSPath returns a path for the index.json within a directory using OCI conventions,
+// satisfying fs.ValidPath.
+func indexFSPath() string {
+	return imgspecv1.ImageIndexFile
+}
+
+// blobFSPath returns a path for a blob within a directory using OCI conventions,
+// or within sharedBlobDir, depending on useSharedBlobDir.
+func blobFSPath(digest digest.Digest, useSharedBlobDir bool) (string, error) {
+	if err := digest.Validate(); err != nil {
+		return "", fmt.Errorf("unexpected digest reference %s: %w", digest, err)
+	}
+	if useSharedBlobDir {
+		return path.Join(digest.Algorithm().String(), digest.Encoded()), nil
+	} else {
+		return path.Join(imgspecv1.ImageBlobsDir, digest.Algorithm().String(), digest.Encoded()), nil
+	}
 }

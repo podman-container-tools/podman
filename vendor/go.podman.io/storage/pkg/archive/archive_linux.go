@@ -2,6 +2,9 @@ package archive
 
 import (
 	"archive/tar"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,21 +19,50 @@ func getOverlayOpaqueXattrName() string {
 	return GetOverlayXattrName("opaque")
 }
 
-func GetWhiteoutConverter(format WhiteoutFormat, data any) TarWhiteoutConverter {
+func getWhiteoutConverter(format WhiteoutFormat, data any, options *TarOptions) tarWhiteoutConverter {
 	if format == OverlayWhiteoutFormat {
+		var roLayers []string = nil
 		if rolayers, ok := data.([]string); ok && len(rolayers) > 0 {
-			return overlayWhiteoutConverter{rolayers: rolayers}
+			roLayers = rolayers
 		}
-		return overlayWhiteoutConverter{rolayers: nil}
+		return overlayWhiteoutConverter{
+			rolayers:               roLayers,
+			runningInMinimalChroot: options != nil && options.InternalRunningInMinimalChroot,
+		}
 	}
 	return nil
 }
 
 type overlayWhiteoutConverter struct {
 	rolayers []string
+	// runningInMinimalChroot indicates that we are confined to a fairly strict chroot,
+	// so we don’t need to worry about Lgetxattr / Llistxattr escaping the source directory.
+	//
+	// We need this because:
+	// - getxattrat() would be ideal, but requires Linux 6.13, and as of 2026-05 that might still be too new
+	// - Our fallback is to open "/proc/self/fd/$fd" of an O_PATH file handle, but /proc is not available in these chroots.
+	runningInMinimalChroot bool
 }
 
 func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi os.FileInfo) (*tar.Header, error) {
+	return o.convertWriteWithGetxattr(hdr, fi, func(attrName string) ([]byte, error) {
+		return system.Lgetxattr(path, attrName)
+	})
+}
+
+func (o overlayWhiteoutConverter) convertWrite(hdr *tar.Header, root *os.Root, fsPath string, fi os.FileInfo) (*tar.Header, error) {
+	if !o.runningInMinimalChroot {
+		return o.convertWriteWithGetxattr(hdr, fi, func(attrName string) ([]byte, error) {
+			return system.RootLgetxattr(root, fsPath, attrName)
+		})
+	} else {
+		return o.convertWriteWithGetxattr(hdr, fi, func(attrName string) ([]byte, error) {
+			return system.Lgetxattr(filepath.Join(root.Name(), filepath.FromSlash(fsPath)), attrName)
+		})
+	}
+}
+
+func (o overlayWhiteoutConverter) convertWriteWithGetxattr(hdr *tar.Header, fi os.FileInfo, getxattr func(attrName string) ([]byte, error)) (*tar.Header, error) {
 	// convert whiteouts to AUFS format
 	if fi.Mode()&os.ModeCharDevice != 0 && hdr.Devmajor == 0 && hdr.Devminor == 0 {
 		// we just rename the file and make it normal
@@ -43,7 +75,7 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 
 	if fi.Mode()&os.ModeDir != 0 {
 		// convert opaque dirs to AUFS format by writing an empty file with the whiteout prefix
-		opaque, err := system.Lgetxattr(path, getOverlayOpaqueXattrName())
+		opaque, err := getxattr(getOverlayOpaqueXattrName())
 		if err != nil {
 			return nil, err
 		}
@@ -58,52 +90,73 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 			// At this point, we have a directory that's opaque.  If it appears in one of the lower
 			// layers, then it was newly-created here, so it wasn't also deleted here.
 			for _, rolayer := range o.rolayers {
-				stat, statErr := os.Stat(filepath.Join(rolayer, hdr.Name))
-				if statErr != nil && !os.IsNotExist(statErr) && !isENOTDIR(statErr) {
-					// Not sure what happened here.
-					return nil, statErr
-				}
-				if statErr == nil {
-					if stat.Mode()&os.ModeCharDevice != 0 {
-						if isWhiteOut(stat) {
-							return nil, nil //nolint: nilnil
-						}
+				// FIXME: This resolves symlinks for hdr.Name within rolayer; presumably paths with symlinks
+				// don’t participate in whiteout lookups?!
+				//
+				// For now, just use securejoin/pathrs to restrict the paths to be within the layer.
+				// (We can’t use os.Root because that one fails with an untyped error if it encounters a symlink to a parent to the root,
+				// and those symlinks are valid inside containers.)
+				// This should, almost certainly, instead do the checks for parent directories
+				// in the parent->child order, and stop if it encounters a symlink.
+				//
+				// Also seriously look at deduplicating this with overlayDeletedFile.
+				if done, ret, err := func() (bool, *tar.Header, error) { // A scope for defer
+					layerRoot, err := os.Open(rolayer)
+					if err != nil {
+						return true, nil, err
 					}
-					// It's not whiteout, so it was there in the older layer, so we need to
-					// add a whiteout for this item in this layer.
-					// create a header for the whiteout file
-					// it should inherit some properties from the parent, but be a regular file
-					wo := &tar.Header{
-						Typeflag:   tar.TypeReg,
-						Mode:       hdr.Mode & int64(os.ModePerm),
-						Name:       filepath.Join(hdr.Name, WhiteoutOpaqueDir),
-						Size:       0,
-						Uid:        hdr.Uid,
-						Uname:      hdr.Uname,
-						Gid:        hdr.Gid,
-						Gname:      hdr.Gname,
-						AccessTime: hdr.AccessTime,
-						ChangeTime: hdr.ChangeTime,
-					}
-					return wo, nil
-				}
-				for dir := filepath.Dir(hdr.Name); dir != "" && dir != "." && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
-					// Check for whiteout for a parent directory in a parent layer.
-					stat, statErr := os.Stat(filepath.Join(rolayer, dir))
-					if statErr != nil && !os.IsNotExist(statErr) && !isENOTDIR(statErr) {
+					defer layerRoot.Close()
+
+					stat, statErr := pathrsStat(layerRoot, strings.TrimSuffix(hdr.Name, "/"))
+					if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) && !errors.Is(statErr, syscall.ENOTDIR) {
 						// Not sure what happened here.
-						return nil, statErr
+						return true, nil, statErr
 					}
 					if statErr == nil {
 						if stat.Mode()&os.ModeCharDevice != 0 {
-							// If it's whiteout for a parent directory, then the
-							// original directory wasn't inherited into this layer,
-							// so we don't need to emit whiteout for it.
 							if isWhiteOut(stat) {
-								return nil, nil //nolint: nilnil
+								return true, nil, nil //nolint: nilnil // FIXME: test coverage
+							}
+						}
+						// It's not whiteout, so it was there in the older layer, so we need to
+						// add a whiteout for this item in this layer.
+						// create a header for the whiteout file
+						// it should inherit some properties from the parent, but be a regular file
+						wo := &tar.Header{
+							Typeflag:   tar.TypeReg,
+							Mode:       hdr.Mode & int64(os.ModePerm),
+							Name:       filepath.Join(hdr.Name, WhiteoutOpaqueDir),
+							Size:       0,
+							Uid:        hdr.Uid,
+							Uname:      hdr.Uname,
+							Gid:        hdr.Gid,
+							Gname:      hdr.Gname,
+							AccessTime: hdr.AccessTime,
+							ChangeTime: hdr.ChangeTime,
+						}
+						return true, wo, nil
+					}
+					for dir := filepath.Dir(hdr.Name); dir != "" && dir != "." && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
+						// Check for whiteout for a parent directory in a parent layer.
+						stat, statErr := pathrsStat(layerRoot, dir)
+						if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) && !errors.Is(statErr, syscall.ENOTDIR) {
+							// Not sure what happened here.
+							return true, nil, statErr
+						}
+						if statErr == nil {
+							if stat.Mode()&os.ModeCharDevice != 0 { // FIXME: test coverage
+								// If it's whiteout for a parent directory, then the
+								// original directory wasn't inherited into this layer,
+								// so we don't need to emit whiteout for it.
+								if isWhiteOut(stat) {
+									return true, nil, nil //nolint: nilnil
+								}
 							}
 						}
 					}
+					return false, nil, nil
+				}(); done {
+					return ret, err
 				}
 			}
 		}
@@ -113,11 +166,17 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 }
 
 func (overlayWhiteoutConverter) ConvertReadWithHandler(hdr *tar.Header, path string, handler TarWhiteoutHandler) (bool, error) {
+	// ConvertReadWithHandler is only allowed to create files within parent(path) (whatever
+	// that resolves to), and must ensure it does not follow symlinks when creating files
+	// within that directory.
+
 	base := filepath.Base(path)
 	dir := filepath.Dir(path)
 
 	// if a directory is marked as opaque by the AUFS special file, we need to translate that to overlay
 	if base == WhiteoutOpaqueDir {
+		// Note that this follows symlinks: it’s up to the caller to ensure "dir" == parent(path)
+		// is acceptable.
 		err := handler.Setxattr(dir, getOverlayOpaqueXattrName(), []byte{'y'})
 		// don't write the file itself
 		return false, err
@@ -125,8 +184,12 @@ func (overlayWhiteoutConverter) ConvertReadWithHandler(hdr *tar.Header, path str
 
 	// if a file was deleted and we are using overlay, we need to create a character device
 	if originalBase, ok := strings.CutPrefix(base, WhiteoutPrefix); ok {
+		if isInvalidWhiteoutTargetBaseName(originalBase) {
+			return false, fmt.Errorf("invalid whiteout path %q", path)
+		}
 		originalPath := filepath.Join(dir, originalBase)
 
+		// Mknod fails with EEXIST if the target is a symlink, so this should be safe.
 		if err := handler.Mknod(originalPath, unix.S_IFCHR, 0); err != nil {
 			// If someone does:
 			//     rm -rf /foo/bar
@@ -173,6 +236,9 @@ func (d directHandler) Chown(path string, uid, gid int) error {
 }
 
 func (o overlayWhiteoutConverter) ConvertRead(hdr *tar.Header, path string) (bool, error) {
+	// ConvertRead is only allowed to create files within parent(path) and
+	// must ensure it does not follow symlinks when creating them.
+
 	var handler directHandler
 	return o.ConvertReadWithHandler(hdr, path, handler)
 }
@@ -194,13 +260,14 @@ func GetFileOwner(path string) (uint32, uint32, uint32, error) {
 	return 0, 0, uint32(f.Mode()), nil
 }
 
-func handleLChmod(hdr *tar.Header, path string, hdrInfo os.FileInfo, forceMask *os.FileMode) error {
+func handleLChmod(hdr *tar.Header, path string, hardlinkTargetPath string, hdrInfo os.FileInfo, forceMask *os.FileMode) error {
 	permissionsMask := hdrInfo.Mode()
 	if forceMask != nil {
 		permissionsMask = *forceMask
 	}
+
 	if hdr.Typeflag == tar.TypeLink {
-		if fi, err := os.Lstat(hdr.Linkname); err == nil && (fi.Mode()&os.ModeSymlink == 0) {
+		if fi, err := os.Lstat(hardlinkTargetPath); err == nil && (fi.Mode()&os.ModeSymlink == 0) {
 			if err := os.Chmod(path, permissionsMask); err != nil {
 				return err
 			}

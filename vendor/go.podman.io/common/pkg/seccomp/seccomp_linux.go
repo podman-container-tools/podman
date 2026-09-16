@@ -77,7 +77,8 @@ func getErrno(errno string, def *uint) (*uint, error) {
 	}
 	v, err := strconv.ParseUint(errno, 10, 32)
 	if err == nil {
-		return new(uint(v)), nil
+		v2 := uint(v)
+		return &v2, nil
 	}
 
 	v2, found := errnoArch[errno]

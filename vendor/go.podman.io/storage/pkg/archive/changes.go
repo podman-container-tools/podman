@@ -6,14 +6,17 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
 	"time"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
@@ -83,28 +86,36 @@ func Changes(layers []string, rw string) ([]Change, error) {
 	return changes(layers, rw, aufsDeletedFile, aufsMetadataSkip, aufsWhiteoutPresent)
 }
 
-func aufsMetadataSkip(path string) (bool, error) {
-	skip, err := filepath.Match(string(os.PathSeparator)+WhiteoutMetaPrefix+"*", path)
+func aufsMetadataSkip(fsPath string) (bool, error) {
+	skip, err := path.Match(WhiteoutMetaPrefix+"*", fsPath)
 	if err != nil {
 		skip = true
 	}
 	return skip, err
 }
 
-func aufsDeletedFile(root, path string, fi os.FileInfo) (string, error) {
-	f := filepath.Base(path)
+func aufsDeletedFile(root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
+	f := path.Base(fsPath)
 
 	// If there is a whiteout, then the file was removed
 	if originalFile, ok := strings.CutPrefix(f, WhiteoutPrefix); ok {
-		return filepath.Join(filepath.Dir(path), originalFile), nil
+		if isInvalidWhiteoutTargetBaseName(originalFile) {
+			return "", fmt.Errorf("invalid whiteout path %q", fsPath)
+		}
+		return path.Join(path.Dir(fsPath), originalFile), nil
 	}
 
 	return "", nil
 }
 
-func aufsWhiteoutPresent(root, path string) (bool, error) {
+func aufsWhiteoutPresent(root, fsPath string) (bool, error) {
+	path := filepath.FromSlash(fsPath)
 	f := filepath.Join(filepath.Dir(path), WhiteoutPrefix+filepath.Base(path))
-	err := fileutils.Exists(filepath.Join(root, f))
+	pathInLayer, err := securejoin.SecureJoin(root, f)
+	if err != nil {
+		return false, err
+	}
+	err = fileutils.Lexists(pathInLayer)
 	if err == nil {
 		return true, nil
 	}
@@ -131,53 +142,70 @@ func isENOTDIR(err error) bool {
 
 type (
 	skipChange     func(string) (bool, error)
-	deleteChange   func(string, string, os.FileInfo) (string, error)
+	deleteChange   func(*os.Root, string, os.FileInfo) (string, error)
 	whiteoutChange func(string, string) (bool, error)
 )
 
-func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whiteoutChange) ([]Change, error) {
+// changes walks the path rw and determines changes for the files in the path,
+// with respect to the parent layers.
+//
+// deleteConverter returns "" for most files; if path (relative to rw, per fs.ValidPath) indicates a deletion,
+// it returns the path (relative to rw, per fs.ValidPath) of the file that was deleted.
+//
+// skipCondition, if not nil, should return true if a file path (relative to rw, per fs.ValidPath) should be skipped.
+// It MUST NOT do I/O on the path.
+//
+// whiteoutChecker, if not nil, returns true if path (relative to rw, per fs.ValidPath) is a whiteout within a layer.
+func changes(layers []string, rw string, deleteConverter deleteChange, skipCondition skipChange, whiteoutChecker whiteoutChange) ([]Change, error) {
+	// WARNING: This is called in contexts where the contents of rw (but not layers) may be maliciously
+	// concurrently modified.
+	//
+	// In such a situation it’s fine to fail, but we should not expose the rest of the system.
+	// Generally, try to read every attribute of a file only once.
+
 	var (
 		changes     []Change
 		changedDirs = make(map[string]struct{})
 	)
 
-	err := filepath.Walk(rw, func(path string, f os.FileInfo, err error) error {
+	root, err := os.OpenRoot(rw)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	err = fs.WalkDir(root.FS(), ".", func(fsPath string, dirEntry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-
-		// Rebase path
-		path, err = filepath.Rel(rw, path)
+		f, err := dirEntry.Info()
 		if err != nil {
 			return err
 		}
-
-		// As this runs on the daemon side, file paths are OS specific.
-		path = filepath.Join(string(os.PathSeparator), path)
 
 		// Skip root
-		if path == string(os.PathSeparator) {
+		if fsPath == "." {
 			return nil
 		}
 
-		if sc != nil {
-			if skip, err := sc(path); skip {
-				return err
+		if skipCondition != nil {
+			if skip, err := skipCondition(fsPath); skip {
+				return err // FIXME: test coverage
 			}
 		}
 
 		change := Change{
-			Path: path,
+			Path: filepath.FromSlash("/" + fsPath), // We have skipped ".", and no other fsPath values start with "." or "/", so blindly prepending "/" is safe.
 		}
 
-		deletedFile, err := dc(rw, path, f)
+		deletedFile, err := deleteConverter(root, fsPath, f)
 		if err != nil {
 			return err
 		}
 
 		// Find out what kind of modification happened
 		if deletedFile != "" {
-			change.Path = deletedFile
+			change.Path = filepath.FromSlash(path.Join("/", deletedFile))
 			change.Kind = ChangeDelete
 		} else {
 			// Otherwise, the file was added
@@ -186,18 +214,26 @@ func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whit
 			// ...Unless it already existed in a top layer, in which case, it's a modification
 		layerScan:
 			for _, layer := range layers {
-				if wc != nil {
+				// FIXME: This resolves symlinks in fsPath relative to layer; presumably those symlinks
+				// don’t participate in whiteout lookups?!
+				//
+				// For now, just use securejoin/pathrs to restrict the paths to be within the layer.
+				// (We can’t use os.Root because that one fails with an untyped error if it encounters a symlink to a parent to the root,
+				// and those symlinks are valid inside containers.)
+				// This should, almost certainly, instead do the checks for parent directories
+				// in the parent->child order, and stop if it encounters a symlink.
+				if whiteoutChecker != nil {
 					// ...Unless a lower layer also had whiteout for this directory or one of its parents,
 					// in which case, it's new
-					ignore, err := wc(layer, path)
+					ignore, err := whiteoutChecker(layer, fsPath)
 					if err != nil {
 						return err
 					}
 					if ignore {
 						break layerScan
 					}
-					for dir := filepath.Dir(path); dir != "" && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
-						ignore, err = wc(layer, dir)
+					for fsDir := path.Dir(fsPath); fsDir != "."; fsDir = path.Dir(fsDir) {
+						ignore, err = whiteoutChecker(layer, fsDir)
 						if err != nil {
 							return err
 						}
@@ -206,7 +242,11 @@ func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whit
 						}
 					}
 				}
-				stat, err := os.Stat(filepath.Join(layer, path))
+				layerFilepath, err := securejoin.SecureJoin(layer, filepath.FromSlash(fsPath)) // This is expensive but securejoin.pathrs is Linux-specific, and os.Root has non-container semantics on symlinks through /.. .
+				if err != nil {
+					return err
+				}
+				stat, err := os.Lstat(layerFilepath)
 				if err != nil && !os.IsNotExist(err) {
 					return err
 				}
@@ -232,17 +272,17 @@ func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whit
 		// modify time, mode and size of the parent directory in the rw and ro layers are all equal.
 		// Check https://github.com/docker/docker/pull/13590 for details.
 		if f.IsDir() {
-			changedDirs[path] = struct{}{}
+			changedDirs[fsPath] = struct{}{}
 		}
 		if change.Kind == ChangeAdd || change.Kind == ChangeDelete {
-			parent := filepath.Dir(path)
+			fsParent := path.Dir(fsPath)
 			tail := []Change{}
-			for parent != "/" {
-				if _, ok := changedDirs[parent]; !ok && parent != "/" {
-					tail = append([]Change{{Path: parent, Kind: ChangeModify}}, tail...)
-					changedDirs[parent] = struct{}{}
+			for fsParent != "." {
+				if _, ok := changedDirs[fsParent]; !ok {
+					tail = append([]Change{{Path: filepath.FromSlash("/" + fsParent), Kind: ChangeModify}}, tail...)
+					changedDirs[fsParent] = struct{}{}
 				}
-				parent = filepath.Dir(parent)
+				fsParent = path.Dir(fsParent)
 			}
 			changes = append(changes, tail...)
 		}
@@ -396,6 +436,9 @@ func newRootFileInfo(idMappings *idtools.IDMappings) *FileInfo {
 // ChangesDirs compares two directories and generates an array of Change objects describing the changes.
 // If oldDir is "", then all files in newDir will be Add-Changes.
 func ChangesDirs(newDir string, newMappings *idtools.IDMappings, oldDir string, oldMappings *idtools.IDMappings) ([]Change, error) {
+	// WARNING: This is called in contexts where the contents of newDir (but not oldDir) may be maliciously
+	// concurrently modified.
+
 	var oldRoot, newRoot *FileInfo
 	if oldDir == "" {
 		emptyDir, err := os.MkdirTemp("", "empty")
@@ -413,18 +456,28 @@ func ChangesDirs(newDir string, newMappings *idtools.IDMappings, oldDir string, 
 	return newRoot.Changes(oldRoot), nil
 }
 
-// ChangesSize calculates the size in bytes of the provided changes, based on newDir.
-func ChangesSize(newDir string, changes []Change) int64 {
+// ChangesSizeWithError calculates the size in bytes of the provided changes, based on newDir.
+func ChangesSizeWithError(newDir string, changes []Change) (int64, error) {
+	// WARNING: This is called in contexts where the contents of newDir may be maliciously
+	// concurrently modified.
+
+	root, err := os.OpenRoot(newDir)
+	if err != nil {
+		return -1, err
+	}
+	defer root.Close()
+
 	var (
 		size int64
 		sf   = make(map[uint64]struct{})
 	)
 	for _, change := range changes {
 		if change.Kind == ChangeModify || change.Kind == ChangeAdd {
-			file := filepath.Join(newDir, change.Path)
-			fileInfo, err := os.Lstat(file)
+			fileInfo, err := root.Lstat(strings.TrimPrefix(filepath.ToSlash(change.Path), "/"))
 			if err != nil {
-				logrus.Errorf("Can not stat %q: %s", file, err)
+				// We don’t _fail_ on these errors, this is intended to be at least minimally-useful
+				// with concurrent modifications happening.
+				logrus.Errorf("Can not stat %q in %q: %s", change.Path, newDir, err)
 				continue
 			}
 
@@ -441,19 +494,40 @@ func ChangesSize(newDir string, changes []Change) int64 {
 			}
 		}
 	}
+	return size, nil
+}
+
+// ChangesSize calculates the size in bytes of the provided changes, based on newDir.
+//
+// Deprecated: Use ChangesSizeWithError.
+func ChangesSize(newDir string, changes []Change) int64 {
+	size, err := ChangesSizeWithError(newDir, changes)
+	if err != nil {
+		return 0
+	}
 	return size
 }
 
 // ExportChanges produces an Archive from the provided changes, relative to dir.
 func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMap) (io.ReadCloser, error) {
+	// WARNING: This is called in contexts where the contents of dir may be maliciously
+	// concurrently modified.
+
 	reader, writer := io.Pipe()
 	go func() {
-		ta := newTarWriter(idtools.NewIDMappingsFromMaps(uidMaps, gidMaps), writer, nil, nil)
+		ta := newTarWriter(idtools.NewIDMappingsFromMaps(uidMaps, gidMaps), writer, nil, nil, false)
 
 		// this buffer is needed for the duration of this piped stream
 		defer pools.BufioWriter32KPool.Put(ta.Buffer)
 
 		slices.SortFunc(changes, compareChangesByPath)
+
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			writer.CloseWithError(err)
+			return
+		}
+		defer root.Close()
 
 		// In general we log errors here but ignore them because
 		// during e.g. a diff operation the container can continue
@@ -476,12 +550,12 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 					logrus.Debugf("Can't write whiteout header: %s", err)
 				}
 			} else {
-				path := filepath.Join(dir, change.Path)
-				headers, err := ta.prepareAddFile(path, change.Path[1:])
+				relPath := change.Path[1:]
+				headers, err := ta.prepareAddFile(root, filepath.ToSlash(relPath), relPath)
 				if err != nil {
-					logrus.Debugf("Can't add file %s to tar: %s", path, err)
+					logrus.Debugf("Can't add file %q in %q to tar: %s", change.Path, root.Name(), err)
 				} else if headers != nil {
-					if err := ta.addFile(headers); err != nil {
+					if err := ta.addFile(root, headers); err != nil {
 						writer.CloseWithError(err)
 						return
 					}

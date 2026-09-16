@@ -90,7 +90,8 @@ func Setup(opts *SetupOptions) (*SetupResult, error) {
 	// pasta forks once ready, and quits once we delete the target namespace
 	out, err := exec.Command(path, cmdArgs...).CombinedOutput()
 	if err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return nil, fmt.Errorf("pasta failed with exit code %d:\n%s",
 				exitErr.ExitCode(), string(out))
 		}

@@ -109,7 +109,7 @@ func statFlagNames(flags uintptr) []string {
 	for flag, name := range statFlagMap {
 		if int(flags)&flag == flag {
 			names = append(names, name)
-			flags = flags &^ (uintptr(flag))
+			flags = flags &^ uintptr(flag)
 		}
 	}
 	if flags != 0 { // got some unknown leftovers

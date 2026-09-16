@@ -253,8 +253,10 @@ func (c *copier) copySingleImage(ctx context.Context, unparsedImage *image.Unpar
 		// because we failed to create a manifest of the specified type because the specific manifest type
 		// doesn't support the type of compression we're trying to use (e.g. docker v2s2 and zstd), we may
 		// have other options available that could still succeed.
-		_, isManifestRejected := errors.AsType[types.ManifestTypeRejectedError](err)
-		_, isCompressionIncompatible := errors.AsType[manifest.ManifestLayerCompressionIncompatibilityError](err)
+		var manifestTypeRejectedError types.ManifestTypeRejectedError
+		var manifestLayerCompressionIncompatibilityError manifest.ManifestLayerCompressionIncompatibilityError
+		isManifestRejected := errors.As(err, &manifestTypeRejectedError)
+		isCompressionIncompatible := errors.As(err, &manifestLayerCompressionIncompatibilityError)
 		if (!isManifestRejected && !isCompressionIncompatible) || len(ic.manifestConversionPlan.otherMIMETypeCandidates) == 0 {
 			// We don’t have other options.
 			// In principle the code below would handle this as well, but the resulting  error message is fairly ugly.
@@ -826,7 +828,8 @@ func (ic *imageCopier) copyLayer(ctx context.Context, srcInfo types.BlobInfo, to
 				return true, updatedBlobInfoFromUpload(srcInfo, uploadedBlob), nil
 			}
 			// On a "partial content not available" error, ignore it and retrieve the whole layer.
-			if _, ok := errors.AsType[private.ErrFallbackToOrdinaryLayerDownload](err); ok {
+			var perr private.ErrFallbackToOrdinaryLayerDownload
+			if errors.As(err, &perr) {
 				// Reset progress, the reporter is reused for the fallback.
 				reporter.reset()
 				logrus.Debugf("Failed to retrieve partial blob: %v", err)

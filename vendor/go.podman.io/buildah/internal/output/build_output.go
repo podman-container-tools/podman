@@ -14,6 +14,20 @@ const (
 	BuildOutputTar      BuildOutputType = 3
 )
 
+func (b BuildOutputType) String() string {
+	switch b {
+	case BuildOutputInvalid:
+		return "invalid (unset)!"
+	case BuildOutputStdout:
+		return "stdout"
+	case BuildOutputLocalDir:
+		return "local"
+	case BuildOutputTar:
+		return "tar"
+	}
+	return fmt.Sprintf("unknown %d!", int(b))
+}
+
 // BuildOutputOptions contains the outcome of parsing the value of a build --output flag
 type BuildOutputOption struct {
 	Type BuildOutputType

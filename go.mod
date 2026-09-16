@@ -64,10 +64,10 @@ require (
 	github.com/vbauerster/mpb/v8 v8.16.1
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
-	go.podman.io/buildah v1.45.0
-	go.podman.io/common v0.69.2-0.20260909161734-49fe7190f3ec
-	go.podman.io/image/v5 v5.41.2-0.20260909161734-49fe7190f3ec
-	go.podman.io/storage v1.64.1-0.20260909161734-49fe7190f3ec
+	go.podman.io/buildah v1.45.1
+	go.podman.io/common v0.69.2
+	go.podman.io/image/v5 v5.41.2
+	go.podman.io/storage v1.64.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	golang.org/x/sync v0.23.0
@@ -108,6 +108,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20220804181439-8648fbde413e // indirect
 	github.com/disiqueira/gotree/v3 v3.0.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -151,6 +152,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/sftp v1.13.11 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/proglottis/gpgme v0.1.6 // indirect
 	github.com/seccomp/libseccomp-golang v0.12.0 // indirect

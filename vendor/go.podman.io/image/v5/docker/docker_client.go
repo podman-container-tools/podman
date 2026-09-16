@@ -1193,17 +1193,19 @@ func isManifestUnknownError(err error) bool {
 		return true
 	}
 	// registry.redhat.io as of October 2022
-	if e, ok := errors.AsType[errcode.Error](err); ok && e.ErrorCode() == errcode.ErrorCodeUnknown && e.Message == "Not Found" {
+	var e errcode.Error
+	if errors.As(err, &e) && e.ErrorCode() == errcode.ErrorCodeUnknown && e.Message == "Not Found" {
 		return true
 	}
 	// Harbor v2.10.2
-	if e, ok := errors.AsType[errcode.Error](err); ok && e.ErrorCode() == errcode.ErrorCodeUnknown && strings.Contains(strings.ToLower(e.Message), "not found") {
+	if errors.As(err, &e) && e.ErrorCode() == errcode.ErrorCodeUnknown && strings.Contains(strings.ToLower(e.Message), "not found") {
 		return true
 	}
 
 	// opencontainers/distribution-spec does not require the errcode.Error payloads to be used,
 	// but specifies that the HTTP status must be 404.
-	if unexpected, ok := errors.AsType[*unexpectedHTTPResponseError](err); ok && unexpected.StatusCode == http.StatusNotFound {
+	var unexpected *unexpectedHTTPResponseError
+	if errors.As(err, &unexpected) && unexpected.StatusCode == http.StatusNotFound {
 		return true
 	}
 	return false

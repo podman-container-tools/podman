@@ -2,6 +2,30 @@
 
 # Changelog
 
+## v1.45.1 (2026-09-15)
+
+    Bump go.podman.io/storage, go.podman.io/image/v5, and go.podman.io/common
+    Add FIXMEs for the read path
+    Split insecureResolvePath from resolvePath
+    Fix root escapes in copier.Put
+    Fix escaping symlinks in Ensure
+    Fix symlink escapes in ConditionalRemove
+    Remove unnecessary filepath.FromSlash
+    Use a separate hdrErr variable for the loop condition
+    Improve test coverage
+    Decrease size of the test archives
+    vendor: bump golang.org/x/crypto to v0.56.0
+    copier.copierHandlerPut(): check each component in paths for escape
+    copier.copierHandlerPut(): run each path to extract through os.Root.Lstat()
+    Fix new linter warnings
+    Fix a few format-specifier warnings
+    "chroot with overlay root" integration test: fix a typo in a comment
+    linter(modernize): switch a strings.Split() call to use strings.Cut()
+    linter(gofumpt): update formatting to pass gofumpt
+    linter(staticcheck): don't set deprecated fields when setting up overlay
+    Update dependency golangci/golangci-lint to v2.13.2
+    Remove rawhide from test matrix
+
 ## v1.45.0 (2026-07-30)
 
     Bump to c/storage 1.64.0, c/image 5.41.0, c/common v0.69.0

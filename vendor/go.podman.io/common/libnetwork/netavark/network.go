@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/internal/rootlessnetns"
 	"go.podman.io/common/libnetwork/internal/util"
-	"go.podman.io/common/libnetwork/pasta"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/version"
@@ -36,10 +35,6 @@ type netavarkNetwork struct {
 	netavarkBinary string
 	// aardvarkBinary is the path to the aardvark binary.
 	aardvarkBinary string
-	// pestoBinary is the path to the pesto binary for dynamic port forwarding.
-	// Valid if rootlessNetns != nil; can be "" and then pestoBinaryErr is set.
-	pestoBinary    string
-	pestoBinaryErr error
 
 	// firewallDriver sets the firewall driver to use
 	firewallDriver string
@@ -81,6 +76,10 @@ type netavarkNetwork struct {
 	// containers.conf. When set to config.RootlessPortForwarderPasta, pesto
 	// handles port forwarding directly and netavark DNAT rules are skipped.
 	rootlessPortForwarder string
+
+	// config is the containers.conf config, needed for FindHelperBinary
+	// when invoking pesto for dynamic port forwarding.
+	config *config.Config
 }
 
 type InitConfig struct {
@@ -113,14 +112,11 @@ func NewNetworkInterface(conf *InitConfig) (types.ContainerNetwork, error) {
 	// causes issues as this slower more complicated rootless-netns logic should not be used as root.
 	val, ok := os.LookupEnv(unshare.UsernsEnvName)
 	useRootlessNetns := ok && val == "done"
-	var pestoBinary string
-	var pestoBinaryErr error
 	if useRootlessNetns {
 		netns, err = rootlessnetns.New(conf.NetworkRunDir, conf.Config)
 		if err != nil {
 			return nil, err
 		}
-		pestoBinary, pestoBinaryErr = conf.Config.FindHelperBinary(pasta.PestoBinaryName, true)
 	}
 
 	// root needs to use a globally unique lock because there is only one host netns
@@ -162,8 +158,6 @@ func NewNetworkInterface(conf *InitConfig) (types.ContainerNetwork, error) {
 		networkRunDir:         conf.NetworkRunDir,
 		netavarkBinary:        conf.NetavarkBinary,
 		aardvarkBinary:        conf.AardvarkBinary,
-		pestoBinary:           pestoBinary,
-		pestoBinaryErr:        pestoBinaryErr,
 		networkRootless:       useRootlessNetns,
 		ipamDBPath:            filepath.Join(conf.NetworkRunDir, "ipam.db"),
 		firewallDriver:        conf.Config.Network.FirewallDriver,
@@ -176,6 +170,7 @@ func NewNetworkInterface(conf *InitConfig) (types.ContainerNetwork, error) {
 		syslog:                conf.Syslog,
 		rootlessNetns:         netns,
 		rootlessPortForwarder: conf.Config.Network.RootlessPortForwarder,
+		config:                conf.Config,
 	}
 
 	return n, nil

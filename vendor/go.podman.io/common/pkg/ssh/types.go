@@ -126,6 +126,7 @@ type HostInfo struct {
 	// ServiceIsRemote is true when the podman/libpod service is remote to the client
 	ServiceIsRemote bool         `json:"serviceIsRemote"`
 	Security        SecurityInfo `json:"security"`
+	Slirp4NetNS     SlirpInfo    `json:"slirp4netns"`
 	SwapFree        int64        `json:"swapFree"`
 	SwapTotal       int64        `json:"swapTotal"`
 	Uptime          string       `json:"uptime"`
@@ -136,6 +137,13 @@ type HostInfo struct {
 type RemoteSocket struct {
 	Path   string `json:"path,omitempty"`
 	Exists bool   `json:"exists,omitempty"`
+}
+
+// SlirpInfo describes the slirp executable that is being used.
+type SlirpInfo struct {
+	Executable string `json:"executable"`
+	Package    string `json:"package"`
+	Version    string `json:"version"`
 }
 
 // IDMappings describe the GID and UID mappings.

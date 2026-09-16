@@ -35,11 +35,15 @@ type UntrustedSigstorePayload struct {
 // NewUntrustedSigstorePayload returns an UntrustedSigstorePayload object with
 // the specified primary contents and appropriate metadata.
 func NewUntrustedSigstorePayload(dockerManifestDigest digest.Digest, dockerReference string) UntrustedSigstorePayload {
+	// Use intermediate variables for these values so that we can take their addresses.
+	// Golang guarantees that they will have a new address on every execution.
+	creatorID := "containers/image " + version.Version
+	timestamp := time.Now().Unix()
 	return UntrustedSigstorePayload{
 		untrustedDockerManifestDigest: dockerManifestDigest,
 		untrustedDockerReference:      dockerReference,
-		untrustedCreatorID:            new("containers/image " + version.Version),
-		untrustedTimestamp:            new(time.Now().Unix()),
+		untrustedCreatorID:            &creatorID,
+		untrustedTimestamp:            &timestamp,
 	}
 }
 

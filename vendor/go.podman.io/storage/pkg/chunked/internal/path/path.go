@@ -2,17 +2,9 @@ package path
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/opencontainers/go-digest"
 )
-
-// CleanAbsPath removes any ".." and "." from the path
-// and ensures it starts with a "/".  If the path refers to the root
-// directory, it returns "/".
-func CleanAbsPath(path string) string {
-	return filepath.Clean("/" + path)
-}
 
 // RegularFilePath returns the path used in the composefs backing store for a
 // regular file with the provided content digest.

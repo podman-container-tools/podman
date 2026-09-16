@@ -394,18 +394,17 @@ const (
 	UsernsEnvName = "_CONTAINERS_USERNS_CONFIGURED"
 )
 
-// inInitUserNamespace checks whether the current process is running in the
-// initial user namespace by comparing the inode of /proc/self/ns/user against
-// the kernel-defined USER_NS_INIT_INO.
-func inInitUserNamespace() (bool, error) {
-	const userNsInitIno uint64 = 0xEFFF_FFFD
-	var st syscall.Stat_t
-	// Stat, not Lstat: /proc/self/ns/user is a magic symlink and we need
-	// to dereference it to obtain the inode of the actual namespace object.
-	if err := syscall.Stat("/proc/self/ns/user", &st); err != nil {
+// hasFullUsersMappings checks whether the current user namespace has all the IDs mapped.
+func hasFullUsersMappings() (bool, error) {
+	content, err := os.ReadFile("/proc/self/uid_map")
+	if err != nil {
 		return false, err
 	}
-	return st.Ino == userNsInitIno, nil
+	// The kernel rejects attempts to create mappings where either starting
+	// point is (u32)-1: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/user_namespace.c?id=af3e9579ecfb#n1006 .
+	// So, if the uid_map contains 4294967295, the entire IDs space is available in the
+	// user namespace, so it is likely the initial user namespace.
+	return bytes.Contains(content, []byte("4294967295")), nil
 }
 
 var (
@@ -428,11 +427,11 @@ func IsRootless() bool {
 			}
 		}
 		if !isRootless {
-			initNS, err := inInitUserNamespace()
+			hasMappings, err := hasFullUsersMappings()
 			if err != nil {
-				logrus.Warnf("Failed to check initial user namespace")
+				logrus.Warnf("Failed to read current user namespace mappings")
 			}
-			if err == nil && !initNS {
+			if err == nil && !hasMappings {
 				isRootless = true
 			}
 		}

@@ -52,7 +52,7 @@ ifeq ($(BUILDDEBUG), 1)
 endif
 
 # Managed by renovate.
-export GOLANGCI_LINT_VERSION := 2.12.2
+export GOLANGCI_LINT_VERSION := 2.13.2
 
 #   make all BUILDDEBUG=1
 #     Note: Uses the -N -l go compiler options to disable compiler optimizations

@@ -18,3 +18,13 @@ func Lstat(path string) (*StatT, error) {
 	}
 	return fromStatT(s)
 }
+
+// RootLstat takes fsPath within root and returns
+// a system.StatT type pertaining to that file.
+func RootLstat(root *os.Root, fsPath string) (*StatT, error) {
+	fi, err := root.Lstat(fsPath)
+	if err != nil {
+		return nil, err
+	}
+	return fromStatT(fi.Sys().(*syscall.Stat_t))
+}

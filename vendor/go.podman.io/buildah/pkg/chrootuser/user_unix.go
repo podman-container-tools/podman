@@ -281,7 +281,7 @@ func lookupUIDInContainer(rootdir string, uid uint64) (string, uint64, error) {
 		return pwd.name, pwd.gid, nil
 	}
 
-	return "", 0, user.UnknownUserError(fmt.Sprintf("error looking up uid %q", uid))
+	return "", 0, user.UnknownUserError(fmt.Sprintf("error looking up uid %d", uid))
 }
 
 func lookupHomedirInContainer(rootdir string, uid uint64) (string, error) {
@@ -307,5 +307,5 @@ func lookupHomedirInContainer(rootdir string, uid uint64) (string, error) {
 		return pwd.home, nil
 	}
 
-	return "", user.UnknownUserError(fmt.Sprintf("error looking up uid %q for homedir", uid))
+	return "", user.UnknownUserError(fmt.Sprintf("error looking up homedir for uid %d", uid))
 }

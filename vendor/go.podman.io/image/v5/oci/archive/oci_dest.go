@@ -14,6 +14,8 @@ import (
 	"go.podman.io/image/v5/internal/imagedestination/impl"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
+	"go.podman.io/image/v5/internal/tmpdir"
+	"go.podman.io/image/v5/oci/layout"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/idtools"
@@ -24,26 +26,36 @@ type ociArchiveImageDestination struct {
 
 	ref          ociArchiveReference
 	unpackedDest private.ImageDestination
-	tempDirRef   tempDirOCIRef
+	tempDir      string
 }
 
 // newImageDestination returns an ImageDestination for writing to an existing directory.
 func newImageDestination(ctx context.Context, sys *types.SystemContext, ref ociArchiveReference) (private.ImageDestination, error) {
-	tempDirRef, err := createOCIRef(sys, ref.image)
+	tempDir, err := tmpdir.MkDirBigFileTemp(sys, "oci")
 	if err != nil {
-		return nil, fmt.Errorf("creating oci reference: %w", err)
+		return nil, fmt.Errorf("creating temp directory: %w", err)
 	}
-	unpackedDest, err := tempDirRef.ociRefExtracted.NewImageDestination(ctx, sys)
-	if err != nil {
-		if err := tempDirRef.deleteTempDir(); err != nil {
-			return nil, fmt.Errorf("deleting temp directory %q: %w", tempDirRef.tempDirectory, err)
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			os.RemoveAll(tempDir)
 		}
+	}()
+
+	unpackedRef, err := layout.NewReference(tempDir, ref.image)
+	if err != nil {
 		return nil, err
 	}
+	unpackedDest, err := unpackedRef.NewImageDestination(ctx, sys)
+	if err != nil {
+		return nil, err
+	}
+
+	succeeded = true
 	d := &ociArchiveImageDestination{
 		ref:          ref,
 		unpackedDest: imagedestination.FromPublic(unpackedDest),
-		tempDirRef:   tempDirRef,
+		tempDir:      tempDir,
 	}
 	d.Compat = impl.AddCompat(d)
 	return d, nil
@@ -58,7 +70,7 @@ func (d *ociArchiveImageDestination) Reference() types.ImageReference {
 // Close deletes the temp directory of the oci-archive image
 func (d *ociArchiveImageDestination) Close() error {
 	defer func() {
-		err := d.tempDirRef.deleteTempDir()
+		err := os.RemoveAll(d.tempDir)
 		logrus.Debugf("Error deleting temporary directory: %v", err)
 	}()
 	return d.unpackedDest.Close()
@@ -169,11 +181,7 @@ func (d *ociArchiveImageDestination) CommitWithOptions(ctx context.Context, opti
 		return fmt.Errorf("storing image %q: %w", d.ref.image, err)
 	}
 
-	// path of directory to tar up
-	src := d.tempDirRef.tempDirectory
-	// path to save tarred up file
-	dst := d.ref.resolvedFile
-	return tarDirectory(src, dst, options.Timestamp)
+	return tarDirectory(d.tempDir, d.ref.resolvedFile, options.Timestamp)
 }
 
 // tar converts the directory at src and saves it to dst

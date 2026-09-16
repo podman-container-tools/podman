@@ -62,6 +62,10 @@ func (s StatT) IsDir() bool {
 	return (s.mode & unix.S_IFDIR) != 0
 }
 
+func (s StatT) IsSymlink() bool {
+	return (s.mode & unix.S_IFMT) == unix.S_IFLNK
+}
+
 // Stat takes a path to a file and returns
 // a system.StatT type pertaining to that file.
 //

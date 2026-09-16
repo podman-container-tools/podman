@@ -2245,8 +2245,7 @@ func exitCodeFromError(err error) (int32, bool) {
 	if err == nil {
 		return 0, true
 	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
+	if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 		return int32(ee.ExitCode()), true
 	}
 	return 0, false

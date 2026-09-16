@@ -16,9 +16,9 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/vbatts/tar-split/archive/tar"
 	driversCopy "go.podman.io/storage/drivers/copy"
+	"go.podman.io/storage/internal/createpath"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chunked/internal/minimal"
-	storagePath "go.podman.io/storage/pkg/chunked/internal/path"
 	"golang.org/x/sys/unix"
 )
 
@@ -50,32 +50,8 @@ type fileMetadata struct {
 	skipSetAttrs bool
 }
 
-// splitPath takes a file path as input and returns two components: dir and base.
-// Differently than filepath.Split(), this function handles some edge cases.
-// If the path refers to a file in the root directory, the returned dir is "/".
-// The returned base value is never empty, it never contains any slash and the
-// value "..".
-func splitPath(path string) (string, string, error) {
-	path = storagePath.CleanAbsPath(path)
-	dir, base := filepath.Split(path)
-	if base == "" {
-		base = "."
-	}
-	// Remove trailing slashes from dir, but make sure that "/" is preserved.
-	dir = strings.TrimSuffix(dir, "/")
-	if dir == "" {
-		dir = "/"
-	}
-
-	if strings.Contains(base, "/") {
-		// This should never happen, but be safe as the base is passed to *at syscalls.
-		return "", "", fmt.Errorf("internal error: splitPath(%q) contains a slash", path)
-	}
-	return dir, base, nil
-}
-
 func doHardLink(dirfd, srcFd int, destFile string) error {
-	destDir, destBase, err := splitPath(destFile)
+	destDir, destBase, err := createpath.SplitPath(destFile)
 	if err != nil {
 		return err
 	}
@@ -112,9 +88,7 @@ func doHardLink(dirfd, srcFd int, destFile string) error {
 	return err
 }
 
-// copyFileContent copies the content of srcFd into a new file under dirfd.
-// The returned *os.File, when non-nil, is opened read-only.
-func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool, needsForkLock bool) (*os.File, int64, error) {
+func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool) (*os.File, int64, error) {
 	destFile := fileMetadata.Name
 	src := procPathForFd(srcFd)
 	st, err := os.Stat(src)
@@ -133,13 +107,6 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 		}
 	}
 
-	if needsForkLock {
-		// Prevent concurrent fork(2) from duplicating this writable fd.
-		// See openDestinationFile for the full explanation.
-		syscall.ForkLock.RLock()
-		defer syscall.ForkLock.RUnlock()
-	}
-
 	// If the destination file already exists, we shouldn't blow it away
 	dstFile, err := openFileUnderRoot(dirfd, destFile, newFileFlags, mode)
 	if err != nil {
@@ -151,13 +118,7 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 		dstFile.Close()
 		return nil, -1, fmt.Errorf("copy to file %q under rootfs: %w", destFile, err)
 	}
-
-	roFile, err := reopenFileReadOnly(dstFile)
-	dstFile.Close()
-	if err != nil {
-		return nil, -1, fmt.Errorf("reopen %q as read-only: %w", destFile, err)
-	}
-	return roFile, st.Size(), nil
+	return dstFile, st.Size(), nil
 }
 
 func timeToTimespec(time *time.Time) (ts unix.Timespec) {
@@ -324,7 +285,7 @@ func openFileUnderRootFallback(dirfd int, name string, flags uint64, mode os.Fil
 	// If O_NOFOLLOW is specified in the flags, then resolve only the parent directory and use the
 	// last component as the path to openat().
 	if hasNoFollow {
-		dirName, baseName, err := splitPath(name)
+		dirName, baseName, err := createpath.SplitPath(name)
 		if err != nil {
 			return -1, err
 		}
@@ -387,7 +348,7 @@ func openFileUnderRootOpenat2(dirfd int, name string, flags uint64, mode os.File
 
 // skipOpenat2 is set when openat2 is not supported by the underlying kernel and avoid
 // using it again.
-var skipOpenat2 atomic.Bool
+var skipOpenat2 int32
 
 // openFileUnderRootRaw tries to open a file using openat2 and if it is not supported fallbacks to a
 // userspace lookup.
@@ -401,14 +362,14 @@ func openFileUnderRootRaw(dirfd int, name string, flags uint64, mode os.FileMode
 		}
 		return fd, nil
 	}
-	if skipOpenat2.Load() {
+	if atomic.LoadInt32(&skipOpenat2) > 0 {
 		fd, err = openFileUnderRootFallback(dirfd, name, flags, mode)
 	} else {
 		fd, err = openFileUnderRootOpenat2(dirfd, name, flags, mode)
 		// If the function failed with ENOSYS, switch off the support for openat2
 		// and fallback to using safejoin.
 		if err != nil && errors.Is(err, unix.ENOSYS) {
-			skipOpenat2.Store(true)
+			atomic.StoreInt32(&skipOpenat2, 1)
 			fd, err = openFileUnderRootFallback(dirfd, name, flags, mode)
 		}
 	}
@@ -495,7 +456,7 @@ func appendHole(fd int, name string, size int64) error {
 }
 
 func safeMkdir(dirfd int, mode os.FileMode, name string, metadata *fileMetadata, options *archive.TarOptions) error {
-	parent, base, err := splitPath(name)
+	parent, base, err := createpath.SplitPath(name)
 	if err != nil {
 		return err
 	}
@@ -536,7 +497,7 @@ func safeLink(dirfd int, mode os.FileMode, metadata *fileMetadata, options *arch
 		return err
 	}
 
-	newFile, err := openFileUnderRoot(dirfd, metadata.Name, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	newFile, err := openFileUnderRoot(dirfd, metadata.Name, unix.O_WRONLY|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		// If the target is a symlink, open the file with O_PATH.
 		if errors.Is(err, unix.ELOOP) {
@@ -556,7 +517,7 @@ func safeLink(dirfd int, mode os.FileMode, metadata *fileMetadata, options *arch
 }
 
 func safeSymlink(dirfd int, metadata *fileMetadata) error {
-	destDir, destBase, err := splitPath(metadata.Name)
+	destDir, destBase, err := createpath.SplitPath(metadata.Name)
 	if err != nil {
 		return err
 	}
@@ -595,7 +556,7 @@ func (d whiteoutHandler) Setxattr(path, name string, value []byte) error {
 }
 
 func (d whiteoutHandler) Mknod(path string, mode uint32, dev int) error {
-	dir, base, err := splitPath(path)
+	dir, base, err := createpath.SplitPath(path)
 	if err != nil {
 		return err
 	}
