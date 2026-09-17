@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -33,7 +34,8 @@ func readPIDFileWithRetry(f define.VMFile) ([]byte, error) {
 	return f.Read()
 }
 
-// CleanupGVProxy reads the --pid-file for gvproxy attempts to stop it
+// CleanupGVProxy reads the --pid-file for gvproxy, stops the process,
+// removes the PID file, and cleans up the notification socket.
 func CleanupGVProxy(f define.VMFile) error {
 	gvPid, err := readPIDFileWithRetry(f)
 	if err != nil {
@@ -51,5 +53,13 @@ func CleanupGVProxy(f define.VMFile) error {
 	if err := waitOnProcess(proxyPid); err != nil {
 		return err
 	}
-	return removeGVProxyPIDFile(f)
+	if err := removeGVProxyPIDFile(f); err != nil {
+		return err
+	}
+
+	// Remove notification socket after gvproxy has exited
+	runtimeDir := filepath.Dir(f.GetPath())
+	CleanupGvProxyNotifySocket(runtimeDir)
+
+	return nil
 }

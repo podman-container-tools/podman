@@ -33,11 +33,6 @@ type QEMUStubber struct {
 	virtiofsHelpers []virtiofsdHelperCmd
 }
 
-var (
-	gvProxyWaitBackoff        = 500 * time.Millisecond
-	gvProxyMaxBackoffAttempts = 6
-)
-
 func (q *QEMUStubber) UserModeNetworkEnabled(*vmconfigs.MachineConfig) bool {
 	return true
 }
@@ -152,16 +147,6 @@ func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func()
 
 	readySocket, err := mc.ReadySocket()
 	if err != nil {
-		return nil, nil, err
-	}
-
-	gvProxySock, err := mc.GVProxySocket()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Wait on gvproxy to be running and aware
-	if err := sockets.WaitForSocketWithBackoffs(gvProxyMaxBackoffAttempts, gvProxyWaitBackoff, gvProxySock.GetPath(), "gvproxy"); err != nil {
 		return nil, nil, err
 	}
 

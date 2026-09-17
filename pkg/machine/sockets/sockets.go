@@ -11,7 +11,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/pkg/machine/define"
-	"go.podman.io/storage/pkg/fileutils"
 )
 
 // ListenAndWaitOnSocket waits for a new connection to the listener and sends
@@ -79,21 +78,6 @@ func DialSocketWithBackoffsAndProcCheck(
 		}
 	}
 	return nil, err
-}
-
-// WaitForSocketWithBackoffs attempts to discover listening socket in maxBackoffs attempts
-func WaitForSocketWithBackoffs(maxBackoffs int, backoff time.Duration, socketPath string, name string) error {
-	backoffWait := backoff
-	logrus.Debugf("checking that %q socket is ready", name)
-	for range maxBackoffs {
-		err := fileutils.Exists(socketPath)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(backoffWait)
-		backoffWait *= 2
-	}
-	return fmt.Errorf("unable to connect to %q socket at %q", name, socketPath)
 }
 
 // ToUnixURL converts `socketLoc` into URL representation
