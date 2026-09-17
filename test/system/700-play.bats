@@ -444,6 +444,25 @@ _EOF
 }
 
 # bats test_tags=ci:parallel
+@test "podman kube --label" {
+    _write_test_yaml command=/home/podman/pause
+
+    RANDOMSTRING=$(random_string 15)
+    LABEL_WITH_COMMA="comma,$(random_string 5)"
+    run_podman kube play --label "name=$RANDOMSTRING"  \
+        --label "lab=$LABEL_WITH_COMMA" $TESTYAML
+    run_podman inspect --format "{{ .Config.Labels }}" $PODCTRNAME
+    is "$output" ".*name:$RANDOMSTRING" "Label should be added to pod"
+    is "$output" ".*lab:$LABEL_WITH_COMMA" "Label with comma should be added to pod"
+
+    # invalid label
+    run_podman 125 kube play --label "val" $TESTYAML
+    assert "$output" == 'Error: invalid label format: "val"' "invalid label error"
+
+    run_podman pod rm -t 0 -f $PODNAME
+}
+
+# bats test_tags=ci:parallel
 @test "podman play Yaml deprecated --no-trunc annotation" {
    skip "FIXME: I can't figure out what this test is supposed to do"
    RANDOMSTRING=$(random_string 65)

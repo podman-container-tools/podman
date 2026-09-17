@@ -43,6 +43,7 @@ type playKubeOptionsWrapper struct {
 	ValidateCLI    string
 	annotations    []string
 	macs           []string
+	labels         []string
 }
 
 const yamlFileSeparator = "\n---\n"
@@ -112,6 +113,10 @@ func playFlags(cmd *cobra.Command) {
 		"Add Podman-specific annotations to containers and pods created by Podman (key=value)",
 	)
 	_ = cmd.RegisterFlagCompletionFunc(annotationFlagName, completion.AutocompleteNone)
+
+	labelFlagName := "label"
+	flags.StringArrayVarP(&playOptions.labels, labelFlagName, "l", []string{}, "Add labels to resources created by podman kube play (key=value)")
+	_ = cmd.RegisterFlagCompletionFunc(labelFlagName, completion.AutocompleteNone)
 	credsFlagName := "creds"
 	flags.StringVar(&playOptions.CredentialsCLI, credsFlagName, "", "`Credentials` (USERNAME:PASSWORD) to use for authenticating to a registry")
 	_ = cmd.RegisterFlagCompletionFunc(credsFlagName, completion.AutocompleteNone)
@@ -274,6 +279,15 @@ func play(cmd *cobra.Command, args []string) error {
 			playOptions.Annotations = make(map[string]string)
 		}
 		playOptions.Annotations[key] = val
+	}
+
+	// parse labels provided on CLI and attach to PlayKubeOptions
+	if len(playOptions.labels) > 0 {
+		labelMap, err := parse.GetAllLabels([]string{}, playOptions.labels)
+		if err != nil {
+			return err
+		}
+		playOptions.Labels = labelMap
 	}
 
 	if err := annotations.ValidateAnnotations(playOptions.Annotations); err != nil {
