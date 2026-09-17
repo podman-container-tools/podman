@@ -120,6 +120,8 @@ type PlayKubeOptions struct {
 	NoPodPrefix bool
 	// Validate controls how unrecognized YAML fields and kinds are handled.
 	Validate KubeValidateMode
+	// MultiplePods allows creating of multiple Pods
+	MultiplePods bool
 }
 
 // PlayKubePod represents a single pod and associated containers created by play kube

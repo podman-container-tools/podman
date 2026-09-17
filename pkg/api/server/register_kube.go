@@ -73,6 +73,10 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    items:
 	//         type: string
 	//  - in: query
+	//    name: multiplepods
+	//    type: boolean
+	//    description: Allow creation of multiple pod replicas from a Deployment
+	//  - in: query
 	//    name: network
 	//    type: array
 	//    description: USe the network mode or specify an array of networks.
