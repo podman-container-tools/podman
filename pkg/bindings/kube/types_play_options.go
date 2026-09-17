@@ -18,21 +18,6 @@ func (o *PlayOptions) ToParams() (url.Values, error) {
 	return util.ToParams(o)
 }
 
-// WithLabels set field Labels to given value
-func (o *PlayOptions) WithLabels(value map[string]string) *PlayOptions {
-	o.Labels = value
-	return o
-}
-
-// GetLabels returns value of field Labels
-func (o *PlayOptions) GetLabels() map[string]string {
-	if o.Labels == nil {
-		var z map[string]string
-		return z
-	}
-	return o.Labels
-}
-
 // WithAnnotations set field Annotations to given value
 func (o *PlayOptions) WithAnnotations(value map[string]string) *PlayOptions {
 	o.Annotations = value
@@ -46,6 +31,21 @@ func (o *PlayOptions) GetAnnotations() map[string]string {
 		return z
 	}
 	return o.Annotations
+}
+
+// WithLabels set field Labels to given value
+func (o *PlayOptions) WithLabels(value map[string]string) *PlayOptions {
+	o.Labels = value
+	return o
+}
+
+// GetLabels returns value of field Labels
+func (o *PlayOptions) GetLabels() map[string]string {
+	if o.Labels == nil {
+		var z map[string]string
+		return z
+	}
+	return o.Labels
 }
 
 // WithAuthfile set field Authfile to given value
