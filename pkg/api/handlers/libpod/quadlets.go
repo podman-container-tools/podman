@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -137,6 +138,15 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 			return nil, fmt.Errorf("failed to read multipart: %w", err)
 		}
 
+ fix-quadlet-multipart-fd-leak
+		filePath, err := writeQuadletPart(quadletDir, part)
+		if err != nil {
+			return nil, err
+		}
+
+		if filePath != "" {
+			filePaths = append(filePaths, filePath)
+
 		filename := part.FileName()
 		if filename == "" {
 			// Skip parts without filenames
@@ -167,12 +177,38 @@ func processMultipartQuadlets(tempDir string, r *http.Request) ([]string, error)
 			return nil
 		}(); err != nil {
 			return nil, err
+ main
 		}
-
-		filePaths = append(filePaths, filePath)
 	}
 
 	return filePaths, nil
+}
+
+// writeQuadletPart writes part to a file named after it in dir and returns the
+// path it was written to.  Parts without a filename are skipped (empty path
+// returned).  The part and any created file are closed before returning so that
+// a request carrying many parts does not keep one descriptor open per part.
+func writeQuadletPart(dir string, part *multipart.Part) (string, error) {
+	defer part.Close()
+
+	filename := part.FileName()
+	if filename == "" {
+		// Skip parts without filenames
+		return "", nil
+	}
+
+	filePath := filepath.Join(dir, filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, part); err != nil {
+		return "", fmt.Errorf("failed to write file %s: %w", filename, err)
+	}
+
+	return filePath, nil
 }
 
 func InstallQuadlets(w http.ResponseWriter, r *http.Request) {
