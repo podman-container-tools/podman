@@ -414,8 +414,14 @@ type ContainerSecurityConfig struct {
 	// SeccompProfilePath is the path to a JSON file containing the
 	// container's Seccomp profile.
 	// If not specified, no Seccomp profile will be used.
+	// Conflicts with SeccompProfile.
 	// Optional.
 	SeccompProfilePath string `json:"seccomp_profile_path,omitempty"`
+	// SeccompProfile is the JSON content of the container's Seccomp
+	// profile.
+	// Conflicts with SeccompProfilePath.
+	// Optional.
+	SeccompProfile string `json:"seccomp_profile,omitempty"`
 	// NoNewPrivileges is whether the container will set the no new
 	// privileges flag on create, which disables gaining additional
 	// privileges (e.g. via setuid) in the container.
