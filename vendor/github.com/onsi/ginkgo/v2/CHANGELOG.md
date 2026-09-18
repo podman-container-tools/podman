@@ -1,3 +1,19 @@
+## Unreleased
+
+### Features
+
+### Fixes
+
+### Maintenance
+
+## 2.33.0
+
+### Features
+- The JUnit reporter now records each spec's `ReportEntry`s as `<properties>` on its `<testcase>` element, with the entry's name and its JSON-encoded value.  Thanks @pohly! [23db51a]
+
+### Maintenance
+- Releases are now cut by a GitHub Actions workflow (Actions -> Release -> Run workflow) rather than by hand, with changelog entries collected under `## Unreleased` as the work happens.  See RELEASING.md. [8616ecb]
+
 ## 2.32.2
 
 ### Fixes
