@@ -127,7 +127,6 @@ func DefineBuildFlags(cmd *cobra.Command, buildOpts *BuildFlagsWrapper, isFarmBu
 		_ = flags.MarkHidden("sign-by")
 		_ = flags.MarkHidden("signature-policy")
 		_ = flags.MarkHidden("compress")
-		_ = flags.MarkHidden("output")
 		_ = flags.MarkHidden("logsplit")
 		_ = flags.MarkHidden("cw")
 		// Support for farm build in podman-remote
@@ -147,9 +146,6 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 		return nil, errors.New("cannot specify --squash-all with --squash")
 	}
 
-	if cmd.Flag("output").Changed && registry.IsRemote() {
-		return nil, errors.New("'--output' option is not supported in remote mode")
-	}
 	if cmd.Flag("metadata-file").Changed && registry.IsRemote() {
 		return nil, errors.New("'--metadata-file' option is not supported in remote mode")
 	}
