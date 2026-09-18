@@ -13,9 +13,9 @@ ipam driver automatically based on the network driver.
 
 Valid values are:
 
- - `dhcp`: IP addresses are assigned from a DHCP server on the network. When using the netavark backend
-  the `netavark-dhcp-proxy.socket` must be enabled in order to start the DHCP proxy when a container is
-  started, for CNI use the `cni-dhcp.socket` unit instead.
+ - `dhcp`: IP addresses are assigned from a DHCP server on the network.
+  The `netavark-dhcp-proxy.socket` unit must be enabled in order to start the DHCP proxy when a container is
+  started.
  - `host-local`: IP addresses are assigned locally.
  - `none`: No ip addresses are assigned to the interfaces.
 
