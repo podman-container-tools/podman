@@ -10,6 +10,8 @@ type AutoUpdateOptions struct {
 	// pending, it will be indicated in the Updated field of
 	// AutoUpdateReport.
 	DryRun *bool
+	// Filters select containers to consider for auto updates.
+	Filters map[string][]string
 	// If restarting the service with the new image failed, restart it
 	// another time with the previous image.
 	Rollback *bool

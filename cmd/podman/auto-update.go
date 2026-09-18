@@ -11,6 +11,7 @@ import (
 	"go.podman.io/common/pkg/report"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
+	"go.podman.io/podman/v6/cmd/podman/parse"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/errorhandling"
@@ -18,6 +19,7 @@ import (
 
 type cliAutoUpdateOptions struct {
 	entities.AutoUpdateOptions
+	filters   []string
 	format    string
 	tlsVerify bool
 }
@@ -52,6 +54,9 @@ func init() {
 	flags.StringVar(&autoUpdateOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "Path to the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = autoUpdateCommand.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
 
+	flags.StringArrayVarP(&autoUpdateOptions.filters, "filter", "f", nil, "Filter containers based on conditions given")
+	_ = autoUpdateCommand.RegisterFlagCompletionFunc("filter", common.AutocompletePsFilters)
+
 	flags.BoolVar(&autoUpdateOptions.DryRun, "dry-run", false, "Check for pending updates")
 	flags.BoolVar(&autoUpdateOptions.Rollback, "rollback", true, "Rollback to previous image if update fails")
 
@@ -74,6 +79,12 @@ func autoUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("tls-verify") {
 		autoUpdateOptions.InsecureSkipTLSVerify = types.NewOptionalBool(!autoUpdateOptions.tlsVerify)
+	}
+
+	var err error
+	autoUpdateOptions.Filters, err = parse.FilterArgumentsIntoFilters(autoUpdateOptions.filters)
+	if err != nil {
+		return err
 	}
 
 	allReports, failures := registry.ContainerEngine().AutoUpdate(registry.Context(), autoUpdateOptions.AutoUpdateOptions)

@@ -16,6 +16,7 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/domain/infra/abi"
 	"go.podman.io/podman/v6/pkg/errorhandling"
+	"go.podman.io/podman/v6/pkg/util"
 )
 
 func AutoUpdate(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,12 @@ func AutoUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filterMap, err := util.PrepareFilters(r)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to decode filter parameters: %w", err))
+		return
+	}
+
 	_, authfile, err := auth.GetCredentials(r)
 	if err != nil {
 		utils.Error(w, http.StatusBadRequest, err)
@@ -47,6 +54,7 @@ func AutoUpdate(w http.ResponseWriter, r *http.Request) {
 	options := entities.AutoUpdateOptions{
 		Authfile:              authfile,
 		DryRun:                query.DryRun,
+		Filters:               *filterMap,
 		Rollback:              query.Rollback,
 		InsecureSkipTLSVerify: types.OptionalBoolUndefined,
 	}

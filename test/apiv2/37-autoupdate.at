@@ -4,3 +4,14 @@
 #
 
 t POST libpod/autoupdate 200
+
+t POST 'libpod/autoupdate?filters={"label":["deployment=missing"]}' 200
+t POST 'libpod/autoupdate?filters=invalid' 400 .message~'failed to decode filter parameters'
+t POST 'libpod/autoupdate?filters={"invalid":["value"]}' 500 .message~'.*invalid filter'
+
+# A filtered-out container must not cause a missing-systemd-unit error.
+podman pull $IMAGE
+podman run -d --name auto-update-filter --label io.containers.autoupdate=local --label deployment=web $IMAGE top
+t POST 'libpod/autoupdate?filters={"label":["deployment=worker"]}' 200
+t POST 'libpod/autoupdate?filters={"label":["deployment=web"]}' 500 .message~'.*no PODMAN_SYSTEMD_UNIT label found'
+podman rm -f auto-update-filter

@@ -18,6 +18,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/pkg/domain/entities"
+	"go.podman.io/podman/v6/pkg/domain/filters"
 	"go.podman.io/podman/v6/pkg/systemd"
 	systemdDefine "go.podman.io/podman/v6/pkg/systemd/define"
 )
@@ -353,6 +354,15 @@ func (u *updater) restartSystemdUnit(ctx context.Context, unit string) error {
 // assembleTasks assembles update tasks per unit and populates a mapping from
 // `unit -> []*task` such that multiple containers _can_ run in a single unit.
 func (u *updater) assembleTasks(ctx context.Context) []error {
+	filterFuncs := make([]libpod.ContainerFilter, 0, len(u.options.Filters))
+	for key, values := range u.options.Filters {
+		filter, err := filters.GenerateContainerFilterFuncs(key, values, u.runtime)
+		if err != nil {
+			return []error{err}
+		}
+		filterFuncs = append(filterFuncs, filter)
+	}
+
 	// Assemble a map `image ID -> *libimage.Image` that we can consult
 	// later on for lookups.
 	imageMap, err := u.assembleImageMap(ctx)
@@ -360,7 +370,7 @@ func (u *updater) assembleTasks(ctx context.Context) []error {
 		return []error{err}
 	}
 
-	allContainers, err := u.runtime.GetAllContainers()
+	allContainers, err := u.runtime.GetContainers(false, filterFuncs...)
 	if err != nil {
 		return []error{err}
 	}

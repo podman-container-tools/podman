@@ -290,6 +290,66 @@ function _confirm_update() {
     _confirm_update $cname $ori_image
 }
 
+@test "podman auto-update - filters" {
+    generate_service localtest local "" "--label deployment=web --label tier=frontend --label revision=a=b,c"
+    local web=$cname
+    local old_image=$ori_image
+    generate_service test local "" "--label deployment=worker --label tier=backend"
+    local worker=$cname
+
+    _wait_service_ready container-$web.service
+    _wait_service_ready container-$worker.service
+
+    # A matching label alone does not opt a container into auto-update.
+    run_podman run -d --label deployment=web $IMAGE top
+    local unmanaged=$output
+
+    run_podman commit --change CMD=/bin/bash $web quay.io/libpod/localtest:latest
+    run_podman tag quay.io/libpod/localtest:latest quay.io/libpod/test:latest
+
+    local filter
+    for filter in label=deployment=web label=tier=frontend label=revision=a=b,c name=$web ancestor=quay.io/libpod/localtest:latest
+    do
+        run_podman auto-update --dry-run --filter "$filter" --format '{{.ContainerName}} {{.Updated}}'
+        assert "$output" = "$web pending" "Select only the web container with $filter"
+    done
+
+    run_podman auto-update --dry-run -f label=deployment=web -f label=tier=frontend --format '{{.ContainerName}}'
+    assert "$output" = "$web" "Repeated label filters must all match"
+    run_podman auto-update --dry-run -f label=deployment=web -f label=tier=backend --format '{{.ContainerName}}'
+    assert "$output" = "" "Conflicting label filters select no containers"
+    run_podman auto-update --dry-run -f label=deployment=web -f name=$worker --format '{{.ContainerName}}'
+    assert "$output" = "" "Different filter keys must all match"
+
+    run_podman auto-update --dry-run -f name=$web -f name=$worker --format '{{.ContainerName}}'
+    assert "$(sort <<<"$output")" = "$(printf '%s\n' "$web" "$worker" | sort)" "Repeated name filters match either container"
+    run_podman auto-update --dry-run -f label=deployment --format '{{.ContainerName}}'
+    assert "$(sort <<<"$output")" = "$(printf '%s\n' "$web" "$worker" | sort)" "Match a label key"
+
+    run_podman auto-update --filter label=deployment=missing --format '{{.ContainerName}}'
+    assert "$output" = "" "No matches succeeds without updates"
+    run_podman inspect --format '{{.Image}}' $web $worker
+    assert "$output" = "$(printf '%s\n' "$old_image" "$old_image")" "A no-match update leaves both images unchanged"
+
+    run_podman 125 auto-update --filter invalid
+    assert "$output" = 'Error: filter input must be in the form of filter=value: invalid is invalid' "Reject malformed filters"
+    run_podman 125 auto-update --filter invalid=value
+    assert "$output" = 'Error: invalid is an invalid filter' "Reject unknown filters"
+
+    run_podman inspect --format '{{.ID}}' $worker
+    local worker_id=$output
+    run_podman auto-update --filter label=deployment=web --format '{{.ContainerName}} {{.Updated}}'
+    assert "$output" = "$web true" "Only the selected service updates"
+    _confirm_update $web $old_image
+    run_podman inspect --format '{{.ID}} {{.Image}}' $worker
+    assert "$output" = "$worker_id $old_image" "The other service is not recreated"
+
+    run_podman auto-update --format '{{.ContainerName}} {{.Updated}}'
+    assert "$(sort <<<"$output")" = "$(printf '%s\n' "$web false" "$worker true" | sort)" "Without filters all eligible services are considered"
+    _confirm_update $worker $old_image
+    run_podman rm -f $unmanaged
+}
+
 # This test can fail in dev. environment because of SELinux.
 # quick fix: chcon -t container_runtime_exec_t ./bin/podman
 @test "podman auto-update - label io.containers.autoupdate=local with rollback" {
@@ -576,6 +636,7 @@ EOF
 
     podname=$(random_string)
     ctrname=$(random_string)
+    sibling=$(random_string)
     podunit="$UNIT_DIR/pod-$podname.service.*"
     ctrunit="$UNIT_DIR/container-$ctrname.service.*"
     local_image=localhost/image:$(random_string 10)
@@ -584,6 +645,8 @@ EOF
 
     run_podman pod create --name=$podname
     run_podman create --label "io.containers.autoupdate=local" --pod=$podname --name=$ctrname $local_image top
+
+    run_podman create --pod=$podname --name=$sibling $local_image top
 
     # cd into the unit dir to generate the two files.
     pushd "$UNIT_DIR"
@@ -606,17 +669,22 @@ EOF
     podid="$output"
     run_podman container inspect --format "{{.ID}}" $ctrname
     ctrid="$output"
+    run_podman container inspect --format "{{.ID}}" $sibling
+    siblingid="$output"
+
+    run_podman auto-update --filter name=missing-$ctrname --format "{{.ContainerName}}"
+    assert "$output" = "" "An unmatched pod member does not trigger updates"
 
     # Note that the pod's unit is listed below, not the one of the container.
-    run_podman auto-update --dry-run --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
+    run_podman auto-update --filter name=$ctrname --dry-run --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
     is "$output" ".*pod-$podname.service,$local_image,false,local.*" "No update available"
 
     run_podman build -t $local_image -f $dockerfile
 
-    run_podman auto-update --dry-run --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
+    run_podman auto-update --filter name=$ctrname --dry-run --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
     is "$output" ".*pod-$podname.service,$local_image,pending,local.*" "Image updated is pending"
 
-    run_podman auto-update --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
+    run_podman auto-update --filter name=$ctrname --format "{{.Unit}},{{.Image}},{{.Updated}},{{.Policy}}"
     is "$output" ".*pod-$podname.service,$local_image,true,local.*" "Service has been restarted"
     _wait_service_ready container-$ctrname.service
 
@@ -625,12 +693,15 @@ EOF
     run_podman container inspect --format "{{.ID}}" $ctrname
     assert "$output" != "$ctrid" "container has been recreated"
 
+    run_podman container inspect --format "{{.ID}}" $sibling
+    assert "$output" != "$siblingid" "The unselected sibling is recreated with the pod"
+
     run systemctl stop pod-$podname.service
     assert $status -eq 0 "Error stopping pod systemd unit: $output"
 
     run_podman pod rm -f $podname
     run_podman rmi $local_image
-    rm -f $podunit $ctrunit
+    rm -f "$UNIT_DIR/pod-$podname.service" "$UNIT_DIR/container-$ctrname.service" "$UNIT_DIR/container-$sibling.service"
     systemctl daemon-reload
 }
 

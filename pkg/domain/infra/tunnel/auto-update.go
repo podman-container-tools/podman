@@ -9,7 +9,7 @@ import (
 )
 
 func (ic *ContainerEngine) AutoUpdate(_ context.Context, opts entities.AutoUpdateOptions) ([]*entities.AutoUpdateReport, []error) {
-	options := new(autoupdate.AutoUpdateOptions).WithAuthfile(opts.Authfile).WithDryRun(opts.DryRun).WithRollback(opts.Rollback)
+	options := new(autoupdate.AutoUpdateOptions).WithAuthfile(opts.Authfile).WithDryRun(opts.DryRun).WithFilters(opts.Filters).WithRollback(opts.Rollback)
 	if s := opts.InsecureSkipTLSVerify; s != types.OptionalBoolUndefined {
 		if s == types.OptionalBoolTrue {
 			options.WithInsecureSkipTLSVerify(true)

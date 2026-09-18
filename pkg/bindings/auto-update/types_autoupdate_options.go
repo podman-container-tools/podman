@@ -47,6 +47,21 @@ func (o *AutoUpdateOptions) GetDryRun() bool {
 	return *o.DryRun
 }
 
+// WithFilters set field Filters to given value
+func (o *AutoUpdateOptions) WithFilters(value map[string][]string) *AutoUpdateOptions {
+	o.Filters = value
+	return o
+}
+
+// GetFilters returns value of field Filters
+func (o *AutoUpdateOptions) GetFilters() map[string][]string {
+	if o.Filters == nil {
+		var z map[string][]string
+		return z
+	}
+	return o.Filters
+}
+
 // WithRollback set field Rollback to given value
 func (o *AutoUpdateOptions) WithRollback(value bool) *AutoUpdateOptions {
 	o.Rollback = &value

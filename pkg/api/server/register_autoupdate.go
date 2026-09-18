@@ -32,6 +32,12 @@ func (s *APIServer) registerAutoUpdateHandlers(r *mux.Router) error {
 	//     type: boolean
 	//     description: Only check for but do not perform any update. If an update is pending, it will be indicated in the Updated field.
 	//   - in: query
+	//     name: filters
+	//     type: string
+	//     description: |
+	//       JSON encoded map[string][]string of container filters, as supported by the containers endpoint.
+	//       Only matching containers with an auto-update policy are considered. Restarting their systemd units may also restart other containers.
+	//   - in: query
 	//     name: rollback
 	//     type: boolean
 	//     description: If restarting the service with the new image failed, restart it another time with the previous image.
@@ -45,6 +51,8 @@ func (s *APIServer) registerAutoUpdateHandlers(r *mux.Router) error {
 	// responses:
 	//   200:
 	//     $ref: "#/responses/autoupdateResponse"
+	//   400:
+	//     $ref: "#/responses/badParamError"
 	//   500:
 	//     $ref: '#/responses/internalError'
 	r.HandleFunc(VersionedPath("/libpod/autoupdate"), s.APIHandler(libpod.AutoUpdate)).Methods(http.MethodPost)

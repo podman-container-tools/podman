@@ -1,5 +1,5 @@
 ####> This option file is used in:
-####>   podman pause, ps, restart, rm, start, stop, unpause
+####>   podman auto update, pause, ps, restart, rm, start, stop, unpause
 ####> If file is edited, make sure the changes
 ####> are applicable to all of those.
 #### **--filter**, **-f**=*filter*

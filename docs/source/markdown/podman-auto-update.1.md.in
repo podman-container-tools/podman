@@ -53,6 +53,19 @@ Alternatively, the `io.containers.autoupdate.authfile` container label can be co
 Check for the availability of new images but do not perform any pull operation or restart any service or container.
 The `UPDATED` field indicates the availability of a new image with "pending".
 
+@@option filter.container
+
+Only matching running containers with an enabled auto-update policy are considered for updates.
+The label filter matches labels assigned to containers.
+For example, `--filter label=app=web` selects containers labeled `app=web`.
+Use `--filter ancestor=IMAGE` to select containers by image.
+Without filters, all eligible containers are considered. A filter that matches no eligible containers succeeds without updating anything.
+
+Updates restart the systemd unit associated with a selected container.
+For containers in a pod, this may be the pod's unit.
+Other containers in the same unit or affected by systemd dependencies may also restart, even if they do not match the filters.
+Those containers may use updated images when recreated, including images shared with selected containers.
+
 #### **--format**=*format*
 
 Change the default output format.  This can be of a supported type like 'json' or a Go template.
@@ -116,6 +129,16 @@ Update the service:
 $ podman auto-update
 UNIT           CONTAINER                     IMAGE                                     POLICY      UPDATED
 sleep.service  f8e4759798d4 (systemd-sleep)  registry.fedoraproject.org/fedora:latest  registry    true
+```
+
+Update containers belonging to a deployment, selected by a container label:
+```
+$ podman auto-update --filter label=com.example.deploy.repository=example/web
+```
+
+Check for updates to containers using a particular image:
+```
+$ podman auto-update --dry-run --filter ancestor=quay.io/example/web:latest
 ```
 
 ## SEE ALSO
