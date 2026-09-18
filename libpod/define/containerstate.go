@@ -36,6 +36,24 @@ const (
 	ContainerStateStopping ContainerStatus = iota
 )
 
+// Wait condition strings that do not map 1:1 to a ContainerStatus.
+// These mirror Docker's wait condition names so users have a way to
+// express "block until the container next dies" or "block until the
+// container is removed", regardless of the container's current state.
+const (
+	// ContainerWaitConditionNextExit waits for the next exit event,
+	// regardless of the container's current state. This differs from
+	// "exited"/"stopped", which return immediately for a container that
+	// has never been started.
+	ContainerWaitConditionNextExit = "next-exit"
+	// ContainerWaitConditionNotRunning matches any state that is not
+	// "running" (configured, created, stopped, exited, removing).
+	ContainerWaitConditionNotRunning = "not-running"
+	// ContainerWaitConditionRemoved waits until the container has been
+	// removed.
+	ContainerWaitConditionRemoved = "removed"
+)
+
 // ContainerStatus returns a string representation for users of a container
 // state. All results should match Docker's versions (from `docker ps`) as
 // closely as possible, given the different set of states we support.
