@@ -18,4 +18,4 @@ Type=oneshot
 ExecStart=@@PODMAN@@ system prune --external
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
