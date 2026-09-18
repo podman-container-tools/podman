@@ -329,6 +329,17 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 	if err != nil {
 		return nil, err
 	}
+	if registry.IsRemote() {
+		hasSeccompOption := slices.ContainsFunc(flags.SecurityOpt, func(opt string) bool {
+			return strings.HasPrefix(opt, "seccomp=")
+		})
+		// Do not send the client's local default seccomp profile to
+		// the remote server; the server must adopt its own default.
+		// See #24318
+		if !hasSeccompOption {
+			commonOpts.SeccompProfilePath = ""
+		}
+	}
 
 	pullFlagsCount := 0
 	if c.Flag("pull").Changed {
