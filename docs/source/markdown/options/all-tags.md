@@ -10,4 +10,8 @@
 
 All tagged images in the repository are pulled.
 
-*IMPORTANT: When using the all-tags flag, Podman does not iterate over the search registries in the **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)** but always uses docker.io for unqualified image names.*
+*IMPORTANT: With **--all-tags**, Podman does **not** walk the unqualified-search registries from
+**[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**
+for short (unqualified) names. Unqualified names are resolved as if they lived on **docker.io**
+(for example `alpine` becomes `docker.io/library/alpine`). To pull every tag from another registry,
+use a fully qualified image name such as `quay.io/myorg/myimage` or `registry.example.com/ns/name`.*
