@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"go.podman.io/common/pkg/completion"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/utils"
@@ -62,8 +63,13 @@ func startFlags(cmd *cobra.Command) {
 
 	flags.BoolVar(&startOptions.All, "all", false, "Start all containers regardless of their state or configuration")
 
+	pidFileFlagName := "pidfile"
+	flags.StringVar(&startOptions.PIDFile, pidFileFlagName, "", "Write the container process ID to the file")
+	_ = cmd.RegisterFlagCompletionFunc(pidFileFlagName, completion.AutocompleteDefault)
+
 	if registry.IsRemote() {
 		_ = flags.MarkHidden("sig-proxy")
+		_ = flags.MarkHidden("pidfile")
 	}
 }
 
@@ -101,10 +107,20 @@ func validateStart(_ *cobra.Command, args []string) error {
 	if startOptions.Attach && startOptions.All {
 		return errors.New("you cannot start and attach all containers at once")
 	}
+	if startOptions.PIDFile != "" && startOptions.Attach {
+		return errors.New("--pidfile cannot be used with --attach")
+	}
+	if startOptions.PIDFile != "" && (startOptions.All || len(args) > 1) {
+		return errors.New("--pidfile can only be used with a single container")
+	}
 	return nil
 }
 
 func start(cmd *cobra.Command, args []string) error {
+	if registry.IsRemote() && startOptions.PIDFile != "" {
+		return errors.New("--pidfile is not supported on remote connections")
+	}
+
 	var errs utils.OutputErrors
 	sigProxy := startOptions.SigProxy || startOptions.Attach
 	if cmd.Flag("sig-proxy").Changed {
