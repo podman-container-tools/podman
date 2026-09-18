@@ -165,15 +165,23 @@ jobs:
     trigger: release
     update_release: false
     packages: [podman-fedora]
-    dist_git_branches: &fedora_targets
+    dist_git_branches:
       - fedora-rawhide
       - fedora-45
 
+  # ***NOTE***: On the Fedora dist-git side, packit only triggers koji_build and
+  # bodhi_update jobs for targets in .packit.yaml
+  # on the `rawhide` branch. So, enablement for these two jobs
+  # for fedora release branches needs to be on the rawhide branch itself.
+  # So, for koji_build, the target should typically be: fedora-all and for
+  # bodhi_update job, the target should be fedora-branched (rawhide bodhis are
+  # already automated in Fedora infra).
   - job: koji_build
     trigger: commit
     packages: [podman-fedora]
     sidetag_group: podman-releases
-    dist_git_branches: *fedora_targets
+    dist_git_branches:
+      - fedora-all
 
   - job: bodhi_update
     trigger: koji_build
@@ -186,4 +194,5 @@ jobs:
       - buildah
       - containers-common
       - skopeo
-    dist_git_branches: *fedora_targets
+    dist_git_branches:
+      - fedora-branched
