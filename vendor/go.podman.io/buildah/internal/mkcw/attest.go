@@ -3,6 +3,7 @@ package mkcw
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,13 +64,19 @@ func (h httpError) Error() string {
 
 // SendRegistrationRequest registers a workload with the specified decryption
 // passphrase with the service whose location is part of the WorkloadConfig.
-func SendRegistrationRequest(workloadConfig WorkloadConfig, diskEncryptionPassphrase, firmwareLibrary string, ignoreAttestationErrors bool, logger *logrus.Logger) error {
+func SendRegistrationRequest(ctx context.Context, workloadConfig WorkloadConfig, diskEncryptionPassphrase, firmwareLibrary string, ignoreAttestationErrors bool, logger *logrus.Logger) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if workloadConfig.AttestationURL == "" {
 		return errors.New("attestation URL not provided")
 	}
 
 	// Measure the execution environment.
-	measurement, err := GenerateMeasurement(workloadConfig, firmwareLibrary)
+	measurement, err := GenerateMeasurement(ctx, workloadConfig, firmwareLibrary)
 	if err != nil {
 		if !ignoreAttestationErrors {
 			return measurementError{err}
@@ -142,7 +149,12 @@ func SendRegistrationRequest(workloadConfig WorkloadConfig, diskEncryptionPassph
 	requestContentType := "application/json"
 	requestBody := bytes.NewReader(registrationRequestBytes)
 	defer http.DefaultClient.CloseIdleConnections()
-	resp, err := http.Post(url, requestContentType, requestBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, requestBody)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", requestContentType)
+	resp, err := http.DefaultClient.Do(req)
 	if resp != nil {
 		if resp.Body != nil {
 			resp.Body.Close()
@@ -174,7 +186,13 @@ func SendRegistrationRequest(workloadConfig WorkloadConfig, diskEncryptionPassph
 // of directories.
 // If firmwareLibrary is empty, both the filename and the directory it is in
 // will be taken from a hard-coded set of candidates.
-func GenerateMeasurement(workloadConfig WorkloadConfig, firmwareLibrary string) (string, error) {
+func GenerateMeasurement(ctx context.Context, workloadConfig WorkloadConfig, firmwareLibrary string) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	cpuString := fmt.Sprintf("%d", workloadConfig.CPUs)
 	memoryString := fmt.Sprintf("%d", workloadConfig.Memory)
 	var prefix string
@@ -232,7 +250,7 @@ func GenerateMeasurement(workloadConfig WorkloadConfig, firmwareLibrary string) 
 		if err := fileutils.Lexists(candidate); err == nil {
 			var stdout, stderr bytes.Buffer
 			logrus.Debugf("krunfw_measurement -c %s -m %s %s", cpuString, memoryString, candidate)
-			cmd := exec.Command("krunfw_measurement", "-c", cpuString, "-m", memoryString, candidate)
+			cmd := exec.CommandContext(ctx, "krunfw_measurement", "-c", cpuString, "-m", memoryString, candidate)
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {

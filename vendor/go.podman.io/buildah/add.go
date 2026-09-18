@@ -26,7 +26,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	"github.com/tonistiigi/dchapes-mode"
+	mode "github.com/tonistiigi/dchapes-mode"
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/define"
 	"go.podman.io/buildah/internal/tmpdir"
@@ -129,7 +129,13 @@ type AddAndCopyOptions struct {
 }
 
 // getURL writes a tar archive containing the named content
-func getURL(src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, certPath string, insecureSkipTLSVerify types.OptionalBool, timestamp *time.Time) error {
+func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, certPath string, insecureSkipTLSVerify types.OptionalBool, timestamp *time.Time) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	url, err := url.Parse(src)
 	if err != nil {
 		return err
@@ -152,7 +158,11 @@ func getURL(src string, chown *idtools.IDPair, mountpoint, renameTarget string, 
 		Proxy:           http.ProxyFromEnvironment,
 	}
 	httpClient := &http.Client{Transport: tr}
-	response, err := httpClient.Get(src)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	if err != nil {
+		return err
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return err
 	}
@@ -184,7 +194,7 @@ func getURL(src string, chown *idtools.IDPair, mountpoint, renameTarget string, 
 	}
 	// Figure out the size of the content.
 	size := response.ContentLength
-	var responseBody io.Reader = response.Body
+	responseBody := io.Reader(response.Body)
 	if size < 0 {
 		// Create a temporary file and copy the content to it, so that
 		// we can figure out how much content there is.
@@ -307,10 +317,23 @@ func getParentsPrefixToRemoveAndParentsToSkip(pattern string, contextDir string)
 	return prefix, out
 }
 
-// Add copies the contents of the specified sources into the container's root
+// Add() calls AddContext() with context.TODO().
+//
+//go:fix inline
+func (b *Builder) Add(destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+	return b.AddContext(context.TODO(), destination, extract, options, sources...)
+}
+
+// AddContext copies the contents of the specified sources into the container's root
 // filesystem, optionally extracting contents of local files that look like
 // non-empty archives.
-func (b *Builder) Add(destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+func (b *Builder) AddContext(ctx context.Context, destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	mountPoint, err := b.Mount(b.MountLabel)
 	if err != nil {
 		return err
@@ -374,7 +397,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			DisallowWildcard:   options.AllowWildcard == types.OptionalBoolFalse,
 			AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 		}
-		localSourceStats, err = copier.Stat(contextDir, contextDir, statOptions, localSources)
+		localSourceStats, err = copier.StatContext(ctx, contextDir, contextDir, statOptions, localSources)
 		if err != nil {
 			return fmt.Errorf("checking on sources under %q: %w", contextDir, err)
 		}
@@ -466,7 +489,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	statOptions := copier.StatOptions{
 		CheckForArchives: extract,
 	}
-	destStats, err := copier.Stat(mountPoint, filepath.Join(mountPoint, b.WorkDir()), statOptions, []string{extractDirectory})
+	destStats, err := copier.StatContext(ctx, mountPoint, filepath.Join(mountPoint, b.WorkDir()), statOptions, []string{extractDirectory})
 	if err != nil {
 		return fmt.Errorf("checking on destination %v: %w", extractDirectory, err)
 	}
@@ -496,7 +519,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	// Make sure that, if it's a symlink, we'll chroot to the target of the link;
 	// knowing that target requires that we resolve it within the chroot.
 	evalOptions := copier.EvalOptions{}
-	evaluated, err := copier.Eval(mountPoint, extractDirectory, evalOptions)
+	evaluated, err := copier.EvalContext(ctx, mountPoint, extractDirectory, evalOptions)
 	if err != nil {
 		return fmt.Errorf("checking on destination %v: %w", extractDirectory, err)
 	}
@@ -559,7 +582,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 		if !strings.HasPrefix(putDirAbs, stagingDirAbs+string(os.PathSeparator)) && putDirAbs != stagingDirAbs {
 			return fmt.Errorf("destination path %q escapes staging directory", destination)
 		}
-		if err := copier.Mkdir(putRoot, putDirAbs, mkdirOptions); err != nil {
+		if err := copier.MkdirContext(ctx, putRoot, putDirAbs, mkdirOptions); err != nil {
 			return fmt.Errorf("ensuring target directory exists: %w", err)
 		}
 		tempPath := putDir
@@ -570,7 +593,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			tempPath = filepath.Dir(tempPath)
 		}
 	} else {
-		if err := copier.Mkdir(mountPoint, extractDirectory, mkdirOptions); err != nil {
+		if err := copier.MkdirContext(ctx, mountPoint, extractDirectory, mkdirOptions); err != nil {
 			return fmt.Errorf("ensuring target directory exists: %w", err)
 		}
 
@@ -599,7 +622,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					defer wg.Done()
 					defer pipeWriter.Close()
 					var cloneDir, subdir string
-					cloneDir, subdir, getErr = define.TempDirForURL(tmpdir.GetTempDir(), "", src)
+					cloneDir, subdir, getErr = define.TempDirForURLContext(ctx, tmpdir.GetTempDir(), "", src)
 					if getErr != nil {
 						return
 					}
@@ -621,12 +644,12 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					}
 					writer := io.WriteCloser(pipeWriter)
 					repositoryDir := filepath.Join(cloneDir, subdir)
-					getErr = copier.Get(repositoryDir, repositoryDir, getOptions, []string{"."}, writer)
+					getErr = copier.GetContext(ctx, repositoryDir, repositoryDir, getOptions, []string{"."}, writer)
 				}()
 			} else {
 				go func() {
-					getErr = retry.IfNecessary(context.TODO(), func() error {
-						return getURL(src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.CertPath, options.InsecureSkipTLSVerify, options.Timestamp)
+					getErr = retry.IfNecessary(ctx, func() error {
+						return getURL(ctx, src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.CertPath, options.InsecureSkipTLSVerify, options.Timestamp)
 					}, &retry.Options{
 						MaxRetry: options.MaxRetries,
 						Delay:    options.RetryDelay,
@@ -656,7 +679,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						IgnoreDevices: userns.RunningInUserNS(),
 						Timestamp:     options.Timestamp,
 					}
-					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
+					putErr = copier.PutContext(ctx, putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()
@@ -788,7 +811,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 					NoDerefSymlinks:    options.FollowSymlink == types.OptionalBoolFalse,
 				}
-				getErr = copier.Get(contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
+				getErr = copier.GetContext(ctx, contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
 				closeErr = writer.Close()
 				if renameTarget != "" && renamedItems > 1 {
 					renameErr = fmt.Errorf("internal error: renamed %d items when we expected to only rename 1", renamedItems)
@@ -820,7 +843,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						IgnoreDevices:   userns.RunningInUserNS(),
 						Timestamp:       options.Timestamp,
 					}
-					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
+					putErr = copier.PutContext(ctx, putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()

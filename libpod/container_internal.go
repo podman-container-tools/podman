@@ -328,7 +328,7 @@ func (c *Container) handleRestartPolicy(ctx context.Context) (_ bool, retErr err
 		return false, err
 	}
 
-	if err := c.prepare(); err != nil {
+	if err := c.prepare(ctx); err != nil {
 		return false, err
 	}
 
@@ -845,7 +845,7 @@ func (c *Container) prepareToStart(ctx context.Context, recursive bool) (retErr 
 		}
 	}()
 
-	if err := c.prepare(); err != nil {
+	if err := c.prepare(ctx); err != nil {
 		return err
 	}
 
@@ -1227,7 +1227,7 @@ func (c *Container) initAndStart(ctx context.Context) (retErr error) {
 		}
 	}()
 
-	if err := c.prepare(); err != nil {
+	if err := c.prepare(ctx); err != nil {
 		return err
 	}
 
@@ -1664,7 +1664,7 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 			}
 		}
 	}()
-	if err := c.prepare(); err != nil {
+	if err := c.prepare(ctx); err != nil {
 		return err
 	}
 
@@ -1691,7 +1691,7 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 // TODO: Add ability to override mount label so we can use this for Mount() too
 // TODO: Can we use this for export? Copying SHM into the export might not be
 // good
-func (c *Container) mountStorage() (_ string, deferredErr error) {
+func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr error) {
 	var err error
 	// Container already mounted, nothing to do
 	if c.state.Mounted {
@@ -1870,7 +1870,7 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 
 	// Request a mount of all named volumes
 	for _, v := range c.config.NamedVolumes {
-		vol, err := c.mountNamedVolume(v, mountPoint)
+		vol, err := c.mountNamedVolume(ctx, v, mountPoint)
 		if err != nil {
 			return "", err
 		}
@@ -1894,7 +1894,7 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 // Does not verify that the name volume given is actually present in container
 // config.
 // Returns the volume that was mounted.
-func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string) (*Volume, error) {
+func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolume, mountpoint string) (*Volume, error) {
 	logrus.Debugf("Going to mount named volume %s", v.Name)
 	vol, err := c.runtime.state.Volume(v.Name)
 	if err != nil {
@@ -1997,7 +1997,7 @@ func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string)
 		// Copy, volume side: stream what we've written to the pipe, into
 		// the volume.
 		copyOpts := copier.PutOptions{}
-		if err := copier.Put(volMount, "", copyOpts, reader); err != nil {
+		if err := copier.PutContext(ctx, volMount, "", copyOpts, reader); err != nil {
 			// consume the reader otherwise the goroutine will block
 			_, _ = io.Copy(io.Discard, reader)
 			err2 := <-errChan

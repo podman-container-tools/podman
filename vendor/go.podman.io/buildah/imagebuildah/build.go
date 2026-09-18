@@ -29,6 +29,7 @@ import (
 	"go.podman.io/buildah"
 	"go.podman.io/buildah/define"
 	"go.podman.io/buildah/internal"
+	"go.podman.io/buildah/internal/ctxreader"
 	internalUtil "go.podman.io/buildah/internal/util"
 	"go.podman.io/buildah/pkg/parse"
 	"go.podman.io/buildah/util"
@@ -71,6 +72,12 @@ type BuildOptions = define.BuildOptions
 // returns the ID of the built image, and if a name was assigned to it, a
 // canonical reference for that image.
 func BuildDockerfiles(ctx context.Context, store storage.Store, options define.BuildOptions, paths ...string) (id string, ref reference.Canonical, err error) {
+	select {
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	default:
+	}
+
 	if options.CommonBuildOpts == nil {
 		options.CommonBuildOpts = &define.CommonBuildOptions{}
 	}
@@ -119,7 +126,11 @@ func BuildDockerfiles(ctx context.Context, store storage.Store, options define.B
 
 		if strings.HasPrefix(dfile, "http://") || strings.HasPrefix(dfile, "https://") {
 			logger.Debugf("reading remote Dockerfile %q", dfile)
-			resp, err := http.Get(dfile)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, dfile, nil)
+			if err != nil {
+				return "", nil, err
+			}
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return "", nil, err
 			}
@@ -159,12 +170,12 @@ func BuildDockerfiles(ctx context.Context, store storage.Store, options define.B
 			if dinfo.Mode().IsRegular() && dinfo.Size() == 0 {
 				return "", nil, fmt.Errorf("no contents in %q", dfile)
 			}
-			data = contents
+			data = ctxreader.NewCancelableReader(ctx, contents)
 		}
 
 		// pre-process Dockerfiles with ".in" suffix
 		if strings.HasSuffix(dfile, ".in") {
-			pData, err := preprocessContainerfileContents(logger, dfile, data, options.ContextDirectory, options.CPPFlags)
+			pData, err := preprocessContainerfileContents(ctx, logger, dfile, data, options.ContextDirectory, options.CPPFlags)
 			if err != nil {
 				return "", nil, err
 			}
@@ -172,6 +183,12 @@ func BuildDockerfiles(ctx context.Context, store storage.Store, options define.B
 		}
 
 		dockerfiles = append(dockerfiles, data)
+
+		select {
+		case <-ctx.Done():
+			return "", nil, ctx.Err()
+		default:
+		}
 	}
 
 	var files [][]byte
@@ -348,7 +365,7 @@ func BuildDockerfiles(ctx context.Context, store storage.Store, options define.B
 	//   multiple platforms ( more than one platform ) and --manifest
 	//   option then this assignment is insignificant since it will be
 	//   overridden anyways with the id and ref of manifest list later in
-	//   in this code.
+	//   this code.
 	//
 	// * Multi-platform build without manifest list: If this is a build for
 	//   multiple platforms without --manifest then we are free to return
@@ -425,6 +442,12 @@ func BuildDockerfiles(ctx context.Context, store storage.Store, options define.B
 }
 
 func buildDockerfilesOnce(ctx context.Context, store storage.Store, logger *logrus.Logger, logPrefix string, options define.BuildOptions, containerFiles []string, dockerfilecontents [][]byte, processLabel, mountLabel string, usingContextOverlay bool) (string, reference.Canonical, error) {
+	select {
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	default:
+	}
+
 	mainNode, err := imagebuilder.ParseDockerfile(bytes.NewReader(dockerfilecontents[0]))
 	if err != nil {
 		return "", nil, fmt.Errorf("parsing main Dockerfile: %s: %w", containerFiles[0], err)
@@ -493,7 +516,13 @@ func buildDockerfilesOnce(ctx context.Context, store storage.Store, logger *logr
 
 // preprocessContainerfileContents runs CPP(1) in preprocess-only mode on the input
 // dockerfile content and will use ctxDir as the base include path.
-func preprocessContainerfileContents(logger *logrus.Logger, containerfile string, r io.Reader, ctxDir string, cppFlags []string) (stdout io.Reader, err error) {
+func preprocessContainerfileContents(ctx context.Context, logger *logrus.Logger, containerfile string, r io.Reader, ctxDir string, cppFlags []string) (stdout io.Reader, err error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	cppCommand := "cpp"
 	cppPath, err := exec.LookPath(cppCommand)
 	if err != nil {
@@ -515,7 +544,7 @@ func preprocessContainerfileContents(logger *logrus.Logger, containerfile string
 		cppArgs = append(cppArgs, args...)
 	}
 	cppArgs = append(cppArgs, cppFlags...)
-	cmd := exec.Command(cppPath, cppArgs...)
+	cmd := exec.CommandContext(ctx, cppPath, cppArgs...)
 	cmd.Stdin = r
 	cmd.Stdout = &stdoutBuffer
 	cmd.Stderr = &stderrBuffer
@@ -558,6 +587,12 @@ func platformIsAcceptable(platform *v1.Platform, logger *logrus.Logger) bool {
 // dockerfiles, and if they are all valid references to manifest lists, returns
 // the list of platforms that are supported by all of the base images.
 func platformsForBaseImages(ctx context.Context, logger *logrus.Logger, dockerfilepaths []string, dockerfiles [][]byte, from string, args map[string]string, additionalBuildContext map[string]*define.AdditionalBuildContext, systemContext *types.SystemContext) ([]struct{ OS, Arch, Variant string }, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	baseImages, err := baseImages(dockerfilepaths, dockerfiles, from, args, additionalBuildContext)
 	if err != nil {
 		return nil, fmt.Errorf("determining list of base images: %w", err)

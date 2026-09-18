@@ -213,7 +213,7 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 	}()
 	if len(args) > 0 {
 		// The context directory could be a URL.  Try to handle that.
-		tempDir, subDir, err := buildahDefine.TempDirForURL("", "buildah", args[0])
+		tempDir, subDir, err := buildahDefine.TempDirForURLContext(registry.Context(), "", "buildah", args[0])
 		if err != nil {
 			return nil, fmt.Errorf("prepping temporary context directory: %w", err)
 		}

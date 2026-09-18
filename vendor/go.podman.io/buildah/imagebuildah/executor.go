@@ -159,7 +159,6 @@ type executor struct {
 	cachePushSourceLookupReferenceFunc      func(dest types.ImageReference) libimage.LookupReferenceFunc
 	cachePushDestinationLookupReferenceFunc libimage.LookupReferenceFunc
 	ociDecryptConfig                        *encconfig.DecryptConfig
-	lastError                               error
 	terminatedStage                         map[int]error // maps from stage indexes to error results, serialized by stagesLock
 	stagesLock                              sync.Mutex    // serializes stages, stageImageIDs, imageMap, terminatedStage
 	stagesSemaphore                         *semaphore.Weighted
@@ -518,8 +517,8 @@ func (b *executor) waitForStage(ctx context.Context, name string, stages imagebu
 		return false, nil
 	}
 	for {
-		if b.lastError != nil {
-			return true, b.lastError
+		if ctx.Err() != nil {
+			return true, ctx.Err()
 		}
 
 		b.stagesLock.Lock()
@@ -534,8 +533,8 @@ func (b *executor) waitForStage(ctx context.Context, name string, stages imagebu
 		}
 
 		b.stagesSemaphore.Release(1)
-		time.Sleep(time.Millisecond * 10)
-		if err := b.stagesSemaphore.Acquire(ctx, 1); err != nil {
+		time.Sleep(time.Millisecond * 10)                                          // give any other goroutine a shot at running
+		if err := b.stagesSemaphore.Acquire(context.Background(), 1); err != nil { // don't let context cancellation throw off our count; trust another goroutine to release the semaphore
 			return true, fmt.Errorf("reacquiring job semaphore: %w", err)
 		}
 	}
@@ -543,6 +542,12 @@ func (b *executor) waitForStage(ctx context.Context, name string, stages imagebu
 
 // getImageTypeAndHistoryAndDiffIDs returns the os, architecture, manifest type, history, and diff IDs list of imageID.
 func (b *executor) getImageTypeAndHistoryAndDiffIDs(ctx context.Context, imageID string) (string, string, string, []v1.History, []digest.Digest, error) {
+	select {
+	case <-ctx.Done():
+		return "", "", "", nil, nil, ctx.Err()
+	default:
+	}
+
 	b.imageInfoLock.Lock()
 	imageInfo, ok := b.imageInfoCache[imageID]
 	b.imageInfoLock.Unlock()
@@ -583,6 +588,12 @@ func (b *executor) getImageTypeAndHistoryAndDiffIDs(ctx context.Context, imageID
 }
 
 func (b *executor) buildStage(ctx context.Context, cleanupStages map[int]*stageExecutor, stages imagebuilder.Stages, stageIndex int, afterDependency map[int]int) (imageID string, commitResults *buildah.CommitResults, onlyBaseImage bool, err error) {
+	select {
+	case <-ctx.Done():
+		return "", nil, false, ctx.Err()
+	default:
+	}
+
 	var prependInstructions, appendInstructions []string
 	stage := stages[stageIndex]
 	ib := stage.Builder
@@ -680,6 +691,9 @@ func (b *executor) buildStage(ctx context.Context, cleanupStages map[int]*stageE
 	if stageExecutor.log == nil {
 		stepCounter := 0
 		stageExecutor.log = func(format string, args ...any) {
+			if !logrus.IsLevelEnabled(logrus.WarnLevel) {
+				return
+			}
 			prefix := b.logPrefix
 			if len(stages) > 1 {
 				prefix += fmt.Sprintf("[%d/%d] ", stageIndex+1, len(stages))
@@ -818,6 +832,12 @@ func (b *executor) warnOnUnsetBuildArgs(stages imagebuilder.Stages, dependencyMa
 // Build takes care of the details of running Prepare/Execute/Commit/Delete
 // over each of the one or more parsed Dockerfiles and stages.
 func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (imageID string, ref reference.Canonical, err error) {
+	select {
+	case <-ctx.Done():
+		return "", nil, ctx.Err()
+	default:
+	}
+
 	if len(stages) == 0 {
 		return "", nil, errors.New("building: no stages to build")
 	}
@@ -1120,22 +1140,25 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 	ch := make(chan Result, len(stages))
 
 	if b.stagesSemaphore == nil {
+		// The API caller didn't supply a semaphore to share among possibly-many builds,
+		// and our caller didn't, either, so the intention is that there's no limit on the
+		// number of concurrent builds (stages) that can be running.  Represent that with
+		// a semaphore that has enough weight to allow all stages to acquire it at the
+		// same time.
 		b.stagesSemaphore = semaphore.NewWeighted(int64(len(stages)))
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(len(stages))
-
-	var commitResults buildah.CommitResults
+	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
-		cancel := false
 		for stageIndex := range stages {
 			index := stageIndex
 			// Acquire the semaphore before creating the goroutine so we are sure they
-			// run in the specified order.
+			// run in something resembling the original order if they're not all
+			// running concurrently.  This will fail immediately if the build has been
+			// canceled due to an error or a timeout.
 			if err := b.stagesSemaphore.Acquire(ctx, 1); err != nil {
-				cancel = true
-				b.lastError = err
 				ch <- Result{
 					Index: index,
 					Error: err,
@@ -1149,12 +1172,14 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 			go func() {
 				defer b.stagesSemaphore.Release(1)
 				defer wg.Done()
-				if cancel || cleanupStages == nil {
+				// If the context was canceled already, we should stop here and
+				// prepare to clean up.
+				if ctx.Err() != nil {
 					var err error
 					if stages[index].Name != strconv.Itoa(index) {
-						err = fmt.Errorf("not building stage %d: build canceled", index)
+						err = fmt.Errorf("not building stage %d: build canceled: %w", index, context.Cause(ctx))
 					} else {
-						err = fmt.Errorf("not building stage %d (%s): build canceled", index, stages[index].Name)
+						err = fmt.Errorf("not building stage %d (%s): build canceled: %w", index, stages[index].Name, context.Cause(ctx))
 					}
 					ch <- Result{
 						Index: index,
@@ -1162,9 +1187,9 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 					}
 					return
 				}
-				// Skip stage if it is not needed by TargetStage
-				// or any of its dependency stages and `SkipUnusedStages`
-				// is not set to `false`.
+				// Skip this stage (just mark it as successfully completed) if it is
+				// not needed by TargetStage or any of its dependency stages and
+				// `SkipUnusedStages` is not set to `false`.
 				if stageDependencyInfo, ok := dependencyMap[stages[index].Name]; ok {
 					if !stageDependencyInfo.NeededByTarget && b.skipUnusedStages != types.OptionalBoolFalse {
 						logrus.Debugf("Skipping stage with name %q and index %d since it's not needed by the target stage", stages[index].Name, index)
@@ -1175,10 +1200,11 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 						return
 					}
 				}
-
+				// Build this stage.
 				stageID, stageResults, stageOnlyBaseImage, stageErr := b.buildStage(ctx, cleanupStages, stages, index, afterDependency)
 				if stageErr != nil {
-					cancel = true
+					// Bail out.
+					cancel(stageErr)
 					ch <- Result{
 						Index:         index,
 						Error:         stageErr,
@@ -1186,7 +1212,7 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 					}
 					return
 				}
-
+				// Note success and output info for this stage.
 				ch <- Result{
 					Index:         index,
 					ImageID:       stageID,
@@ -1201,7 +1227,9 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 		wg.Wait()
 		close(ch)
 	}()
+	defer cancel(nil)
 
+	var commitResults buildah.CommitResults
 	for r := range ch {
 		stage := stages[r.Index]
 
@@ -1210,8 +1238,7 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 
 		if r.Error != nil {
 			b.stagesLock.Unlock()
-			b.lastError = r.Error
-			return "", nil, r.Error
+			continue
 		}
 
 		// If this is an intermediate stage, make a note of the ID, so
@@ -1235,6 +1262,11 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 			ref = commitResults.Canonical
 		}
 		b.stagesLock.Unlock()
+	}
+	select {
+	case <-ctx.Done():
+		return "", nil, context.Cause(ctx)
+	default:
 	}
 
 	if len(b.unusedArgs) > 0 {
@@ -1266,6 +1298,9 @@ func (b *executor) Build(ctx context.Context, stages imagebuilder.Stages) (image
 				return imageID, ref, fmt.Errorf("locating just-written image %q: %w", transports.ImageName(dest), err)
 			}
 			for _, name := range img.Names {
+				if !logrus.IsLevelEnabled(logrus.WarnLevel) {
+					continue
+				}
 				fmt.Fprintf(b.out, "Successfully tagged %s\n", name)
 			}
 

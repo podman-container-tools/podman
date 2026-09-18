@@ -19,7 +19,7 @@ type BlobCache interface {
 	types.ImageReference
 	// HasBlob checks if a blob that matches the passed-in digest (and
 	// size, if not -1), is present in the cache.
-	HasBlob(types.BlobInfo) (bool, int64, error)
+	HasBlob(blobInfo types.BlobInfo) (bool, int64, error)
 	// Directories returns the list of cache directories.
 	Directory() string
 	// ClearCache() clears the contents of the cache directories.  Note

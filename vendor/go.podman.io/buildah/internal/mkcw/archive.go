@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/buildah/internal/ctxreader"
 	"go.podman.io/buildah/internal/tmpdir"
 	"go.podman.io/buildah/pkg/overlay"
 	"go.podman.io/storage/pkg/idtools"
@@ -75,7 +77,13 @@ func (c chainRetrievalError) Unwrap() error {
 
 // Archive generates a WorkloadConfig for a specified directory and produces a
 // tar archive of a container image's rootfs with the expected contents.
-func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io.ReadCloser, WorkloadConfig, error) {
+func Archive(ctx context.Context, rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io.ReadCloser, WorkloadConfig, error) {
+	select {
+	case <-ctx.Done():
+		return nil, WorkloadConfig{}, ctx.Err()
+	default:
+	}
+
 	const (
 		teeDefaultCPUs       = 2
 		teeDefaultMemory     = 512
@@ -140,7 +148,7 @@ func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io
 			}
 		}()
 		logrus.Debugf("sevctl export -f %s", chain.Name())
-		cmd := exec.Command("sevctl", "export", "-f", chain.Name())
+		cmd := exec.CommandContext(ctx, "sevctl", "export", "-f", chain.Name())
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		if err := cmd.Run(); err != nil {
@@ -264,7 +272,7 @@ func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io
 				return err
 			}
 			defer input.Close()
-			if _, err := io.Copy(output, input); err != nil {
+			if _, err := io.Copy(output, ctxreader.NewCancelableReader(ctx, input)); err != nil {
 				return fmt.Errorf("copying contents of %q to %q in container root filesystem: %w", content, location, err)
 			}
 			if err := output.Chown(int(st.UID()), int(st.GID())); err != nil {
@@ -371,7 +379,7 @@ func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io
 	}
 
 	// Format the disk image with the filesystem contents.
-	if _, stderr, err := MakeFS(rootfsPath, plain.Name(), filesystem); err != nil {
+	if _, stderr, err := MakeFS(ctx, rootfsPath, plain.Name(), filesystem); err != nil {
 		if strings.TrimSpace(stderr) != "" {
 			return nil, WorkloadConfig{}, fmt.Errorf("%s: %w", strings.TrimSpace(stderr), err)
 		}
@@ -380,7 +388,7 @@ func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io
 
 	// If we're registering the workload, we can do that now.
 	if workloadConfig.AttestationURL != "" {
-		if err := SendRegistrationRequest(workloadConfig, diskEncryptionPassphrase, options.FirmwareLibrary, options.IgnoreAttestationErrors, logger); err != nil {
+		if err := SendRegistrationRequest(ctx, workloadConfig, diskEncryptionPassphrase, options.FirmwareLibrary, options.IgnoreAttestationErrors, logger); err != nil {
 			return nil, WorkloadConfig{}, err
 		}
 	}
@@ -524,7 +532,7 @@ func Archive(rootfsPath string, ociConfig *v1.Image, options ArchiveOptions) (io
 			return
 		}
 		encryptWrapper := luksy.EncryptWriter(encrypt, tw, blockSize)
-		if _, err = io.Copy(encryptWrapper, plain); err != nil {
+		if _, err = io.Copy(encryptWrapper, ctxreader.NewCancelableReader(ctx, plain)); err != nil {
 			logrus.Errorf("encrypting disk.img: %v", err)
 			return
 		}

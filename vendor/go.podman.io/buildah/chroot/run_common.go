@@ -4,9 +4,11 @@ package chroot
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"go.podman.io/buildah/bind"
 	"go.podman.io/buildah/internal/pty"
 	"go.podman.io/buildah/util"
@@ -51,10 +54,23 @@ type runUsingChrootExecSubprocOptions struct {
 	NoPivot    bool
 }
 
-// RunUsingChroot runs a chrooted process, using some of the settings from the
+// RunUsingChroot() calls RunUsingChrootContext() with context.TODO().
+//
+//go:fix inline
+func RunUsingChroot(spec *specs.Spec, bundlePath, homeDir string, stdin io.Reader, stdout, stderr io.Writer, noPivot bool) (err error) {
+	return RunUsingChrootContext(context.TODO(), spec, bundlePath, homeDir, stdin, stdout, stderr, noPivot)
+}
+
+// RunUsingChrootContext runs a chrooted process, using some of the settings from the
 // passed-in spec, and using the specified bundlePath to hold temporary files,
 // directories, and mountpoints.
-func RunUsingChroot(spec *specs.Spec, bundlePath, homeDir string, stdin io.Reader, stdout, stderr io.Writer, noPivot bool) (err error) {
+func RunUsingChrootContext(ctx context.Context, spec *specs.Spec, bundlePath, homeDir string, stdin io.Reader, stdout, stderr io.Writer, noPivot bool) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	var confwg sync.WaitGroup
 	var homeFound bool
 	for _, env := range spec.Process.Env {
@@ -127,6 +143,7 @@ func RunUsingChroot(spec *specs.Spec, bundlePath, homeDir string, stdin io.Reade
 
 	// Start the grandparent subprocess.
 	cmd := unshare.Command(runUsingChrootCommand)
+	cmd.Cmd = reexec.CommandContext(ctx, runUsingChrootCommand) // TODO: add an unshare.CommandContext()
 	setPdeathsig(cmd.Cmd)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
 	cmd.Dir = "/"
@@ -170,9 +187,13 @@ func runUsingChrootMain() {
 	runtime.LockOSThread()
 
 	// Set logging.
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
 	if level := os.Getenv("LOGLEVEL"); level != "" {
 		if ll, err := strconv.Atoi(level); err == nil {
-			logrus.SetLevel(logrus.Level(ll))
+			ll := logrus.Level(ll)
+			logrus.SetLevel(ll)
+			slog.SetLogLoggerLevel(lslog.Level(ll).Level())
 		}
 		os.Unsetenv("LOGLEVEL")
 	}
@@ -579,9 +600,13 @@ func runUsingChrootExecMain() {
 	runtime.LockOSThread()
 
 	// Set logging.
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
 	if level := os.Getenv("LOGLEVEL"); level != "" {
 		if ll, err := strconv.Atoi(level); err == nil {
-			logrus.SetLevel(logrus.Level(ll))
+			ll := logrus.Level(ll)
+			logrus.SetLevel(ll)
+			slog.SetLogLoggerLevel(lslog.Level(ll).Level())
 		}
 		os.Unsetenv("LOGLEVEL")
 	}
@@ -739,6 +764,11 @@ func runUsingChrootExecMain() {
 	if err = unix.Setresuid(int(user.UID), int(user.UID), int(user.UID)); err != nil {
 		fmt.Fprintf(os.Stderr, "error setting UID: %v\n", err)
 		os.Exit(1)
+	}
+
+	if user.Umask != nil {
+		logrus.Debugf("setting umask %04o", *user.Umask)
+		unix.Umask(int(*user.Umask))
 	}
 
 	// Set $PATH to the value for the container, so that when args[0] is not an absolute path,

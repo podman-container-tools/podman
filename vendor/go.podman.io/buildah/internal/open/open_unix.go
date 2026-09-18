@@ -142,9 +142,8 @@ func inChrootMain() {
 		if err == nil {
 			fds = append(fds, fd)
 		} else {
-			var errno syscall.Errno
 			thisResult.Err = err.Error()
-			if errors.As(err, &errno) {
+			if errno, ok := errors.AsType[syscall.Errno](err); ok {
 				thisResult.Errno = errno
 			}
 		}

@@ -269,6 +269,12 @@ func checkRegistrySourcesAllows(forWhat string, dest types.ImageReference) (inse
 }
 
 func (b *Builder) addManifest(ctx context.Context, manifestName string, imageSpec string) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	var create bool
 	systemContext := &types.SystemContext{}
 	var list manifests.List
@@ -348,6 +354,12 @@ func (b *Builder) Commit(ctx context.Context, dest types.ImageReference, options
 // add any additional tags that were specified.  Returns a CommitResults
 // structure.
 func (b *Builder) CommitResults(ctx context.Context, dest types.ImageReference, options CommitOptions) (*CommitResults, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	var (
 		imgID                string
 		src                  types.ImageReference
@@ -455,7 +467,7 @@ func (b *Builder) CommitResults(ctx context.Context, dest types.ImageReference, 
 	}
 
 	// Build an image reference from which we can copy the finished image.
-	src, err = b.makeContainerImageRef(options)
+	src, err = b.makeContainerImageRef(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("computing layer digests and building metadata for container %q: %w", b.ContainerID, err)
 	}

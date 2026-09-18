@@ -62,7 +62,13 @@ type PullOptions struct {
 
 // Pull copies the contents of the image from somewhere else to local storage.  Returns the
 // ID of the local image or an error.
-func Pull(_ context.Context, imageName string, options PullOptions) (imageID string, err error) {
+func Pull(ctx context.Context, imageName string, options PullOptions) (imageID string, err error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	libimageOptions := &libimage.PullOptions{}
 	libimageOptions.SignaturePolicyPath = options.SignaturePolicyPath
 	libimageOptions.Writer = options.ReportWriter
@@ -92,7 +98,7 @@ func Pull(_ context.Context, imageName string, options PullOptions) (imageID str
 		return "", err
 	}
 
-	pulledImages, err := runtime.Pull(context.Background(), imageName, pullPolicy, libimageOptions)
+	pulledImages, err := runtime.Pull(ctx, imageName, pullPolicy, libimageOptions)
 	if err != nil {
 		return "", err
 	}

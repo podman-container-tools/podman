@@ -5,11 +5,13 @@ package buildah
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -30,6 +32,7 @@ import (
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"go.podman.io/buildah/bind"
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/define"
@@ -300,6 +303,9 @@ func (b *Builder) configureUIDGID(g *generate.Generator, mountPoint string, opti
 		}
 		g.AddProcessAdditionalGid(uint32(gid))
 	}
+	if options.Umask != nil {
+		g.SetProcessUmask(*options.Umask)
+	}
 
 	// Remove capabilities if not running as root except Bounding set
 	if user.UID != 0 && g.Config.Process.Capabilities != nil {
@@ -427,9 +433,13 @@ func waitForSync(pipeR *os.File) error {
 	return err
 }
 
-func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs []string, spec *specs.Spec, bundlePath, containerName string,
-	containerCreateW io.WriteCloser, containerStartR io.ReadCloser,
-) (wstatus unix.WaitStatus, err error) {
+func runUsingRuntime(ctx context.Context, options RunOptions, configureNetwork bool, moreCreateArgs []string, spec *specs.Spec, bundlePath, containerName string, containerCreateW io.WriteCloser, containerStartR io.ReadCloser) (wstatus unix.WaitStatus, err error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+	}
+
 	if options.Logger == nil {
 		options.Logger = logrus.StandardLogger()
 	}
@@ -658,7 +668,7 @@ func runUsingRuntime(options RunOptions, configureNetwork bool, moreCreateArgs [
 		now := time.Now()
 		var state specs.State
 		args = append(options.Args, "state", containerName)
-		stat := exec.Command(runtime, args...)
+		stat := exec.CommandContext(ctx, runtime, args...)
 		stat.Dir = bundlePath
 		stat.Stderr = os.Stderr
 		stateOutput, err := stat.Output()
@@ -1076,9 +1086,13 @@ func reapStrays() {
 func runUsingRuntimeMain() {
 	var options runUsingRuntimeSubprocOptions
 	// Set logging.
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
 	if level := os.Getenv("LOGLEVEL"); level != "" {
 		if ll, err := strconv.Atoi(level); err == nil {
-			logrus.SetLevel(logrus.Level(ll))
+			ll := logrus.Level(ll)
+			logrus.SetLevel(ll)
+			slog.SetLogLoggerLevel(lslog.Level(ll).Level())
 		}
 	}
 	// Unpack our configuration.
@@ -1120,7 +1134,7 @@ func runUsingRuntimeMain() {
 	}
 
 	// Run the container, start to finish.
-	status, err := runUsingRuntime(options.Options, options.ConfigureNetwork, options.MoreCreateArgs, ospec, options.BundlePath, options.ContainerName, containerCreateW, containerStartR)
+	status, err := runUsingRuntime(context.Background(), options.Options, options.ConfigureNetwork, options.MoreCreateArgs, ospec, options.BundlePath, options.ContainerName, containerCreateW, containerStartR)
 	reapStrays()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running container: %v\n", err)
@@ -1136,9 +1150,13 @@ func runUsingRuntimeMain() {
 	os.Exit(1)
 }
 
-func (b *Builder) runUsingRuntimeSubproc(isolation define.Isolation, options RunOptions, configureNetwork bool, networkString string,
-	moreCreateArgs []string, spec *specs.Spec, rootPath, bundlePath, containerName, buildContainerName, hostsFile, resolvFile string,
-) (err error) {
+func (b *Builder) runUsingRuntimeSubproc(ctx context.Context, isolation define.Isolation, options RunOptions, configureNetwork bool, networkString string, moreCreateArgs []string, spec *specs.Spec, rootPath, bundlePath, containerName, buildContainerName, hostsFile, resolvFile string) (err error) {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	// Decide which runtime to use in case it was empty.
 	ociRuntime := options.Runtime
 	if ociRuntime == "" {
@@ -1168,7 +1186,7 @@ func (b *Builder) runUsingRuntimeSubproc(isolation define.Isolation, options Run
 	if conferr != nil {
 		return fmt.Errorf("encoding configuration for %q: %w", runUsingRuntimeCommand, conferr)
 	}
-	cmd := reexec.Command(runUsingRuntimeCommand)
+	cmd := reexec.CommandContext(ctx, runUsingRuntimeCommand)
 	setPdeathsig(cmd)
 	cmd.Dir = bundlePath
 	cmd.Stdin = options.Stdin
@@ -1316,7 +1334,13 @@ func init() {
 // If this succeeds, after the command which uses the spec finishes running,
 // the caller must call b.cleanupRunMounts() on the returned runMountArtifacts
 // structure.
-func (b *Builder) setupMounts(mountPoint string, spec *specs.Spec, bundlePath string, optionMounts []specs.Mount, bindFiles map[string]string, builtinVolumes []string, compatBuiltinVolumes types.OptionalBool, volumeMounts []string, runFileMounts []string, runMountInfo runMountInfo) (*runMountArtifacts, error) {
+func (b *Builder) setupMounts(ctx context.Context, mountPoint string, spec *specs.Spec, bundlePath string, optionMounts []specs.Mount, bindFiles map[string]string, builtinVolumes []string, compatBuiltinVolumes types.OptionalBool, volumeMounts []string, runFileMounts []string, runMountInfo runMountInfo) (*runMountArtifacts, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Start building a new list of mounts.
 	var mounts []specs.Mount
 	haveMount := func(destination string) bool {
@@ -1388,7 +1412,7 @@ func (b *Builder) setupMounts(mountPoint string, spec *specs.Spec, bundlePath st
 	}()
 	// Add temporary copies of the contents of volume locations at the
 	// volume locations, unless we already have something there.
-	builtins, err := runSetupBuiltinVolumes(b.MountLabel, mountPoint, cdir, builtinVolumes, compatBuiltinVolumes, int(rootUID), int(rootGID))
+	builtins, err := runSetupBuiltinVolumes(ctx, b.MountLabel, mountPoint, cdir, builtinVolumes, compatBuiltinVolumes, int(rootUID), int(rootGID))
 	if err != nil {
 		return nil, err
 	}
@@ -1425,7 +1449,13 @@ func (b *Builder) setupMounts(mountPoint string, spec *specs.Spec, bundlePath st
 	return mountArtifacts, nil
 }
 
-func runSetupBuiltinVolumes(mountLabel, mountPoint, containerDir string, builtinVolumes []string, compatBuiltinVolumes types.OptionalBool, rootUID, rootGID int) ([]specs.Mount, error) {
+func runSetupBuiltinVolumes(ctx context.Context, mountLabel, mountPoint, containerDir string, builtinVolumes []string, compatBuiltinVolumes types.OptionalBool, rootUID, rootGID int) ([]specs.Mount, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	var mounts []specs.Mount
 	hostOwner := idtools.IDPair{UID: rootUID, GID: rootGID}
 	// Add temporary copies of the contents of volume locations at the
@@ -1433,7 +1463,7 @@ func runSetupBuiltinVolumes(mountLabel, mountPoint, containerDir string, builtin
 	for _, volume := range builtinVolumes {
 		// Make sure the volume exists in the rootfs.
 		createDirPerms := os.FileMode(0o755)
-		err := copier.Mkdir(mountPoint, filepath.Join(mountPoint, volume), copier.MkdirOptions{
+		err := copier.MkdirContext(ctx, mountPoint, filepath.Join(mountPoint, volume), copier.MkdirOptions{
 			ChownNew: &hostOwner,
 			ChmodNew: &createDirPerms,
 		})
@@ -1464,7 +1494,7 @@ func runSetupBuiltinVolumes(mountLabel, mountPoint, containerDir string, builtin
 			initializeVolume = true
 		}
 		// Read the attributes of the volume's location in the rootfs.
-		srcPath, err := copier.Eval(mountPoint, filepath.Join(mountPoint, volume), copier.EvalOptions{})
+		srcPath, err := copier.EvalContext(ctx, mountPoint, filepath.Join(mountPoint, volume), copier.EvalOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("evaluating path %q: %w", srcPath, err)
 		}
@@ -1482,7 +1512,7 @@ func runSetupBuiltinVolumes(mountLabel, mountPoint, containerDir string, builtin
 				return nil, err
 			}
 			logrus.Debugf("populating directory %q for volume %q using contents of %q", volumePath, volume, srcPath)
-			if err = extractWithTar(mountPoint, srcPath, volumePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err = extractWithTar(ctx, mountPoint, srcPath, volumePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return nil, fmt.Errorf("populating directory %q for volume %q using contents of %q: %w", volumePath, volume, srcPath, err)
 			}
 		}
@@ -2074,7 +2104,13 @@ func mapContainerNameToHostname(containerName string) string {
 
 // createMountTargets creates empty files or directories that are used as
 // targets for mounts in the spec, and makes a note of what it created.
-func (b *Builder) createMountTargets(spec *specs.Spec) ([]copier.ConditionalRemovePath, error) {
+func (b *Builder) createMountTargets(ctx context.Context, spec *specs.Spec) ([]copier.ConditionalRemovePath, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Avoid anything weird happening, just in case.
 	if spec == nil || spec.Root == nil {
 		return nil, nil
@@ -2165,7 +2201,7 @@ func (b *Builder) createMountTargets(spec *specs.Spec) ([]copier.ConditionalRemo
 	if len(targets.Paths) == 0 {
 		return nil, nil
 	}
-	created, noted, err := copier.Ensure(rootfsPath, rootfsPath, targets)
+	created, noted, err := copier.EnsureContext(ctx, rootfsPath, rootfsPath, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -2245,8 +2281,7 @@ func exitCodeFromError(err error) (int32, bool) {
 	if err == nil {
 		return 0, true
 	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
+	if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 		return int32(ee.ExitCode()), true
 	}
 	return 0, false

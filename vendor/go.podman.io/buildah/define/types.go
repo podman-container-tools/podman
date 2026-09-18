@@ -3,6 +3,7 @@ package define
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/buildah/internal/ctxreader"
 	"go.podman.io/buildah/internal/urlsource"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/storage/pkg/archive"
@@ -30,7 +32,7 @@ const (
 	// identify working containers.
 	Package = "buildah"
 	// Version for the Package. Also used by .packit.sh for Packit builds.
-	Version = "1.45.0"
+	Version = "1.46.0-dev"
 
 	// DefaultRuntime if containers.conf fails.
 	DefaultRuntime = "runc"
@@ -188,14 +190,27 @@ type SBOMScanOptions struct {
 	MergeStrategy   SBOMMergeStrategy // how to merge the outputs of multiple scans
 }
 
-// TempDirForURL checks if the passed-in string looks like a URL or "-".  If it
+// TempDirForURL() calls TempDirForURLContext() with context.TODO().
+//
+//go:fix inline
+func TempDirForURL(dir, prefix, url string) (tempDir string, relativeContextDir string, err error) {
+	return TempDirForURLContext(context.TODO(), dir, prefix, url)
+}
+
+// TempDirForURLContext checks if the passed-in string looks like a URL or "-".  If it
 // is, TempDirForURL creates a temporary directory, arranges for its contents
 // to be the contents of that URL, and returns the temporary directory's path
 // (for cleanup) and a relative subdirectory to the build context within it.
 // Removal of the temporary directory is the responsibility of the caller.
 // If the string doesn't look like a URL or "-", TempDirForURL returns empty
 // strings and a nil error code.
-func TempDirForURL(dir, prefix, url string) (tempDir string, relativeContextDir string, err error) {
+func TempDirForURLContext(ctx context.Context, dir, prefix, url string) (tempDir string, relativeContextDir string, err error) {
+	select {
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	default:
+	}
+
 	if !urlsource.IsHTTPOrHTTPS(url) &&
 		!strings.HasPrefix(url, "git://") &&
 		!strings.HasPrefix(url, "github.com/") &&
@@ -229,13 +244,13 @@ func TempDirForURL(dir, prefix, url string) (tempDir string, relativeContextDir 
 	isGitURL := urlParsed.Scheme == "git" || strings.HasSuffix(urlParsed.Path, ".git")
 	switch {
 	case isGitURL:
-		combinedOutput, gitSubDir, cloneErr := cloneToDirectory(url, downloadDir)
+		combinedOutput, gitSubDir, cloneErr := cloneToDirectory(ctx, url, downloadDir)
 		if cloneErr != nil {
 			return "", "", fmt.Errorf("cloning %q to %q:\n%s: %w", url, tempDir, string(combinedOutput), cloneErr)
 		}
 		contentSubdir = gitSubDir
 	case urlsource.IsHTTPOrHTTPS(url):
-		if err = downloadToDirectory(url, downloadDir); err != nil {
+		if err = downloadToDirectory(ctx, url, downloadDir); err != nil {
 			return "", "", err
 		}
 	case strings.HasPrefix(url, "github.com/"):
@@ -243,11 +258,11 @@ func TempDirForURL(dir, prefix, url string) (tempDir string, relativeContextDir 
 		contentSubdir = path.Base(ghURL) + "-master"
 		downloadURL := fmt.Sprintf("https://%s/archive/master.tar.gz", ghURL)
 		logrus.Debugf("resolving url %q to %q", ghURL, downloadURL)
-		if err = downloadToDirectory(downloadURL, downloadDir); err != nil {
+		if err = downloadToDirectory(ctx, downloadURL, downloadDir); err != nil {
 			return "", "", err
 		}
 	case url == "-":
-		if err = stdinToDirectory(downloadDir); err != nil {
+		if err = stdinToDirectory(ctx, downloadDir); err != nil {
 			return "", "", err
 		}
 	}
@@ -283,11 +298,17 @@ func parseGitBuildContext(url string) (string, string, string) {
 	return gitBranchPart[0], gitSubdir, gitBranch
 }
 
-func cloneToDirectory(url, dir string) ([]byte, string, error) {
+func cloneToDirectory(ctx context.Context, url, dir string) ([]byte, string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
+	default:
+	}
+
 	var cmd *exec.Cmd
 	gitRepo, gitSubdir, gitRef := parseGitBuildContext(url)
 	// init repo
-	cmd = exec.Command("git", "init", dir)
+	cmd = exec.CommandContext(ctx, "git", "init", dir)
 	combinedOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		// Return err.Error() instead of err as we want buildah to override error code with more predictable
@@ -295,7 +316,7 @@ func cloneToDirectory(url, dir string) ([]byte, string, error) {
 		return combinedOutput, gitSubdir, fmt.Errorf("failed while performing `git init`: %s", err.Error())
 	}
 	// add origin
-	cmd = exec.Command("git", "remote", "add", "origin", gitRepo)
+	cmd = exec.CommandContext(ctx, "git", "remote", "add", "origin", gitRepo)
 	cmd.Dir = dir
 	combinedOutput, err = cmd.CombinedOutput()
 	if err != nil {
@@ -306,7 +327,7 @@ func cloneToDirectory(url, dir string) ([]byte, string, error) {
 
 	logrus.Debugf("fetching repo %q and branch (or commit ID) %q to %q", gitRepo, gitRef, dir)
 	args := []string{"fetch", "-u", "--depth=1", "origin", "--", gitRef}
-	cmd = exec.Command("git", args...)
+	cmd = exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	combinedOutput, err = cmd.CombinedOutput()
 	if err != nil {
@@ -315,7 +336,7 @@ func cloneToDirectory(url, dir string) ([]byte, string, error) {
 		return combinedOutput, gitSubdir, fmt.Errorf("failed while performing `git fetch`: %s", err.Error())
 	}
 
-	cmd = exec.Command("git", "checkout", "FETCH_HEAD")
+	cmd = exec.CommandContext(ctx, "git", "checkout", "FETCH_HEAD")
 	cmd.Dir = dir
 	combinedOutput, err = cmd.CombinedOutput()
 	if err != nil {
@@ -326,9 +347,19 @@ func cloneToDirectory(url, dir string) ([]byte, string, error) {
 	return combinedOutput, gitSubdir, nil
 }
 
-func downloadToDirectory(url, dir string) error {
+func downloadToDirectory(ctx context.Context, url, dir string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	logrus.Debugf("extracting %q to %q", url, dir)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -342,7 +373,11 @@ func downloadToDirectory(url, dir string) error {
 	// Try to extract the response as a tar archive; if that fails,
 	// assume it is a raw Dockerfile and write it as such.
 	if err := chrootarchive.Untar(resp.Body, dir, nil); err != nil {
-		resp1, err := http.Get(url)
+		req1, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		resp1, err := http.DefaultClient.Do(req1)
 		if err != nil {
 			return err
 		}
@@ -358,7 +393,13 @@ func downloadToDirectory(url, dir string) error {
 	return nil
 }
 
-func stdinToDirectory(dir string) error {
+func stdinToDirectory(ctx context.Context, dir string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	logrus.Debugf("extracting stdin to %q", dir)
 	r := bufio.NewReader(os.Stdin)
 	b, err := io.ReadAll(r)
@@ -368,7 +409,7 @@ func stdinToDirectory(dir string) error {
 	// Try to extract the buffered input as a tar archive; if that fails,
 	// assume it is a raw Dockerfile and write it as such.
 	reader := bytes.NewReader(b)
-	if err := chrootarchive.Untar(reader, dir, nil); err != nil {
+	if err := chrootarchive.Untar(ctxreader.NewCancelableReader(ctx, reader), dir, nil); err != nil {
 		if err := writeFileInRoot(dir, "Dockerfile", b, 0o600); err != nil {
 			return fmt.Errorf("failed to write bytes to %q: %w", filepath.Join(dir, "Dockerfile"), err)
 		}

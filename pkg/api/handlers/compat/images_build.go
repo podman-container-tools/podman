@@ -252,7 +252,7 @@ func processBuildContext(query url.Values, r *http.Request, buildContext *BuildC
 	remote := query.Get("remote")
 
 	if utils.IsLibpodRequest(r) && remote != "" {
-		tempDir, subDir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", remote)
+		tempDir, subDir, err := buildahDefine.TempDirForURLContext(r.Context(), anchorDir, "buildah", remote)
 		if err != nil {
 			return nil, utils.GetInternalServerError(genSpaceErr(err))
 		}
@@ -970,7 +970,7 @@ func executeBuild(runtime *libpod.Runtime, w http.ResponseWriter, r *http.Reques
 //
 // Returns a BuildContext struct with the main context directory and a map of additional build contexts,
 // or an error if validation fails or required parameters are missing.
-func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext, error) {
+func handleLocalBuildContexts(ctx context.Context, query url.Values, anchorDir string) (*BuildContext, error) {
 	localContextDir := query.Get("localcontextdir")
 	if localContextDir == "" {
 		return nil, utils.GetBadRequestError("localcontextdir", localContextDir, fmt.Errorf("localcontextdir cannot be empty"))
@@ -999,7 +999,7 @@ func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext
 		switch {
 		case strings.HasPrefix(value, "url:"):
 			value = strings.TrimPrefix(value, "url:")
-			tempDir, subdir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", value)
+			tempDir, subdir, err := buildahDefine.TempDirForURLContext(ctx, anchorDir, "buildah", value)
 			if err != nil {
 				return nil, utils.GetInternalServerError(genSpaceErr(err))
 			}
@@ -1033,7 +1033,7 @@ func handleLocalBuildContexts(query url.Values, anchorDir string) (*BuildContext
 // getLocalBuildContext processes build contexts from Local API HTTP request to a BuildContext struct.
 func getLocalBuildContext(r *http.Request, query url.Values, anchorDir string, _ bool) (*BuildContext, error) {
 	// Handle build contexts
-	buildContext, err := handleLocalBuildContexts(query, anchorDir)
+	buildContext, err := handleLocalBuildContexts(r.Context(), query, anchorDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1171,7 +1171,7 @@ func handleBuildContexts(r *http.Request, query url.Values, anchorDir string, mu
 		logrus.Debugf("name: %q, context: %q", name, value)
 
 		if urlValue, ok := strings.CutPrefix(value, "url:"); ok {
-			tempDir, subdir, err := buildahDefine.TempDirForURL(anchorDir, "buildah", urlValue)
+			tempDir, subdir, err := buildahDefine.TempDirForURLContext(r.Context(), anchorDir, "buildah", urlValue)
 			if err != nil {
 				return nil, fmt.Errorf("downloading URL %q: %w", name, err)
 			}

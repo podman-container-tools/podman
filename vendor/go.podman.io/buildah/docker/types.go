@@ -234,7 +234,7 @@ type V2S2Descriptor struct {
 	Size int64 `json:"size,omitempty"`
 
 	// Digest uniquely identifies the content. A byte stream can be verified
-	// against against this digest.
+	// against this digest.
 	Digest digest.Digest `json:"digest,omitempty"`
 
 	// URLs contains the source URLs of this content.

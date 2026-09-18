@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,10 +25,10 @@ FROM scratch
 ENV test1=test1
 ENV test2=test2`
 
-var longBuildImage = fmt.Sprintf(`
+var failBuildImage = fmt.Sprintf(`
 FROM %s
-RUN echo "Hello, World!"
-RUN RUN echo "Please use signal 9 this will never ends" && sleep 10000s`, ALPINE)
+RUN echo hello > /hello
+RUN false`, ALPINE)
 
 var _ = Describe("Podman prune", func() {
 	It("podman container prune containers", func() {
@@ -619,27 +617,13 @@ var _ = Describe("Podman prune", func() {
 		Expect(create).Should(ExitCleanly())
 
 		containerFilePath := filepath.Join(podmanTest.TempDir, "ContainerFile-podman-leaker")
-		err := os.WriteFile(containerFilePath, []byte(longBuildImage), 0o755)
+		err := os.WriteFile(containerFilePath, []byte(failBuildImage), 0o755)
 		Expect(err).ToNot(HaveOccurred())
 
-		build := podmanTest.Podman([]string{"build", "--network=none", "-f", containerFilePath, "-t", "podmanleaker"})
-		// Build will never finish so let's wait for build to ask for SIGKILL to simulate a failed build that leaves stage containers.
-		matchedOutput := false
-		for range 900 {
-			if strings.Contains(build.OutputToString(), "Please use signal 9") {
-				matchedOutput = true
-				build.Signal(syscall.SIGKILL)
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if !matchedOutput {
-			Fail("Did not match special string in podman build")
-		}
-
-		// kill is async, wait for process exit here and make sure it was killed (137).
+		// Build will fail, and we very specifically tell it to not clean up
+		build := podmanTest.Podman([]string{"build", "--network=none", "--force-rm=false", "--rm=false", "-f", containerFilePath, "-t", "podmanleaker"})
 		build.WaitWithDefaultTimeout()
-		Expect(build).To(Exit(137))
+		Expect(build).To(Exit(1))
 
 		// Check Intermediate image of stage container
 		none := podmanTest.Podman([]string{"images", "-a"})

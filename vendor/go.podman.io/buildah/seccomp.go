@@ -25,7 +25,7 @@ func setupSeccomp(spec *specs.Spec, seccompProfilePath string) error {
 		if err != nil {
 			return fmt.Errorf("opening seccomp profile failed: %w", err)
 		}
-		seccompConfig, err := seccomp.LoadProfile(string(seccompProfile), spec)
+		seccompConfig, err := seccomp.LoadProfileFromBytes(seccompProfile, spec)
 		if err != nil {
 			return fmt.Errorf("loading seccomp profile (%s) failed: %w", seccompProfilePath, err)
 		}

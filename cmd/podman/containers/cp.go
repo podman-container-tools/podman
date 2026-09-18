@@ -13,7 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	buildahCopiah "go.podman.io/buildah/copier"
+	"go.podman.io/buildah/copier"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/pkg/copy"
@@ -298,7 +298,7 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 			logrus.Debugf("Error converting GID %q to int: %v", groot.Gid, err)
 		}
 
-		putOptions := buildahCopiah.PutOptions{
+		putOptions := copier.PutOptions{
 			ChownDirs:            &idPair,
 			ChownFiles:           &idPair,
 			IgnoreDevices:        true,
@@ -314,7 +314,7 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 		if !hostInfo.IsDir {
 			dir = filepath.Dir(dir)
 		}
-		if err := buildahCopiah.Put(dir, "", putOptions, reader); err != nil {
+		if err := copier.PutContext(registry.Context(), dir, "", putOptions, reader); err != nil {
 			return fmt.Errorf("copying to host: %w", err)
 		}
 		return nil
@@ -419,7 +419,7 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 			return err
 		}
 
-		getOptions := buildahCopiah.GetOptions{
+		getOptions := copier.GetOptions{
 			// Unless the specified path points to ".", we want to
 			// copy the base directory.
 			KeepDirectoryNames: hostInfo.IsDir && filepath.Base(hostTarget) != ".",
@@ -433,7 +433,7 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 		// On Windows, the root path needs to be <drive>:\, while otherwise
 		// it needs to be /. Combining filepath.VolumeName() + string(os.PathSeparator)
 		// gives us the correct path for the current OS.
-		if err := buildahCopiah.Get(filepath.VolumeName(hostTarget)+string(os.PathSeparator), "", getOptions, []string{hostTarget}, writer); err != nil {
+		if err := copier.GetContext(registry.Context(), filepath.VolumeName(hostTarget)+string(os.PathSeparator), "", getOptions, []string{hostTarget}, writer); err != nil {
 			return fmt.Errorf("copying from host: %w", err)
 		}
 		return nil
