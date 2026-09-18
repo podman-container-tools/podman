@@ -37,8 +37,7 @@ the YAML body for `swagger:operation`.
 `Build(tgt *spec.Paths)` resolves the path-item slot on `tgt`,
 allocates or reuses the operation for the HTTP verb via
 `setPathOperation`, attaches the operation's `Tags`, then dispatches
-into `applyBlockToOperation` for the header content and the YAML
-body.
+into `applyBlockToOperation` for the header content and the YAML body.
 
 The path-item slot may be missing on `tgt` (`tgt.Paths == nil`); the
 builder lazily initialises the map before writing the result back.
@@ -52,11 +51,9 @@ partially-built operation accumulates work across the scanner's two
 passes (route discovery then operation discovery). Otherwise the
 incoming operation replaces what was there.
 
-When the incoming operation is nil, a fresh operation is allocated
-with the given ID.
+When the incoming operation is nil, a fresh operation is allocated with the given ID.
 
-Unrecognised methods leave the path item untouched and return the
-incoming operation verbatim.
+Unrecognised methods leave the path item untouched and return the incoming operation verbatim.
 
 The public re-export `SetPathOperation` exists for consumers in
 sibling packages (the `routes` builder uses it to allocate or reuse

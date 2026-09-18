@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/go-openapi/codescan/internal/builders/resolvers"
 	"github.com/go-openapi/codescan/internal/ifaces"
 	"github.com/go-openapi/codescan/internal/scanner"
 	oaispec "github.com/go-openapi/spec"
@@ -23,10 +24,17 @@ func (s *Builder) buildFromInterface(decl *scanner.EntityDecl, it *types.Interfa
 		hasAllOf bool
 	)
 
-	var flist []*ast.Field
-	if specType, ok := decl.Spec.Type.(*ast.InterfaceType); ok {
-		flist = make([]*ast.Field, it.NumEmbeddeds()+it.NumExplicitMethods())
-		copy(flist, specType.Methods.List)
+	// An embed's annotation lives in its AST field's doc comment and its identity in the interface's
+	// own embedded-type list; the two are paired positionally rather than through the type-checker's
+	// expression records, which a package read from export data does not have.
+	//
+	// No source means no pairing: an embed's annotation lives in a comment, so a declaration read
+	// from compiled export data has nothing to pair and every embed reads as unannotated.
+	var embeds []resolvers.Embed
+	if expr, ok := decl.TypeExpr(); ok {
+		if specType, isIface := expr.(*ast.InterfaceType); isIface && specType.Methods != nil {
+			embeds = resolvers.Embeds(specType.Methods.List, it)
+		}
 	}
 
 	// First collect the embedded interfaces create refs when:
@@ -38,7 +46,7 @@ func (s *Builder) buildFromInterface(decl *scanner.EntityDecl, it *types.Interfa
 			target = &oaispec.Schema{}
 		}
 
-		fieldHasAllOf, err := s.processEmbeddedType(fld, flist, decl, schema, nameByJSON)
+		fieldHasAllOf, err := s.processEmbeddedType(fld, embeds, decl, schema, nameByJSON)
 		if err != nil {
 			return err
 		}
@@ -86,23 +94,17 @@ func (s *Builder) processInterfaceMethod(fld *types.Func, decl *scanner.EntityDe
 }
 
 func (s *Builder) buildNamedInterface(
-	ftpe *types.Named, flist []*ast.Field, decl *scanner.EntityDecl, schema *oaispec.Schema, nameByJSON map[string]propOwner,
+	ftpe *types.Named, embeds []resolvers.Embed, schema *oaispec.Schema, nameByJSON map[string]propOwner,
 ) (hasAllOf bool, err error) {
 	o := ftpe.Obj()
 	var afld *ast.Field
 
-	for _, an := range flist {
-		if len(an.Names) != 0 {
+	for _, embed := range embeds {
+		if embed.Type.String() != o.Type().String() {
 			continue
 		}
 
-		tpp := decl.Pkg.TypesInfo.Types[an.Type]
-		if tpp.Type.String() != o.Type().String() {
-			continue
-		}
-
-		// decl.
-		afld = an
+		afld = embed.Field
 		break
 	}
 

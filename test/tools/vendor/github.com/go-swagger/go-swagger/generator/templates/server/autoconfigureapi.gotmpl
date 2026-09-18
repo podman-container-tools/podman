@@ -22,7 +22,7 @@ import (
 )
 
 {{ with .GenOpts }}
-//go:generate swagger generate server --target {{ .TargetPath }} --name {{ .Name }} --spec {{ .SpecPath }}
+//go:generate {{ .GoGenerateCommand }} generate server --target {{ .TargetPath }} --name {{ .Name }} --spec {{ .SpecPath }}
 {{- if .APIPackage }}{{ if ne .APIPackage "operations" }} --api-package {{ .APIPackage }}{{ end }}{{ end }}
 {{- if .ModelPackage }}{{ if ne .ModelPackage "models" }} --model-package {{ .ModelPackage }}{{ end }}{{ end }}
 {{- if .ServerPackage }}{{ if ne .ServerPackage "restapi"}} --server-package {{ .ServerPackage }}{{ end }}{{ end }}

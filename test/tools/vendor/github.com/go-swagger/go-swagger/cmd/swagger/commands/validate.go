@@ -30,6 +30,13 @@ type ValidateSpec struct {
 	StopOnError  bool `description:"when present will not continue validation after critical errors are found" long:"stop-on-error"`
 }
 
+// Usage documents the spec argument in the help message.
+//
+// It replaces the "[validate-OPTIONS]" placeholder the flags parser renders by default.
+func (c ValidateSpec) Usage() string {
+	return "[validate-OPTIONS] {spec}"
+}
+
 // Execute validates the spec.
 func (c *ValidateSpec) Execute(args []string) error {
 	if len(args) == 0 {

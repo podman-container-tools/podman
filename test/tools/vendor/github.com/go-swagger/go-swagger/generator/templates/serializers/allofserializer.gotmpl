@@ -12,13 +12,13 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
           {{- if not $.IsExported }}
             {{ template "privstructfield" . }}
           {{- else }}
-            {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+            {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
           {{- end }}
         {{ else }}
           {{ if not $.IsExported }}
             {{ template "privstructfield" . }}
           {{ else }}
-            {{ .GoName}} json.RawMessage `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+            {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
           {{ end }}
         {{ end }}
       {{- end }}
@@ -59,13 +59,13 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
         {{- if not $.IsExported }}
           {{ template "privstructfield" . }}
         {{- else }}
-          {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+          {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
         {{- end }}
       {{- else }}
         {{- if not $.IsExported }}
           {{ template "privstructfield" . }}
         {{- else }}
-          {{ .GoName}} json.RawMessage `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+          {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
         {{- end }}
       {{- end }}
     {{ end }}
@@ -98,13 +98,13 @@ func ({{.ReceiverName}} {{ .GoName }}) MarshalJSON() ([]byte, error) {
           {{- if not $.IsExported }}
             {{ template "privstructfield" . }}
           {{- else }}
-            {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+            {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
           {{- end }}
         {{- else }}
           {{- if not $.IsExported }}
             {{ template "privstructfield" . }}
           {{- else }}
-            {{ .GoName}} json.RawMessage `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+            {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
             {{- end }}
         {{- end }}
       {{ end }}
@@ -151,13 +151,13 @@ func ({{.ReceiverName}} {{ .GoName }}) MarshalJSON() ([]byte, error) {
         {{- if not $.IsExported }}
           {{ template "privstructfield" . }}
         {{- else }}
-          {{ .GoName}} {{ template "schemaType" . }} `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+          {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
         {{- end }}
       {{- else }}
         {{- if not $.IsExported }}
           {{ template "privstructfield" . }}
         {{- else }}
-          {{ .GoName}} json.RawMessage `json:"{{ .OriginalName }}{{ if and (not .Required) .IsEmptyOmitted }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+          {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
         {{- end }}
       {{- end }}
     {{ end }}

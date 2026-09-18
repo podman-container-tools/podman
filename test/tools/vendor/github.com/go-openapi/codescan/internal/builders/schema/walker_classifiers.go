@@ -7,11 +7,12 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/go-openapi/codescan/internal/builders/common"
 	"github.com/go-openapi/codescan/internal/builders/resolvers"
+	"github.com/go-openapi/codescan/internal/builders/validations"
 	"github.com/go-openapi/codescan/internal/ifaces"
 	"github.com/go-openapi/codescan/internal/parsers/grammar"
 	"github.com/go-openapi/codescan/internal/scanner"
@@ -65,7 +66,7 @@ func (s *Builder) classifierTextMarshal(tpe types.Type, tgt ifaces.SwaggerTypabl
 		return false
 	}
 
-	if name, ok := s.findAnnotationArg(decl.Comments, grammar.AnnStrfmt); ok {
+	if name, ok := s.findAnnotationArg(decl.Comments(), grammar.AnnStrfmt); ok {
 		tgt.Typed("string", name)
 		return true
 	}
@@ -81,7 +82,6 @@ func (s *Builder) classifierTextMarshal(tpe types.Type, tgt ifaces.SwaggerTypabl
 // It is the single resolution point for `swagger:type` on a named type: it routes the argument
 // through resolveTypeOverride (always inlining — keyword scalars / Go builtins / `[]T` / `inline`
 // / `array` / type-name refs), and applies a co-present `swagger:strfmt` as a supplementary format
-// only when compatible with the resolved type (F3 — see .claude/plans/quirks-F-series-fix.md).
 // ownType is the named Go type (consumed by the `inline`/`array` keywords); pos drives diagnostics.
 //
 // Reports back via the (handled, fallthrough) tuple:
@@ -154,22 +154,189 @@ func (s *Builder) recordEnumOrigins(enumPos []token.Pos) {
 	}
 }
 
-func (s *Builder) classifierNamedBasic(cg *ast.CommentGroup, pkg *packages.Package, utitpe *types.Basic, tgt ifaces.SwaggerTypable, declTypeName string) (resolved bool) {
+// applyEnum writes the enum members of enumName onto tgt, together with the type/format of the
+// enum's own declared Go type.
+//
+// Type and format come from utitpe — the DECLARED underlying basic type — never from the values.
+// The scanner hands over evaluated constants, so every integer width collapses to int64 and every
+// float width to float64 on the way out; typing the schema from the first value made an
+// `int8` enum an `int64` one, a `float32` enum a `double`, and — when a float enum's first member
+// happened to be written as an integer literal (`= 0`) — produced `{type: integer}` carrying
+// fractional members, a schema no validator can satisfy. Each value is then normalised to that
+// declared type (go-swagger#3412 follow-up).
+//
+// Returns false when the enum has no usable member, leaving tgt untouched so the caller can fall
+// through to the type-resolution engine.
+//
+// # Details
+//
+// See [§enum-typing](./README.md#enum-typing) — why the declared type wins over the parsed values,
+// and the two defects that rule settles.
+func (s *Builder) applyEnum(pkg *packages.Package, declared *types.Named, utitpe *types.Basic, tgt ifaces.SwaggerTypable, enumName string) (resolved bool) {
+	enumValues, enumDesces, enumPos, _ := s.Ctx.FindEnumValues(pkg, enumName)
+	if len(enumValues) == 0 {
+		return false
+	}
+
+	schemaType := basicSchemaType(utitpe)
+	values := make([]any, 0, len(enumValues))
+	descs := make([]string, 0, len(enumValues))
+	positions := make([]token.Pos, 0, len(enumValues))
+
+	for i, raw := range enumValues {
+		value, ok := validations.CoerceConstant(raw, schemaType)
+		if !ok {
+			// Unreachable from code that compiles: Go rejects a const whose value does not fit its
+			// declared type. Reported rather than emitted, so a malformed member can never contradict
+			// the schema's own type.
+			s.RecordDiagnostic(grammar.Warnf(s.declPos(), grammar.CodeInvalidEnumOption,
+				"swagger:enum %s: const value %v is not representable as %s; member dropped",
+				enumName, raw, utitpe.Name()))
+			continue
+		}
+
+		values = append(values, value)
+		if i < len(enumDesces) {
+			descs = append(descs, enumDesces[i])
+		}
+		if i < len(enumPos) {
+			positions = append(positions, enumPos[i])
+		}
+	}
+
+	if len(values) == 0 {
+		return false
+	}
+
+	if !s.applyEnumType(declared, utitpe, tgt, schemaType, enumName) {
+		return false
+	}
+
+	tgt.WithEnum(values...)
+	if len(descs) > 0 {
+		tgt.WithEnumDescription(strings.Join(descs, "\n"))
+	}
+	s.recordEnumOrigins(positions)
+
+	return true
+}
+
+// applyEnumType writes the enum's `type` / `format` onto tgt, resolved from the enum's declared Go
+// type.
+//
+// The underlying basic type is the usual answer, but it is not always the whole one: a type
+// declared OVER another named type (`type Kind strfmt.UUID`) reaches go/types with `string` as its
+// underlying, and everything the intermediate contributed — here the `uuid` format — is gone from
+// that view. The same type without the enum annotation keeps its format, because the ordinary path
+// resolves the declaration's right-hand side rather than its underlying; inheritedStrfmt is the
+// enum arm's equivalent of that, restricted to what a strfmt can legally decorate (a string).
+//
+// Reports false when the underlying type has no Swagger representation at all (a complex64 enum):
+// there is no schema to write members onto, and the caller falls through so the type-resolution
+// engine reports the unsupported type.
+func (s *Builder) applyEnumType(declared *types.Named, utitpe *types.Basic, tgt ifaces.SwaggerTypable, schemaType, enumName string) bool {
+	if schemaType == "string" {
+		if format, ok := s.inheritedStrfmt(declared); ok {
+			tgt.Typed("string", format)
+
+			return true
+		}
+	}
+
+	if err := resolvers.SwaggerSchemaForType(utitpe.Name(), tgt); err != nil {
+		// e.g. a complex64 enum: no JSON representation, so there is no schema to write the members
+		// onto. The type-resolution engine reports the unsupported type on the fallthrough.
+		s.RecordDiagnostic(grammar.Warnf(s.declPos(), grammar.CodeUnsupportedGoType,
+			"swagger:enum %s: underlying type %s has no Swagger representation: %v",
+			enumName, utitpe.Name(), err))
+
+		return false
+	}
+
+	return true
+}
+
+// inheritedStrfmt returns the strfmt format that declared inherits from the type it is written
+// over, walking the chain of declarations to its right.
+//
+// `type Kind strfmt.UUID` carries no `swagger:strfmt` of its own — the annotation sits on
+// `strfmt.UUID`, one declaration to the right — and go/types offers no way back to it, since
+// Underlying() jumps straight to the bottom `string`. The AST does: a declaration's Spec.Type is
+// the type it was written over, and the walk repeats from there, so an indirection chain several
+// redefinitions long resolves like a single one.
+//
+// The walk stops at the first type that is not itself a named declaration (the basic bottom), at
+// one the scan cannot see the source of, or at a repeat — Go forbids a cyclic type declaration, but
+// nothing guarantees the AST handed to us came from code that compiles.
+//
+// Only `swagger:strfmt` is inherited: a type-changing annotation (`swagger:type`) on an intermediate
+// would contradict the enum's own members rather than decorate them.
+func (s *Builder) inheritedStrfmt(declared *types.Named) (string, bool) {
+	seen := make(map[types.Type]struct{})
+
+	for current := types.Type(declared); current != nil; {
+		if _, dup := seen[current]; dup {
+			return "", false
+		}
+		seen[current] = struct{}{}
+
+		decl, ok := s.Ctx.DeclForType(current)
+		if !ok || decl == nil {
+			return "", false
+		}
+
+		// The enum's own declaration is the first step: its swagger:strfmt (if any) already won in
+		// classifierNamedBasic's strfmt-first arm, so a match here can only come from further right.
+		if current != types.Type(declared) {
+			if format, ok := s.findAnnotationArg(decl.Comments(), grammar.AnnStrfmt); ok {
+				return format, true
+			}
+		}
+
+		rhs, ok := decl.WrittenRHS()
+		if !ok {
+			return "", false
+		}
+
+		switch rhs.(type) {
+		case *types.Named, *types.Alias:
+			current = rhs
+		default:
+			return "", false
+		}
+	}
+
+	return "", false
+}
+
+// basicSchemaType maps a Go basic type to the Swagger type whose value domain it belongs to.
+//
+// Driven by go/types' own kind bits rather than a name table, so every integer width (including
+// `byte` / `rune`) lands on "integer" without enumerating them. Types with no Swagger value domain
+// (complex, unsafe.Pointer) yield "" — the caller's cue to leave values untouched.
+func basicSchemaType(utitpe *types.Basic) string {
+	switch info := utitpe.Info(); {
+	case info&types.IsInteger != 0:
+		return "integer"
+	case info&types.IsFloat != 0:
+		return "number"
+	case info&types.IsString != 0:
+		return "string"
+	case info&types.IsBoolean != 0:
+		return "boolean"
+	default:
+		return ""
+	}
+}
+
+func (s *Builder) classifierNamedBasic(cg *ast.CommentGroup, pkg *packages.Package, declared *types.Named, utitpe *types.Basic, tgt ifaces.SwaggerTypable) (resolved bool) {
 	if name, ok := s.findAnnotationArg(cg, grammar.AnnStrfmt); ok {
 		tgt.Typed("string", name)
 		return true
 	}
 
-	if enumName, ok := s.enumName(cg, declTypeName); ok {
-		enumValues, enumDesces, enumPos, _ := s.Ctx.FindEnumValues(pkg, enumName)
-		if len(enumValues) > 0 {
-			tgt.WithEnum(enumValues...)
-			enumTypeName := reflect.TypeOf(enumValues[0]).String()
-			_ = resolvers.SwaggerSchemaForType(enumTypeName, tgt)
-			if len(enumDesces) > 0 {
-				tgt.WithEnumDescription(strings.Join(enumDesces, "\n"))
-			}
-			s.recordEnumOrigins(enumPos)
+	if enumName, ok := s.enumName(cg, declared.Obj().Name()); ok {
+		if s.applyEnum(pkg, declared, utitpe, tgt, enumName) {
 			return true
 		}
 		// swagger:enum with no matching const values.
@@ -179,8 +346,23 @@ func (s *Builder) classifierNamedBasic(cg *ast.CommentGroup, pkg *packages.Packa
 			"swagger:enum %s: no matching const values found; enum semantics dropped", enumName))
 	}
 
-	if _, ok := s.findAnnotationArg(cg, grammar.AnnDefaultName); ok {
-		return true
+	// swagger:default is DEPRECATED: it is now an empty sink.
+	//
+	// It never emitted a `default` into the spec in any placement or form. Worse, this arm used to
+	// return handled=true on a target it had not written, so a named basic type carrying it published
+	// a TYPELESS definition — and every property referencing it came out typeless too, silently.
+	//
+	// Every place OpenAPI 2.0 admits a default is already served: the `default:` keyword covers the
+	// Schema, Parameter, Items and Header objects (which is exactly its registered context set), and a
+	// `default` response-code head in a route's `Responses:` body covers the Responses object. That
+	// closes the surface, so the annotation has no meaning left to implement.
+	//
+	// Emit a deprecation diagnostic and fall through, exactly as the swagger:alias sink below does.
+	if def := s.findAnnotation(cg, grammar.AnnDefaultName); def != nil {
+		s.RecordDiagnostic(grammar.Warnf(def.Pos(), grammar.CodeDeprecated,
+			`swagger:default is deprecated and no longer affects output; use the "default:" keyword `+
+				`on the field, parameter, header or type declaration, or a "default:" response code `+
+				`in a route's Responses: body`))
 	}
 
 	if typeName, ok := s.findAnnotationArg(cg, grammar.AnnType); ok {
@@ -213,26 +395,19 @@ func (s *Builder) classifierNamedBasic(cg *ast.CommentGroup, pkg *packages.Packa
 // classifierNamedArrayLike is the named-type walker shared between `buildNamedArray` and
 // `buildNamedSlice`.
 //
-// Both have the same classifier surface — `swagger:strfmt` and `swagger:type` — with subtly
-// different strfmt fall-throughs (array honors a "bsonobjectid" special case the slice doesn't).
-// The boolean `forSlice` switches that arm; the rest is identical.
+// Both have the same classifier surface — `swagger:strfmt` and `swagger:type`. elem is the
+// sequence's element type, which decides whether a format describes the whole value or its items
+// (see [common.ApplyArrayLikeStrfmt]); array and slice are otherwise identical here.
 //
 // Returns:
 //   - handled=true,  err=nil   → caller returns nil
 //   - handled=true,  err!=nil  → unrecognised swagger:type → caller
 //     should fall through to inline the element type
 //   - handled=false, err=nil   → no classifier matched
-func (s *Builder) classifierNamedArrayLike(cg *ast.CommentGroup, tgt ifaces.SwaggerTypable, forSlice bool) (handled bool, fallthroughElement bool) {
+func (s *Builder) classifierNamedArrayLike(cg *ast.CommentGroup, tgt ifaces.SwaggerTypable, elem types.Type) (handled bool, fallthroughElement bool) {
 	if sfnm, isf := s.findAnnotationArg(cg, grammar.AnnStrfmt); isf {
-		if sfnm == "byte" {
-			tgt.Typed("string", sfnm)
-			return true, false
-		}
-		if !forSlice && sfnm == "bsonobjectid" {
-			tgt.Typed("string", sfnm)
-			return true, false
-		}
-		tgt.Items().Typed("string", sfnm)
+		common.ApplyArrayLikeStrfmt(sfnm, elem, tgt)
+
 		return true, false
 	}
 
@@ -248,20 +423,118 @@ func (s *Builder) classifierNamedArrayLike(cg *ast.CommentGroup, tgt ifaces.Swag
 	return false, false
 }
 
-// classifierAliasTargetStrfmt is the named-type walker fired from `buildNamedAllOf`'s struct branch
-// — checks the alias's target type's docstring for `swagger:strfmt`.
+// warnUnfixableAliasEnum reports a `swagger:enum` on an alias declaration whose right-hand side is
+// not a named type, where the annotation cannot work and never could.
+//
+// An enum is collected by finding the constants declared WITH the annotated type. A type alias is
+// erased by the type-checker, so in
+//
+//	type Unsigned = uint64
+//	const Zero Unsigned = 0
+//
+// `Zero` is a `uint64` constant indistinguishable from every other `uint64` constant in the package.
+// There is nothing to collect, and no amount of plumbing changes that — unlike `swagger:strfmt` and
+// `swagger:type`, which merely decorate the emitted schema and were fixed.
+//
+// An alias to a NAMED enum type is silent here: the named type survives the alias, so the members
+// resolve and the annotation works.
+//
+// See [§enum-values](../../scanner/README.md#enum-values).
+func (s *Builder) warnUnfixableAliasEnum(cg *ast.CommentGroup, tpe *types.Alias, pos token.Position) {
+	ann := s.findAnnotation(cg, grammar.AnnEnum)
+	if ann == nil {
+		return
+	}
+	if _, named := types.Unalias(tpe.Rhs()).(*types.Named); named {
+		return
+	}
+
+	s.RecordDiagnostic(grammar.Warnf(pos, grammar.CodeInvalidEnumOption,
+		"swagger:enum on an alias to a non-named type cannot collect any member: the type-checker "+
+			"erases the alias, so its constants are indistinguishable from any other constant of the "+
+			"underlying type. Declare it as a named type (`type %s %s`) instead",
+		tpe.Obj().Name(), tpe.Rhs().String()))
+}
+
+// classifierAliasStrfmt applies a `swagger:strfmt` carried by an ALIAS declaration.
+//
+// The implementation is shared with the parameters and responses builders, which have their own
+// alias dissolve paths and the same gap. See [common.Builder.ClassifierAliasStrfmt].
+//
+// # Details
+//
+// See [§aliases](./README.md#aliases) — the use-site classifier contract.
+func (s *Builder) classifierAliasStrfmt(cg *ast.CommentGroup, tpe *types.Alias, tgt ifaces.SwaggerTypable) bool {
+	return s.ClassifierAliasStrfmt(cg, tpe, tgt)
+}
+
+// The named-type walker fired from `buildNamedAllOf`'s struct branch.
+// It checks the alias's target type's docstring for `swagger:strfmt`.
 //
 // On match writes `{string, <format>}` to schema and returns true.
-func (s *Builder) classifierAliasTargetStrfmt(tpe types.Type, tgt ifaces.SwaggerTypable) bool {
-	decl, ok := s.Ctx.DeclForType(tpe)
-	if !ok || decl == nil {
-		return false
+// applyNamedShapeClassifier runs the author's classifier annotations that depend on a named type's
+// UNDERLYING shape: `swagger:strfmt` for a struct, `swagger:strfmt` / `swagger:enum` for a basic,
+// and the element-driven `swagger:strfmt` / `swagger:type` for an array or slice.
+//
+// handled reports that the classifiers produced the schema; recurse is non-nil when one of them
+// asked for the type to be rebuilt rather than resolved here.
+//
+// This is the shape-aware half of the cascade, and the reason it is a function rather than three
+// lines inside a switch: the composition arm needs the same answers as the field dispatch, and the
+// copy it used to keep is shape-BLIND.
+// That copy writes `Typed("string", format)` whatever the underlying is, so a `[]string` annotated `email` composed
+// into an allOf claimed the member IS an email address rather than a list of them, and a
+// `swagger:enum` reached it not at all.
+func (s *Builder) applyNamedShapeClassifier(
+	cg *ast.CommentGroup, titpe *types.Named, tgt ifaces.SwaggerTypable,
+) (handled bool, recurse func() error) {
+	switch utitpe := titpe.Underlying().(type) {
+	case *types.Struct:
+		return s.classifierNamedStructStrfmt(cg, tgt), nil
+
+	case *types.Basic:
+		// A builtin with no Swagger form is left to the caller, which warns and skips it. The guard sits
+		// ahead of the classifier because that is the order the field dispatch has always applied, and
+		// moving it would quietly start honouring an annotation on a type that cannot carry one.
+		if resolvers.UnsupportedBuiltinType(utitpe) {
+			return false, nil
+		}
+
+		// PkgForType yields the package the enum's const values are collected from; a miss means the
+		// type cannot be anchored to a scanned package, so there is nothing to collect.
+		pkg, found := s.Ctx.PkgForType(titpe)
+		if !found {
+			return false, nil
+		}
+
+		return s.classifierNamedBasic(cg, pkg, titpe, utitpe, tgt), nil
+
+	case *types.Array:
+		return s.arrayLikeClassifier(cg, tgt, utitpe.Elem())
+
+	case *types.Slice:
+		return s.arrayLikeClassifier(cg, tgt, utitpe.Elem())
+
+	default:
+		return false, nil
 	}
-	if name, ok := s.findAnnotationArg(decl.Comments, grammar.AnnStrfmt); ok {
-		tgt.Typed("string", name)
-		return true
+}
+
+// arrayLikeClassifier adapts classifierNamedArrayLike's (handled, fallthroughElement) pair to the
+// closure form applyNamedShapeClassifier returns.
+func (s *Builder) arrayLikeClassifier(
+	cg *ast.CommentGroup, tgt ifaces.SwaggerTypable, elem types.Type,
+) (bool, func() error) {
+	handled, fallthroughElement := s.classifierNamedArrayLike(cg, tgt, elem)
+	if !handled || !fallthroughElement {
+		return handled, nil
 	}
-	return false
+
+	return true, func() error {
+		defer s.descend("items")()
+
+		return s.buildFromType(elem, tgt.Items())
+	}
 }
 
 // fieldDoc is the field-level FieldWalker output: every classifier signal a struct field /
@@ -291,6 +564,11 @@ type fieldDoc struct {
 	//
 	// Empty for bare `swagger:allOf`.
 	AllOfClass string
+	// OmitTargets — arguments of `swagger:omit <name>[,<name>…]` written ON AN EMBED: the Go field
+	// names not to promote out of the embedded type.
+	//
+	// Nil when the annotation is absent. See omit.go.
+	OmitTargets []string
 }
 
 // scanFieldDoc inspects afld's docstring through the ParseBlocks cache and returns every
@@ -306,7 +584,7 @@ func (s *Builder) scanFieldDoc(afld *ast.Field) fieldDoc {
 	}
 	var nameKeyword string
 	for _, b := range s.ParseBlocks(afld.Doc) {
-		switch b.AnnotationKind() { //nolint:exhaustive // field-level walker only consumes these five kinds
+		switch b.AnnotationKind() { //nolint:exhaustive // field-level walker only consumes these six kinds
 		case grammar.AnnIgnore:
 			fd.Ignored = true
 		case grammar.AnnName:
@@ -325,6 +603,10 @@ func (s *Builder) scanFieldDoc(afld *ast.Field) fieldDoc {
 			fd.IsAllOfMember = true
 			if name, ok := b.AnnotationArg(); ok {
 				fd.AllOfClass = name
+			}
+		case grammar.AnnOmit:
+			if arg, ok := b.AnnotationArg(); ok {
+				fd.OmitTargets = append(fd.OmitTargets, parseOmitTargets(arg)...)
 			}
 		}
 		// The `name:` keyword is the canonical field-naming keyword, honoured uniformly across schema /

@@ -380,6 +380,23 @@ func (g *GenOpts) SpecPath() string {
 	return specRel
 }
 
+// GoGenerateCommand returns the command invoked by the //go:generate directive
+// emitted in generated server files.
+//
+// By default this is the bare "swagger" binary, which assumes it is
+// pre-installed and available on $PATH. When WithGoRunGoGenerate is set, the
+// tool is instead invoked via "go run", following the tools.go pattern for
+// tracking build tool dependencies (see issue #3000), so `go generate` works
+// without requiring a separately installed swagger binary.
+//
+// This method is used by templates, e.g. with {{ .GoGenerateCommand }}.
+func (g *GenOpts) GoGenerateCommand() string {
+	if g.WithGoRunGoGenerate {
+		return "go run github.com/go-swagger/go-swagger/cmd/swagger"
+	}
+	return "swagger"
+}
+
 // titleOrDefault infers a name for the app from the title of the spec.
 func titleOrDefault(lang *language.Options, specDoc *loads.Document, name, defaultName string) string {
 	if strings.TrimSpace(name) == "" {
@@ -638,4 +655,49 @@ func concatUnique(collections ...[]string) []string {
 		result = append(result, k)
 	}
 	return result
+}
+
+// ensureDedupedImports ensures that extra imports are not already in default imports.
+//
+// Besides it also check that:
+//
+//   - the same package is not imported twice with a different alias
+//   - the same alias found in default imports point to the same package
+//
+// It prunes redundant keys from extraImports, or errors if checks don't pass.
+func ensureDedupedImports(defaultImports, extraImports map[string]string) error {
+	pkgIndex := make(map[string]string, len(extraImports))
+	for alias, pkg := range defaultImports {
+		pkgIndex[pkg] = alias
+	}
+
+	for alias, pkg := range extraImports {
+		seenAlias, foundAlias := defaultImports[alias]
+		seenPackage, alreadyImported := pkgIndex[pkg]
+
+		if !foundAlias && !alreadyImported {
+			continue
+		}
+
+		if foundAlias && alias != seenAlias {
+			return fmt.Errorf(
+				"dev error: the same package %q imported with different aliases: %q and %q",
+				pkg, alias, seenAlias,
+			)
+		}
+
+		if alreadyImported && pkg != seenPackage {
+			return fmt.Errorf(
+				"dev error: package aliased as %q points to different packages: %q and %q",
+				alias, pkg, seenPackage,
+			)
+		}
+
+		// true duplicate, consistent with defaultImports: may be safely pruned
+		pkgIndex[pkg] = alias
+
+		delete(extraImports, alias)
+	}
+
+	return nil
 }
