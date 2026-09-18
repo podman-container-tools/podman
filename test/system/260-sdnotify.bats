@@ -227,10 +227,14 @@ READY=1" "Container log after ready signal"
     mainPID="$output"
 
     # Container does not send READY=1 until it runs a successful health check.
-    # Until then, there must be exactly one line in the log
-    wait_for_file_content $_SOCAT_LOG "MAINPID="
-    # ...and that line must contain the expected PID, nothing more
-    assert "$(< $_SOCAT_LOG)" = "MAINPID=$mainPID" "Container logs after start, prior to healthcheck run"
+    # Until then, the log must contain the MAINPID line followed by one or
+    # more EXTEND_TIMEOUT_USEC messages sent while waiting for the container
+    # to turn healthy (see #27290) -- but no READY.
+    wait_for_file_content $_SOCAT_LOG "EXTEND_TIMEOUT_USEC="
+    assert "$(head -n1 $_SOCAT_LOG)" = "MAINPID=$mainPID" \
+           "Container logs after start, prior to healthcheck run"
+    assert "$(< $_SOCAT_LOG)" !~ "READY=1" \
+           "READY must not be sent before the container turns healthy"
 
     # Now run the healthcheck and look for the READY message.
     run_podman healthcheck run $ctr
@@ -239,8 +243,7 @@ READY=1" "Container log after ready signal"
     # Wait for start to return.  At that point the READY message must have been
     # sent.
     wait_for_file_content $_SOCAT_LOG "READY=1"
-    assert "$(< $_SOCAT_LOG)" = "MAINPID=$mainPID
-READY=1" "Container log after healthcheck run"
+    assert "$(tail -n1 $_SOCAT_LOG)" = "READY=1" "Container log after healthcheck run"
 
     run_podman container inspect  --format "{{.State.Status}}" $ctr
     is "$output" "running" "make sure container is still running"
