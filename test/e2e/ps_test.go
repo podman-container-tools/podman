@@ -520,6 +520,26 @@ var _ = Describe("Podman ps", func() {
 		})).To(BeTrue(), "slice is sorted")
 	})
 
+	It("podman --sort by pod", func() {
+		// Create the pods in reverse-alphabetical order so a broken sort
+		// (falling back to creation order) would fail this test.
+		for _, name := range []string{"bpod", "apod"} {
+			pod := podmanTest.Podman([]string{"pod", "create", "--name", name})
+			pod.WaitWithDefaultTimeout()
+			Expect(pod).Should(ExitCleanly())
+
+			ctr := podmanTest.Podman([]string{"create", "--pod", name, ALPINE, "top"})
+			ctr.WaitWithDefaultTimeout()
+			Expect(ctr).Should(ExitCleanly())
+		}
+
+		session := podmanTest.Podman([]string{"ps", "-a", "--pod", "--sort=pod", "--format", "{{.PodName}}"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		Expect(sort.StringsAreSorted(session.OutputToStringArray())).To(BeTrue(), "containers are sorted by pod name")
+	})
+
 	It("podman --sort by command", func() {
 		session := podmanTest.RunTopContainer("")
 		session.WaitWithDefaultTimeout()
