@@ -24,7 +24,7 @@ jobs:
   bump:
     if: github.repository == 'podman-container-tools/podman'
     name: Bump
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write # to push to a branch
       pull-requests: write # to read and create PRs

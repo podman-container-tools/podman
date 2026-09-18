@@ -15,7 +15,7 @@ concurrency:
 jobs:
   zizmor:
     name: Zizmor
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       security-events: write # to create vulnerability alerts
       contents: read # to read repo contents
