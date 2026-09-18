@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	gosignal "os/signal"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -212,6 +214,72 @@ func copyMappings(from, to string) error {
 	return os.WriteFile(to, content, 0o600)
 }
 
+// saveDeviceGIDsFromArgs reads --device flags from os.Args and saves
+// each device's real host GID to a file in stateDir before entering
+// the user namespace. After re-exec, device GIDs may appear as 65534
+// (overflow) if unmapped, so we need to save them while still on host.
+func SaveDeviceGIDsFromArgs(stateDir string) {
+	deviceGIDs := make(map[string]int)
+
+	args := os.Args
+	for i, arg := range args {
+		var devicePath string
+		if arg == "--device" && i+1 < len(args) {
+			devicePath = args[i+1]
+		} else if len(arg) > 9 && arg[:9] == "--device=" {
+			devicePath = arg[9:]
+		}
+		if devicePath == "" {
+			continue
+		}
+		// Strip options like /dev/foo:bar:rw
+		if idx := strings.Index(devicePath, ":"); idx >= 0 {
+			devicePath = devicePath[:idx]
+		}
+		var st unix.Stat_t
+		if err := unix.Stat(devicePath, &st); err != nil {
+			logrus.Debugf("saveDeviceGIDsFromArgs: cannot stat %s: %v", devicePath, err)
+			continue
+		}
+		// If it's a directory, walk it and save GIDs for each device file
+		if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+			_ = filepath.WalkDir(devicePath, func(p string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.Type()&os.ModeDevice == os.ModeDevice {
+					var dst unix.Stat_t
+					if err := unix.Stat(p, &dst); err == nil {
+						deviceGIDs[p] = int(dst.Gid)
+						logrus.Debugf("saveDeviceGIDsFromArgs: %s has host GID %d", p, dst.Gid)
+					}
+				}
+				return nil
+			})
+		} else {
+			deviceGIDs[devicePath] = int(st.Gid)
+			logrus.Debugf("saveDeviceGIDsFromArgs: %s has host GID %d", devicePath, st.Gid)
+		}
+	}
+
+	if len(deviceGIDs) == 0 {
+		return
+	}
+
+	var lines []string
+	for path, gid := range deviceGIDs {
+		lines = append(lines, fmt.Sprintf("%s:%d", path, gid))
+	}
+	deviceGIDsFile := stateDir + "/device_gids"
+	if mkdirErr := os.MkdirAll(stateDir, 0o700); mkdirErr == nil {
+		if writeErr := os.WriteFile(deviceGIDsFile, []byte(strings.Join(lines, "\n")), 0o600); writeErr != nil {
+			logrus.Debugf("saveDeviceGIDsFromArgs: failed to write %s: %v", deviceGIDsFile, writeErr)
+		} else {
+			logrus.Debugf("saveDeviceGIDsFromArgs: saved to %s", deviceGIDsFile)
+		}
+	}
+}
+
 func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
 	hasCapSysAdmin, err := unshare.HasCapSysAdmin()
 	if err != nil {
@@ -278,6 +346,29 @@ func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
 			C.reexec_in_user_namespace_wait(C.int(pid), 0)
 		}
 	}()
+
+	// Save host groups to file BEFORE re-exec.
+	// After reexec_in_user_namespace, euid becomes 0 and os.Getgroups()
+	// returns namespace-mapped groups, not real host groups.
+	// addDevice reads this file to check if user can access a device's group.
+	if hostGroups, err := os.Getgroups(); err == nil {
+		parts := make([]string, len(hostGroups))
+		for i, g := range hostGroups {
+			parts[i] = strconv.Itoa(g)
+		}
+		groupsFile := stateDir + "/host_groups"
+		if mkdirErr := os.MkdirAll(stateDir, 0o755); mkdirErr == nil {
+			if writeErr := os.WriteFile(groupsFile, []byte(strings.Join(parts, ",")), 0o600); writeErr != nil {
+				logrus.Debugf("Failed to save host groups to file: %v", writeErr)
+			} else {
+				logrus.Debugf("Saved host groups to %s: %s", groupsFile, strings.Join(parts, ","))
+			}
+		}
+	}
+
+	// Save device GIDs from --device flags BEFORE re-exec.
+	// After re-exec device GIDs may be unmapped (appear as 65534).
+	SaveDeviceGIDsFromArgs(stateDir)
 
 	pidC := C.reexec_in_user_namespace(C.int(r.Fd()), cStateDir)
 	pid = int(pidC)
