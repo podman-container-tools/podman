@@ -24,5 +24,11 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 		return err
 	}
 
+	// Console size
+	// We can't actually get this for now...
+	// So default to something sane.
+	// TODO: Populate this.
+	hostConfig.ConsoleSize = []uint{0, 0}
+
 	return nil
 }
