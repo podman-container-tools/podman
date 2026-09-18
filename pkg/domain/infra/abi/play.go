@@ -329,7 +329,22 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 
 		// TODO: create constants for the various "kinds" of yaml files.
 		if options.ServiceContainer && serviceContainer == nil && (kind == "Pod" || kind == "Deployment") {
-			ctr, err := ic.createServiceContainer(ctx, k8sName(content, "service"), options)
+
+			// If the serviceNameAnnotation is set in the yaml, use that as the service container name
+			// If not, fall back to the default infra container name
+			var svcCtrName string
+			svcCtrName = k8sName(content, "service")
+
+			name, err := getServiceContainerName(kind, document)
+			if err != nil {
+				return nil, err
+			}
+
+			if name != "" {
+				svcCtrName = name
+			}
+
+			ctr, err := ic.createServiceContainer(ctx, svcCtrName, options)
 			if err != nil {
 				return nil, err
 			}
@@ -1686,6 +1701,28 @@ func getKubeKind(obj []byte) (string, error) {
 	}
 
 	return kubeObject.Kind, nil
+}
+
+func getServiceContainerName(kind string, obj []byte) (string, error) {
+	var podYAML v1.Pod
+	var deploymentYAML v1.Deployment
+
+	switch kind {
+	case "Pod":
+		if err := yaml.Unmarshal(obj, &podYAML); err != nil {
+			return "", err
+		}
+
+		return podYAML.Annotations[define.ServiceNameAnnotation], nil
+	case "Deployment":
+		if err := yaml.Unmarshal(obj, &deploymentYAML); err != nil {
+			return "", err
+		}
+
+		return deploymentYAML.Annotations[define.ServiceNameAnnotation], nil
+	default:
+		return "", fmt.Errorf("can only read service name from pod or deployment")
+	}
 }
 
 // sortKubeKinds adds the correct creation order for the kube kinds.
