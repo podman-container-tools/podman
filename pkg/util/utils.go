@@ -21,6 +21,7 @@ import (
 	ruser "github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/common/pkg/sysctl"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/namespaces"
@@ -1088,51 +1089,7 @@ func Tmpdir() string {
 
 // ValidateSysctls validates a list of sysctl and returns it.
 func ValidateSysctls(strSlice []string) (map[string]string, error) {
-	sysctl := make(map[string]string)
-	validSysctlMap := map[string]bool{
-		"kernel.msgmax":          true,
-		"kernel.msgmnb":          true,
-		"kernel.msgmni":          true,
-		"kernel.sem":             true,
-		"kernel.shmall":          true,
-		"kernel.shmmax":          true,
-		"kernel.shmmni":          true,
-		"kernel.shm_rmid_forced": true,
-	}
-	validSysctlPrefixes := []string{
-		"net.",
-		"fs.mqueue.",
-	}
-
-	for _, val := range strSlice {
-		foundMatch := false
-		arr := strings.Split(val, "=")
-		if len(arr) < 2 {
-			return nil, fmt.Errorf("%s is invalid, sysctl values must be in the form of KEY=VALUE", val)
-		}
-
-		trimmed := fmt.Sprintf("%s=%s", strings.TrimSpace(arr[0]), strings.TrimSpace(arr[1]))
-		if trimmed != val {
-			return nil, fmt.Errorf("'%s' is invalid, extra spaces found", val)
-		}
-
-		if validSysctlMap[arr[0]] {
-			sysctl[arr[0]] = arr[1]
-			continue
-		}
-
-		for _, prefix := range validSysctlPrefixes {
-			if strings.HasPrefix(arr[0], prefix) {
-				sysctl[arr[0]] = arr[1]
-				foundMatch = true
-				break
-			}
-		}
-		if !foundMatch {
-			return nil, fmt.Errorf("sysctl '%s' is not allowed", arr[0])
-		}
-	}
-	return sysctl, nil
+	return sysctl.Validate(strSlice)
 }
 
 func CreateIDFile(path string, id string) error {

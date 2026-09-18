@@ -834,6 +834,7 @@ go.podman.io/common/pkg/ssh
 go.podman.io/common/pkg/strongunits
 go.podman.io/common/pkg/subscriptions
 go.podman.io/common/pkg/supplemented
+go.podman.io/common/pkg/sysctl
 go.podman.io/common/pkg/sysinfo
 go.podman.io/common/pkg/systemd
 go.podman.io/common/pkg/timetype

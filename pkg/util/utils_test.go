@@ -500,7 +500,7 @@ func TestValidateSysctlBadSysctl(t *testing.T) {
 }
 
 func TestValidateSysctlBadSysctlWithExtraSpaces(t *testing.T) {
-	expectedError := "'%s' is invalid, extra spaces found"
+	expectedError := "%q is invalid, extra spaces found"
 
 	// should fail fast on first sysctl
 	strSlice1 := []string{
