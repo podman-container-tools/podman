@@ -17,14 +17,11 @@ func TestBuildNotMatchStatusMessage(t *testing.T) {
 	assert.False(t, iidRegex.MatchString("Copying config a883dafc480d466ee04e0d6da986bd78eb1fdd2178d04693723da3a8f95d42f4"))
 }
 
+// Windows host paths are only rewritten when the client runs on Windows or
+// inside a WSL/Hyper-V guest, so the drive letter case is covered separately in
+// build_windows_test.go. The values below are left alone on every platform.
 func TestConvertAdditionalBuildContexts(t *testing.T) {
 	additionalBuildContexts := map[string]*define.AdditionalBuildContext{
-		"context1": {
-			IsURL:           false,
-			IsImage:         false,
-			Value:           "C:\\test",
-			DownloadedCache: "",
-		},
 		"context2": {
 			IsURL:           false,
 			IsImage:         false,
@@ -48,7 +45,6 @@ func TestConvertAdditionalBuildContexts(t *testing.T) {
 	convertAdditionalBuildContexts(additionalBuildContexts)
 
 	expectedGuestValues := map[string]string{
-		"context1": "/mnt/c/test",
 		"context2": "/test",
 		"context3": "https://a.com/b.tar",
 		"context4": "quay.io/a/b:c",

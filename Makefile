@@ -691,7 +691,7 @@ localunit: .install.ginkgo test/goecho/goecho test/version/version ## Run unit t
 	UNIT=1 $(GINKGO) \
 		-r \
 		$(TESTFLAGS) \
-		--skip-package test/e2e,pkg/bindings,hack,pkg/machine/e2e,pkg/machine/wsl,pkg/machine/hyperv \
+		--skip-package test/e2e,pkg/bindings/test,hack,pkg/machine/e2e,pkg/machine/wsl,pkg/machine/hyperv \
 		--cover \
 		--covermode atomic \
 		--coverprofile coverprofile \
