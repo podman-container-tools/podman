@@ -1431,8 +1431,8 @@ func readConmonPidFile(pidFile string) (int, error) {
 		if err != nil {
 			return -1, err
 		}
-		// Convert it to an int
-		conmonPID, err := strconv.Atoi(string(contents))
+		// Convert it to an int, trimming any whitespace (like trailing newlines)
+		conmonPID, err := strconv.Atoi(strings.TrimSpace(string(contents)))
 		if err != nil {
 			return -1, err
 		}

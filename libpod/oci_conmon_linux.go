@@ -180,7 +180,10 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 		mustCreateCgroup = false
 	}
 
-	// $INVOCATION_ID is set by systemd when running as a service.
+	// If we are run from systemd, we do not want to create a cgroup for conmon.
+	// When Podman is launched from a systemd service, conmon is intended to be
+	// the main process of that service. If we move it to a different cgroup,
+	// systemd will think the service has exited, and kill everything.
 	if ctr.runtime.RemoteURI() == "" && os.Getenv("INVOCATION_ID") != "" {
 		mustCreateCgroup = false
 	}
@@ -227,6 +230,45 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 	}
 
 	/* We set the cgroup, now the child can start creating children */
+	if mustCreateCgroup && ctr.config.NetMode.IsPasta() {
+		logLevel := logrus.WarnLevel
+		if rootless.IsRootless() {
+			logLevel = logrus.InfoLevel
+		}
+		extraOpts := ctr.config.NetworkOptions["pasta"]
+		pidFile := filepath.Join(ctr.state.RunDir, "pasta.pid")
+		for i, opt := range extraOpts {
+			if (opt == "--pid" || opt == "-P") && i+1 < len(extraOpts) {
+				pidFile = extraOpts[i+1]
+				break
+			}
+		}
+		if pid, err := readConmonPidFile(pidFile); err == nil {
+			if ctr.CgroupManager() == config.SystemdCgroupsManager {
+				unitName := createUnitName("libpod-conmon", ctr.ID())
+				realCgroupParent := ctr.CgroupParent()
+				splitParent := strings.Split(realCgroupParent, "/")
+				if strings.HasSuffix(realCgroupParent, ".slice") && len(splitParent) > 1 {
+					realCgroupParent = splitParent[len(splitParent)-1]
+				}
+				if err := systemd.RunUnderSystemdScope(pid, realCgroupParent, unitName); err != nil {
+					logrus.StandardLogger().Logf(logLevel, "Failed to add pasta to systemd sandbox cgroup: %v", err)
+				}
+			} else {
+				cgroupPath := filepath.Join(ctr.config.CgroupParent, "conmon")
+				cgroupResources, err := GetLimits(ctr.LinuxResources())
+				if err == nil {
+					if control, err := cgroups.New(cgroupPath, &cgroupResources); err == nil {
+						if err := control.AddPid(pid); err != nil {
+							logrus.StandardLogger().Logf(logLevel, "Failed to add pasta to cgroupfs sandbox cgroup: %v", err)
+						}
+					}
+				}
+			}
+		} else {
+			logrus.Infof("Could not read pasta PID file %s, pasta will remain in the caller's cgroup: %v", pidFile, err)
+		}
+	}
 	return writeConmonPipeData(startFd)
 }
 

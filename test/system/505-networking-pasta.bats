@@ -795,6 +795,35 @@ function pasta_test_do() {
     die "Timed out waiting for pid $pid to terminate"
 }
 
+# https://github.com/containers/podman/issues/29582
+@test "pasta gets moved to the same cgroup scope as conmon" {
+    # When running a container with pasta, pasta should be moved to
+    # the exact same libpod-conmon cgroup scope as conmon, so it
+    # doesn't remain in the caller's cgroup.
+    local port=$(random_free_port "" "" tcp)
+    local pidfile="${PODMAN_TMPDIR}/pasta-cgroup.pid"
+
+    cname=c_$(safename)
+    run_podman run --name $cname --detach --net=pasta:--pid,${pidfile} -p "$port:$port" $IMAGE sleep infinity
+
+    # Get conmon's PID and check its cgroup
+    run_podman inspect --format '{{.State.ConmonPid}}' $cname
+    local conmon_pid="$output"
+
+    local pasta_pid=$(< $pidfile)
+
+    local conmon_cgroup
+    conmon_cgroup=$(cat /proc/$conmon_pid/cgroup)
+
+    local pasta_cgroup
+    pasta_cgroup=$(cat /proc/$pasta_pid/cgroup)
+
+    assert "$pasta_cgroup" == "$conmon_cgroup" \
+        "pasta (PID $pasta_pid) should be in the same cgroup as conmon (PID $conmon_pid)"
+
+    run_podman rm -f -t0 $cname
+}
+
 ### Options ####################################################################
 @test "Unsupported protocol in port forwarding" {
     local port=$(random_free_port "" "" tcp)

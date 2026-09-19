@@ -9,14 +9,31 @@
 
 package libpod
 
-import "go.podman.io/common/libnetwork/pasta"
+import (
+	"path/filepath"
+
+	"go.podman.io/common/libnetwork/pasta"
+)
 
 func (r *Runtime) setupPasta(ctr *Container, netns string) error {
+	extraOpts := ctr.config.NetworkOptions[pasta.BinaryName]
+	hasPidFlag := false
+	for _, opt := range extraOpts {
+		if opt == "--pid" || opt == "-P" {
+			hasPidFlag = true
+			break
+		}
+	}
+	if !hasPidFlag {
+		pidFile := filepath.Join(ctr.state.RunDir, "pasta.pid")
+		extraOpts = append([]string{"--pid", pidFile}, extraOpts...)
+	}
+
 	res, err := pasta.Setup(&pasta.SetupOptions{
 		Config:       r.config,
 		Netns:        netns,
 		Ports:        ctr.convertPortMappings(),
-		ExtraOptions: ctr.config.NetworkOptions[pasta.BinaryName],
+		ExtraOptions: extraOpts,
 	})
 	if err != nil {
 		return err
