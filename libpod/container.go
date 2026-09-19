@@ -125,6 +125,9 @@ type Container struct {
 	restoreFromCheckpoint bool
 
 	pastaResult *pasta.SetupResult
+	// pastaPID is the PID of the pasta process for this container.
+	// Set during setupPasta and used to move it into the conmon cgroup scope.
+	pastaPID int
 }
 
 // ContainerState contains the current state of the container
