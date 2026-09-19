@@ -16,6 +16,13 @@ type imageNotFound struct {
 	Body errorhandling.ErrorModel
 }
 
+// Failed authentication or no image found
+// swagger:response
+type distributionUnauthorized struct {
+	// in:body
+	Body errorhandling.ErrorModel
+}
+
 // No such file
 // swagger:response
 type fileNotFound struct {
