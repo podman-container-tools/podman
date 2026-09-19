@@ -214,14 +214,29 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 			if err := systemd.RunUnderSystemdScope(cmd.Process.Pid, realCgroupParent, unitName); err != nil {
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to systemd sandbox cgroup: %v", err)
 			}
+			// Move the pasta process into the same conmon scope so it
+			// is not killed when a parent systemd service restarts.
+			// See https://github.com/containers/podman/issues/29582
+			if ctr.pastaPID > 0 {
+				if err := systemd.RunUnderSystemdScope(ctr.pastaPID, realCgroupParent, unitName); err != nil {
+					logrus.StandardLogger().Logf(logLevel, "Failed to add pasta to systemd sandbox cgroup: %v", err)
+				}
+			}
 		} else {
 			control, err := cgroups.New(cgroupPath, &cgroupResources)
 			if err != nil {
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
-			} else if err := control.AddPid(cmd.Process.Pid); err != nil {
-				// we need to remove this defer and delete the cgroup once conmon exits
-				// maybe need a conmon monitor?
-				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
+			} else {
+				if err := control.AddPid(cmd.Process.Pid); err != nil {
+					// we need to remove this defer and delete the cgroup once conmon exits
+					// maybe need a conmon monitor?
+					logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
+				}
+				if ctr.pastaPID > 0 {
+					if err := control.AddPid(ctr.pastaPID); err != nil {
+						logrus.StandardLogger().Logf(logLevel, "Failed to add pasta to cgroupfs sandbox cgroup: %v", err)
+					}
+				}
 			}
 		}
 	}
