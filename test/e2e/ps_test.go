@@ -462,6 +462,32 @@ var _ = Describe("Podman ps", func() {
 		Expect(output).To(BeEmpty())
 	})
 
+	// A container created with --entrypoint and no command of its own stores an
+	// empty command, because the image CMD is not inherited once an entrypoint
+	// is set. Filtering by command must skip such a container instead of
+	// indexing into the empty command slice.
+	It("podman ps filter by container command with a container that has no command", func() {
+		noCommand := podmanTest.Podman([]string{"create", "--name", "nocommand", "--entrypoint", "/bin/true", ALPINE})
+		noCommand.WaitWithDefaultTimeout()
+		Expect(noCommand).Should(ExitCleanly())
+
+		withCommand := podmanTest.Podman([]string{"create", "--name", "withcommand", ALPINE, "top"})
+		withCommand.WaitWithDefaultTimeout()
+		withCommandID := withCommand.OutputToString()
+		Expect(withCommandID).ShouldNot(BeEmpty())
+		Expect(withCommand).Should(ExitCleanly())
+
+		session := podmanTest.Podman([]string{"ps", "-a", "--no-trunc", "--noheading", "--filter", "command=top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		// Only the container that actually has a command must match, and the
+		// one without a command must not make the filter fail.
+		output := session.OutputToStringArray()
+		Expect(output).To(HaveLen(1))
+		Expect(output).Should(ContainElement(ContainSubstring(withCommandID)))
+	})
+
 	It("podman ps mutually exclusive flags", func() {
 		session := podmanTest.Podman([]string{"ps", "-aqs"})
 		session.WaitWithDefaultTimeout()
