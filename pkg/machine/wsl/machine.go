@@ -119,6 +119,22 @@ func provisionWSLDist(name string, imagePath string, prompt string) (string, err
 	return dist, nil
 }
 
+func verifyWSLVersion(rootful bool) error {
+	// WSL v2.5.1 or later is required. Earlier versions will fail to
+	// start Podman machines because they supported cgroupv1.
+	if !wutil.WSLVersionAtLeast(2, 5, 1) {
+		return fmt.Errorf("WSL version 2.5.1 or later is required to run Podman. Please upgrade WSL with: wsl --update")
+	}
+
+	// WSL v2.7.5 or later is required in rootful mode. Earlier versions
+	// don't support nftables:
+	// https://github.com/podman-container-tools/podman/issues/25201
+	if rootful && !wutil.WSLVersionAtLeast(2, 7, 5) {
+		return fmt.Errorf("WSL version 2.7.5 or later is required to run Podman in rootful mode. Please use rootless mode or upgrade WSL with: wsl --update")
+	}
+	return nil
+}
+
 func createKeys(mc *vmconfigs.MachineConfig, dist string) error {
 	user := mc.SSH.RemoteUsername
 
