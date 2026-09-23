@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/pkg/systemd/parser"
 )
 
 func TestLogfWritesToStderrWhenKmsgUnavailable(t *testing.T) {
@@ -157,3 +159,40 @@ func TestIsUnambiguousName(t *testing.T) {
 		assert.Equal(t, res, test.res, "%q", test.input)
 	}
 }
+
+func TestLoadUnitDropinsSymlink(t *testing.T) {
+	// Create a target directory simulating /etc/containers/systemd
+	targetDir := t.TempDir()
+	targetUnitPath := filepath.Join(targetDir, "test.container")
+	targetDropinDir := filepath.Join(targetDir, "test.container.d")
+	require.NoError(t, os.MkdirAll(targetDropinDir, 0o755))
+
+	// Base unit definition in target directory
+	baseUnitContent := "[Container]\nImage=alpine\n"
+	require.NoError(t, os.WriteFile(targetUnitPath, []byte(baseUnitContent), 0o644))
+
+	// Drop-in file in target directory (.container.d)
+	targetDropinPath := filepath.Join(targetDropinDir, "10-override.conf")
+	dropinContent := "[Container]\nEnvironment=FOO=BAR\n"
+	require.NoError(t, os.WriteFile(targetDropinPath, []byte(dropinContent), 0o644))
+
+	// Create a user directory simulating ~/.config/containers/systemd
+	userDir := t.TempDir()
+	userSymlinkPath := filepath.Join(userDir, "test.container")
+	require.NoError(t, os.Symlink(targetUnitPath, userSymlinkPath))
+
+	// Parse the unit via the symlink
+	unit, err := parser.ParseUnitFile(userSymlinkPath)
+	require.NoError(t, err)
+
+	// In rootless mode, sourcePaths only contains user directories (e.g. userDir)
+	sourcePaths := []string{userDir}
+	err = loadUnitDropins(unit, sourcePaths)
+	require.NoError(t, err)
+
+	// Verify that the drop-in from targetDir's test.container.d was found and merged
+	envVal, ok := unit.Lookup("Container", "Environment")
+	assert.True(t, ok, "Expected Container.Environment key to be merged from symlink target's drop-in")
+	assert.Equal(t, "FOO=BAR", envVal)
+}
+
