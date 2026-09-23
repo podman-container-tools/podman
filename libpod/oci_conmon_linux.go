@@ -161,14 +161,21 @@ func (r *ConmonOCIRuntime) withContainerSocketLabel(ctr *Container, closure func
 	return err
 }
 
-// moveConmonToCgroupAndSignal gets a container's cgroupParent and moves the conmon process to that cgroup
+// moveConmonToCgroupAndSignal gets a container's cgroupParent and moves the conmon process
+// and the per-container network helpers to the conmon cgroup below it
 // it then signals for conmon to start by sending nonce data down the start fd
 func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec.Cmd, startFd *os.File) error {
-	if err := ctr.moveToConmonCgroup(cmd.Process.Pid); err != nil {
+	// The per-container network helpers belong in the same cgroup as conmon.
+	// They are usually started before conmon, so they can go in together with
+	// it; the orderings where they are not are handled in configureNetNS().
+	pids := append([]int{cmd.Process.Pid}, ctr.netHelperPids()...)
+	created, err := ctr.moveToConmonCgroup(true, pids...)
+	if err != nil {
 		// Only log this, ending up in the wrong cgroup is not a reason to
 		// fail the container.
 		logrus.StandardLogger().Logf(ctr.conmonCgroupLogLevel(), "Failed to move conmon to the sandbox cgroup: %v", err)
 	}
+	ctr.conmonCgroupCreated = created
 
 	/* We set the cgroup, now the child can start creating children */
 	return writeConmonPipeData(startFd)

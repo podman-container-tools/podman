@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,35 +70,82 @@ func (c *Container) conmonCgroupfsPath() string {
 	return filepath.Join(c.config.CgroupParent, "conmon")
 }
 
-// moveToConmonCgroup creates the container's conmon cgroup and moves pid into
-// it.  It is a no-op when podman does not manage that cgroup at all.
+// netHelperPids returns the pids of the per-container network helpers that
+// belong in the conmon cgroup.  Helpers without a pid are skipped: the state of
+// a container created by an older podman does not record them, and not
+// accounting one of them is preferable to failing the container over it.
+//
+// The shared rootless netns pasta is deliberately not included.  It outlives
+// any single container and is moved to user.slice on purpose.
+func (c *Container) netHelperPids() []int {
+	var pids []int
+	if c.pastaResult != nil && c.pastaResult.Pid > 0 {
+		pids = append(pids, c.pastaResult.Pid)
+	}
+	if c.rootlessPortPid > 0 {
+		pids = append(pids, c.rootlessPortPid)
+	}
+	return pids
+}
+
+// moveToConmonCgroup moves pids into the container's conmon cgroup, creating it
+// first when create is set.  It reports whether the cgroup now exists, which is
+// false both when creating it failed and when podman does not manage it at all.
 //
 // Reporting the error is up to the caller, and every caller should only log it:
 // ending up in the wrong cgroup is not a reason to fail the container, and
 // rootless users routinely cannot configure cgroupfs at all.  Use
 // conmonCgroupLogLevel() to pick a level for that.
-func (c *Container) moveToConmonCgroup(pid int) error {
-	if !c.mustCreateConmonCgroup() {
-		return nil
+//
+// The first pid is the important one, the rest are network helpers.  A helper
+// that died in the meantime must never keep the first one out of the cgroup.
+func (c *Container) moveToConmonCgroup(create bool, pids ...int) (bool, error) {
+	if len(pids) == 0 || !c.mustCreateConmonCgroup() {
+		return false, nil
 	}
 
 	// TODO: This should be a switch - we are not guaranteed that
 	// there are only 2 valid cgroup managers
 	if c.CgroupManager() == config.SystemdCgroupsManager {
 		slice, unitName := c.conmonScopeUnit()
+		if !create {
+			return false, systemd.AddPidsToSystemdScope(unitName, pids...)
+		}
 		logrus.Infof("Running conmon under slice %s and unitName %s", slice, unitName)
-		return systemd.RunUnderSystemdScope([]int{pid}, slice, unitName)
+		err := systemd.RunUnderSystemdScope(pids, slice, unitName)
+		if err != nil && len(pids) > 1 {
+			// One of the helpers is likely gone already, retry without
+			// them rather than leave conmon outside of its own scope.
+			logrus.Infof("Failed to add conmon and the network helpers to the systemd sandbox cgroup, retrying with conmon only: %v", err)
+			err = systemd.RunUnderSystemdScope(pids[:1], slice, unitName)
+		}
+		return err == nil, err
 	}
 
-	cgroupResources, err := GetLimits(c.LinuxResources())
-	if err != nil {
-		return fmt.Errorf("could not get ctr resources: %w", err)
+	var control *cgroups.CgroupControl
+	var err error
+	if create {
+		cgroupResources, rerr := GetLimits(c.LinuxResources())
+		if rerr != nil {
+			return false, fmt.Errorf("could not get ctr resources: %w", rerr)
+		}
+		control, err = cgroups.New(c.conmonCgroupfsPath(), &cgroupResources)
+	} else {
+		control, err = cgroups.Load(c.conmonCgroupfsPath())
 	}
-	control, err := cgroups.New(c.conmonCgroupfsPath(), &cgroupResources)
 	if err != nil {
-		return err
+		return false, err
 	}
+
 	// we need to remove this defer and delete the cgroup once conmon exits
 	// maybe need a conmon monitor?
-	return control.AddPid(pid)
+	var errs []error
+	for _, pid := range pids {
+		if err := control.AddPid(pid); err != nil {
+			errs = append(errs, fmt.Errorf("add process %d: %w", pid, err))
+		}
+	}
+	// The cgroup itself is there even if some of the processes could not be
+	// moved into it.
+	return create, errors.Join(errs...)
 }

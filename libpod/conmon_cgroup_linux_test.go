@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/common/libnetwork/pasta"
 	"go.podman.io/common/pkg/config"
 )
 
@@ -24,6 +25,10 @@ func newCgroupTestContainer(cfg *ContainerConfig) *Container {
 }
 
 func TestMustCreateConmonCgroup(t *testing.T) {
+	// $INVOCATION_ID is only looked at when it is set, and the test binary
+	// may well run as a systemd service itself.
+	t.Setenv("INVOCATION_ID", "")
+
 	tests := []struct {
 		name string
 		cfg  *ContainerConfig
@@ -135,7 +140,61 @@ func TestMoveToConmonCgroupIsANoop(t *testing.T) {
 	for _, mode := range []string{"disabled", "no-conmon", cgroupSplit} {
 		t.Run(mode, func(t *testing.T) {
 			c := newCgroupTestContainer(&ContainerConfig{ContainerMiscConfig: ContainerMiscConfig{CgroupsMode: mode}})
-			require.NoError(t, c.moveToConmonCgroup(1))
+			created, err := c.moveToConmonCgroup(true, 1)
+			require.NoError(t, err)
+			assert.False(t, created)
+		})
+	}
+
+	t.Run("no pids", func(t *testing.T) {
+		c := newCgroupTestContainer(&ContainerConfig{})
+		created, err := c.moveToConmonCgroup(true)
+		require.NoError(t, err)
+		assert.False(t, created)
+	})
+}
+
+func TestNetHelperPids(t *testing.T) {
+	tests := []struct {
+		name            string
+		pastaResult     *pasta.SetupResult
+		rootlessPortPid int
+		want            []int
+	}{
+		{
+			name: "no helpers",
+			want: nil,
+		},
+		{
+			name:        "pasta only",
+			pastaResult: &pasta.SetupResult{Pid: 42},
+			want:        []int{42},
+		},
+		{
+			name:            "rootlessport only",
+			rootlessPortPid: 43,
+			want:            []int{43},
+		},
+		{
+			name:            "both",
+			pastaResult:     &pasta.SetupResult{Pid: 42},
+			rootlessPortPid: 43,
+			want:            []int{42, 43},
+		},
+		{
+			// The state of a container created by an older podman has no pid.
+			name:            "unknown pasta pid is skipped",
+			pastaResult:     &pasta.SetupResult{},
+			rootlessPortPid: 43,
+			want:            []int{43},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newCgroupTestContainer(&ContainerConfig{})
+			c.pastaResult = tt.pastaResult
+			c.rootlessPortPid = tt.rootlessPortPid
+			assert.Equal(t, tt.want, c.netHelperPids(), "check network helper pids")
 		})
 	}
 }
