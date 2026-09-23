@@ -35,6 +35,10 @@ func (w WSLStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConf
 
 	_ = setupWslProxyEnv()
 
+	if err = verifyWSLVersion(mc.HostUser.Rootful); err != nil {
+		return err
+	}
+
 	if opts.UserModeNetworking {
 		if err = verifyWSLUserModeCompat(); err != nil {
 			return err
@@ -134,6 +138,9 @@ func (w WSLStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.Se
 	}
 
 	if opts.Rootful != nil && mc.HostUser.Rootful != *opts.Rootful {
+		if err = verifyWSLVersion(*opts.Rootful); err != nil {
+			return err
+		}
 		if err := mc.SetRootful(*opts.Rootful); err != nil {
 			return err
 		}
