@@ -139,9 +139,32 @@ func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 
 	unitDropinPaths := unit.GetUnitDropinPaths()
 	dropinDirs := make([]string, 0, len(unitDropinPaths))
+
+	// Get the resolved path of the unit file to handle symlinks
+	resolvedPath, err := filepath.EvalSymlinks(unit.Path)
+	if err != nil {
+		// If we can't resolve symlinks, use the original path
+		resolvedPath = unit.Path
+	}
+	resolvedDir := filepath.Dir(resolvedPath)
+
+	// Use a map to track directories we've already added
+	addedDirs := make(map[string]struct{})
+
 	for _, dropinPath := range unitDropinPaths {
 		for _, sourcePath := range sourcePaths {
-			dropinDirs = append(dropinDirs, filepath.Join(sourcePath, dropinPath))
+			dir := filepath.Join(sourcePath, dropinPath)
+			if _, exists := addedDirs[dir]; !exists {
+				addedDirs[dir] = struct{}{}
+				dropinDirs = append(dropinDirs, dir)
+			}
+		}
+		// Also search in the directory containing the resolved unit file
+		// This is needed for rootless users when rootful quadlets are symlinked
+		dir := filepath.Join(resolvedDir, dropinPath)
+		if _, exists := addedDirs[dir]; !exists {
+			addedDirs[dir] = struct{}{}
+			dropinDirs = append(dropinDirs, dir)
 		}
 	}
 
