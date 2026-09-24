@@ -144,7 +144,7 @@ jobs:
     packages: [podman-fedora]
     notifications:
       failure_comment:
-        message: "tmt tests failed for commit {commit_sha}. @lsm5, @psss, @thrix please check."
+        message: "tmt tests failed for commit {commit_sha}. @psss, @thrix please check."
     targets:
       - fedora-latest
     tmt_plan: "/plans/tmt"

@@ -14,7 +14,6 @@ Maintainers and Reviewers on other Podman Container Tools projects are found in 
 | Ygal Blum        | [ygalblum](https://github.com/ygalblum)                  | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Ashley Cui       | [ashley-cui](https://github.com/ashley-cui)              | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Mario Loriedo    | [l0rd](https://github.com/l0rd/)                         | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
-| Lokesh Mandvekar | [lsm5](https://github.com/lsm5)                          | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Danish Prakash   | [danishprakash](https://github.com/danishprakash)        | Maintainer    | [SUSE](https://github.com/suse)              |
 | Jan Rodák        | [Honny1](https://github.com/Honny1)                      | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Tom Sweeney      | [TomSweeneyRedHat](https://github.com/TomSweeneyRedHat/) | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
@@ -29,6 +28,7 @@ Maintainers and Reviewers on other Podman Container Tools projects are found in 
 
 | Maintainer        | GitHub ID                                 | Project Roles | Affiliation                                  |
 |-------------------|-------------------------------------------|---------------|----------------------------------------------|
+| Lokesh Mandvekar  | [lsm5](https://github.com/lsm5)           | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Aditya Rajan      | [flouthoc](https://github.com/flouthoc)                  | Reviewer                         | [Red Hat](https://github.com/RedHatOfficial) |
 | Jason Greene      | [n1hility](https://github.com/n1hility)                  | Reviewer                         | [Red Hat](https://github.com/RedHatOfficial) |
 | Jhon Honce        | [jwhonce](https://github.com/jwhonce)                    | Reviewer                         | [Red Hat](https://github.com/RedHatOfficial) |
