@@ -64,6 +64,9 @@ type BuildOptions struct {
 	buildahDefine.BuildOptions
 	ContainerFiles []string
 	FarmBuildOptions
+	// RemoteContextDirectory is ContextDirectory as the server sees it, set by localapi when the
+	// context directory is found on a running machine's mount; ContextDirectory keeps the client path.
+	RemoteContextDirectory string `json:"-"`
 	// Files that need to be closed after the build
 	// so need to pass this to the main build functions
 	LogFileToClose *os.File
