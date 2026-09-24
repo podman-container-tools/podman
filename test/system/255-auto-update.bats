@@ -661,7 +661,7 @@ EOF
     _wait_service_ready container-$ctrname.service
 
     run_podman pod inspect --format "{{.State}}" $podname
-    is "$output" "Running" "pod is in running state"
+    is "$output" "running" "pod is in running state"
     run_podman container inspect --format "{{.State.Status}}" $ctrname
     is "$output" "running" "container is in running state"
 

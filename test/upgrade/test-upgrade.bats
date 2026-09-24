@@ -311,7 +311,7 @@ failed    | exited     | 17
 
     run_podman pod ps
     is "$output" ".*mypod.*" "podman pod ps shows name"
-    is "$output" ".*Running.*" "podman pod ps shows running state"
+    is "$output" ".*running.*" "podman pod ps shows running state"
 
     run_podman pod stop mypod
     is "$output" "mypod" "podman pod stop"
