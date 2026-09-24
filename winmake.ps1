@@ -67,7 +67,7 @@ function Make-Clean {
 function Local-Unit {
     Build-Ginkgo
     # The compat stats handler depends on the local libpod stats implementation, which is not built on Windows.
-    $skippackages = 'hack,internal\domain\infra\abi,internal\domain\infra\tunnel,libpod\lock\shm,pkg\api\handlers\compat,pkg\api\handlers\libpod,pkg\api\handlers\utils,pkg\bindings,'
+    $skippackages = 'hack,internal\domain\infra\abi,internal\domain\infra\tunnel,libpod\lock\shm,pkg\api\handlers\compat,pkg\api\handlers\libpod,pkg\api\handlers\utils,pkg\bindings\test,'
     $skippackages += 'pkg\domain\infra\abi,pkg\emulation,pkg\machine\apple,pkg\machine\applehv,pkg\machine\e2e,pkg\machine\libkrun,'
     $skippackages += 'pkg\machine\proxyenv,pkg\machine\qemu,pkg\specgen\generate,pkg\systemd,test\e2e,test\utils,cmd\rootlessport,'
     $skippackages += 'pkg\pidhandle'
