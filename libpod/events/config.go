@@ -42,6 +42,8 @@ type Event struct {
 	Type Type
 	// Health status of the current container
 	HealthStatus string `json:"health_status,omitempty"`
+	// Health status of the current container
+	HealthStatusChanged bool `json:"health_status_changed,omitempty"`
 	// Healthcheck log of the current container
 	HealthLog string `json:"health_log,omitempty"`
 	// HealthFailingStreak log of the current container
