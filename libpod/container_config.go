@@ -381,6 +381,12 @@ type ContainerMiscConfig struct {
 	LogSize int64 `json:"logSize"`
 	// LogDriver driver for logs
 	LogDriver string `json:"logDriver"`
+	// LogRotate indicates whether log files should be rotated instead of
+	// truncated when the maximum size is reached.
+	LogRotate bool `json:"logRotate,omitempty"`
+	// LogMaxFiles is the maximum number of rotated log files to keep when
+	// log rotation is enabled (LogRotate == true).
+	LogMaxFiles uint `json:"logMaxFiles,omitempty"`
 	// File containing the conmon PID
 	ConmonPidFile string `json:"conmonPidFile,omitempty"`
 	// RestartPolicy indicates what action the container will take upon
