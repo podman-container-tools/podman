@@ -294,6 +294,8 @@ type ContainerStorageConfig struct {
 	// Optional.
 	InitPath string `json:"init_path,omitempty"`
 	// Mounts are mounts that will be added to the container.
+	// These follow the OCI runtime specification (with fields destination, source, type, options).
+	// Note: Use "destination" (not "target") to specify the mount path inside the container.
 	// These will supersede Image Volumes and VolumesFrom volumes where
 	// there are conflicts.
 	// Optional.
