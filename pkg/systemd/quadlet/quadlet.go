@@ -1221,9 +1221,28 @@ func ConvertVolume(volume *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, i
 
 	podman.add(volumeName)
 
-	service.AddCmdline(ServiceGroup, "ExecStart", podman.Args)
+	service.AddCmdline(ServiceGroup, "ExecStartPre", podman.Args)
 
-	defaultOneshotServiceGroup(service, false)
+	buildMountCmd := func(action string) []string {
+		var cmd *PodmanCmdline
+
+		if isUser {
+			cmd = NewPodmanCmdline()
+			cmd.add("unshare")
+			innerCmd := createBasePodmanCommand(volume, VolumeGroup)
+			innerCmd.add("volume", action, volumeName)
+			cmd.add(innerCmd.Args...)
+		} else {
+			cmd = createBasePodmanCommand(volume, VolumeGroup)
+			cmd.add("volume", action, volumeName)
+		}
+		return cmd.Args
+	}
+
+	service.AddCmdline(ServiceGroup, "ExecStart", buildMountCmd("mount"))
+	service.AddCmdline(ServiceGroup, "ExecStop", buildMountCmd("unmount"))
+
+	defaultOneshotServiceGroup(service, true)
 
 	// Store the name of the created resource
 	unitInfo.ResourceName = volumeName

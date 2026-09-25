@@ -390,7 +390,7 @@ EOF
 
     run_quadlet "$quadlet_file"
 
-    service_setup $QUADLET_SERVICE_NAME wait
+    service_setup $QUADLET_SERVICE_NAME
 
     local volume_name=systemd-$(basename $quadlet_file .volume)
     run_podman volume ls
@@ -415,7 +415,7 @@ EOF
 
     run_quadlet "$quadlet_file"
 
-    service_setup $QUADLET_SERVICE_NAME wait
+    service_setup $QUADLET_SERVICE_NAME
 
     local volume_name=systemd-$(basename $quadlet_file .volume)
     run_podman volume ls
@@ -468,10 +468,10 @@ EOF
     # Start the container service which should also trigger the start of the volume service
     service_setup $container_service
 
-    # Volume system unit should be inactive (oneshot)
+    # Volume system unit should be active (persistent oneshot)
     run systemctl show --property=ActiveState "$vol_service"
-    assert "$output" = "ActiveState=inactive" \
-           "volume should be inactive via dependency"
+    assert "$output" = "ActiveState=active" \
+           "volume should be active via dependency"
 
     # Volume should exist
     run_podman volume exists ${volume_name}
@@ -552,10 +552,10 @@ EOF
     SERVICES_TO_STOP+=("$vol_service_instance")
     SERVICES_TO_STOP+=("$net_service_instance")
 
-    # Volume system unit instance should be inactive (oneshot)
+    # Volume system unit instance should be active (persistent oneshot)
     run systemctl show --property=ActiveState "$vol_service_instance"
-    assert "$output" = "ActiveState=inactive" \
-           "volume template instance should be inactive via dependency"
+    assert "$output" = "ActiveState=active" \
+           "volume template instance should be active via dependency"
 
     # Network system unit instance should be active
     run systemctl show --property=ActiveState "$net_service_instance"
@@ -614,9 +614,9 @@ EOF
     # Start the container service which should also trigger the start of the volume service
     service_setup $container_service
 
-    # Volume system unit should be inactive (oneshot)
+    # Volume system unit should be active (persistent oneshot)
     run systemctl show --property=ActiveState "$vol_service"
-    assert "$output" = "ActiveState=inactive" "volume should be inactive via dependency"
+    assert "$output" = "ActiveState=active" "volume should be active via dependency"
 
     # Volume should exist
     run_podman volume exists ${volume_name}
@@ -1466,10 +1466,10 @@ EOF
     assert "$output" = "ActiveState=active" \
            "quadlet - image files: image should be active via dependency but is not"
 
-    # Volume system unit should be inactive (oneshot)
+    # Volume system unit should be active (persistent oneshot)
     run systemctl show --property=ActiveState "$volume_service"
-    assert "$output" = "ActiveState=inactive" \
-           "quadlet - image files: volume should be inactive via dependency"
+    assert "$output" = "ActiveState=active" \
+           "quadlet - image files: volume should be active via dependency"
 
     # Image should exist
     run_podman image exists ${image_for_test}
@@ -1764,9 +1764,9 @@ EOF
     assert "$output" = "ActiveState=active" \
            "quadlet - image tag: image service ActiveState"
 
-    # Volume system unit should be inactive (oneshot)
+    # Volume system unit should be active (persistent oneshot)
     run systemctl show --property=ActiveState "$volume_service"
-    assert "$output" = "ActiveState=inactive" \
+    assert "$output" = "ActiveState=active" \
            "quadlet - image tag: volume service ActiveState"
 
     # Image should exist
@@ -2083,3 +2083,54 @@ EOF
     run_podman rmi -i $image_tag
 }
 # vim: filetype=sh
+
+@test "quadlet - volume image shared mount" {
+    local quadlet_tmpdir=$(mktemp -d --tmpdir=$PODMAN_TMPDIR quadlet.XXXXXX)
+
+    local quadlet_vol_file=$PODMAN_TMPDIR/shared_img_$(safename).volume
+    cat > $quadlet_vol_file <<EOF
+[Volume]
+Driver=image
+Image=$IMAGE
+EOF
+
+    run_quadlet "$quadlet_vol_file" "$quadlet_tmpdir"
+    local vol_service=$QUADLET_SERVICE_NAME
+    local volume_name=systemd-$(basename $quadlet_vol_file .volume)
+
+    # Create the share volume
+    local quadlet_c1_file=$PODMAN_TMPDIR/c1_$(safename).container
+    cat > $quadlet_c1_file <<EOF
+[Container]
+Image=$IMAGE
+Exec=sleep 600
+Volume=shared_img_$(safename).volume:/shared
+EOF
+
+    run_quadlet "$quadlet_c1_file" "$quadlet_tmpdir"
+    local c1_service=$QUADLET_SERVICE_NAME
+
+    local quadlet_c2_file=$PODMAN_TMPDIR/c2_$(safename).container
+    cat > $quadlet_c2_file <<EOF
+[Container]
+Image=$IMAGE
+Exec=sleep 600
+Volume=shared_img_$(safename).volume:/shared
+EOF
+
+    run_quadlet "$quadlet_c2_file" "$quadlet_tmpdir"
+    local c2_service=$QUADLET_SERVICE_NAME
+
+    service_setup $c1_service
+    service_setup $c2_service
+
+    run_podman exec systemd-$(basename $quadlet_c1_file .container) sh -c "echo 'hello from c1' > /shared/testfile.txt"
+    service_cleanup $c1_service ""
+
+    run_podman exec systemd-$(basename $quadlet_c2_file .container) cat /shared/testfile.txt
+    is "$output" "hello from c1"
+
+    service_cleanup $c2_service ""
+    service_cleanup $vol_service "inactive"
+    run_podman volume rm $volume_name
+}

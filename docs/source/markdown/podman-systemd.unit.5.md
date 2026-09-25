@@ -1674,9 +1674,8 @@ This key can be listed multiple times.
 ## Volume units [Volume]
 
 Volume files are named with a `.volume` extension and contain a section `[Volume]` describing the
-named Podman volume. The generated service is a one-time command that ensures that the volume
-exists on the host, creating it if needed. Unlike `.network`, `.image`, and `.artifact` oneshot units,
-the generated service for `.volume` units does not set `RemainAfterExit=yes` by default.
+named Podman volume. The generated service ensures that the volume exists on the host, creating it if needed.
+It also securely manages the mount lifecycle of the volume, ensuring background mounts (such as `fuse-overlayfs` for image volumes) are kept active across container restarts. Like `.network`, `.image`, and `.artifact` oneshot units, the generated service for `.volume` units sets `RemainAfterExit=yes` by default.
 
 By default, the Podman volume has the same name as the unit, but with a `systemd-` prefix, i.e. for
 a volume file named `$NAME.volume`, the generated Podman volume is called `systemd-$NAME`, and the

@@ -1,7 +1,7 @@
-## assert-last-key-contains Service ExecStart " --opt o=uid=0,gid=11,rw,compress=zstd "
-## assert-last-key-contains Service ExecStart " --opt type=btrfs "
-## assert-last-key-contains Service ExecStart " --opt device=/dev/vda1 "
-## assert-last-key-contains Service ExecStart " --opt copy "
+## assert-last-key-contains Service ExecStartPre " --opt o=uid=0,gid=11,rw,compress=zstd "
+## assert-last-key-contains Service ExecStartPre " --opt type=btrfs "
+## assert-last-key-contains Service ExecStartPre " --opt device=/dev/vda1 "
+## assert-last-key-contains Service ExecStartPre " --opt copy "
 
 [Volume]
 # Test usernames too
