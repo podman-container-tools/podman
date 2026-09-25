@@ -937,6 +937,41 @@ BOGUS=foo
 		})
 	})
 
+	It("Should discover template instances from drop-in directories", func() {
+		templateFile := "template@.container"
+		instanceFile := "template@instance.container"
+		template := loadQuadletTestcase(filepath.Join("quadlet", templateFile))
+		// Reuse the instance assertions without copying its unit file.
+		instance := loadQuadletTestcase(filepath.Join("quadlet", instanceFile))
+
+		err = os.WriteFile(filepath.Join(quadletDir, templateFile), template.data, 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		for _, fileName := range []string{templateFile, instanceFile} {
+			dropinDir := fileName + ".d"
+			destination := filepath.Join(quadletDir, dropinDir)
+			err = os.Mkdir(destination, os.ModePerm)
+			Expect(err).ToNot(HaveOccurred())
+			err = CopyDirectory(filepath.Join("quadlet", dropinDir), destination)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		_, err = os.Lstat(filepath.Join(quadletDir, instanceFile))
+		Expect(err).To(MatchError(os.ErrNotExist))
+
+		var args []string
+		if isRootless() {
+			args = append(args, "--user")
+		}
+		args = append(args, "--no-kmsg-log", generatedDir)
+		session := podmanTest.Quadlet(args, quadletDir)
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		template.check(generatedDir, session)
+		instance.check(generatedDir, session)
+	})
+
 	It("Should not leave temp files after generating service files", func() {
 		runSuccessQuadletTestCase("basic.container")
 

@@ -168,11 +168,21 @@ and the template systemd service can be used as a regular template.
 For example, "foo@.container" will generate "foo@.service" and you can
 then "systemctl start foo@bar.service".
 
-Secondly, if you make a symlink like "foo@instance.container", that
-will generate an instantiated template file. When generating this file
-quadlet will read drop-in files both from the instanced directory
+Secondly, an instance-specific drop-in directory such as
+`foo@instance.container.d/` creates an instance from `foo@.container`,
+without requiring a `foo@instance.container` file or symlink. You can
+also create an instance explicitly with a file or a symlink like
+`foo@instance.container`. When generating this instance,
+Quadlet will read drop-in files both from the instanced directory
 (foo@instance.container.d) and the template directory
 (foo@.container.d). This allows customization of individual instances.
+
+The template and its instance drop-ins may be in different Quadlet search
+directories. An explicit instance file or symlink takes precedence over
+creating an instance from a drop-in directory. Without an explicit instance,
+relative paths are resolved relative to the template file. A drop-in directory
+without a matching template does not create a unit. This also applies to other
+Quadlet types, such as `net@abc.network.d/` with `net@.network`.
 
 Instanced template files (like `foo@bar.container`) can be enabled
 just like non-templated ones. However, templated ones
@@ -180,7 +190,7 @@ just like non-templated ones. However, templated ones
 instantiated. If the `[Install]` section contains a `DefaultInstance=`
 key, then that instance will be enabled, but if not, nothing will
 happen and the options will only be used as the default for units
-that are instantiated using symlinks.
+that are instantiated using drop-in directories, files, or symlinks.
 
 An example template file `sleep@.container` might look like this:
 
@@ -207,10 +217,10 @@ running that sleeps for 100 seconds. You can then do something like
 sleeps 50 seconds, or alternatively another service can start it via a
 dependency like `Wants=sleep@50.service`.
 
-In addition, if you do `ln -s sleep@.container sleep@10.container` you
-will also have a 10 second sleep running at boot. And, if you want
-that particular instance to be running with another image, you can
-create a drop-in file like `sleep@10.container.d/10-image.conf`:
+To create a 10 second sleep instance using another image, create a drop-in
+file like `sleep@10.container.d/10-image.conf`. No `sleep@10.container`
+file or symlink is required. This instance also starts at boot because it
+inherits the template's `[Install]` settings:
 ```
 [Container]
 Image=quay.io/centos/centos

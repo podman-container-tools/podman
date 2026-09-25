@@ -128,6 +128,63 @@ func loadUnitsFromDir(sourcePath string) ([]*parser.UnitFile, error) {
 	return units, prevError
 }
 
+// Discover instances from drop-in directories after loading all explicit units,
+// but before merging drop-ins so that each instance gets its own template copy.
+func loadTemplateInstances(sourcePaths []string, units []*parser.UnitFile) ([]*parser.UnitFile, error) {
+	unitsByName := make(map[string]*parser.UnitFile, len(units))
+	for _, unit := range units {
+		unitsByName[unit.Filename] = unit
+	}
+
+	var instances []*parser.UnitFile
+	var prevError error
+	for _, sourcePath := range sourcePaths {
+		files, err := os.ReadDir(sourcePath)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				prevError = errors.Join(prevError, fmt.Errorf("reading %q: %w", sourcePath, err))
+			}
+			continue
+		}
+		for _, file := range files {
+			name, found := strings.CutSuffix(file.Name(), ".d")
+			if !found || !quadlet.IsExtSupported(name) || unitsByName[name] != nil {
+				continue
+			}
+			candidate := &parser.UnitFile{Filename: name}
+			base, instance, isTemplate := candidate.GetTemplateParts()
+			if !isTemplate || base == "" || instance == "" {
+				continue
+			}
+			template := unitsByName[base+"@"+filepath.Ext(name)]
+			if template == nil {
+				continue
+			}
+			// Follow symlinks to drop-in directories, as loadUnitDropins does.
+			dropinPath := filepath.Join(sourcePath, file.Name())
+			info, err := os.Stat(dropinPath)
+			if err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					prevError = errors.Join(prevError, fmt.Errorf("reading %q: %w", dropinPath, err))
+				}
+				continue
+			}
+			if !info.IsDir() {
+				continue
+			}
+
+			Debugf("Loading instance %s from template %s", name, template.Path)
+			unit := template.Dup()
+			unit.Filename = name
+			// Keep the source path for relative paths and SourcePath in the service.
+			unit.Path = template.Path
+			unitsByName[name] = unit
+			instances = append(instances, unit)
+		}
+	}
+	return instances, prevError
+}
+
 func loadUnitDropins(unit *parser.UnitFile, sourcePaths []string) error {
 	var prevError error
 	reportError := func(err error) {
@@ -518,6 +575,12 @@ func process() bool {
 		Debugf("No files parsed from %s", sourcePathsMap)
 		return processErred
 	}
+
+	instances, err := loadTemplateInstances(sourcePathsMap, units)
+	if err != nil {
+		reportError(err)
+	}
+	units = append(units, instances...)
 
 	for _, unit := range units {
 		if err := loadUnitDropins(unit, sourcePathsMap); err != nil {
