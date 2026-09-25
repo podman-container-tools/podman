@@ -98,6 +98,9 @@ func isDirEmpty(path string) (bool, error) {
 
 // update() updates the volume state from the DB.
 func (v *Volume) update() error {
+	if v.runtime == nil || v.runtime.state == nil {
+		return nil
+	}
 	if err := v.runtime.state.UpdateVolume(v); err != nil {
 		return err
 	}
@@ -109,6 +112,9 @@ func (v *Volume) update() error {
 
 // save() saves the volume state to the DB
 func (v *Volume) save() error {
+	if v.runtime == nil || v.runtime.state == nil {
+		return nil
+	}
 	return v.runtime.state.SaveVolume(v)
 }
 
