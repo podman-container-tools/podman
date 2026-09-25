@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/dbus"
@@ -399,4 +400,37 @@ func validateApplicationName(baseDir string, application string) error {
 	}
 
 	return nil
+}
+
+func getServiceNameViaDBus(ctx context.Context, conn *dbus.Conn, netName string) (string, error) {
+	units, err := conn.ListUnitsByPatternsContext(ctx, []string{"loaded"}, []string{"*-network.service"})
+	if err != nil {
+		return "", fmt.Errorf("failed to list network units via D-Bus: %w", err)
+	}
+
+	for _, unit := range units {
+		prop, err := conn.GetUnitPropertyContext(ctx, unit.Name, "SourcePath")
+		if err != nil || prop == nil || prop.Value.Value() == nil {
+			continue
+		}
+
+		sourcePath, ok := prop.Value.Value().(string)
+		if !ok || !strings.HasSuffix(sourcePath, ".network") {
+			continue
+		}
+
+		execProp, err := conn.GetServicePropertyContext(ctx, unit.Name, "ExecStart")
+		if err != nil || execProp == nil || execProp.Value.Value() == nil {
+			continue
+		}
+
+		execStart := fmt.Sprintf("%v", execProp.Value.Value())
+		cleanedExecStart := strings.NewReplacer("[", " ", "]", " ").Replace(execStart)
+
+		if slices.Contains(strings.Fields(cleanedExecStart), netName) {
+			return unit.Name, nil
+		}
+	}
+
+	return "", nil
 }

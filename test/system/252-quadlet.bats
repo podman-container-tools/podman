@@ -2083,3 +2083,75 @@ EOF
     run_podman rmi -i $image_tag
 }
 # vim: filetype=sh
+
+@test "quadlet - network prune stops network systemd service" {
+    local network_quadlet_file=$PODMAN_TMPDIR/foo_$(safename).network
+    local container_quadlet_file=$PODMAN_TMPDIR/foo_$(safename).container
+
+    cat > "$network_quadlet_file" <<EOF
+[Network]
+NetworkName=my-test
+EOF
+
+    cat > "$container_quadlet_file" <<EOF
+[Container]
+Image=$IMAGE
+Exec=sleep 5
+Network=$(basename "$network_quadlet_file")
+EOF
+
+    local quadlet_tmpdir=$(mktemp -d --tmpdir=$PODMAN_TMPDIR quadlet.XXXXXX)
+
+    run_quadlet "$network_quadlet_file" "$quadlet_tmpdir"
+    local network_service=$QUADLET_SERVICE_NAME
+    local network_name="my-test"
+
+    run_quadlet "$container_quadlet_file" "$quadlet_tmpdir"
+    local container_service=$QUADLET_SERVICE_NAME
+
+    service_setup "$container_service"
+
+    run systemctl show --value --property=ActiveState "$container_service"
+    assert $status -eq 0 "succeeded"
+    is "$output" "active" "container service is active"
+
+    run systemctl show --value --property=ActiveState "$network_service"
+    assert $status -eq 0 "succeeded"
+    is "$output" "active" "network service is active"
+
+    local i
+    for i in $(seq 1 20); do
+        run systemctl show --value --property=ActiveState "$container_service"
+        assert $status -eq 0 "succeeded"
+        if [[ "$output" == "inactive" ]]; then
+            break
+        fi
+        sleep 1
+    done
+
+    is "$output" "inactive" "container service is inactive"
+
+    run_podman network prune --force
+
+    run systemctl show --value --property=ActiveState "$network_service"
+    assert $status -eq 0 "succeeded"
+    is "$output" "inactive" "network service is inactive after prune"
+
+    run_podman 1 network exists "$network_name"
+
+    service_setup "$container_service"
+
+    run systemctl show --value --property=ActiveState "$container_service"
+    assert $status -eq 0 "succeeded"
+    is "$output" "active" "container service is active after restart"
+
+    run systemctl show --value --property=ActiveState "$network_service"
+    assert $status -eq 0 "succeeded"
+    is "$output" "active" "network service is active after container restart"
+
+    run_podman network exists "$network_name"
+
+    service_cleanup "$container_service" inactive
+    service_cleanup "$network_service" inactive
+    run_podman network rm "$network_name"
+}
