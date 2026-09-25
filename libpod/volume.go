@@ -27,7 +27,7 @@ type Volume struct {
 
 	ignoreIfExists bool
 	valid          bool
-	plugin         *plugin.VolumePlugin
+	volumePlugin   func() (*plugin.VolumePlugin, error)
 	runtime        *Runtime
 	lock           lock.Locker
 }
