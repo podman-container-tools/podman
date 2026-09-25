@@ -1,0 +1,7 @@
+[Unit]
+Description=Podman image prune service
+Documentation=man:podman-image-prune(1)
+
+[Service]
+Type=oneshot
+ExecStart=@@PODMAN@@ image prune -a -f
