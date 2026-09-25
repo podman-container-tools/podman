@@ -3,11 +3,9 @@
 package wsl
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"go.podman.io/podman/v6/pkg/machine/env"
 	"go.podman.io/podman/v6/pkg/machine/wsl/wutil"
@@ -34,6 +32,10 @@ func (w WSLStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConf
 	mc.WSLHypervisor = new(vmconfigs.WSLConfig)
 
 	_ = setupWslProxyEnv()
+
+	if !wutil.WSLVersionAtLeast(0, 67, 6) {
+		return fmt.Errorf("WSL version 0.67.6 or later is required for native systemd support. Please upgrade WSL with: wsl --update")
+	}
 
 	if opts.UserModeNetworking {
 		if err = verifyWSLUserModeCompat(); err != nil {
@@ -237,8 +239,6 @@ func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, e
 }
 
 func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
-	var err error
-
 	if running, err := isRunning(mc.Name); !running {
 		return err
 	}
@@ -254,23 +254,9 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
-	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
-	cmd.Stdin = strings.NewReader(waitTerm)
-	out := &bytes.Buffer{}
-	cmd.Stderr = out
-	cmd.Stdout = out
-
-	if err = cmd.Start(); err != nil {
-		return fmt.Errorf("executing wait command: %w", err)
-	}
-
-	exitCmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "/usr/local/bin/enterns", "systemctl", "exit", "0")
-	if err = exitCmd.Run(); err != nil {
-		return fmt.Errorf("stopping systemd: %w", err)
-	}
-
-	if err = cmd.Wait(); err != nil {
-		logrus.Warnf("Failed to wait for systemd to exit: (%s)", strings.TrimSpace(out.String()))
+	exitCmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "systemctl", "poweroff")
+	if err := exitCmd.Run(); err != nil {
+		logrus.Warnf("Failed to request systemd poweroff: %v", err)
 	}
 
 	return terminateDist(dist)
