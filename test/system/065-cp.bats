@@ -642,6 +642,51 @@ load helpers
     run_podman volume rm $volume1 $volume2
 }
 
+@test "podman cp from named volume subpath" {
+    volume="cp-subpath-$(safename)"
+    container="cp-subpath-$(safename)"
+    outputdir="$PODMAN_TMPDIR/cp-subpath-output"
+    mkdir -p "$outputdir"
+    echo HOST_TO_SUBPATH > "$outputdir/hostfile"
+
+    run_podman volume create "$volume"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE sh -c \
+               'mkdir -p /data/sub; echo ROOT_MARKER >/data/probe; echo SUBPATH_MARKER >/data/sub/probe'
+    run_podman create --name "$container" --network=none \
+               --mount "type=volume,source=$volume,target=/data,subpath=sub" \
+               $IMAGE sleep 120
+
+    run_podman cp "$container:/data/probe" "$outputdir/created"
+    is "$(< "$outputdir/created")" "SUBPATH_MARKER"
+
+    run_podman cp "$outputdir/hostfile" "$container:/data/created"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE cat /data/sub/created
+    is "$output" "HOST_TO_SUBPATH"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE test ! -e /data/created
+
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE rm /data/probe
+
+    run_podman start "$container"
+    run_podman cp "$container:/data/probe" "$outputdir/running"
+    is "$(< "$outputdir/running")" "SUBPATH_MARKER"
+
+    run_podman cp "$outputdir/hostfile" "$container:/data/running"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE cat /data/sub/running
+    is "$output" "HOST_TO_SUBPATH"
+
+    run_podman kill "$container"
+    run_podman cp "$outputdir/hostfile" "$container:/data/stopped"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE cat /data/sub/stopped
+    is "$output" "HOST_TO_SUBPATH"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE test ! -e /data/stopped
+
+    run_podman cp "$container:/data/probe" "$outputdir/stopped"
+    is "$(< "$outputdir/stopped")" "SUBPATH_MARKER"
+
+    run_podman rm -t 0 -f "$container"
+    run_podman volume rm "$volume"
+}
+
 
 @test "podman cp file from host to container mount" {
     srcdir=$PODMAN_TMPDIR/cp-test-mount-src
