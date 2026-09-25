@@ -180,7 +180,12 @@ Path to a PEM file containing the TLS client certificate to present to the serve
 
 #### **--tls-details**=*path*
 
-Path to a `containers-tls-details.yaml(5)` file, affecting TLS behavior throughout the program.
+Path to a `containers-tls-details.yaml(5)` file, affecting TLS behavior.
+
+This option affects Podman’s `login`, `logout`, `pull`, `push` and `run` operations when contacting a registry;
+for remote operation, the option must be set both on the client and the server.
+Effect on other operations is unspecified and may change over time.
+There is currently no plan to extend coverage further.
 
 If not set, defaults to a reasonable default that may change over time (depending on system’s global policy,
 version of the program, version of the Go language, and the like).
