@@ -13,7 +13,7 @@ echo "::group::Test Setup"
 
 parse_args "$@"
 
-PRESERVE_ENVS="PODMAN_CI,CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,CI_DESIRED_STORAGE,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM"
+PRESERVE_ENVS="PODMAN_CI,CI_USE_REGISTRY_CACHE,CI_DESIRED_COMPOSEFS,CI_DESIRED_STORAGE,CI_DESIRED_CONMON,OCI_RUNTIME,CGROUP_MANAGER,STORAGE_OPTIONS_OVERLAY,STORAGE_OPTIONS_VFS,PODMAN_UPGRADE_FROM,CONMON_BINARY"
 # run as root or or not
 SUDO=""
 if [[ "$PRIV" == "root" ]]; then
@@ -33,6 +33,33 @@ fedora-rawhide)
     CI_DESIRED_COMPOSEFS="composefs"
     # Enable sequoia testing
     TEST_BUILD_TAGS="containers_image_sequoia"
+
+    # Use conmon-v3 as the default on Rawhide (https://github.com/containers/conmon-v3).
+    # WIP: Pin Packit COPR build for containers/conmon-v3#62 (e552ad1):
+    # https://dashboard.packit.dev/jobs/copr/4014911
+    # The CI image may bake a build whose Release sorts *newer* than repo
+    # packages (e.g. ...-3.202607... vs ...-1.202609...), so "dnf update" is a
+    # no-op; remove + install from the Packit COPR instead.
+    # CI_DESIRED_CONMON is asserted by system/e2e info tests via `podman info`.
+    sudo dnf -y install 'dnf*-command(copr)'
+    sudo dnf -y copr enable packit/containers-conmon-v3-62 fedora-rawhide-x86_64
+    sudo dnf -y remove --noautoremove conmon-v3 || true
+    sudo dnf -y install --refresh \
+        conmon-v3-3.0.0~dev-1.20260925103023022650.pr62.60.ge552ad1.fc46.x86_64
+    sudo dnf -y copr disable packit/containers-conmon-v3-62
+    rpm -q conmon-v3
+    sudo mkdir -p /etc/containers/containers.conf.d
+    sudo tee /etc/containers/containers.conf.d/90-conmon-v3.conf << EOF
+[engine]
+conmon_path = [
+  "/usr/bin/conmon-v3"
+]
+EOF
+    export CI_DESIRED_CONMON=/usr/bin/conmon-v3
+    export CONMON_BINARY=$CI_DESIRED_CONMON
+    version=$("$CONMON_BINARY" --version)
+    echo "$version"
+    grep -qE '^conmon version 3(\.|$)' <<< "$version"
     ;;
 debian-sid)
     ;;
@@ -55,6 +82,10 @@ fi
 
 ## Used in tests so we need to export them
 export CI_DESIRED_STORAGE
+# CI_DESIRED_CONMON is only set on fedora-rawhide; export when present so sudo preserves it.
+if [[ -n "${CI_DESIRED_CONMON:-}" ]]; then
+    export CI_DESIRED_CONMON
+fi
 
 # Marker for the tests so they can insist the CI_DESIRED_* values are set
 # instead of silently skipping. GITHUB_ACTIONS is no use here, it is not

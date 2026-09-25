@@ -442,8 +442,9 @@ EOF
     systemctl is-active $service_name
 
     # Make sure that Podman is the service's MainPID
+    # conmon-v3 reports as "conmon-v3" in /proc/<pid>/comm
     run systemctl show --property=MainPID --value $service_name
-    is "$(</proc/$output/comm)" "conmon" "podman is the service mainPID"
+    assert "$(</proc/$output/comm)" =~ "^conmon(-v3)?$" "podman is the service mainPID"
 
     # The name of the service container is predictable: the first 12 characters
     # of the hash of the YAML file followed by the "-service" suffix
