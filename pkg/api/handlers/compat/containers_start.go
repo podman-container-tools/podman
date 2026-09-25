@@ -36,7 +36,7 @@ func StartContainer(w http.ResponseWriter, r *http.Request) {
 		utils.ContainerNotFound(w, name, err)
 		return
 	}
-	if err := con.Start(r.Context(), true); err != nil {
+	if _, err := con.Start(r.Context(), true); err != nil {
 		if errors.Is(err, define.ErrCtrStateRunning) {
 			utils.WriteResponse(w, http.StatusNotModified, nil)
 			return

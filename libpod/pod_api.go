@@ -25,7 +25,7 @@ func (p *Pod) startInitContainers(ctx context.Context) error {
 	}
 	// Now iterate init containers
 	for _, initCon := range initCtrs {
-		if err := initCon.startNoPodLock(ctx, true); err != nil {
+		if _, err := initCon.startNoPodLock(ctx, true); err != nil {
 			return err
 		}
 		// Check that the init container waited correctly and the exit
