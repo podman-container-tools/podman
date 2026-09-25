@@ -26,6 +26,18 @@ func readFull(r io.Reader, buf []byte) (n int, err error) {
 	return
 }
 
+// readN reads exactly n bytes from r.
+func readN(r io.Reader, n uint32) ([]byte, error) {
+	var buf bytes.Buffer
+	if _, err := io.CopyN(&buf, r, int64(n)); err != nil {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // readLength reads an OpenPGP length from r. See RFC 4880, section 4.2.2.
 func readLength(r io.Reader) (length int64, isPartial bool, err error) {
 	var buf [4]byte
@@ -509,13 +521,25 @@ const (
 	// Deprecated in RFC 4880, Section 13.5. Use key flags instead.
 	PubKeyAlgoRSAEncryptOnly PublicKeyAlgorithm = 2
 	PubKeyAlgoRSASignOnly    PublicKeyAlgorithm = 3
+
+	// PQC DSA algorithms
+	PubKeyAlgoMldsa65Ed25519  = 30
+	PubKeyAlgoMldsa87Ed448    = 31
+	PubKeyAlgoSlhdsaShake128s = 32
+	PubKeyAlgoSlhdsaShake128f = 33
+	PubKeyAlgoSlhdsaShake256s = 34
+
+	// PQC KEM algorithms
+	PubKeyAlgoMlkem768X25519 = 35
+	PubKeyAlgoMlkem1024X448  = 36
 )
 
 // CanEncrypt returns true if it's possible to encrypt a message to a public
 // key of the given type.
 func (pka PublicKeyAlgorithm) CanEncrypt() bool {
 	switch pka {
-	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly, PubKeyAlgoElGamal, PubKeyAlgoECDH, PubKeyAlgoX25519, PubKeyAlgoX448:
+	case PubKeyAlgoRSA, PubKeyAlgoRSAEncryptOnly, PubKeyAlgoElGamal, PubKeyAlgoECDH, PubKeyAlgoX25519, PubKeyAlgoX448,
+		PubKeyAlgoMlkem768X25519, PubKeyAlgoMlkem1024X448:
 		return true
 	}
 	return false
@@ -525,7 +549,10 @@ func (pka PublicKeyAlgorithm) CanEncrypt() bool {
 // sign a message.
 func (pka PublicKeyAlgorithm) CanSign() bool {
 	switch pka {
-	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, PubKeyAlgoEd25519, PubKeyAlgoEd448:
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA,
+		PubKeyAlgoEd25519, PubKeyAlgoEd448,
+		PubKeyAlgoMldsa65Ed25519, PubKeyAlgoMldsa87Ed448,
+		PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
 		return true
 	}
 	return false
@@ -611,7 +638,7 @@ func (mode AEADMode) IsSupported() bool {
 }
 
 // new returns a fresh instance of the given mode.
-func (mode AEADMode) new(block cipher.Block) cipher.AEAD {
+func (mode AEADMode) new(block cipher.Block) (cipher.AEAD, error) {
 	return algorithm.AEADMode(mode).New(block)
 }
 

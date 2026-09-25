@@ -47,6 +47,8 @@ var V5Disabled = false
 type Config struct {
 	// Rand provides the source of entropy.
 	// If nil, the crypto/rand Reader is used.
+	// Since Go 1.26, standard library calls (e.g., key generation) ignore Rand
+	// unless GODEBUG=cryptocustomrand=1 is set.
 	Rand io.Reader
 	// DefaultHash is the default hash function to be used.
 	// If zero, SHA-256 is used.

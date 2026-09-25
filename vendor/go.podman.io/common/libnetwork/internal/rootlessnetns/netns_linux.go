@@ -200,9 +200,7 @@ func (n *Netns) cleanup() error {
 }
 
 func (n *Netns) setupPasta(nsPath string) error {
-	pidPath := n.getPath(rootlessNetNsConnPidFile)
-
-	extraOpts := []string{"--pid", pidPath}
+	var extraOpts []string
 
 	if n.config.Network.RootlessPortForwarder == config.RootlessPortForwarderPasta {
 		extraOpts = append(extraOpts, "-c", n.getPath(pestoSocketFile))
@@ -222,8 +220,11 @@ func (n *Netns) setupPasta(nsPath string) error {
 	)
 
 	pastaOpts := pasta.SetupOptions{
-		Config:       n.config,
-		Netns:        nsPath,
+		Config: n.config,
+		Netns:  nsPath,
+		// The pid must survive this podman invocation: other call sites read
+		// the file to find the rootless netns pasta again.
+		PidFile:      n.getPath(rootlessNetNsConnPidFile),
 		ExtraOptions: extraOpts,
 	}
 	res, err := pasta.Setup(&pastaOpts)
@@ -232,13 +233,7 @@ func (n *Netns) setupPasta(nsPath string) error {
 	}
 
 	if systemd.RunsOnSystemd() {
-		// Treat these as fatal - if pasta failed to write a PID file something is probably wrong.
-		pid, err := readPidFile(pidPath)
-		if err != nil {
-			return fmt.Errorf("unable to decode pasta PID: %w", err)
-		}
-
-		if err := systemd.MoveRootlessNetnsProcessToUserSlice(pid); err != nil {
+		if err := systemd.MoveRootlessNetnsProcessToUserSlice(res.Pid); err != nil {
 			// only log this, it is not fatal but can lead to issues when running podman inside systemd units
 			logrus.Errorf("failed to move the rootless netns pasta process to the systemd user.slice: %v", err)
 		}

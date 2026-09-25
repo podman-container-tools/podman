@@ -4,8 +4,11 @@ package algorithm
 
 import (
 	"crypto/cipher"
+	"strconv"
+
 	"github.com/ProtonMail/go-crypto/eax"
 	"github.com/ProtonMail/go-crypto/ocb"
+	"github.com/ProtonMail/go-crypto/openpgp/errors"
 )
 
 // AEADMode defines the Authenticated Encryption with Associated Data mode of
@@ -48,8 +51,7 @@ func (mode AEADMode) NonceLength() int {
 }
 
 // New returns a fresh instance of the given mode
-func (mode AEADMode) New(block cipher.Block) (alg cipher.AEAD) {
-	var err error
+func (mode AEADMode) New(block cipher.Block) (alg cipher.AEAD, err error) {
 	switch mode {
 	case AEADModeEAX:
 		alg, err = eax.NewEAX(block)
@@ -57,9 +59,8 @@ func (mode AEADMode) New(block cipher.Block) (alg cipher.AEAD) {
 		alg, err = ocb.NewOCB(block)
 	case AEADModeGCM:
 		alg, err = cipher.NewGCM(block)
+	default:
+		err = errors.UnsupportedError("unknown aead mode: " + strconv.Itoa(int(mode)))
 	}
-	if err != nil {
-		panic(err.Error())
-	}
-	return alg
+	return alg, err
 }

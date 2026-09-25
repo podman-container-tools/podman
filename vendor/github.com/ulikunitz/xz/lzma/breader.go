@@ -5,7 +5,6 @@
 package lzma
 
 import (
-	"errors"
 	"io"
 )
 
@@ -28,12 +27,14 @@ func ByteReader(r io.Reader) io.ByteReader {
 
 // ReadByte read byte function.
 func (r *breader) ReadByte() (c byte, err error) {
-	n, err := r.Reader.Read(r.p)
-	if n < 1 {
-		if err == nil {
-			err = errors.New("breader.ReadByte: no data")
+	for i := 0; i < 100; i++ {
+		n, err := r.Reader.Read(r.p)
+		if n > 0 {
+			return r.p[0], nil
 		}
-		return 0, err
+		if err != nil {
+			return 0, err
+		}
 	}
-	return r.p[0], nil
+	return 0, io.ErrNoProgress
 }

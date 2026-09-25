@@ -82,6 +82,10 @@
 
 ## Log
 
+## 2026-09-19
+
+Includes a fix for lzma.breader handling 0, nil Reader returns correctly.
+
 ## 2026-07-20
 
 New release v0.5.16 to support other operating systems like Illumos using a

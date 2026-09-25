@@ -795,6 +795,160 @@ function pasta_test_do() {
     die "Timed out waiting for pid $pid to terminate"
 }
 
+### Cgroups ####################################################################
+
+# _cgroup_of() - print the cgroup v2 path of a process, empty if it is gone
+function _cgroup_of() {
+    sed -ne 's;^0::;;p' "/proc/${1}/cgroup" 2>/dev/null
+}
+
+# _comms_in_cgroup_of() - print the comm of every process sharing $1's cgroup
+function _comms_in_cgroup_of() {
+    local pid
+    for pid in $(< "/sys/fs/cgroup$(_cgroup_of ${1})/cgroup.procs"); do
+        cat "/proc/${pid}/comm" 2>/dev/null
+    done
+}
+
+# _skip_if_no_conmon_cgroup() - skip when podman does not create a conmon cgroup
+function _skip_if_no_conmon_cgroup() {
+    skip_if_remote "conmon cgroup checks need a local podman"
+
+    if [[ ! -e /sys/fs/cgroup/cgroup.controllers ]]; then
+        skip "the conmon cgroup is only created on cgroup v2"
+    fi
+
+    # $INVOCATION_ID means podman runs as a systemd service, which then owns
+    # cgroup placement and podman creates no conmon cgroup of its own.
+    if [[ -n "$INVOCATION_ID" ]]; then
+        skip "running as a systemd service, systemd owns the cgroup"
+    fi
+}
+
+# _assert_pasta_in_conmon_cgroup() - the meat of the tests below
+function _assert_pasta_in_conmon_cgroup() {
+    local cname=$1
+    local cid=$2
+    local pasta_pid=$3
+
+    run_podman container inspect --format '{{.State.ConmonPid}}' $cname
+    local conmon_pid="$output"
+
+    run_podman container inspect --format '{{.HostConfig.CgroupManager}}' $cname
+    local manager="$output"
+
+    local conmon_cgroup=$(_cgroup_of $conmon_pid)
+    assert "$conmon_cgroup" != "" "conmon must be in a cgroup"
+
+    if [[ "$manager" == "systemd" ]]; then
+        assert "$conmon_cgroup" =~ "/libpod-conmon-${cid}\.scope\$" \
+               "conmon must run in its own scope"
+    fi
+
+    if [[ -n "$pasta_pid" ]]; then
+        assert "$(_cgroup_of $pasta_pid)" == "$conmon_cgroup" \
+               "pasta must run in the same cgroup as conmon"
+    else
+        # No pid file was asked for, so find pasta by looking at who else is
+        # in there.  pasta(1) is usually a symlink to passt(1), so accept
+        # either name.
+        assert "$(_comms_in_cgroup_of $conmon_pid)" =~ "pas(ta|st)" \
+               "pasta must run in the same cgroup as conmon"
+    fi
+}
+
+@test "pasta(1) runs in the conmon cgroup" {
+    _skip_if_no_conmon_cgroup
+
+    local pidfile="${PODMAN_TMPDIR}/pasta.pid"
+    local cname="c-$(safename)"
+
+    run_podman run -d --name $cname "--net=pasta:--pid,${pidfile}" $IMAGE top
+    local cid="$output"
+
+    _assert_pasta_in_conmon_cgroup $cname $cid "$(< $pidfile)"
+
+    run_podman rm -f -t 0 $cname
+}
+
+@test "pasta(1) runs in the conmon cgroup, without --pid" {
+    _skip_if_no_conmon_cgroup
+
+    local cname="c-$(safename)"
+
+    # This is the variant real users hit: podman asks pasta for its pid itself.
+    run_podman run -d --name $cname --net=pasta $IMAGE top
+    local cid="$output"
+
+    _assert_pasta_in_conmon_cgroup $cname $cid ""
+
+    run_podman rm -f -t 0 $cname
+}
+
+@test "pasta(1) runs in the conmon cgroup with a userns" {
+    _skip_if_no_conmon_cgroup
+
+    local pidfile="${PODMAN_TMPDIR}/pasta.pid"
+    local cname="c-$(safename)"
+
+    # A userns means PostConfigureNetNS, so pasta only starts once conmon and
+    # its cgroup are already there.  That is the one ordering where podman has
+    # to add pasta to an existing cgroup rather than create it with pasta in it.
+    run_podman run -d --name $cname --userns=keep-id \
+               "--net=pasta:--pid,${pidfile}" $IMAGE top
+    local cid="$output"
+
+    _assert_pasta_in_conmon_cgroup $cname $cid "$(< $pidfile)"
+
+    run_podman rm -f -t 0 $cname
+}
+
+@test "pasta(1) runs in the conmon cgroup, cgroupfs manager" {
+    _skip_if_no_conmon_cgroup
+
+    local pidfile="${PODMAN_TMPDIR}/pasta.pid"
+    local cname="c-$(safename)"
+
+    run_podman --cgroup-manager=cgroupfs run -d --name $cname \
+               "--net=pasta:--pid,${pidfile}" $IMAGE top
+    local cid="$output"
+
+    # Rootless is usually not allowed to create a cgroupfs cgroup.  Moving
+    # conmon is only best effort for exactly that reason, so all we can require
+    # here is that the container still works; when the move did happen, pasta
+    # must have come along.
+    run_podman container inspect --format '{{.State.ConmonPid}}' $cname
+    if [[ "$(_cgroup_of $output)" =~ /conmon$ ]]; then
+        _assert_pasta_in_conmon_cgroup $cname $cid "$(< $pidfile)"
+    fi
+
+    run_podman exec $cname true
+
+    run_podman rm -f -t 0 $cname
+}
+
+@test "pasta(1) is left alone with --cgroups=disabled" {
+    _skip_if_no_conmon_cgroup
+
+    runtime=$(podman_runtime)
+    if [[ $runtime != "crun" ]]; then
+        skip "runtime is $runtime; --cgroups=disabled requires crun"
+    fi
+
+    local pidfile="${PODMAN_TMPDIR}/pasta.pid"
+    local cname="c-$(safename)"
+
+    run_podman run -d --name $cname --cgroups=disabled \
+               "--net=pasta:--pid,${pidfile}" $IMAGE top
+
+    # --cgroups=disabled means podman must not touch cgroups at all, so there
+    # is no conmon cgroup to move pasta into either.
+    assert "$(_cgroup_of "$(< $pidfile)")" !~ "libpod-conmon|/conmon\$" \
+           "pasta must not be moved to a conmon cgroup"
+
+    run_podman rm -f -t 0 $cname
+}
+
 ### Options ####################################################################
 @test "Unsupported protocol in port forwarding" {
     local port=$(random_free_port "" "" tcp)

@@ -147,7 +147,6 @@ func handleEnv() {
 	if DefaultCondition.EastAsianWidth != EastAsianWidth {
 		DefaultCondition.EastAsianWidth = EastAsianWidth
 		if len(DefaultCondition.combinedLut) > 0 {
-			DefaultCondition.combinedLut = DefaultCondition.combinedLut[:0]
 			CreateLUT()
 		}
 	}
@@ -355,7 +354,12 @@ var nonprint = table{
 
 // Condition have flag EastAsianWidth whether the current locale is CJK or not.
 type Condition struct {
-	combinedLut        []byte
+	combinedLut []byte
+	// The flags combinedLut was built from, so that CreateLUT can tell a
+	// table that is still current from one that has to be rebuilt.
+	lutEastAsianWidth     bool
+	lutStrictEmojiNeutral bool
+
 	EastAsianWidth     bool
 	StrictEmojiNeutral bool
 
@@ -421,6 +425,11 @@ func (c *Condition) CreateLUT() {
 	const max = 0x110000
 	lut := c.combinedLut
 	if len(c.combinedLut) != 0 {
+		if c.lutEastAsianWidth == c.EastAsianWidth && c.lutStrictEmojiNeutral == c.StrictEmojiNeutral {
+			// The table still matches the flags, so rebuilding it
+			// would produce the same bytes.
+			return
+		}
 		// Remove so we don't use it.
 		c.combinedLut = nil
 	} else {
@@ -433,6 +442,8 @@ func (c *Condition) CreateLUT() {
 		lut[i] = uint8(x0) | uint8(x1)<<4
 	}
 	c.combinedLut = lut
+	c.lutEastAsianWidth = c.EastAsianWidth
+	c.lutStrictEmojiNeutral = c.StrictEmojiNeutral
 }
 
 // graphemeWidth returns the width of a single grapheme cluster: the sum of
@@ -566,7 +577,9 @@ func (c *Condition) TruncatePrefix(s string, w int, prefix string) string {
 func (c *Condition) Wrap(s string, w int) string {
 	width := 0
 	var out strings.Builder
-	out.Grow(len(s) + len(s)/w + 1)
+	// max keeps the capacity hint from dividing by zero when w is 0; a
+	// non-positive width breaks before every rune, as it always has.
+	out.Grow(len(s) + len(s)/max(w, 1) + 1)
 	for _, r := range s {
 		cw := c.RuneWidth(r)
 		if r == '\n' {
@@ -664,9 +677,8 @@ func FillRight(s string, w int) string {
 
 // CreateLUT will create an in-memory lookup table of 557055 bytes for faster operation.
 // This should not be called concurrently with other operations.
+// If flags in DefaultCondition are changed, CreateLUT should be called again;
+// a call that finds the table already current is a no-op.
 func CreateLUT() {
-	if len(DefaultCondition.combinedLut) > 0 {
-		return
-	}
 	DefaultCondition.CreateLUT()
 }

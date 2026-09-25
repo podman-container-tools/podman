@@ -125,6 +125,14 @@ type Container struct {
 	restoreFromCheckpoint bool
 
 	pastaResult *pasta.SetupResult
+
+	// rootlessPortPid is the pid of the rootlessport process started for
+	// this container, 0 when there is none or it is unknown.
+	rootlessPortPid int
+
+	// conmonCgroupCreated is set once this process created the conmon
+	// cgroup, so that processes started afterwards can be added to it.
+	conmonCgroupCreated bool
 }
 
 // ContainerState contains the current state of the container

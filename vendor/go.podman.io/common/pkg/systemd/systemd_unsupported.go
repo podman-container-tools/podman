@@ -10,6 +10,10 @@ func RunsOnSystemd() bool {
 
 func MovePauseProcessToScope(pausePidPath string) {}
 
-func RunUnderSystemdScope(pid int, slice string, unitName string) error {
+func RunUnderSystemdScope(pids []int, slice string, unitName string) error {
 	return errors.New("RunUnderSystemdScope not supported on this OS")
+}
+
+func AddPidsToSystemdScope(unitName string, pids ...int) error {
+	return errors.New("AddPidsToSystemdScope not supported on this OS")
 }

@@ -4,6 +4,7 @@ package packet
 
 import (
 	"io"
+	"strconv"
 
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
@@ -50,6 +51,9 @@ func (ae *AEADEncrypted) parse(buf io.Reader) error {
 	ae.cipher = CipherFunction(c)
 	ae.mode = mode
 	ae.chunkSizeByte = headerData[3]
+	if ae.chunkSizeByte > 16 {
+		return errors.UnsupportedError("invalid aead chunk size byte: " + strconv.Itoa(int(ae.chunkSizeByte)))
+	}
 	return nil
 }
 
@@ -62,8 +66,15 @@ func (ae *AEADEncrypted) Decrypt(ciph CipherFunction, key []byte) (io.ReadCloser
 // decrypt prepares an aeadCrypter and returns a ReadCloser from which
 // decrypted bytes can be read (see aeadDecrypter.Read()).
 func (ae *AEADEncrypted) decrypt(key []byte) (io.ReadCloser, error) {
+	if ae.cipher.KeySize() != len(key) {
+		return nil, errors.StructuralError("invalid session key length for cipher: got " + strconv.Itoa(len(key)) + " bytes, but expected " + strconv.Itoa(ae.cipher.KeySize()) + " bytes")
+	}
 	blockCipher := ae.cipher.new(key)
-	aead := ae.mode.new(blockCipher)
+	aead, err := ae.mode.new(blockCipher)
+	if err != nil {
+		return nil, err
+	}
+
 	// Carry the first tagLen bytes
 	chunkSize := decodeAEADChunkSize(ae.chunkSizeByte)
 	tagLen := ae.mode.TagLength()

@@ -476,7 +476,7 @@ func (r *ConmonOCIRuntime) startExec(c *Container, sessionID string, options *Ex
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot start container %s: %w", c.ID(), err)
 	}
-	if err := r.moveConmonToCgroupAndSignal(c, execCmd, parentStartPipe); err != nil {
+	if err := r.moveToConmonCgroupAndSignal(c, execCmd, parentStartPipe); err != nil {
 		return nil, nil, err
 	}
 
