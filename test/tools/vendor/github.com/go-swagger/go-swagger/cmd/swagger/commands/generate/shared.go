@@ -28,9 +28,8 @@ const (
 
 // FlattenCmdOptions determines options to the flatten spec preprocessing.
 type FlattenCmdOptions struct {
-	WithExpand          bool     `description:"expands all $ref's in spec prior to generation (shorthand to --with-flatten=expand)" group:"shared" long:"with-expand"`
-	WithFlatten         []string `choice:"minimal"                                                                                  choice:"full"  choice:"expand"              choice:"verbose" choice:"noverbose" choice:"remove-unused" choice:"keep-names" default:"minimal" default:"verbose" description:"flattens all $ref's in spec prior to generation" group:"shared" long:"with-flatten"`
-	WithCustomFormatter bool     `description:"use faster custom contributed go import processing instead of the standard one"      group:"shared" long:"with-custom-formatter"`
+	WithExpand  bool     `description:"expands all $ref's in the spec (shorthand to --with-flatten=expand)" group:"shared" long:"with-expand"`
+	WithFlatten []string `choice:"minimal"                                                                  choice:"full"  choice:"expand"    choice:"verbose" choice:"noverbose" choice:"remove-unused" choice:"keep-names" default:"minimal" default:"verbose" description:"flattens all $ref's in the spec" group:"shared" long:"with-flatten"`
 }
 
 // SetFlattenOptions builds flatten options from command line args.
@@ -126,41 +125,103 @@ func (w WithShared) getConfigFile() string {
 	return string(w.Shared.ConfigFile)
 }
 
-type sharedOptionsCommon struct {
-	FlattenCmdOptions
-
-	Spec                  flags.Filename `description:"the spec file to use (default swagger.{json,yml,yaml})"                             group:"shared"                                            long:"spec"                    short:"f"`
-	Target                flags.Filename `default:"./"                                                                                     description:"the base directory for generating the files" group:"shared"                 long:"target"   short:"t"`
-	Template              string         `choice:"stratoscale"                                                                             description:"load contributed templates"                  group:"shared"                 long:"template"`
-	TemplateDir           flags.Filename `description:"alternative template override directory"                                            group:"shared"                                            long:"template-dir"            short:"T"`
-	ConfigFile            flags.Filename `description:"configuration file to use for overriding template options"                          group:"shared"                                            long:"config-file"             short:"C"`
-	CopyrightFile         flags.Filename `description:"copyright file used to add copyright header"                                        group:"shared"                                            long:"copyright-file"          short:"r"`
-	AdditionalInitialisms []string       `description:"consecutive capitals that should be considered intialisms"                          group:"shared"                                            long:"additional-initialism"`
-	AllowTemplateOverride bool           `description:"allows overriding protected templates"                                              group:"shared"                                            long:"allow-template-override"`
-	SkipValidation        bool           `description:"skips validation of spec prior to generation"                                       group:"shared"                                            long:"skip-validation"`
-	DumpData              bool           `description:"when present dumps the json for the template generator instead of generating files" group:"shared"                                            long:"dump-data"`
-	StrictResponders      bool           `description:"Use strict type for the handler return value"                                       long:"strict-responders"`
-	ReturnErrors          bool           `description:"handlers explicitly return an error as the second value"                            group:"shared"                                            long:"return-errors"           short:"e"`
-	Restricted            bool           `description:"Use restricted http client for remote $ref"                                         group:"shared"                                            long:"restricted"`
-	Rooted                string         `description:"Local $ref resolution contained relative to root FS"                                group:"shared"                                            long:"rooted"`
+// usageWithSpec builds the usage line of a code generation command, which takes the spec
+// either with --spec or as its single argument.
+//
+// It replaces the "[<command>-OPTIONS]" placeholder the flags parser renders by default.
+func usageWithSpec(command string) string {
+	return fmt.Sprintf("[%s-OPTIONS] [spec]", command)
 }
 
-func (s sharedOptionsCommon) apply(opts *generator.GenOpts) {
+// specOptions determine how the swagger spec is located, loaded and preprocessed.
+//
+// They apply to every command that generates something out of a spec, whether it is go code or not.
+type specOptions struct {
+	FlattenCmdOptions
+
+	Spec           flags.Filename `description:"the spec file to use (default swagger.{json,yml,yaml})" group:"shared" long:"spec"            short:"f"`
+	SkipValidation bool           `description:"skips validation of spec prior to generation"           group:"shared" long:"skip-validation"`
+	Restricted     bool           `description:"Use restricted http client for remote $ref"             group:"shared" long:"restricted"`
+	Rooted         string         `description:"Local $ref resolution contained relative to root FS"    group:"shared" long:"rooted"`
+}
+
+func (s specOptions) apply(opts *generator.GenOpts) {
 	opts.Spec = string(s.Spec)
-	opts.Target = string(s.Target)
-	opts.Template = s.Template
-	opts.TemplateDir = string(s.TemplateDir)
-	opts.AllowTemplateOverride = s.AllowTemplateOverride
 	opts.ValidateSpec = !s.SkipValidation
-	opts.DumpData = s.DumpData
 	opts.FlattenOpts = s.SetFlattenOptions(opts.FlattenOpts)
-	opts.Copyright = string(s.CopyrightFile)
-	opts.StrictResponders = s.StrictResponders
-	opts.ReturnErrors = s.ReturnErrors
-	opts.WithCustomFormatter = s.WithCustomFormatter
-	opts.WithExtraInitialisms = s.AdditionalInitialisms
 	opts.Restricted = s.Restricted
 	opts.Rooted = s.Rooted
+}
+
+// outputOptions determine where the generated artifacts are written and which templates render them.
+//
+// They apply to every command that generates something out of a spec, whether it is go code or not.
+type outputOptions struct {
+	Target                flags.Filename `default:"./"                                                                                     description:"the base directory for generating the files" group:"shared"                 long:"target" short:"t"`
+	TemplateDir           flags.Filename `description:"alternative template override directory"                                            group:"shared"                                            long:"template-dir"            short:"T"`
+	ConfigFile            flags.Filename `description:"configuration file to use for overriding template options"                          group:"shared"                                            long:"config-file"             short:"C"`
+	AdditionalInitialisms []string       `description:"consecutive capitals that should be considered intialisms"                          group:"shared"                                            long:"additional-initialism"`
+	AllowTemplateOverride bool           `description:"allows overriding protected templates"                                              group:"shared"                                            long:"allow-template-override"`
+	DumpData              bool           `description:"when present dumps the json for the template generator instead of generating files" group:"shared"                                            long:"dump-data"`
+	EnsureTarget          bool           `description:"Create the target directory if it does not already exist"                           group:"shared"                                            long:"ensure-target"`
+}
+
+func (o outputOptions) apply(opts *generator.GenOpts) {
+	opts.Target = string(o.Target)
+	opts.TemplateDir = string(o.TemplateDir)
+	opts.AllowTemplateOverride = o.AllowTemplateOverride
+	opts.DumpData = o.DumpData
+	opts.WithExtraInitialisms = o.AdditionalInitialisms
+	opts.EnsureTarget = o.EnsureTarget
+}
+
+// goCodegenOptions only bear on the go code that is generated.
+//
+// Commands that do not produce go source, such as "generate markdown", do not expose them.
+type goCodegenOptions struct {
+	Template            string         `choice:"stratoscale"                                                                         description:"load contributed templates" group:"shared"               long:"template"`
+	CopyrightFile       flags.Filename `description:"copyright file used to add copyright header"                                    group:"shared"                           long:"copyright-file"        short:"r"`
+	StrictResponders    bool           `description:"Use strict type for the handler return value"                                   long:"strict-responders"`
+	ReturnErrors        bool           `description:"handlers explicitly return an error as the second value"                        group:"shared"                           long:"return-errors"         short:"e"`
+	WithCustomFormatter bool           `description:"use faster custom contributed go import processing instead of the standard one" group:"shared"                           long:"with-custom-formatter"`
+}
+
+func (g goCodegenOptions) apply(opts *generator.GenOpts) {
+	opts.Template = g.Template
+	opts.Copyright = string(g.CopyrightFile)
+	opts.StrictResponders = g.StrictResponders
+	opts.ReturnErrors = g.ReturnErrors
+	opts.WithCustomFormatter = g.WithCustomFormatter
+}
+
+// sharedOptions are the options common to all code generation commands.
+type sharedOptions struct {
+	specOptions
+	outputOptions
+	goCodegenOptions
+	pluginOptions
+}
+
+func (s sharedOptions) apply(opts *generator.GenOpts) {
+	s.specOptions.apply(opts)
+	s.outputOptions.apply(opts)
+	s.goCodegenOptions.apply(opts)
+	s.pluginOptions.apply(opts)
+}
+
+// markdownSharedOptions are the shared options that bear on the generated markdown.
+//
+// The markdown command generates no go code, so it leaves out [goCodegenOptions].
+type markdownSharedOptions struct {
+	specOptions
+	outputOptions
+	pluginOptions
+}
+
+func (s markdownSharedOptions) apply(opts *generator.GenOpts) {
+	s.specOptions.apply(opts)
+	s.outputOptions.apply(opts)
+	s.pluginOptions.apply(opts)
 }
 
 func setCopyright(copyrightFile string) (string, error) {
@@ -175,7 +236,35 @@ func setCopyright(copyrightFile string) (string, error) {
 	return string(bytebuffer), nil
 }
 
-func createSwagger(s sharedCommand) error {
+// specFromArgs resolves the spec passed as a command line argument.
+//
+// Code generation commands accept the spec either with --spec (-f) or as a single
+// argument, like the validate, expand, flatten, mixin and diff commands do.
+func specFromArgs(opts *generator.GenOpts, args []string) error {
+	switch {
+	case len(args) == 0:
+		return nil
+
+	case len(args) > 1:
+		return fmt.Errorf(
+			"too many arguments: this command takes at most one swagger spec, but got %d: %v",
+			len(args), args,
+		)
+
+	case opts.Spec != "":
+		return fmt.Errorf(
+			"the swagger spec is specified twice: as --spec %q and as the argument %q. Use one or the other",
+			opts.Spec, args[0],
+		)
+
+	default:
+		opts.Spec = args[0]
+
+		return nil
+	}
+}
+
+func createSwagger(s sharedCommand, args []string) error {
 	var (
 		cfg *viper.Viper
 		err error
@@ -195,6 +284,10 @@ func createSwagger(s sharedCommand) error {
 	// finalizes the options in Prepare.
 	opts := generator.NewGenOpts(generator.WithViper(cfg))
 	s.apply(opts)
+
+	if err = specFromArgs(opts, args); err != nil {
+		return err
+	}
 
 	opts.Copyright, err = setCopyright(opts.Copyright)
 	if err != nil {

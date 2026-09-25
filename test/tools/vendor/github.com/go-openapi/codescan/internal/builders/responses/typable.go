@@ -26,12 +26,10 @@ func (ht responseTypable) In() string { return ht.in }
 
 func (ht responseTypable) Level() int { return 0 }
 
-// Typed writes the primitive type onto the body schema in body mode, or onto the header in
-// SimpleSchema mode.
+// Typed writes the primitive type onto the body schema in body mode, or onto the header in SimpleSchema mode.
 //
-// Without the body branch a primitive `Body` field (e.g. `Body string`) lands its type on the
-// header, which body responses discard — leaving the response with no schema at all
-// (go-swagger#2942).
+// Without the body branch a primitive `Body` field (e.g. `Body string`) lands its type on the header, which body
+// responses discard — leaving the response with no schema at all (go-swagger#2942).
 // Mirrors SetRef's body/non-body split.
 func (ht responseTypable) Typed(tpe, format string) {
 	if ht.in == inBody {
@@ -57,8 +55,7 @@ func (ht responseTypable) Items() ifaces.SwaggerTypable { //nolint:ireturn // po
 	return resolvers.NewItemsTypable(ht.header.Items, 1, "header")
 }
 
-// SetRef writes the ref onto the body schema in body mode; under non-body it no-ops and flips
-// refAttempted (Q2).
+// SetRef writes the ref onto the body schema in body mode; under non-body it no-ops and flips refAttempted.
 //
 // See [§typable](./README.md#typable).
 func (ht responseTypable) SetRef(ref oaispec.Ref) {
@@ -79,30 +76,40 @@ func (ht responseTypable) Schema() *oaispec.Schema {
 	return ht.response.Schema
 }
 
+// AddExtension writes onto the construct the typable is currently describing — the body schema under `in: body`, the
+// header otherwise — mirroring paramTypable.
+//
+// It used to write onto the RESPONSE in every case, so an extension describing a body's Go type (`x-go-type` on a field
+// typed `error`) surfaced as a sibling of `schema` and `description` instead of inside the schema it was talking about.
 func (ht responseTypable) AddExtension(key string, value any) {
-	ht.response.AddExtension(key, value)
+	if ht.in == inBody {
+		ht.Schema().AddExtension(key, value)
+
+		return
+	}
+
+	ht.header.AddExtension(key, value)
 }
 
 func (ht responseTypable) WithEnum(values ...any) {
-	// Spread the variadic through: passing the slice itself would nest it one level deep (enum:
-	// [[FIRST, SECOND]]), producing malformed OAS2. Mirrors paramTypable / schema.Typable /
-	// ItemsTypable.
+	// Spread the variadic through: passing the slice itself would nest it one level deep (enum: [[FIRST, SECOND]]),
+	// producing malformed OAS2. Mirrors paramTypable / schema.Typable / ItemsTypable.
 	ht.header.WithEnum(values...)
 }
 
-// WithEnumDescription rides the enum const-name mapping on the header's x-go-enum-desc vendor
-// extension, mirroring paramTypable.WithEnumDescription.
+// WithEnumDescription rides the enum const-name mapping on the header's x-go-enum-desc vendor extension, mirroring
+// paramTypable.WithEnumDescription.
 //
-// This is wired against go-openapi/spec >= v0.22.6, where Header.MarshalJSON emits the embedded
-// VendorExtensible (go-openapi/spec#277).
+// This is wired against go-openapi/spec >= v0.22.6, where Header.MarshalJSON emits the embedded VendorExtensible
+// (go-openapi/spec#277).
 // Earlier versions dropped header extensions at marshal, so this was a documented no-op.
 // The enum *values* themselves ship via WithEnum and were never affected.
 func (ht responseTypable) WithEnumDescription(desc string) {
 	if desc == "" {
 		return
 	}
-	// Gated on SkipExtensions (mirrors schema.Typable): the contract is that x-go-* vendor extensions
-	// are suppressed everywhere when SkipExtensions is set.
+	// Gated on SkipExtensions (mirrors schema.Typable): the contract is that x-go-* vendor extensions are suppressed
+	// everywhere when SkipExtensions is set.
 	resolvers.AddExtension(&ht.header.VendorExtensible, resolvers.ExtEnumDesc, desc, ht.skipExt)
 }
 
@@ -115,8 +122,7 @@ func (ht responseTypable) SimpleSchemaShape() *oaispec.SimpleSchema {
 
 // HasRef satisfies schema.SimpleSchemaProbe.
 //
-// True when a non-body SetRef attempt was recorded — the exit validator emits
-// CodeUnsupportedInSimpleSchema.
+// True when a non-body SetRef attempt was recorded — the exit validator emits CodeUnsupportedInSimpleSchema.
 // See [§typable](./README.md#typable).
 func (ht responseTypable) HasRef() bool {
 	return ht.refAttempted != nil && *ht.refAttempted

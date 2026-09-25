@@ -8,11 +8,10 @@ import (
   "fmt"
 
   httptransport "github.com/go-openapi/runtime/client"
-  {{ imports .DefaultImports }}
-  {{ imports .Imports }}
-
   "github.com/spf13/cobra"
   "github.com/go-openapi/runtime"
+  {{ imports .DefaultImports }}
+  {{ imports .Imports }}
 )
 
 // make{{ cmdName . }} returns a command to handle operation {{ camelize .Name }}

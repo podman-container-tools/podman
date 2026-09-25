@@ -9,7 +9,6 @@ package golang
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"math"
 	"path"
 	"path/filepath"
@@ -29,16 +28,23 @@ import (
 	"github.com/go-openapi/swag/stringutils"
 )
 
-// FuncMap returns a template.FuncMap containing all Go-specific template
-// functions that are independent of generator types. Callers typically
-// merge additional entries (e.g. LanguageOpts-dependent or type-dependent
-// functions) on top.
+// FuncMap returns a template.FuncMap containing all Go-specific template functions.
+//
+// Callers typically merge or coalesce additional entries (e.g. LanguageOpts-dependent or type-dependent functions) on top.
+//
+// NOTE: built-in functions are preserved by the [Coalesce] semantics.
 func FuncMap(mangler mangling.NameMangler) template.FuncMap {
 	f := sprig.TxtFuncMap()
+	extra := goswaggerFuncMap(mangler)
+
+	return Coalesce(extra, f)
+}
+
+func goswaggerFuncMap(mangler mangling.NameMangler) template.FuncMap {
 	pascalize := pascalize(mangler)
 	mediaGoName := mediaGoName(mangler)
 
-	extra := template.FuncMap{
+	return template.FuncMap{
 		"pascalize":          pascalize,
 		"camelize":           mangler.ToJSONName,
 		"humanize":           mangler.ToHumanNameLower,
@@ -88,6 +94,32 @@ func FuncMap(mangler mangling.NameMangler) template.FuncMap {
 
 			return quoted[1 : len(quoted)-1]
 		},
+		// jsonFieldTag renders a complete `json:"..."` struct tag from a
+		// spec-derived field name, mirroring the whole-tag quoting decision of
+		// GenSchema.PrintTags. Templates that hand-write the backtick tag inline
+		// (server response headers, allOf / discriminator serializers) bypass
+		// PrintTags, so a backtick in the name would otherwise close the raw
+		// string early and inject arbitrary top-level Go. strconv.Quote escapes
+		// the name into the tag value; if the assembled tag can be backquoted it
+		// is emitted as a raw literal (byte-identical to the previous output for
+		// clean names), otherwise the whole tag is rendered as a double-quoted
+		// literal so no breakout is possible.
+		"jsonFieldTag": func(name string, omitEmpty, asString bool) string {
+			value := name
+			if omitEmpty {
+				value += ",omitempty"
+			}
+			if asString {
+				value += ",string"
+			}
+
+			tag := "json:" + strconv.Quote(value)
+			if strconv.CanBackquote(tag) {
+				return "`" + tag + "`"
+			}
+
+			return strconv.Quote(tag)
+		},
 		"flagNameVar": func(in string) string {
 			return fmt.Sprintf("flag%sName", pascalize(in))
 		},
@@ -110,10 +142,6 @@ func FuncMap(mangler mangling.NameMangler) template.FuncMap {
 			return foldReplacer.Replace(in)
 		},
 	}
-
-	maps.Copy(f, extra)
-
-	return f
 }
 
 var foldReplacer = strings.NewReplacer("\n", " ", "\r", "")

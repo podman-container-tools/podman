@@ -75,9 +75,9 @@ func (s *Builder) overridesFor(cg *ast.CommentGroup) (title, desc common.Overrid
 // Returns true when the block's primary annotation is swagger:ignore; the caller short-circuits
 // further building.
 func (s *Builder) applyDeclCommentBlock(schema *oaispec.Schema) (skip bool) {
-	block := s.ParseBlock(s.Decl.Comments)
+	block := s.ParseBlock(s.Decl.Comments())
 	// `swagger:ignore` only short-circuits when it is the FIRST annotation on the comment group.
-	// Fixture fixtures/enhancements/top-level-kinds/IgnoredModel deliberately places `swagger:model`
+	// Fixture testdata/enhancements/top-level-kinds/IgnoredModel deliberately places `swagger:model`
 	// first and `swagger:ignore` second to pin this behaviour: the ignore is silently overridden
 	// because only the source-order-first annotation drives the short-circuit.
 	//
@@ -92,7 +92,7 @@ func (s *Builder) applyDeclCommentBlock(schema *oaispec.Schema) (skip bool) {
 	// swagger:title / swagger:description overrides replace the godoc-derived title / description
 	// (enum value docs are still appended below).
 	// Overrides are author-written and never passed through CleanGoDoc.
-	titleOv, descOv := s.overridesFor(s.Decl.Comments)
+	titleOv, descOv := s.overridesFor(s.Decl.Comments())
 	if titleOv.Present {
 		schema.Title = titleOv.Value
 	}
@@ -243,7 +243,24 @@ func (s *Builder) applyToRefField(block grammar.Block, enclosing, ps *oaispec.Sc
 	}
 
 	if !c.anyCollected() && !s.Ctx.DescWithRef() {
-		return // description/title-only, not preserved → bare {$ref}
+		// Description/title-only: the legacy default emits a bare {$ref} rather than wrapping a lone
+		// reference in a compound just to carry prose. That is deliberate (§ref-override), but it is
+		// still a dropped sibling, and every other drop on this path is reported — an author whose
+		// description silently vanished has nothing else to tell them EmitRefSiblings would keep it.
+		//
+		// A Hint, not a Warning: nothing is wrong, the default simply cannot carry it.
+		dropped := "description"
+		switch {
+		case description == "":
+			dropped = "title"
+		case title != "":
+			dropped = "description and title"
+		}
+		s.RecordDiagnostic(grammar.Hintf(block.Pos(), grammar.CodeDroppedRefSibling,
+			"field %q: %s dropped — a bare $ref carries no siblings; set EmitRefSiblings to keep it",
+			name, dropped))
+
+		return
 	}
 
 	// Lift x-* siblings onto the outer compound (see §ref-override).

@@ -14,8 +14,8 @@ import (
 //
 //	contact: <Name> <email> <URL>
 //
-// where each part is optional in the order written: the parser recognises a `Name <email>` head
-// (Go's net/mail.ParseAddress form) followed by an optional URL.
+// where each part is optional in the order written: the parser recognises a `Name <email>` head (Go's
+// net/mail.ParseAddress form) followed by an optional URL.
 // A bare email without a name is also accepted.
 // Empty or unrecognised inputs return (Contact{}, false) from Block.Contact().
 type Contact struct {
@@ -36,8 +36,8 @@ type License struct {
 // parseContact converts the raw contact: value into a typed Contact.
 //
 // Returns (Contact{}, nil) on empty input (treated as "no contact").
-// A non-nil error signals a malformed `Name <email>` head — the caller decides whether to fail
-// the build or downgrade to a warning.
+// A non-nil error signals a malformed `Name <email>` head — the caller decides whether to fail the build or downgrade
+// to a warning.
 // An isolated URL (no name/email) yields (Contact{URL: …}, nil).
 func parseContact(line string) (Contact, error) {
 	line = strings.TrimSpace(line)
@@ -57,9 +57,8 @@ func parseContact(line string) (Contact, error) {
 
 // parseLicense converts the raw license: value into a typed License.
 //
-// Returns (License{}, false) only when the input is empty; any non-empty input yields a (License,
-// true) with Name and URL split on the URL prefix (Name may be empty if the line starts with the
-// URL).
+// Returns (License{}, false) only when the input is empty; any non-empty input yields a (License, true) with Name and
+// URL split on the URL prefix (Name may be empty if the line starts with the URL).
 func parseLicense(line string) (License, bool) {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -77,8 +76,7 @@ var urlSchemes = []string{"https://", "http://", "ftps://", "ftp://", "wss://", 
 
 // splitURL separates the leading non-URL prefix from the trailing URL on a single line.
 //
-// Returns ("", url) when the line begins with a URL scheme; (line, "") when no scheme is found
-// anywhere.
+// Returns ("", url) when the line begins with a URL scheme; (line, "") when no scheme is found anywhere.
 func splitURL(line string) (notURL, url string) {
 	str := strings.TrimSpace(line)
 	idx := -1

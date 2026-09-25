@@ -2,5 +2,6 @@
 # so byte-level comparison doesn't trip on Windows checkouts that
 # default to core.autocrlf=true.
 *.json text eol=lf
+*.txt text eol=lf
 internal/parsers/grammar/grammar_test/testdata/golden/* text eol=lf
-fixtures/integration/golden/* text eol=lf
+testdata/integration/golden/* text eol=lf
