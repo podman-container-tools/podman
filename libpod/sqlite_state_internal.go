@@ -39,6 +39,28 @@ func checkSQLiteDBExists(runtime *Runtime) bool {
 	return true
 }
 
+// verifyJournalMode reads back PRAGMA journal_mode after sql.Open and checks
+// it matches what was requested. go-sqlite3 does not error when WAL fails on
+// an unsupported filesystem — it silently keeps the current mode. On mismatch,
+// logs a warning and continues; the DB is still usable in rollback journal mode.
+func verifyJournalMode(conn *sql.DB, walRequested bool) error {
+	var mode string
+	if err := conn.QueryRow("PRAGMA journal_mode;").Scan(&mode); err != nil {
+		return fmt.Errorf("reading SQLite journal mode: %w", err)
+	}
+	mode = strings.ToLower(mode)
+	switch {
+	case walRequested && mode != "wal":
+		logrus.Warnf("SQLite WAL mode was requested but the database is using %q journal mode. "+
+			"This may indicate a network filesystem (e.g. FUSE-over-NFS) that does not "+
+			"support POSIX mmap. Continuing in %q mode — move the Podman storage root "+
+			"to a local filesystem for best reliability.", mode, mode)
+	case !walRequested && mode == "wal":
+		logrus.Infof("SQLite database is already in WAL mode despite network filesystem detection; continuing in WAL mode.")
+	}
+	return nil
+}
+
 func initSQLiteDB(conn *sql.DB) (defErr error) {
 	// Start with a transaction to avoid "database locked" errors.
 	// See https://github.com/mattn/go-sqlite3/issues/274#issuecomment-1429054597

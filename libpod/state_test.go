@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
@@ -2443,4 +2444,59 @@ func TestRemoveVolumeNotInDB(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorIs(t, err, define.ErrNoSuchVolume)
 	})
+}
+
+func TestSqliteJournalModeWAL(t *testing.T) {
+	// Regression test: on a local filesystem (tmpfs in t.TempDir()), WAL mode
+	// must be successfully applied. This exercises the full detection +
+	// open + verify path through NewSqliteState.
+	state, _ := getEmptySqliteState(t)
+	sqliteState, ok := state.(*SQLiteState)
+	require.True(t, ok)
+
+	var journalMode string
+	err := sqliteState.conn.QueryRow("PRAGMA journal_mode;").Scan(&journalMode)
+	require.NoError(t, err)
+	assert.Equal(t, "wal", strings.ToLower(journalMode))
+
+	err = sqliteState.Close()
+	assert.NoError(t, err)
+}
+
+func TestSqliteVerifyJournalModeFallback(t *testing.T) {
+	// verifyJournalMode must NOT return an error when WAL was requested but
+	// the database is actually using DELETE mode (simulating FUSE-over-NFS
+	// or any other silent WAL fallback). It should log a warning and
+	// continue — a hard error here would break existing NFS users.
+	//
+	// We simulate this by opening a raw connection without _journal_mode=WAL,
+	// confirming it is in DELETE mode, then calling verifyJournalMode(true).
+	dir := t.TempDir()
+	dbPath := dir + "/fallback_test.db"
+
+	// Open without WAL option so the DB stays in the default DELETE mode.
+	conn, err := sql.Open("sqlite3", dbPath+"?_loc=auto")
+	require.NoError(t, err)
+	defer conn.Close()
+	require.NoError(t, conn.Ping())
+
+	// Confirm the raw connection is in DELETE mode before calling verify.
+	var mode string
+	require.NoError(t, conn.QueryRow("PRAGMA journal_mode;").Scan(&mode))
+	require.Equal(t, "delete", strings.ToLower(mode),
+		"precondition: raw conn must be in DELETE mode")
+
+	// verifyJournalMode must not return an error on WAL mismatch — warn only.
+	err = verifyJournalMode(conn, true)
+	assert.NoError(t, err,
+		"verifyJournalMode must not fail on WAL fallback — it should warn only")
+}
+
+func TestIsNetworkFilesystemLocalReturnsFalse(t *testing.T) {
+	// isNetworkFilesystem must return false for a local directory (tmpfs or
+	// ext4) created by t.TempDir(). This ensures the detection does not
+	// produce false positives on normal Podman installations.
+	dir := t.TempDir()
+	assert.False(t, isNetworkFilesystem(dir),
+		"isNetworkFilesystem should return false for a local tmpfs/ext4 directory")
 }

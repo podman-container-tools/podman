@@ -42,9 +42,16 @@ const (
 	sqliteOptionTXLock = "&_txlock=exclusive"
 	// Enforce case sensitivity for LIKE
 	sqliteOptionCaseSensitiveLike = "&_cslike=TRUE"
+	// Enable WAL (Write-Ahead Logging) mode to prevent freelist corruption under high concurrency
+	// and enable SQLite's broken-lock defenses (#29721).
+	// NOTE: WAL mode requires a local POSIX filesystem (ext4, xfs, btrfs) since the -shm shared
+	// memory sidecar file relies on POSIX mmap, which is not supported on network filesystems (NFS/SMB).
+	// WAL is appended to the DSN conditionally in NewSqliteState after filesystem detection.
+	sqliteOptionJournalMode = "&_journal_mode=WAL"
 
-	// Assembled sqlite options used when opening the database.
-	sqliteOptions = "?" +
+	// sqliteOptionsBase is the set of connection options that are always applied,
+	// regardless of filesystem type. WAL is appended conditionally.
+	sqliteOptionsBase = "?" +
 		sqliteOptionLocation +
 		sqliteOptionSynchronous +
 		sqliteOptionForeignKeys +
@@ -58,11 +65,12 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 	state := new(SQLiteState)
 
 	dbPath := sqliteStatePath(runtime)
+	dbDir := filepath.Dir(dbPath)
 
 	// c/storage is set up *after* the DB - so even though we use the c/s
 	// root (or, for transient, runroot) dir, we need to make the dir
 	// ourselves.
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+	if err := os.MkdirAll(dbDir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating root directory: %w", err)
 	}
 
@@ -77,7 +85,15 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 	}
 	sqliteOptionBusyTimeout := "&_busy_timeout=" + busyTimeout
 
-	conn, err := sql.Open("sqlite3", dbPath+sqliteOptions+sqliteOptionBusyTimeout)
+	// Skip WAL on network filesystems — they do not support POSIX mmap
+	// required by WAL's -shm sidecar file. See https://www.sqlite.org/wal.html
+	useWAL := !isNetworkFilesystem(dbDir)
+	dsn := dbPath + sqliteOptionsBase + sqliteOptionBusyTimeout
+	if useWAL {
+		dsn += sqliteOptionJournalMode
+	}
+
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("initializing sqlite database: %w", err)
 	}
@@ -88,6 +104,10 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 			}
 		}
 	}()
+
+	if err := verifyJournalMode(conn, useWAL); err != nil {
+		return nil, err
+	}
 
 	if err := initSQLiteDB(conn); err != nil {
 		return nil, err
