@@ -372,7 +372,7 @@ github.com/lufia/plan9stats
 github.com/manifoldco/promptui
 github.com/manifoldco/promptui/list
 github.com/manifoldco/promptui/screenbuf
-# github.com/mattn/go-runewidth v0.0.28
+# github.com/mattn/go-runewidth v0.0.30
 ## explicit; go 1.23
 github.com/mattn/go-runewidth
 # github.com/mattn/go-shellwords v1.0.15
@@ -675,11 +675,11 @@ github.com/ulikunitz/xz/lzma
 github.com/vbatts/tar-split/archive/tar
 github.com/vbatts/tar-split/tar/asm
 github.com/vbatts/tar-split/tar/storage
-# github.com/vbauerster/cupwriter v0.0.4
-## explicit; go 1.25.0
+# github.com/vbauerster/cupwriter v0.0.5
+## explicit; go 1.26.0
 github.com/vbauerster/cupwriter
-# github.com/vbauerster/mpb/v8 v8.16.1
-## explicit; go 1.25.0
+# github.com/vbauerster/mpb/v8 v8.16.2
+## explicit; go 1.26.0
 github.com/vbauerster/mpb/v8
 github.com/vbauerster/mpb/v8/decor
 github.com/vbauerster/mpb/v8/internal
