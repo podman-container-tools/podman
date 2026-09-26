@@ -1,6 +1,7 @@
 package bindings_test
 
 import (
+	"log/slog"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -11,6 +12,7 @@ import (
 func TestTest(t *testing.T) {
 	if testing.Verbose() {
 		logrus.SetLevel(logrus.DebugLevel)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
 	RegisterFailHandler(Fail)

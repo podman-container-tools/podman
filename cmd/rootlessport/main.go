@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	rkbuiltin "github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin"
 	rkportutil "github.com/rootless-containers/rootlesskit/v2/pkg/port/portutil"
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/netns"
 	"go.podman.io/common/pkg/rootlessport"
@@ -35,6 +37,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, `too many arguments, rootlessport expects a json config via STDIN`)
 		os.Exit(1)
 	}
+
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
+
 	var err error
 	if os.Args[0] == ReexecChildKey {
 		err = child()

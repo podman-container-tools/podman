@@ -24,13 +24,13 @@ func ExecAttachCtr(ctx context.Context, ctr *libpod.Container, execConfig *libpo
 	// events, and set the terminal to raw mode
 	if haveTerminal && execConfig.Terminal {
 		resizechan = make(chan resize.TerminalSize)
-		cancel, oldTermState, err := handleTerminalAttach(ctx, resizechan)
+		cancel, oldTermState, normalLogWriter, err := handleTerminalAttach(ctx, resizechan)
 		if err != nil {
 			return -1, err
 		}
 		defer cancel()
 		defer func() {
-			if err := restoreTerminal(oldTermState); err != nil {
+			if err := restoreTerminal(oldTermState, normalLogWriter); err != nil {
 				logrus.Errorf("Unable to restore terminal: %q", err)
 			}
 		}()
@@ -53,12 +53,12 @@ func StartAttachCtr(ctx context.Context, ctr *libpod.Container, stdout, stderr, 
 	// events, and set the terminal to raw mode
 
 	if haveTerminal && ctr.Terminal() {
-		cancel, oldTermState, err := handleTerminalAttach(ctx, resize)
+		cancel, oldTermState, normalLogWriter, err := handleTerminalAttach(ctx, resize)
 		if err != nil {
 			return err
 		}
 		defer func() {
-			if err := restoreTerminal(oldTermState); err != nil {
+			if err := restoreTerminal(oldTermState, normalLogWriter); err != nil {
 				logrus.Errorf("Unable to restore terminal: %q", err)
 			}
 		}()

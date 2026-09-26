@@ -622,6 +622,7 @@ github.com/sigstore/sigstore/pkg/signature/payload
 # github.com/sirupsen/logrus v1.10.2
 ## explicit; go 1.23
 github.com/sirupsen/logrus
+github.com/sirupsen/logrus/hooks/slog
 github.com/sirupsen/logrus/hooks/syslog
 # github.com/skeema/knownhosts v1.3.3
 ## explicit; go 1.25.0
