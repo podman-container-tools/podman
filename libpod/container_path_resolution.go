@@ -52,7 +52,7 @@ func (c *Container) resolvePath(mountPoint string, containerPath string) (string
 
 	searchPath := pathRelativeToContainerMountPoint
 	for {
-		volume, err := findVolume(c, searchPath)
+		volume, subPath, err := findVolume(c, searchPath)
 		if err != nil {
 			return "", "", nil, err
 		}
@@ -65,6 +65,13 @@ func (c *Container) resolvePath(mountPoint string, containerPath string) (string
 			}
 			if mountPoint == "" {
 				return "", "", nil, fmt.Errorf("volume %s is not mounted, cannot copy into it", volume.Name())
+			}
+
+			if subPath != "" {
+				mountPoint, err = securejoin.SecureJoin(mountPoint, subPath)
+				if err != nil {
+					return "", "", nil, err
+				}
 			}
 
 			// We found a matching volume for searchPath.  We now
@@ -106,16 +113,17 @@ func (c *Container) resolvePath(mountPoint string, containerPath string) (string
 }
 
 // findVolume checks if the specified containerPath matches the destination
-// path of a Volume.  Returns a matching Volume or nil.
-func findVolume(c *Container, containerPath string) (*Volume, error) {
+// path of a Volume. It returns the matching Volume, its configured subpath, or nil.
+func findVolume(c *Container, containerPath string) (*Volume, string, error) {
 	runtime := c.Runtime()
 	cleanedContainerPath := filepath.Clean(containerPath)
 	for _, vol := range c.config.NamedVolumes {
 		if cleanedContainerPath == filepath.Clean(vol.Dest) {
-			return runtime.GetVolume(vol.Name)
+			volume, err := runtime.GetVolume(vol.Name)
+			return volume, vol.SubPath, err
 		}
 	}
-	return nil, nil
+	return nil, "", nil
 }
 
 // isSubDir checks whether path is a subdirectory of root.
