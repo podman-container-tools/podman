@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,10 @@ import (
 	"go.podman.io/storage/pkg/stringid"
 	yamlv3 "gopkg.in/yaml.v3"
 	"sigs.k8s.io/yaml"
+)
+
+var (
+	labelNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$`)
 )
 
 // sdNotifyAnnotation allows for configuring service-global and
@@ -362,15 +367,21 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
-			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
-			podTemplateSpec.Spec = podYAML.Spec
-
 			for name, val := range options.Annotations {
 				if podYAML.Annotations == nil {
 					podYAML.Annotations = make(map[string]string)
 				}
 				podYAML.Annotations[name] = val
 			}
+
+			// Merge CLI-specified labels into the pod's labels and validate them.
+			podYAML.Labels, err = mergeAndValidateLabels(podYAML.Labels, options.Labels)
+			if err != nil {
+				return nil, err
+			}
+
+			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
+			podTemplateSpec.Spec = podYAML.Spec
 
 			if err := annotations.ValidateAnnotations(podYAML.Annotations); err != nil {
 				return nil, err
@@ -491,6 +502,12 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				pvcYAML.Annotations[name] = val
 			}
 
+			// Merge CLI-provided labels into the PVC's labels and validate them.
+			pvcYAML.Labels, err = mergeAndValidateLabels(pvcYAML.Labels, options.Labels)
+			if err != nil {
+				return nil, err
+			}
+
 			if options.IsRemote {
 				if _, ok := pvcYAML.Annotations[util.VolumeImportSourceAnnotation]; ok {
 					return nil, fmt.Errorf("importing volumes is not supported for remote requests")
@@ -521,6 +538,12 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
+
+			// Merge CLI-provided labels into the secret's labels and validate them.
+			secret.ObjectMeta.Labels, err = mergeAndValidateLabels(secret.ObjectMeta.Labels, options.Labels)
+			if err != nil {
+				return nil, err
+			}
 
 			r, err := ic.playKubeSecret(&secret)
 			if err != nil {
@@ -1985,9 +2008,6 @@ func (ic *ContainerEngine) playKubeSecret(secret *v1.Secret) (*entities.SecretCr
 	secretsPath := ic.Libpod.GetSecretsStorageDir()
 	opts := make(map[string]string)
 	opts["path"] = filepath.Join(secretsPath, "filedriver")
-	// maybe k8sName(data)...
-	// using this does not allow the user to use the name given to the secret
-	// but keeping secret.Name as the ID can lead to a collision.
 
 	s, err := secretsManager.Lookup(secret.Name)
 	if err == nil {
@@ -2013,6 +2033,7 @@ func (ic *ContainerEngine) playKubeSecret(secret *v1.Secret) (*entities.SecretCr
 	storeOpts := secrets.StoreOptions{
 		DriverOpts: opts,
 		Metadata:   meta,
+		Labels:     secret.ObjectMeta.Labels,
 	}
 
 	secretID, err := secretsManager.Store(secret.Name, data, "file", storeOpts)
@@ -2061,4 +2082,47 @@ func expandForKube(s *specgen.SpecGenerator) {
 	for i, subCmd := range s.Command {
 		s.Command[i] = expansion.Expand(subCmd, mapping)
 	}
+}
+
+// mergeAndValidateLabels merges the CLI-provided labels into the labels of a
+// resource from Kubernetes YAML and validates that the merged labels conform
+// to Kubernetes label rules. It returns nil if both maps are empty, so
+// callers can keep passing nil (rather than an empty map) downstream.
+func mergeAndValidateLabels(resourceLabels, cliLabels map[string]string) (map[string]string, error) {
+	if len(resourceLabels) == 0 && len(cliLabels) == 0 {
+		return nil, nil
+	}
+
+	merged := make(map[string]string, len(resourceLabels)+len(cliLabels))
+	maps.Copy(merged, resourceLabels)
+	maps.Copy(merged, cliLabels)
+
+	if err := validateLabels(merged); err != nil {
+		return nil, err
+	}
+
+	return merged, nil
+}
+
+// validateLabels validates that label keys and values conform to Kubernetes label rules.
+func validateLabels(labels map[string]string) error {
+	const maxLen = 63
+
+	for k, v := range labels {
+		prefix, name, hasPrefix := strings.Cut(k, "/")
+		if hasPrefix {
+			if err := annotations.IsDNS1123Subdomain(prefix); err != nil {
+				return fmt.Errorf("invalid label key %q: prefix %q is not a valid DNS subdomain", k, prefix)
+			}
+		} else {
+			name = prefix
+		}
+		if len(name) == 0 || len(name) > maxLen || !labelNameRegexp.MatchString(name) {
+			return fmt.Errorf("invalid label key %q", k)
+		}
+		if len(v) > maxLen || (len(v) > 0 && !labelNameRegexp.MatchString(v)) {
+			return fmt.Errorf("invalid label value %q for key %q", v, k)
+		}
+	}
+	return nil
 }

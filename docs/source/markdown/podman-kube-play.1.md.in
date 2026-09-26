@@ -234,6 +234,10 @@ Print usage statement
 Assign a static ip address to the pod. This option can be specified several times when kube play creates more than one pod.
 Note: When joining multiple networks use the **--network name:ip=\<ip\>** syntax.
 
+#### **--label**, **-l**=*key=value*
+
+Add a label to the pods, persistent volume claims, and secrets created by `podman kube play`. This option can be set multiple times.
+
 #### **--log-driver**=*driver*
 
 Set logging driver for all created containers.

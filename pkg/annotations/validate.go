@@ -37,9 +37,9 @@ const DNS1123SubdomainMaxLength int = 253
 
 var dns1123SubdomainRegexp = regexp.Delayed("^" + dns1123SubdomainFmt + "$")
 
-// isDNS1123Subdomain tests for a string that conforms to the definition of a
+// IsDNS1123Subdomain tests for a string that conforms to the definition of a
 // subdomain in DNS (RFC 1123).
-func isDNS1123Subdomain(value string) error {
+func IsDNS1123Subdomain(value string) error {
 	if len(value) > DNS1123SubdomainMaxLength {
 		return fmt.Errorf("prefix part must be no more than %d characters", DNS1123SubdomainMaxLength)
 	}
@@ -77,7 +77,7 @@ func isQualifiedName(value string) error {
 		prefix, name = parts[0], parts[1]
 		if len(prefix) == 0 {
 			return fmt.Errorf("prefix part of %s must be non-empty", value)
-		} else if err := isDNS1123Subdomain(prefix); err != nil {
+		} else if err := IsDNS1123Subdomain(prefix); err != nil {
 			return err
 		}
 	default:
