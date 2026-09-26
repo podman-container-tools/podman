@@ -534,9 +534,10 @@ func ConfigToSpec(rt *libpod.Runtime, specg *specgen.SpecGenerator, containerID 
 	if len(conf.NamedVolumes) != 0 {
 		for _, v := range conf.NamedVolumes {
 			named = append(named, &specgen.NamedVolume{
-				Name:    v.Name,
-				Dest:    v.Dest,
-				Options: v.Options,
+				Name:      v.Name,
+				Dest:      v.Dest,
+				Options:   v.Options,
+				NoInherit: v.NoInherit,
 			})
 		}
 	}

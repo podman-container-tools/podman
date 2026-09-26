@@ -496,6 +496,7 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 				Dest:        v.Dest,
 				Options:     v.Options,
 				IsAnonymous: v.IsAnonymous,
+				NoInherit:   v.NoInherit,
 				SubPath:     v.SubPath,
 			})
 		}
@@ -754,7 +755,7 @@ func Inherit(infra *libpod.Container, s *specgen.SpecGenerator, rt *libpod.Runti
 	compatibleOptions.Mounts = append(compatibleOptions.Mounts, s.Mounts...)
 	compatibleOptions.OverlayVolumes = append(compatibleOptions.OverlayVolumes, s.OverlayVolumes...)
 	compatibleOptions.SelinuxOpts = append(compatibleOptions.SelinuxOpts, s.SelinuxOpts...)
-	compatibleOptions.Volumes = append(compatibleOptions.Volumes, s.Volumes...)
+	compatibleOptions.Volumes = inheritNamedVolumes(compatibleOptions.Volumes, s.Volumes)
 
 	if err := applyInfraInherit(compatibleOptions, s); err != nil {
 		return nil, nil, nil, err
@@ -770,6 +771,16 @@ func Inherit(infra *libpod.Container, s *specgen.SpecGenerator, rt *libpod.Runti
 		s.ShmSize = nil
 	}
 	return options, infraSpec, compatibleOptions, nil
+}
+
+func inheritNamedVolumes(infraVolumes, containerVolumes []*specgen.NamedVolume) []*specgen.NamedVolume {
+	inheritedVolumes := make([]*specgen.NamedVolume, 0, len(infraVolumes)+len(containerVolumes))
+	for _, volume := range infraVolumes {
+		if !volume.NoInherit {
+			inheritedVolumes = append(inheritedVolumes, volume)
+		}
+	}
+	return append(inheritedVolumes, containerVolumes...)
 }
 
 // applyInfraInherit copies the InfraInherit fields into the SpecGenerator.

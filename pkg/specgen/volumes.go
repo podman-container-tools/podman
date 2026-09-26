@@ -27,6 +27,9 @@ type NamedVolume struct {
 	// IsAnonymous sets the named volume as anonymous even if it has a name
 	// This is used for emptyDir volumes from a kube yaml
 	IsAnonymous bool
+	// NoInherit prevents containers joining the pod from inheriting this
+	// volume from the infra container.
+	NoInherit bool
 	// SubPath stores the sub directory of the named volume to be mounted in the container
 	SubPath string
 }
