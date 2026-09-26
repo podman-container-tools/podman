@@ -1,0 +1,6 @@
+## assert-podman-args-key-val "--mount" "," "type=volume,source=app-data,destination=/data,ro=true"
+## assert-key-is "Unit" "Requires" "volume-template-volume@app-data.service"
+
+[Container]
+Image=localhost/imagename
+Mount=type=volume,source=volume-template@app-data.volume,destination=/data,ro=true
