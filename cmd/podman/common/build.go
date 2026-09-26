@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,6 +22,7 @@ import (
 	buildahDefine "go.podman.io/buildah/define"
 	buildahCLI "go.podman.io/buildah/pkg/cli"
 	"go.podman.io/buildah/pkg/parse"
+	"go.podman.io/buildah/pkg/tmpdir"
 	buildahUtil "go.podman.io/buildah/pkg/util"
 	"go.podman.io/common/pkg/auth"
 	"go.podman.io/common/pkg/completion"
@@ -213,7 +215,10 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 	}()
 	if len(args) > 0 {
 		// The context directory could be a URL.  Try to handle that.
-		tempDir, subDir, err := buildahDefine.TempDirForURL("", "buildah", args[0])
+		tempDir, subDir, err := tmpdir.ForURL(registry.Context(), "", "buildah", args[0], &tmpdir.URLOptions{
+			InsecureSkipTLSVerify: types.NewOptionalBool(!buildOpts.BudResults.TLSVerify),
+			Proxy:                 http.ProxyFromEnvironment,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("prepping temporary context directory: %w", err)
 		}
@@ -668,6 +673,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		Output:                  output,
 		OutputFormat:            format,
 		Platforms:               platforms,
+		Proxy:                   http.ProxyFromEnvironment,
 		PullPolicy:              pullPolicy,
 		PullPushRetryDelay:      retryDelay,
 		Quiet:                   flags.Quiet,

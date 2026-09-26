@@ -3,6 +3,7 @@
 package copier
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -50,11 +51,21 @@ func chmod(path string, mode os.FileMode) error {
 }
 
 func chown(path string, uid, gid int) error {
-	return os.Chown(path, uid, gid)
+	err := os.Chown(path, uid, gid)
+	// if the kernel rejects the ID mapping, provide an actionable hint
+	if err != nil && errors.Is(err, syscall.EINVAL) {
+		return fmt.Errorf("%w: check that your subuid/subgid ranges are large enough to cover %d:%d", err, uid, gid)
+	}
+	return err
 }
 
 func lchown(path string, uid, gid int) error {
-	return os.Lchown(path, uid, gid)
+	err := os.Lchown(path, uid, gid)
+	// if the kernel rejects the ID mapping, provide an actionable hint
+	if err != nil && errors.Is(err, syscall.EINVAL) {
+		return fmt.Errorf("%w: check that your subuid/subgid ranges are large enough to cover %d:%d", err, uid, gid)
+	}
+	return err
 }
 
 func lutimes(_ bool, path string, atime, mtime time.Time) error {

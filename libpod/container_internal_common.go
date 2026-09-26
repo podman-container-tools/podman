@@ -1734,7 +1734,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 		}
 	}()
 
-	if err := c.prepare(); err != nil {
+	if err := c.prepare(ctx); err != nil {
 		return nil, 0, err
 	}
 

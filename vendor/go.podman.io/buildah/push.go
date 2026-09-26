@@ -111,6 +111,12 @@ type PushOptions struct {
 
 // Push copies the contents of the image to a new location.
 func Push(ctx context.Context, image string, dest types.ImageReference, options PushOptions) (reference.Canonical, digest.Digest, error) {
+	select {
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
+	default:
+	}
+
 	libimageOptions := &libimage.PushOptions{}
 	libimageOptions.SignaturePolicyPath = options.SignaturePolicyPath
 	libimageOptions.Writer = options.ReportWriter

@@ -58,7 +58,7 @@ func (r *Runtime) NewContainer(ctx context.Context, rSpec *spec.Spec, spec *spec
 	return r.newContainer(ctx, rSpec, options...)
 }
 
-func (r *Runtime) PrepareVolumeOnCreateContainer(_ context.Context, ctr *Container) error {
+func (r *Runtime) PrepareVolumeOnCreateContainer(ctx context.Context, ctr *Container) error {
 	// Copy the content from the underlying image into the newly created
 	// volume if configured to do so.
 	if !r.config.Containers.PrepareVolumeOnCreate {
@@ -71,7 +71,7 @@ func (r *Runtime) PrepareVolumeOnCreateContainer(_ context.Context, ctr *Contain
 		}
 	}()
 
-	mountPoint, err := ctr.mountStorage()
+	mountPoint, err := ctr.mountStorage(ctx)
 	if err == nil {
 		// Finish up mountStorage
 		ctr.state.Mounted = true

@@ -12,13 +12,42 @@ formatters:
 
 linters:
   enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - decorder
+    - durationcheck
+    - errchkjson
+    - exptostd
+    - fatcontext
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - goprintffuncname
+    - grouper
+    - iface
+    - inamedparam
+    - makezero
+    - mirror
+    - misspell
     - modernize
     - nilnesserr
     - nolintlint
+    - nosprintfhostport
+    - protogetter
+    - reassign
+    - recvcheck
     - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - testableexamples
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
+    - usetesting
     - whitespace
   exclusions:
     presets:

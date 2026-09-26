@@ -2,6 +2,8 @@ package define
 
 import (
 	"io"
+	"net/http"
+	"net/url"
 	"time"
 
 	encconfig "github.com/containers/ocicrypt/config"
@@ -446,4 +448,7 @@ type BuildOptions struct {
 	// MetadataFile is the name of a file to which the builder should write a JSON map
 	// containing metadata about the built image.
 	MetadataFile string
+	// Proxy controls how we retrieve HTTP or HTTPS build contexts and
+	// sources to ADD.
+	Proxy func(req *http.Request) (*url.URL, error)
 }

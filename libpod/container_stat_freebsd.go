@@ -3,6 +3,8 @@
 package libpod
 
 import (
+	"context"
+
 	"go.podman.io/buildah/copier"
 )
 
@@ -10,6 +12,6 @@ import (
 // the mounts the jail should see. This means that we can use
 // statOnHost whether the container is running or not.
 // container is running
-func (c *Container) statInContainer(mountPoint string, containerPath string) (*copier.StatForItem, string, string, error) {
-	return c.statOnHost(mountPoint, containerPath)
+func (c *Container) statInContainer(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, string, string, error) {
+	return c.statOnHost(ctx, mountPoint, containerPath)
 }

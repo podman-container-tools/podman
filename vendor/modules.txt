@@ -18,8 +18,8 @@ github.com/BurntSushi/toml/internal
 # github.com/Masterminds/semver/v3 v3.5.0
 ## explicit; go 1.21
 github.com/Masterminds/semver/v3
-# github.com/Microsoft/go-winio v0.6.2
-## explicit; go 1.21
+# github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29
+## explicit; go 1.23.0
 github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/internal/fs
 github.com/Microsoft/go-winio/internal/socket
@@ -393,8 +393,8 @@ github.com/miekg/pkcs11
 # github.com/mistifyio/go-zfs/v4 v4.0.0
 ## explicit; go 1.14
 github.com/mistifyio/go-zfs/v4
-# github.com/moby/buildkit v0.31.2
-## explicit; go 1.25.9
+# github.com/moby/buildkit v0.33.0
+## explicit; go 1.26.3
 github.com/moby/buildkit/frontend/dockerfile/command
 github.com/moby/buildkit/frontend/dockerfile/parser
 github.com/moby/buildkit/frontend/dockerfile/shell
@@ -455,7 +455,7 @@ github.com/moby/sys/sequential
 # github.com/moby/sys/user v0.4.1
 ## explicit; go 1.18
 github.com/moby/sys/user
-# github.com/moby/sys/userns v0.2.0
+# github.com/moby/sys/userns v0.2.1
 ## explicit; go 1.21
 github.com/moby/sys/userns
 # github.com/moby/term v0.5.2
@@ -622,6 +622,7 @@ github.com/sigstore/sigstore/pkg/signature/payload
 # github.com/sirupsen/logrus v1.10.2
 ## explicit; go 1.23
 github.com/sirupsen/logrus
+github.com/sirupsen/logrus/hooks/slog
 github.com/sirupsen/logrus/hooks/syslog
 # github.com/skeema/knownhosts v1.3.3
 ## explicit; go 1.25.0
@@ -738,8 +739,8 @@ go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
-# go.podman.io/buildah v1.45.0
-## explicit; go 1.25.9
+# go.podman.io/buildah v1.45.1-0.20260922153544-b05874667205
+## explicit; go 1.26.3
 go.podman.io/buildah
 go.podman.io/buildah/bind
 go.podman.io/buildah/chroot
@@ -749,6 +750,8 @@ go.podman.io/buildah/docker
 go.podman.io/buildah/imagebuildah
 go.podman.io/buildah/internal
 go.podman.io/buildah/internal/config
+go.podman.io/buildah/internal/ctxreader
+go.podman.io/buildah/internal/httpclient
 go.podman.io/buildah/internal/metadata
 go.podman.io/buildah/internal/mkcw
 go.podman.io/buildah/internal/mkcw/types
@@ -773,6 +776,7 @@ go.podman.io/buildah/pkg/parse
 go.podman.io/buildah/pkg/rusage
 go.podman.io/buildah/pkg/sourcepolicy
 go.podman.io/buildah/pkg/sshagent
+go.podman.io/buildah/pkg/tmpdir
 go.podman.io/buildah/pkg/util
 go.podman.io/buildah/pkg/volumes
 go.podman.io/buildah/util

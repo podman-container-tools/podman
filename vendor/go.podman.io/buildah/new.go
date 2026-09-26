@@ -117,6 +117,12 @@ func findUnusedContainer(name string, containers []storage.Container) string {
 }
 
 func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions) (*Builder, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	var (
 		ref types.ImageReference
 		img *storage.Image
@@ -217,6 +223,11 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 			return nil, fmt.Errorf("instantiating image for %q instance %q: %w", transports.ImageName(ref), instanceDigest, err)
 		}
 	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	name := "working-container"
 	if options.ContainerSuffix != "" {
@@ -276,6 +287,11 @@ func newBuilder(ctx context.Context, store storage.Store, options BuilderOptions
 			}
 		}
 	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	uidmap, gidmap := convertStorageIDMaps(container.UIDMap, container.GIDMap)
 

@@ -1,6 +1,7 @@
 package buildah
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -151,18 +152,18 @@ func IsContainer(id string, store storage.Store) (bool, error) {
 // Copy content from the directory "src" to the directory "dest", ensuring that
 // content from outside of "root" (which is a parent of "src" or "src" itself)
 // isn't read.
-func extractWithTar(root, src, dest string) error {
+func extractWithTar(ctx context.Context, root, src, dest string) error {
 	var getErr, putErr error
 	var wg sync.WaitGroup
 
 	pipeReader, pipeWriter := io.Pipe()
 
 	wg.Go(func() {
-		getErr = copier.Get(root, src, copier.GetOptions{}, []string{"."}, pipeWriter)
+		getErr = copier.GetContext(ctx, root, src, copier.GetOptions{}, []string{"."}, pipeWriter)
 		pipeWriter.Close()
 	})
 	wg.Go(func() {
-		putErr = copier.Put(dest, dest, copier.PutOptions{}, pipeReader)
+		putErr = copier.PutContext(ctx, dest, dest, copier.PutOptions{}, pipeReader)
 		pipeReader.Close()
 	})
 	wg.Wait()

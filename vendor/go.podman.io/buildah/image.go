@@ -25,6 +25,7 @@ import (
 	"go.podman.io/buildah/define"
 	"go.podman.io/buildah/docker"
 	"go.podman.io/buildah/internal/config"
+	"go.podman.io/buildah/internal/ctxreader"
 	"go.podman.io/buildah/internal/mkcw"
 	"go.podman.io/buildah/internal/tmpdir"
 	"go.podman.io/image/v5/docker/reference"
@@ -93,9 +94,9 @@ const (
 	winSecurityDescriptorFile = "AQAEgBQAAAAkAAAAAAAAADAAAAABAgAAAAAABSAAAAAgAgAAAQEAAAAAAAUSAAAAAgBMAAMAAAAAABgA/wEfAAECAAAAAAAFIAAAACACAAAAABQA/wEfAAEBAAAAAAAFEgAAAAAAGACpABIAAQIAAAAAAAUgAAAAIQIAAA=="
 )
 
-// ExtractRootfsOptions is consumed by ExtractRootfs() which allows users to
-// control whether various information like the like setuid and setgid bits and
-// xattrs are preserved when extracting file system objects.
+// ExtractRootfsOptions is consumed by ExtractRootfsContext() which allows
+// users to control whether various information like the like setuid and setgid
+// bits and xattrs are preserved when extracting file system objects.
 type ExtractRootfsOptions struct {
 	StripSetuidBit bool       // strip the setuid bit off of items being extracted.
 	StripSetgidBit bool       // strip the setgid bit off of items being extracted.
@@ -178,6 +179,12 @@ type containerImageSource struct {
 }
 
 func (i *containerImageRef) NewImage(ctx context.Context, sc *types.SystemContext) (types.ImageCloser, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	src, err := i.NewImageSource(ctx, sc)
 	if err != nil {
 		return nil, err
@@ -207,7 +214,13 @@ func expectedDockerDiffIDs(image docker.V2Image) int {
 
 // Extract the container's whole filesystem as a filesystem image, wrapped
 // in LUKS-compatible encryption.
-func (i *containerImageRef) extractConfidentialWorkloadFS(options ConfidentialWorkloadOptions) (io.ReadCloser, error) {
+func (i *containerImageRef) extractConfidentialWorkloadFS(ctx context.Context, options ConfidentialWorkloadOptions) (io.ReadCloser, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	var image v1.Image
 	if err := json.Unmarshal(i.oconfig, &image); err != nil {
 		return nil, fmt.Errorf("recreating OCI configuration for %q: %w", i.containerID, err)
@@ -246,7 +259,7 @@ func (i *containerImageRef) extractConfidentialWorkloadFS(options ConfidentialWo
 		GraphOptions:             i.store.GraphOptions(),
 		ExtraImageContent:        i.extraImageContent,
 	}
-	rc, _, err := mkcw.Archive(mountPoint, &image, archiveOptions)
+	rc, _, err := mkcw.Archive(ctx, mountPoint, &image, archiveOptions)
 	if err != nil {
 		if _, err2 := i.store.Unmount(i.containerID, false); err2 != nil {
 			logrus.Debugf("unmounting container %q: %v", i.containerID, err2)
@@ -272,7 +285,7 @@ func (i *containerImageRef) extractConfidentialWorkloadFS(options ConfidentialWo
 // Extract the container's whole filesystem as if it were a single layer.
 // The ExtractRootfsOptions control whether or not to preserve setuid and
 // setgid bits and extended attributes on contents.
-func (i *containerImageRef) extractRootfs(opts ExtractRootfsOptions) (io.ReadCloser, chan error, error) {
+func (i *containerImageRef) extractRootfs(ctx context.Context, opts ExtractRootfsOptions) (io.ReadCloser, chan error, error) {
 	var uidMap, gidMap []idtools.IDMap
 	mountPoint, err := i.store.Mount(i.containerID, i.mountLabel)
 	if err != nil {
@@ -299,7 +312,7 @@ func (i *containerImageRef) extractRootfs(opts ExtractRootfsOptions) (io.ReadClo
 				return
 			}
 			defer file.Close()
-			if _, err = io.Copy(pipeWriter, file); err != nil {
+			if _, err = io.Copy(pipeWriter, ctxreader.NewCancelableReader(ctx, file)); err != nil {
 				errChan <- fmt.Errorf("writing contents of %q: %w", filename, err)
 				return
 			}
@@ -315,7 +328,7 @@ func (i *containerImageRef) extractRootfs(opts ExtractRootfsOptions) (io.ReadClo
 			StripXattrs:    opts.StripXattrs,
 			Timestamp:      opts.ForceTimestamp,
 		}
-		err := copier.Get(mountPoint, mountPoint, copierOptions, []string{"."}, pipeWriter)
+		err := copier.GetContext(ctx, mountPoint, mountPoint, copierOptions, []string{"."}, pipeWriter)
 		errChan <- err
 	}()
 	return ioutils.NewReadCloserWrapper(pipeReader, func() error {
@@ -821,7 +834,13 @@ func (mb *ociManifestBuilder) manifestAndConfig() ([]byte, []byte, error) {
 }
 
 // filterExclusionsByImage returns a slice of the members of "exclusions" which are present in the image with the specified ID
-func (i containerImageRef) filterExclusionsByImage(ctx context.Context, exclusions []copier.EnsureParentPath, imageID string) ([]copier.EnsureParentPath, error) {
+func (i *containerImageRef) filterExclusionsByImage(ctx context.Context, exclusions []copier.EnsureParentPath, imageID string) ([]copier.EnsureParentPath, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if len(exclusions) == 0 || imageID == "" {
 		return nil, nil
 	}
@@ -857,7 +876,7 @@ func (i containerImageRef) filterExclusionsByImage(ctx context.Context, exclusio
 		globs = append(globs, exclusion.Path)
 	}
 	options := copier.StatOptions{}
-	stats, err := copier.Stat(mountPoint, mountPoint, options, globs)
+	stats, err := copier.StatContext(ctx, mountPoint, mountPoint, options, globs)
 	if err != nil {
 		return nil, fmt.Errorf("checking for potential exclusion items in image %q: %w", imageID, err)
 	}
@@ -879,6 +898,8 @@ func (i containerImageRef) filterExclusionsByImage(ctx context.Context, exclusio
 				if exclusion.Owner != nil && (int64(exclusion.Owner.UID) != stat.UID && int64(exclusion.Owner.GID) != stat.GID) {
 					continue
 				}
+				exclusion.Mode = &stat.Mode
+				exclusion.Owner = &idtools.IDPair{UID: int(stat.UID), GID: int(stat.GID)}
 				paths = append(paths, exclusion)
 			}
 		}
@@ -887,6 +908,12 @@ func (i containerImageRef) filterExclusionsByImage(ctx context.Context, exclusio
 }
 
 func (i *containerImageRef) NewImageSource(ctx context.Context, _ *types.SystemContext) (src types.ImageSource, err error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// These maps will let us check if a layer ID is part of one group or another.
 	parentLayerIDs := make(map[string]bool)
 	apiLayerIDs := make(map[string]bool)
@@ -1051,15 +1078,16 @@ func (i *containerImageRef) NewImageSource(ctx context.Context, _ *types.SystemC
 		var rc io.ReadCloser
 		var errChan chan error
 		var layerExclusions []copier.ConditionalRemovePath
+		var layerPullUps []copier.EnsureParentPath
 		if i.confidentialWorkload.Convert {
 			// Convert the root filesystem into an encrypted disk image.
-			rc, err = i.extractConfidentialWorkloadFS(i.confidentialWorkload)
+			rc, err = i.extractConfidentialWorkloadFS(ctx, i.confidentialWorkload)
 			if err != nil {
 				return nil, err
 			}
 		} else if i.squash {
 			// Extract the root filesystem as a single layer.
-			rc, errChan, err = i.extractRootfs(ExtractRootfsOptions{})
+			rc, errChan, err = i.extractRootfs(ctx, ExtractRootfsOptions{})
 			if err != nil {
 				return nil, err
 			}
@@ -1086,14 +1114,13 @@ func (i *containerImageRef) NewImageSource(ctx context.Context, _ *types.SystemC
 				if layerID == i.layerID {
 					// We need to filter out any mount targets that we created.
 					layerExclusions = append(slices.Clone(i.layerExclusions), i.layerMountTargets...)
-					// And we _might_ need to filter out directories that modified
-					// by creating and removing mount targets, _if_ they were the
-					// same in the base image for this stage.
-					layerPullUps, err := i.filterExclusionsByImage(ctx, i.layerPullUps, i.fromImageID)
+					// Parent directories that were modified by creating and
+					// removing mount targets should have their ownership
+					// and mode corrected rather than being excluded.
+					layerPullUps, err = i.filterExclusionsByImage(ctx, i.layerPullUps, i.fromImageID)
 					if err != nil {
 						return nil, fmt.Errorf("checking which exclusions are in base image %q: %w", i.fromImageID, err)
 					}
-					layerExclusions = append(layerExclusions, layerPullUps...)
 				}
 				// Extract this layer, one of possibly many.
 				rc, err = i.store.Diff("", layerID, diffOptions)
@@ -1137,14 +1164,14 @@ func (i *containerImageRef) NewImageSource(ctx context.Context, _ *types.SystemC
 		// Use specified timestamps in the layer, if we're doing that for history
 		// entries.
 		nestedWriteCloser := ioutils.NewWriteCloserWrapper(writer, writeCloser.Close)
-		writeCloser, err = makeFilteredLayerWriteCloser(nestedWriteCloser, i.layerModTime, i.layerLatestModTime, layerExclusions, i.os == "windows")
+		writeCloser, err = makeFilteredLayerWriteCloser(nestedWriteCloser, i.layerModTime, i.layerLatestModTime, layerExclusions, layerPullUps, i.os == "windows")
 		if err != nil {
 			return nil, fmt.Errorf("creating filter write closer %s: %w", what, err)
 		}
 		writer = writeCloser
 		// Okay, copy from the raw diff through the filter, compressor, and counter and
 		// digesters.
-		size, err := io.Copy(writer, rc)
+		size, err := io.Copy(writer, ctxreader.NewCancelableReader(ctx, rc))
 		if err != nil {
 			writeCloser.Close()
 			layerFile.Close()
@@ -1422,8 +1449,8 @@ func (i *containerImageRef) makeExtraImageContentDiff(includeFooter bool, timest
 // no later than layerLatestModTime (if a value is provided for it).
 // This implies that if both values are provided, the archive's timestamps will
 // be set to the earlier of the two values.
-func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestModTime *time.Time, exclusions []copier.ConditionalRemovePath, windows bool) (io.WriteCloser, error) {
-	if layerModTime == nil && layerLatestModTime == nil && len(exclusions) == 0 && !windows {
+func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestModTime *time.Time, exclusions []copier.ConditionalRemovePath, pullUps []copier.EnsureParentPath, windows bool) (io.WriteCloser, error) {
+	if layerModTime == nil && layerLatestModTime == nil && len(exclusions) == 0 && len(pullUps) == 0 && !windows {
 		return wc, nil
 	}
 	exclusionsMap := make(map[string]copier.ConditionalRemovePath)
@@ -1434,10 +1461,19 @@ func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestMo
 		}
 		exclusionsMap[pathSpec] = exclusionSpec
 	}
+	pullUpsMap := make(map[string]copier.EnsureParentPath)
+	for _, pullUpSpec := range pullUps {
+		pathSpec := strings.Trim(path.Clean(pullUpSpec.Path), "/")
+		if pathSpec == "" {
+			continue
+		}
+		pullUpsMap[pathSpec] = pullUpSpec
+	}
 	var initialized bool
-	wc = newTarFilterer(wc, func(hdr *tar.Header) (skip, replaceContents bool, replacementContents io.Reader) {
+	wc = newTarFilterer(wc, func(hdr *tar.Header) (action tarFilterAction, replaceContents bool, replacementContents io.Reader) {
+		action = tarFilterKeep
 		modTime := hdr.ModTime
-		if layerModTime != nil || layerLatestModTime != nil || len(exclusions) != 0 {
+		if layerModTime != nil || layerLatestModTime != nil || len(exclusions) != 0 || len(pullUps) != 0 {
 			// Changing a zeroed field to a non-zero field can affect the
 			// format that the library uses for writing the header, so only
 			// change fields that are already set to avoid changing the
@@ -1448,8 +1484,23 @@ func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestMo
 				if (conditions.ModTime == nil || conditions.ModTime.Equal(modTime)) &&
 					(conditions.Owner == nil || (conditions.Owner.UID == hdr.Uid && conditions.Owner.GID == hdr.Gid)) &&
 					(conditions.Mode == nil || (*conditions.Mode&os.ModePerm == os.FileMode(hdr.Mode)&os.ModePerm)) {
-					return true, false, nil
+					return tarFilterSkip, false, nil
 				}
+			}
+			// Correct the ownership and mode of pulled-up parent
+			// directories, but defer writing them until a child
+			// entry passes through the filter.
+			if pullUpSpec, ok := pullUpsMap[nameSpec]; ok {
+				if pullUpSpec.Owner != nil {
+					hdr.Uid = pullUpSpec.Owner.UID
+					hdr.Gid = pullUpSpec.Owner.GID
+				}
+				if pullUpSpec.Mode != nil {
+					hdr.Mode = int64(*pullUpSpec.Mode & os.ModePerm)
+				}
+				// Fall through so timestamp/Windows transforms apply
+				// before the deferred header is copied for later emit.
+				action = tarFilterDefer
 			}
 		}
 		if layerModTime != nil {
@@ -1499,7 +1550,7 @@ func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestMo
 				hdr.PAXRecords[keyCreationTime] = fmt.Sprintf("%d.%09d", hdr.ModTime.Unix(), hdr.ModTime.Nanosecond())
 			}
 		}
-		return false, false, nil
+		return action, false, nil
 	})
 	if windows {
 		// prep the archive by writing the Files/ and Hives/ directories to the writer.
@@ -1535,7 +1586,13 @@ func makeFilteredLayerWriteCloser(wc io.WriteCloser, layerModTime, layerLatestMo
 
 // makeLinkedLayerInfos calculates the size and digest information for a layer
 // we intend to add to the image that we're committing.
-func (b *Builder) makeLinkedLayerInfos(layers []LinkedLayer, layerType string, layerModTime, layerLatestModTime *time.Time) ([]commitLinkedLayerInfo, error) {
+func (b *Builder) makeLinkedLayerInfos(ctx context.Context, layers []LinkedLayer, layerType string, layerModTime, layerLatestModTime *time.Time) ([]commitLinkedLayerInfo, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if layers == nil {
 		return nil, nil
 	}
@@ -1588,11 +1645,11 @@ func (b *Builder) makeLinkedLayerInfos(layers []LinkedLayer, layerType string, l
 
 			digester := digest.Canonical.Digester()
 			sizeCountedFile := ioutils.NewWriteCounter(io.MultiWriter(digester.Hash(), f))
-			wc, err := makeFilteredLayerWriteCloser(ioutils.NopWriteCloser(sizeCountedFile), layerModTime, layerLatestModTime, nil, false)
+			wc, err := makeFilteredLayerWriteCloser(ioutils.NopWriteCloser(sizeCountedFile), layerModTime, layerLatestModTime, nil, nil, false)
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(wc, rc)
+			_, copyErr := io.Copy(wc, ctxreader.NewCancelableReader(ctx, rc))
 			wcErr := wc.Close()
 			if err := rc.Close(); err != nil {
 				return fmt.Errorf("storing a copy of %s %q: closing reader: %w", what, info.linkedLayer.BlobPath, err)
@@ -1619,7 +1676,13 @@ func (b *Builder) makeLinkedLayerInfos(layers []LinkedLayer, layerType string, l
 // which is mainly used for representing the working container as a source
 // image that can be copied, which is how we commit the container to create the
 // image.
-func (b *Builder) makeContainerImageRef(options CommitOptions) (*containerImageRef, error) {
+func (b *Builder) makeContainerImageRef(ctx context.Context, options CommitOptions) (*containerImageRef, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if (len(options.PrependedLinkedLayers) > 0 || len(options.AppendedLinkedLayers) > 0) &&
 		(options.ConfidentialWorkloadOptions.Convert || options.Squash) {
 		return nil, errors.New("can't add prebuilt layers and produce an image with only one layer, at the same time")
@@ -1743,11 +1806,11 @@ func (b *Builder) makeContainerImageRef(options CommitOptions) (*containerImageR
 		}
 	}
 
-	preLayerInfos, err := b.makeLinkedLayerInfos(append(slices.Clone(b.PrependedLinkedLayers), slices.Clone(options.PrependedLinkedLayers)...), "prepended layer", layerModTime, layerLatestModTime)
+	preLayerInfos, err := b.makeLinkedLayerInfos(ctx, append(slices.Clone(b.PrependedLinkedLayers), slices.Clone(options.PrependedLinkedLayers)...), "prepended layer", layerModTime, layerLatestModTime)
 	if err != nil {
 		return nil, err
 	}
-	postLayerInfos, err := b.makeLinkedLayerInfos(append(slices.Clone(options.AppendedLinkedLayers), slices.Clone(b.AppendedLinkedLayers)...), "appended layer", layerModTime, layerLatestModTime)
+	postLayerInfos, err := b.makeLinkedLayerInfos(ctx, append(slices.Clone(options.AppendedLinkedLayers), slices.Clone(b.AppendedLinkedLayers)...), "appended layer", layerModTime, layerLatestModTime)
 	if err != nil {
 		return nil, err
 	}
@@ -1813,11 +1876,18 @@ func (b *Builder) makeContainerImageRef(options CommitOptions) (*containerImageR
 	return ref, nil
 }
 
-// Extract the container's whole filesystem as if it were a single layer from current builder instance
+// ExtractRootfs() calls ExtractRootfsContext() with context.TODO().
+//
+//go:fix inline
 func (b *Builder) ExtractRootfs(options CommitOptions, opts ExtractRootfsOptions) (io.ReadCloser, chan error, error) {
-	src, err := b.makeContainerImageRef(options)
+	return b.ExtractRootfsContext(context.TODO(), options, opts)
+}
+
+// ExtractRootfsContext extracts the container's whole filesystem, as if it were a single layer, from the current builder instance.
+func (b *Builder) ExtractRootfsContext(ctx context.Context, options CommitOptions, opts ExtractRootfsOptions) (io.ReadCloser, chan error, error) {
+	src, err := b.makeContainerImageRef(ctx, options)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating image reference for container %q to extract its contents: %w", b.ContainerID, err)
 	}
-	return src.extractRootfs(opts)
+	return src.extractRootfs(ctx, opts)
 }

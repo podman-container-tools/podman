@@ -1,6 +1,7 @@
 package buildah
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -192,6 +193,8 @@ type RunOptions struct {
 	// ValidExitCodes is a list of exit codes which should be considered
 	// successful. If empty, only exit code 0 is considered success.
 	ValidExitCodes []int32
+	// Initial umask to set for the process.
+	Umask *uint32
 }
 
 // RunMountArtifacts are the artifacts created when using a run mount.
@@ -244,4 +247,11 @@ type netResult struct {
 	ipv6                              bool
 	keepHostResolvers                 bool
 	preferredHostContainersInternalIP string
+}
+
+// Run() calls RunContext() with context.TODO().
+//
+//go:fix inline
+func (b *Builder) Run(command []string, options RunOptions) error {
+	return b.RunContext(context.TODO(), command, options)
 }

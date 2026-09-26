@@ -131,7 +131,13 @@ func convertToOverlay(m specs.Mount, store storage.Store, mountLabel, tmpDir str
 // clean up the overlay filesystem (if we provided a path to it), unmount and
 // remove the mountpoint for the mounted filesystem (if we provided the path to
 // its mountpoint), and then unmount the image (if we mounted one).
-func GetBindMount(sys *types.SystemContext, args []string, contextDir string, store storage.Store, mountLabel string, additionalMountPoints map[string]internal.StageMountDetails, workDir, tmpDir string) (specs.Mount, string, string, string, error) {
+func GetBindMount(ctx context.Context, sys *types.SystemContext, args []string, contextDir string, store storage.Store, mountLabel string, additionalMountPoints map[string]internal.StageMountDetails, workDir, tmpDir string) (specs.Mount, string, string, string, error) {
+	select {
+	case <-ctx.Done():
+		return specs.Mount{}, "", "", "", ctx.Err()
+	default:
+	}
+
 	newMount := specs.Mount{
 		Type: define.TypeBind,
 	}
@@ -298,7 +304,7 @@ func GetBindMount(sys *types.SystemContext, args []string, contextDir string, st
 	// buildkit parity: support absolute path for sources from current build context
 	if contextDir != "" {
 		// path should be /contextDir/specified path
-		evaluated, err := copier.Eval(contextDir, contextDir+string(filepath.Separator)+newMount.Source, copier.EvalOptions{})
+		evaluated, err := copier.EvalContext(ctx, contextDir, contextDir+string(filepath.Separator)+newMount.Source, copier.EvalOptions{})
 		if err != nil {
 			return newMount, "", "", "", err
 		}
@@ -360,7 +366,13 @@ func GetBindMount(sys *types.SystemContext, args []string, contextDir string, st
 // and remove the mountpoint of the mounted filesystem (if we provided the path
 // to its mountpoint), unmount the image (if we mounted one), and release the
 // lock (if we took one).
-func GetCacheMount(sys *types.SystemContext, args []string, store storage.Store, mountLabel string, additionalMountPoints map[string]internal.StageMountDetails, uidmap, gidmap []specs.LinuxIDMapping, workDir, tmpDir string) (specs.Mount, string, string, string, *lockfile.LockFile, error) {
+func GetCacheMount(ctx context.Context, sys *types.SystemContext, args []string, store storage.Store, mountLabel string, additionalMountPoints map[string]internal.StageMountDetails, uidmap, gidmap []specs.LinuxIDMapping, workDir, tmpDir string) (specs.Mount, string, string, string, *lockfile.LockFile, error) {
+	select {
+	case <-ctx.Done():
+		return specs.Mount{}, "", "", "", nil, ctx.Err()
+	default:
+	}
+
 	var err error
 	var mode uint64
 	var buildahLockFilesDir string
@@ -597,7 +609,7 @@ func GetCacheMount(sys *types.SystemContext, args []string, store storage.Store,
 	}
 
 	// path should be /mountPoint/specified path
-	evaluated, err := copier.Eval(thisCacheRoot, thisCacheRoot+string(filepath.Separator)+newMount.Source, copier.EvalOptions{})
+	evaluated, err := copier.EvalContext(ctx, thisCacheRoot, thisCacheRoot+string(filepath.Separator)+newMount.Source, copier.EvalOptions{})
 	if err != nil {
 		return newMount, "", "", "", nil, err
 	}
@@ -715,8 +727,14 @@ func UnlockLockArray(locks []*lockfile.LockFile) {
 // mountpoints for the bind-mounted paths, unmount any images we mounted, and
 // release the locks we returned (either using UnlockLockArray() or by
 // iterating over them and unlocking them).
-func GetVolumes(ctx *types.SystemContext, store storage.Store, mountLabel string, volumes []string, mounts []string, contextDir string, idMaps define.IDMappingOptions, workDir, tmpDir string) ([]specs.Mount, []string, []string, []string, []*lockfile.LockFile, error) {
-	unifiedMounts, mountedImages, intermediateMounts, overlayMounts, targetLocks, err := getMounts(ctx, store, mountLabel, mounts, contextDir, idMaps.UIDMap, idMaps.GIDMap, workDir, tmpDir)
+func GetVolumes(ctx context.Context, sys *types.SystemContext, store storage.Store, mountLabel string, volumes []string, mounts []string, contextDir string, idMaps define.IDMappingOptions, workDir, tmpDir string) ([]specs.Mount, []string, []string, []string, []*lockfile.LockFile, error) {
+	select {
+	case <-ctx.Done():
+		return nil, nil, nil, nil, nil, ctx.Err()
+	default:
+	}
+
+	unifiedMounts, mountedImages, intermediateMounts, overlayMounts, targetLocks, err := getMounts(ctx, sys, store, mountLabel, mounts, contextDir, idMaps.UIDMap, idMaps.GIDMap, workDir, tmpDir)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -778,7 +796,13 @@ func GetVolumes(ctx *types.SystemContext, store storage.Store, mountLabel string
 // to mountpoints), unmount any mounted images (if we provided the IDs of any),
 // and then unlock the locks we returned (either using UnlockLockArray() or by
 // iterating over them and unlocking them).
-func getMounts(ctx *types.SystemContext, store storage.Store, mountLabel string, mounts []string, contextDir string, uidmap, gidmap []specs.LinuxIDMapping, workDir, tmpDir string) (map[string]specs.Mount, []string, []string, []string, []*lockfile.LockFile, error) {
+func getMounts(ctx context.Context, sys *types.SystemContext, store storage.Store, mountLabel string, mounts []string, contextDir string, uidmap, gidmap []specs.LinuxIDMapping, workDir, tmpDir string) (map[string]specs.Mount, []string, []string, []string, []*lockfile.LockFile, error) {
+	select {
+	case <-ctx.Done():
+		return nil, nil, nil, nil, nil, ctx.Err()
+	default:
+	}
+
 	// If `type` is not set default to "bind"
 	mountType := define.TypeBind
 	finalMounts := make(map[string]specs.Mount, len(mounts))
@@ -829,7 +853,7 @@ func getMounts(ctx *types.SystemContext, store storage.Store, mountLabel string,
 		}
 		switch mountType {
 		case define.TypeBind:
-			mount, image, intermediateMount, overlayMount, err := GetBindMount(ctx, tokens, contextDir, store, mountLabel, nil, workDir, tmpDir)
+			mount, image, intermediateMount, overlayMount, err := GetBindMount(ctx, sys, tokens, contextDir, store, mountLabel, nil, workDir, tmpDir)
 			if err != nil {
 				return nil, nil, nil, nil, nil, err
 			}
@@ -847,7 +871,7 @@ func getMounts(ctx *types.SystemContext, store storage.Store, mountLabel string,
 			}
 			finalMounts[mount.Destination] = mount
 		case TypeCache:
-			mount, image, intermediateMount, overlayMount, tl, err := GetCacheMount(ctx, tokens, store, "", nil, uidmap, gidmap, workDir, tmpDir)
+			mount, image, intermediateMount, overlayMount, tl, err := GetCacheMount(ctx, sys, tokens, store, "", nil, uidmap, gidmap, workDir, tmpDir)
 			if err != nil {
 				return nil, nil, nil, nil, nil, err
 			}

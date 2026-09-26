@@ -18,6 +18,12 @@ import (
 )
 
 func importBuilderDataFromImage(ctx context.Context, store storage.Store, systemContext *types.SystemContext, imageID, containerName, containerID string) (*Builder, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if imageID == "" {
 		return nil, errors.New("internal error: imageID is empty in importBuilderDataFromImage")
 	}
@@ -120,6 +126,12 @@ func importBuilderDataFromImage(ctx context.Context, store storage.Store, system
 }
 
 func importBuilder(ctx context.Context, store storage.Store, options ImportOptions) (*Builder, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if options.Container == "" {
 		return nil, errors.New("container name must be specified")
 	}
@@ -157,6 +169,12 @@ func importBuilder(ctx context.Context, store storage.Store, options ImportOptio
 }
 
 func importBuilderFromImage(ctx context.Context, store storage.Store, options ImportFromImageOptions) (*Builder, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	if options.Image == "" {
 		return nil, errors.New("image name must be specified")
 	}

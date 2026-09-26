@@ -146,6 +146,7 @@ type BudResults struct {
 type FromAndBudResults struct {
 	AddHost        []string
 	BlobCache      string
+	BlobInfoCache  string
 	CapAdd         []string
 	CapDrop        []string
 	CDIConfigDir   string
@@ -422,7 +423,11 @@ func GetFromAndBudFlags(flags *FromAndBudResults, usernsResults *UserNSResults, 
 	fs.StringSliceVar(&flags.AddHost, "add-host", []string{}, "add a custom host-to-IP mapping (`host:ip`) (default [])")
 	fs.StringVar(&flags.BlobCache, "blob-cache", "", "assume image blobs in the specified directory will be available for pushing")
 	if err := fs.MarkHidden("blob-cache"); err != nil {
-		panic(fmt.Sprintf("error marking net flag as hidden: %v", err))
+		panic(fmt.Sprintf("error marking blob-cache flag as hidden: %v", err))
+	}
+	fs.StringVar(&flags.BlobInfoCache, "blob-info-cache-dir", "", "cache information about blobs in the specified directory instead of the default location")
+	if err := fs.MarkHidden("blob-info-cache-dir"); err != nil {
+		panic(fmt.Sprintf("error marking blob-info-cache flag as hidden: %v", err))
 	}
 	fs.StringSliceVar(&flags.CapAdd, "cap-add", []string{}, "add the specified capability when running (default [])")
 	fs.StringSliceVar(&flags.CapDrop, "cap-drop", []string{}, "drop the specified capability when running (default [])")

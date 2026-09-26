@@ -52,7 +52,7 @@ ifeq ($(BUILDDEBUG), 1)
 endif
 
 # Managed by renovate.
-export GOLANGCI_LINT_VERSION := 2.12.2
+export GOLANGCI_LINT_VERSION := 2.13.2
 
 #   make all BUILDDEBUG=1
 #     Note: Uses the -N -l go compiler options to disable compiler optimizations
@@ -155,6 +155,7 @@ validate: all lint lint-entrypoint codespell
 	./hack/xref-helpmsgs-manpages
 	./tests/validate/pr-should-include-tests
 	./tests/validate/commit-subject-check.sh $(EPOCH_TEST_COMMIT)..$(HEAD)
+	./tests/helpers.bash.t
 
 .PHONY: lint-entrypoint
 lint-entrypoint: internal/mkcw/embed/entrypoint_amd64.gz
@@ -168,11 +169,14 @@ install.go-md2man:
 install.golangci-lint:
 	$(MAKE) -C tests/tools build/golangci-lint
 
-.PHONY: install
-install: bin/buildah
+.PHONY: install.nobuild
+install.nobuild:
 	install -d -m 755 $(DESTDIR)/$(BINDIR)
 	install -m 755 bin/buildah $(DESTDIR)/$(BINDIR)/buildah
 	$(MAKE) -C docs install
+
+.PHONY: install
+install: bin/buildah install.nobuild
 
 .PHONY: uninstall
 uninstall:

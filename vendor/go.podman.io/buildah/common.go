@@ -80,6 +80,12 @@ func retryCopyImageWithOptions(ctx context.Context, policyContext *signature.Pol
 		err           error
 	)
 	err = retry.IfNecessary(ctx, func() error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		manifestBytes, err = cp.Image(ctx, policyContext, maybeWrappedDest, maybeWrappedSrc, copyOptions)
 		return err
 	}, &retry.RetryOptions{MaxRetry: maxRetries, Delay: retryDelay, IsErrorRetryable: func(err error) bool {

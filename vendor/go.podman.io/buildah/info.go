@@ -3,11 +3,13 @@ package buildah
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
@@ -15,9 +17,11 @@ import (
 	putil "go.podman.io/buildah/pkg/util"
 	"go.podman.io/buildah/util"
 	"go.podman.io/common/pkg/cgroups"
+	"go.podman.io/common/pkg/config"
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/system"
 	"go.podman.io/storage/pkg/unshare"
+	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
 
 // InfoData holds the info type, i.e store, host etc and the data for each type
@@ -39,6 +43,15 @@ func Info(store storage.Store) ([]InfoData, error) {
 		logrus.Error(err, "error getting store info")
 	}
 	info = append(info, InfoData{Type: "store", Data: storeInfo})
+
+	// get CDI information
+	cdiInfo, err := cdiInfo()
+	if err != nil && !errors.Is(err, syscall.ENOSYS) {
+		logrus.Error(err, "error getting CDI info")
+	}
+	if len(cdiInfo) > 0 {
+		info = append(info, InfoData{Type: "cdi", Data: cdiInfo})
+	}
 	return info, nil
 }
 
@@ -186,4 +199,36 @@ func getHostDistributionInfo() map[string]string {
 		}
 	}
 	return dist
+}
+
+// cdiInfo returns info about devices configured by CDI, and how we know about them.
+func cdiInfo() (map[string]any, error) {
+	cfg, err := config.Default()
+	if err != nil {
+		return nil, fmt.Errorf("reading default configuration: %w", err)
+	}
+	cache, err := cdi.NewCache(cdi.WithSpecDirs(cfg.Engine.CdiSpecDirs.Get()...), cdi.WithAutoRefresh(false))
+	if err != nil {
+		return nil, fmt.Errorf("reading CDI spec directories (%v): %w", cfg.Engine.CdiSpecDirs.Get(), err)
+	}
+	if err := cache.Refresh(); err != nil {
+		return nil, fmt.Errorf("refreshing CDI specs: %w", err)
+	}
+	devices := map[string]any{}
+	for _, device := range cache.ListDevices() {
+		devSpec := cache.GetDevice(device)
+		devices[device] = devSpec
+	}
+	vendors := map[string]any{}
+	for _, vendor := range cache.ListVendors() {
+		vendorSpecs := cache.GetVendorSpecs(vendor)
+		vendors[vendor] = vendorSpecs
+	}
+	summary := map[string]any{
+		"classes":     append([]string{}, cache.ListClasses()...),
+		"directories": cache.GetSpecDirectories(),
+		"devices":     devices,
+		"vendors":     vendors,
+	}
+	return summary, nil
 }

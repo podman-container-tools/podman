@@ -498,6 +498,10 @@ func SystemContextFromFlagSet(flags *pflag.FlagSet, findFlagFunc func(name strin
 	if err == nil && findFlagFunc("short-name-alias-conf").Changed {
 		ctx.UserShortNameAliasConfPath = shortNameAliasConf
 	}
+	blobInfoCacheDir, err := flags.GetString("blob-info-cache-dir")
+	if err == nil && findFlagFunc("blob-info-cache-dir").Changed {
+		ctx.BlobInfoCacheDir = blobInfoCacheDir
+	}
 	ctx.DockerRegistryUserAgent = fmt.Sprintf("Buildah/%s", define.Version)
 	if findFlagFunc("os") != nil && findFlagFunc("os").Changed {
 		var os string
@@ -547,19 +551,7 @@ func SystemContextFromFlagSet(flags *pflag.FlagSet, findFlagFunc func(name strin
 
 // pullPolicyWithFlags parses a string value of a pull policy, evaluating it in
 // combination with "always" and "never" boolean flags.
-// Allow for:
-// * --pull
-// * --pull=""
-// * --pull=true
-// * --pull=false
-// * --pull=never
-// * --pull=always
-// * --pull=ifmissing
-// * --pull=missing
-// * --pull=notpresent
-// * --pull=newer
-// * --pull=ifnewer
-// and --pull-always and --pull-never as boolean flags.
+// Policy names and aliases are defined in define.PolicyMap.
 func pullPolicyWithFlags(policySpec string, always, never bool) (define.PullPolicy, error) {
 	if always {
 		return define.PullAlways, nil
@@ -567,18 +559,11 @@ func pullPolicyWithFlags(policySpec string, always, never bool) (define.PullPoli
 	if never {
 		return define.PullNever, nil
 	}
-	policy := strings.ToLower(policySpec)
-	switch policy {
-	case "missing", "ifmissing", "notpresent":
-		return define.PullIfMissing, nil
-	case "true", "always":
-		return define.PullAlways, nil
-	case "false", "never":
-		return define.PullNever, nil
-	case "ifnewer", "newer":
-		return define.PullIfNewer, nil
+	policy, ok := define.PolicyMap[strings.ToLower(policySpec)]
+	if !ok {
+		return 0, fmt.Errorf("unrecognized pull policy %q", policySpec)
 	}
-	return 0, fmt.Errorf("unrecognized pull policy %q", policySpec)
+	return policy, nil
 }
 
 // PullPolicyFromOptions returns a PullPolicy that reflects the combination of

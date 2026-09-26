@@ -38,16 +38,24 @@ func (p PullPolicy) String() string {
 	case PullAlways:
 		return "always"
 	case PullIfNewer:
-		return "ifnewer"
+		return "newer"
 	case PullNever:
 		return "never"
 	}
 	return fmt.Sprintf("unrecognized policy %d", p)
 }
 
+// PolicyMap maps from names of PullPolicy values (including aliases) to
+// PullPolicy values.
 var PolicyMap = map[string]PullPolicy{
-	"missing": PullIfMissing,
-	"always":  PullAlways,
-	"never":   PullNever,
-	"ifnewer": PullIfNewer,
+	"missing":    PullIfMissing,
+	"ifmissing":  PullIfMissing,
+	"notpresent": PullIfMissing,
+	"always":     PullAlways,
+	"true":       PullAlways,
+	"never":      PullNever,
+	"false":      PullNever,
+	"newer":      PullIfNewer,
+	"ifnewer":    PullIfNewer,
+	// This map is used by pkg/parse.pullPolicyWithFlags().
 }

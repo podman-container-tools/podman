@@ -3,6 +3,7 @@
 package buildah
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -63,7 +64,14 @@ func setChildProcess() error {
 	return nil
 }
 
-func (b *Builder) Run(command []string, options RunOptions) error {
+// RunContext runs the specified command in the container's root filesystem.
+func (b *Builder) RunContext(ctx context.Context, command []string, options RunOptions) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	var runArtifacts *runMountArtifacts
 	if len(options.ExternalImageMounts) > 0 {
 		defer func() {
@@ -202,7 +210,7 @@ func (b *Builder) Run(command []string, options RunOptions) error {
 		ChownNew: idPair,
 		ChmodNew: &mode,
 	}
-	if err := copier.Mkdir(mountPoint, filepath.Join(mountPoint, spec.Process.Cwd), coptions); err != nil {
+	if err := copier.MkdirContext(ctx, mountPoint, filepath.Join(mountPoint, spec.Process.Cwd), coptions); err != nil {
 		return err
 	}
 
@@ -272,7 +280,7 @@ func (b *Builder) Run(command []string, options RunOptions) error {
 		SystemContext:    options.SystemContext,
 	}
 
-	runArtifacts, err = b.setupMounts(mountPoint, spec, path, options.Mounts, bindFiles, volumes, options.CompatBuiltinVolumes, b.CommonBuildOpts.Volumes, options.RunMounts, runMountInfo)
+	runArtifacts, err = b.setupMounts(ctx, mountPoint, spec, path, options.Mounts, bindFiles, volumes, options.CompatBuiltinVolumes, b.CommonBuildOpts.Volumes, options.RunMounts, runMountInfo)
 	if err != nil {
 		return fmt.Errorf("resolving mountpoints for container %q: %w", b.ContainerID, err)
 	}
@@ -323,7 +331,7 @@ func (b *Builder) Run(command []string, options RunOptions) error {
 
 	// Create any mount points that we need that aren't already present in
 	// the rootfs.
-	createdMountTargets, err := b.createMountTargets(spec)
+	createdMountTargets, err := b.createMountTargets(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("ensuring mount targets for container %q: %w", b.ContainerID, err)
 	}
@@ -334,7 +342,7 @@ func (b *Builder) Run(command []string, options RunOptions) error {
 		// points to stick around.  They'll still get filtered out at
 		// commit-time if another concurrent Run() is keeping something
 		// busy.
-		if _, err := copier.ConditionalRemove(mountPoint, mountPoint, copier.ConditionalRemoveOptions{
+		if _, err := copier.ConditionalRemoveContext(ctx, mountPoint, mountPoint, copier.ConditionalRemoveOptions{
 			UIDMap: b.store.UIDMap(),
 			GIDMap: b.store.GIDMap(),
 			Paths:  createdMountTargets,
@@ -351,9 +359,9 @@ func (b *Builder) Run(command []string, options RunOptions) error {
 		} else {
 			moreCreateArgs = nil
 		}
-		err = b.runUsingRuntimeSubproc(isolation, options, configureNetwork, networkString, moreCreateArgs, spec, mountPoint, path, containerName, b.Container, hostsFile, resolvFile)
+		err = b.runUsingRuntimeSubproc(ctx, isolation, options, configureNetwork, networkString, moreCreateArgs, spec, mountPoint, path, containerName, b.Container, hostsFile, resolvFile)
 	case IsolationChroot:
-		err = chroot.RunUsingChroot(spec, path, homeDir, options.Stdin, options.Stdout, options.Stderr, options.NoPivot)
+		err = chroot.RunUsingChrootContext(ctx, spec, path, homeDir, options.Stdin, options.Stdout, options.Stderr, options.NoPivot)
 	default:
 		err = errors.New("don't know how to run this command")
 	}
@@ -385,7 +393,7 @@ func setupSpecialMountSpecChanges(spec *specs.Spec, shmSize string) ([]specs.Mou
 // unmount the mounted filesystem (if we provided the path to its mountpoint)
 // and remove its mountpoint, unmount the image (if we mounted one), and
 // release the lock (if we took one).
-func (b *Builder) getCacheMount(tokens []string, sys *types.SystemContext, stageMountPoints map[string]internal.StageMountDetails, idMaps IDMaps, workDir, tmpDir string) (*specs.Mount, string, string, string, *lockfile.LockFile, error) {
+func (b *Builder) getCacheMount(ctx context.Context, sys *types.SystemContext, tokens []string, stageMountPoints map[string]internal.StageMountDetails, idMaps IDMaps, workDir, tmpDir string) (*specs.Mount, string, string, string, *lockfile.LockFile, error) {
 	return nil, "", "", "", nil, errors.New("cache mounts not supported on freebsd")
 }
 

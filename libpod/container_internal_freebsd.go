@@ -34,7 +34,7 @@ func (c *Container) unmountSHM(_ string) error {
 
 // prepare mounts the container and sets up other required resources like net
 // namespaces
-func (c *Container) prepare() error {
+func (c *Container) prepare(ctx context.Context) error {
 	var (
 		wg                              sync.WaitGroup
 		ctrNS                           string
@@ -71,7 +71,7 @@ func (c *Container) prepare() error {
 	// Mount storage if not mounted
 	go func() {
 		defer wg.Done()
-		mountPoint, mountStorageErr = c.mountStorage()
+		mountPoint, mountStorageErr = c.mountStorage(ctx)
 
 		if mountStorageErr != nil {
 			return

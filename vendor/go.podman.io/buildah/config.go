@@ -27,6 +27,12 @@ import (
 // (either as it exists, or converting the image if necessary), and unmarshals it into dest.
 // NOTE: The MIME type is of the _manifest_, not of the _config_ that is returned.
 func unmarshalConvertedConfig(ctx context.Context, dest any, img types.Image, wantedManifestMIMEType string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	_, actualManifestMIMEType, err := img.Manifest(ctx)
 	if err != nil {
 		return fmt.Errorf("getting manifest MIME type for %q: %w", transports.ImageName(img.Reference()), err)
@@ -62,6 +68,12 @@ func unmarshalConvertedConfig(ctx context.Context, dest any, img types.Image, wa
 }
 
 func (b *Builder) initConfig(ctx context.Context, sys *types.SystemContext, img types.Image, options *BuilderOptions) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if img != nil { // A pre-existing image, as opposed to a "FROM scratch" new one.
 		rawManifest, manifestMIMEType, err := img.Manifest(ctx)
 		if err != nil {

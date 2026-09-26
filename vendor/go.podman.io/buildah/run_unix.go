@@ -3,6 +3,7 @@
 package buildah
 
 import (
+	"context"
 	"errors"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -20,7 +21,13 @@ func setChildProcess() error {
 
 func runUsingRuntimeMain() {}
 
-func (b *Builder) Run(command []string, options RunOptions) error {
+func (b *Builder) RunContext(ctx context.Context, command []string, options RunOptions) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	return errors.New("function not supported on non-linux systems")
 }
 

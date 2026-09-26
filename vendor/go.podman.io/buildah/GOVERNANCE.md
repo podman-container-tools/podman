@@ -1,11 +1,3 @@
-## The Buildah Project Community Governance
+# Project Governance
 
-The Buildah project, as part of Podman Container Tools, follows the [Podman Project Governance](https://github.com/containers/podman/blob/main/GOVERNANCE.md)
-except sections found in this document, which override those found in Podman's Governance.
-
----
-
-# Maintainers File
-
-The definitive source of truth for maintainers of this repository is the local [MAINTAINERS.md](./MAINTAINERS.md) file. The [MAINTAINERS.md](https://github.com/containers/podman/blob/main/MAINTAINERS.md) file in the main Podman repository is used for project-spanning roles, including Core Maintainer and Community Manager.
-
+The Buildah tool, as part of the [Podman Container Tools project](https://www.cncf.io/projects/podman-container-tools), follows the project's governance, which is defined here: https://github.com/podman-container-tools/community/blob/main/GOVERNANCE.md

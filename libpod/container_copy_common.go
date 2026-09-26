@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	buildahCopiah "go.podman.io/buildah/copier"
+	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/pkg/chrootuser"
 	"go.podman.io/buildah/util"
 	"go.podman.io/podman/v6/libpod/define"
@@ -23,7 +24,7 @@ import (
 	"go.podman.io/storage/pkg/stringid"
 )
 
-func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir bool, rename map[string]string, reader io.Reader) (func() error, error) {
+func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noOverwriteDirNonDir bool, rename map[string]string, reader io.Reader) (func() error, error) {
 	var (
 		mountPoint   string
 		resolvedRoot string
@@ -93,7 +94,7 @@ func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir boo
 		// containers that have never started.
 		if len(c.config.NamedVolumes) > 0 {
 			for _, v := range c.config.NamedVolumes {
-				vol, err := c.mountNamedVolume(v, mountPoint)
+				vol, err := c.mountNamedVolume(ctx, v, mountPoint)
 				if err != nil {
 					unmount()
 					return nil, err
@@ -211,7 +212,7 @@ func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir boo
 	return func() error {
 		defer unmount()
 		defer decompressed.Close()
-		putOptions := buildahCopiah.PutOptions{
+		putOptions := copier.PutOptions{
 			UIDMap:               c.config.IDMappings.UIDMap,
 			GIDMap:               c.config.IDMappings.GIDMap,
 			ChownDirs:            idPair,
@@ -223,13 +224,13 @@ func (c *Container) copyFromArchive(path string, chown, noOverwriteDirNonDir boo
 
 		return c.joinMountAndExec(
 			func() error {
-				return buildahCopiah.Put(resolvedRoot, resolvedPath, putOptions, decompressed)
+				return copier.PutContext(ctx, resolvedRoot, resolvedPath, putOptions, decompressed)
 			},
 		)
 	}, nil
 }
 
-func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, error) {
+func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Writer) (func() error, error) {
 	var (
 		mountPoint string
 		unmount    func()
@@ -253,7 +254,7 @@ func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, 
 		}
 	}
 
-	statInfo, resolvedRoot, resolvedPath, err := c.stat(mountPoint, path)
+	statInfo, resolvedRoot, resolvedPath, err := c.stat(ctx, mountPoint, path)
 	if err != nil {
 		unmount()
 		return nil, err
@@ -283,7 +284,7 @@ func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, 
 
 	return func() error {
 		defer unmount()
-		getOptions := buildahCopiah.GetOptions{
+		getOptions := copier.GetOptions{
 			// Unless the specified points to ".", we want to copy the base directory.
 			KeepDirectoryNames: statInfo.IsDir && filepath.Base(path) != ".",
 			UIDMap:             c.config.IDMappings.UIDMap,
@@ -299,7 +300,7 @@ func (c *Container) copyToArchive(path string, writer io.Writer) (func() error, 
 		}
 		return c.joinMountAndExec(
 			func() error {
-				return buildahCopiah.Get(resolvedRoot, "", getOptions, []string{resolvedPath}, writer)
+				return copier.GetContext(ctx, resolvedRoot, "", getOptions, []string{resolvedPath}, writer)
 			},
 		)
 	}, nil

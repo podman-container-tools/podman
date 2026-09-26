@@ -36,6 +36,12 @@ func stringSliceReplaceAll(slice []string, replacements map[string]string, impor
 // sbomScan iterates through the scanning configuration settings, generating
 // SBOM files and storing them either in the rootfs or in a local file path.
 func (b *Builder) sbomScan(ctx context.Context, options CommitOptions) (imageFiles, localFiles map[string]string, scansDir string, err error) {
+	select {
+	case <-ctx.Done():
+		return nil, nil, "", ctx.Err()
+	default:
+	}
+
 	// We'll use a temporary per-container directory for this one.
 	cdir, err := b.store.ContainerDirectory(b.ContainerID)
 	if err != nil {
@@ -211,7 +217,7 @@ func (b *Builder) sbomScan(ctx context.Context, options CommitOptions) (imageFil
 		// or more files named "scan%d.json" in our temporary directory.
 		for _, resolvedCommand := range resolvedCommands {
 			logrus.Debugf("Running scan command %q", resolvedCommand)
-			if err = scanBuilder.Run(resolvedCommand, runOptions); err != nil {
+			if err = scanBuilder.RunContext(ctx, resolvedCommand, runOptions); err != nil {
 				return nil, nil, "", fmt.Errorf("running scanning command %v: %w", resolvedCommand, err)
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah/define"
+	"go.podman.io/buildah/internal/ctxreader"
 	"go.podman.io/buildah/internal/mkcw"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/types"
@@ -68,6 +69,12 @@ type CWConvertImageOptions struct {
 // Returns the new image's ID and digest on success, along with a canonical
 // reference for it if a repository name was specified.
 func CWConvertImage(ctx context.Context, systemContext *types.SystemContext, store storage.Store, options CWConvertImageOptions) (string, reference.Canonical, digest.Digest, error) {
+	select {
+	case <-ctx.Done():
+		return "", nil, "", ctx.Err()
+	default:
+	}
+
 	// Apply our defaults if some options aren't set.
 	logger := options.Logger
 	if logger == nil {
@@ -172,11 +179,11 @@ func CWConvertImage(ctx context.Context, systemContext *types.SystemContext, sto
 		GraphOptions:             store.GraphOptions(),
 		ExtraImageContent:        options.ExtraImageContent,
 	}
-	rc, workloadConfig, err := mkcw.Archive(sourceDir, &source.OCIv1, archiveOptions)
+	rc, workloadConfig, err := mkcw.Archive(ctx, sourceDir, &source.OCIv1, archiveOptions)
 	if err != nil {
 		return "", nil, "", fmt.Errorf("generating encrypted image content: %w", err)
 	}
-	if err = archive.Untar(rc, targetDir, &archive.TarOptions{}); err != nil {
+	if err = archive.Untar(ctxreader.NewCancelableReader(ctx, rc), targetDir, &archive.TarOptions{}); err != nil {
 		if err = rc.Close(); err != nil {
 			logger.Warnf("cleaning up: %v", err)
 		}

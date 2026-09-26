@@ -3,7 +3,6 @@ package buildah
 import (
 	"archive/tar"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -19,21 +18,21 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/go-connections/tlsconfig"
 	"github.com/hashicorp/go-multierror"
 	"github.com/moby/sys/userns"
 	digest "github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	"github.com/tonistiigi/dchapes-mode"
+	mode "github.com/tonistiigi/dchapes-mode"
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/define"
+	"go.podman.io/buildah/internal/httpclient"
 	"go.podman.io/buildah/internal/tmpdir"
 	"go.podman.io/buildah/internal/urlsource"
 	"go.podman.io/buildah/pkg/chrootuser"
+	tmpdirpkg "go.podman.io/buildah/pkg/tmpdir"
 	"go.podman.io/common/pkg/retry"
-	"go.podman.io/image/v5/pkg/tlsclientconfig"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
@@ -126,33 +125,31 @@ type AddAndCopyOptions struct {
 	// FollowSymlink controls whether symlinks should be followed when copying content.
 	// When set to false, symlinks are not dereferenced.
 	FollowSymlink types.OptionalBool
+	// KeepGitDir keeps the cloned ".git" subdirectory instead of stripping it out
+	// when set to true. This is only meaningful for Git sources. Defaults to false.
+	KeepGitDir bool
+	// Callback which controls which, if any, proxy server to use when retrieving HTTP or
+	// HTTPS sources.  Used to construct an http.Client's Transport.
+	Proxy func(*http.Request) (*url.URL, error)
 }
 
 // getURL writes a tar archive containing the named content
-func getURL(src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, certPath string, insecureSkipTLSVerify types.OptionalBool, timestamp *time.Time) error {
+func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, timestamp *time.Time, client *http.Client) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	url, err := url.Parse(src)
 	if err != nil {
 		return err
 	}
-	tlsClientConfig := &tls.Config{
-		// As of 2025-08, tlsconfig.ClientDefault() differs from Go 1.23 defaults only in CipherSuites;
-		// so, limit us to only using that value. If go-connections/tlsconfig changes its policy, we
-		// will want to consider that and make a decision whether to follow suit.
-		// There is some chance that eventually the Go default will be to require TLS 1.3, and that point
-		// we might want to drop the dependency on go-connections entirely.
-		CipherSuites: tlsconfig.ClientDefault().CipherSuites,
-	}
-	if err := tlsclientconfig.SetupCertificates(certPath, tlsClientConfig); err != nil {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	if err != nil {
 		return err
 	}
-	tlsClientConfig.InsecureSkipVerify = insecureSkipTLSVerify == types.OptionalBoolTrue
-
-	tr := &http.Transport{
-		TLSClientConfig: tlsClientConfig,
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	httpClient := &http.Client{Transport: tr}
-	response, err := httpClient.Get(src)
+	response, err := client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -184,7 +181,7 @@ func getURL(src string, chown *idtools.IDPair, mountpoint, renameTarget string, 
 	}
 	// Figure out the size of the content.
 	size := response.ContentLength
-	var responseBody io.Reader = response.Body
+	responseBody := io.Reader(response.Body)
 	if size < 0 {
 		// Create a temporary file and copy the content to it, so that
 		// we can figure out how much content there is.
@@ -307,10 +304,23 @@ func getParentsPrefixToRemoveAndParentsToSkip(pattern string, contextDir string)
 	return prefix, out
 }
 
-// Add copies the contents of the specified sources into the container's root
+// Add() calls AddContext() with context.TODO().
+//
+//go:fix inline
+func (b *Builder) Add(destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+	return b.AddContext(context.TODO(), destination, extract, options, sources...)
+}
+
+// AddContext copies the contents of the specified sources into the container's root
 // filesystem, optionally extracting contents of local files that look like
 // non-empty archives.
-func (b *Builder) Add(destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+func (b *Builder) AddContext(ctx context.Context, destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	mountPoint, err := b.Mount(b.MountLabel)
 	if err != nil {
 		return err
@@ -374,7 +384,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			DisallowWildcard:   options.AllowWildcard == types.OptionalBoolFalse,
 			AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 		}
-		localSourceStats, err = copier.Stat(contextDir, contextDir, statOptions, localSources)
+		localSourceStats, err = copier.StatContext(ctx, contextDir, contextDir, statOptions, localSources)
 		if err != nil {
 			return fmt.Errorf("checking on sources under %q: %w", contextDir, err)
 		}
@@ -466,7 +476,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	statOptions := copier.StatOptions{
 		CheckForArchives: extract,
 	}
-	destStats, err := copier.Stat(mountPoint, filepath.Join(mountPoint, b.WorkDir()), statOptions, []string{extractDirectory})
+	destStats, err := copier.StatContext(ctx, mountPoint, filepath.Join(mountPoint, b.WorkDir()), statOptions, []string{extractDirectory})
 	if err != nil {
 		return fmt.Errorf("checking on destination %v: %w", extractDirectory, err)
 	}
@@ -496,7 +506,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 	// Make sure that, if it's a symlink, we'll chroot to the target of the link;
 	// knowing that target requires that we resolve it within the chroot.
 	evalOptions := copier.EvalOptions{}
-	evaluated, err := copier.Eval(mountPoint, extractDirectory, evalOptions)
+	evaluated, err := copier.EvalContext(ctx, mountPoint, extractDirectory, evalOptions)
 	if err != nil {
 		return fmt.Errorf("checking on destination %v: %w", extractDirectory, err)
 	}
@@ -559,7 +569,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 		if !strings.HasPrefix(putDirAbs, stagingDirAbs+string(os.PathSeparator)) && putDirAbs != stagingDirAbs {
 			return fmt.Errorf("destination path %q escapes staging directory", destination)
 		}
-		if err := copier.Mkdir(putRoot, putDirAbs, mkdirOptions); err != nil {
+		if err := copier.MkdirContext(ctx, putRoot, putDirAbs, mkdirOptions); err != nil {
 			return fmt.Errorf("ensuring target directory exists: %w", err)
 		}
 		tempPath := putDir
@@ -570,12 +580,22 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 			tempPath = filepath.Dir(tempPath)
 		}
 	} else {
-		if err := copier.Mkdir(mountPoint, extractDirectory, mkdirOptions); err != nil {
+		if err := copier.MkdirContext(ctx, mountPoint, extractDirectory, mkdirOptions); err != nil {
 			return fmt.Errorf("ensuring target directory exists: %w", err)
 		}
 
 		putRoot = extractDirectory
 		putDir = extractDirectory
+	}
+
+	urlOptions := tmpdirpkg.URLOptions{
+		CertPath:              options.CertPath,
+		InsecureSkipTLSVerify: options.InsecureSkipTLSVerify,
+		Proxy:                 options.Proxy,
+	}
+	httpClient, err := httpclient.ForURLOptions(urlOptions)
+	if err != nil {
+		return fmt.Errorf("setting up http client options: %w", err)
 	}
 
 	// Copy each source in turn.
@@ -599,7 +619,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					defer wg.Done()
 					defer pipeWriter.Close()
 					var cloneDir, subdir string
-					cloneDir, subdir, getErr = define.TempDirForURL(tmpdir.GetTempDir(), "", src)
+					cloneDir, subdir, getErr = tmpdirpkg.ForURL(ctx, tmpdir.GetTempDir(), "", src, &urlOptions)
 					if getErr != nil {
 						return
 					}
@@ -621,12 +641,20 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					}
 					writer := io.WriteCloser(pipeWriter)
 					repositoryDir := filepath.Join(cloneDir, subdir)
-					getErr = copier.Get(repositoryDir, repositoryDir, getOptions, []string{"."}, writer)
+
+					// Unless the caller asked to keep the ".git", remove it before copying.
+					if !options.KeepGitDir {
+						if getErr = os.RemoveAll(filepath.Join(repositoryDir, ".git")); getErr != nil {
+							getErr = fmt.Errorf("removing .git directory: %w", getErr)
+							return
+						}
+					}
+					getErr = copier.GetContext(ctx, repositoryDir, repositoryDir, getOptions, []string{"."}, writer)
 				}()
 			} else {
 				go func() {
-					getErr = retry.IfNecessary(context.TODO(), func() error {
-						return getURL(src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.CertPath, options.InsecureSkipTLSVerify, options.Timestamp)
+					getErr = retry.IfNecessary(ctx, func() error {
+						return getURL(ctx, src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.Timestamp, httpClient)
 					}, &retry.Options{
 						MaxRetry: options.MaxRetries,
 						Delay:    options.RetryDelay,
@@ -656,7 +684,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						IgnoreDevices: userns.RunningInUserNS(),
 						Timestamp:     options.Timestamp,
 					}
-					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
+					putErr = copier.PutContext(ctx, putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()
@@ -741,18 +769,18 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 				renamedItems := 0
 				writer := io.WriteCloser(pipeWriter)
 				if renameTarget != "" {
-					writer = newTarFilterer(writer, func(hdr *tar.Header) (bool, bool, io.Reader) {
+					writer = newTarFilterer(writer, func(hdr *tar.Header) (tarFilterAction, bool, io.Reader) {
 						hdr.Name = renameTarget
 						renamedItems++
-						return false, false, nil
+						return tarFilterKeep, false, nil
 					})
 				}
 
 				if options.Parents {
 					parentsPrefixToRemove, parentsToSkip := getParentsPrefixToRemoveAndParentsToSkip(src, options.ContextDir)
-					writer = newTarFilterer(writer, func(hdr *tar.Header) (bool, bool, io.Reader) {
+					writer = newTarFilterer(writer, func(hdr *tar.Header) (tarFilterAction, bool, io.Reader) {
 						if slices.Contains(parentsToSkip, hdr.Name) && hdr.Typeflag == tar.TypeDir {
-							return true, false, nil
+							return tarFilterSkip, false, nil
 						}
 						hdr.Name = strings.TrimPrefix(hdr.Name, parentsPrefixToRemove)
 						hdr.Name = strings.TrimPrefix(hdr.Name, "/")
@@ -761,14 +789,14 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 							hdr.Linkname = strings.TrimPrefix(hdr.Linkname, "/")
 						}
 						if hdr.Name == "" {
-							return true, false, nil
+							return tarFilterSkip, false, nil
 						}
-						return false, false, nil
+						return tarFilterKeep, false, nil
 					})
 				}
-				writer = newTarFilterer(writer, func(_ *tar.Header) (bool, bool, io.Reader) {
+				writer = newTarFilterer(writer, func(_ *tar.Header) (tarFilterAction, bool, io.Reader) {
 					itemsCopied++
-					return false, false, nil
+					return tarFilterKeep, false, nil
 				})
 				getOptions := copier.GetOptions{
 					UIDMap:             srcUIDMap,
@@ -788,7 +816,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 					AllowEmptyWildcard: options.AllowEmptyWildcard == types.OptionalBoolTrue,
 					NoDerefSymlinks:    options.FollowSymlink == types.OptionalBoolFalse,
 				}
-				getErr = copier.Get(contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
+				getErr = copier.GetContext(ctx, contextDir, contextDir, getOptions, []string{globbedToGlobbable(globbed)}, writer)
 				closeErr = writer.Close()
 				if renameTarget != "" && renamedItems > 1 {
 					renameErr = fmt.Errorf("internal error: renamed %d items when we expected to only rename 1", renamedItems)
@@ -820,7 +848,7 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 						IgnoreDevices:   userns.RunningInUserNS(),
 						Timestamp:       options.Timestamp,
 					}
-					putErr = copier.Put(putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
+					putErr = copier.PutContext(ctx, putRoot, putDir, putOptions, io.TeeReader(pipeReader, hasher))
 				}
 				hashCloser.Close()
 				pipeReader.Close()
@@ -982,9 +1010,16 @@ func (b *Builder) userForCopy(mountPoint string, userspec string) (uint32, uint3
 	return owner.UID, owner.GID, nil
 }
 
-// EnsureContainerPathAs creates the specified directory if it doesn't exist,
-// setting a newly-created directory's owner to USER and its permissions to MODE.
+// EnsureContainerPathAs calls EnsureContainerPathAsContext using context.TODO().
+//
+//go:fix inline
 func (b *Builder) EnsureContainerPathAs(path, user string, mode *os.FileMode) error {
+	return b.EnsureContainerPathAsContext(context.TODO(), path, user, mode)
+}
+
+// EnsureContainerPathAsContext creates the specified directory if it doesn't exist,
+// setting a newly-created directory's owner to USER and its permissions to MODE.
+func (b *Builder) EnsureContainerPathAsContext(ctx context.Context, path, user string, mode *os.FileMode) error {
 	mountPoint, err := b.Mount(b.MountLabel)
 	if err != nil {
 		return err
@@ -1012,5 +1047,5 @@ func (b *Builder) EnsureContainerPathAs(path, user string, mode *os.FileMode) er
 		UIDMap:   destUIDMap,
 		GIDMap:   destGIDMap,
 	}
-	return copier.Mkdir(mountPoint, filepath.Join(mountPoint, path), opts)
+	return copier.MkdirContext(ctx, mountPoint, filepath.Join(mountPoint, path), opts)
 }
