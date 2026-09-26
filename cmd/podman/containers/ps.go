@@ -294,8 +294,15 @@ func ps(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+type psHeader map[string]string
+
+// Label uses the requested label name as the column heading.
+func (h psHeader) Label(name string) string {
+	return name
+}
+
 // cannot use report.Headers() as it doesn't support structures as fields
-func createPsOut() ([]map[string]string, string) {
+func createPsOut() ([]psHeader, string) {
 	hdrs := report.Headers(psReporter{}, map[string]string{
 		"Cgroup":       "cgroupns",
 		"CreatedHuman": "created",
@@ -327,7 +334,7 @@ func createPsOut() ([]map[string]string, string) {
 			row += "\t{{.Size}}"
 		}
 	}
-	return hdrs, "{{range .}}" + row + "\n{{end -}}"
+	return []psHeader{psHeader(hdrs[0])}, "{{range .}}" + row + "\n{{end -}}"
 }
 
 type psReporter struct {

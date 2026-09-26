@@ -1,11 +1,59 @@
 package containers
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/common/pkg/report"
+	"go.podman.io/podman/v6/pkg/domain/entities"
 )
+
+func TestPsLabelFormat(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		format string
+		want   string
+	}{
+		{
+			name:   "table labels",
+			format: `table {{.Names}}|{{.Label "app"}}|{{.Label "com.example.project"}}|{{.Label "missing"}}`,
+			want:   "NAMES|app|com.example.project|missing\nwith-label|my-app|my-project|\nwithout-label|||\n",
+		},
+		{
+			name:   "labels without headings",
+			format: `{{.Names}}|{{.Label "app"}}`,
+			want:   "with-label|my-app\nwithout-label|\n",
+		},
+		{
+			name:   "ordinary headings",
+			format: `table {{.Names}}|{{.ID}}`,
+			want:   "NAMES|CONTAINER ID\nwith-label|123456789abc\nwithout-label|abcdef123456\n",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			rpt, err := report.New(&output, "ps").Parse(report.OriginUser, tt.format)
+			require.NoError(t, err)
+			if rpt.RenderHeaders {
+				headers, _ := createPsOut()
+				require.NoError(t, rpt.Execute(headers))
+			}
+			require.NoError(t, rpt.Execute([]psReporter{
+				{entities.ListContainer{
+					ID:     "123456789abc",
+					Names:  []string{"with-label"},
+					Labels: map[string]string{"app": "my-app", "com.example.project": "my-project"},
+				}},
+				{entities.ListContainer{ID: "abcdef123456", Names: []string{"without-label"}}},
+			}))
+			require.NoError(t, rpt.Flush())
+			assert.Equal(t, tt.want, output.String())
+		})
+	}
+}
 
 func Test_portsToString(t *testing.T) {
 	tests := []struct {
