@@ -1,12 +1,10 @@
-//go:build !windows && !js && !wasip1
+//go:build js || wasip1
 
 package cupwriter
 
 import (
 	"bytes"
 	"io"
-
-	"golang.org/x/sys/unix"
 )
 
 // Writer is a buffered terminal writer, which moves cursor N lines up
@@ -29,24 +27,19 @@ func (w *Writer) Flush(lines int) error {
 		return err
 	}
 
-	if w.terminal || w.forceTTY {
+	if w.forceTTY {
 		return w.ew.ansiCuuAndEd(w, lines)
 	}
 
 	return nil
 }
 
-// getTermSize returns the dimensions of the given terminal.
+// getTermSize reports that terminal dimensions are unavailable on WebAssembly.
 func getTermSize(fd int) (width, height int, err error) {
-	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
-	if err != nil {
-		return
-	}
-	return int(ws.Col), int(ws.Row), nil
+	return 0, 0, nil
 }
 
-// isTerminal returns whether the given file descriptor is a terminal.
+// isTerminal reports that WebAssembly file descriptors are not terminals.
 func isTerminal(fd int) bool {
-	_, err := unix.IoctlGetTermios(fd, ioctlReadTermios)
-	return err == nil
+	return false
 }

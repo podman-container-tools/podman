@@ -54,10 +54,24 @@ var (
 	strictWidthLUT      [2][0x110000]byte
 	strictWidthLUTLimit atomic.Int32
 	strictWidthLUTOnce  sync.Once
+
+	// joinerBits is the joiner table as a bitmap over
+	// [joinerBase, 0x10000), the range where the per-rune test has to be
+	// cheap for the fast paths in StringWidth and Wrap to pay off. It is
+	// 7.6 KB and init fills it in a few microseconds. Runes above it stay
+	// on the interval search: they are rare in the text these fast paths
+	// are for, and the emoji that are common there leave the fast path at
+	// their first joiner anyway.
+	joinerBits [(0x10000 - joinerBase) / 8]byte
 )
+
+// joinerBase is the lowest rune in the joiner table. CR is the only rune
+// below it that can form a multi-rune cluster, by pairing with LF.
+const joinerBase = 0x300
 
 func init() {
 	initStrictWidthLUTLow()
+	fillJoinerBits()
 	strictWidthLUTLimit.Store(0x300)
 	handleEnv()
 }
@@ -147,7 +161,6 @@ func handleEnv() {
 	if DefaultCondition.EastAsianWidth != EastAsianWidth {
 		DefaultCondition.EastAsianWidth = EastAsianWidth
 		if len(DefaultCondition.combinedLut) > 0 {
-			DefaultCondition.combinedLut = DefaultCondition.combinedLut[:0]
 			CreateLUT()
 		}
 	}
@@ -355,7 +368,12 @@ var nonprint = table{
 
 // Condition have flag EastAsianWidth whether the current locale is CJK or not.
 type Condition struct {
-	combinedLut        []byte
+	combinedLut []byte
+	// The flags combinedLut was built from, so that CreateLUT can tell a
+	// table that is still current from one that has to be rebuilt.
+	lutEastAsianWidth     bool
+	lutStrictEmojiNeutral bool
+
 	EastAsianWidth     bool
 	StrictEmojiNeutral bool
 
@@ -421,6 +439,11 @@ func (c *Condition) CreateLUT() {
 	const max = 0x110000
 	lut := c.combinedLut
 	if len(c.combinedLut) != 0 {
+		if c.lutEastAsianWidth == c.EastAsianWidth && c.lutStrictEmojiNeutral == c.StrictEmojiNeutral {
+			// The table still matches the flags, so rebuilding it
+			// would produce the same bytes.
+			return
+		}
 		// Remove so we don't use it.
 		c.combinedLut = nil
 	} else {
@@ -433,6 +456,62 @@ func (c *Condition) CreateLUT() {
 		lut[i] = uint8(x0) | uint8(x1)<<4
 	}
 	c.combinedLut = lut
+	c.lutEastAsianWidth = c.EastAsianWidth
+	c.lutStrictEmojiNeutral = c.StrictEmojiNeutral
+}
+
+// isASCII reports whether s has no byte above 0x7F, in which case every
+// grapheme cluster in s is a single byte apart from CRLF.
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+// fillJoinerBits paints joinerBits from the joiner table.
+func fillJoinerBits() {
+	for _, iv := range joiner {
+		if iv.first >= 0x10000 {
+			break // the table is sorted, the rest is astral
+		}
+		lo, hi := int(iv.first)-joinerBase, int(iv.last)-joinerBase
+		if hi >= len(joinerBits)*8 {
+			hi = len(joinerBits)*8 - 1
+		}
+		for lo <= hi {
+			if lo&7 == 0 && lo+7 <= hi {
+				joinerBits[lo>>3] = 0xFF
+				lo += 8
+				continue
+			}
+			joinerBits[lo>>3] |= 1 << uint(lo&7)
+			lo++
+		}
+	}
+	// A byte that is not valid UTF-8 decodes to U+FFFD, and the segmenter
+	// can gather a run of such bytes into one cluster, which a rune loop
+	// has no way to see. Marking U+FFFD keeps those strings on the
+	// segmenter, and the only string it holds back needlessly is one that
+	// really contains U+FFFD.
+	i := int(utf8.RuneError) - joinerBase
+	joinerBits[i>>3] |= 1 << uint(i&7)
+}
+
+// isJoiner reports whether r can join with a neighbour into a multi-rune
+// grapheme cluster. A string of runes for which it reports false has one
+// rune per cluster, so measuring it needs no grapheme segmentation.
+func isJoiner(r rune) bool {
+	if r < joinerBase {
+		return r == '\r'
+	}
+	if r < 0x10000 {
+		i := r - joinerBase
+		return joinerBits[i>>3]&(1<<(uint(i)&7)) != 0
+	}
+	return inTable(r, joiner)
 }
 
 // graphemeWidth returns the width of a single grapheme cluster: the sum of
@@ -478,6 +557,13 @@ func (c *Condition) StringWidth(s string) (width int) {
 	return
 
 graphemes:
+	// Runes first: until one of them can join a cluster, each cluster is a
+	// single rune and segmenting the string would only find that out the
+	// expensive way.
+	if w, ok := c.runeWidthSum(s); ok {
+		width = w
+		return
+	}
 	width = 0
 	g := graphemes.FromString(s)
 	for g.Next() {
@@ -486,12 +572,29 @@ graphemes:
 	return
 }
 
+// runeWidthSum adds up the widths of the runes in s, and reports false
+// without a total once it meets a rune that can join a cluster, which is
+// where per-rune widths stop being the whole story.
+func (c *Condition) runeWidthSum(s string) (int, bool) {
+	width := 0
+	for _, r := range s {
+		if isJoiner(r) {
+			return 0, false
+		}
+		width += c.RuneWidth(r)
+	}
+	return width, true
+}
+
 // Truncate return string truncated with w cells
 func (c *Condition) Truncate(s string, w int, tail string) string {
 	if c.StringWidth(s) <= w {
 		return s
 	}
 	w -= c.StringWidth(tail)
+	if pos, ok := c.truncateRunes(s, w); ok {
+		return s[:pos] + tail
+	}
 	var width int
 	pos := len(s)
 	g := graphemes.FromString(s)
@@ -506,10 +609,43 @@ func (c *Condition) Truncate(s string, w int, tail string) string {
 	return s[:pos] + tail
 }
 
+// truncateRunes is the loop in Truncate with every rune taken for a whole
+// cluster, which holds until a rune can join one. It reports false there
+// and leaves the string to the segmenter.
+func (c *Condition) truncateRunes(s string, w int) (int, bool) {
+	width := 0
+	for i, r := range s {
+		if isJoiner(r) {
+			return 0, false
+		}
+		cw := c.RuneWidth(r)
+		if width+cw > w {
+			return i, true
+		}
+		width += cw
+	}
+	return len(s), true
+}
+
+// endsCluster reports whether the byte at i, which follows a rune that
+// cannot join a cluster, also starts one. Cutting there is only safe when
+// the rune that follows does not reach back.
+func endsCluster(s string, i int) bool {
+	if i >= len(s) {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(s[i:])
+	return !isJoiner(r)
+}
+
 // TruncateLeft cuts w cells from the beginning of the `s`.
 func (c *Condition) TruncateLeft(s string, w int, prefix string) string {
 	if c.StringWidth(s) <= w {
 		return prefix
+	}
+
+	if pos, pad, ok := c.truncateLeftRunes(s, w); ok {
+		return prefix + strings.Repeat(" ", pad) + s[pos:]
 	}
 
 	var width int
@@ -536,6 +672,32 @@ func (c *Condition) TruncateLeft(s string, w int, prefix string) string {
 	return prefix + s[pos:]
 }
 
+// truncateLeftRunes is the loop in TruncateLeft with every rune taken for a
+// whole cluster, returning the cut and the padding that replaces the cell
+// the cut lands inside. It reports false at the first rune that can join a
+// cluster.
+func (c *Condition) truncateLeftRunes(s string, w int) (pos, pad int, ok bool) {
+	width := 0
+	for i, r := range s {
+		if isJoiner(r) {
+			return 0, 0, false
+		}
+		cw := c.RuneWidth(r)
+		if width+cw > w {
+			if width >= w {
+				return i, 0, true
+			}
+			end := i + utf8.RuneLen(r)
+			if !endsCluster(s, end) {
+				return 0, 0, false
+			}
+			return end, width + cw - w, true
+		}
+		width += cw
+	}
+	return len(s), 0, true
+}
+
 // TruncatePrefix cuts the beginning of `s` so the result fits in w cells, with prefix prepended
 func (c *Condition) TruncatePrefix(s string, w int, prefix string) string {
 	if c.StringWidth(prefix) >= w {
@@ -547,6 +709,9 @@ func (c *Condition) TruncatePrefix(s string, w int, prefix string) string {
 		return s
 	}
 	w -= c.StringWidth(prefix)
+	if pos, ok := c.truncatePrefixRunes(s, sw, w); ok {
+		return prefix + s[pos:]
+	}
 	var width int
 	var pos int
 	g := graphemes.FromString(s)
@@ -562,25 +727,109 @@ func (c *Condition) TruncatePrefix(s string, w int, prefix string) string {
 	return prefix + s[pos:]
 }
 
-// Wrap return string wrapped with w cells
-func (c *Condition) Wrap(s string, w int) string {
+// truncatePrefixRunes is the loop in TruncatePrefix with every rune taken
+// for a whole cluster, reporting false at the first rune that can join one.
+func (c *Condition) truncatePrefixRunes(s string, sw, w int) (int, bool) {
+	width := 0
+	for i, r := range s {
+		if isJoiner(r) {
+			return 0, false
+		}
+		cw := c.RuneWidth(r)
+		if sw-(width+cw) <= w {
+			end := i + utf8.RuneLen(r)
+			if !endsCluster(s, end) {
+				return 0, false
+			}
+			return end, true
+		}
+		width += cw
+	}
+	return 0, true
+}
+
+// wrapRunes wraps s treating every rune as its own grapheme cluster, and
+// reports false without a result once it meets a rune that can join one.
+func (c *Condition) wrapRunes(s string, w int) (string, bool) {
 	width := 0
 	var out strings.Builder
-	out.Grow(len(s) + len(s)/w + 1)
+	out.Grow(len(s) + len(s)/max(w, 1) + 1)
 	for _, r := range s {
+		if isJoiner(r) {
+			return "", false
+		}
 		cw := c.RuneWidth(r)
 		if r == '\n' {
 			out.WriteRune(r)
 			width = 0
 			continue
-		} else if width+cw > w {
+		}
+		if width+cw > w {
 			out.WriteByte('\n')
 			width = 0
-			out.WriteRune(r)
-			width += cw
-			continue
 		}
 		out.WriteRune(r)
+		width += cw
+	}
+	return out.String(), true
+}
+
+// Wrap return string wrapped with w cells
+func (c *Condition) Wrap(s string, w int) string {
+	// ASCII fast path: no grapheme clustering needed for pure ASCII
+	if isASCII(s) {
+		width := 0
+		var out strings.Builder
+		// max keeps the capacity hint from dividing by zero when w is 0;
+		// a non-positive width breaks before every cluster, as it always
+		// has.
+		out.Grow(len(s) + len(s)/max(w, 1) + 1)
+		for i := 0; i < len(s); i++ {
+			b := s[i]
+			if b == '\n' {
+				out.WriteByte(b)
+				width = 0
+				continue
+			}
+			// Same rule as the StringWidth fast path: no ASCII byte is
+			// wide or ambiguous, so the flags in c cannot change this.
+			cw := 0
+			if b >= 0x20 && b != 0x7F {
+				cw = 1
+			}
+			if width+cw > w {
+				out.WriteByte('\n')
+				width = 0
+			}
+			out.WriteByte(b)
+			width += cw
+		}
+		return out.String()
+	}
+	// Runes first, as in StringWidth. Reaching a rune that can join a
+	// cluster throws the wrapped text away and starts over on the
+	// segmenter, which is the uncommon case.
+	if out, ok := c.wrapRunes(s, w); ok {
+		return out
+	}
+	width := 0
+	var out strings.Builder
+	out.Grow(len(s) + len(s)/max(w, 1) + 1)
+	g := graphemes.FromString(s)
+	for g.Next() {
+		cluster := g.Value()
+		// LF and CRLF are each a single cluster
+		if strings.HasSuffix(cluster, "\n") {
+			out.WriteString(cluster)
+			width = 0
+			continue
+		}
+		cw := c.graphemeWidth(cluster)
+		if width+cw > w {
+			out.WriteByte('\n')
+			width = 0
+		}
+		out.WriteString(cluster)
 		width += cw
 	}
 	return out.String()
@@ -664,9 +913,8 @@ func FillRight(s string, w int) string {
 
 // CreateLUT will create an in-memory lookup table of 557055 bytes for faster operation.
 // This should not be called concurrently with other operations.
+// If flags in DefaultCondition are changed, CreateLUT should be called again;
+// a call that finds the table already current is a no-op.
 func CreateLUT() {
-	if len(DefaultCondition.combinedLut) > 0 {
-		return
-	}
 	DefaultCondition.CreateLUT()
 }

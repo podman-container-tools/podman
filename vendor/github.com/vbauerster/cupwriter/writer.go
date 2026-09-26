@@ -30,15 +30,14 @@ func New(out io.Writer, forceTTY bool) *Writer {
 }
 
 // SetTermFd sets fd if only it stands for an actual terminal handle.
-// If it is indeed a terminal handle then next (*Writer).IsTerminal
-// call will return true and (*Writer).GetTermSize is safe to call.
-// Use case: preserve terminal behaviour while constructing *Writer
-// with io.Writer wrapper.
+// Use case: preserve terminal behaviour while constructing *Writer with
+// io.Writer wrapper.
 //
 //	cw := New(io.MultiWriter(os.Stdout, &someTestBuf), false)
-//	cw.IsTerminal() // returns false
-//	cw.SetTermFd(int(os.Stdout.Fd()))
-//	cw.IsTerminal() // returns true
+//
+//	if !cw.IsTerminal() {
+//		cw.SetTermFd(int(os.Stdout.Fd()))
+//	}
 func (w *Writer) SetTermFd(fd int) {
 	if isTerminal(fd) {
 		w.fd = fd
