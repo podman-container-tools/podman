@@ -23,6 +23,9 @@ import (
 // SignatureType is the armor type for a PGP signature.
 var SignatureType = "PGP SIGNATURE"
 
+// MessageType is the armor type for a PGP message.
+var MessageType = "PGP MESSAGE"
+
 // readArmored reads an armored block with the given type.
 func readArmored(r io.Reader, expectedType string) (body io.Reader, err error) {
 	block, err := armor.Decode(r)
@@ -118,7 +121,9 @@ ParsePackets:
 			// This packet contains the decryption key encrypted to a public key.
 			md.EncryptedToKeyIds = append(md.EncryptedToKeyIds, p.KeyId)
 			switch p.Algo {
-			case packet.PubKeyAlgoRSA, packet.PubKeyAlgoRSAEncryptOnly, packet.PubKeyAlgoElGamal, packet.PubKeyAlgoECDH, packet.PubKeyAlgoX25519, packet.PubKeyAlgoX448:
+			case packet.PubKeyAlgoRSA, packet.PubKeyAlgoRSAEncryptOnly, packet.PubKeyAlgoElGamal, packet.PubKeyAlgoECDH,
+				packet.PubKeyAlgoX25519, packet.PubKeyAlgoX448,
+				packet.PubKeyAlgoMlkem768X25519, packet.PubKeyAlgoMlkem1024X448:
 				break
 			default:
 				continue
@@ -407,7 +412,7 @@ func (scr *signatureCheckReader) Read(buf []byte) (int, error) {
 				}
 
 				// If signature KeyID matches
-				if scr.md.SignedBy != nil && *sig.IssuerKeyId == scr.md.SignedByKeyId {
+				if scr.md.SignedBy != nil && sig.IssuerKeyId != nil && *sig.IssuerKeyId == scr.md.SignedByKeyId {
 					key := scr.md.SignedBy
 					signatureError := key.PublicKey.VerifySignature(scr.h, sig)
 					if signatureError == nil {

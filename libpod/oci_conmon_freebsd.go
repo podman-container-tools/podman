@@ -18,9 +18,10 @@ func (r *ConmonOCIRuntime) withContainerSocketLabel(_ *Container, closure func()
 	return closure()
 }
 
-// moveConmonToCgroupAndSignal gets a container's cgroupParent and moves the conmon process to that cgroup
+// moveToConmonCgroupAndSignal gets a container's cgroupParent and moves conmon and the
+// per-container network helpers to the conmon cgroup below it
 // it then signals for conmon to start by sending nonce data down the start fd
-func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(_ *Container, _ *exec.Cmd, startFd *os.File) error {
+func (r *ConmonOCIRuntime) moveToConmonCgroupAndSignal(_ *Container, _ *exec.Cmd, startFd *os.File) error {
 	// No equivalent to cgroup on FreeBSD, just signal conmon to start
 	if err := writeConmonPipeData(startFd); err != nil {
 		return err

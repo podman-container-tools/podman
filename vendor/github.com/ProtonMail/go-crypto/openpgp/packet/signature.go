@@ -23,6 +23,10 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/encoding"
+	"github.com/ProtonMail/go-crypto/openpgp/mldsa_eddsa"
+	"github.com/ProtonMail/go-crypto/openpgp/slhdsa"
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
+	"github.com/cloudflare/circl/sign/mldsa/mldsa87"
 )
 
 const (
@@ -81,17 +85,21 @@ type Signature struct {
 	ECDSASigR, ECDSASigS encoding.Field
 	EdDSASigR, EdDSASigS encoding.Field
 	EdSig                []byte
+	MldsaSig             []byte
+	SlhdsaSig            []byte
 
 	// rawSubpackets contains the unparsed subpackets, in order.
 	rawSubpackets []outputSubpacket
 
 	// The following are optional so are nil when not included in the
 	// signature.
+	// The exception is IssuerKeyVersion, which defaults to 0.
 
 	SigLifetimeSecs, KeyLifetimeSecs                        *uint32
 	PreferredSymmetric, PreferredHash, PreferredCompression []uint8
 	PreferredCipherSuites                                   [][2]uint8
 	IssuerKeyId                                             *uint64
+	IssuerKeyVersion                                        uint8
 	IssuerFingerprint                                       []byte
 	SignerUserId                                            *string
 	IsPrimaryId                                             *bool
@@ -198,7 +206,11 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 	sig.SigType = SignatureType(buf[0])
 	sig.PubKeyAlgo = PublicKeyAlgorithm(buf[1])
 	switch sig.PubKeyAlgo {
-	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA, PubKeyAlgoECDSA, PubKeyAlgoEdDSA, PubKeyAlgoEd25519, PubKeyAlgoEd448:
+	case PubKeyAlgoRSA, PubKeyAlgoRSASignOnly, PubKeyAlgoDSA,
+		PubKeyAlgoECDSA, PubKeyAlgoEdDSA,
+		PubKeyAlgoEd25519, PubKeyAlgoEd448,
+		PubKeyAlgoMldsa65Ed25519, PubKeyAlgoMldsa87Ed448,
+		PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
 	default:
 		err = errors.UnsupportedError("public key algorithm " + strconv.Itoa(int(sig.PubKeyAlgo)))
 		return
@@ -216,19 +228,18 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 		return errors.UnsupportedError("hash function " + strconv.Itoa(int(buf[2])))
 	}
 
-	var hashedSubpacketsLength int
+	var hashedSubpacketsLength uint32
 	if sig.Version == 6 {
 		// For a v6 signature, a four-octet length is used.
 		hashedSubpacketsLength =
-			int(buf[3])<<24 |
-				int(buf[4])<<16 |
-				int(buf[5])<<8 |
-				int(buf[6])
+			uint32(buf[3])<<24 |
+				uint32(buf[4])<<16 |
+				uint32(buf[5])<<8 |
+				uint32(buf[6])
 	} else {
-		hashedSubpacketsLength = int(buf[3])<<8 | int(buf[4])
+		hashedSubpacketsLength = uint32(buf[3])<<8 | uint32(buf[4])
 	}
-	hashedSubpackets := make([]byte, hashedSubpacketsLength)
-	_, err = readFull(r, hashedSubpackets)
+	hashedSubpackets, err := readN(r, hashedSubpacketsLength)
 	if err != nil {
 		return
 	}
@@ -257,8 +268,7 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 	} else {
 		unhashedSubpacketsLength = uint32(buf[0])<<8 | uint32(buf[1])
 	}
-	unhashedSubpackets := make([]byte, unhashedSubpacketsLength)
-	_, err = readFull(r, unhashedSubpackets)
+	unhashedSubpackets, err := readN(r, unhashedSubpacketsLength)
 	if err != nil {
 		return
 	}
@@ -336,9 +346,45 @@ func (sig *Signature) parse(r io.Reader) (err error) {
 		if err != nil {
 			return
 		}
+	case PubKeyAlgoMldsa65Ed25519:
+		if err = sig.parseMldsaEddsaSignature(r, 64, mldsa65.SignatureSize); err != nil {
+			return
+		}
+	case PubKeyAlgoMldsa87Ed448:
+		if err = sig.parseMldsaEddsaSignature(r, 114, mldsa87.SignatureSize); err != nil {
+			return
+		}
+	case PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
+		if err = sig.parseSlhdsaSignature(r, sig.PubKeyAlgo); err != nil {
+			return
+		}
 	default:
 		panic("unreachable")
 	}
+	return
+}
+
+// parseMldsaEddsaSignature parses an ML-DSA + EdDSA signature as specified in
+// https://www.rfc-editor.org/rfc/rfc9980.html#name-signature-packet-packet-typ
+func (sig *Signature) parseMldsaEddsaSignature(r io.Reader, ecLen, dLen int) (err error) {
+	sig.EdSig = make([]byte, ecLen)
+	if _, err = io.ReadFull(r, sig.EdSig); err != nil {
+		return
+	}
+
+	sig.MldsaSig = make([]byte, dLen)
+	_, err = io.ReadFull(r, sig.MldsaSig)
+	return
+}
+
+// parseSlhdsaSignature parses an SLH-DSA signature as specified in
+func (sig *Signature) parseSlhdsaSignature(r io.Reader, algID PublicKeyAlgorithm) (err error) {
+	scheme, err := GetSlhdsaSchemeFromAlgID(algID)
+	if err != nil {
+		return err
+	}
+	sig.SlhdsaSig = make([]byte, scheme.SignatureSize())
+	_, err = io.ReadFull(r, sig.SlhdsaSig)
 	return
 }
 
@@ -455,6 +501,10 @@ func parseSignatureSubpacket(sig *Signature, subpacket []byte, isHashed bool) (r
 		sig.SigLifetimeSecs = new(uint32)
 		*sig.SigLifetimeSecs = binary.BigEndian.Uint32(subpacket)
 	case exportableCertSubpacket:
+		if len(subpacket) < 1 {
+			err = errors.StructuralError("exportable certification subpacket with a bad length")
+			return
+		}
 		if subpacket[0] == 0 {
 			err = errors.UnsupportedError("signature with non-exportable certification")
 			return
@@ -618,6 +668,11 @@ func parseSignatureSubpacket(sig *Signature, subpacket []byte, isHashed bool) (r
 			err = errors.StructuralError("Cannot have multiple embedded signatures")
 			return
 		}
+		// A Primary Key Binding signature must not itself carry an embedded
+		// signature, otherwise the structure can recurse without bound.
+		if sig.SigType == SigTypePrimaryKeyBinding {
+			return nil, errors.StructuralError("embedded signature within a primary key binding signature")
+		}
 		sig.EmbeddedSignature = new(Signature)
 		if err := sig.EmbeddedSignature.parse(bytes.NewBuffer(subpacket)); err != nil {
 			return nil, err
@@ -637,6 +692,7 @@ func parseSignatureSubpacket(sig *Signature, subpacket []byte, isHashed bool) (r
 		if v >= 5 && l != 32 || v < 5 && l != 20 {
 			return nil, errors.StructuralError("bad fingerprint length")
 		}
+		sig.IssuerKeyVersion = subpacket[0]
 		sig.IssuerFingerprint = make([]byte, l)
 		copy(sig.IssuerFingerprint, subpacket[1:])
 		sig.IssuerKeyId = new(uint64)
@@ -694,14 +750,14 @@ func subpacketLengthLength(length int) int {
 }
 
 func (sig *Signature) CheckKeyIdOrFingerprint(pk *PublicKey) bool {
-	if sig.IssuerFingerprint != nil && len(sig.IssuerFingerprint) >= 20 {
-		return bytes.Equal(sig.IssuerFingerprint, pk.Fingerprint)
+	if sig.IssuerKeyVersion != 0 && len(sig.IssuerFingerprint) >= 20 {
+		return int(sig.IssuerKeyVersion) == pk.Version && bytes.Equal(sig.IssuerFingerprint, pk.Fingerprint)
 	}
 	return sig.IssuerKeyId != nil && *sig.IssuerKeyId == pk.KeyId
 }
 
 func (sig *Signature) CheckKeyIdOrFingerprintExplicit(fingerprint []byte, keyId uint64) bool {
-	if sig.IssuerFingerprint != nil && len(sig.IssuerFingerprint) >= 20 && fingerprint != nil {
+	if sig.IssuerKeyVersion != 0 && len(sig.IssuerFingerprint) >= 20 && fingerprint != nil {
 		return bytes.Equal(sig.IssuerFingerprint, fingerprint)
 	}
 	return sig.IssuerKeyId != nil && *sig.IssuerKeyId == keyId
@@ -918,6 +974,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 		return errors.ErrDummyPrivateKey("dummy key found")
 	}
 	sig.Version = priv.PublicKey.Version
+	sig.IssuerKeyVersion = uint8(priv.PublicKey.Version)
 	sig.IssuerFingerprint = priv.PublicKey.Fingerprint
 	if sig.Version < 6 && config.RandomizeSignaturesViaNotation() {
 		sig.removeNotationsWithName(SaltNotationName)
@@ -933,7 +990,7 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 		}
 		sig.Notations = append(sig.Notations, &notation)
 	}
-	sig.outSubpackets, err = sig.buildSubpackets(priv.PublicKey, config)
+	sig.outSubpackets, err = sig.buildSubpackets(config)
 	if err != nil {
 		return err
 	}
@@ -995,6 +1052,27 @@ func (sig *Signature) Sign(h hash.Hash, priv *PrivateKey, config *Config) (err e
 		signature, err := ed448.Sign(sk, digest)
 		if err == nil {
 			sig.EdSig = signature
+		}
+	case PubKeyAlgoMldsa65Ed25519, PubKeyAlgoMldsa87Ed448:
+		if sig.Version != 6 {
+			return errors.StructuralError("cannot use MldsaEdDsa on a non-v6 signature")
+		}
+		sk := priv.PrivateKey.(*mldsa_eddsa.PrivateKey)
+		dSig, ecSig, err := mldsa_eddsa.Sign(sk, digest)
+
+		if err == nil {
+			sig.MldsaSig = dSig
+			sig.EdSig = ecSig
+		}
+	case PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
+		if sig.Version != 6 {
+			return errors.StructuralError("cannot use SLH-DSA on a non-v6 signature")
+		}
+		sk := priv.PrivateKey.(*slhdsa.PrivateKey)
+		dSig, err := slhdsa.Sign(sk, digest)
+
+		if err == nil {
+			sig.SlhdsaSig = dSig
 		}
 	default:
 		err = errors.UnsupportedError("public key algorithm: " + strconv.Itoa(int(sig.PubKeyAlgo)))
@@ -1113,7 +1191,7 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 	if len(sig.outSubpackets) == 0 {
 		sig.outSubpackets = sig.rawSubpackets
 	}
-	if sig.RSASignature == nil && sig.DSASigR == nil && sig.ECDSASigR == nil && sig.EdDSASigR == nil && sig.EdSig == nil {
+	if sig.RSASignature == nil && sig.DSASigR == nil && sig.ECDSASigR == nil && sig.EdDSASigR == nil && sig.EdSig == nil && sig.SlhdsaSig == nil {
 		return errors.InvalidArgumentError("Signature: need to call Sign, SignUserId or SignKey before Serialize")
 	}
 
@@ -1134,6 +1212,11 @@ func (sig *Signature) Serialize(w io.Writer) (err error) {
 		sigLength = ed25519.SignatureSize
 	case PubKeyAlgoEd448:
 		sigLength = ed448.SignatureSize
+	case PubKeyAlgoMldsa65Ed25519, PubKeyAlgoMldsa87Ed448:
+		sigLength = len(sig.EdSig)
+		sigLength += len(sig.MldsaSig)
+	case PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
+		sigLength += len(sig.SlhdsaSig)
 	default:
 		panic("impossible")
 	}
@@ -1240,6 +1323,13 @@ func (sig *Signature) serializeBody(w io.Writer) (err error) {
 		err = ed25519.WriteSignature(w, sig.EdSig)
 	case PubKeyAlgoEd448:
 		err = ed448.WriteSignature(w, sig.EdSig)
+	case PubKeyAlgoMldsa65Ed25519, PubKeyAlgoMldsa87Ed448:
+		if _, err = w.Write(sig.EdSig); err != nil {
+			return
+		}
+		_, err = w.Write(sig.MldsaSig)
+	case PubKeyAlgoSlhdsaShake128s, PubKeyAlgoSlhdsaShake128f, PubKeyAlgoSlhdsaShake256s:
+		_, err = w.Write(sig.SlhdsaSig)
 	default:
 		panic("impossible")
 	}
@@ -1254,7 +1344,7 @@ type outputSubpacket struct {
 	contents      []byte
 }
 
-func (sig *Signature) buildSubpackets(issuer PublicKey, config *Config) (subpackets []outputSubpacket, err error) {
+func (sig *Signature) buildSubpackets(config *Config) (subpackets []outputSubpacket, err error) {
 	creationTime := make([]byte, 4)
 	binary.BigEndian.PutUint32(creationTime, uint32(sig.CreationTime.Unix()))
 	// Signature Creation Time
@@ -1391,8 +1481,8 @@ func (sig *Signature) buildSubpackets(issuer PublicKey, config *Config) (subpack
 		subpackets = append(subpackets, outputSubpacket{true, embeddedSignatureSubpacket, true, buf.Bytes()})
 	}
 	// Issuer Fingerprint
-	if sig.IssuerFingerprint != nil {
-		contents := append([]uint8{uint8(issuer.Version)}, sig.IssuerFingerprint...)
+	if sig.IssuerKeyVersion != 0 && sig.IssuerFingerprint != nil {
+		contents := append([]uint8{sig.IssuerKeyVersion}, sig.IssuerFingerprint...)
 		subpackets = append(subpackets, outputSubpacket{true, issuerFingerprintSubpacket, sig.Version >= 5, contents})
 	}
 	// Intended Recipient Fingerprint

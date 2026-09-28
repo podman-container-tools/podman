@@ -26,7 +26,7 @@ github.com/Microsoft/go-winio/internal/socket
 github.com/Microsoft/go-winio/internal/stringbuffer
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/vhd
-# github.com/ProtonMail/go-crypto v1.4.1
+# github.com/ProtonMail/go-crypto v1.5.1
 ## explicit; go 1.23.0
 github.com/ProtonMail/go-crypto/bitcurves
 github.com/ProtonMail/go-crypto/brainpool
@@ -46,8 +46,11 @@ github.com/ProtonMail/go-crypto/openpgp/errors
 github.com/ProtonMail/go-crypto/openpgp/internal/algorithm
 github.com/ProtonMail/go-crypto/openpgp/internal/ecc
 github.com/ProtonMail/go-crypto/openpgp/internal/encoding
+github.com/ProtonMail/go-crypto/openpgp/mldsa_eddsa
+github.com/ProtonMail/go-crypto/openpgp/mlkem_ecdh
 github.com/ProtonMail/go-crypto/openpgp/packet
 github.com/ProtonMail/go-crypto/openpgp/s2k
+github.com/ProtonMail/go-crypto/openpgp/slhdsa
 github.com/ProtonMail/go-crypto/openpgp/x25519
 github.com/ProtonMail/go-crypto/openpgp/x448
 # github.com/VividCortex/ewma v1.2.0
@@ -90,13 +93,32 @@ github.com/cloudflare/circl/dh/x448
 github.com/cloudflare/circl/ecc/goldilocks
 github.com/cloudflare/circl/internal/conv
 github.com/cloudflare/circl/internal/sha3
+github.com/cloudflare/circl/kem
+github.com/cloudflare/circl/kem/mlkem/mlkem1024
+github.com/cloudflare/circl/kem/mlkem/mlkem768
 github.com/cloudflare/circl/math
 github.com/cloudflare/circl/math/fp25519
 github.com/cloudflare/circl/math/fp448
 github.com/cloudflare/circl/math/mlsbset
+github.com/cloudflare/circl/pke/kyber/internal/common
+github.com/cloudflare/circl/pke/kyber/internal/common/params
+github.com/cloudflare/circl/pke/kyber/kyber1024
+github.com/cloudflare/circl/pke/kyber/kyber1024/internal
+github.com/cloudflare/circl/pke/kyber/kyber768
+github.com/cloudflare/circl/pke/kyber/kyber768/internal
 github.com/cloudflare/circl/sign
 github.com/cloudflare/circl/sign/ed25519
 github.com/cloudflare/circl/sign/ed448
+github.com/cloudflare/circl/sign/internal/dilithium
+github.com/cloudflare/circl/sign/internal/dilithium/params
+github.com/cloudflare/circl/sign/mldsa/mldsa65
+github.com/cloudflare/circl/sign/mldsa/mldsa65/internal
+github.com/cloudflare/circl/sign/mldsa/mldsa87
+github.com/cloudflare/circl/sign/mldsa/mldsa87/internal
+github.com/cloudflare/circl/sign/slhdsa
+github.com/cloudflare/circl/simd/keccakf1600
+github.com/cloudflare/circl/xof
+github.com/cloudflare/circl/xof/k12
 # github.com/containerd/errdefs v1.0.0
 ## explicit; go 1.20
 github.com/containerd/errdefs
@@ -372,7 +394,7 @@ github.com/lufia/plan9stats
 github.com/manifoldco/promptui
 github.com/manifoldco/promptui/list
 github.com/manifoldco/promptui/screenbuf
-# github.com/mattn/go-runewidth v0.0.28
+# github.com/mattn/go-runewidth v0.0.29
 ## explicit; go 1.23
 github.com/mattn/go-runewidth
 # github.com/mattn/go-shellwords v1.0.15
@@ -455,7 +477,7 @@ github.com/moby/sys/sequential
 # github.com/moby/sys/user v0.4.1
 ## explicit; go 1.18
 github.com/moby/sys/user
-# github.com/moby/sys/userns v0.2.0
+# github.com/moby/sys/userns v0.2.1
 ## explicit; go 1.21
 github.com/moby/sys/userns
 # github.com/moby/term v0.5.2
@@ -664,7 +686,7 @@ github.com/tonistiigi/dchapes-mode
 # github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701
 ## explicit; go 1.21
 github.com/u-root/uio/ulog
-# github.com/ulikunitz/xz v0.5.16
+# github.com/ulikunitz/xz v0.5.17
 ## explicit; go 1.20
 github.com/ulikunitz/xz
 github.com/ulikunitz/xz/internal/hash
@@ -776,7 +798,7 @@ go.podman.io/buildah/pkg/sshagent
 go.podman.io/buildah/pkg/util
 go.podman.io/buildah/pkg/volumes
 go.podman.io/buildah/util
-# go.podman.io/common v0.69.2-0.20260915153640-acbb1e7d4c83
+# go.podman.io/common v0.69.2 => github.com/giuseppe/container-libs/common v0.0.0-20260925233115-b95a199a9429
 ## explicit; go 1.26.0
 go.podman.io/common/internal
 go.podman.io/common/libimage
@@ -843,7 +865,7 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.41.2-0.20260915153640-acbb1e7d4c83
+# go.podman.io/image/v5 v5.41.2 => github.com/giuseppe/container-libs/image/v5 v5.0.0-20260925233115-b95a199a9429
 ## explicit; go 1.26.0
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
@@ -920,7 +942,7 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.64.1-0.20260915153640-acbb1e7d4c83
+# go.podman.io/storage v1.64.1 => github.com/giuseppe/container-libs/storage v0.0.0-20260925233115-b95a199a9429
 ## explicit; go 1.26.0
 go.podman.io/storage
 go.podman.io/storage/drivers
@@ -982,6 +1004,7 @@ go.yaml.in/yaml/v3
 ## explicit; go 1.26.0
 golang.org/x/crypto/argon2
 golang.org/x/crypto/blake2b
+golang.org/x/crypto/blake2s
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/cast5
 golang.org/x/crypto/chacha20
@@ -1221,3 +1244,6 @@ tags.cncf.io/container-device-interface/pkg/parser
 # tags.cncf.io/container-device-interface/specs-go v1.1.1
 ## explicit; go 1.19
 tags.cncf.io/container-device-interface/specs-go
+# go.podman.io/common => github.com/giuseppe/container-libs/common v0.0.0-20260925233115-b95a199a9429
+# go.podman.io/image/v5 => github.com/giuseppe/container-libs/image/v5 v5.0.0-20260925233115-b95a199a9429
+# go.podman.io/storage => github.com/giuseppe/container-libs/storage v0.0.0-20260925233115-b95a199a9429

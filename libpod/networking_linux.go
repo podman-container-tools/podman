@@ -33,6 +33,20 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, reload bool) (sta
 	if strings.HasPrefix(string(ctr.config.NetMode), "slirp4netns") {
 		return nil, fmt.Errorf("slirp4netns support has been removed, run `podman system migrate` to update this container to use pasta")
 	}
+	defer func() {
+		// The network helpers we just started belong in the conmon cgroup.
+		// When it does not exist yet - the common case, network setup runs
+		// before conmon does - moveToConmonCgroupAndSignal() picks the pids up
+		// via netHelperPids() instead.
+		if rerr != nil || !ctr.conmonCgroupCreated {
+			return
+		}
+		if _, err := ctr.moveToConmonCgroup(false, ctr.netHelperPids()...); err != nil {
+			// Only log this, ending up in the wrong cgroup is not a reason
+			// to fail the container.
+			logrus.StandardLogger().Logf(ctr.conmonCgroupLogLevel(), "Failed to move the network helpers to the sandbox cgroup: %v", err)
+		}
+	}()
 	if ctr.config.NetMode.IsPasta() {
 		return nil, r.setupPasta(ctr, ctrNS)
 	}

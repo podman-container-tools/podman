@@ -1236,7 +1236,7 @@ func (r *ConmonOCIRuntime) createOCIContainer(ctr *Container, restoreOptions *Co
 	if err != nil {
 		return 0, err
 	}
-	if err := r.moveConmonToCgroupAndSignal(ctr, cmd, parentStartPipe); err != nil {
+	if err := r.moveToConmonCgroupAndSignal(ctr, cmd, parentStartPipe); err != nil {
 		// The child likely already exited in which case the cmd.Wait() below should return the proper error.
 		// EPIPE is expected if the child already exited so not worth to log and kill the process.
 		if !errors.Is(err, syscall.EPIPE) {

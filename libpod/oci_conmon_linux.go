@@ -19,10 +19,7 @@ import (
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/cgroups"
-	"go.podman.io/common/pkg/config"
-	"go.podman.io/common/pkg/systemd"
 	"go.podman.io/podman/v6/pkg/errorhandling"
-	"go.podman.io/podman/v6/pkg/rootless"
 	pmount "go.podman.io/storage/pkg/mount"
 	"golang.org/x/sys/unix"
 )
@@ -164,67 +161,21 @@ func (r *ConmonOCIRuntime) withContainerSocketLabel(ctr *Container, closure func
 	return err
 }
 
-// Create systemd unit name for cgroup scopes.
-func createUnitName(prefix string, name string) string {
-	return fmt.Sprintf("%s-%s.scope", prefix, name)
-}
-
-// moveConmonToCgroupAndSignal gets a container's cgroupParent and moves the conmon process to that cgroup
+// moveToConmonCgroupAndSignal gets a container's cgroupParent and moves conmon and the
+// per-container network helpers to the conmon cgroup below it
 // it then signals for conmon to start by sending nonce data down the start fd
-func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec.Cmd, startFd *os.File) error {
-	mustCreateCgroup := !ctr.config.NoCgroups
-
-	// If cgroup creation is disabled - just signal.
-	switch ctr.config.CgroupsMode {
-	case "disabled", "no-conmon", cgroupSplit:
-		mustCreateCgroup = false
+func (r *ConmonOCIRuntime) moveToConmonCgroupAndSignal(ctr *Container, cmd *exec.Cmd, startFd *os.File) error {
+	// The per-container network helpers belong in the same cgroup as conmon.
+	// They are usually started before conmon, so they can go in together with
+	// it; the orderings where they are not are handled in configureNetNS().
+	pids := append([]int{cmd.Process.Pid}, ctr.netHelperPids()...)
+	created, err := ctr.moveToConmonCgroup(true, pids...)
+	if err != nil {
+		// Only log this, ending up in the wrong cgroup is not a reason to
+		// fail the container.
+		logrus.StandardLogger().Logf(ctr.conmonCgroupLogLevel(), "Failed to move conmon to the sandbox cgroup: %v", err)
 	}
-
-	// $INVOCATION_ID is set by systemd when running as a service.
-	if ctr.runtime.RemoteURI() == "" && os.Getenv("INVOCATION_ID") != "" {
-		mustCreateCgroup = false
-	}
-
-	if mustCreateCgroup {
-		// Usually rootless users are not allowed to configure cgroupfs.
-		// There are cases though, where it is allowed, e.g. if the cgroup
-		// is manually configured and chowned).  Avoid detecting all
-		// such cases and simply use a lower log level.
-		logLevel := logrus.WarnLevel
-		if rootless.IsRootless() {
-			logLevel = logrus.InfoLevel
-		}
-		// TODO: This should be a switch - we are not guaranteed that
-		// there are only 2 valid cgroup managers
-		cgroupParent := ctr.CgroupParent()
-		cgroupPath := filepath.Join(ctr.config.CgroupParent, "conmon")
-		cgroupResources, err := GetLimits(ctr.LinuxResources())
-		if err != nil {
-			logrus.StandardLogger().Log(logLevel, "Could not get ctr resources")
-		}
-		if ctr.CgroupManager() == config.SystemdCgroupsManager {
-			unitName := createUnitName("libpod-conmon", ctr.ID())
-			realCgroupParent := cgroupParent
-			splitParent := strings.Split(cgroupParent, "/")
-			if strings.HasSuffix(cgroupParent, ".slice") && len(splitParent) > 1 {
-				realCgroupParent = splitParent[len(splitParent)-1]
-			}
-
-			logrus.Infof("Running conmon under slice %s and unitName %s", realCgroupParent, unitName)
-			if err := systemd.RunUnderSystemdScope(cmd.Process.Pid, realCgroupParent, unitName); err != nil {
-				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to systemd sandbox cgroup: %v", err)
-			}
-		} else {
-			control, err := cgroups.New(cgroupPath, &cgroupResources)
-			if err != nil {
-				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
-			} else if err := control.AddPid(cmd.Process.Pid); err != nil {
-				// we need to remove this defer and delete the cgroup once conmon exits
-				// maybe need a conmon monitor?
-				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
-			}
-		}
-	}
+	ctr.conmonCgroupCreated = created
 
 	/* We set the cgroup, now the child can start creating children */
 	return writeConmonPipeData(startFd)

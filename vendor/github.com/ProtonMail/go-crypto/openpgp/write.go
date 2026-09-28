@@ -369,11 +369,16 @@ func encrypt(keyWriter io.Writer, dataWriter io.Writer, to []*Entity, signed *En
 	// AEAD is used only if config enables it and every key supports it
 	aeadSupported := config.AEAD() != nil
 
+	allPQ := len(to) > 0
 	for i := range to {
 		var ok bool
 		encryptKeys[i], ok = to[i].EncryptionKey(config.Now())
 		if !ok {
 			return nil, errors.InvalidArgumentError("cannot encrypt a message to key id " + strconv.FormatUint(to[i].PrimaryKey.KeyId, 16) + " because it has no valid encryption keys")
+		}
+
+		if !encryptKeys[i].PublicKey.IsPQ() {
+			allPQ = false
 		}
 
 		primarySelfSignature, _ := to[i].PrimarySelfSignature()
@@ -402,8 +407,12 @@ func encrypt(keyWriter io.Writer, dataWriter io.Writer, to []*Entity, signed *En
 		candidateHashes = []uint8{hashToHashId(crypto.SHA256)}
 	}
 	if len(candidateCipherSuites) == 0 {
-		// https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-07.html#section-9.6
-		candidateCipherSuites = [][2]uint8{{uint8(packet.CipherAES128), uint8(packet.AEADModeOCB)}}
+		if allPQ {
+			candidateCipherSuites = [][2]uint8{{uint8(packet.CipherAES256), uint8(packet.AEADModeOCB)}}
+		} else {
+			// https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-07.html#section-9.6
+			candidateCipherSuites = [][2]uint8{{uint8(packet.CipherAES128), uint8(packet.AEADModeOCB)}}
+		}
 	}
 
 	cipher := packet.CipherFunction(candidateCiphers[0])
@@ -566,6 +575,7 @@ func createSignaturePacket(signer *packet.PublicKey, sigType packet.SignatureTyp
 		Hash:              hash,
 		CreationTime:      config.Now(),
 		IssuerKeyId:       &signer.KeyId,
+		IssuerKeyVersion:  uint8(signer.Version),
 		IssuerFingerprint: signer.Fingerprint,
 		Notations:         config.Notations(),
 		SigLifetimeSecs:   &sigLifetimeSecs,
@@ -656,7 +666,7 @@ func selectHash(candidateHashes []byte, configuredHash crypto.Hash, signer *pack
 
 func acceptableHashesToWrite(singingKey *packet.PublicKey) []uint8 {
 	switch singingKey.PubKeyAlgo {
-	case packet.PubKeyAlgoEd448:
+	case packet.PubKeyAlgoEd448, packet.PubKeyAlgoMldsa87Ed448, packet.PubKeyAlgoSlhdsaShake256s:
 		return []uint8{
 			hashToHashId(crypto.SHA512),
 			hashToHashId(crypto.SHA3_512),

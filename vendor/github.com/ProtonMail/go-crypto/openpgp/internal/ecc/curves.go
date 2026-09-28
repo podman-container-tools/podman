@@ -16,6 +16,8 @@ type ECDSACurve interface {
 	UnmarshalIntegerPoint([]byte) (x, y *big.Int)
 	MarshalIntegerSecret(d *big.Int) []byte
 	UnmarshalIntegerSecret(d []byte) *big.Int
+	MarshalFieldInteger(d *big.Int) []byte
+	UnmarshalFieldInteger(d []byte) *big.Int
 	GenerateECDSA(rand io.Reader) (x, y, secret *big.Int, err error)
 	Sign(rand io.Reader, x, y, d *big.Int, hash []byte) (r, s *big.Int, err error)
 	Verify(x, y *big.Int, hash []byte, r, s *big.Int) bool

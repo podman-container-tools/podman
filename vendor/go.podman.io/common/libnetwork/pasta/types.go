@@ -27,4 +27,6 @@ type SetupResult struct {
 	MapGuestAddrIPs []string
 	// IPv6 says whenever pasta run with ipv6 support
 	IPv6 bool
+	// Pid of the pasta process.
+	Pid int
 }

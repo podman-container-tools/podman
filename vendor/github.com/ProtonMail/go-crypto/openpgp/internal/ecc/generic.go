@@ -56,6 +56,15 @@ func (c *genericCurve) UnmarshalIntegerSecret(d []byte) *big.Int {
 	return new(big.Int).SetBytes(d)
 }
 
+func (c *genericCurve) MarshalFieldInteger(i *big.Int) (b []byte) {
+	b = make([]byte, (c.Curve.Params().BitSize+7)/8)
+	return i.FillBytes(b)
+}
+
+func (c *genericCurve) UnmarshalFieldInteger(d []byte) *big.Int {
+	return new(big.Int).SetBytes(d)
+}
+
 func (c *genericCurve) GenerateECDH(rand io.Reader) (point, secret []byte, err error) {
 	secret, x, y, err := elliptic.GenerateKey(c.Curve, rand)
 	if err != nil {

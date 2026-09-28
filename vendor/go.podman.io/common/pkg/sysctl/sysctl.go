@@ -5,6 +5,31 @@ import (
 	"strings"
 )
 
+// convertSysctlVariableToDotsSeparator returns sysctl variables in dot-separated
+// format. The '/' separator is also accepted in place of a '.'.
+// See sysctl.d(5) and opencontainers/runc#3257.
+func convertSysctlVariableToDotsSeparator(val string) string {
+	if val == "" {
+		return val
+	}
+
+	firstSepIndex := strings.IndexAny(val, "./")
+	if firstSepIndex == -1 || val[firstSepIndex] == '.' {
+		return val
+	}
+
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '.':
+			return '/'
+		case '/':
+			return '.'
+		default:
+			return r
+		}
+	}, val)
+}
+
 // Validate validates a list of sysctl and returns it.
 func Validate(strSlice []string) (map[string]string, error) {
 	sysctl := make(map[string]string)
@@ -34,14 +59,15 @@ func Validate(strSlice []string) (map[string]string, error) {
 		if trimmed != val {
 			return nil, fmt.Errorf("%q is invalid, extra spaces found", val)
 		}
+		key := convertSysctlVariableToDotsSeparator(arr[0])
 
-		if validSysctlMap[arr[0]] {
+		if validSysctlMap[key] {
 			sysctl[arr[0]] = arr[1]
 			continue
 		}
 
 		for _, prefix := range validSysctlPrefixes {
-			if strings.HasPrefix(arr[0], prefix) {
+			if strings.HasPrefix(key, prefix) {
 				sysctl[arr[0]] = arr[1]
 				foundMatch = true
 				break

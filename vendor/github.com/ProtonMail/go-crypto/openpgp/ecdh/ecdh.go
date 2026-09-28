@@ -145,7 +145,14 @@ func Decrypt(priv *PrivateKey, vsG, c, curveOID, fingerprint []byte) (msg []byte
 
 	// RFC6637 §8: "m = symm_alg_ID || session key || checksum || pkcs5_padding"
 	// The last byte should be the length of the padding, as per PKCS5; strip it off.
-	return m[:len(m)-int(m[len(m)-1])], nil
+	if len(m) == 0 {
+		return nil, errors.New("ecdh: invalid padding")
+	}
+	padLen := int(m[len(m)-1])
+	if padLen > len(m) {
+		return nil, errors.New("ecdh: invalid padding")
+	}
+	return m[:len(m)-padLen], nil
 }
 
 func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLeading, stripTrailing bool) ([]byte, error) {
@@ -196,6 +203,9 @@ func buildKey(pub *PublicKey, zb []byte, curveOID, fingerprint []byte, stripLead
 		return nil, err
 	}
 	mb := h.Sum(nil)
+	if len(mb) < pub.KDF.Cipher.KeySize() {
+		return nil, errors.New("ecdh: KDF hash output is shorter than the KDF cipher key size")
+	}
 
 	return mb[:pub.KDF.Cipher.KeySize()], nil // return oBits leftmost bits of MB.
 

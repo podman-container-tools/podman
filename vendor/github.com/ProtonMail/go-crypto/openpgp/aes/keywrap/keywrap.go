@@ -101,7 +101,7 @@ func Wrap(key, plainText []byte) ([]byte, error) {
 
 // Unwrap a key using the RFC 3394 AES Key Wrap Algorithm.
 func Unwrap(key, cipherText []byte) ([]byte, error) {
-	if len(cipherText)%8 != 0 {
+	if len(cipherText) < 16 || len(cipherText)%8 != 0 {
 		return nil, ErrUnwrapCiphertext
 	}
 

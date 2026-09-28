@@ -21,7 +21,10 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/errors"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/algorithm"
 	"github.com/ProtonMail/go-crypto/openpgp/internal/ecc"
+	"github.com/ProtonMail/go-crypto/openpgp/mldsa_eddsa"
+	"github.com/ProtonMail/go-crypto/openpgp/mlkem_ecdh"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/ProtonMail/go-crypto/openpgp/slhdsa"
 	"github.com/ProtonMail/go-crypto/openpgp/x25519"
 	"github.com/ProtonMail/go-crypto/openpgp/x448"
 )
@@ -279,7 +282,7 @@ func newSigner(config *packet.Config) (signer interface{}, err error) {
 			config.RSAPrimes = config.RSAPrimes[2:]
 			return generateRSAKeyWithPrimes(config.Random(), 2, bits, primes)
 		}
-		return rsa.GenerateKey(config.Random(), bits)
+		return generateRSAKey(config.Random(), bits)
 	case packet.PubKeyAlgoEdDSA:
 		if config.V6() {
 			// Implementations MUST NOT accept or generate v6 key material
@@ -319,6 +322,32 @@ func newSigner(config *packet.Config) (signer interface{}, err error) {
 			return nil, err
 		}
 		return priv, nil
+	case packet.PubKeyAlgoMldsa65Ed25519, packet.PubKeyAlgoMldsa87Ed448:
+		if !config.V6() {
+			return nil, goerrors.New("openpgp: cannot create a non-v6 mldsa_eddsa key")
+		}
+
+		c, err := packet.GetEdDSACurveFromAlgID(config.PublicKeyAlgorithm())
+		if err != nil {
+			return nil, err
+		}
+		d, err := packet.GetMldsaFromAlgID(config.PublicKeyAlgorithm())
+		if err != nil {
+			return nil, err
+		}
+
+		return mldsa_eddsa.GenerateKey(config.Random(), uint8(config.PublicKeyAlgorithm()), c, d)
+	case packet.PubKeyAlgoSlhdsaShake128s, packet.PubKeyAlgoSlhdsaShake128f, packet.PubKeyAlgoSlhdsaShake256s:
+		if !config.V6() {
+			return nil, goerrors.New("openpgp: cannot create a non-v6 SLH-DSH key")
+		}
+
+		scheme, err := packet.GetSlhdsaSchemeFromAlgID(config.PublicKeyAlgorithm())
+		if err != nil {
+			return nil, err
+		}
+
+		return slhdsa.GenerateKey(config.Random(), uint8(config.PublicKeyAlgorithm()), scheme)
 	default:
 		return nil, errors.InvalidArgumentError("unsupported public key algorithm")
 	}
@@ -326,7 +355,8 @@ func newSigner(config *packet.Config) (signer interface{}, err error) {
 
 // Generates an encryption/decryption key
 func newDecrypter(config *packet.Config) (decrypter interface{}, err error) {
-	switch config.PublicKeyAlgorithm() {
+	pubKeyAlgo := config.PublicKeyAlgorithm()
+	switch pubKeyAlgo {
 	case packet.PubKeyAlgoRSA:
 		bits := config.RSAModulusBits()
 		if bits < 1024 {
@@ -337,7 +367,7 @@ func newDecrypter(config *packet.Config) (decrypter interface{}, err error) {
 			config.RSAPrimes = config.RSAPrimes[2:]
 			return generateRSAKeyWithPrimes(config.Random(), 2, bits, primes)
 		}
-		return rsa.GenerateKey(config.Random(), bits)
+		return generateRSAKey(config.Random(), bits)
 	case packet.PubKeyAlgoEdDSA, packet.PubKeyAlgoECDSA:
 		fallthrough // When passing EdDSA or ECDSA, we generate an ECDH subkey
 	case packet.PubKeyAlgoECDH:
@@ -361,12 +391,54 @@ func newDecrypter(config *packet.Config) (decrypter interface{}, err error) {
 		return x25519.GenerateKey(config.Random())
 	case packet.PubKeyAlgoEd448, packet.PubKeyAlgoX448: // When passing Ed448, we generate an x448 subkey
 		return x448.GenerateKey(config.Random())
+	case packet.PubKeyAlgoMldsa65Ed25519, packet.PubKeyAlgoMldsa87Ed448,
+		packet.PubKeyAlgoSlhdsaShake128s, packet.PubKeyAlgoSlhdsaShake128f, packet.PubKeyAlgoSlhdsaShake256s:
+		if pubKeyAlgo, err = packet.GetMatchingMlkem(config.PublicKeyAlgorithm()); err != nil {
+			return nil, err
+		}
+		fallthrough // When passing ML-DSA + EdDSA or ECDSA, we generate a ML-KEM + ECDH subkey
+	case packet.PubKeyAlgoMlkem768X25519, packet.PubKeyAlgoMlkem1024X448:
+		if !config.V6() && pubKeyAlgo == packet.PubKeyAlgoMlkem1024X448 {
+			return nil, goerrors.New("openpgp: cannot create a non-v6 mlkem1024_x448 key")
+		}
+
+		c, err := packet.GetECDHCurveFromAlgID(pubKeyAlgo)
+		if err != nil {
+			return nil, err
+		}
+		k, err := packet.GetMlkemFromAlgID(pubKeyAlgo)
+		if err != nil {
+			return nil, err
+		}
+
+		return mlkem_ecdh.GenerateKey(config.Random(), uint8(pubKeyAlgo), c, k)
 	default:
 		return nil, errors.InvalidArgumentError("unsupported public key algorithm")
 	}
 }
 
 var bigOne = big.NewInt(1)
+
+// generateRSAKey generates an RSA keypair and ensures that p < q as required by RFC 9580.
+func generateRSAKey(random io.Reader, bits int) (*rsa.PrivateKey, error) {
+	key, err := rsa.GenerateKey(random, bits)
+	if err != nil {
+		return nil, err
+	}
+	enforceRSAPrimeOrder(key)
+	return key, nil
+}
+
+// enforceRSAPrimeOrder ensures p < q, as required by RFC 9580 section 5.5.5.1
+// for RSA keys. The Go standard library does not guarantee this, so we swap if
+// needed and recompute the precomputed values.
+func enforceRSAPrimeOrder(key *rsa.PrivateKey) {
+	if len(key.Primes) == 2 && key.Primes[0].Cmp(key.Primes[1]) > 0 {
+		key.Primes[0], key.Primes[1] = key.Primes[1], key.Primes[0]
+		key.Precomputed = rsa.PrecomputedValues{}
+		key.Precompute()
+	}
+}
 
 // generateRSAKeyWithPrimes generates a multi-prime RSA keypair of the
 // given bit size, using the given random source and pre-populated primes.
@@ -449,6 +521,11 @@ NextSetOfPrimes:
 			priv.N = n
 			break
 		}
+	}
+
+	// RFC 9580 section 5.5.5.1 requires p < q for RSA keys.
+	if len(priv.Primes) == 2 && priv.Primes[0].Cmp(priv.Primes[1]) > 0 {
+		priv.Primes[0], priv.Primes[1] = priv.Primes[1], priv.Primes[0]
 	}
 
 	priv.Precompute()
