@@ -21,6 +21,7 @@ import (
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/secrets"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/lock"
 	"go.podman.io/storage"
@@ -141,7 +142,7 @@ type ContainerState struct {
 	Mounted bool `json:"mounted,omitempty"`
 	// Mountpoint contains the path to the container's mounted storage as given
 	// by containers/storage.
-	Mountpoint string `json:"mountPoint,omitempty"`
+	Mountpoint *protectedroot.PathRoot `json:"mountPoint,omitempty"`
 	// StartedTime is the time the container was started
 	StartedTime time.Time `json:"startedTime"`
 	// FinishedTime is the time the container finished executing

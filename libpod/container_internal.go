@@ -37,6 +37,7 @@ import (
 	"go.podman.io/common/pkg/hooks/exec"
 	"go.podman.io/common/pkg/timezone"
 	cutil "go.podman.io/common/pkg/util"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/libpod/shutdown"
@@ -620,7 +621,7 @@ func (c *Container) teardownStorage() error {
 func resetContainerState(state *ContainerState) {
 	state.PID = 0
 	state.ConmonPID = 0
-	state.Mountpoint = ""
+	state.Mountpoint = nil
 	state.Mounted = false
 	// Reset state.
 	// Almost all states are reset to either Configured or Exited,
@@ -783,7 +784,7 @@ func (c *Container) export(out io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("mounting container %q: %w", c.ID(), err)
 		}
-		mountPoint = containerMount
+		mountPoint = protectedroot.NewPathRoot(containerMount)
 		defer func() {
 			if _, err := c.runtime.store.Unmount(c.ID(), false); err != nil {
 				logrus.Errorf("Unmounting container %q: %v", c.ID(), err)
@@ -791,7 +792,7 @@ func (c *Container) export(out io.Writer) error {
 		}()
 	}
 
-	input, err := chrootarchive.Tar(mountPoint, nil, mountPoint)
+	input, err := chrootarchive.Tar(mountPoint.PathWithoutProtection(), nil, mountPoint.PathWithoutProtection())
 	if err != nil {
 		return fmt.Errorf("reading container directory %q: %w", c.ID(), err)
 	}
@@ -1748,10 +1749,10 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 	if c.state.Mounted {
 		mounted := true
 		if c.ensureState(define.ContainerStateExited) {
-			mounted, _ = mount.Mounted(c.state.Mountpoint)
+			mounted, _ = mount.Mounted(c.state.Mountpoint.PathWithoutProtection())
 		}
 		if mounted {
-			return c.state.Mountpoint, nil
+			return c.state.Mountpoint.PathWithoutProtection(), nil
 		}
 	}
 
@@ -2084,7 +2085,7 @@ func (c *Container) cleanupStorage() error {
 	}
 
 	markUnmounted := func() {
-		c.state.Mountpoint = ""
+		c.state.Mountpoint = nil
 		c.state.Mounted = false
 
 		if c.valid {
@@ -2096,7 +2097,7 @@ func (c *Container) cleanupStorage() error {
 
 	// umount rootfs overlay if it was created
 	if c.config.RootfsOverlay {
-		overlayBasePath := filepath.Dir(c.state.Mountpoint)
+		overlayBasePath := filepath.Dir(c.state.Mountpoint.PathWithoutProtection())
 		if err := overlay.Unmount(overlayBasePath); err != nil {
 			reportErrorf("failed to clean up overlay mounts for %s: %w", c.ID(), err)
 		}
@@ -2560,7 +2561,7 @@ func (c *Container) setupOCIHooks(ctx context.Context, config *spec.Spec) (map[s
 // Otherwise, it returns an intermediate mountpoint that is accessible to anyone.
 func (c *Container) getRootPathForOCI() (string, error) {
 	if hasCurrentUserMapped(c) || c.config.RootfsMapping != nil {
-		return c.state.Mountpoint, nil
+		return c.state.Mountpoint.PathWithoutProtection(), nil
 	}
 	return c.getIntermediateMountpointUser()
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
@@ -82,7 +83,7 @@ func (c *Container) prepare(ctx context.Context) error {
 
 		// Finish up mountStorage
 		c.state.Mounted = true
-		c.state.Mountpoint = mountPoint
+		c.state.Mountpoint = protectedroot.NewPathRoot(mountPoint)
 
 		logrus.Debugf("Created root filesystem for container %s at %s", c.ID(), c.state.Mountpoint)
 	}()

@@ -735,7 +735,7 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 	}
 
 	overrides := c.getUserOverrides()
-	execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint, user, overrides)
+	execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint.PathWithoutProtection(), user, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -749,7 +749,7 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 
 	// Always add the groups added through --group-add, no matter the exec UID:GID.
 	if len(c.config.Groups) > 0 {
-		additionalSgids, err := lookup.GetContainerGroups(c.config.Groups, c.state.Mountpoint, overrides)
+		additionalSgids, err := lookup.GetContainerGroups(c.config.Groups, c.state.Mountpoint.PathWithoutProtection(), overrides)
 		if err != nil {
 			return nil, fmt.Errorf("looking up supplemental groups for container %s exec session %s: %w", c.ID(), sessionID, err)
 		}
