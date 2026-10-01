@@ -151,6 +151,14 @@ func hijackWriteError(toWrite error, cid string, terminal bool, httpBuf *bufio.R
 func hijackWriteErrorAndClose(toWrite error, cid string, terminal bool, httpCon io.Closer, httpBuf *bufio.ReadWriter) {
 	hijackWriteError(toWrite, cid, terminal, httpBuf)
 
+	// Flush any remaining buffered output before closing. Without this, a
+	// full Close() on the underlying connection can send a TCP RST which
+	// causes the remote client to discard data still in its receive buffer,
+	// resulting in truncated or missing output.
+	if err := httpBuf.Flush(); err != nil {
+		logrus.Errorf("Flushing HTTP attach buffer for container %s: %v", cid, err)
+	}
+
 	if err := httpCon.Close(); err != nil {
 		logrus.Errorf("Closing container %s HTTP attach connection: %v", cid, err)
 	}
