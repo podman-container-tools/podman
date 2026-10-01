@@ -9,7 +9,9 @@ podman\-stats - Display a live stream of one or more container's resource usage 
 **podman container stats** [*options*] [*container*]
 
 ## DESCRIPTION
-Display a live stream of one or more containers' resource usage statistics
+Display a live stream of one or more containers' resource usage statistics.
+
+In streaming mode, `CPU %` reports resource utilization calculated over the latest sampling interval. When streaming is disabled (via `--no-stream`), `CPU %` reflects cumulative average CPU utilization over the container's lifetime since startup.
 
 Note: Rootless environments are not able to report statistics
 about their networking usage.
