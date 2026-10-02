@@ -30,7 +30,10 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVV R11, 120(R14)
 
 	// Adjust SP by frame size.
-	SUBV $(22*8), R3
+	// Layout: R1(8) + R30(8) + callbackArgs(48) = 64 bytes below R14,
+	// plus 128 bytes of saved registers above = 192 = 24*8.
+	// callbackArgs is placed at SP+16, ending at SP+64 = R14.
+	SUBV $(24*8), R3
 
 	// It is important to save R30 because the go assembler
 	// uses it for move instructions for a variable.
@@ -47,8 +50,9 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVV R1, 0(R3)
 	MOVV R30, 8(R3)
 
-	// Create a struct callbackArgs on our stack.
-	MOVV $(callbackArgs__size)(R3), R13
+	// Create a struct callbackArgs on our stack at SP+16
+	// (right after the saved R1 and R30).
+	MOVV $16(R3), R13
 	MOVV R12, callbackArgs_index(R13)   // callback index
 	MOVV R14, callbackArgs_args(R13)    // address of args vector
 	MOVV $0, callbackArgs_result(R13)   // result
@@ -64,12 +68,12 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	JAL crosscall2(SB)
 
 	// Get callback result.
-	MOVV $(callbackArgs__size)(R3), R13
+	MOVV $16(R3), R13
 	MOVV callbackArgs_result(R13), R4
 
 	// Restore LR and R30
 	MOVV 0(R3), R1
 	MOVV 8(R3), R30
-	ADDV $(22*8), R3
+	ADDV $(24*8), R3
 
 	RET

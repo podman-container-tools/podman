@@ -5,6 +5,7 @@ package cpu
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"unsafe"
@@ -62,17 +63,25 @@ func getFrequency() (float64, error) {
 
 		if buf.GoString() == "pmgr" {
 			pCoreRef := iokit.IORegistryEntryCreateCFProperty(service, uintptr(pCorekey), common.KCFAllocatorDefault, common.KNilOptions)
+			if pCoreRef == nil {
+				iokit.IOObjectRelease(service)
+				return 0, errors.New("pmgr has no voltage-states5-sram property")
+			}
 			length := corefoundation.CFDataGetLength(uintptr(pCoreRef))
 			data := corefoundation.CFDataGetBytePtr(uintptr(pCoreRef))
 
-			// composite uint32 from the byte array
-			buf := unsafe.Slice((*byte)(data), length)
+			var raw []byte
+			if data != nil && length > 0 {
+				raw = unsafe.Slice((*byte)(data), length)
+			}
 
-			// combine the bytes into a uint32 value
-			b := buf[length-8 : length-4]
-			pCoreHz = binary.LittleEndian.Uint32(b)
+			var err error
+			pCoreHz, err = parsePCoreHz(raw)
 			corefoundation.CFRelease(uintptr(pCoreRef))
 			iokit.IOObjectRelease(service)
+			if err != nil {
+				return 0, err
+			}
 			break
 		}
 
@@ -80,4 +89,14 @@ func getFrequency() (float64, error) {
 	}
 
 	return float64(pCoreHz / 1_000_000), nil
+}
+
+// parsePCoreHz returns the highest P-core frequency in Hz from the raw
+// voltage-states5-sram data, which is stored in the second-to-last
+// 4-byte little-endian word.
+func parsePCoreHz(buf []byte) (uint32, error) {
+	if len(buf) < 8 {
+		return 0, fmt.Errorf("voltage-states5-sram data too short: %d bytes", len(buf))
+	}
+	return binary.LittleEndian.Uint32(buf[len(buf)-8 : len(buf)-4]), nil
 }

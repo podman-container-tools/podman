@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2025 The Ebitengine Authors
 
+//go:build !cgo
+
 package purego
 
 //go:cgo_import_dynamic purego_dlopen dlopen "libc.so"

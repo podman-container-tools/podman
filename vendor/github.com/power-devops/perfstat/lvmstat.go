@@ -30,7 +30,9 @@ func LogicalVolumeStat() ([]LogicalVolume, error) {
 	lv_len := C.sizeof_perfstat_logicalvolume_t * C.ulong(numlvs)
 	lv = (*C.perfstat_logicalvolume_t)(C.malloc(lv_len))
 	defer C.free(unsafe.Pointer(lv))
-	C.strcpy(&lvname.name[0], C.CString(""))
+	cstr := C.CString("")
+	C.strcpy(&lvname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_logicalvolume(&lvname, lv, C.sizeof_perfstat_logicalvolume_t, numlvs)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_logicalvolume() error")
@@ -57,7 +59,9 @@ func VolumeGroupStat() ([]VolumeGroup, error) {
 	vg_len := C.sizeof_perfstat_volumegroup_t * C.ulong(numvgs)
 	vg = (*C.perfstat_volumegroup_t)(C.malloc(vg_len))
 	defer C.free(unsafe.Pointer(vg))
-	C.strcpy(&vgname.name[0], C.CString(""))
+	cstr := C.CString("")
+	C.strcpy(&vgname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_volumegroup(&vgname, vg, C.sizeof_perfstat_volumegroup_t, numvgs)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_volumegroup() error")

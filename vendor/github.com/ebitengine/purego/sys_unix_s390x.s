@@ -18,22 +18,24 @@
 //
 // S390X uses R2-R6 for integer arguments (5 registers) and F0,F2,F4,F6 for floats (4 registers).
 //
-// Our frame layout (total 264 bytes, 8-byte aligned):
+// Our frame layout (total 200 bytes, 8-byte aligned). To stay under the
+// 800-byte nosplit limit on Go 1.27 the callbackArgs struct is stored in the
+// caller's free linkage slot (old_R15+16..48) instead of our own frame:
 //  0(R15)    - back chain
 // 48(R15)   - saved R6-R15 (done by STMG)
-// 160(R15)  - callbackArgs struct (32 bytes: index, args, result, stackArgs)
-// 192(R15)  - args array start
+// 128(R15)  - args array start
 //
 // Args array layout:
 // - floats F0,F2,F4,F6 (32 bytes)
 // - ints R2-R6 (40 bytes)
-// Total args array: 72 bytes, ends at 264
+// Total args array: 72 bytes, ends at 200
 //
+// callbackArgs struct lives at old_R15+16 (32 bytes: index, args, result, stackArgs)
 // Stack args in caller's frame start at old_R15+160
 
-#define FRAME_SIZE     264
-#define CB_ARGS        160
-#define ARGS_ARRAY     192
+#define FRAME_SIZE     200
+#define ARGS_ARRAY     128
+#define CB_ARGS        (FRAME_SIZE+16)
 #define FLOAT_OFF      0
 #define INT_OFF        32
 
@@ -71,7 +73,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVD R5, (ARGS_ARRAY+INT_OFF+3*8)(R15)
 
 	// R6 (5th int arg) was saved at 48(old_R15) by STMG
-	// old_R15 = current R15 + FRAME_SIZE, so R6 is at 48+FRAME_SIZE(R15) = 312(R15)
+	// old_R15 = current R15 + FRAME_SIZE
 	MOVD (48+FRAME_SIZE)(R15), R1
 	MOVD R1, (ARGS_ARRAY+INT_OFF+4*8)(R15)
 

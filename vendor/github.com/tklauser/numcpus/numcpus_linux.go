@@ -51,49 +51,20 @@ func readCPURangeWith[T any](file string, f func(cpus string) (T, error)) (T, er
 }
 
 func countCPURange(cpus string) (int, error) {
-	cpus = strings.Trim(cpus, "\n ")
-
-	// Treat empty file as valid. This might be the case if there are no offline CPUs in which
-	// case /sys/devices/system/cpu/offline is empty.
-	if cpus == "" {
-		return 0, nil
-	}
-
-	n := int(0)
-	for cpuRange := range strings.SplitSeq(cpus, ",") {
-		if cpuRange == "" {
-			return 0, fmt.Errorf("empty CPU range in CPU string %q", cpus)
-		}
-		from, to, found := strings.Cut(cpuRange, "-")
-		first, err := strconv.ParseUint(from, 10, 32)
-		if err != nil {
-			return 0, err
-		}
-		if !found {
-			n++
-			continue
-		}
-		last, err := strconv.ParseUint(to, 10, 32)
-		if err != nil {
-			return 0, err
-		}
-		if last < first {
-			return 0, fmt.Errorf("last CPU in range (%d) less than first (%d)", last, first)
-		}
-		n += int(last - first + 1)
-	}
-	return n, nil
+	list, err := listCPURange(cpus)
+	return len(list), err
 }
 
 func listCPURange(cpus string) ([]int, error) {
 	cpus = strings.Trim(cpus, "\n ")
 
-	// See comment in countCPURange.
+	// Treat empty file as valid. This might be the case if there are no offline CPUs in which
+	// case /sys/devices/system/cpu/offline is empty.
 	if cpus == "" {
 		return []int{}, nil
 	}
 
-	list := []int{}
+	var list []int
 	for cpuRange := range strings.SplitSeq(cpus, ",") {
 		if cpuRange == "" {
 			return nil, fmt.Errorf("empty CPU range in CPU string %q", cpus)
@@ -123,18 +94,13 @@ func listCPURange(cpus string) ([]int, error) {
 }
 
 func getConfigured() (int, error) {
-	d, err := os.Open(sysfsCPUBasePath)
-	if err != nil {
-		return 0, err
-	}
-	defer d.Close()
-	fis, err := d.Readdir(-1)
+	entries, err := os.ReadDir(sysfsCPUBasePath)
 	if err != nil {
 		return 0, err
 	}
 	count := 0
-	for _, fi := range fis {
-		if name := fi.Name(); fi.IsDir() && strings.HasPrefix(name, "cpu") {
+	for _, entry := range entries {
+		if name := entry.Name(); entry.IsDir() && strings.HasPrefix(name, "cpu") {
 			_, err := strconv.ParseInt(name[3:], 10, 64)
 			if err == nil {
 				count++
@@ -149,7 +115,7 @@ func getKernelMax() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := strconv.ParseInt(strings.Trim(string(buf), "\n "), 10, 32)
+	n, err := strconv.ParseInt(strings.Trim(string(buf), "\n "), 10, 64)
 	if err != nil {
 		return 0, err
 	}

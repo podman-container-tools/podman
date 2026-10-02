@@ -309,6 +309,8 @@ func fillFromMeminfoWithContext(ctx context.Context) (*VirtualMemoryStat, *ExVir
 		}
 	}
 
+	// free(1) and psutil both count the reclaimable slab as part of the page
+	// cache, so report "Cached" the same way. See #844.
 	ret.Cached += ret.Sreclaimable
 
 	if !memavail {

@@ -27,9 +27,6 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	FMOVD F14, 80(R15)
 	FMOVD F15, 88(R15)
 
-	// Initialize Go ABI environment.
-	BL runtime·load_g(SB)
-
 	MOVD R2, 8(R15)  // fn unsafe.Pointer
 	MOVD R3, 16(R15) // a unsafe.Pointer
 

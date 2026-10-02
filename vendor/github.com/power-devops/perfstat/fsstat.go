@@ -20,6 +20,7 @@ func FileSystemStat() ([]FileSystem, error) {
 	if nmounts <= 0 {
 		return nil, fmt.Errorf("No mounts found")
 	}
+	defer C.free_all_fs(fsinfo, nmounts)
 
 	fs := make([]FileSystem, nmounts)
 	for i := 0; i < int(nmounts); i++ {

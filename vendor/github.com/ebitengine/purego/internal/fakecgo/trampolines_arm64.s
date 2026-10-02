@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2022 The Ebitengine Authors
 
-//go:build !cgo && (darwin || freebsd || linux)
+//go:build !cgo && (darwin || freebsd || linux || netbsd)
 
 #include "textflag.h"
 #include "go_asm.h"
@@ -58,7 +58,6 @@ TEXT threadentry_trampoline(SB), NOSPLIT, $0-0
 
 	SAVE_R19_TO_R28(8*4)
 	SAVE_F8_TO_F15(8*14)
-	STP (R29, R30), (8*22)(RSP)
 
 	MOVD ·threadentry_call(SB), R9
 	MOVD (R9), R9
@@ -67,8 +66,6 @@ TEXT threadentry_trampoline(SB), NOSPLIT, $0-0
 
 	RESTORE_R19_TO_R28(8*4)
 	RESTORE_F8_TO_F15(8*14)
-	LDP (8*22)(RSP), (R29, R30)
-
 	ADD $(8*24), RSP
 	RET
 

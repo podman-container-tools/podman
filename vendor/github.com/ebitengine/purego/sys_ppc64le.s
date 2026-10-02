@@ -35,10 +35,10 @@
 #define TOC_SAVE   160
 #define ARGP_SAVE  168
 
-GLOBL ·syscall15XABI0(SB), NOPTR|RODATA, $8
-DATA ·syscall15XABI0(SB)/8, $syscall15X(SB)
+GLOBL ·syscallXABI0(SB), NOPTR|RODATA, $8
+DATA ·syscallXABI0(SB)/8, $syscallX(SB)
 
-TEXT syscall15X(SB), NOSPLIT, $0
+TEXT syscallX(SB), NOSPLIT, $0
 	// Prologue: create stack frame
 	// R3 contains the args pointer on entry
 	MOVD R1, R12          // save old SP
@@ -51,49 +51,49 @@ TEXT syscall15X(SB), NOSPLIT, $0
 	// Save args pointer (in R3)
 	MOVD R3, ARGP_SAVE(R1)
 
-	// R11 := args pointer (syscall15Args*)
+	// R11 := args pointer (syscallArgs*)
 	MOVD R3, R11
 
 	// Load float args into F1-F8
-	FMOVD syscall15Args_f1(R11), F1
-	FMOVD syscall15Args_f2(R11), F2
-	FMOVD syscall15Args_f3(R11), F3
-	FMOVD syscall15Args_f4(R11), F4
-	FMOVD syscall15Args_f5(R11), F5
-	FMOVD syscall15Args_f6(R11), F6
-	FMOVD syscall15Args_f7(R11), F7
-	FMOVD syscall15Args_f8(R11), F8
+	FMOVD syscallArgs_f1(R11), F1
+	FMOVD syscallArgs_f2(R11), F2
+	FMOVD syscallArgs_f3(R11), F3
+	FMOVD syscallArgs_f4(R11), F4
+	FMOVD syscallArgs_f5(R11), F5
+	FMOVD syscallArgs_f6(R11), F6
+	FMOVD syscallArgs_f7(R11), F7
+	FMOVD syscallArgs_f8(R11), F8
 
 	// Load integer args into R3-R10
-	MOVD syscall15Args_a1(R11), R3
-	MOVD syscall15Args_a2(R11), R4
-	MOVD syscall15Args_a3(R11), R5
-	MOVD syscall15Args_a4(R11), R6
-	MOVD syscall15Args_a5(R11), R7
-	MOVD syscall15Args_a6(R11), R8
-	MOVD syscall15Args_a7(R11), R9
-	MOVD syscall15Args_a8(R11), R10
+	MOVD syscallArgs_a1(R11), R3
+	MOVD syscallArgs_a2(R11), R4
+	MOVD syscallArgs_a3(R11), R5
+	MOVD syscallArgs_a4(R11), R6
+	MOVD syscallArgs_a5(R11), R7
+	MOVD syscallArgs_a6(R11), R8
+	MOVD syscallArgs_a7(R11), R9
+	MOVD syscallArgs_a8(R11), R10
 
 	// Spill a9-a15 onto the stack (stack parameters start at 96(R1))
 	// Per ELFv2: parameter save area is 32-95, stack args start at 96
 	MOVD ARGP_SAVE(R1), R11          // reload args pointer
-	MOVD syscall15Args_a9(R11), R12
+	MOVD syscallArgs_a9(R11), R12
 	MOVD R12, 96(R1)                 // a9 at 96(R1)
-	MOVD syscall15Args_a10(R11), R12
+	MOVD syscallArgs_a10(R11), R12
 	MOVD R12, 104(R1)                // a10 at 104(R1)
-	MOVD syscall15Args_a11(R11), R12
+	MOVD syscallArgs_a11(R11), R12
 	MOVD R12, 112(R1)                // a11 at 112(R1)
-	MOVD syscall15Args_a12(R11), R12
+	MOVD syscallArgs_a12(R11), R12
 	MOVD R12, 120(R1)                // a12 at 120(R1)
-	MOVD syscall15Args_a13(R11), R12
+	MOVD syscallArgs_a13(R11), R12
 	MOVD R12, 128(R1)                // a13 at 128(R1)
-	MOVD syscall15Args_a14(R11), R12
+	MOVD syscallArgs_a14(R11), R12
 	MOVD R12, 136(R1)                // a14 at 136(R1)
-	MOVD syscall15Args_a15(R11), R12
+	MOVD syscallArgs_a15(R11), R12
 	MOVD R12, 144(R1)                // a15 at 144(R1)
 
 	// Call function: load fn and call
-	MOVD syscall15Args_fn(R11), R12
+	MOVD syscallArgs_fn(R11), R12
 	MOVD R12, CTR
 	BL   (CTR)
 
@@ -104,14 +104,20 @@ TEXT syscall15X(SB), NOSPLIT, $0
 	MOVD ARGP_SAVE(R1), R11
 
 	// Store integer results back (R3, R4)
-	MOVD R3, syscall15Args_a1(R11)
-	MOVD R4, syscall15Args_a2(R11)
+	MOVD R3, syscallArgs_a1(R11)
+	MOVD R4, syscallArgs_a2(R11)
+	MOVD $0, R3
+	MOVD R3, syscallArgs_a3(R11) // no errno here: clear the input argument
 
-	// Store float return values (F1-F4)
-	FMOVD F1, syscall15Args_f1(R11)
-	FMOVD F2, syscall15Args_f2(R11)
-	FMOVD F3, syscall15Args_f3(R11)
-	FMOVD F4, syscall15Args_f4(R11)
+	// Store float return values F1-F8 (an HFA may span up to eight).
+	FMOVD F1, syscallArgs_f1(R11)
+	FMOVD F2, syscallArgs_f2(R11)
+	FMOVD F3, syscallArgs_f3(R11)
+	FMOVD F4, syscallArgs_f4(R11)
+	FMOVD F5, syscallArgs_f5(R11)
+	FMOVD F6, syscallArgs_f6(R11)
+	FMOVD F7, syscallArgs_f7(R11)
+	FMOVD F8, syscallArgs_f8(R11)
 
 	// Epilogue: restore and return
 	MOVD LR_SAVE(R1), R12

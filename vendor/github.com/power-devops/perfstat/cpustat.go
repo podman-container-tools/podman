@@ -37,7 +37,9 @@ func CpuStat() ([]CPU, error) {
 	cpustat_len := C.sizeof_perfstat_cpu_t * C.ulong(ncpu)
 	cpustat = (*C.perfstat_cpu_t)(C.malloc(cpustat_len))
 	defer C.free(unsafe.Pointer(cpustat))
-	C.strcpy(&cpu.name[0], C.CString(C.FIRST_CPU))
+	cstr := C.CString(C.FIRST_CPU)
+	C.strcpy(&cpu.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_cpu(&cpu, cpustat, C.sizeof_perfstat_cpu_t, C.int(ncpu))
 	if r <= 0 {
 		return nil, fmt.Errorf("error perfstat_cpu()")

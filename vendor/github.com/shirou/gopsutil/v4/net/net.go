@@ -264,10 +264,12 @@ func getIOCountersAll(n []IOCountersStat) []IOCountersStat {
 		r.PacketsRecv += nic.PacketsRecv
 		r.Errin += nic.Errin
 		r.Dropin += nic.Dropin
+		r.Fifoin += nic.Fifoin
 		r.BytesSent += nic.BytesSent
 		r.PacketsSent += nic.PacketsSent
 		r.Errout += nic.Errout
 		r.Dropout += nic.Dropout
+		r.Fifoout += nic.Fifoout
 	}
 
 	return []IOCountersStat{r}

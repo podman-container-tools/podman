@@ -306,7 +306,7 @@ func IntContains(target []int, src int) bool {
 // This method is used only for debugging platform dependent code.
 func attributes(m any) map[string]reflect.Type {
 	typ := reflect.TypeOf(m)
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 

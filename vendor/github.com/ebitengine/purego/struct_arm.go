@@ -28,7 +28,14 @@ func addStruct(v reflect.Value, numInts, numFloats, numStack *int, addInt, addFl
 	return keepAlive
 }
 
-func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
+// structReturnInMemory always reports false on arm: an indirect struct return
+// is recovered from the pointer the callee leaves in a1 (see getStruct) rather
+// than through a caller-allocated hidden first argument.
+func structReturnInMemory(reflect.Type) bool {
+	return false
+}
+
+func getStruct(outType reflect.Type, syscall syscallArgs) (v reflect.Value) {
 	outSize := outType.Size()
 	if outSize == 0 {
 		return reflect.New(outType).Elem()
@@ -82,4 +89,12 @@ func collectStackArgs(args []reflect.Value, startIdx int, numInts, numFloats int
 // bundleStackArgs is not used on arm.
 func bundleStackArgs(stackArgs []reflect.Value, addStack func(uintptr)) {
 	panic("purego: bundleStackArgs should not be called on arm")
+}
+
+func getCallbackStruct(inType reflect.Type, frame unsafe.Pointer, floatsN *int, intsN *int, stackSlot *int, stackByteOffset *uintptr) reflect.Value {
+	panic("purego: struct callback arguments are not supported on arm")
+}
+
+func setStruct(a *callbackArgs, ret reflect.Value) {
+	panic("purego: struct returns are not supported on arm")
 }

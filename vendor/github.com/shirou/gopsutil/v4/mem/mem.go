@@ -53,14 +53,25 @@ type VirtualMemoryStat struct {
 	// https://www.kernel.org/doc/Documentation/vm/overcommit-accounting
 	// https://www.kernel.org/doc/Documentation/vm/transhuge.txt
 	//
-	Buffers        uint64 `json:"buffers"`
-	Cached         uint64 `json:"cached"`
-	WriteBack      uint64 `json:"writeBack"`
-	Dirty          uint64 `json:"dirty"`
-	WriteBackTmp   uint64 `json:"writeBackTmp"`
-	Shared         uint64 `json:"shared"`
-	Slab           uint64 `json:"slab"`
-	Sreclaimable   uint64 `json:"sreclaimable"`
+	Buffers uint64 `json:"buffers"`
+
+	// Cached is the page cache.
+	//
+	// On Linux this is "Cached" plus "SReclaimable" from /proc/meminfo, which
+	// is what free(1) and psutil report. Subtract Sreclaimable to get the raw
+	// "Cached" value.
+	Cached uint64 `json:"cached"`
+
+	WriteBack    uint64 `json:"writeBack"`
+	Dirty        uint64 `json:"dirty"`
+	WriteBackTmp uint64 `json:"writeBackTmp"`
+	Shared       uint64 `json:"shared"`
+	Slab         uint64 `json:"slab"`
+
+	// Sreclaimable is the reclaimable part of Slab. On Linux it is also
+	// included in Cached.
+	Sreclaimable uint64 `json:"sreclaimable"`
+
 	Sunreclaim     uint64 `json:"sunreclaim"`
 	PageTables     uint64 `json:"pageTables"`
 	SwapCached     uint64 `json:"swapCached"`

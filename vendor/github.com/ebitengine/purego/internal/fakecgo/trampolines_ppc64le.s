@@ -5,188 +5,93 @@
 
 #include "textflag.h"
 #include "go_asm.h"
+#include "abi_ppc64x.h"
 
 // These trampolines map the C ABI to Go ABI and call into the Go equivalent functions.
-//
-// PPC64LE ELFv2 ABI stack frame layout:
-//   0(R1)  = backchain (pointer to caller's frame)
-//   8(R1)  = CR save area
-//   16(R1) = LR save area
-//   24(R1) = reserved
-//   32(R1) = parameter save area (minimum 64 bytes for 8 args)
-//
-// Two patterns are used depending on call direction:
-//
-// C→Go trampolines: The C caller already provides a 32-byte linkage area.
-//   Save LR/CR into caller's frame at 16(R1)/8(R1) BEFORE allocating,
-//   then use MOVDU to allocate and set backchain atomically.
-//
-// Go→C trampolines: Go callers don't provide ELFv2 linkage area.
-//   Allocate frame first with MOVDU, then save LR/CR into OUR frame.
 
-TEXT x_cgo_init_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
-	// R3, R4 already have the arguments
+TEXT x_cgo_init_trampoline(SB), NOSPLIT, $0-0
 	MOVD ·x_cgo_init_call(SB), R12
 	MOVD (R12), R12
 	MOVD R12, CTR
 	CALL CTR
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-TEXT x_cgo_thread_start_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
+TEXT x_cgo_thread_start_trampoline(SB), NOSPLIT, $0-0
 	MOVD ·x_cgo_thread_start_call(SB), R12
 	MOVD (R12), R12
 	MOVD R12, CTR
 	CALL CTR
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-// void (*_cgo_setenv)(char**)
-// C arg: R3 = pointer to env
-// This is C→Go: caller is C ABI.
-TEXT x_cgo_setenv_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
+TEXT x_cgo_setenv_trampoline(SB), NOSPLIT, $0-0
 	MOVD ·x_cgo_setenv_call(SB), R12
 	MOVD (R12), R12
 	MOVD R12, CTR
 	CALL CTR
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-TEXT x_cgo_unsetenv_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
+TEXT x_cgo_unsetenv_trampoline(SB), NOSPLIT, $0-0
 	MOVD ·x_cgo_unsetenv_call(SB), R12
 	MOVD (R12), R12
 	MOVD R12, CTR
 	CALL CTR
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-TEXT x_cgo_notify_runtime_init_done_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
+TEXT x_cgo_notify_runtime_init_done_trampoline(SB), NOSPLIT, $0-0
 	CALL ·x_cgo_notify_runtime_init_done(SB)
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-TEXT x_cgo_bindm_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
-	MOVW CR, R0
-	MOVD R0, 8(R1)
-
-	MOVDU R1, -32(R1)
-
+TEXT x_cgo_bindm_trampoline(SB), NOSPLIT, $0-0
 	CALL ·x_cgo_bindm(SB)
-
-	ADD $32, R1
-
-	MOVD 16(R1), LR
-	MOVD 8(R1), R0
-	MOVW R0, CR
 	RET
 
-TEXT ·setg_trampoline(SB), NOSPLIT|NOFRAME, $0-16
-	// Save LR, CR, and R31 to non-volatile registers (C ABI preserves R14-R31)
-	MOVD LR, R20
-	MOVW CR, R21
-	MOVD R31, R22 // save R31 because load_g clobbers it
+// func setg_trampoline(setg uintptr, g uintptr)
+TEXT ·setg_trampoline(SB), NOSPLIT, $16-16
+	MOVD R31, 8(R1) // save R31
 
-	// Load arguments from Go stack
-	MOVD 32(R1), R12 // setg function pointer
-	MOVD 40(R1), R3  // g pointer → first C arg
+	MOVD setg+0(FP), R12
+	MOVD newg+8(FP), R3
 
-	// Allocate ELFv2 frame for the C callee (32 bytes minimum)
-	MOVDU R1, -32(R1)
+	MOVD R3, 16(R1) // save newg before call
 
-	// Call setg_gcc which stores g to TLS
 	MOVD R12, CTR
 	CALL CTR
 
-	// setg_gcc stored g to TLS but restored old g in R30.
-	// Call load_g to reload g from TLS into R30.
-	// Note: load_g clobbers R31
-	CALL runtime·load_g(SB)
+	// Assign g directly instead of calling runtime·load_g
+	// setg_gcc has already stored newg into TLS; put it in the g register too.
+	MOVD 16(R1), g
 
-	// Deallocate frame
-	ADD $32, R1
-
-	// Clear R0 before returning to Go code.
-	// Go uses R0 as a constant 0 for things like "std r0,X(r1)" to zero stack locations.
-	// C/assembly functions may leave garbage in R0.
-	XOR R0, R0, R0
-
-	// Restore LR, CR, and R31 from non-volatile registers
-	MOVD R22, R31 // restore R31
-	MOVD R20, LR
-	MOVW R21, CR
+	MOVD 8(R1), R31
+	XOR  R0, R0, R0
 	RET
 
 TEXT threadentry_trampoline(SB), NOSPLIT|NOFRAME, $0-0
-	MOVD LR, 16(R1)
+	// Called from C (pthread_create). Must save all C callee-saved registers.
+	// Uses NOFRAME for proper ELFv2 backchain via MOVDU.
+	MOVD LR, R0
+	MOVD R0, 16(R1)
 	MOVW CR, R0
 	MOVD R0, 8(R1)
 
-	MOVDU R1, -32(R1)
+	MOVDU R1, -320(R1)
+
+	SAVE_GPR(32)
+	SAVE_FPR(32+SAVE_GPR_SIZE)
+
+	MOVD $0, R0
 
 	MOVD ·threadentry_call(SB), R12
 	MOVD (R12), R12
 	MOVD R12, CTR
 	CALL CTR
 
-	ADD $32, R1
+	RESTORE_FPR(32+SAVE_GPR_SIZE)
+	RESTORE_GPR(32)
 
-	MOVD 16(R1), LR
+	ADD $320, R1
+
+	MOVD 16(R1), R0
+	MOVD R0, LR
 	MOVD 8(R1), R0
 	MOVW R0, CR
 	RET

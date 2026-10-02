@@ -25,7 +25,6 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	STP (R29, R30), (8*22)(RSP)
 
 	// Initialize Go ABI environment
-	BL runtime·load_g(SB)
 	BL runtime·cgocallback(SB)
 
 	RESTORE_R19_TO_R28(8*4)

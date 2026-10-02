@@ -29,7 +29,7 @@ func readProcFsInt64(path string, fallback int64) int64 {
 	if err != nil {
 		return fallback
 	}
-	i, err := strconv.ParseInt(string(data[:len(data)-1]), 0, 64)
+	i, err := strconv.ParseInt(strings.TrimRight(string(data), "\n"), 0, 64)
 	if err != nil {
 		return fallback
 	}
@@ -55,7 +55,7 @@ func getPhysPages() int64 {
 	var si unix.Sysinfo_t
 	err := unix.Sysinfo(&si)
 	if err != nil {
-		return int64(0)
+		return -1
 	}
 	return getMemPages(uint64(si.Totalram), si.Unit)
 }
@@ -64,7 +64,7 @@ func getAvPhysPages() int64 {
 	var si unix.Sysinfo_t
 	err := unix.Sysinfo(&si)
 	if err != nil {
-		return int64(0)
+		return -1
 	}
 	return getMemPages(uint64(si.Freeram), si.Unit)
 }
@@ -142,13 +142,6 @@ func hasClock(clockid int32) bool {
 		return false
 	}
 	return true
-}
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func sysconf(name int) (int64, error) {

@@ -86,7 +86,7 @@ func sysconf(name int) (int64, error) {
 		if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rlim); err != nil {
 			return -1, nil
 		}
-		if rlim.Cur > unix.RLIM_INFINITY {
+		if rlim.Cur == unix.RLIM_INFINITY {
 			return -1, nil
 		}
 		if rlim.Cur > _LONG_MAX {
@@ -296,7 +296,10 @@ func sysconf(name int) (int64, error) {
 		return _XOPEN_XCU_VERSION, nil
 
 	case SC_PHYS_PAGES:
-		return sysctl64("hw.memsize") / int64(unix.Getpagesize()), nil
+		if mem := sysctl64("hw.memsize"); mem >= 0 {
+			return mem / int64(unix.Getpagesize()), nil
+		}
+		return -1, nil
 	case SC_NPROCESSORS_CONF:
 		fallthrough
 	case SC_NPROCESSORS_ONLN:

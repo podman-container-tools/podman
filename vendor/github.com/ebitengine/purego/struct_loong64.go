@@ -4,177 +4,200 @@
 package purego
 
 import (
-	"math"
 	"reflect"
 	"unsafe"
 )
 
-func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
-	outSize := outType.Size()
-	switch {
-	case outSize == 0:
-		return reflect.New(outType).Elem()
-	case outSize <= 8:
-		r1 := syscall.a1
-		if isAllFloats, numFields := isAllSameFloat(outType); isAllFloats {
-			r1 = syscall.f1
-			if numFields == 2 {
-				r1 = syscall.f2<<32 | syscall.f1
+// loong64Leaf is a scalar member of an aggregate after flattening nested structs
+// and arrays. offset is the byte offset of the member within the aggregate.
+type loong64Leaf struct {
+	isFloat bool
+	kind    reflect.Kind
+	offset  uintptr
+	size    uintptr
+}
+
+// loong64Flatten appends the scalar leaves of t to leaves, offsetting each member
+// by base. Nested structs and arrays are expanded into their members.
+func loong64Flatten(t reflect.Type, base uintptr, leaves *[]loong64Leaf) {
+	switch t.Kind() {
+	case reflect.Struct:
+		for i := range t.NumField() {
+			f := t.Field(i)
+			if f.Name == "_" {
+				// Blank fields are explicit padding to match the C layout, not
+				// members that the calling convention counts.
+				continue
 			}
+			loong64Flatten(f.Type, base+f.Offset, leaves)
 		}
-		return reflect.NewAt(outType, unsafe.Pointer(&struct{ a uintptr }{r1})).Elem()
-	case outSize <= 16:
-		r1, r2 := syscall.a1, syscall.a2
-		if isAllFloats, numFields := isAllSameFloat(outType); isAllFloats {
-			switch numFields {
-			case 4:
-				r1 = syscall.f2<<32 | syscall.f1
-				r2 = syscall.f4<<32 | syscall.f3
-			case 3:
-				r1 = syscall.f2<<32 | syscall.f1
-				r2 = syscall.f3
-			case 2:
-				r1 = syscall.f1
-				r2 = syscall.f2
-			default:
-				panic("unreachable")
-			}
+	case reflect.Array:
+		elem := t.Elem()
+		for i := range t.Len() {
+			loong64Flatten(elem, base+uintptr(i)*elem.Size(), leaves)
 		}
-		return reflect.NewAt(outType, unsafe.Pointer(&struct{ a, b uintptr }{r1, r2})).Elem()
 	default:
-		// create struct from the Go pointer created above
-		// weird pointer dereference to circumvent go vet
-		return reflect.NewAt(outType, *(*unsafe.Pointer)(unsafe.Pointer(&syscall.a1))).Elem()
+		k := t.Kind()
+		*leaves = append(*leaves, loong64Leaf{
+			isFloat: k == reflect.Float32 || k == reflect.Float64,
+			kind:    k,
+			offset:  base,
+			size:    t.Size(),
+		})
 	}
 }
 
-const (
-	_NO_CLASS = 0b00
-	_FLOAT    = 0b01
-	_INT      = 0b11
-)
+// loong64Classify flattens t and reports whether it is passed and returned through
+// the floating-point calling convention. Under the LoongArch hard-float ABI an
+// aggregate uses FP registers only when, after flattening, it has one or two
+// floating-point members and nothing else, or exactly one floating-point member
+// together with one integer member.
+func loong64Classify(t reflect.Type) (leaves []loong64Leaf, useFP bool) {
+	loong64Flatten(t, 0, &leaves)
+	var floats, ints int
+	for _, l := range leaves {
+		if l.isFloat {
+			floats++
+		} else {
+			ints++
+		}
+	}
+	switch {
+	case ints == 0 && (floats == 1 || floats == 2):
+		return leaves, true
+	case ints == 1 && floats == 1:
+		return leaves, true
+	default:
+		return leaves, false
+	}
+}
+
+// structReturnInMemory reports whether a struct return value is returned through
+// a caller-allocated hidden pointer passed as the first integer argument.
+// Aggregates larger than two eightbytes are returned in memory.
+func structReturnInMemory(outType reflect.Type) bool {
+	return outType.Size() > maxRegAllocStructSize
+}
+
+func getStruct(outType reflect.Type, syscall syscallArgs) reflect.Value {
+	outSize := outType.Size()
+	if outSize == 0 {
+		return reflect.New(outType).Elem()
+	}
+	if outSize > 16 {
+		// Returned indirectly through a pointer in the first integer register.
+		return reflect.NewAt(outType, *(*unsafe.Pointer)(unsafe.Pointer(&syscall.a1))).Elem()
+	}
+
+	var buf [16]byte
+	base := unsafe.Pointer(&buf[0])
+	if leaves, useFP := loong64Classify(outType); useFP {
+		floatRegs := [2]uintptr{syscall.f1, syscall.f2}
+		intRegs := [2]uintptr{syscall.a1, syscall.a2}
+		var fi, ii int
+		for _, l := range leaves {
+			dst := unsafe.Add(base, l.offset)
+			if !l.isFloat {
+				loong64StoreInt(dst, l.size, intRegs[ii])
+				ii++
+				continue
+			}
+			r := floatRegs[fi]
+			fi++
+			if l.kind == reflect.Float32 {
+				// A single-precision value is NaN-boxed in the register.
+				*(*uint32)(dst) = uint32(r)
+			} else {
+				*(*uint64)(dst) = uint64(r)
+			}
+		}
+	} else {
+		*(*uintptr)(base) = syscall.a1
+		if outSize > 8 {
+			*(*uintptr)(unsafe.Add(base, 8)) = syscall.a2
+		}
+	}
+	return reflect.NewAt(outType, base).Elem()
+}
+
+func loong64StoreInt(dst unsafe.Pointer, size uintptr, r uintptr) {
+	switch size {
+	case 1:
+		*(*uint8)(dst) = uint8(r)
+	case 2:
+		*(*uint16)(dst) = uint16(r)
+	case 4:
+		*(*uint32)(dst) = uint32(r)
+	default:
+		*(*uint64)(dst) = uint64(r)
+	}
+}
 
 func addStruct(v reflect.Value, numInts, numFloats, numStack *int, addInt, addFloat, addStack func(uintptr), keepAlive []any) []any {
-	if v.Type().Size() == 0 {
+	size := v.Type().Size()
+	if size == 0 {
+		return keepAlive
+	}
+	if size > 16 {
+		return placeStack(v, keepAlive, addInt)
+	}
+
+	var ptr unsafe.Pointer
+	if v.CanAddr() {
+		ptr = v.Addr().UnsafePointer()
+	} else {
+		tmp := reflect.New(v.Type())
+		tmp.Elem().Set(v)
+		ptr = tmp.UnsafePointer()
+		keepAlive = append(keepAlive, tmp.Interface())
+	}
+
+	if leaves, useFP := loong64Classify(v.Type()); useFP {
+		for _, l := range leaves {
+			src := unsafe.Add(ptr, l.offset)
+			switch {
+			case l.isFloat && l.kind == reflect.Float32:
+				// NaN-box the single-precision value in the 64-bit FP register.
+				addFloat(uintptr(*(*uint32)(src)) | 0xFFFFFFFF_00000000)
+			case l.isFloat:
+				addFloat(uintptr(*(*uint64)(src)))
+			default:
+				addInt(loong64LoadInt(src, l))
+			}
+		}
 		return keepAlive
 	}
 
-	if size := v.Type().Size(); size <= 16 {
-		placeRegisters(v, addFloat, addInt)
-	} else {
-		keepAlive = placeStack(v, keepAlive, addInt)
+	// Integer calling convention: pass the raw aggregate in one or two GARs.
+	var words [16]byte
+	copy(words[:], unsafe.Slice((*byte)(ptr), size))
+	addInt(*(*uintptr)(unsafe.Pointer(&words[0])))
+	if size > 8 {
+		addInt(*(*uintptr)(unsafe.Pointer(&words[8])))
 	}
-	return keepAlive // the struct was allocated so don't panic
+	return keepAlive
 }
 
-func placeRegisters(v reflect.Value, addFloat func(uintptr), addInt func(uintptr)) {
-	var val uint64
-	var shift byte
-	var flushed bool
-	class := _NO_CLASS
-	var place func(v reflect.Value)
-	place = func(v reflect.Value) {
-		var numFields int
-		if v.Kind() == reflect.Struct {
-			numFields = v.Type().NumField()
-		} else {
-			numFields = v.Type().Len()
-		}
-		for k := 0; k < numFields; k++ {
-			flushed = false
-			var f reflect.Value
-			if v.Kind() == reflect.Struct {
-				f = v.Field(k)
-			} else {
-				f = v.Index(k)
-			}
-			align := byte(f.Type().Align()*8 - 1)
-			shift = (shift + align) &^ align
-			if shift >= 64 {
-				shift = 0
-				flushed = true
-				if class == _FLOAT {
-					addFloat(uintptr(val))
-				} else {
-					addInt(uintptr(val))
-				}
-			}
-			switch f.Type().Kind() {
-			case reflect.Struct:
-				place(f)
-			case reflect.Bool:
-				if f.Bool() {
-					val |= 1 << shift
-				}
-				shift += 8
-				class |= _INT
-			case reflect.Uint8:
-				val |= f.Uint() << shift
-				shift += 8
-				class |= _INT
-			case reflect.Uint16:
-				val |= f.Uint() << shift
-				shift += 16
-				class |= _INT
-			case reflect.Uint32:
-				val |= f.Uint() << shift
-				shift += 32
-				class |= _INT
-			case reflect.Uint64, reflect.Uint, reflect.Uintptr:
-				addInt(uintptr(f.Uint()))
-				shift = 0
-				flushed = true
-				class = _NO_CLASS
-			case reflect.Int8:
-				val |= uint64(f.Int()&0xFF) << shift
-				shift += 8
-				class |= _INT
-			case reflect.Int16:
-				val |= uint64(f.Int()&0xFFFF) << shift
-				shift += 16
-				class |= _INT
-			case reflect.Int32:
-				val |= uint64(f.Int()&0xFFFF_FFFF) << shift
-				shift += 32
-				class |= _INT
-			case reflect.Int64, reflect.Int:
-				addInt(uintptr(f.Int()))
-				shift = 0
-				flushed = true
-				class = _NO_CLASS
-			case reflect.Float32:
-				if class == _FLOAT {
-					addFloat(uintptr(val))
-					val = 0
-					shift = 0
-				}
-				val |= uint64(math.Float32bits(float32(f.Float()))) << shift
-				shift += 32
-				class |= _FLOAT
-			case reflect.Float64:
-				addFloat(uintptr(math.Float64bits(float64(f.Float()))))
-				shift = 0
-				flushed = true
-				class = _NO_CLASS
-			case reflect.Ptr, reflect.UnsafePointer:
-				addInt(f.Pointer())
-				shift = 0
-				flushed = true
-				class = _NO_CLASS
-			case reflect.Array:
-				place(f)
-			default:
-				panic("purego: unsupported kind " + f.Kind().String())
-			}
-		}
-	}
-	place(v)
-	if !flushed {
-		if class == _FLOAT {
-			addFloat(uintptr(val))
-		} else {
-			addInt(uintptr(val))
-		}
+// loong64LoadInt reads an integer leaf into a register value, sign-extending
+// signed members and zero-extending the rest.
+func loong64LoadInt(src unsafe.Pointer, l loong64Leaf) uintptr {
+	switch l.kind {
+	case reflect.Int8:
+		return uintptr(int64(*(*int8)(src)))
+	case reflect.Int16:
+		return uintptr(int64(*(*int16)(src)))
+	case reflect.Int32:
+		return uintptr(int64(*(*int32)(src)))
+	case reflect.Int, reflect.Int64:
+		return uintptr(*(*int64)(src))
+	case reflect.Bool, reflect.Uint8:
+		return uintptr(*(*uint8)(src))
+	case reflect.Uint16:
+		return uintptr(*(*uint16)(src))
+	case reflect.Uint32:
+		return uintptr(*(*uint32)(src))
+	default:
+		return uintptr(*(*uint64)(src))
 	}
 }
 
@@ -210,4 +233,12 @@ func collectStackArgs(args []reflect.Value, startIdx int, numInts, numFloats int
 // bundleStackArgs is not used on loong64.
 func bundleStackArgs(stackArgs []reflect.Value, addStack func(uintptr)) {
 	panic("purego: bundleStackArgs should not be called on loong64")
+}
+
+func getCallbackStruct(inType reflect.Type, frame unsafe.Pointer, floatsN *int, intsN *int, stackSlot *int, stackByteOffset *uintptr) reflect.Value {
+	panic("purego: struct callback arguments are not supported on loong64")
+}
+
+func setStruct(a *callbackArgs, ret reflect.Value) {
+	panic("purego: struct returns are not supported on loong64")
 }

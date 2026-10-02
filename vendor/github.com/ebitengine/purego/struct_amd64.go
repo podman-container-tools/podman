@@ -6,11 +6,48 @@ package purego
 import (
 	"math"
 	"reflect"
+	"runtime"
 	"unsafe"
 )
 
-func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
+// structReturnInMemory reports whether a struct return value of the given size
+// is returned through a caller-allocated hidden pointer passed as the first
+// integer argument (true) rather than in registers (false).
+func structReturnInMemory(outType reflect.Type) bool {
+	size := outType.Size()
+	if size == 0 {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		// The Win64 ABI returns aggregates of exactly 1, 2, 4, or 8 bytes in
+		// RAX. Every other size is returned through a caller-allocated hidden
+		// pointer that the callee also returns in RAX.
+		switch size {
+		case 1, 2, 4, 8:
+			return false
+		default:
+			return true
+		}
+	}
+	// The System V ABI returns aggregates of up to two eightbytes in registers.
+	return size > maxRegAllocStructSize
+}
+
+func getStruct(outType reflect.Type, syscall syscallArgs) (v reflect.Value) {
 	outSize := outType.Size()
+	if runtime.GOOS == "windows" {
+		switch {
+		case outSize == 0:
+			return reflect.New(outType).Elem()
+		case structReturnInMemory(outType):
+			// Returned through the caller-allocated hidden pointer, which the
+			// callee also returns in RAX.
+			return reflect.NewAt(outType, *(*unsafe.Pointer)(unsafe.Pointer(&syscall.a1))).Elem()
+		default:
+			// 1, 2, 4, or 8 byte aggregates are returned in RAX.
+			return reflect.NewAt(outType, unsafe.Pointer(&struct{ a uintptr }{syscall.a1})).Elem()
+		}
+	}
 	switch {
 	case outSize == 0:
 		return reflect.New(outType).Elem()
@@ -29,23 +66,24 @@ func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
 		} else {
 			// check first 8 bytes if it's floats
 			hasFirstFloat := false
-			f1 := outType.Field(0).Type
-			if f1.Kind() == reflect.Float64 || f1.Kind() == reflect.Float32 && outType.Field(1).Type.Kind() == reflect.Float32 {
+			numFields := numABIFields(outType)
+			f1 := abiField(outType, 0).Type
+			if f1.Kind() == reflect.Float64 || f1.Kind() == reflect.Float32 && abiField(outType, 1).Type.Kind() == reflect.Float32 {
 				r1 = syscall.f1
 				hasFirstFloat = true
 			}
 
 			// find index of the field that starts the second 8 bytes
 			var i int
-			for i = 0; i < outType.NumField(); i++ {
-				if outType.Field(i).Offset == 8 {
+			for i = 0; i < numFields; i++ {
+				if abiField(outType, i).Offset == 8 {
 					break
 				}
 			}
 
 			// check last 8 bytes if they are floats
-			f1 = outType.Field(i).Type
-			if f1.Kind() == reflect.Float64 || f1.Kind() == reflect.Float32 && i+1 == outType.NumField() {
+			f1 = abiField(outType, i).Type
+			if f1.Kind() == reflect.Float64 || f1.Kind() == reflect.Float32 && i+1 == numFields {
 				r2 = syscall.f1
 			} else if hasFirstFloat {
 				// if the first field was a float then that means the second integer field
@@ -62,8 +100,11 @@ func getStruct(outType reflect.Type, syscall syscall15Args) (v reflect.Value) {
 }
 
 func isAllFloats(ty reflect.Type) bool {
-	for i := 0; i < ty.NumField(); i++ {
+	for i := range ty.NumField() {
 		f := ty.Field(i)
+		if !isABIField(f) {
+			continue
+		}
 		switch f.Type.Kind() {
 		case reflect.Float64, reflect.Float32:
 		default:
@@ -86,6 +127,12 @@ const (
 )
 
 func addStruct(v reflect.Value, numInts, numFloats, numStack *int, addInt, addFloat, addStack func(uintptr), keepAlive []any) []any {
+	if runtime.GOOS == "windows" {
+		// Win64 still passes an empty struct as an argument slot, so this must
+		// run before the zero-size early return used by the System V path.
+		return addStructWindows(v, addInt, keepAlive)
+	}
+
 	if v.Type().Size() == 0 {
 		return keepAlive
 	}
@@ -107,6 +154,27 @@ func addStruct(v reflect.Value, numInts, numFloats, numStack *int, addInt, addFl
 		*numInts = savedNumInts
 		*numStack = savedNumStack
 		placeStack(v, addStack)
+	}
+	return keepAlive
+}
+
+// addStructWindows passes a struct argument under the Win64 ABI. Aggregates of
+// exactly 1, 2, 4, or 8 bytes are passed by value in a single integer slot; all
+// other sizes are passed as a pointer to a caller-allocated copy. Empty structs
+// fall in the latter group: unlike the System V ABI, Win64 still consumes an
+// argument slot for them.
+func addStructWindows(v reflect.Value, addInt func(uintptr), keepAlive []any) []any {
+	switch v.Type().Size() {
+	case 1, 2, 4, 8:
+		var val uintptr
+		reflect.NewAt(v.Type(), unsafe.Pointer(&val)).Elem().Set(v)
+		addInt(val)
+	default:
+		ptrStruct := reflect.New(v.Type())
+		ptrStruct.Elem().Set(v)
+		ptr := ptrStruct.Elem().Addr().UnsafePointer()
+		keepAlive = append(keepAlive, ptr)
+		addInt(uintptr(ptr))
 	}
 	return keepAlive
 }
@@ -152,7 +220,10 @@ func tryPlaceRegister(v reflect.Value, addFloat func(uintptr), addInt func(uintp
 			numFields = v.Type().Len()
 		}
 
-		for i := 0; i < numFields; i++ {
+		for i := range numFields {
+			if v.Kind() == reflect.Struct && !isABIField(v.Type().Field(i)) {
+				continue
+			}
 			flushed = false
 			var f reflect.Value
 			if v.Kind() == reflect.Struct {
@@ -283,4 +354,165 @@ func collectStackArgs(args []reflect.Value, startIdx int, numInts, numFloats int
 // bundleStackArgs is not used on amd64.
 func bundleStackArgs(stackArgs []reflect.Value, addStack func(uintptr)) {
 	panic("purego: bundleStackArgs should not be called on amd64")
+}
+
+// getCallbackStruct reads a struct argument from the callback frame on amd64.
+// It mirrors the SysV AMD64 ABI rules used by addStruct for the Go→C path.
+//
+// getCallbackStruct is only used on Unix. On Windows, callbacks are handled by
+// the runtime's own callback mechanism, so this function is compiled but unused.
+//
+// SysV AMD64 struct argument passing rules:
+//   - Struct > 16 bytes (postMerger): passed on the stack as raw bytes
+//   - Struct ≤ 16 bytes: classify each eightbyte (INTEGER or SSE),
+//     read from the appropriate register class
+//   - If not enough registers for all eightbytes: entire struct goes on the stack
+func getCallbackStruct(inType reflect.Type, frame unsafe.Pointer, floatsN *int, intsN *int, stackSlot *int, stackByteOffset *uintptr) reflect.Value {
+	switch runtime.GOOS {
+	case "android", "darwin", "freebsd", "ios", "linux", "netbsd":
+	default:
+		panic("purego: getCallbackStruct is not supported on " + runtime.GOOS)
+	}
+
+	f := (*[callbackMaxFrame]uintptr)(frame)
+	size := inType.Size()
+
+	// Structs > 16 bytes are passed on the stack as raw bytes (SysV ABI MEMORY class).
+	if postMerger(inType) {
+		numSlots := int((size + 7) / 8)
+		v := reflect.NewAt(inType, unsafe.Pointer(&f[*stackSlot])).Elem()
+		*stackSlot += numSlots
+		return v
+	}
+
+	// Struct ≤ 16 bytes: classify each eightbyte and read from the appropriate register.
+	numEightbytes := int((size + 7) / 8)
+
+	// Count how many integer and SSE registers this struct needs.
+	var needInts, needFloats int
+	for i := range numEightbytes {
+		class := classifyEightbyte(inType, uintptr(i)*8, uintptr(i)*8+8)
+		if class == _SSE {
+			needFloats++
+		} else {
+			needInts++
+		}
+	}
+
+	// If not enough registers for all eightbytes, the entire struct goes on the stack.
+	if *intsN+needInts > numOfIntegerRegisters() || *floatsN+needFloats > numOfFloatRegisters() {
+		v := reflect.NewAt(inType, unsafe.Pointer(&f[*stackSlot])).Elem()
+		*stackSlot += numEightbytes
+		return v
+	}
+
+	// Read each eightbyte from its appropriate register class.
+	var r1, r2 uintptr
+	for i := range numEightbytes {
+		class := classifyEightbyte(inType, uintptr(i)*8, uintptr(i)*8+8)
+		if class == _SSE {
+			if i == 0 {
+				r1 = f[*floatsN]
+			} else {
+				r2 = f[*floatsN]
+			}
+			*floatsN++
+		} else {
+			if i == 0 {
+				r1 = f[numOfFloatRegisters()+*intsN]
+			} else {
+				r2 = f[numOfFloatRegisters()+*intsN]
+			}
+			*intsN++
+		}
+	}
+
+	if numEightbytes == 1 {
+		return reflect.NewAt(inType, unsafe.Pointer(&struct{ a uintptr }{r1})).Elem()
+	}
+	return reflect.NewAt(inType, unsafe.Pointer(&struct{ a, b uintptr }{r1, r2})).Elem()
+}
+
+func setStruct(a *callbackArgs, ret reflect.Value) {
+	outSize := ret.Type().Size()
+	switch {
+	case outSize == 0:
+		return
+	case outSize <= 16:
+		// Copy the struct's raw bytes (including padding) into a buffer.
+		var buf [2]uintptr
+		reflect.NewAt(ret.Type(), unsafe.Pointer(&buf[0])).Elem().Set(ret)
+		// Classify each eightbyte by the SysV ABI rules (§3.2.3, rule 4d
+		// of https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf).
+		// INTEGER wins over SSE for mixed eightbytes. Place INTEGER eightbytes in
+		// result[0]/result[1] (AX/DX) and SSE eightbytes in result[2]/result[3]
+		// (XMM0/XMM1).
+		// Assign each eightbyte to the next available register of the
+		// appropriate class. The ABI counts integer (AX, DX) and SSE
+		// (XMM0, XMM1) return registers independently.
+		var numInts int
+		var numFloats int
+		for i := 0; i < 2 && uintptr(i)*8 < outSize; i++ {
+			class := classifyEightbyte(ret.Type(), uintptr(i)*8, uintptr(i)*8+8)
+			if class == _SSE {
+				switch numFloats {
+				case 0:
+					a.result[2] = buf[i]
+				case 1:
+					a.result[3] = buf[i]
+				}
+				numFloats++
+			} else {
+				switch numInts {
+				case 0:
+					a.result[0] = buf[i]
+				case 1:
+					a.result[1] = buf[i]
+				}
+				numInts++
+			}
+		}
+	default:
+		// Structs > 16 bytes are returned by hidden pointer.
+		// a.result[0] contains the pointer passed by the caller in RDI.
+		// Write the struct through this pointer.
+		reflect.NewAt(ret.Type(), *(*unsafe.Pointer)(unsafe.Pointer(&a.result[0]))).Elem().Set(ret)
+	}
+}
+
+// classifyEightbyte returns the SysV ABI class for the byte range [start, end)
+// within a type, by examining all scalar fields that overlap that range.
+func classifyEightbyte(t reflect.Type, start, end uintptr) int {
+	return doClassifyEightbyte(t, 0, start, end)
+}
+
+func doClassifyEightbyte(t reflect.Type, base, start, end uintptr) int {
+	switch t.Kind() {
+	case reflect.Struct:
+		class := _NO_CLASS
+		for i := range t.NumField() {
+			f := t.Field(i)
+			class |= doClassifyEightbyte(f.Type, base+f.Offset, start, end)
+		}
+		return class
+	case reflect.Array:
+		class := _NO_CLASS
+		elemSize := t.Elem().Size()
+		for i := range t.Len() {
+			class |= doClassifyEightbyte(t.Elem(), base+uintptr(i)*elemSize, start, end)
+		}
+		return class
+	default:
+		fStart := base
+		fEnd := base + t.Size()
+		if fStart >= end || fEnd <= start {
+			return _NO_CLASS
+		}
+		switch t.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return _SSE
+		default:
+			return _INTEGER
+		}
+	}
 }

@@ -69,7 +69,9 @@ func PagingSpaceStat() ([]PagingSpace, error) {
 	ps_len := C.sizeof_perfstat_pagingspace_t * C.ulong(numps)
 	pspace = (*C.perfstat_pagingspace_t)(C.malloc(ps_len))
 	defer C.free(unsafe.Pointer(pspace))
-	C.strcpy(&fps.name[0], C.CString(C.FIRST_PAGINGSPACE))
+	cstr := C.CString(C.FIRST_PAGINGSPACE)
+	C.strcpy(&fps.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_pagingspace(&fps, pspace, C.sizeof_perfstat_pagingspace_t, numps)
 	if r < 1 {
 		return nil, fmt.Errorf("perfstat_pagingspace() error")

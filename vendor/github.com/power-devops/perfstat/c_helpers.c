@@ -135,6 +135,7 @@ int getfsinfo(char *fsname, char *devname, char *host, char *options, int flags,
 
 struct fsinfo *get_all_fs(int *rc) {
         struct vmount *mnt;
+        struct vmount *vm_base;
         struct fsinfo *fs_all;
         int nmounts;
 
@@ -144,6 +145,7 @@ struct fsinfo *get_all_fs(int *rc) {
                 return NULL;
         }
 
+	vm_base = mnt;
         fs_all = (struct fsinfo *)calloc(sizeof(struct fsinfo), nmounts);
         while ((*rc)++, nmounts--) {
                 getfsinfo(vmt2dataptr(mnt, VMT_STUB),
@@ -155,5 +157,16 @@ struct fsinfo *get_all_fs(int *rc) {
                           &fs_all[*rc]);
                 mnt = (struct vmount *)((char *)mnt + mnt->vmt_length);
         }
+	free(vm_base);
         return fs_all;
+}
+
+void free_all_fs(struct fsinfo *fs_all, int n) {
+	int i;
+	if (!fs_all) return;
+	for (i = 0; i < n; i++) {
+		free(fs_all[i].devname);   // free(NULL) is safe for the "ignore" path
+		free(fs_all[i].fsname);
+	}
+	free(fs_all);
 }

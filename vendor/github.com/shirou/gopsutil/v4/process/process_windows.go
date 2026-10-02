@@ -1237,7 +1237,14 @@ func getProcessCommandLine(pid int32) (string, error) {
 		return "", nil
 	}
 	defer syscall.CloseHandle(syscall.Handle(lh))
-	cmdLine, _ := getProcessCommandLineNative(lh, pid)
+
+	// A failure here is not an error for the caller: before this fallback
+	// existed, every ACCESS_DENIED process returned ("", nil), so the
+	// fallback can only add command lines, never take one away.
+	cmdLine, err := getProcessCommandLineNative(lh, pid)
+	if err != nil {
+		return "", nil
+	}
 	return cmdLine, nil
 }
 

@@ -21,8 +21,11 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	// starting at 4(R13).
 	MOVW.W R14, -4(R13)
 
+	// Skip floating point registers if runtime.goarmsoftfp!=0.
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfpsave
 	// Save VFP callee-saved registers D8-D15 (same as S16-S31).
-	// Note: We always save these since we target hard-float ABI.
 	MOVD F8, (13*4+8*1)(R13)
 	MOVD F9, (13*4+8*2)(R13)
 	MOVD F10, (13*4+8*3)(R13)
@@ -32,11 +35,13 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	MOVD F14, (13*4+8*7)(R13)
 	MOVD F15, (13*4+8*8)(R13)
 
-	BL runtime·load_g(SB)
-
+skipfpsave:
 	// We set up the arguments to cgocallback when saving registers above.
 	BL runtime·cgocallback(SB)
 
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfprest
 	MOVD (13*4+8*1)(R13), F8
 	MOVD (13*4+8*2)(R13), F9
 	MOVD (13*4+8*3)(R13), F10
@@ -46,6 +51,7 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	MOVD (13*4+8*7)(R13), F14
 	MOVD (13*4+8*8)(R13), F15
 
+skipfprest:
 	MOVW.P   4(R13), R14
 	MOVM.IAW (R13), [R0, R1, R3, R4, R5, R6, R7, R8, R9, g, R11, R12]
 	ADD      $(8*9), R13

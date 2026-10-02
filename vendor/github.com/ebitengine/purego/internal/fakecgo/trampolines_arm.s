@@ -54,12 +54,62 @@ TEXT ·setg_trampoline(SB), NOSPLIT, $0-8
 	BL   (R12)
 	RET
 
-TEXT threadentry_trampoline(SB), NOSPLIT, $8-0
-	// See crosscall2.
-	MOVW R0, 4(R13)
+TEXT threadentry_trampoline(SB), NOSPLIT, $104-0
+	// Save C callee-saved registers at C-to-Go boundary.
+	// See crosscall2 in asm_arm.s.
+	// ARM AAPCS callee-saved: R4-R11 (includes g=R10), D8-D15.
+	// LR is saved/restored by the Go-managed frame prologue/epilogue.
+	MOVW R0, 4(R13) // arg for threadentry_call
+
+	MOVW R4, 8(R13)
+	MOVW R5, 12(R13)
+	MOVW R6, 16(R13)
+	MOVW R7, 20(R13)
+	MOVW R8, 24(R13)
+	MOVW R9, 28(R13)
+	MOVW g, 32(R13)   // R10
+	MOVW R11, 36(R13)
+
+	// Skip floating point registers if runtime.goarmsoftfp!=0.
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfpsave
+	MOVD F8, 40(R13)
+	MOVD F9, 48(R13)
+	MOVD F10, 56(R13)
+	MOVD F11, 64(R13)
+	MOVD F12, 72(R13)
+	MOVD F13, 80(R13)
+	MOVD F14, 88(R13)
+	MOVD F15, 96(R13)
+
+skipfpsave:
 	MOVW ·threadentry_call(SB), R12
 	MOVW (R12), R12
 	CALL (R12)
+
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfprest
+	MOVD 40(R13), F8
+	MOVD 48(R13), F9
+	MOVD 56(R13), F10
+	MOVD 64(R13), F11
+	MOVD 72(R13), F12
+	MOVD 80(R13), F13
+	MOVD 88(R13), F14
+	MOVD 96(R13), F15
+
+skipfprest:
+	MOVW 8(R13), R4
+	MOVW 12(R13), R5
+	MOVW 16(R13), R6
+	MOVW 20(R13), R7
+	MOVW 24(R13), R8
+	MOVW 28(R13), R9
+	MOVW 32(R13), g
+	MOVW 36(R13), R11
+
 	RET
 
 TEXT ·call5(SB), NOSPLIT, $8-28

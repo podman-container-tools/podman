@@ -41,7 +41,9 @@ func DiskAdapterStat() ([]DiskAdapter, error) {
 	adapter_len := C.sizeof_perfstat_diskadapter_t * C.ulong(numadpt)
 	adapter = (*C.perfstat_diskadapter_t)(C.malloc(adapter_len))
 	defer C.free(unsafe.Pointer(adapter))
-	C.strcpy(&adptname.name[0], C.CString(C.FIRST_DISKADAPTER))
+	cstr := C.CString(C.FIRST_DISKADAPTER)
+	C.strcpy(&adptname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_diskadapter(&adptname, adapter, C.sizeof_perfstat_diskadapter_t, numadpt)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_diskadapter() error")
@@ -68,7 +70,9 @@ func DiskStat() ([]Disk, error) {
 	disk_len := C.sizeof_perfstat_disk_t * C.ulong(numdisk)
 	disk = (*C.perfstat_disk_t)(C.malloc(disk_len))
 	defer C.free(unsafe.Pointer(disk))
-	C.strcpy(&diskname.name[0], C.CString(C.FIRST_DISK))
+	cstr := C.CString(C.FIRST_DISK)
+	C.strcpy(&diskname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_disk(&diskname, disk, C.sizeof_perfstat_disk_t, numdisk)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_disk() error")
@@ -95,7 +99,9 @@ func DiskPathStat() ([]DiskPath, error) {
 	path_len := C.sizeof_perfstat_diskpath_t * C.ulong(numpaths)
 	diskpath = (*C.perfstat_diskpath_t)(C.malloc(path_len))
 	defer C.free(unsafe.Pointer(diskpath))
-	C.strcpy(&pathname.name[0], C.CString(C.FIRST_DISKPATH))
+	cstr := C.CString(C.FIRST_DISKPATH)
+	C.strcpy(&pathname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_diskpath(&pathname, diskpath, C.sizeof_perfstat_diskpath_t, numpaths)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_diskpath() error")
@@ -122,7 +128,9 @@ func FCAdapterStat() ([]FCAdapter, error) {
 	fcstat_len := C.sizeof_perfstat_fcstat_t * C.ulong(numadpt)
 	fcstat = (*C.perfstat_fcstat_t)(C.malloc(fcstat_len))
 	defer C.free(unsafe.Pointer(fcstat))
-	C.strcpy(&fcname.name[0], C.CString(C.FIRST_NETINTERFACE))
+	cstr := C.CString(C.FIRST_NETINTERFACE)
+	C.strcpy(&fcname.name[0], cstr)
+	C.free(unsafe.Pointer(cstr))
 	r := C.perfstat_fcstat(&fcname, fcstat, C.sizeof_perfstat_fcstat_t, numadpt)
 	if r < 0 {
 		return nil, fmt.Errorf("perfstat_fcstat() error")

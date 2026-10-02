@@ -16,6 +16,16 @@ import "unsafe"
 //go:cgo_import_dynamic purego_sigfillset sigfillset "libc.so.6"
 //go:cgo_import_dynamic purego_nanosleep nanosleep "libc.so.6"
 //go:cgo_import_dynamic purego_abort abort "libc.so.6"
+//go:cgo_import_dynamic purego___errno_location __errno_location "libc.so.6"
+//go:cgo_import_dynamic purego_setegid setegid "libc.so.6"
+//go:cgo_import_dynamic purego_seteuid seteuid "libc.so.6"
+//go:cgo_import_dynamic purego_setgid setgid "libc.so.6"
+//go:cgo_import_dynamic purego_setregid setregid "libc.so.6"
+//go:cgo_import_dynamic purego_setresgid setresgid "libc.so.6"
+//go:cgo_import_dynamic purego_setresuid setresuid "libc.so.6"
+//go:cgo_import_dynamic purego_setreuid setreuid "libc.so.6"
+//go:cgo_import_dynamic purego_setuid setuid "libc.so.6"
+//go:cgo_import_dynamic purego_setgroups setgroups "libc.so.6"
 //go:cgo_import_dynamic purego_pthread_attr_init pthread_attr_init "libpthread.so.0"
 //go:cgo_import_dynamic purego_pthread_create pthread_create "libpthread.so.0"
 //go:cgo_import_dynamic purego_pthread_detach pthread_detach "libpthread.so.0"
@@ -29,6 +39,66 @@ import "unsafe"
 
 //go:nosplit
 //go:norace
+func __errno_location() uintptr {
+	return uintptr(call5(__errno_locationABI0, 0, 0, 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setegid(egid uint32) int32 {
+	return int32(call5(setegidABI0, uintptr(egid), 0, 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func seteuid(euid uint32) int32 {
+	return int32(call5(seteuidABI0, uintptr(euid), 0, 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setgid(gid uint32) int32 {
+	return int32(call5(setgidABI0, uintptr(gid), 0, 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setregid(rgid uint32, egid uint32) int32 {
+	return int32(call5(setregidABI0, uintptr(rgid), uintptr(egid), 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setresgid(rgid uint32, egid uint32, sgid uint32) int32 {
+	return int32(call5(setresgidABI0, uintptr(rgid), uintptr(egid), uintptr(sgid), 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setresuid(ruid uint32, euid uint32, suid uint32) int32 {
+	return int32(call5(setresuidABI0, uintptr(ruid), uintptr(euid), uintptr(suid), 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setreuid(ruid uint32, euid uint32) int32 {
+	return int32(call5(setreuidABI0, uintptr(ruid), uintptr(euid), 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setuid(uid uint32) int32 {
+	return int32(call5(setuidABI0, uintptr(uid), 0, 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
+func setgroups(ngid uint32, gidset *uint32) int32 {
+	return int32(call5(setgroupsABI0, uintptr(ngid), uintptr(unsafe.Pointer(gidset)), 0, 0, 0))
+}
+
+//go:nosplit
+//go:norace
 func pthread_attr_getstacksize(attr *pthread_attr_t, stacksize *size_t) int32 {
 	return int32(call5(pthread_attr_getstacksizeABI0, uintptr(unsafe.Pointer(attr)), uintptr(unsafe.Pointer(stacksize)), 0, 0, 0))
 }
@@ -38,6 +108,46 @@ func pthread_attr_getstacksize(attr *pthread_attr_t, stacksize *size_t) int32 {
 func pthread_attr_destroy(attr *pthread_attr_t) int32 {
 	return int32(call5(pthread_attr_destroyABI0, uintptr(unsafe.Pointer(attr)), 0, 0, 0, 0))
 }
+
+//go:linkname ___errno_location ___errno_location
+var ___errno_location uint8
+var __errno_locationABI0 = uintptr(unsafe.Pointer(&___errno_location))
+
+//go:linkname _setegid _setegid
+var _setegid uint8
+var setegidABI0 = uintptr(unsafe.Pointer(&_setegid))
+
+//go:linkname _seteuid _seteuid
+var _seteuid uint8
+var seteuidABI0 = uintptr(unsafe.Pointer(&_seteuid))
+
+//go:linkname _setgid _setgid
+var _setgid uint8
+var setgidABI0 = uintptr(unsafe.Pointer(&_setgid))
+
+//go:linkname _setregid _setregid
+var _setregid uint8
+var setregidABI0 = uintptr(unsafe.Pointer(&_setregid))
+
+//go:linkname _setresgid _setresgid
+var _setresgid uint8
+var setresgidABI0 = uintptr(unsafe.Pointer(&_setresgid))
+
+//go:linkname _setresuid _setresuid
+var _setresuid uint8
+var setresuidABI0 = uintptr(unsafe.Pointer(&_setresuid))
+
+//go:linkname _setreuid _setreuid
+var _setreuid uint8
+var setreuidABI0 = uintptr(unsafe.Pointer(&_setreuid))
+
+//go:linkname _setuid _setuid
+var _setuid uint8
+var setuidABI0 = uintptr(unsafe.Pointer(&_setuid))
+
+//go:linkname _setgroups _setgroups
+var _setgroups uint8
+var setgroupsABI0 = uintptr(unsafe.Pointer(&_setgroups))
 
 //go:linkname _pthread_attr_getstacksize _pthread_attr_getstacksize
 var _pthread_attr_getstacksize uint8

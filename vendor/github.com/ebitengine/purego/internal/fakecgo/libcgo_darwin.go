@@ -5,12 +5,16 @@
 
 package fakecgo
 
+import "structs"
+
 type (
 	pthread_mutex_t struct {
+		_      structs.HostLayout
 		sig    int64
 		opaque [56]byte
 	}
 	pthread_cond_t struct {
+		_      structs.HostLayout
 		sig    int64
 		opaque [40]byte
 	}

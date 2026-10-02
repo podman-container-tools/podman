@@ -50,9 +50,6 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	// Initialize R0 to 0 as expected by Go
 	MOVD $0, R0
 
-	// Load the current g.
-	BL runtime·load_g(SB)
-
 	// Set up arguments for cgocallback
 	MOVD R3, FIXED_FRAME+0(R1) // fn unsafe.Pointer
 	MOVD R4, FIXED_FRAME+8(R1) // a unsafe.Pointer

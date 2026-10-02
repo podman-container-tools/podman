@@ -9,6 +9,36 @@
 
 // these stubs are here because it is not possible to go:linkname directly the C functions
 
+TEXT ___errno_location(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego___errno_location(SB)
+
+TEXT _setegid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setegid(SB)
+
+TEXT _seteuid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_seteuid(SB)
+
+TEXT _setgid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setgid(SB)
+
+TEXT _setregid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setregid(SB)
+
+TEXT _setresgid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setresgid(SB)
+
+TEXT _setresuid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setresuid(SB)
+
+TEXT _setreuid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setreuid(SB)
+
+TEXT _setuid(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setuid(SB)
+
+TEXT _setgroups(SB), NOSPLIT|NOFRAME, $0-0
+	JMP purego_setgroups(SB)
+
 TEXT _pthread_attr_getstacksize(SB), NOSPLIT|NOFRAME, $0-0
 	JMP purego_pthread_attr_getstacksize(SB)
 

@@ -54,5 +54,6 @@ int get_mounts(struct vmount **);
 void fill_statfs(struct statfs, struct fsinfo *);
 int getfsinfo(char *, char *, char *, char *, int, int, struct fsinfo *);
 struct fsinfo *get_all_fs(int *);
+void free_all_fs(struct fsinfo *, int);
 
 #endif

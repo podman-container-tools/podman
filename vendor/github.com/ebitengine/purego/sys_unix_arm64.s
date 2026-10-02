@@ -47,7 +47,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVD $(callbackArgs__size)(RSP), R13
 	MOVD R12, callbackArgs_index(R13)    // callback index
 	MOVD R14, callbackArgs_args(R13)     // address of args vector
-	MOVD ZR, callbackArgs_result(R13)    // result
+	MOVD R8, callbackArgs_result(R13)    // result
 
 	// Move parameters into registers
 	// Get the ABIInternal function pointer
@@ -60,8 +60,13 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	BL crosscall2(SB)
 
 	// Get callback result.
-	MOVD $(callbackArgs__size)(RSP), R13
-	MOVD callbackArgs_result(R13), R0
+	MOVD  $(callbackArgs__size)(RSP), R13
+	MOVD  (callbackArgs_result+0)(R13), R0
+	MOVD  (callbackArgs_result+8)(R13), R1
+	FMOVD (callbackArgs_result+0)(R13), F0
+	FMOVD (callbackArgs_result+8)(R13), F1
+	FMOVD (callbackArgs_result+16)(R13), F2
+	FMOVD (callbackArgs_result+24)(R13), F3
 
 	// Restore LR and R27
 	LDP 0(RSP), (R27, R30)

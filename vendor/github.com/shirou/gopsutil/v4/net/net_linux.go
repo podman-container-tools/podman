@@ -611,8 +611,7 @@ func getProcInodesAllWithContext(ctx context.Context, root string, maxConn int) 
 	for _, pid := range pids {
 		t, err := getProcInodes(root, pid, maxConn)
 		if err != nil {
-			// skip if permission error or no longer exists
-			if os.IsPermission(err) || os.IsNotExist(err) || errors.Is(err, io.EOF) {
+			if isProcessGone(err) {
 				continue
 			}
 			return ret, err
@@ -624,6 +623,17 @@ func getProcInodesAllWithContext(ctx context.Context, root string, maxConn int) 
 		ret = updateMap(ret, t)
 	}
 	return ret, nil
+}
+
+// isProcessGone reports whether err from reading /proc/<pid>/fd means the
+// process can be skipped: it is not accessible or no longer exists.
+//
+// ESRCH is returned when the /proc/<pid> dentry is still cached but the task
+// has already been released, so the process is gone just like in the ENOENT
+// case. os.IsNotExist does not cover ESRCH, so check it explicitly.
+func isProcessGone(err error) bool {
+	return os.IsPermission(err) || os.IsNotExist(err) || errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.ESRCH)
 }
 
 // decodeAddress decode address represents addr in proc/net/*

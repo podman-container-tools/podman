@@ -5,34 +5,30 @@
 
 #include "textflag.h"
 #include "go_asm.h"
+#include "abi_riscv64.h"
 
 // these trampolines map the gcc ABI to Go ABI and then calls into the Go equivalent functions.
 // X5 is used as temporary register.
 
 TEXT x_cgo_init_trampoline(SB), NOSPLIT, $16
-	MOV  X10, 8(SP)
-	MOV  X11, 16(SP)
 	MOV  ·x_cgo_init_call(SB), X5
 	MOV  (X5), X5
 	CALL X5
 	RET
 
 TEXT x_cgo_thread_start_trampoline(SB), NOSPLIT, $8
-	MOV  X10, 8(SP)
 	MOV  ·x_cgo_thread_start_call(SB), X5
 	MOV  (X5), X5
 	CALL X5
 	RET
 
 TEXT x_cgo_setenv_trampoline(SB), NOSPLIT, $8
-	MOV  X10, 8(SP)
 	MOV  ·x_cgo_setenv_call(SB), X5
 	MOV  (X5), X5
 	CALL X5
 	RET
 
 TEXT x_cgo_unsetenv_trampoline(SB), NOSPLIT, $8
-	MOV  X10, 8(SP)
 	MOV  ·x_cgo_unsetenv_call(SB), X5
 	MOV  (X5), X5
 	CALL X5
@@ -53,11 +49,19 @@ TEXT ·setg_trampoline(SB), NOSPLIT, $0
 	CALL X5
 	RET
 
-TEXT threadentry_trampoline(SB), NOSPLIT, $16
-	MOV  X10, 8(SP)
+TEXT threadentry_trampoline(SB), NOSPLIT, $200
+	MOV X10, 8(SP)
+
+	SAVE_GPR(8*2)
+	SAVE_FPR(8*14)
+
 	MOV  ·threadentry_call(SB), X5
 	MOV  (X5), X5
 	CALL X5
+
+	RESTORE_GPR(8*2)
+	RESTORE_FPR(8*14)
+
 	RET
 
 TEXT ·call5(SB), NOSPLIT, $0-48

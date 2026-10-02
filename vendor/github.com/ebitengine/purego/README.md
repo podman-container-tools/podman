@@ -34,23 +34,27 @@ Tier 1 platforms are the primary targets officially supported by PureGo. When a 
 - **iOS**: amd64<sup>1</sup>, arm64<sup>1</sup>
 - **Linux**: amd64, arm64
 - **macOS**: amd64, arm64
-- **Windows**: amd64, arm64
+- **Windows**: amd64<sup>2</sup>, arm64<sup>2</sup>
 
 ### Tier 2
 
 Tier 2 platforms are supported by PureGo on a best-effort basis. Critical bugs on Tier 2 platforms do not block new PureGo releases. However, fixes contributed by external contributors are very welcome and encouraged.
 
-- **Android**: 386<sup>1</sup>, arm<sup>1</sup>
-- **FreeBSD**: amd64<sup>2</sup>, arm64<sup>2</sup>
-- **Linux**: 386, arm, loong64, ppc64le, riscv64, s390x<sup>1</sup>
-- **Windows**: 386<sup>3</sup>, arm<sup>3,4</sup>
+- **Android**: 386<sup>1,3</sup>, arm<sup>1,3</sup>
+- **FreeBSD**: amd64<sup>3,4</sup>, arm64<sup>3,4</sup>
+- **Linux**: 386<sup>3</sup>, arm<sup>3</sup>, loong64<sup>2</sup>, ppc64le<sup>2</sup>, riscv64<sup>3</sup>, s390x<sup>3, 5</sup>
+- **NetBSD**: amd64<sup>3,4</sup>, arm64<sup>3,4</sup>
+- **Windows**: 386<sup>3,6</sup>, arm<sup>3,6,7</sup>
 
 #### Support Notes
 
 1. These architectures require CGO_ENABLED=1 to compile
-2. These architectures require the special flag `-gcflags="github.com/ebitengine/purego/internal/fakecgo=-std"` to compile with CGO_ENABLED=0
-3. These architectures only support `SyscallN` and `NewCallback`
-4. These architectures are no longer supported as of Go 1.26
+2. These architectures support passing structs by value as arguments and return values when calling C functions, but not in callbacks created with `NewCallback`
+3. These architectures do not support passing structs by value as arguments or return values
+4. These architectures require the special flag `-gcflags="github.com/ebitengine/purego/internal/fakecgo=-std"` to compile with CGO_ENABLED=0
+5. These architectures require CGO_ENABLED=1 to compile in versions before Go 1.27, but will be supported without Cgo in Go 1.27 and later
+6. These architectures only support `SyscallN` and `NewCallback`
+7. These architectures are no longer supported as of Go 1.26
 
 ## Example
 
@@ -104,7 +108,6 @@ This is a list of the copied files:
 
 * `abi_*.h` from package `runtime/cgo`
 * `wincallback.go` from package `runtime`
-* `zcallback_darwin_*.s` from package `runtime`
 * `internal/fakecgo/abi_*.h` from package `runtime/cgo`
 * `internal/fakecgo/asm_GOARCH.s` from package `runtime/cgo`
 * `internal/fakecgo/callbacks.go` from package `runtime/cgo`
@@ -112,8 +115,10 @@ This is a list of the copied files:
 * `internal/fakecgo/setenv.go` from package `runtime/cgo`
 * `internal/fakecgo/freebsd.go` from package `runtime/cgo`
 * `internal/fakecgo/netbsd.go` from package `runtime/cgo`
+* `internal/fakecgo/linux.go` from package `runtime/cgo`
 
 The `internal/fakecgo/go_GOOS.go` files were modified from `runtime/cgo/gcc_GOOS_GOARCH.go`.
+The `internal/fakecgo/linux.go` file is a combination of `runtime/cgo/linux.go` and `runtime/cgo/linux_syscall.c`.
 
 The files `abi_*.h` and `internal/fakecgo/abi_*.h` are the same because Bazel does not support cross-package use of
 `#include` so we need each one once per package. (cf. [issue](https://github.com/bazelbuild/rules_go/issues/3636))

@@ -608,3 +608,82 @@ func (p *Process) NumFDsWithContext(_ context.Context) (int32, error) {
 	numFDs := ret / sizeofProcFDInfo
 	return numFDs, nil
 }
+
+// EnvironWithContext returns the environment variables for the process.
+//
+// Known limitation: the returned slice can still contain XNU's "apple" strings
+// rather than only environment variables; see parseEnviron.
+//
+// For a cs_restricted process, the kernel truncates the buffer at the end of
+// argv, so this will return an empty slice with a nil error, indistinguishable
+// from a process with no environment. (Reading another user's process needs
+// root, but that already applies to Cmdline().)
+func (p *Process) EnvironWithContext(_ context.Context) ([]string, error) {
+	pargs, nargs, err := procArgs(p.Pid)
+	if err != nil {
+		return nil, err
+	}
+	// procArgs reads nargs as a 4-byte uint32; skip exactly those 4 bytes, the
+	// same way cmdlineSlice does.
+	return parseEnviron(pargs[4:], nargs), nil
+}
+
+// parseEnviron extracts envp from the kern.procargs2 buffer with the leading
+// nargs int already stripped. Layout:
+//
+//	exec_path \0 [padding \0...] argv[0] \0 ... argv[nargs-1] \0 envp[0] \0 ... envp[n] \0 [padding \0...] apple[0] \0 ...
+//
+// The buffer does not stop at the end of envp: XNU appends its own "apple"
+// strings (pfz=, stack_guard=, malloc_entropy=, ptr_munge=, main_stack=,
+// th_port= and friends) after it and p_argslen covers them too. Every one of
+// them is shaped KEY=VALUE, so they cannot be told apart from real environment
+// variables by content, and the end of envp has to be found positionally.
+//
+// Known limitation: the only boundary XNU leaves behind is the pointer
+// alignment padding it writes between envp and the apple strings, and that
+// padding is 0-7 bytes on a 64-bit process — zero whenever argv+envp already
+// ends aligned. Stopping at the first empty entry therefore drops the apple
+// strings in the common case but not always; psutil's psutil_proc_environ()
+// keys off the same boundary and has the same gap. Conversely an envp entry
+// that is itself an empty string leaves that same single NUL, so anything
+// behind it is dropped. Closing either half requires libgetargv-style
+// alignment math against the XNU exec layout, which is out of scope here.
+func parseEnviron(args []byte, nargs int) []string {
+	chunks := bytes.Split(args, []byte{0})
+	if len(chunks) <= 1 {
+		return nil
+	}
+
+	// Skip exec_path (chunks[0]) and the padding that follows it.
+	i := 1
+	for ; i < len(chunks) && len(chunks[i]) == 0; i++ {
+	}
+
+	if nargs > len(chunks)-i {
+		nargs = len(chunks) - i
+	}
+	if nargs < 0 {
+		nargs = 0
+	}
+
+	// Skip argv, leaving i at envp[0].
+	i += nargs
+	if i >= len(chunks) {
+		return nil
+	}
+
+	var envSlice []string
+	for ; i < len(chunks); i++ {
+		if len(chunks[i]) == 0 {
+			// Alignment padding: the end of envp, as far as it can be seen
+			// from here. See the known limitation above.
+			break
+		}
+		// An environment variable is KEY=VALUE, with a non-empty KEY.
+		if bytes.IndexByte(chunks[i], '=') > 0 {
+			envSlice = append(envSlice, string(chunks[i]))
+		}
+	}
+
+	return envSlice
+}

@@ -27,8 +27,6 @@ TEXT crosscall2(SB), NOSPLIT|NOFRAME, $0
 	MOVV R1, (22*8)(R3)
 
 	// Initialize Go ABI environment
-	JAL runtime·load_g(SB)
-
 	JAL runtime·cgocallback(SB)
 
 	RESTORE_R22_TO_R31((4*8))

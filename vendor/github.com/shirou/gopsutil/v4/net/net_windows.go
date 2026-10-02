@@ -90,7 +90,11 @@ type guid struct {
 const (
 	maxStringSize        = 256
 	maxPhysAddressLength = 32
-	pad0for64_4for32     = 0
+	// Windows aligns ULONG64 to 8 bytes. Go gives uint64 only 4-byte
+	// alignment on 32-bit, so pad ConnectionType up to the next 8-byte
+	// boundary there.
+	// https://learn.microsoft.com/en-us/windows/win32/api/netioapi/ns-netioapi-mib_if_row2
+	pad0for64_4for32 = (8 - unsafe.Alignof(uint64(0))) % 8
 )
 
 type mibIfRow2 struct {

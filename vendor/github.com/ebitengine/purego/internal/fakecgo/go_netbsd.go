@@ -60,9 +60,7 @@ func threadentry(v unsafe.Pointer) unsafe.Pointer {
 
 	setg_trampoline(setg_func, uintptr(unsafe.Pointer(ts.g)))
 
-	// faking funcs in go is a bit a... involved - but the following works :)
-	fn := uintptr(unsafe.Pointer(&ts.fn))
-	(*(*func())(unsafe.Pointer(&fn)))()
+	callThreadEntryFn(ts.fn)
 
 	return nil
 }
@@ -73,34 +71,13 @@ var setg_func uintptr
 //go:nosplit
 func x_cgo_init(g *G, setg uintptr) {
 	var size size_t
-	var attr *pthread_attr_t
-
-	/* The memory sanitizer distributed with versions of clang
-	   before 3.8 has a bug: if you call mmap before malloc, mmap
-	   may return an address that is later overwritten by the msan
-	   library.  Avoid this problem by forcing a call to malloc
-	   here, before we ever call malloc.
-
-	   This is only required for the memory sanitizer, so it's
-	   unfortunate that we always run it.  It should be possible
-	   to remove this when we no longer care about versions of
-	   clang before 3.8.  The test for this is
-	   misc/cgo/testsanitizers.
-
-	   GCC works hard to eliminate a seemingly unnecessary call to
-	   malloc, so we actually use the memory we allocate.  */
+	var attr pthread_attr_t
 
 	setg_func = setg
-	attr = (*pthread_attr_t)(malloc(unsafe.Sizeof(*attr)))
-	if attr == nil {
-		println("fakecgo: malloc failed")
-		abort()
-	}
-	pthread_attr_init(attr)
-	pthread_attr_getstacksize(attr, &size)
+	pthread_attr_init(&attr)
+	pthread_attr_getstacksize(&attr, &size)
 	// runtime/cgo uses __builtin_frame_address(0) instead of `uintptr(unsafe.Pointer(&size))`
 	// but this should be OK since we are taking the address of the first variable in this function.
 	g.stacklo = uintptr(unsafe.Pointer(&size)) - uintptr(size) + 4096
-	pthread_attr_destroy(attr)
-	free(unsafe.Pointer(attr))
+	pthread_attr_destroy(&attr)
 }

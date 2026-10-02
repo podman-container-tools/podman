@@ -33,8 +33,11 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVW R2, 136(R13)
 	MOVW R3, 140(R13)
 
+	// Skip floating point registers if runtime.goarmsoftfp!=0.
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfpsave
 	// Save floating point registers F0-F7 at SP+64 (frame[0..15])
-	// Note: We always save these since we target hard-float ABI.
 	MOVD F0, 64(R13)
 	MOVD F1, 72(R13)
 	MOVD F2, 80(R13)
@@ -44,6 +47,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVD F6, 112(R13)
 	MOVD F7, 120(R13)
 
+skipfpsave:
 	// Set up callbackArgs at SP+48
 	MOVW 36(R13), R4
 	MOVW R4, 48(R13)
@@ -51,6 +55,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVW R4, 52(R13)
 	MOVW $0, R4
 	MOVW R4, 56(R13)
+	MOVW R4, 60(R13) // high word of a 64-bit return
 
 	// Call crosscall2(fn, frame, 0, ctxt)
 	MOVW ·callbackWrap_call(SB), R0
@@ -63,7 +68,11 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 
 	// Get result
 	MOVW 56(R13), R0
+	MOVW 60(R13), R1 // high word of a 64-bit return
 
+	MOVB    runtime·goarmsoftfp(SB), R11
+	CMP     $0, R11
+	BNE     skipfprest
 	// Restore float registers
 	MOVD 64(R13), F0
 	MOVD 72(R13), F1
@@ -74,6 +83,7 @@ TEXT callbackasm1(SB), NOSPLIT|NOFRAME, $0
 	MOVD 112(R13), F6
 	MOVD 120(R13), F7
 
+skipfprest:
 	// Restore callee-saved registers
 	MOVW 0(R13), R4
 	MOVW 4(R13), R5

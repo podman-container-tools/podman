@@ -11,3 +11,9 @@ import (
 
 //go:linkname runtime_cgocall runtime.cgocall
 func runtime_cgocall(fn uintptr, arg unsafe.Pointer) int32 // from runtime/sys_libc.go
+
+// from runtime/runtime2.go, exported via go:linkname for usage with cgo assembly
+// pulled in as struct{} for proper linking, see https://github.com/golang/go/issues/72032
+//
+//go:linkname runtime_goarmsoftfp runtime.goarmsoftfp
+var runtime_goarmsoftfp struct{}
