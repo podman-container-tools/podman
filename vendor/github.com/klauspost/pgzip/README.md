@@ -24,12 +24,11 @@ which has the same feature, as well as seeking in the resulting file.
 The only drawback is a slightly bigger overhead compared to this and pure gzip. 
 See a comparison below.
 
-[![GoDoc][1]][2] [![Build Status][3]][4]
+[![GoDoc][1]][2] ![Build Status][3]
 
 [1]: https://godoc.org/github.com/klauspost/pgzip?status.svg
 [2]: https://godoc.org/github.com/klauspost/pgzip
-[3]: https://travis-ci.org/klauspost/pgzip.svg
-[4]: https://travis-ci.org/klauspost/pgzip
+[3]: https://github.com/klauspost/pgzip/actions/workflows/go.yml/badge.svg
 
 Installation
 ====

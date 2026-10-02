@@ -85,7 +85,7 @@ func (z *Writer) SetConcurrency(blockSize, blocks int) error {
 	z.blockSize = blockSize
 	z.results = make(chan result, blocks)
 	z.blocks = blocks
-	z.dstPool.New = func() interface{} { return make([]byte, 0, blockSize+(blockSize)>>4) }
+	z.dstPool.New = func() any { return make([]byte, 0, blockSize+(blockSize)>>4) }
 	return nil
 }
 
@@ -155,12 +155,18 @@ func (z *Writer) init(w io.Writer, level int) {
 	z.Extra = nil
 	z.ModTime = time.Time{}
 	z.wroteHeader = false
-	z.currentBuffer = nil
+	if z.currentBuffer != nil {
+		z.dstPool.Put(z.currentBuffer)
+		z.currentBuffer = nil
+	}
 	z.buf = [10]byte{}
-	z.prevTail = nil
+	if z.prevTail != nil {
+		z.dstPool.Put(z.prevTail)
+		z.prevTail = nil
+	}
 	z.size = 0
 	if z.dictFlatePool.New == nil {
-		z.dictFlatePool.New = func() interface{} {
+		z.dictFlatePool.New = func() any {
 			f, _ := flate.NewWriterDict(w, level, nil)
 			return f
 		}
