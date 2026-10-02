@@ -391,7 +391,11 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	// tags:
 	//   - containers (compat)
 	// summary: Get stats for a container
-	// description: This returns a live stream of a container’s resource usage statistics.
+	// description: |
+	//   This returns a live stream of a container's resource usage statistics.
+	//   With stream=false, precpu_stats is seeded from an initial sample taken
+	//   moments before cpu_stats. For accurate instantaneous CPU percentage,
+	//   use stream=true.
 	// parameters:
 	//  - in: path
 	//    name: name

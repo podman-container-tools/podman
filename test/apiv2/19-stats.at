@@ -41,3 +41,82 @@ t GET libpod/containers/stopped-stats/stats?stream=false 409 \
     .cause="container is stopped" \
     .response=409
 podman rm stopped-stats
+
+# https://github.com/containers/podman/issues/28761
+podman pod create --name statspod
+podman run -dt --pod statspod --name podctr $IMAGE top &>/dev/null
+sleep 2
+
+before_ns=$(awk '/^cpu / {t=0; for(i=2;i<=NF;i++) t+=$i; printf "%.0f", t * 10000000}' /proc/stat)
+
+t GET containers/podctr/stats?stream=false 200
+api_sys_cpu=$(jq -r '.cpu_stats.system_cpu_usage' <<<"$output")
+
+after_ns=$(awk '/^cpu / {t=0; for(i=2;i<=NF;i++) t+=$i; printf "%.0f", t * 10000000}' /proc/stat)
+
+is $(jq -n "$api_sys_cpu >= ($before_ns * 0.99)" 2>/dev/null) "true" \
+   "system_cpu_usage ($api_sys_cpu) >= /proc/stat before ($before_ns)"
+
+is $(jq -n "$api_sys_cpu <= ($after_ns * 1.01)" 2>/dev/null) "true" \
+   "system_cpu_usage ($api_sys_cpu) <= /proc/stat after ($after_ns)"
+
+is $(jq '.cpu_stats.online_cpus > 0' <<<"$output") "true" \
+   "pod container compat stats: online_cpus > 0"
+
+tmpfile="$WORKDIR/stats-stream.json"
+curl -s --max-time 8 \
+    "http://$HOST:$PORT/v1.44/containers/podctr/stats?stream=true" \
+    >"$tmpfile" 2>/dev/null || true
+
+nlines=$(wc -l <"$tmpfile")
+if [ "$nlines" -ge 2 ]; then
+    second=$(sed -n '2p' "$tmpfile")
+    cpu_pct=$(echo "$second" | jq '
+        ((.cpu_stats.cpu_usage.total_usage - .precpu_stats.cpu_usage.total_usage) /
+         ((.cpu_stats.system_cpu_usage  - .precpu_stats.system_cpu_usage) + 1e-9)
+        ) * .cpu_stats.online_cpus * 100')
+
+    is $(jq -n "$cpu_pct < 50" 2>/dev/null) "true" \
+       "streaming CPU%% ($cpu_pct) for idle pod container < 50%%"
+fi
+rm -f "$tmpfile"
+
+before_ns=$(awk '/^cpu / {t=0; for(i=2;i<=NF;i++) t+=$i; printf "%.0f", t * 10000000}' /proc/stat)
+
+t GET libpod/containers/podctr/stats?stream=false 200
+libpod_sys_cpu=$(jq -r '.cpu_stats.system_cpu_usage' <<<"$output")
+
+after_ns=$(awk '/^cpu / {t=0; for(i=2;i<=NF;i++) t+=$i; printf "%.0f", t * 10000000}' /proc/stat)
+
+is $(jq -n "$libpod_sys_cpu >= ($before_ns * 0.99)" 2>/dev/null) "true" \
+   "libpod system_cpu_usage ($libpod_sys_cpu) >= /proc/stat before ($before_ns)"
+
+is $(jq -n "$libpod_sys_cpu <= ($after_ns * 1.01)" 2>/dev/null) "true" \
+   "libpod system_cpu_usage ($libpod_sys_cpu) <= /proc/stat after ($after_ns)"
+
+podman rm -f podctr
+podman pod rm -f statspod
+
+# https://github.com/containers/podman/issues/24730
+podman run -dt --name precpuctr $IMAGE top &>/dev/null
+sleep 2
+
+# Docker-compat endpoint
+t GET containers/precpuctr/stats?stream=false 200
+
+is $(jq '.precpu_stats.cpu_usage.total_usage > 0' <<<"$output") "true" \
+   "#24730 compat: precpu_stats.total_usage > 0 with stream=false"
+
+is $(jq '.precpu_stats.system_cpu_usage > 0' <<<"$output") "true" \
+   "#24730 compat: precpu_stats.system_cpu_usage > 0 with stream=false"
+
+# libpod endpoint
+t GET libpod/containers/precpuctr/stats?stream=false 200
+
+is $(jq '.precpu_stats.cpu_usage.total_usage > 0' <<<"$output") "true" \
+   "#24730 libpod: precpu_stats.total_usage > 0 with stream=false"
+
+is $(jq '.precpu_stats.system_cpu_usage > 0' <<<"$output") "true" \
+   "#24730 libpod: precpu_stats.system_cpu_usage > 0 with stream=false"
+
+podman rm -f precpuctr
