@@ -428,6 +428,53 @@ var _ = Describe("Podman ps", func() {
 		Expect(psAll.OutputToString()).To(Equal(psFilter.OutputToString()))
 	})
 
+	It("podman ps negated status filter does not need all", func() {
+		stoppedCtr := podmanTest.Podman([]string{"create", "--name", "ps-negated-status-stopped", ALPINE, "ls", "/"})
+		stoppedCtr.WaitWithDefaultTimeout()
+		Expect(stoppedCtr).Should(ExitCleanly())
+
+		runningCtr := podmanTest.Podman([]string{"run", "-d", "--name", "ps-negated-status-running", ALPINE, "sleep", "600"})
+		runningCtr.WaitWithDefaultTimeout()
+		Expect(runningCtr).Should(ExitCleanly())
+
+		psFilter := podmanTest.Podman([]string{"ps", "--no-trunc", "--quiet", "--filter", "status!=running"})
+		psFilter.WaitWithDefaultTimeout()
+		Expect(psFilter).Should(ExitCleanly())
+
+		Expect(psFilter.OutputToStringArray()).To(HaveLen(1))
+		Expect(psFilter.OutputToString()).To(Equal(stoppedCtr.OutputToString()))
+		Expect(psFilter.OutputToString()).ToNot(ContainSubstring(runningCtr.OutputToString()))
+	})
+
+	It("podman ps multiple negated status filters", func() {
+		createdCtr := podmanTest.Podman([]string{"create", "--name", "ps-negated-status-created", ALPINE, "ls", "/"})
+		createdCtr.WaitWithDefaultTimeout()
+		Expect(createdCtr).Should(ExitCleanly())
+
+		runningCtr := podmanTest.Podman([]string{"run", "-d", "--name", "ps-negated-status-running", ALPINE, "sleep", "600"})
+		runningCtr.WaitWithDefaultTimeout()
+		Expect(runningCtr).Should(ExitCleanly())
+
+		// Excluding only "created" leaves the running container.
+		psFilter := podmanTest.Podman([]string{"ps", "--no-trunc", "--quiet", "--filter", "status!=created"})
+		psFilter.WaitWithDefaultTimeout()
+		Expect(psFilter).Should(ExitCleanly())
+		Expect(psFilter.OutputToStringArray()).To(HaveLen(1))
+		Expect(psFilter.OutputToString()).To(Equal(runningCtr.OutputToString()))
+
+		// Excluding both states leaves nothing.
+		psFilter = podmanTest.Podman([]string{"ps", "--no-trunc", "--quiet", "--filter", "status!=created", "--filter", "status!=running"})
+		psFilter.WaitWithDefaultTimeout()
+		Expect(psFilter).Should(ExitCleanly())
+		Expect(psFilter.OutputToString()).To(BeEmpty())
+	})
+
+	It("podman ps negated status filter with invalid value", func() {
+		session := podmanTest.Podman([]string{"ps", "--filter", "status!=bogus"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "bogus"))
+	})
+
 	It("podman filter without status does not find non-running", func() {
 		ctrName := "aContainerName"
 		ctr := podmanTest.Podman([]string{"create", "--name", ctrName, ALPINE, "ls", "/"})
