@@ -1,16 +1,20 @@
 package machine
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
+
+const sshCommandTimeout = 30 * time.Second
 
 // LocalhostSSH is a common function for ssh'ing to a podman machine using system-connections
 // and a port
@@ -97,7 +101,27 @@ func localhostBuiltinSSH(username, identityPath, name string, sshPort int, input
 		session.Stderr = logger
 	}
 
-	return session.Run(cmd)
+	// Run the SSH command with a timeout to prevent indefinite blocking
+	ctx, cancel := context.WithTimeout(context.Background(), sshCommandTimeout)
+	defer cancel()
+
+	type result struct {
+		err error
+	}
+	resultChan := make(chan result, 1)
+
+	go func() {
+		resultChan <- result{err: session.Run(cmd)}
+	}()
+
+	select {
+	case res := <-resultChan:
+		return res.err
+	case <-ctx.Done():
+		// Timeout occurred - close session to unblock the goroutine
+		session.Close()
+		return fmt.Errorf("ssh command %q on machine %q timed out after %v", cmd, name, sshCommandTimeout)
+	}
 }
 
 // createLocalhostConfig returns a *ssh.ClientConfig for authenticating a user using a private key
