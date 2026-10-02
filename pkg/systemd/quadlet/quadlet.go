@@ -620,7 +620,7 @@ func ConvertContainer(container *parser.UnitFile, unitsInfoMap map[string]*UnitI
 
 	if len(image) > 0 {
 		var err error
-		if image, err = handleImageSource(image, service, unitsInfoMap); err != nil {
+		if image, err = handleImageSource(container, image, service, unitsInfoMap); err != nil {
 			return nil, warnings, err
 		}
 	}
@@ -1144,7 +1144,7 @@ func ConvertVolume(volume *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, i
 		if !ok {
 			return nil, warnings, fmt.Errorf("the key %s is mandatory when using the image driver", KeyImage)
 		}
-		imageName, err := handleImageSource(imageName, service, unitsInfoMap)
+		imageName, err := handleImageSource(volume, imageName, service, unitsInfoMap)
 		if err != nil {
 			return nil, warnings, err
 		}
@@ -1853,23 +1853,27 @@ func addNetworks(quadletUnitFile *parser.UnitFile, groupName string, serviceUnit
 	for _, network := range networks {
 		if len(network) > 0 {
 			quadletNetworkName, options, found := strings.Cut(network, ":")
+			quadletNetworkName = expandNSpecifier(quadletNetworkName, quadletUnitFile)
 
 			isNetworkUnit := strings.HasSuffix(quadletNetworkName, ".network")
 			isContainerUnit := strings.HasSuffix(quadletNetworkName, ".container")
 
 			if isNetworkUnit || isContainerUnit {
-				unitInfo, ok := unitsInfoMap[quadletNetworkName]
-				if !ok {
+				unitInfo, instance, err := resolveUnitRef(quadletNetworkName, unitsInfoMap)
+				if err != nil {
 					return fmt.Errorf("requested Quadlet unit %s was not found", quadletNetworkName)
 				}
 
+				resourceName := resourceNameForInstance(unitInfo, instance)
 				// XXX: this is usually because a '@' in service name
-				if len(unitInfo.ResourceName) == 0 {
+				if len(resourceName) == 0 {
 					return fmt.Errorf("cannot get the resource name of %s", quadletNetworkName)
 				}
 
-				// the systemd unit name is $serviceName.service
-				serviceFileName := unitInfo.ServiceFileName()
+				serviceFileName, err := serviceFileNameForInstance(unitInfo, instance)
+				if err != nil {
+					return err
+				}
 
 				serviceUnitFile.Add(UnitGroup, "Requires", serviceFileName)
 				serviceUnitFile.Add(UnitGroup, "After", serviceFileName)
@@ -1878,12 +1882,12 @@ func addNetworks(quadletUnitFile *parser.UnitFile, groupName string, serviceUnit
 					if isContainerUnit {
 						return errors.New("extra options are not supported when joining another container's network")
 					}
-					network = fmt.Sprintf("%s:%s", unitInfo.ResourceName, options)
+					network = fmt.Sprintf("%s:%s", resourceName, options)
 				} else {
 					if isContainerUnit {
-						network = fmt.Sprintf("container:%s", unitInfo.ResourceName)
+						network = fmt.Sprintf("container:%s", resourceName)
 					} else {
-						network = unitInfo.ResourceName
+						network = resourceName
 					}
 				}
 			}
@@ -1970,20 +1974,84 @@ func handleStorageSource(quadletUnitFile, serviceUnitFile *parser.UnitFile, sour
 		// Absolute path
 		serviceUnitFile.AddEscaped(UnitGroup, "RequiresMountsFor", source)
 	} else if strings.HasSuffix(source, ".volume") || (checkImage && strings.HasSuffix(source, ".image")) || strings.HasSuffix(source, ".artifact") {
-		sourceUnitInfo, ok := unitsInfoMap[source]
-		if !ok {
+		source = expandNSpecifier(source, quadletUnitFile)
+
+		sourceUnitInfo, instance, err := resolveUnitRef(source, unitsInfoMap)
+		if err != nil {
 			return "", fmt.Errorf("requested Quadlet source %s was not found", source)
 		}
 
-		// the systemd unit name is $serviceName.service
-		sourceServiceName := sourceUnitInfo.ServiceFileName()
+		sourceServiceName, err := serviceFileNameForInstance(sourceUnitInfo, instance)
+		if err != nil {
+			return "", err
+		}
 		serviceUnitFile.Add(UnitGroup, "Requires", sourceServiceName)
 		serviceUnitFile.Add(UnitGroup, "After", sourceServiceName)
 
-		source = sourceUnitInfo.ResourceName
+		source = resourceNameForInstance(sourceUnitInfo, instance)
 	}
 
 	return source, nil
+}
+
+// expandNSpecifier replaces %N with the consuming unit's service name when it is
+// known at generation time. Template units (service name ending in '@') keep %N
+// so systemd can expand it when an instance starts.
+func expandNSpecifier(source string, unit *parser.UnitFile) string {
+	if !strings.Contains(source, "%N") {
+		return source
+	}
+	serviceName, err := GetUnitServiceName(unit)
+	if err != nil || serviceName == "" || strings.HasSuffix(serviceName, "@") {
+		return source
+	}
+	return strings.ReplaceAll(source, "%N", serviceName)
+}
+
+// resolveUnitRef looks up a Quadlet unit by exact name, or as a template instance
+// reference (name@instance.ext → name@.ext). instance is empty for exact matches.
+func resolveUnitRef(source string, unitsInfoMap map[string]*UnitInfo) (*UnitInfo, string, error) {
+	if info, ok := unitsInfoMap[source]; ok {
+		return info, "", nil
+	}
+
+	ext := filepath.Ext(source)
+	if ext == "" {
+		return nil, "", fmt.Errorf("unit %s not found", source)
+	}
+	base := strings.TrimSuffix(source, ext)
+	templateBase, instance, found := strings.Cut(base, "@")
+	if !found || templateBase == "" || instance == "" {
+		return nil, "", fmt.Errorf("unit %s not found", source)
+	}
+
+	templateKey := templateBase + "@" + ext
+	info, ok := unitsInfoMap[templateKey]
+	if !ok {
+		return nil, "", fmt.Errorf("unit %s not found", source)
+	}
+	return info, instance, nil
+}
+
+// serviceFileNameForInstance returns the systemd service file name for a unit,
+// optionally instantiated when instance is non-empty (template@instance.service).
+func serviceFileNameForInstance(info *UnitInfo, instance string) (string, error) {
+	if instance == "" {
+		return info.ServiceFileName(), nil
+	}
+	if !strings.HasSuffix(info.ServiceName, "@") {
+		return "", fmt.Errorf("cannot instantiate non-template service %s", info.ServiceName)
+	}
+	return info.ServiceName + instance + ".service", nil
+}
+
+// resourceNameForInstance returns the podman resource name, substituting the
+// template instance for %i when instance is non-empty.
+func resourceNameForInstance(info *UnitInfo, instance string) string {
+	if instance == "" {
+		return info.ResourceName
+	}
+	return strings.ReplaceAll(info.ResourceName, "%i", instance)
 }
 
 func handleHealth(unitFile *parser.UnitFile, groupName string, podman *PodmanCmdline) {
@@ -2112,22 +2180,26 @@ func lookupAndAddBoolean(unit *parser.UnitFile, group string, keys map[string]st
 	}
 }
 
-func handleImageSource(quadletImageName string, serviceUnitFile *parser.UnitFile, unitsInfoMap map[string]*UnitInfo) (string, error) {
+func handleImageSource(quadletUnitFile *parser.UnitFile, quadletImageName string, serviceUnitFile *parser.UnitFile, unitsInfoMap map[string]*UnitInfo) (string, error) {
+	quadletImageName = expandNSpecifier(quadletImageName, quadletUnitFile)
 	for _, suffix := range []string{".build", ".image"} {
 		if strings.HasSuffix(quadletImageName, suffix) {
 			// since there is no default name conversion, the actual image name must exist in the names map
-			unitInfo, ok := unitsInfoMap[quadletImageName]
-			if !ok {
+			unitInfo, instance, err := resolveUnitRef(quadletImageName, unitsInfoMap)
+			if err != nil {
 				return "", fmt.Errorf("requested Quadlet image %s was not found", quadletImageName)
 			}
 
 			// the systemd unit name is $name-$suffix.service
-			imageServiceName := unitInfo.ServiceFileName()
+			imageServiceName, err := serviceFileNameForInstance(unitInfo, instance)
+			if err != nil {
+				return "", err
+			}
 
 			serviceUnitFile.Add(UnitGroup, "Requires", imageServiceName)
 			serviceUnitFile.Add(UnitGroup, "After", imageServiceName)
 
-			quadletImageName = unitInfo.ResourceName
+			quadletImageName = resourceNameForInstance(unitInfo, instance)
 		}
 	}
 
@@ -2217,22 +2289,22 @@ func createBasePodmanCommand(unitFile *parser.UnitFile, groupName string) *Podma
 func handlePod(quadletUnitFile, serviceUnitFile *parser.UnitFile, groupName string, unitsInfoMap map[string]*UnitInfo, podman *PodmanCmdline) error {
 	pod, ok := quadletUnitFile.Lookup(groupName, KeyPod)
 	if ok && len(pod) > 0 {
-		// XXX: only %N is handled.
-		// it is difficult to properly implement specifiers handling without consulting systemd.
-		pod = strings.ReplaceAll(pod, "%N", GetContainerServiceName(quadletUnitFile))
-
+		pod = expandNSpecifier(pod, quadletUnitFile)
 		if !strings.HasSuffix(pod, ".pod") {
 			return fmt.Errorf("pod %s is not Quadlet based", pod)
 		}
 
-		podInfo, ok := unitsInfoMap[pod]
-		if !ok {
+		podInfo, instance, err := resolveUnitRef(pod, unitsInfoMap)
+		if err != nil {
 			return fmt.Errorf("quadlet pod unit %s does not exist", pod)
 		}
 
-		podman.add("--pod", podInfo.ResourceName)
+		podman.add("--pod", resourceNameForInstance(podInfo, instance))
 
-		podServiceName := podInfo.ServiceFileName()
+		podServiceName, err := serviceFileNameForInstance(podInfo, instance)
+		if err != nil {
+			return err
+		}
 		serviceUnitFile.Add(UnitGroup, "BindsTo", podServiceName)
 		serviceUnitFile.Add(UnitGroup, "After", podServiceName)
 
@@ -2345,11 +2417,16 @@ func translateUnitDependencies(serviceUnitFile *parser.UnitFile, unitsInfoMap ma
 
 			ext := filepath.Ext(dep)
 			if _, ok := SupportedExtensions[ext]; ok {
-				unitInfo, ok := unitsInfoMap[dep]
-				if !ok {
+				dep = expandNSpecifier(dep, serviceUnitFile)
+				unitInfo, instance, err := resolveUnitRef(dep, unitsInfoMap)
+				if err != nil {
 					return fmt.Errorf("unable to translate dependency for %s", dep)
 				}
-				translatedDep = unitInfo.ServiceFileName()
+				var errService error
+				translatedDep, errService = serviceFileNameForInstance(unitInfo, instance)
+				if errService != nil {
+					return errService
+				}
 				translated = true
 			} else {
 				translatedDep = dep
