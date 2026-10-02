@@ -994,7 +994,9 @@ PODMAN_GENERATED_UNIT_FILES = contrib/systemd/system/podman-auto-update.service 
 		    contrib/systemd/system/podman.service \
 		    contrib/systemd/system/podman-restart.service \
 		    contrib/systemd/system/podman-kube@.service \
-		    contrib/systemd/system/podman-clean-transient.service
+		    contrib/systemd/system/podman-clean-transient.service \
+		    contrib/systemd/system/podman-image-prune.service \
+		    contrib/systemd/system/podman-image-prune.timer
 
 %.service: %.service.in
 	sed -e 's;@@PODMAN@@;$(BINDIR)/podman;g' $< >$@.tmp.$$ \
