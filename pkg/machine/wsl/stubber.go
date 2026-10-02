@@ -215,14 +215,25 @@ func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() e
 
 	err := wslInvoke(dist, "/root/bootstrap")
 	if err != nil {
-		err = fmt.Errorf("the WSL bootstrap script failed: %w", err)
+		return nil, nil, fmt.Errorf("the WSL bootstrap script failed: %w", err)
+	}
+
+	// We need to set cgroup_manager="cgroupfs" in the [engine] section
+	// of containers.conf until we use the WSL supported systemd.
+	// The details are in this GitHub issue:
+	// https://github.com/podman-container-tools/podman/issues/29749
+	// The issue about using the WSL supported systemd:
+	// https://github.com/podman-container-tools/podman/issues/15967
+	err = wslPipe(cgroupManager, dist, "sh", "-c", "cat > /usr/share/containers/containers.conf.d/999-podman-machine-wsl-cgroupfs.conf")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed creating the cgroupfs config file: %w", err)
 	}
 
 	readyFunc := func() error {
 		return nil
 	}
 
-	return nil, readyFunc, err
+	return nil, readyFunc, nil
 }
 
 func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {

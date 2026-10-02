@@ -38,6 +38,8 @@ The CGroup manager to use for container cgroups. Supported values are __cgroupfs
 
 Note: Setting this flag can cause certain commands to break when called on containers previously created by the other CGroup manager type.
 
+__cgroupfs__ doesn't work in Rootless mode and containers cgroups aren't used.
+
 #### **--config**
 Location of config file. Mainly for docker compatibility, only the authentication parts of the config are supported.
 
