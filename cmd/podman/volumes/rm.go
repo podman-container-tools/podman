@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -62,7 +61,7 @@ func rm(cmd *cobra.Command, args []string) error {
 		timeout := uint(stopTimeout)
 		rmOptions.Timeout = &timeout
 	}
-	responses, err := registry.ContainerEngine().VolumeRm(context.Background(), args, rmOptions)
+	responses, err := registry.ContainerEngine().VolumeRm(cmd.Context(), args, rmOptions)
 	if err != nil {
 		if rmOptions.Force && strings.Contains(err.Error(), define.ErrNoSuchVolume.Error()) {
 			return nil

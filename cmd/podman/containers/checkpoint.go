@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -122,7 +121,7 @@ func checkpoint(cmd *cobra.Command, args []string) error {
 	if (checkpointOptions.WithPrevious || checkpointOptions.PreCheckPoint) && !criu.MemTrack() {
 		return errors.New("system (architecture/kernel/CRIU) does not support memory tracking")
 	}
-	responses, err := registry.ContainerEngine().ContainerCheckpoint(context.Background(), args, checkpointOptions)
+	responses, err := registry.ContainerEngine().ContainerCheckpoint(cmd.Context(), args, checkpointOptions)
 	if err != nil {
 		return err
 	}

@@ -214,7 +214,7 @@ func imagePull(cmd *cobra.Command, args []string) error {
 	// scattering logic across (too) many parts of the code.
 	var errs utils.OutputErrors
 	for _, arg := range args {
-		pullReport, err := registry.ImageEngine().Pull(registry.Context(), arg, pullOptions.ImagePullOptions)
+		pullReport, err := registry.ImageEngine().Pull(cmd.Context(), arg, pullOptions.ImagePullOptions)
 		if err != nil {
 			errs = append(errs, err)
 			continue

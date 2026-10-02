@@ -2,6 +2,7 @@ package containers
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -173,8 +174,8 @@ func quietOut(responses []entities.ListContainer) {
 	}
 }
 
-func getResponses() ([]entities.ListContainer, error) {
-	responses, err := registry.ContainerEngine().ContainerList(registry.Context(), listOpts)
+func getResponses(ctx context.Context) ([]entities.ListContainer, error) {
+	responses, err := registry.ContainerEngine().ContainerList(ctx, listOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func ps(cmd *cobra.Command, _ []string) error {
 		}
 		listOpts.Filters[fname] = append(listOpts.Filters[fname], filter)
 	}
-	listContainers, err := getResponses()
+	listContainers, err := getResponses(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -260,7 +261,7 @@ func ps(cmd *cobra.Command, _ []string) error {
 		// responses will grow to the largest number of processes reported on, but will not thrash the gc
 		var responses []psReporter
 		for ; ; responses = responses[:0] {
-			ctnrs, err := getResponses()
+			ctnrs, err := getResponses(cmd.Context())
 			if err != nil {
 				return err
 			}

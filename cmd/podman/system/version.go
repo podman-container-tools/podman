@@ -41,7 +41,7 @@ func init() {
 }
 
 func version(cmd *cobra.Command, _ []string) error {
-	versions, err := registry.ContainerEngine().Version(registry.Context())
+	versions, err := registry.ContainerEngine().Version(cmd.Context())
 	if err != nil {
 		return err
 	}

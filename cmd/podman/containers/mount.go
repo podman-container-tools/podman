@@ -85,7 +85,7 @@ func mount(cmd *cobra.Command, args []string) error {
 	}
 	args = utils.RemoveSlash(args)
 
-	reports, err := registry.ContainerEngine().ContainerMount(registry.Context(), args, mountOpts)
+	reports, err := registry.ContainerEngine().ContainerMount(cmd.Context(), args, mountOpts)
 	if err != nil {
 		return err
 	}

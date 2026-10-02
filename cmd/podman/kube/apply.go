@@ -89,7 +89,7 @@ func apply(cmd *cobra.Command, args []string) error {
 		reader = f
 	} else {
 		generateOptions.Service = applyOptions.Service
-		report, err := registry.ContainerEngine().GenerateKube(registry.Context(), args, generateOptions)
+		report, err := registry.ContainerEngine().GenerateKube(cmd.Context(), args, generateOptions)
 		if err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func apply(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Deploying to cluster...")
 
-	if err = registry.ContainerEngine().KubeApply(registry.Context(), reader, applyOptions); err != nil {
+	if err = registry.ContainerEngine().KubeApply(cmd.Context(), reader, applyOptions); err != nil {
 		return err
 	}
 

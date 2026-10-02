@@ -48,6 +48,6 @@ func init() {
 	flags.BoolVar(&migrateOptions.MigrateDB, "migrate-db", false, "Migrate database from BoltDB to SQLite")
 }
 
-func migrate(_ *cobra.Command, _ []string) error {
-	return registry.ContainerEngine().Migrate(registry.Context(), migrateOptions)
+func migrate(cmd *cobra.Command, _ []string) error {
+	return registry.ContainerEngine().Migrate(cmd.Context(), migrateOptions)
 }

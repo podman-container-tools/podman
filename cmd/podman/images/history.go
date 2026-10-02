@@ -75,7 +75,7 @@ func historyFlags(cmd *cobra.Command) {
 }
 
 func history(cmd *cobra.Command, args []string) error {
-	results, err := registry.ImageEngine().History(registry.Context(), args[0], entities.ImageHistoryOptions{})
+	results, err := registry.ImageEngine().History(cmd.Context(), args[0], entities.ImageHistoryOptions{})
 	if err != nil {
 		return err
 	}

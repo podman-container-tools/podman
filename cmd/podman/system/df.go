@@ -50,7 +50,7 @@ func init() {
 }
 
 func df(cmd *cobra.Command, _ []string) error {
-	reports, err := registry.ContainerEngine().SystemDf(registry.Context(), dfOptions)
+	reports, err := registry.ContainerEngine().SystemDf(cmd.Context(), dfOptions)
 	if err != nil {
 		return err
 	}

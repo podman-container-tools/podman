@@ -61,7 +61,7 @@ func imageRemoveFlagSet(flags *pflag.FlagSet) {
 	flags.BoolVar(&imageOpts.NoPrune, "no-prune", false, "Do not remove dangling images")
 }
 
-func rm(_ *cobra.Command, args []string) error {
+func rm(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 && !imageOpts.All {
 		return errors.New("image name or ID must be specified")
 	}
@@ -75,7 +75,7 @@ func rm(_ *cobra.Command, args []string) error {
 
 	// Note: certain image-removal errors are non-fatal.  Hence, the report
 	// might be set even if err != nil.
-	report, rmErrors := registry.ImageEngine().Remove(registry.Context(), args, imageOpts)
+	report, rmErrors := registry.ImageEngine().Remove(cmd.Context(), args, imageOpts)
 	if report != nil {
 		for _, u := range report.Untagged {
 			fmt.Println("Untagged: " + u)

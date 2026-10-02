@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -86,7 +85,7 @@ func init() {
 	validate.AddLatestFlag(containerPauseCommand, &pauseOpts.Latest)
 }
 
-func pause(_ *cobra.Command, args []string) error {
+func pause(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
 	args = utils.RemoveSlash(args)
 
@@ -107,7 +106,7 @@ func pause(_ *cobra.Command, args []string) error {
 		pauseOpts.Filters[fname] = append(pauseOpts.Filters[fname], filter)
 	}
 
-	responses, err := registry.ContainerEngine().ContainerPause(context.Background(), args, pauseOpts)
+	responses, err := registry.ContainerEngine().ContainerPause(cmd.Context(), args, pauseOpts)
 	if err != nil {
 		return err
 	}

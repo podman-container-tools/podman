@@ -120,7 +120,7 @@ func images(cmd *cobra.Command, args []string) error {
 		listOptions.Filter = append(listOptions.Filter, "reference="+args[0])
 	}
 
-	summaries, err := registry.ImageEngine().List(registry.Context(), listOptions)
+	summaries, err := registry.ImageEngine().List(cmd.Context(), listOptions)
 	if err != nil {
 		return err
 	}

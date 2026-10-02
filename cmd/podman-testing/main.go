@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/config"
 	_ "go.podman.io/podman/v6/cmd/podman/completion"
+	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/storage/pkg/reexec"
 	"go.podman.io/storage/pkg/unshare"
@@ -33,7 +33,6 @@ var (
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	mainContext    = context.Background()
 	podmanConfig   entities.PodmanConfig
 	globalLogLevel string
 )
@@ -95,7 +94,7 @@ func main() {
 	unshare.MaybeReexecUsingUserNamespace(false)
 
 	exitCode := 1
-	if err := mainCmd.Execute(); err != nil {
+	if err := mainCmd.ExecuteContext(registry.Context()); err != nil {
 		if logrus.IsLevelEnabled(logrus.TraceLevel) {
 			fmt.Fprintf(os.Stderr, "Error: %+v\n", err)
 		} else {

@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -138,9 +137,9 @@ func stop(cmd *cobra.Command, args []string) error {
 		err       error
 	)
 	if stopAsService {
-		responses, err = registry.ContainerEngine().ContainerStopService(context.Background(), args, stopOptions)
+		responses, err = registry.ContainerEngine().ContainerStopService(cmd.Context(), args, stopOptions)
 	} else {
-		responses, err = registry.ContainerEngine().ContainerStop(context.Background(), args, stopOptions)
+		responses, err = registry.ContainerEngine().ContainerStop(cmd.Context(), args, stopOptions)
 	}
 	if err != nil {
 		return err

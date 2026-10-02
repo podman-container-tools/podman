@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -79,7 +80,7 @@ func init() {
 	cpFlags(containerCpCommand)
 }
 
-func cp(_ *cobra.Command, args []string) error {
+func cp(cmd *cobra.Command, args []string) error {
 	// Parse user input.
 	sourceContainerStr, sourcePath, destContainerStr, destPath, err := copy.ParseSourceAndDestination(args[0], args[1])
 	if err != nil {
@@ -87,18 +88,18 @@ func cp(_ *cobra.Command, args []string) error {
 	}
 
 	if len(sourceContainerStr) > 0 && len(destContainerStr) > 0 {
-		return copyContainerToContainer(sourceContainerStr, sourcePath, destContainerStr, destPath)
+		return copyContainerToContainer(cmd.Context(), sourceContainerStr, sourcePath, destContainerStr, destPath)
 	} else if len(sourceContainerStr) > 0 {
-		return copyFromContainer(sourceContainerStr, sourcePath, destPath)
+		return copyFromContainer(cmd.Context(), sourceContainerStr, sourcePath, destPath)
 	}
 
-	return copyToContainer(destContainerStr, destPath, sourcePath)
+	return copyToContainer(cmd.Context(), destContainerStr, destPath, sourcePath)
 }
 
 // containerMustExist returns an error if the specified container does not
 // exist.
-func containerMustExist(container string) error {
-	exists, err := registry.ContainerEngine().ContainerExists(registry.Context(), container, entities.ContainerExistsOptions{})
+func containerMustExist(ctx context.Context, container string) error {
+	exists, err := registry.ContainerEngine().ContainerExists(ctx, container, entities.ContainerExistsOptions{})
 	if err != nil {
 		return err
 	}
@@ -122,21 +123,21 @@ func doCopy(funcA func() error, funcB func() error) error {
 	return errorhandling.JoinErrors(copyErrors)
 }
 
-func copyContainerToContainer(sourceContainer string, sourcePath string, destContainer string, destPath string) error {
-	if err := containerMustExist(sourceContainer); err != nil {
+func copyContainerToContainer(ctx context.Context, sourceContainer string, sourcePath string, destContainer string, destPath string) error {
+	if err := containerMustExist(ctx, sourceContainer); err != nil {
 		return err
 	}
 
-	if err := containerMustExist(destContainer); err != nil {
+	if err := containerMustExist(ctx, destContainer); err != nil {
 		return err
 	}
 
-	sourceContainerInfo, err := registry.ContainerEngine().ContainerStat(registry.Context(), sourceContainer, sourcePath)
+	sourceContainerInfo, err := registry.ContainerEngine().ContainerStat(ctx, sourceContainer, sourcePath)
 	if err != nil {
 		return fmt.Errorf("%q could not be found on container %s: %w", sourcePath, sourceContainer, err)
 	}
 
-	destContainerBaseName, destContainerInfo, destResolvedToParentDir, err := resolvePathOnDestinationContainer(destContainer, destPath, false)
+	destContainerBaseName, destContainerInfo, destResolvedToParentDir, err := resolvePathOnDestinationContainer(ctx, destContainer, destPath, false)
 	if err != nil {
 		return err
 	}
@@ -167,7 +168,7 @@ func copyContainerToContainer(sourceContainer string, sourcePath string, destCon
 
 	sourceContainerCopy := func() error {
 		defer writer.Close()
-		copyFunc, err := registry.ContainerEngine().ContainerCopyToArchive(registry.Context(), sourceContainer, sourceContainerTarget, writer)
+		copyFunc, err := registry.ContainerEngine().ContainerCopyToArchive(ctx, sourceContainer, sourceContainerTarget, writer)
 		if err != nil {
 			return err
 		}
@@ -187,7 +188,7 @@ func copyContainerToContainer(sourceContainer string, sourcePath string, destCon
 			copyOptions.Rename = map[string]string{path.Base(sourceContainerTarget): destContainerBaseName}
 		}
 
-		copyFunc, err := registry.ContainerEngine().ContainerCopyFromArchive(registry.Context(), destContainer, destContainerTarget, reader, copyOptions)
+		copyFunc, err := registry.ContainerEngine().ContainerCopyFromArchive(ctx, destContainer, destContainerTarget, reader, copyOptions)
 		if err != nil {
 			return err
 		}
@@ -201,8 +202,8 @@ func copyContainerToContainer(sourceContainer string, sourcePath string, destCon
 }
 
 // copyFromContainer copies from the containerPath on the container to hostPath.
-func copyFromContainer(container string, containerPath string, hostPath string) error {
-	if err := containerMustExist(container); err != nil {
+func copyFromContainer(ctx context.Context, container string, containerPath string, hostPath string) error {
+	if err := containerMustExist(ctx, container); err != nil {
 		return err
 	}
 
@@ -212,7 +213,7 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 		hostPath = os.Stdout.Name()
 	}
 
-	containerInfo, err := registry.ContainerEngine().ContainerStat(registry.Context(), container, containerPath)
+	containerInfo, err := registry.ContainerEngine().ContainerStat(ctx, container, containerPath)
 	if err != nil {
 		return fmt.Errorf("%q could not be found on container %s: %w", containerPath, container, err)
 	}
@@ -314,7 +315,7 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 		if !hostInfo.IsDir {
 			dir = filepath.Dir(dir)
 		}
-		if err := copier.PutContext(registry.Context(), dir, "", putOptions, reader); err != nil {
+		if err := copier.PutContext(ctx, dir, "", putOptions, reader); err != nil {
 			return fmt.Errorf("copying to host: %w", err)
 		}
 		return nil
@@ -322,7 +323,7 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 
 	containerCopy := func() error {
 		defer writer.Close()
-		copyFunc, err := registry.ContainerEngine().ContainerCopyToArchive(registry.Context(), container, containerTarget, writer)
+		copyFunc, err := registry.ContainerEngine().ContainerCopyToArchive(ctx, container, containerTarget, writer)
 		if err != nil {
 			return err
 		}
@@ -335,8 +336,8 @@ func copyFromContainer(container string, containerPath string, hostPath string) 
 }
 
 // copyToContainer copies the hostPath to containerPath on the container.
-func copyToContainer(container string, containerPath string, hostPath string) error {
-	if err := containerMustExist(container); err != nil {
+func copyToContainer(ctx context.Context, container string, containerPath string, hostPath string) error {
+	if err := containerMustExist(ctx, container); err != nil {
 		return err
 	}
 
@@ -354,7 +355,7 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 		}
 	}
 
-	containerBaseName, containerInfo, containerResolvedToParentDir, err := resolvePathOnDestinationContainer(container, containerPath, isStdin)
+	containerBaseName, containerInfo, containerResolvedToParentDir, err := resolvePathOnDestinationContainer(ctx, container, containerPath, isStdin)
 	if err != nil {
 		return err
 	}
@@ -433,7 +434,7 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 		// On Windows, the root path needs to be <drive>:\, while otherwise
 		// it needs to be /. Combining filepath.VolumeName() + string(os.PathSeparator)
 		// gives us the correct path for the current OS.
-		if err := copier.GetContext(registry.Context(), filepath.VolumeName(hostTarget)+string(os.PathSeparator), "", getOptions, []string{hostTarget}, writer); err != nil {
+		if err := copier.GetContext(ctx, filepath.VolumeName(hostTarget)+string(os.PathSeparator), "", getOptions, []string{hostTarget}, writer); err != nil {
 			return fmt.Errorf("copying from host: %w", err)
 		}
 		return nil
@@ -446,7 +447,7 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 			target = path.Dir(target)
 		}
 
-		copyFunc, err := registry.ContainerEngine().ContainerCopyFromArchive(registry.Context(), container, target, reader, entities.CopyOptions{Chown: chown, NoOverwriteDirNonDir: !cpOpts.OverwriteDirNonDir})
+		copyFunc, err := registry.ContainerEngine().ContainerCopyFromArchive(ctx, container, target, reader, entities.CopyOptions{Chown: chown, NoOverwriteDirNonDir: !cpOpts.OverwriteDirNonDir})
 		if err != nil {
 			return err
 		}
@@ -462,8 +463,8 @@ func copyToContainer(container string, containerPath string, hostPath string) er
 // resolvePathOnDestinationContainer resolves the specified path on the
 // container.  If the path does not exist, it attempts to use the parent
 // directory.
-func resolvePathOnDestinationContainer(container string, containerPath string, isStdin bool) (baseName string, containerInfo *entities.ContainerStatReport, resolvedToParentDir bool, err error) {
-	containerInfo, err = registry.ContainerEngine().ContainerStat(registry.Context(), container, containerPath)
+func resolvePathOnDestinationContainer(ctx context.Context, container string, containerPath string, isStdin bool) (baseName string, containerInfo *entities.ContainerStatReport, resolvedToParentDir bool, err error) {
+	containerInfo, err = registry.ContainerEngine().ContainerStat(ctx, container, containerPath)
 	if err == nil {
 		baseName = path.Base(containerInfo.LinkTarget)
 		return baseName, containerInfo, resolvedToParentDir, err //nolint: nilerr
@@ -489,13 +490,13 @@ func resolvePathOnDestinationContainer(container string, containerPath string, i
 		baseName = path.Base(containerPath)
 	}
 
-	parentDir, err := containerParentDir(container, parentPath)
+	parentDir, err := containerParentDir(ctx, container, parentPath)
 	if err != nil {
 		err = fmt.Errorf("could not determine parent dir of %q on container %s: %w", parentPath, container, err)
 		return baseName, containerInfo, resolvedToParentDir, err
 	}
 
-	containerInfo, err = registry.ContainerEngine().ContainerStat(registry.Context(), container, parentDir)
+	containerInfo, err = registry.ContainerEngine().ContainerStat(ctx, container, parentDir)
 	if err != nil {
 		err = fmt.Errorf("%q could not be found on container %s: %w", containerPath, container, err)
 		return baseName, containerInfo, resolvedToParentDir, err
@@ -508,14 +509,14 @@ func resolvePathOnDestinationContainer(container string, containerPath string, i
 // containerParentDir returns the parent directory of the specified path on the
 // container.  If the path is relative, it will be resolved relative to the
 // container's working directory (or "/" if the work dir isn't set).
-func containerParentDir(container string, containerPath string) (string, error) {
+func containerParentDir(ctx context.Context, container string, containerPath string) (string, error) {
 	// This is specifically a path in the (linux) container, so we need to intentionally use
 	// path instead of filepath to ensure we don't try to parse container paths using the
 	// host OS conventions.
 	if path.IsAbs(containerPath) {
 		return path.Dir(containerPath), nil
 	}
-	inspectData, _, err := registry.ContainerEngine().ContainerInspect(registry.Context(), []string{container}, entities.InspectOptions{})
+	inspectData, _, err := registry.ContainerEngine().ContainerInspect(ctx, []string{container}, entities.InspectOptions{})
 	if err != nil {
 		return "", err
 	}

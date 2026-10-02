@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -32,12 +31,12 @@ func init() {
 
 var rmOptions = entities.SecretRmOptions{}
 
-func rm(_ *cobra.Command, args []string) error {
+func rm(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
 	if (len(args) > 0 && rmOptions.All) || (len(args) < 1 && !rmOptions.All) {
 		return errors.New("`podman secret rm` requires one argument, or the --all flag")
 	}
-	responses, err := registry.ContainerEngine().SecretRm(context.Background(), args, rmOptions)
+	responses, err := registry.ContainerEngine().SecretRm(cmd.Context(), args, rmOptions)
 	if err != nil {
 		return err
 	}

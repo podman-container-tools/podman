@@ -48,7 +48,7 @@ func init() {
 	unmountFlags(unmountCommand.Flags())
 }
 
-func unmount(_ *cobra.Command, args []string) error {
+func unmount(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
 	if len(args) < 1 && !unmountOpts.All {
 		return errors.New("image name or ID must be specified")
@@ -56,7 +56,7 @@ func unmount(_ *cobra.Command, args []string) error {
 	if len(args) > 0 && unmountOpts.All {
 		return errors.New("when using the --all switch, you may not pass any image names or IDs")
 	}
-	reports, err := registry.ImageEngine().Unmount(registry.Context(), args, unmountOpts)
+	reports, err := registry.ImageEngine().Unmount(cmd.Context(), args, unmountOpts)
 	if err != nil {
 		return err
 	}

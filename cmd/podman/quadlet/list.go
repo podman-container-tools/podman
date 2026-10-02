@@ -55,7 +55,7 @@ func init() {
 }
 
 func list(cmd *cobra.Command, _ []string) error {
-	quadlets, err := registry.ContainerEngine().QuadletList(registry.Context(), listOptions)
+	quadlets, err := registry.ContainerEngine().QuadletList(cmd.Context(), listOptions)
 	if err != nil {
 		return err
 	}

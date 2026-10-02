@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -96,7 +95,7 @@ func wait(cmd *cobra.Command, args []string) error {
 		return errors.New("--latest and containers cannot be used together")
 	}
 
-	responses, err := registry.ContainerEngine().ContainerWait(context.Background(), args, waitOptions)
+	responses, err := registry.ContainerEngine().ContainerWait(cmd.Context(), args, waitOptions)
 	if err != nil {
 		return err
 	}

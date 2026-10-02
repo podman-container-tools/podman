@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
@@ -135,14 +136,14 @@ func getMachines(toComplete string) ([]string, cobra.ShellCompDirective) {
 	return suggestions, cobra.ShellCompDirectiveNoFileComp
 }
 
-func initMachineEvents() {
+func initMachineEvents(ctx context.Context) {
 	sockPaths, err := resolveEventSock()
 	if err != nil {
 		logrus.Warnf("Failed to resolve machine event sockets, machine events will not be published: %v", err)
 	}
 
 	for _, path := range sockPaths {
-		conn, err := (&net.Dialer{}).DialContext(registry.Context(), "unix", path)
+		conn, err := (&net.Dialer{}).DialContext(ctx, "unix", path)
 		if err != nil {
 			logrus.Warnf("Failed to open event socket %q: %v", path, err)
 			continue
@@ -199,8 +200,8 @@ func eventSockDir() (string, error) {
 	return filepath.Join(xdg, "podman"), nil
 }
 
-func newMachineEvent(status events.Status, event events.Event) {
-	openEventSock.Do(initMachineEvents)
+func newMachineEvent(ctx context.Context, status events.Status, event events.Event) {
+	openEventSock.Do(func() { initMachineEvents(ctx) })
 
 	event.Status = status
 	event.Time = time.Now()

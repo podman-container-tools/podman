@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -81,7 +80,7 @@ func init() {
 	validate.AddLatestFlag(containerKillCommand, &killOptions.Latest)
 }
 
-func kill(_ *cobra.Command, args []string) error {
+func kill(cmd *cobra.Command, args []string) error {
 	var (
 		err  error
 		errs utils.OutputErrors
@@ -105,7 +104,7 @@ func kill(_ *cobra.Command, args []string) error {
 		args = append(args, id)
 	}
 
-	responses, err := registry.ContainerEngine().ContainerKill(context.Background(), args, killOptions)
+	responses, err := registry.ContainerEngine().ContainerKill(cmd.Context(), args, killOptions)
 	if err != nil {
 		return err
 	}

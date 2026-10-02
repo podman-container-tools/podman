@@ -2,7 +2,6 @@ package containers
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -46,7 +45,7 @@ func init() {
 	_ = pruneCommand.RegisterFlagCompletionFunc(filterFlagName, common.AutocompletePruneFilters)
 }
 
-func prune(_ *cobra.Command, _ []string) error {
+func prune(cmd *cobra.Command, _ []string) error {
 	var (
 		pruneOptions = entities.ContainerPruneOptions{}
 		err          error
@@ -68,7 +67,7 @@ func prune(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	responses, err := registry.ContainerEngine().ContainerPrune(context.Background(), pruneOptions)
+	responses, err := registry.ContainerEngine().ContainerPrune(cmd.Context(), pruneOptions)
 	if err != nil {
 		return err
 	}

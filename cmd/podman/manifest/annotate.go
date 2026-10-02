@@ -76,7 +76,7 @@ func init() {
 	_ = annotateCmd.RegisterFlagCompletionFunc(subjectFlagName, completion.AutocompleteNone)
 }
 
-func annotate(_ *cobra.Command, args []string) error {
+func annotate(cmd *cobra.Command, args []string) error {
 	var listImageSpec, instanceSpec string
 	switch len(args) {
 	case 1:
@@ -119,7 +119,7 @@ func annotate(_ *cobra.Command, args []string) error {
 	} else {
 		opts.Annotations = annotations
 	}
-	id, err := registry.ImageEngine().ManifestAnnotate(registry.Context(), listImageSpec, instanceSpec, opts)
+	id, err := registry.ImageEngine().ManifestAnnotate(cmd.Context(), listImageSpec, instanceSpec, opts)
 	if err != nil {
 		return err
 	}

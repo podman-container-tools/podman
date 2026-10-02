@@ -3,6 +3,7 @@
 package system
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -13,20 +14,19 @@ import (
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
-	"go.podman.io/podman/v6/cmd/podman/registry"
 	api "go.podman.io/podman/v6/pkg/api/server"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/domain/infra"
 	"golang.org/x/sys/unix"
 )
 
-func restService(flags *pflag.FlagSet, cfg *entities.PodmanConfig, opts entities.ServiceOptions) error {
+func restService(ctx context.Context, flags *pflag.FlagSet, cfg *entities.PodmanConfig, opts entities.ServiceOptions) error {
 	var (
 		listener net.Listener
 		err      error
 	)
 
-	libpodRuntime, err := infra.GetRuntime(registry.Context(), flags, cfg)
+	libpodRuntime, err := infra.GetRuntime(ctx, flags, cfg)
 	if err != nil {
 		return err
 	}

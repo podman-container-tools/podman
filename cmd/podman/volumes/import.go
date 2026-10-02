@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -33,7 +32,7 @@ func init() {
 	})
 }
 
-func importVol(_ *cobra.Command, args []string) error {
+func importVol(cmd *cobra.Command, args []string) error {
 	opts := entities.VolumeImportOptions{}
 
 	filepath := args[1]
@@ -53,7 +52,6 @@ func importVol(_ *cobra.Command, args []string) error {
 	}
 
 	containerEngine := registry.ContainerEngine()
-	ctx := context.Background()
 
-	return containerEngine.VolumeImport(ctx, args[0], opts)
+	return containerEngine.VolumeImport(cmd.Context(), args[0], opts)
 }

@@ -47,11 +47,11 @@ func init() {
 	mainCmd.AddCommand(lsCmd)
 }
 
-func ls(_ *cobra.Command, args []string) error {
+func ls(cmd *cobra.Command, args []string) error {
 	if podmanConfig.EngineMode != entities.TunnelMode {
 		return errors.New("only available in remote mode")
 	}
-	ctx, grpcClient, err := getGrpcClient()
+	ctx, grpcClient, err := getGrpcClient(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("setting up grpc client for podman service: %w", err)
 	}
@@ -94,11 +94,11 @@ func ls(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func noop(_ *cobra.Command, args []string) error {
+func noop(cmd *cobra.Command, args []string) error {
 	var out []byte
 	switch podmanConfig.EngineMode {
 	case entities.TunnelMode:
-		ctx, grpcClient, err := getGrpcClient()
+		ctx, grpcClient, err := getGrpcClient(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("setting up grpc client for podman service: %w", err)
 		}
@@ -124,8 +124,8 @@ func noop(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func getGrpcClient() (context.Context, *grpc.ClientConn, error) {
-	ctx, err := bindings.NewConnection(mainContext, podmanConfig.URI)
+func getGrpcClient(ctx context.Context) (context.Context, *grpc.ClientConn, error) {
+	ctx, err := bindings.NewConnection(ctx, podmanConfig.URI)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connecting to podman service: %w", err)
 	}

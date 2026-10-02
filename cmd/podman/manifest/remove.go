@@ -25,8 +25,8 @@ func init() {
 	})
 }
 
-func remove(_ *cobra.Command, args []string) error {
-	updatedListID, err := registry.ImageEngine().ManifestRemoveDigest(registry.Context(), args[0], args[1])
+func remove(cmd *cobra.Command, args []string) error {
+	updatedListID, err := registry.ImageEngine().ManifestRemoveDigest(cmd.Context(), args[0], args[1])
 	if err != nil {
 		return fmt.Errorf("removing from manifest list %s: %w", args[0], err)
 	}

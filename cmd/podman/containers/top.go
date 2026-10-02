@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -96,7 +95,7 @@ func top(cmd *cobra.Command, args []string) error {
 		topOptions.Descriptors = args[1:]
 	}
 
-	topResponse, err := registry.ContainerEngine().ContainerTop(context.Background(), topOptions)
+	topResponse, err := registry.ContainerEngine().ContainerTop(cmd.Context(), topOptions)
 	if err != nil {
 		return err
 	}

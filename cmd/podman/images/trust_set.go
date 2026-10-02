@@ -52,7 +52,7 @@ File(s) must exist before using this command`)
 	_ = setTrustCommand.RegisterFlagCompletionFunc(typeFlagName, common.AutocompleteTrustType)
 }
 
-func setTrust(_ *cobra.Command, args []string) error {
+func setTrust(cmd *cobra.Command, args []string) error {
 	validTrustTypes := []string{"accept", "insecureAcceptAnything", "reject", "signedBy", "sigstoreSigned"}
 
 	valid, err := isValidImageURI(args[0])
@@ -63,7 +63,7 @@ func setTrust(_ *cobra.Command, args []string) error {
 	if !slices.Contains(validTrustTypes, setOptions.Type) {
 		return fmt.Errorf("invalid choice: %s (choose from 'accept', 'reject', 'signedBy', 'sigstoreSigned')", setOptions.Type)
 	}
-	return registry.ImageEngine().SetTrust(registry.Context(), args, setOptions)
+	return registry.ImageEngine().SetTrust(cmd.Context(), args, setOptions)
 }
 
 var (

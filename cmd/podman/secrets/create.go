@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -62,7 +61,7 @@ func init() {
 	_ = createCmd.RegisterFlagCompletionFunc(labelFlagName, completion.AutocompleteNone)
 }
 
-func create(_ *cobra.Command, args []string) error {
+func create(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
 	// Validate that --ignore and --replace are not used together
@@ -97,7 +96,7 @@ func create(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to process labels: %w", err)
 	}
 
-	report, err := registry.ContainerEngine().SecretCreate(context.Background(), name, reader, createOpts)
+	report, err := registry.ContainerEngine().SecretCreate(cmd.Context(), name, reader, createOpts)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -119,7 +118,7 @@ func restart(cmd *cobra.Command, args []string) error {
 		restartOpts.Filters[fname] = append(restartOpts.Filters[fname], filter)
 	}
 
-	responses, err := registry.ContainerEngine().ContainerRestart(context.Background(), args, restartOpts)
+	responses, err := registry.ContainerEngine().ContainerRestart(cmd.Context(), args, restartOpts)
 	if err != nil {
 		return err
 	}

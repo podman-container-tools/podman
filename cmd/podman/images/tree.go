@@ -31,8 +31,8 @@ func init() {
 	treeCmd.Flags().BoolVar(&treeOpts.WhatRequires, "whatrequires", false, "Show all child images and layers of the specified image")
 }
 
-func tree(_ *cobra.Command, args []string) error {
-	results, err := registry.ImageEngine().Tree(registry.Context(), args[0], treeOpts)
+func tree(cmd *cobra.Command, args []string) error {
+	results, err := registry.ImageEngine().Tree(cmd.Context(), args[0], treeOpts)
 	if err != nil {
 		return err
 	}

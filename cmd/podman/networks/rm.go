@@ -59,7 +59,7 @@ func networkRm(cmd *cobra.Command, args []string) error {
 		timeout := uint(stopTimeout)
 		networkRmOptions.Timeout = &timeout
 	}
-	responses, err := registry.ContainerEngine().NetworkRm(registry.Context(), args, networkRmOptions)
+	responses, err := registry.ContainerEngine().NetworkRm(cmd.Context(), args, networkRmOptions)
 	if err != nil {
 		if (networkRmOptions.Force || networkRmOptions.Ignore) && strings.Contains(err.Error(), define.ErrNoSuchNetwork.Error()) {
 			return nil

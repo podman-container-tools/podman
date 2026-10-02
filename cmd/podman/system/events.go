@@ -1,7 +1,6 @@
 package system
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -164,7 +163,7 @@ func eventsCmd(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	err := registry.ContainerEngine().Events(context.Background(), eventOptions)
+	err := registry.ContainerEngine().Events(cmd.Context(), eventOptions)
 	if err != nil {
 		return err
 	}

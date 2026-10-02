@@ -54,7 +54,7 @@ func init() {
 	flags.StringVarP(&modifyLayerFile, "file", "f", "", "archive of contents to extract over layer")
 }
 
-func populateLayer(_ *cobra.Command, _ []string) error {
+func populateLayer(cmd *cobra.Command, _ []string) error {
 	if populateLayerOpts.ID == "" {
 		return errors.New("layer ID not specified")
 	}
@@ -66,14 +66,14 @@ func populateLayer(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	populateLayerOpts.ContentsArchive = buf
-	_, err = testingEngine.PopulateLayer(mainContext, populateLayerOpts)
+	_, err = testingEngine.PopulateLayer(cmd.Context(), populateLayerOpts)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func modifyLayer(_ *cobra.Command, _ []string) error {
+func modifyLayer(cmd *cobra.Command, _ []string) error {
 	if modifyLayerOpts.ID == "" {
 		return errors.New("layer ID not specified")
 	}
@@ -85,7 +85,7 @@ func modifyLayer(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	modifyLayerOpts.ContentsArchive = buf
-	_, err = testingEngine.ModifyLayer(mainContext, modifyLayerOpts)
+	_, err = testingEngine.ModifyLayer(cmd.Context(), modifyLayerOpts)
 	if err != nil {
 		return err
 	}

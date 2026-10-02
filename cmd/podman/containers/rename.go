@@ -1,6 +1,8 @@
 package containers
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
@@ -42,14 +44,14 @@ func init() {
 	})
 }
 
-func rename(_ *cobra.Command, args []string) error {
+func rename(cmd *cobra.Command, args []string) error {
 	args = utils.RemoveSlash(args)
-	return renameContainer(args)
+	return renameContainer(cmd.Context(), args)
 }
 
-func renameContainer(args []string) error {
+func renameContainer(ctx context.Context, args []string) error {
 	renameOpts := entities.ContainerRenameOptions{
 		NewName: args[1],
 	}
-	return registry.ContainerEngine().ContainerRename(registry.Context(), args[0], renameOpts)
+	return registry.ContainerEngine().ContainerRename(ctx, args[0], renameOpts)
 }

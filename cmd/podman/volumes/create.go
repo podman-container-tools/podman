@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -92,7 +91,7 @@ func create(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("gid") {
 		createOpts.GID = &opts.GID
 	}
-	response, err := registry.ContainerEngine().VolumeCreate(context.Background(), createOpts)
+	response, err := registry.ContainerEngine().VolumeCreate(cmd.Context(), createOpts)
 	if err != nil {
 		return err
 	}

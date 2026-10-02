@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -45,7 +44,6 @@ func init() {
 
 func export(cmd *cobra.Command, args []string) error {
 	containerEngine := registry.ContainerEngine()
-	ctx := context.Background()
 	exportOpts := entities.VolumeExportOptions{}
 
 	if targetPath != "" {
@@ -65,5 +63,5 @@ func export(cmd *cobra.Command, args []string) error {
 		exportOpts.Output = os.Stdout
 	}
 
-	return containerEngine.VolumeExport(ctx, args[0], exportOpts)
+	return containerEngine.VolumeExport(cmd.Context(), args[0], exportOpts)
 }

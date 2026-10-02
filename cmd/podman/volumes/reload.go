@@ -31,8 +31,8 @@ func init() {
 	})
 }
 
-func reload(_ *cobra.Command, _ []string) error {
-	report, err := registry.ContainerEngine().VolumeReload(registry.Context())
+func reload(cmd *cobra.Command, _ []string) error {
+	report, err := registry.ContainerEngine().VolumeReload(cmd.Context())
 	if err != nil {
 		return err
 	}

@@ -107,7 +107,7 @@ func scp(cmd *cobra.Command, args []string) (finalErr error) {
 	scpOpts.SSHMode = sshEngine
 	scpOpts.SaveFormat = format
 	scpOpts.ScpCompressionOptions = compressOpts
-	_, err = registry.ImageEngine().Scp(registry.Context(), src, dst, scpOpts)
+	_, err = registry.ImageEngine().Scp(cmd.Context(), src, dst, scpOpts)
 	if err != nil {
 		return err
 	}

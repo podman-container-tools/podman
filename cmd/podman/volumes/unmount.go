@@ -30,9 +30,9 @@ func init() {
 	})
 }
 
-func volumeUnmount(_ *cobra.Command, args []string) error {
+func volumeUnmount(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
-	reports, err := registry.ContainerEngine().VolumeUnmount(registry.Context(), args)
+	reports, err := registry.ContainerEngine().VolumeUnmount(cmd.Context(), args)
 	if err != nil {
 		return err
 	}

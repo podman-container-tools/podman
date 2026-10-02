@@ -1,7 +1,6 @@
 package healthcheck
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -34,8 +33,8 @@ func init() {
 		"Exit with code 0 regardless of healthcheck result or if the container is still in startup period")
 }
 
-func run(_ *cobra.Command, args []string) error {
-	response, err := registry.ContainerEngine().HealthCheckRun(context.Background(), args[0], entities.HealthCheckOptions{})
+func run(cmd *cobra.Command, args []string) error {
+	response, err := registry.ContainerEngine().HealthCheckRun(cmd.Context(), args[0], entities.HealthCheckOptions{})
 	if err != nil {
 		return err
 	}

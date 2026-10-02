@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -42,9 +41,9 @@ func init() {
 	validate.AddLatestFlag(pauseCommand, &pauseOptions.Latest)
 }
 
-func pause(_ *cobra.Command, args []string) error {
+func pause(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
-	responses, err := registry.ContainerEngine().PodPause(context.Background(), args, pauseOptions)
+	responses, err := registry.ContainerEngine().PodPause(cmd.Context(), args, pauseOptions)
 	if err != nil {
 		return err
 	}

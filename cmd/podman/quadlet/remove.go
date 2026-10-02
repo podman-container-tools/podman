@@ -47,12 +47,12 @@ func init() {
 	rmFlags(quadletRmCmd)
 }
 
-func rm(_ *cobra.Command, args []string) error {
+func rm(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 && !removeOptions.All {
 		return errors.New("at least one quadlet file must be selected")
 	}
 	var errs utils.OutputErrors
-	removeReport, err := registry.ContainerEngine().QuadletRemove(registry.Context(), args, removeOptions)
+	removeReport, err := registry.ContainerEngine().QuadletRemove(cmd.Context(), args, removeOptions)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("unable to remove Quadlet: %w", err))
 	}

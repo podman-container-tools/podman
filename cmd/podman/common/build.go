@@ -215,7 +215,7 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 	}()
 	if len(args) > 0 {
 		// The context directory could be a URL.  Try to handle that.
-		tempDir, subDir, err := tmpdir.ForURL(registry.Context(), "", "buildah", args[0], &tmpdir.URLOptions{
+		tempDir, subDir, err := tmpdir.ForURL(cmd.Context(), "", "buildah", args[0], &tmpdir.URLOptions{
 			InsecureSkipTLSVerify: types.NewOptionalBool(!buildOpts.BudResults.TLSVerify),
 			Proxy:                 http.ProxyFromEnvironment,
 		})

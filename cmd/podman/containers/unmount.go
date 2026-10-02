@@ -74,10 +74,10 @@ func init() {
 	validate.AddLatestFlag(containerUnmountCommand, &unmountOpts.Latest)
 }
 
-func unmount(_ *cobra.Command, args []string) error {
+func unmount(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
 	args = utils.RemoveSlash(args)
-	reports, err := registry.ContainerEngine().ContainerUnmount(registry.Context(), args, unmountOpts)
+	reports, err := registry.ContainerEngine().ContainerUnmount(cmd.Context(), args, unmountOpts)
 	if err != nil {
 		return err
 	}

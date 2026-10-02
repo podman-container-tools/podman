@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -42,7 +41,7 @@ func exists(cmd *cobra.Command, args []string) error {
 	options := entities.ContainerExistsOptions{
 		External: external,
 	}
-	response, err := registry.ContainerEngine().ContainerExists(context.Background(), strings.TrimPrefix(args[0], "/"), options)
+	response, err := registry.ContainerEngine().ContainerExists(cmd.Context(), strings.TrimPrefix(args[0], "/"), options)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package manifest
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -34,8 +33,8 @@ func init() {
 	flags.BoolVarP(&rmOptions.Ignore, "ignore", "i", false, "Ignore errors when a specified manifest is missing")
 }
 
-func rm(_ *cobra.Command, args []string) error {
-	report, rmErrors := registry.ImageEngine().ManifestRm(context.Background(), args, rmOptions)
+func rm(cmd *cobra.Command, args []string) error {
+	report, rmErrors := registry.ImageEngine().ManifestRm(cmd.Context(), args, rmOptions)
 	if report != nil {
 		for _, u := range report.Untagged {
 			fmt.Println("Untagged: " + u)

@@ -170,7 +170,7 @@ func systemd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s and %s are redundant and cannot be used together", stopTimeoutFlagName, stopTimeoutCompatFlagName)
 	}
 
-	reports, err := registry.ContainerEngine().GenerateSystemd(registry.Context(), args[0], systemdOptions)
+	reports, err := registry.ContainerEngine().GenerateSystemd(cmd.Context(), args[0], systemdOptions)
 	if err != nil {
 		return err
 	}

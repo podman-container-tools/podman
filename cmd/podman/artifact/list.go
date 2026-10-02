@@ -88,7 +88,7 @@ func list(cmd *cobra.Command, _ []string) error {
 		return errors.New("quiet and format flags cannot be used together")
 	}
 
-	reports, err := registry.ImageEngine().ArtifactList(registry.Context(), entities.ArtifactListOptions{})
+	reports, err := registry.ImageEngine().ArtifactList(cmd.Context(), entities.ArtifactListOptions{})
 	if err != nil {
 		return err
 	}

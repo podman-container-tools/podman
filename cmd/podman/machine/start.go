@@ -65,7 +65,7 @@ func start(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("Machine %q started successfully\n", vmName)
-	newMachineEvent(events.Start, events.Event{Name: vmName})
+	newMachineEvent(cmd.Context(), events.Start, events.Event{Name: vmName})
 	return nil
 }
 

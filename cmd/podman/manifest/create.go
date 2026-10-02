@@ -77,7 +77,7 @@ func create(cmd *cobra.Command, args []string) error {
 		manifestCreateOpts.Annotations[k] = v
 	}
 
-	imageID, err := registry.ImageEngine().ManifestCreate(registry.Context(), args[0], args[1:], manifestCreateOpts.ManifestCreateOptions)
+	imageID, err := registry.ImageEngine().ManifestCreate(cmd.Context(), args[0], args[1:], manifestCreateOpts.ManifestCreateOptions)
 	if err != nil {
 		return err
 	}

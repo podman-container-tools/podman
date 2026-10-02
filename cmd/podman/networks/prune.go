@@ -51,7 +51,7 @@ func init() {
 	networkPruneFlags(networkPruneCommand, flags)
 }
 
-func networkPrune(_ *cobra.Command, _ []string) error {
+func networkPrune(cmd *cobra.Command, _ []string) error {
 	var err error
 	if !force {
 		reader := bufio.NewReader(os.Stdin)
@@ -69,7 +69,7 @@ func networkPrune(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	responses, err := registry.ContainerEngine().NetworkPrune(registry.Context(), networkPruneOptions)
+	responses, err := registry.ContainerEngine().NetworkPrune(cmd.Context(), networkPruneOptions)
 	if err != nil {
 		setExitCode(err)
 		return err

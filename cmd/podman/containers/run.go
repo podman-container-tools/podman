@@ -155,7 +155,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if cliVals.Replace {
-		if err := replaceContainer(cliVals.Name); err != nil {
+		if err := replaceContainer(cmd.Context(), cliVals.Name); err != nil {
 			return err
 		}
 	}
@@ -230,7 +230,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	report, err := registry.ContainerEngine().ContainerRun(registry.Context(), runOpts)
+	report, err := registry.ContainerEngine().ContainerRun(cmd.Context(), runOpts)
 	// report.ExitCode is set by ContainerRun even it returns an error
 	if report != nil {
 		registry.SetExitCode(report.ExitCode)
@@ -253,7 +253,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	if runRmi {
-		_, rmErrors := registry.ImageEngine().Remove(registry.Context(), []string{imageName}, entities.ImageRemoveOptions{Ignore: true})
+		_, rmErrors := registry.ImageEngine().Remove(cmd.Context(), []string{imageName}, entities.ImageRemoveOptions{Ignore: true})
 		for _, err := range rmErrors {
 			logrus.Warnf("Failed to remove image: %v", err)
 		}

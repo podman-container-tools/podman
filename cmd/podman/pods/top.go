@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -55,7 +54,7 @@ func init() {
 	validate.AddLatestFlag(topCommand, &topOptions.Latest)
 }
 
-func top(_ *cobra.Command, args []string) error {
+func top(cmd *cobra.Command, args []string) error {
 	if topOptions.ListDescriptors {
 		descriptors, err := util.GetContainerPidInformationDescriptors() //nolint:staticcheck,nolintlint // false-positives on windows because this always errors there
 		if err != nil {                                                  //nolint:staticcheck,nolintlint
@@ -76,7 +75,7 @@ func top(_ *cobra.Command, args []string) error {
 		topOptions.Descriptors = args[1:]
 	}
 
-	topResponse, err := registry.ContainerEngine().PodTop(context.Background(), topOptions)
+	topResponse, err := registry.ContainerEngine().PodTop(cmd.Context(), topOptions)
 	if err != nil {
 		return err
 	}

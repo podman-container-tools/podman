@@ -63,7 +63,7 @@ func mount(cmd *cobra.Command, args []string) error {
 		return errors.New("when using the --all switch, you may not pass any image names or IDs")
 	}
 
-	reports, err := registry.ImageEngine().Mount(registry.Context(), args, mountOpts)
+	reports, err := registry.ImageEngine().Mount(cmd.Context(), args, mountOpts)
 	if err != nil {
 		return err
 	}

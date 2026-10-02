@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -96,7 +95,7 @@ func init() {
 	commitFlags(containerCommitCommand)
 }
 
-func commit(_ *cobra.Command, args []string) error {
+func commit(cmd *cobra.Command, args []string) error {
 	container := strings.TrimPrefix(args[0], "/")
 	if len(args) == 2 {
 		commitOptions.ImageName = args[1]
@@ -111,7 +110,7 @@ func commit(_ *cobra.Command, args []string) error {
 		}
 		commitOptions.Config = cfg
 	}
-	response, err := registry.ContainerEngine().ContainerCommit(context.Background(), container, commitOptions)
+	response, err := registry.ContainerEngine().ContainerCommit(cmd.Context(), container, commitOptions)
 	if err != nil {
 		return err
 	}

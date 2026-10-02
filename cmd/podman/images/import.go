@@ -1,7 +1,6 @@
 package images
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -92,7 +91,7 @@ func importFlags(cmd *cobra.Command) {
 	}
 }
 
-func importCon(_ *cobra.Command, args []string) error {
+func importCon(cmd *cobra.Command, args []string) error {
 	var (
 		source    string
 		reference string
@@ -139,7 +138,7 @@ func importCon(_ *cobra.Command, args []string) error {
 	importOpts.Source = source
 	importOpts.Reference = reference
 
-	response, err := registry.ImageEngine().Import(context.Background(), importOpts)
+	response, err := registry.ImageEngine().Import(cmd.Context(), importOpts)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -202,7 +201,7 @@ func update(cmd *cobra.Command, args []string) error {
 		opts.Rlimits = rlimits
 	}
 
-	rep, err := registry.ContainerEngine().ContainerUpdate(context.Background(), opts)
+	rep, err := registry.ContainerEngine().ContainerUpdate(cmd.Context(), opts)
 	if err != nil {
 		return err
 	}

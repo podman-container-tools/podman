@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -86,7 +85,7 @@ func login(cmd *cobra.Command, args []string) error {
 		inspectOpts := entities.SecretInspectOptions{
 			ShowSecret: true,
 		}
-		inspected, errs, _ := registry.ContainerEngine().SecretInspect(context.Background(), []string{secretName}, inspectOpts)
+		inspected, errs, _ := registry.ContainerEngine().SecretInspect(cmd.Context(), []string{secretName}, inspectOpts)
 
 		if len(errs) > 0 && errs[0] != nil {
 			return errs[0]
@@ -105,5 +104,5 @@ func login(cmd *cobra.Command, args []string) error {
 		BaseTLSConfig:               baseTLSConfig.TLSConfig(),
 	}
 	loginOptions.GetLoginSet = cmd.Flag("get-login").Changed
-	return auth.Login(context.Background(), sysCtx, &loginOptions.LoginOptions, args)
+	return auth.Login(cmd.Context(), sysCtx, &loginOptions.LoginOptions, args)
 }

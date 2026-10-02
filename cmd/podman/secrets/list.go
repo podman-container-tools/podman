@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -69,7 +68,7 @@ func ls(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	responses, err := registry.ContainerEngine().SecretList(context.Background(), lsOpts)
+	responses, err := registry.ContainerEngine().SecretList(cmd.Context(), lsOpts)
 	if err != nil {
 		return err
 	}

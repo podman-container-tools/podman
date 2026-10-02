@@ -13,8 +13,8 @@ import (
 	"go.podman.io/storage/pkg/archive"
 )
 
-func Diff(_ *cobra.Command, args []string, options entities.DiffOptions) error {
-	results, err := registry.ContainerEngine().Diff(registry.Context(), args, options)
+func Diff(cmd *cobra.Command, args []string, options entities.DiffOptions) error {
+	results, err := registry.ContainerEngine().Diff(cmd.Context(), args, options)
 	if err != nil {
 		return err
 	}

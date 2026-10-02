@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -47,9 +46,9 @@ func init() {
 	validate.AddLatestFlag(killCommand, &killOpts.Latest)
 }
 
-func kill(_ *cobra.Command, args []string) error {
+func kill(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
-	responses, err := registry.ContainerEngine().PodKill(context.Background(), args, killOpts)
+	responses, err := registry.ContainerEngine().PodKill(cmd.Context(), args, killOpts)
 	if err != nil {
 		return err
 	}

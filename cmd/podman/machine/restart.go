@@ -40,7 +40,7 @@ func init() {
 	flags.BoolVarP(&restartOpts.Quiet, quietFlagName, "q", false, "Suppress machine restarting status output")
 }
 
-func restart(_ *cobra.Command, args []string) error {
+func restart(cmd *cobra.Command, args []string) error {
 	restartOpts.NoInfo = restartOpts.Quiet || restartOpts.NoInfo
 	vmName := defaultMachineName
 	if len(args) > 0 && len(args[0]) > 0 {
@@ -62,6 +62,6 @@ func restart(_ *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Machine %q restarted successfully\n", vmName)
 
-	newMachineEvent(events.Restart, events.Event{Name: vmName})
+	newMachineEvent(cmd.Context(), events.Restart, events.Event{Name: vmName})
 	return nil
 }

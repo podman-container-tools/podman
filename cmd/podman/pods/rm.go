@@ -87,7 +87,7 @@ func rm(cmd *cobra.Command, args []string) error {
 		rmOptions.Ignore = true
 	}
 
-	errs = append(errs, removePods(args, rmOptions.PodRmOptions, true)...)
+	errs = append(errs, removePods(cmd.Context(), args, rmOptions.PodRmOptions, true)...)
 
 	for _, idFile := range rmOptions.PodIDFiles {
 		id, err := specgenutil.ReadPodIDFile(idFile)
@@ -95,7 +95,7 @@ func rm(cmd *cobra.Command, args []string) error {
 			errs = append(errs, err)
 			continue
 		}
-		rmErrs := removePods([]string{id}, rmOptions.PodRmOptions, true)
+		rmErrs := removePods(cmd.Context(), []string{id}, rmOptions.PodRmOptions, true)
 		errs = append(errs, rmErrs...)
 		if len(rmErrs) == 0 {
 			if err := os.Remove(idFile); err != nil {
@@ -109,10 +109,10 @@ func rm(cmd *cobra.Command, args []string) error {
 
 // removePods removes the specified pods (names or IDs).  Allows for sharing
 // pod-removal logic across commands.
-func removePods(namesOrIDs []string, rmOptions entities.PodRmOptions, printIDs bool) utils.OutputErrors {
+func removePods(ctx context.Context, namesOrIDs []string, rmOptions entities.PodRmOptions, printIDs bool) utils.OutputErrors {
 	var errs utils.OutputErrors
 
-	responses, err := registry.ContainerEngine().PodRm(context.Background(), namesOrIDs, rmOptions)
+	responses, err := registry.ContainerEngine().PodRm(ctx, namesOrIDs, rmOptions)
 	if err != nil {
 		setExitCode(err)
 		errs = append(errs, err)

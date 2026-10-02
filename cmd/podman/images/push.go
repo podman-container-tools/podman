@@ -246,7 +246,7 @@ func imagePush(cmd *cobra.Command, args []string) error {
 
 	// Let's do all the remaining Yoga in the API to prevent us from scattering
 	// logic across (too) many parts of the code.
-	report, err := registry.ImageEngine().Push(registry.Context(), source, destination, pushOptions.ImagePushOptions)
+	report, err := registry.ImageEngine().Push(cmd.Context(), source, destination, pushOptions.ImagePushOptions)
 	if err != nil {
 		return err
 	}

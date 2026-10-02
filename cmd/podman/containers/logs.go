@@ -121,7 +121,7 @@ func logsFlags(cmd *cobra.Command) {
 	_ = flags.MarkHidden("details")
 }
 
-func logs(_ *cobra.Command, args []string) error {
+func logs(cmd *cobra.Command, args []string) error {
 	args = utils.RemoveSlash(args)
 	if logsOptions.SinceRaw != "" {
 		// parse time, error out if something is wrong
@@ -141,5 +141,5 @@ func logs(_ *cobra.Command, args []string) error {
 	}
 	logsOptions.StdoutWriter = os.Stdout
 	logsOptions.StderrWriter = os.Stderr
-	return registry.ContainerEngine().ContainerLogs(registry.Context(), args, logsOptions.ContainerLogsOptions)
+	return registry.ContainerEngine().ContainerLogs(cmd.Context(), args, logsOptions.ContainerLogsOptions)
 }

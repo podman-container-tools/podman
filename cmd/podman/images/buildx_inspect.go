@@ -39,8 +39,8 @@ func init() {
 	})
 }
 
-func runBuildxInspect(_ *cobra.Command, _ []string) error {
-	info, err := registry.ContainerEngine().Info(registry.Context())
+func runBuildxInspect(cmd *cobra.Command, _ []string) error {
+	info, err := registry.ContainerEngine().Info(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("retrieving podman information: %w", err)
 	}

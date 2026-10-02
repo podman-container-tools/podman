@@ -44,9 +44,9 @@ func init() {
 	flags.BoolVarP(&forceFlag, "force", "f", false, "Do not prompt for confirmation")
 }
 
-func reset(_ *cobra.Command, _ []string) {
+func reset(cmd *cobra.Command, _ []string) {
 	// Get all the external containers in use
-	listCtn, err := registry.ContainerEngine().ContainerListExternal(registry.Context())
+	listCtn, err := registry.ContainerEngine().ContainerListExternal(cmd.Context())
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -62,7 +62,7 @@ func reset(_ *cobra.Command, _ []string) {
         - all machines
         - all volumes`)
 
-		info, _ := registry.ContainerEngine().Info(registry.Context())
+		info, _ := registry.ContainerEngine().Info(cmd.Context())
 		// lets not hard fail in case of an error
 		if info != nil {
 			fmt.Printf("        - the graphRoot directory: %q\n", info.Store.GraphRoot)
@@ -93,7 +93,7 @@ func reset(_ *cobra.Command, _ []string) {
 	}
 
 	// ContainerEngine() is unusable and shut down after this.
-	if err := registry.ContainerEngine().Reset(registry.Context()); err != nil {
+	if err := registry.ContainerEngine().Reset(cmd.Context()); err != nil {
 		logrus.Error(err)
 	}
 

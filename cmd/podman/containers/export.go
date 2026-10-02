@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"errors"
 	"os"
 	"strings"
@@ -68,7 +67,7 @@ func init() {
 	exportFlags(containerExportCommand)
 }
 
-func export(_ *cobra.Command, args []string) error {
+func export(cmd *cobra.Command, args []string) error {
 	if len(outputFile) == 0 {
 		file := os.Stdout
 		if term.IsTerminal(int(file.Fd())) {
@@ -88,5 +87,5 @@ func export(_ *cobra.Command, args []string) error {
 		defer file.Close()
 		exportOpts.Output = file
 	}
-	return registry.ContainerEngine().ContainerExport(context.Background(), strings.TrimPrefix(args[0], "/"), exportOpts)
+	return registry.ContainerEngine().ContainerExport(cmd.Context(), strings.TrimPrefix(args[0], "/"), exportOpts)
 }

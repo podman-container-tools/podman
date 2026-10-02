@@ -207,7 +207,7 @@ func create(cmd *cobra.Command, args []string) error {
 	createOptions.CreateCommand = os.Args
 
 	if replace {
-		if err := replacePod(createOptions.Name); err != nil {
+		if err := replacePod(cmd.Context(), createOptions.Name); err != nil {
 			return err
 		}
 	}
@@ -306,7 +306,7 @@ loop:
 		}
 	}
 	PodSpec := entities.PodSpec{PodSpecGen: *podSpec}
-	response, err := registry.ContainerEngine().PodCreate(context.Background(), PodSpec)
+	response, err := registry.ContainerEngine().PodCreate(cmd.Context(), PodSpec)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ loop:
 	return nil
 }
 
-func replacePod(name string) error {
+func replacePod(ctx context.Context, name string) error {
 	if len(name) == 0 {
 		return errors.New("cannot replace pod without --name being set")
 	}
@@ -328,6 +328,6 @@ func replacePod(name string) error {
 		Force:  true, // stop and remove pod
 		Ignore: true, // ignore if pod doesn't exist
 	}
-	errs := removePods([]string{name}, rmOptions, false)
+	errs := removePods(ctx, []string{name}, rmOptions, false)
 	return errs.PrintErrors()
 }

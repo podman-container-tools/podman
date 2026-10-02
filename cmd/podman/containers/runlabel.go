@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -95,5 +94,5 @@ func runlabel(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	return registry.ContainerEngine().ContainerRunlabel(context.Background(), strings.TrimPrefix(args[0], "/"), args[1], args[2:], runlabelOptions.ContainerRunlabelOptions)
+	return registry.ContainerEngine().ContainerRunlabel(cmd.Context(), strings.TrimPrefix(args[0], "/"), args[1], args[2:], runlabelOptions.ContainerRunlabelOptions)
 }

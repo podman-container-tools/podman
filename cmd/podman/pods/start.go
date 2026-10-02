@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -57,7 +56,7 @@ func init() {
 	validate.AddLatestFlag(startCommand, &startOptions.Latest)
 }
 
-func start(_ *cobra.Command, args []string) error {
+func start(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
 
 	ids, err := specgenutil.ReadPodIDFiles(startOptions.PodIDFiles)
@@ -66,7 +65,7 @@ func start(_ *cobra.Command, args []string) error {
 	}
 	args = append(args, ids...)
 
-	responses, err := registry.ContainerEngine().PodStart(context.Background(), args, startOptions.PodStartOptions)
+	responses, err := registry.ContainerEngine().PodStart(cmd.Context(), args, startOptions.PodStartOptions)
 	if err != nil {
 		return err
 	}

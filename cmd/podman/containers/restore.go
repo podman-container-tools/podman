@@ -1,7 +1,6 @@
 package containers
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -106,7 +105,7 @@ func restore(cmd *cobra.Command, args []string) error {
 	// Check if the container exists (#15055)
 	exists := &entities.BoolReport{Value: false}
 	for _, ctr := range args {
-		exists, e = registry.ContainerEngine().ContainerExists(registry.Context(), ctr, entities.ContainerExistsOptions{})
+		exists, e = registry.ContainerEngine().ContainerExists(cmd.Context(), ctr, entities.ContainerExistsOptions{})
 		if e != nil {
 			return e
 		}
@@ -117,7 +116,7 @@ func restore(cmd *cobra.Command, args []string) error {
 
 	if !exists.Value {
 		// Find out if this is an image
-		restoreOptions.CheckpointImage, e = utils.IsCheckpointImage(context.Background(), args)
+		restoreOptions.CheckpointImage, e = utils.IsCheckpointImage(cmd.Context(), args)
 		if e != nil {
 			return e
 		}
@@ -172,7 +171,7 @@ func restore(cmd *cobra.Command, args []string) error {
 	if argLen > 1 && restoreOptions.Name != "" {
 		return fmt.Errorf("--name can only be used with one checkpoint image")
 	}
-	responses, err := registry.ContainerEngine().ContainerRestore(context.Background(), args, restoreOptions)
+	responses, err := registry.ContainerEngine().ContainerRestore(cmd.Context(), args, restoreOptions)
 	if err != nil {
 		return err
 	}

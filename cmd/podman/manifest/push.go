@@ -190,7 +190,7 @@ func push(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	digest, err := registry.ImageEngine().ManifestPush(registry.Context(), listImageSpec, destSpec, manifestPushOpts.ImagePushOptions)
+	digest, err := registry.ImageEngine().ManifestPush(cmd.Context(), listImageSpec, destSpec, manifestPushOpts.ImagePushOptions)
 	if err != nil {
 		return err
 	}

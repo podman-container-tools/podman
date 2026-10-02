@@ -2,6 +2,7 @@ package kube
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -301,11 +302,11 @@ func play(cmd *cobra.Command, args []string) error {
 	}
 
 	if playOptions.Down {
-		return teardown(reader, entities.PlayKubeDownOptions{Force: playOptions.Force})
+		return teardown(cmd.Context(), reader, entities.PlayKubeDownOptions{Force: playOptions.Force})
 	}
 
 	if playOptions.Replace {
-		if err := teardown(reader, entities.PlayKubeDownOptions{Force: playOptions.Force}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
+		if err := teardown(cmd.Context(), reader, entities.PlayKubeDownOptions{Force: playOptions.Force}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
 			return err
 		}
 		if _, err := reader.Seek(0, 0); err != nil {
@@ -339,13 +340,13 @@ func play(cmd *cobra.Command, args []string) error {
 			<-ch
 			// clean up any volumes that were created as well
 			fmt.Println("\nCleaning up containers, pods, and volumes...")
-			if err := teardown(teardownReader, entities.PlayKubeDownOptions{Force: true}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
+			if err := teardown(cmd.Context(), teardownReader, entities.PlayKubeDownOptions{Force: true}); err != nil && !errorhandling.Contains(err, define.ErrNoSuchPod) {
 				teardownErr = fmt.Errorf("error during cleanup: %w", err)
 			}
 		})
 	}
 
-	if playErr := kubeplay(reader); playErr != nil {
+	if playErr := kubeplay(cmd.Context(), reader); playErr != nil {
 		// FIXME: The cleanup logic below must be fixed to only remove
 		// resources that were created before a failure.  Otherwise,
 		// rerunning the same YAML file will cause an error and remove
@@ -433,14 +434,14 @@ func readerFromArg(fileOrURL string) (io.ReadCloser, error) {
 	}
 }
 
-func teardown(body io.Reader, options entities.PlayKubeDownOptions) error {
+func teardown(ctx context.Context, body io.Reader, options entities.PlayKubeDownOptions) error {
 	var (
 		podStopErrors utils.OutputErrors
 		podRmErrors   utils.OutputErrors
 		volRmErrors   utils.OutputErrors
 		secRmErrors   utils.OutputErrors
 	)
-	reports, err := registry.ContainerEngine().PlayKubeDown(registry.Context(), body, options)
+	reports, err := registry.ContainerEngine().PlayKubeDown(ctx, body, options)
 	if err != nil {
 		return err
 	}
@@ -506,8 +507,8 @@ func teardown(body io.Reader, options entities.PlayKubeDownOptions) error {
 	return volRmErrors.PrintErrors()
 }
 
-func kubeplay(body io.Reader) error {
-	report, err := registry.ContainerEngine().PlayKube(registry.Context(), body, playOptions.PlayKubeOptions)
+func kubeplay(ctx context.Context, body io.Reader) error {
+	report, err := registry.ContainerEngine().PlayKube(ctx, body, playOptions.PlayKubeOptions)
 	if err != nil {
 		return err
 	}
@@ -520,7 +521,7 @@ func kubeplay(body io.Reader) error {
 
 	// If --wait=true, we need wait for the service container to exit so that we know that the pod has exited and we can clean up
 	if playOptions.Wait {
-		_, err := registry.ContainerEngine().ContainerWait(registry.Context(), []string{report.ServiceContainerID}, entities.WaitOptions{})
+		_, err := registry.ContainerEngine().ContainerWait(ctx, []string{report.ServiceContainerID}, entities.WaitOptions{})
 		if err != nil {
 			return err
 		}

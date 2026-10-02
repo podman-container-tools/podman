@@ -75,7 +75,7 @@ func infoFlags(cmd *cobra.Command) {
 }
 
 func info(cmd *cobra.Command, _ []string) error {
-	info, err := registry.ContainerEngine().Info(registry.Context())
+	info, err := registry.ContainerEngine().Info(cmd.Context())
 	if err != nil {
 		return err
 	}

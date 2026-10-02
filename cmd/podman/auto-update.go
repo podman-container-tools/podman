@@ -87,7 +87,7 @@ func autoUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	allReports, failures := registry.ContainerEngine().AutoUpdate(registry.Context(), autoUpdateOptions.AutoUpdateOptions)
+	allReports, failures := registry.ContainerEngine().AutoUpdate(cmd.Context(), autoUpdateOptions.AutoUpdateOptions)
 	if allReports == nil {
 		return errorhandling.JoinErrors(failures)
 	}

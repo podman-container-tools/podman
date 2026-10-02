@@ -3,7 +3,6 @@
 package os
 
 import (
-	"context"
 	"errors"
 
 	"github.com/blang/semver/v4"
@@ -57,7 +56,7 @@ func init() {
 	flags.BoolVar(&opts.restart, restartFlagName, false, "Restart VM to upgrade")
 }
 
-func upgrade(_ *cobra.Command, args []string) error {
+func upgrade(cmd *cobra.Command, args []string) error {
 	var vmName string
 	if len(args) == 1 {
 		vmName = args[0]
@@ -94,5 +93,5 @@ func upgrade(_ *cobra.Command, args []string) error {
 		return errors.New("--restart cannot be used with --dry-run or --format")
 	}
 
-	return osManager.Upgrade(context.Background(), upgradeOpts)
+	return osManager.Upgrade(cmd.Context(), upgradeOpts)
 }

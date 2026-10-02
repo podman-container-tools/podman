@@ -1,7 +1,6 @@
 package images
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -137,7 +136,7 @@ func save(cmd *cobra.Command, args []string) (finalErr error) {
 		tags = args[1:]
 	}
 
-	err := registry.ImageEngine().Save(context.Background(), args[0], tags, saveOpts)
+	err := registry.ImageEngine().Save(cmd.Context(), args[0], tags, saveOpts)
 	if err == nil {
 		succeeded = true
 	}

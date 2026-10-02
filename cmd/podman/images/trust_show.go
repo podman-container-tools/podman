@@ -45,7 +45,7 @@ func init() {
 }
 
 func showTrust(cmd *cobra.Command, args []string) error {
-	trust, err := registry.ImageEngine().ShowTrust(registry.Context(), args, showTrustOptions)
+	trust, err := registry.ImageEngine().ShowTrust(cmd.Context(), args, showTrustOptions)
 	if err != nil {
 		return err
 	}

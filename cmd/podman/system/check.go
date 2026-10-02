@@ -1,7 +1,6 @@
 package system
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -55,7 +54,7 @@ func check(cmd *cobra.Command, _ []string) error {
 		}
 		checkOptions.UnreferencedLayerMaximumAge = &maxAge
 	}
-	response, err := registry.ContainerEngine().SystemCheck(context.Background(), checkOptions)
+	response, err := registry.ContainerEngine().SystemCheck(cmd.Context(), checkOptions)
 	if err != nil {
 		return err
 	}
@@ -74,7 +73,7 @@ func check(cmd *cobra.Command, _ []string) error {
 	recheckOptions := checkOptions
 	recheckOptions.Repair = false
 	recheckOptions.RepairLossy = false
-	if response, err = registry.ContainerEngine().SystemCheck(context.Background(), recheckOptions); err != nil {
+	if response, err = registry.ContainerEngine().SystemCheck(cmd.Context(), recheckOptions); err != nil {
 		return err
 	}
 	if response.Errors {

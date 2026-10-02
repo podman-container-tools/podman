@@ -304,7 +304,7 @@ func initMachine(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	newMachineEvent(events.Init, events.Event{Name: initOpts.Name})
+	newMachineEvent(cmd.Context(), events.Init, events.Event{Name: initOpts.Name})
 	fmt.Println("Machine init complete")
 
 	if now {

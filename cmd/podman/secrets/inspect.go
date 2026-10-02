@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -60,7 +59,7 @@ func init() {
 }
 
 func inspect(cmd *cobra.Command, args []string) error {
-	inspected, errs, _ := registry.ContainerEngine().SecretInspect(context.Background(), args, inspectOpts)
+	inspected, errs, _ := registry.ContainerEngine().SecretInspect(cmd.Context(), args, inspectOpts)
 
 	// always print valid list
 	if len(inspected) == 0 {

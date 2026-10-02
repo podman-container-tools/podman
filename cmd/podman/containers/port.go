@@ -65,7 +65,7 @@ func init() {
 	validate.AddLatestFlag(containerPortCommand, &portOpts.Latest)
 }
 
-func port(_ *cobra.Command, args []string) error {
+func port(cmd *cobra.Command, args []string) error {
 	var (
 		container string
 		err       error
@@ -106,7 +106,7 @@ func port(_ *cobra.Command, args []string) error {
 		userProto = fields[1]
 	}
 
-	reports, err := registry.ContainerEngine().ContainerPort(registry.Context(), container, portOpts)
+	reports, err := registry.ContainerEngine().ContainerPort(cmd.Context(), container, portOpts)
 	if err != nil {
 		return err
 	}

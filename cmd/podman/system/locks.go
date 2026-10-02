@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -13,8 +14,8 @@ var locksCommand = &cobra.Command{
 	Short:  "Debug Libpod's use of locks, identifying any potential conflicts",
 	Args:   validate.NoArgs,
 	Hidden: true,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		return runLocks()
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runLocks(cmd.Context())
 	},
 	Example: "podman system locks",
 }
@@ -26,8 +27,8 @@ func init() {
 	})
 }
 
-func runLocks() error {
-	report, err := registry.ContainerEngine().Locks(registry.Context())
+func runLocks(ctx context.Context) error {
+	report, err := registry.ContainerEngine().Locks(ctx)
 	if err != nil {
 		return err
 	}

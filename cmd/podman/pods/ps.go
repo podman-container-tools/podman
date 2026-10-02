@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -88,7 +87,7 @@ func pods(cmd *cobra.Command, _ []string) error {
 			psInput.Filters[fname] = append(psInput.Filters[fname], filter)
 		}
 	}
-	responses, err := registry.ContainerEngine().PodPs(context.Background(), psInput)
+	responses, err := registry.ContainerEngine().PodPs(cmd.Context(), psInput)
 	if err != nil {
 		return err
 	}

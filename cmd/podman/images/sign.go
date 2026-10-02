@@ -70,6 +70,6 @@ func sign(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	_, err := registry.ImageEngine().Sign(registry.Context(), args, signOptions)
+	_, err := registry.ImageEngine().Sign(cmd.Context(), args, signOptions)
 	return err
 }

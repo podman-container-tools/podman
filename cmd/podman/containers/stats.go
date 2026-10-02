@@ -122,7 +122,7 @@ func stats(cmd *cobra.Command, args []string) error {
 		All:      statsOptions.All,
 	}
 	args = putils.RemoveSlash(args)
-	statsChan, err := registry.ContainerEngine().ContainerStats(registry.Context(), args, opts)
+	statsChan, err := registry.ContainerEngine().ContainerStats(cmd.Context(), args, opts)
 	if err != nil {
 		return err
 	}

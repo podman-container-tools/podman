@@ -2,7 +2,6 @@ package pods
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -40,7 +39,7 @@ func init() {
 	flags.BoolVarP(&pruneOptions.Force, "force", "f", false, "Do not prompt for confirmation.  The default is false")
 }
 
-func prune(_ *cobra.Command, _ []string) error {
+func prune(cmd *cobra.Command, _ []string) error {
 	if !pruneOptions.Force {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Println("WARNING! This will remove all stopped/exited pods..")
@@ -53,7 +52,7 @@ func prune(_ *cobra.Command, _ []string) error {
 			return nil
 		}
 	}
-	responses, err := registry.ContainerEngine().PodPrune(context.Background(), pruneOptions)
+	responses, err := registry.ContainerEngine().PodPrune(cmd.Context(), pruneOptions)
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,7 @@ func init() {
 	flags.BoolVar(&unshareOptions.RootlessNetNS, "rootless-netns", false, "Join the rootless network namespace used for netavark networking")
 }
 
-func unshare(_ *cobra.Command, args []string) error {
+func unshare(cmd *cobra.Command, args []string) error {
 	if isRootless := rootless.IsRootless(); !isRootless {
 		return errors.New("please use unshare with rootless")
 	}
@@ -51,6 +51,6 @@ func unshare(_ *cobra.Command, args []string) error {
 		args = []string{shell}
 	}
 
-	err := registry.ContainerEngine().Unshare(registry.Context(), args, unshareOptions)
+	err := registry.ContainerEngine().Unshare(cmd.Context(), args, unshareOptions)
 	return utils.HandleOSExecError(err)
 }

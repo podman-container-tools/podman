@@ -27,8 +27,8 @@ func init() {
 	})
 }
 
-func volumeRename(_ *cobra.Command, args []string) error {
-	return registry.ContainerEngine().VolumeRename(registry.Context(), args[0], entities.VolumeRenameOptions{
+func volumeRename(cmd *cobra.Command, args []string) error {
+	return registry.ContainerEngine().VolumeRename(cmd.Context(), args[0], entities.VolumeRenameOptions{
 		NewName: args[1],
 	})
 }

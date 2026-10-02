@@ -47,10 +47,10 @@ func downFlags(cmd *cobra.Command) {
 	flags.BoolVar(&downOptions.Force, "force", false, "remove volumes")
 }
 
-func down(_ *cobra.Command, args []string) error {
+func down(cmd *cobra.Command, args []string) error {
 	reader, err := readerFromArgs(args)
 	if err != nil {
 		return err
 	}
-	return teardown(reader, entities.PlayKubeDownOptions{Force: downOptions.Force})
+	return teardown(cmd.Context(), reader, entities.PlayKubeDownOptions{Force: downOptions.Force})
 }

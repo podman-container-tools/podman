@@ -30,7 +30,7 @@ func init() {
 }
 
 // TODO  Name shouldn't be required, need to create a default vm
-func stop(_ *cobra.Command, args []string) error {
+func stop(cmd *cobra.Command, args []string) error {
 	var err error
 
 	vmName := defaultMachineName
@@ -48,6 +48,6 @@ func stop(_ *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Machine %q stopped successfully\n", vmName)
-	newMachineEvent(events.Stop, events.Event{Name: vmName})
+	newMachineEvent(cmd.Context(), events.Stop, events.Event{Name: vmName})
 	return nil
 }

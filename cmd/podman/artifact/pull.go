@@ -134,6 +134,6 @@ func artifactPull(cmd *cobra.Command, args []string) error {
 		pullOptions.Writer = os.Stdout
 	}
 
-	_, err = registry.ImageEngine().ArtifactPull(registry.Context(), args[0], pullOptions.ArtifactPullOptions)
+	_, err = registry.ImageEngine().ArtifactPull(cmd.Context(), args[0], pullOptions.ArtifactPullOptions)
 	return err
 }

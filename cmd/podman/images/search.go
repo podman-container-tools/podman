@@ -153,7 +153,7 @@ func imageSearch(cmd *cobra.Command, args []string) error {
 		searchOptions.Password = creds.Password
 	}
 
-	searchReport, err := registry.ImageEngine().Search(registry.Context(), searchTerm, searchOptions.ImageSearchOptions)
+	searchReport, err := registry.ImageEngine().Search(cmd.Context(), searchTerm, searchOptions.ImageSearchOptions)
 	if err != nil {
 		return err
 	}

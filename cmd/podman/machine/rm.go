@@ -50,7 +50,7 @@ func init() {
 	_ = flags.MarkHidden("reexec")
 }
 
-func rm(_ *cobra.Command, args []string) error {
+func rm(cmd *cobra.Command, args []string) error {
 	var err error
 	vmName := defaultMachineName
 	if len(args) > 0 && len(args[0]) > 0 {
@@ -71,6 +71,6 @@ func rm(_ *cobra.Command, args []string) error {
 		}
 		return err
 	}
-	newMachineEvent(events.Remove, events.Event{Name: vmName})
+	newMachineEvent(cmd.Context(), events.Remove, events.Event{Name: vmName})
 	return nil
 }

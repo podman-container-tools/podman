@@ -182,7 +182,7 @@ func networkCreate(cmd *cobra.Command, args []string) error {
 		IgnoreIfExists: networkCreateOptions.IgnoreIfExists,
 	}
 
-	response, err := registry.ContainerEngine().NetworkCreate(registry.Context(), network, &extraCreateOptions)
+	response, err := registry.ContainerEngine().NetworkCreate(cmd.Context(), network, &extraCreateOptions)
 	if err != nil {
 		return err
 	}

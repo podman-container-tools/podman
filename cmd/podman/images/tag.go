@@ -44,6 +44,6 @@ func init() {
 	})
 }
 
-func tag(_ *cobra.Command, args []string) error {
-	return registry.ImageEngine().Tag(registry.Context(), args[0], args[1:], entities.ImageTagOptions{})
+func tag(cmd *cobra.Command, args []string) error {
+	return registry.ImageEngine().Tag(cmd.Context(), args[0], args[1:], entities.ImageTagOptions{})
 }

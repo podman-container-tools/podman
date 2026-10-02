@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -83,7 +82,7 @@ func stats(cmd *cobra.Command, args []string) error {
 	}
 
 	for ; ; time.Sleep(time.Second) {
-		reports, err := registry.ContainerEngine().PodStats(context.Background(), args, statsOptions.PodStatsOptions)
+		reports, err := registry.ContainerEngine().PodStats(cmd.Context(), args, statsOptions.PodStatsOptions)
 		if err != nil {
 			return err
 		}

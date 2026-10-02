@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -75,7 +74,7 @@ func list(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	responses, err := registry.ContainerEngine().VolumeList(context.Background(), lsOpts)
+	responses, err := registry.ContainerEngine().VolumeList(cmd.Context(), lsOpts)
 	if err != nil {
 		return err
 	}

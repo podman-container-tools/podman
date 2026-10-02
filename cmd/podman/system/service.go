@@ -123,7 +123,7 @@ func service(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--tls-key provided without --tls-cert")
 	}
 
-	return restService(cmd.Flags(), registry.PodmanConfig(), entities.ServiceOptions{
+	return restService(cmd.Context(), cmd.Flags(), registry.PodmanConfig(), entities.ServiceOptions{
 		CorsHeaders:     srvArgs.CorsHeaders,
 		PProfAddr:       srvArgs.PProfAddr,
 		Timeout:         time.Duration(srvArgs.Timeout) * time.Second,

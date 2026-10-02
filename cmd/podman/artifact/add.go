@@ -59,7 +59,7 @@ func init() {
 	_ = addCmd.RegisterFlagCompletionFunc(fileMIMETypeFlagName, completion.AutocompleteNone)
 }
 
-func add(_ *cobra.Command, args []string) error {
+func add(cmd *cobra.Command, args []string) error {
 	artifactName := args[0]
 	blobs := args[1:]
 
@@ -91,7 +91,7 @@ func add(_ *cobra.Command, args []string) error {
 		artifactBlobs = append(artifactBlobs, artifactBlob)
 	}
 
-	report, err := registry.ImageEngine().ArtifactAdd(registry.Context(), artifactName, artifactBlobs, opts)
+	report, err := registry.ImageEngine().ArtifactAdd(cmd.Context(), artifactName, artifactBlobs, opts)
 	if err != nil {
 		return err
 	}

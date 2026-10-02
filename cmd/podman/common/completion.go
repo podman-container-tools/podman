@@ -69,7 +69,7 @@ func setupContainerEngine(cmd *cobra.Command) (entities.ContainerEngine, error) 
 			cgroupMode = flag.Value.String()
 		}
 
-		err := containerEngine.SetupRootless(registry.Context(), noMoveProcess, cgroupMode)
+		err := containerEngine.SetupRootless(cmd.Context(), noMoveProcess, cgroupMode)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +107,7 @@ func getContainers(cmd *cobra.Command, toComplete string, cType completeType, st
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	containers, err := engine.ContainerList(registry.Context(), listOpts)
+	containers, err := engine.ContainerList(cmd.Context(), listOpts)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -117,7 +117,7 @@ func getContainers(cmd *cobra.Command, toComplete string, cType completeType, st
 
 	// Add containers from the external storage into complete list
 	if ok, _ := cmd.Flags().GetBool("external"); ok {
-		externalContainers, err := engine.ContainerListExternal(registry.Context())
+		externalContainers, err := engine.ContainerListExternal(cmd.Context())
 		if err != nil {
 			cobra.CompErrorln(err.Error())
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -155,7 +155,7 @@ func getPods(cmd *cobra.Command, toComplete string, cType completeType, statuses
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	pods, err := engine.PodPs(registry.Context(), listOpts)
+	pods, err := engine.PodPs(cmd.Context(), listOpts)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -184,7 +184,7 @@ func getQuadlets(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellCo
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	quadlets, err := engine.QuadletList(registry.Context(), lsOpts)
+	quadlets, err := engine.QuadletList(cmd.Context(), lsOpts)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -207,7 +207,7 @@ func getVolumes(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellCom
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	volumes, err := engine.VolumeList(registry.Context(), lsOpts)
+	volumes, err := engine.VolumeList(cmd.Context(), lsOpts)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -230,7 +230,7 @@ func getImages(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellComp
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	images, err := engine.List(registry.Context(), listOptions)
+	images, err := engine.List(cmd.Context(), listOptions)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -274,7 +274,7 @@ func getManifestListMembers(cmd *cobra.Command, list, toComplete string) ([]stri
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	listData, err := engine.ManifestInspect(registry.Context(), list, inspectOptions)
+	listData, err := engine.ManifestInspect(cmd.Context(), list, inspectOptions)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -296,7 +296,7 @@ func getSecrets(cmd *cobra.Command, toComplete string, cType completeType) ([]st
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	secrets, err := engine.SecretList(registry.Context(), entities.SecretListRequest{})
+	secrets, err := engine.SecretList(cmd.Context(), entities.SecretListRequest{})
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -334,7 +334,7 @@ func getNetworks(cmd *cobra.Command, toComplete string, cType completeType) ([]s
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	networks, err := engine.NetworkList(registry.Context(), networkListOptions)
+	networks, err := engine.NetworkList(cmd.Context(), networkListOptions)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -364,7 +364,7 @@ func getArtifacts(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellC
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	artifacts, err := engine.ArtifactList(registry.Context(), listOptions)
+	artifacts, err := engine.ArtifactList(cmd.Context(), listOptions)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -388,13 +388,13 @@ func getCommands(cmd *cobra.Command, toComplete string) ([]string, cobra.ShellCo
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	containers, err := engine.ContainerList(registry.Context(), lsOpts)
+	containers, err := engine.ContainerList(cmd.Context(), lsOpts)
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	externalContainers, err := engine.ContainerListExternal(registry.Context())
+	externalContainers, err := engine.ContainerListExternal(cmd.Context())
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -806,13 +806,13 @@ func AutocompleteCreateRun(cmd *cobra.Command, args []string, toComplete string)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	resp, err := engine.Mount(registry.Context(), []string{args[0]}, entities.ImageMountOptions{})
+	resp, err := engine.Mount(cmd.Context(), []string{args[0]}, entities.ImageMountOptions{})
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 	defer func() {
-		_, err := engine.Unmount(registry.Context(), []string{args[0]}, entities.ImageUnmountOptions{})
+		_, err := engine.Unmount(cmd.Context(), []string{args[0]}, entities.ImageUnmountOptions{})
 		if err != nil {
 			cobra.CompErrorln(err.Error())
 		}
@@ -888,13 +888,13 @@ func AutocompleteCpCommand(cmd *cobra.Command, args []string, toComplete string)
 				return nil, cobra.ShellCompDirectiveDefault
 			}
 
-			resp, err := engine.ContainerMount(registry.Context(), []string{toComplete[:i]}, entities.ContainerMountOptions{})
+			resp, err := engine.ContainerMount(cmd.Context(), []string{toComplete[:i]}, entities.ContainerMountOptions{})
 			if err != nil {
 				cobra.CompErrorln(err.Error())
 				return nil, cobra.ShellCompDirectiveDefault
 			}
 			defer func() {
-				_, err := engine.ContainerUnmount(registry.Context(), []string{toComplete[:i]}, entities.ContainerUnmountOptions{})
+				_, err := engine.ContainerUnmount(cmd.Context(), []string{toComplete[:i]}, entities.ContainerUnmountOptions{})
 				if err != nil {
 					cobra.CompErrorln(err.Error())
 				}
@@ -1657,7 +1657,7 @@ func AutocompleteNetworkDriver(cmd *cobra.Command, _ []string, _ string) ([]stri
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	info, err := engine.Info(registry.Context())
+	info, err := engine.Info(cmd.Context())
 	if err != nil {
 		cobra.CompErrorln(err.Error())
 		return nil, cobra.ShellCompDirectiveNoFileComp

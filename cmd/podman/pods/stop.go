@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -82,7 +81,7 @@ func stop(cmd *cobra.Command, args []string) error {
 	}
 	args = append(args, ids...)
 
-	responses, err := registry.ContainerEngine().PodStop(context.Background(), args, stopOptions.PodStopOptions)
+	responses, err := registry.ContainerEngine().PodStop(cmd.Context(), args, stopOptions.PodStopOptions)
 	if err != nil {
 		return err
 	}

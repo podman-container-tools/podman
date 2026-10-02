@@ -93,7 +93,7 @@ func generateFlags(cmd *cobra.Command, podmanConfig *entities.PodmanConfig) {
 }
 
 func generateKube(cmd *cobra.Command, args []string) error {
-	report, err := registry.ContainerEngine().GenerateKube(registry.Context(), args, generateOptions)
+	report, err := registry.ContainerEngine().GenerateKube(cmd.Context(), args, generateOptions)
 	if err != nil {
 		return err
 	}

@@ -130,7 +130,7 @@ func start(cmd *cobra.Command, args []string) error {
 		startOptions.Filters[fname] = append(startOptions.Filters[fname], filter)
 	}
 
-	responses, err := registry.ContainerEngine().ContainerStart(registry.Context(), containers, startOptions)
+	responses, err := registry.ContainerEngine().ContainerStart(cmd.Context(), containers, startOptions)
 	if err != nil {
 		return err
 	}

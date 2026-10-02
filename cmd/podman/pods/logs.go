@@ -95,7 +95,7 @@ func logsFlags(cmd *cobra.Command) {
 	_ = flags.MarkHidden("details")
 }
 
-func logs(_ *cobra.Command, args []string) error {
+func logs(cmd *cobra.Command, args []string) error {
 	if logsPodOptions.SinceRaw != "" {
 		// parse time, error out if something is wrong
 		since, err := util.ParseInputTime(logsPodOptions.SinceRaw, true)
@@ -125,5 +125,5 @@ func logs(_ *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		podName = args[0]
 	}
-	return registry.ContainerEngine().PodLogs(registry.Context(), podName, logsPodOptions.PodLogsOptions)
+	return registry.ContainerEngine().PodLogs(cmd.Context(), podName, logsPodOptions.PodLogsOptions)
 }

@@ -68,7 +68,7 @@ func networkList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	responses, err := registry.ContainerEngine().NetworkList(registry.Context(), networkListOptions)
+	responses, err := registry.ContainerEngine().NetworkList(cmd.Context(), networkListOptions)
 	if err != nil {
 		return err
 	}

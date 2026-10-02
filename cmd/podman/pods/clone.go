@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -77,7 +76,7 @@ func clone(cmd *cobra.Command, args []string) error {
 	}
 
 	podClone.PerContainerOptions.IsClone = true
-	rep, err := registry.ContainerEngine().PodClone(context.Background(), podClone)
+	rep, err := registry.ContainerEngine().PodClone(cmd.Context(), podClone)
 	if err != nil {
 		if rep != nil {
 			fmt.Printf("pod %s created but error after creation\n", rep.Id)

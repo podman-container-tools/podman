@@ -127,13 +127,12 @@ func build(cmd *cobra.Command, args []string) error {
 	}
 
 	localEngine := registry.ImageEngine()
-	ctx := registry.Context()
-	farm, err := farm.NewFarm(ctx, buildOpts.farm, localEngine, buildOpts.local)
+	farm, err := farm.NewFarm(cmd.Context(), buildOpts.farm, localEngine, buildOpts.local)
 	if err != nil {
 		return fmt.Errorf("initializing: %w", err)
 	}
 
-	schedule, err := farm.Schedule(ctx, buildOpts.platforms)
+	schedule, err := farm.Schedule(cmd.Context(), buildOpts.platforms)
 	if err != nil {
 		return fmt.Errorf("scheduling builds: %w", err)
 	}
@@ -142,7 +141,7 @@ func build(cmd *cobra.Command, args []string) error {
 	manifestName := opts.Output
 	// Set Output to "" so that the images built on the farm nodes have no name
 	opts.Output = ""
-	if err = farm.Build(ctx, schedule, *opts, manifestName, localEngine); err != nil {
+	if err = farm.Build(cmd.Context(), schedule, *opts, manifestName, localEngine); err != nil {
 		return fmt.Errorf("build: %w", err)
 	}
 	logrus.Infof("build: ok")

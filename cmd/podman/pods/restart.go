@@ -1,7 +1,6 @@
 package pods
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -43,9 +42,9 @@ func init() {
 	validate.AddLatestFlag(restartCommand, &restartOptions.Latest)
 }
 
-func restart(_ *cobra.Command, args []string) error {
+func restart(cmd *cobra.Command, args []string) error {
 	var errs utils.OutputErrors
-	responses, err := registry.ContainerEngine().PodRestart(context.Background(), args, restartOptions)
+	responses, err := registry.ContainerEngine().PodRestart(cmd.Context(), args, restartOptions)
 	if err != nil {
 		return err
 	}

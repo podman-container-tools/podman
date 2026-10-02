@@ -47,7 +47,7 @@ func init() {
 	flags.BoolVarP(&cpOpts.Quiet, quietFlagName, "q", false, "Suppress copy status output")
 }
 
-func cp(_ *cobra.Command, args []string) error {
+func cp(cmd *cobra.Command, args []string) error {
 	var err error
 
 	srcMachine, srcPath, destMachine, destPath, err := copy.ParseSourceAndDestination(args[0], args[1])
@@ -105,7 +105,7 @@ func cp(_ *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Copy successful")
-	newMachineEvent(events.Copy, events.Event{Name: mc.Name})
+	newMachineEvent(cmd.Context(), events.Copy, events.Event{Name: mc.Name})
 	return nil
 }
 

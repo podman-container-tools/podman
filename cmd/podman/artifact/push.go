@@ -203,6 +203,6 @@ func artifactPush(cmd *cobra.Command, args []string) error {
 			}
 	*/
 
-	_, err = registry.ImageEngine().ArtifactPush(registry.Context(), source, pushOptions.ArtifactPushOptions)
+	_, err = registry.ImageEngine().ArtifactPush(cmd.Context(), source, pushOptions.ArtifactPushOptions)
 	return err
 }

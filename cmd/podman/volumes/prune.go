@@ -2,7 +2,6 @@ package volumes
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -93,14 +92,14 @@ func prune(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		delete(listOptions.Filter, "all") // list does not support --filter all
-		filteredVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), listOptions)
+		filteredVolumes, err := registry.ContainerEngine().VolumeList(cmd.Context(), listOptions)
 		if err != nil {
 			return err
 		}
 		var finalVolumes []*entities.VolumeListReport
 		if allFlag {
 			unusedOptions.Filter = map[string][]string{"dangling": {"true"}}
-			unusedVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), unusedOptions)
+			unusedVolumes, err := registry.ContainerEngine().VolumeList(cmd.Context(), unusedOptions)
 			if err != nil {
 				return err
 			}
@@ -108,11 +107,11 @@ func prune(cmd *cobra.Command, _ []string) error {
 		} else {
 			danglingOptions := entities.VolumeListOptions{Filter: map[string][]string{"dangling": {"true"}}}
 			anonymousOptions := entities.VolumeListOptions{Filter: map[string][]string{"anonymous": {"true"}}}
-			danglingVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), danglingOptions)
+			danglingVolumes, err := registry.ContainerEngine().VolumeList(cmd.Context(), danglingOptions)
 			if err != nil {
 				return err
 			}
-			anonymousVolumes, err := registry.ContainerEngine().VolumeList(context.Background(), anonymousOptions)
+			anonymousVolumes, err := registry.ContainerEngine().VolumeList(cmd.Context(), anonymousOptions)
 			if err != nil {
 				return err
 			}
@@ -138,7 +137,7 @@ func prune(cmd *cobra.Command, _ []string) error {
 			return nil
 		}
 	}
-	responses, err := registry.ContainerEngine().VolumePrune(context.Background(), pruneOptions)
+	responses, err := registry.ContainerEngine().VolumePrune(cmd.Context(), pruneOptions)
 	if err != nil {
 		return err
 	}
