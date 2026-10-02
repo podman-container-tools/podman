@@ -151,6 +151,15 @@ func (a *TypeIndex) emitHintf(code grammar.Code, format string, args ...any) {
 	a.emit(grammar.Hintf(token.Position{}, code, format, args...))
 }
 
+// posOf resolves p against pkg's FileSet, tolerating a package that has none.
+func posOf(pkg *packages.Package, p token.Pos) token.Position {
+	if pkg == nil || pkg.Fset == nil || !p.IsValid() {
+		return token.Position{}
+	}
+
+	return pkg.Fset.Position(p)
+}
+
 func (a *TypeIndex) build(pkgs []*packages.Package) error {
 	for _, pkg := range pkgs {
 		if _, known := a.AllPackages[pkg.PkgPath]; known {
@@ -185,21 +194,21 @@ func (a *TypeIndex) processPackage(pkg *packages.Package) error {
 }
 
 func (a *TypeIndex) processFile(pkg *packages.Package, file *ast.File) error {
-	n, err := a.detectNodes(file)
+	n, err := a.detectNodes(pkg, file)
 	if err != nil {
 		return err
 	}
 
 	if n&metaNode != 0 {
-		a.Meta = append(a.Meta, file.Doc)
+		a.Meta = collectMetaComments(file.Comments, a.Meta)
 	}
 
 	if n&operationNode != 0 {
-		a.Operations = a.collectOperationPathAnnotations(file.Comments, a.Operations)
+		a.Operations = a.collectOperationPathAnnotations(pkg, file.Comments, a.Operations)
 	}
 
 	if n&routeNode != 0 {
-		a.Routes = a.collectRoutePathAnnotations(file.Comments, a.Routes)
+		a.Routes = a.collectRoutePathAnnotations(pkg, file.Comments, a.Routes)
 	}
 
 	a.processFileDecls(pkg, file, n)
@@ -207,10 +216,40 @@ func (a *TypeIndex) processFile(pkg *packages.Package, file *ast.File) error {
 	return nil
 }
 
-func (a *TypeIndex) collectOperationPathAnnotations(comments []*ast.CommentGroup, dst []parsers.ParsedPathContent) []parsers.ParsedPathContent {
+// collectMetaComments appends the comment groups that carry a swagger:meta annotation.
+//
+// The group holding the annotation is the meta block, wherever in the file it sits. Taking the file's PACKAGE doc
+// instead was wrong in both directions: a swagger:meta anywhere else left it nil, and a file that also had a package
+// doc had that unrelated comment parsed as its meta block - so an ordinary sentence above the package clause could
+// set the specification's title and version while the authored block was dropped.
+//
+// Detection already reads every comment in the file, so this is where the two agree on which one it found.
+func collectMetaComments(comments []*ast.CommentGroup, dst []*ast.CommentGroup) []*ast.CommentGroup {
+	for _, cmts := range comments {
+		if cmts == nil {
+			continue
+		}
+		for _, cline := range cmts.List {
+			if cline == nil {
+				continue
+			}
+			if annotation, ok := parsers.ExtractAnnotation(cline.Text); ok && annotation == "meta" {
+				dst = append(dst, cmts)
+
+				break
+			}
+		}
+	}
+
+	return dst
+}
+
+func (a *TypeIndex) collectOperationPathAnnotations(pkg *packages.Package, comments []*ast.CommentGroup, dst []parsers.ParsedPathContent) []parsers.ParsedPathContent {
 	for _, cmts := range comments {
 		pp := parsers.ParseOperationPathAnnotation(cmts.List)
 		if pp.Method == "" {
+			a.reportUnparsedPathAnnotation(pkg, pp, "swagger:operation")
+
 			continue
 		}
 
@@ -225,10 +264,12 @@ func (a *TypeIndex) collectOperationPathAnnotations(comments []*ast.CommentGroup
 	return dst
 }
 
-func (a *TypeIndex) collectRoutePathAnnotations(comments []*ast.CommentGroup, dst []parsers.ParsedPathContent) []parsers.ParsedPathContent {
+func (a *TypeIndex) collectRoutePathAnnotations(pkg *packages.Package, comments []*ast.CommentGroup, dst []parsers.ParsedPathContent) []parsers.ParsedPathContent {
 	for _, cmts := range comments {
 		pp := parsers.ParseRoutePathAnnotation(cmts.List)
 		if pp.Method == "" {
+			a.reportUnparsedPathAnnotation(pkg, pp, "swagger:route")
+
 			continue
 		}
 
@@ -241,6 +282,22 @@ func (a *TypeIndex) collectRoutePathAnnotations(comments []*ast.CommentGroup, ds
 	}
 
 	return dst
+}
+
+// reportUnparsedPathAnnotation warns about a comment group that opened with a path-annotation
+// keyword and yielded no annotation.
+//
+// Only reached when the group produced nothing, so a group holding a good annotation alongside prose
+// that resembles one stays quiet. Without this, the sole symptom of a mistyped `swagger:route` is a
+// path missing from the output — the annotation does not fail, it ceases to be an annotation.
+func (a *TypeIndex) reportUnparsedPathAnnotation(pkg *packages.Package, pp parsers.ParsedPathContent, keyword string) {
+	if !pp.UnparsedPos.IsValid() || pkg == nil || pkg.Fset == nil {
+		return
+	}
+
+	a.emit(grammar.Warnf(pkg.Fset.Position(pp.UnparsedPos), grammar.CodeUnparsedPathAnnotation,
+		"%s annotation does not parse and was ignored, so no path is emitted for it: %q; expected `%s METHOD /path [tags] operationID`",
+		keyword, pp.UnparsedLine, keyword))
 }
 
 func (a *TypeIndex) processFileDecls(pkg *packages.Package, file *ast.File, n node) {
@@ -306,13 +363,13 @@ func (a *TypeIndex) processDecl(pkg *packages.Package, file *ast.File, n node, g
 			}
 
 			decl := &EntityDecl{
-				Comments: comments,
 				Type:     nt,
 				Alias:    at,
-				Ident:    ts.Name,
-				Spec:     ts,
-				File:     file,
-				Pkg:      pkg,
+				comments: comments,
+				ident:    ts.Name,
+				spec:     ts,
+				file:     file,
+				pkg:      pkg,
 			}
 			key := ts.Name
 			switch {
@@ -475,7 +532,7 @@ func (a *TypeIndex) walkImports(pkg *packages.Package) error {
 //
 // See [§classifier](./README.md#classifier) — bitmask semantics, struct-annotation exclusivity
 // rule, and the recognised-but-bitless field-decoration tokens.
-func (a *TypeIndex) detectNodes(file *ast.File) (node, error) {
+func (a *TypeIndex) detectNodes(pkg *packages.Package, file *ast.File) (node, error) {
 	var n node
 	for _, comments := range file.Comments {
 		var seenStruct string // tracks the struct annotation for this comment group
@@ -521,10 +578,15 @@ func (a *TypeIndex) detectNodes(file *ast.File) (node, error) {
 				}
 			case "strfmt", "name", "discriminated", "file", "enum", "default", "alias", "type", "additionalProperties", "patternProperties", "title", "description":
 				// Proposal for enhancement: perhaps collect these and pass along to avoid lookups later on
-			case "allOf":
+			case "allOf", "omit":
 			case "ignore":
 			default:
-				return 0, fmt.Errorf("classifier: unknown swagger annotation %q: %w", annotation, ErrScanner)
+				// An annotation nobody recognises is almost always a typo, and it used to abort the entire
+				// scan — one mistyped keyword in one comment and a whole package graph produced nothing.
+				// Skip-and-diagnose is the house rule, and this is the case that most deserves it: the
+				// author gets the name, the location, and every other annotation in the tree still works.
+				a.emit(grammar.Warnf(posOf(pkg, cline.Pos()), grammar.CodeInvalidAnnotation,
+					"unknown swagger annotation %q; the comment is ignored", annotation))
 			}
 		}
 	}

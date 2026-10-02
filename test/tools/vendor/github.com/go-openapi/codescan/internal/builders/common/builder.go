@@ -11,6 +11,8 @@ package common
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
+	"strings"
 
 	"github.com/go-openapi/codescan/internal/builders/godoclink"
 	"github.com/go-openapi/codescan/internal/ifaces"
@@ -32,9 +34,53 @@ type Builder struct {
 	Decl *scanner.EntityDecl
 
 	postDecls   []*scanner.EntityDecl
-	postDeclSet map[*ast.Ident]struct{} // dedup index keyed by EntityDecl.Ident
+	postDeclSet map[*types.TypeName]struct{} // dedup index keyed by the declared type's identity
 	diagnostics []grammar.Diagnostic
 	blockCache  map[*ast.CommentGroup][]grammar.Block
+}
+
+// SourcelessFallback reports whether a missing declaration should be rendered from the type alone
+// rather than failing the scan, and says so when it should.
+//
+// A declaration lookup comes back empty for two unrelated reasons, and only one of them is a fault.
+// The load may have deliberately not read that package — the standard library under a WebAssembly
+// guest, any unannotated dependency under compiled dependencies — in which case the type is complete
+// and only what its author wrote about it is missing. Or the graph is broken, in which case failing
+// is right and a thinner document would hide it.
+//
+// So the strict sites ask here first. They used to fail on both, which meant one field of a type
+// nobody can render anyway — time.Duration, io.Writer, reflect.Type — took a whole document with it.
+// Worse, they failed inconsistently: the same absent declaration degrades quietly at the soft sites
+// two arms away, so the outcome depended on which position the type happened to appear in rather
+// than on anything about the type.
+//
+// The remedy offered is deliberately not "recognize more standard-library types". A recognizer
+// asserts a wire form for every use of a type, and these are precisely the ones where no such form
+// exists to assert, which is why strfmt.Duration exists. The author loses a doc comment they rarely
+// wanted in their API, and swagger:description puts it back where they can see it.
+func (s *Builder) SourcelessFallback(obj *types.TypeName) bool {
+	if obj == nil || obj.Pkg() == nil {
+		return false
+	}
+
+	if _, sourceless := s.Ctx.SourcelessPackage(obj.Pkg().Path()); !sourceless {
+		return false
+	}
+
+	// Located at the declaration that consumed the type, not at the type itself: the author can act on
+	// their own source, and the position of a standard-library declaration they cannot read is no help.
+	var at token.Position
+	if s.Decl != nil {
+		at = s.Ctx.PosOf(s.Decl.Pos())
+	}
+
+	s.RecordDiagnostic(grammar.Warnf(at, grammar.CodeSourcelessType,
+		"%s.%s is rendered from its type alone, because its declaring package was loaded without source: "+
+			"anything the declaration said about it — its doc comment, any swagger annotation — is not in "+
+			"the spec. Write a swagger:description where it is used if it matters.",
+		obj.Pkg().Path(), obj.Name()))
+
+	return true
 }
 
 // New builds a [Builder] bound to ctx and decl.
@@ -143,15 +189,15 @@ func (s *Builder) ParseBlock(cg *ast.CommentGroup) grammar.Block {
 // comment group.
 //
 // Present=false → annotation absent (fall back to the godoc-derived value); Present=true with
-// Value=="" → explicit empty, the deliberate godoc-suppression affordance (design D7).
+// Value=="" → explicit empty, the deliberate godoc-suppression affordance.
 type OverrideValue struct {
 	Value   string
 	Present bool
 	Pos     token.Position
 }
 
-// HarvestOverrides scans a comment group's sibling classifier blocks for the swagger:title /
-// swagger:description override annotations.
+// HarvestOverrides scans a comment group's sibling classifier blocks
+// for the swagger:title / swagger:description override annotations.
 //
 // Last occurrence wins.
 // This is a pure harvest: the diagnostic policy — the empty-override warning, and the
@@ -174,7 +220,8 @@ func (s *Builder) HarvestOverrides(cg *ast.CommentGroup) (title, desc OverrideVa
 // WarnEmptyOverride raises scan.empty-override when an override is present with an empty value.
 //
 // The empty value is still applied by the caller — empty is the deliberate godoc-suppression
-// affordance — but the case is flagged in case the marker was left bare by mistake (design D7).
+// affordance — but the case is flagged in case the marker was left bare by mistake.
+//
 // Emitted at the consumption point rather than in the parser: sibling classifier blocks are not
 // Walk-ed, so a grammar-stored diagnostic would not reach OnDiagnostic.
 func (s *Builder) WarnEmptyOverride(kind grammar.AnnotationKind, ov OverrideValue) {
@@ -224,24 +271,29 @@ func (s *Builder) CleanGoDocSelf(text string) string {
 
 // AppendPostDecl marks decl for post-processing by the spec orchestrator's discovery loop.
 //
-// Idempotent per-Builder: re-appending a decl whose Ident was already seen is a no-op.
-// Nil and Ident-less decls are silently ignored.
+// Idempotent per-Builder: re-appending a decl whose declared type was already seen is a no-op.
+// Nil decls are silently ignored.
+//
+// Dedup is on the type-checker's object rather than on the declaring identifier: a package cannot
+// declare one name twice, so the two are in bijection wherever both exist — and the object exists
+// for a declaration whose source was never parsed, where the identifier does not.
 //
 // # Details
 //
 // See [§postdecls](./README.md#postdecls) — per-Builder dedup index and the second dedup applied
 // at consumption time by spec.Builder.buildDiscovered.
 func (s *Builder) AppendPostDecl(decl *scanner.EntityDecl) {
-	if decl == nil || decl.Ident == nil {
+	if decl == nil {
 		return
 	}
+	obj := decl.Obj()
 	if s.postDeclSet == nil {
-		s.postDeclSet = make(map[*ast.Ident]struct{})
+		s.postDeclSet = make(map[*types.TypeName]struct{})
 	}
-	if _, dup := s.postDeclSet[decl.Ident]; dup {
+	if _, dup := s.postDeclSet[obj]; dup {
 		return
 	}
-	s.postDeclSet[decl.Ident] = struct{}{}
+	s.postDeclSet[obj] = struct{}{}
 	s.postDecls = append(s.postDecls, decl)
 }
 
@@ -289,4 +341,102 @@ func (s *Builder) MakeRef(decl *scanner.EntityDecl, prop ifaces.SwaggerTypable) 
 	s.AppendPostDecl(decl)
 
 	return nil
+}
+
+// FindAnnotationArg returns the first positional argument of the first Block of the given
+// annotation kind in cg, filtered to non-empty single-word arguments and read through the
+// ParseBlocks cache.
+//
+// Shared here rather than per-builder because the alias classifier below runs from schema,
+// parameters and responses alike.
+func (s *Builder) FindAnnotationArg(cg *ast.CommentGroup, kind grammar.AnnotationKind) (string, bool) {
+	for _, b := range s.ParseBlocks(cg) {
+		if b.AnnotationKind() != kind {
+			continue
+		}
+		arg, ok := b.AnnotationArg()
+		if !ok {
+			continue
+		}
+		if strings.ContainsAny(arg, " \t") {
+			continue
+		}
+
+		return arg, true
+	}
+
+	return "", false
+}
+
+// IsStringLikeSequence reports whether an array/slice element type makes the sequence a
+// STRING-LIKE value rather than a collection — a byte sequence (`[]byte`, `[16]byte`) or a rune
+// sequence (`[]rune`).
+//
+// This is what decides whether a `swagger:strfmt` on the sequence describes the whole value or each
+// element. It replaces a two-name allowlist (`byte`, `bsonobjectid`) that was really standing in for
+// this question: both of those are formats for a byte sequence, `bsonobjectid` being a strfmt
+// library type that happens to have an array underlying. Keying on the element instead of the format
+// name generalises to every such type — `uuid` over `[16]byte`, `ulid`, and whatever comes next —
+// without anyone having to extend a list.
+//
+// go/types cannot distinguish `rune` from `int32` (rune is an alias), so `[]int32` is treated
+// alike. That is harmless: a STRING format on integer elements was already a contradiction.
+func IsStringLikeSequence(elem types.Type) bool {
+	basic, ok := elem.Underlying().(*types.Basic)
+	if !ok {
+		return false
+	}
+
+	switch basic.Kind() {
+	case types.Uint8, types.Int32: // byte, rune
+		return true
+	default:
+		return false
+	}
+}
+
+// ApplyArrayLikeStrfmt writes a `swagger:strfmt` format onto an array/slice target, choosing
+// between the whole schema and its items by the ELEMENT type — see [IsStringLikeSequence].
+//
+//	type ID [16]byte   // swagger:strfmt uuid  → {string, format: uuid}
+//	type Emails []string // swagger:strfmt email → {array, items: {string, format: email}}
+//
+// Note this settles only the mechanical half of the items-vs-whole question. A format on a sequence
+// of some OTHER element type is genuinely ambiguous — it stays on the items, as it always has.
+func ApplyArrayLikeStrfmt(format string, elem types.Type, tgt ifaces.SwaggerTypable) {
+	if IsStringLikeSequence(elem) {
+		tgt.Typed("string", format)
+
+		return
+	}
+	tgt.Items().Typed("string", format)
+}
+
+// ClassifierAliasStrfmt applies a `swagger:strfmt` carried by an ALIAS declaration, dispatching on
+// the alias's underlying kind so the format lands exactly where the equivalent NAMED declaration
+// would put it — whole-schema for a basic or struct underlying, items-or-whole for an array/slice.
+//
+// A named declaration reaches its format through the schema builder's classifier walkers, each
+// keyed off the declaration found via DeclForType. Aliases have no such entry: every builder
+// dissolves an alias to its right-hand side, and by then nothing remembers an alias was involved.
+// This is that missing entry, and it must run BEFORE the dissolve.
+//
+// Scoped to `swagger:strfmt`: the other classifier annotations have separate handling on the alias
+// path and are deliberately not swept in here.
+func (s *Builder) ClassifierAliasStrfmt(cg *ast.CommentGroup, tpe *types.Alias, tgt ifaces.SwaggerTypable) bool {
+	format, ok := s.FindAnnotationArg(cg, grammar.AnnStrfmt)
+	if !ok {
+		return false
+	}
+
+	switch ut := tpe.Underlying().(type) {
+	case *types.Array:
+		ApplyArrayLikeStrfmt(format, ut.Elem(), tgt)
+	case *types.Slice:
+		ApplyArrayLikeStrfmt(format, ut.Elem(), tgt)
+	default:
+		tgt.Typed("string", format)
+	}
+
+	return true
 }

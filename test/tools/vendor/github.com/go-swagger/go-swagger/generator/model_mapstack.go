@@ -113,7 +113,6 @@ func (mt *mapStack) Build() error {
 			mt.Context.GenSchema.AdditionalProperties.HasValidations = true
 		}
 
-		debugLogf("early mapstack exit, nullable: %t for %s", cp.GenSchema.IsNullable, cp.GenSchema.Name)
 		return nil
 	}
 	cur := mt

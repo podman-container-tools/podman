@@ -1,8 +1,19 @@
+codecov:
+  notify:
+    after_n_builds: 2
+
 coverage:
   status:
     patch:
       default:
         target: 80%
+
 ignore:
-  - internal/scantest
-  - fixtures
+ - "docs/examples"
+ - "examples"
+ - "testdata"
+ - "hack"
+ - "internal/scantest"
+ - "internal/benchmarks"
+ - "internal/testloader"
+ - "testdata"

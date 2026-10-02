@@ -1,33 +1,29 @@
 // SPDX-FileCopyrightText: Copyright 2015-2025 go-swagger maintainers
 // SPDX-License-Identifier: Apache-2.0
 
-// Package godoclink rewrites godoc-specific syntax that reads as noise when a Go doc comment is
-// carried into a Swagger title / description (the Options.CleanGoDoc feature).
+// Package godoclink rewrites godoc-specific syntax.
+//
+// It rewrites comments that read as noise when a Go doc comment is carried into a Swagger title / description
+// (corresponds to the Options.CleanGoDoc feature).
 //
 // Two transforms apply to godoc-derived prose:
 //
 //   - resolution-free cleanup: reference-style link definition lines
-//     (`[text]: url`) are dropped; godoc doc-link spans (`[Widget]`,
-//     `[pkg.Type]`, `[Order.Field]`) have their brackets removed and the (leaf)
-//     identifier humanized via the swag name mangler — e.g. `[CustName]` →
-//     "cust name"; the first identifier of the prose is restored to sentence
-//     case;
-//   - idiom recomposition: when a [Resolver] maps a doc-link (or the leading
-//     godoc-convention self-name) to an emitted schema, the span is replaced by
-//     a [marker] carrying that schema's fully-qualified definition key. Markers
-//     are resolved to the schema's final exposed name by [SubstituteMarkers],
-//     run after the spec builder has reduced definition names. This two-step
-//     dance is needed because the final name is only known at the very end of
-//     the build, whereas which prose is godoc-derived is only known here, at the
-//     consumption seam.
+//     (`[text]: url`) are dropped; godoc doc-link spans (`[Widget]`, `[pkg.Type]`, `[Order.Field]`)
+//     have their brackets removed and the (leaf) identifier humanized via the swag name mangler
+//     — e.g. `[CustName]` → "cust name"; the first identifier of the prose is restored to sentence case;
+//   - idiom recomposition: when a [Resolver] maps a doc-link (or the leading godoc-convention self-name)
+//     to an emitted schema, the span is replaced by a [marker] carrying that schema's fully-qualified definition key.
+//     Markers are resolved to the schema's final exposed name by [SubstituteMarkers],
+//     run after the spec builder has reduced definition names. This two-step dance is needed because the final name
+//     is only known at the very end of the build, whereas which prose is godoc-derived is only known here,
+//     at the consumption seam.
 //
-// With a nil [Options.Resolver] (and nil Self), only the resolution-free cleanup runs and no marker
-// is produced.
+// With a nil [Options.Resolver] (and nil Self), only the resolution-free cleanup runs and no marker is produced.
 //
-// The recognizer regexes are adapted from the battle-tested
-// github.com/fredbi/go-fred-mcp/pkg/doc-filters/godoc-filter; the key difference is that this
-// package *rewrites* the prose whereas that tool *redacts* (length-preserving blanking) for
-// masking.
+// The recognizer regexes are adapted from the battle-tested github.com/fredbi/go-fred-mcp/pkg/doc-filters/godoc-filter;
+// the key difference is that this package *rewrites* the prose whereas that tool *redacts* (length-preserving blanking)
+// for masking.
 package godoclink
 
 import (
@@ -39,48 +35,45 @@ import (
 	"github.com/go-openapi/swag/mangling"
 )
 
-// docLinkRE matches a godoc doc-link span: a dotted identifier chain (`[pkg.Type]`,
-// `[Order.Field]`) OR an uppercase-led single (`[Widget]`), tolerating a leading `*`
-// (`[*time.Time]`).
+// docLinkRE matches a godoc doc-link span: a dotted identifier chain (`[pkg.Type]`, `[Order.Field]`) OR an
+// uppercase-led single (`[Widget]`), tolerating a leading `*` (`[*time.Time]`).
 //
-// Bare-lowercase singles (`[id]`), empty (`[]byte`), digit-led (`[0]`) and multi-word (`[see
-// notes]`) spans are deliberately not matched, so ordinary prose brackets are left intact.
+// Bare-lowercase singles (`[id]`), empty (`[]byte`), digit-led (`[0]`) and multi-word (`[see notes]`) spans are
+// deliberately not matched, so ordinary prose brackets are left intact.
 var docLinkRE = regexp.MustCompile(`\[\*?\w+(?:\.\w+)+\]|\[\*?[A-Z]\w*\]`)
 
-// refDefLineRE matches a reference-style link definition line — `[text]: url` on its own line
-// (optionally indented).
+// refDefLineRE matches a reference-style link definition line — `[text]: url` on its own line (optionally indented).
 //
 // Such a line is godoc/markdown link plumbing and carries no prose, so the whole line is dropped.
 var refDefLineRE = regexp.MustCompile(`^[ \t]*\[[^\]]+\]:[ \t]+\S.*$`)
 
-// multiNewlineRE collapses a 3+ newline run (left behind by dropping an interior
-// reference-definition line) back to a single paragraph break.
+// multiNewlineRE collapses a 3+ newline run (left behind by dropping an interior reference-definition line) back to a
+// single paragraph break.
 var multiNewlineRE = regexp.MustCompile(`\n{3,}`)
 
-// identRE matches a leading Go-identifier chain (the godoc-convention self-name at the start of a
-// doc comment, e.g. "Widget" in "Widget does things").
+// identRE matches a leading Go-identifier chain (the godoc-convention self-name at the start of a doc comment, e.g.
+// "Widget" in "Widget does things").
 var identRE = regexp.MustCompile(`^[\p{L}_][\p{L}\p{N}_]*`)
 
 // Resolution is the outcome of resolving a doc-link reference to an emitted schema.
 //
-// DefKey is the referenced type's fully-qualified definition key (whose final exposed name is
-// substituted later); Suffix is the already-exposed field chain for a dotted member reference (e.g.
-// ".customer_name"), or "" for a bare type reference.
+// DefKey is the referenced type's fully-qualified definition key (whose final exposed name is substituted later);
+// Suffix is the already-exposed field chain for a dotted member reference (e.g. ".customer_name"), or "" for a bare
+// type reference.
 type Resolution struct {
 	DefKey string
 	Suffix string
 }
 
-// Resolver maps a doc-link reference — the bracket content with any leading `*` stripped, e.g.
-// "Order.CustName" or "pkg.Type" — to a [Resolution].
+// Resolver maps a doc-link reference — the bracket content with any leading `*` stripped, e.g. "Order.CustName" or
+// "pkg.Type" — to a [Resolution].
 //
-// It returns ok=false when the reference does not resolve to an emitted schema, in which case the
-// caller humanizes the leaf identifier instead.
+// It returns ok=false when the reference does not resolve to an emitted schema, in which case the caller humanizes the
+// leaf identifier instead.
 type Resolver func(ref string) (Resolution, bool)
 
-// SelfRef describes the declaration whose godoc is being cleaned, so the leading godoc-convention
-// self-name ("Widget" in "Widget does things") can be recomposed to the declaration's own exposed
-// name.
+// SelfRef describes the declaration whose godoc is being cleaned, so the leading godoc-convention self-name ("Widget"
+// in "Widget does things") can be recomposed to the declaration's own exposed name.
 //
 // Name is the Go identifier; DefKey is its fully-qualified definition key.
 type SelfRef struct {
@@ -94,8 +87,7 @@ type Options struct {
 	//
 	// Required.
 	Mangler *mangling.NameMangler
-	// Resolver, when non-nil, recomposes resolvable doc-links into markers; nil selects
-	// resolution-free cleanup only.
+	// Resolver, when non-nil, recomposes resolvable doc-links into markers; nil selects resolution-free cleanup only.
 	Resolver Resolver
 	// Self, when non-nil, enables leading self-name recomposition.
 	//
@@ -105,8 +97,9 @@ type Options struct {
 
 // Clean applies godoc filtering to text.
 //
-// It is the caller's responsibility to apply Clean ONLY to godoc-derived prose — never to
-// author-written swagger:title / swagger:description override text.
+// It is the caller's responsibility to apply Clean ONLY to godoc-derived prose — never to author-written
+// swagger:title / swagger:description override text.
+//
 // Clean never mutates o.
 func Clean(text string, o Options) string {
 	if text == "" {
@@ -119,8 +112,8 @@ func Clean(text string, o Options) string {
 	return text
 }
 
-// dropRefDefLines removes reference-style link definition lines, collapsing the blank runs a
-// mid-text drop would otherwise leave and trimming trailing space.
+// dropRefDefLines removes reference-style link definition lines, collapsing the blank runs a mid-text drop would
+// otherwise leave and trimming trailing space.
 func dropRefDefLines(text string) string {
 	if !strings.Contains(text, "]:") {
 		return text
@@ -156,8 +149,8 @@ type span struct {
 	self   bool
 }
 
-// rewrite replaces every doc-link span (and, when enabled, the leading self-name) left to right,
-// emitting a marker for resolvable references and the humanized leaf otherwise.
+// rewrite replaces every doc-link span (and, when enabled, the leading self-name) left to right, emitting a marker for
+// resolvable references and the humanized leaf otherwise.
 func rewrite(text string, o Options) string {
 	spans := collectSpans(text, o)
 	if len(spans) == 0 {
@@ -180,8 +173,8 @@ func rewrite(text string, o Options) string {
 	return b.String()
 }
 
-// collectSpans gathers the leading self-name (when it matches Self.Name) and every doc-link bracket
-// span, in ascending position order.
+// collectSpans gathers the leading self-name (when it matches Self.Name) and every doc-link bracket span, in ascending
+// position order.
 func collectSpans(text string, o Options) []span {
 	var spans []span
 
@@ -203,11 +196,10 @@ func collectSpans(text string, o Options) []span {
 	return spans
 }
 
-// replacement computes the substitution text for one span: a marker when the reference resolves to
-// a schema, otherwise the humanized leaf (sentence-cased at the start of the prose).
+// replacement computes the substitution text for one span: a marker when the reference resolves to a schema, otherwise
+// the humanized leaf (sentence-cased at the start of the prose).
 //
-// A self-name without a Resolver is left verbatim (its exposed name is unknowable without
-// resolution).
+// A self-name without a Resolver is left verbatim (its exposed name is unknowable without resolution).
 func replacement(s span, text string, o Options) string {
 	titleize := isSentenceStart(text, s.lo)
 	fallback := o.humanize(s.leaf)
@@ -230,8 +222,8 @@ func replacement(s span, text string, o Options) string {
 	return fallback
 }
 
-// humanize renders an identifier as lower-case words; a nil mangler is treated as the identity
-// (defensive — callers always supply one).
+// humanize renders an identifier as lower-case words; a nil mangler is treated as the identity (defensive — callers
+// always supply one).
 func (o Options) humanize(ident string) string {
 	if o.Mangler == nil {
 		return ident
@@ -240,8 +232,7 @@ func (o Options) humanize(ident string) string {
 	return o.Mangler.ToHumanNameLower(ident)
 }
 
-// leafOf returns the trailing dot-separated segment of a reference chain (`inventory.Ledger` →
-// "Ledger").
+// leafOf returns the trailing dot-separated segment of a reference chain (`inventory.Ledger` → "Ledger").
 func leafOf(ref string) string {
 	if i := strings.LastIndex(ref, "."); i >= 0 {
 		return ref[i+1:]
@@ -250,8 +241,8 @@ func leafOf(ref string) string {
 	return ref
 }
 
-// isSentenceStart reports whether pos is the first non-space byte of text — the sentence-initial
-// position where a substituted name is restored to title case.
+// isSentenceStart reports whether pos is the first non-space byte of text — the sentence-initial position where a
+// substituted name is restored to title case.
 func isSentenceStart(text string, pos int) bool {
 	for i := range pos {
 		if !unicode.IsSpace(rune(text[i])) {

@@ -11,14 +11,12 @@ import (
 	"github.com/go-swagger/go-swagger/generator"
 )
 
-type sharedOptions struct {
-	sharedOptionsCommon
-
-	// TemplatePlugin option is not available on windows, since it relies on go plugins.
+// pluginOptions exposes the template plugin, which relies on go plugins and is therefore
+// not available on windows.
+type pluginOptions struct {
 	TemplatePlugin flags.Filename `description:"the template plugin to use" group:"shared" long:"template-plugin" short:"p"`
 }
 
-func (s sharedOptions) apply(opts *generator.GenOpts) {
-	opts.TemplatePlugin = string(s.TemplatePlugin)
-	s.sharedOptionsCommon.apply(opts)
+func (p pluginOptions) apply(opts *generator.GenOpts) {
+	opts.TemplatePlugin = string(p.TemplatePlugin)
 }

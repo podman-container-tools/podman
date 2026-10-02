@@ -8,8 +8,7 @@ import (
 	"strings"
 )
 
-// ValueShape names the lexical shape of a keyword's value, mapping directly onto the value
-// terminals:
+// ValueShape names the lexical shape of a keyword's value, mapping directly onto the value terminals:
 //
 //   - ShapeNumber       → NUMBER_VALUE
 //   - ShapeInt          → INT_VALUE
@@ -61,8 +60,7 @@ func (v ValueShape) String() string {
 	}
 }
 
-// IsBody reports whether the keyword's value is a multi-line body terminal (RAW_BLOCK_* or
-// RAW_VALUE_*).
+// IsBody reports whether the keyword's value is a multi-line body terminal (RAW_BLOCK_* or RAW_VALUE_*).
 //
 // Body keywords trigger the lexer's body accumulator.
 func (v ValueShape) IsBody() bool {
@@ -157,15 +155,15 @@ func ctx(ctxs ...KeywordContext) keywordOpt {
 
 // Canonical keyword names.
 //
-// These constants are the single source of truth for spelling: every Property's Keyword.Name
-// compares equal to exactly one of them.
+// These constants are the single source of truth for spelling: every Property's Keyword.Name compares equal to exactly
+// one of them.
 //
-// Consumers that switch on Keyword.Name should reference these constants rather than re-declaring
-// the strings — schema/walker.go and the bridge dispatchers in routes/parameters/
-// responses/operations/items/spec all dispatch on these names.
+// Consumers that switch on Keyword.Name should reference these constants rather than re-declaring the strings —
+// schema/walker.go and the bridge dispatchers in routes/parameters/ responses/operations/items/spec all dispatch on
+// these names.
 //
-// Sections (numeric validations / length validations / schema decorators / boolean markers /
-// param-location / meta single-line / raw-block) follow the same order as the keywords table below.
+// Sections (numeric validations / length validations / schema decorators / boolean markers / param-location / meta
+// single-line / raw-block) follow the same order as the keywords table below.
 const (
 	KwMaximum              = "maximum"
 	KwMinimum              = "minimum"
@@ -259,9 +257,8 @@ var keywords = []Keyword{
 		ctx(CtxParam, CtxHeader, CtxItems)),
 
 	// Object validations.
-	// Full-Schema-only (CtxSchema): object property-count bounds have no SimpleSchema
-	// (param/header/items) equivalent in OAS v2. Shape-restricted to `object` schemas by
-	// validations.keywordTypeRules.
+	// Full-Schema-only (CtxSchema): object property-count bounds have no SimpleSchema (param/header/items) equivalent in
+	// OAS v2. Shape-restricted to `object` schemas by validations.keywordTypeRules.
 	keyword(KwMaxProperties,
 		aka("max properties", "max-properties",
 			"maximum properties", "maximum-properties", "maximumProperties"),
@@ -277,8 +274,7 @@ var keywords = []Keyword{
 		asString(),
 		ctx(CtxSchema)),
 	// additionalProperties: <spec> field keyword (true | false | a swagger:type-style spec).
-	// Full-Schema-only; the schema builder resolves the spec and applies the lowest-priority
-	// precedence.
+	// Full-Schema-only; the schema builder resolves the spec and applies the lowest-priority precedence.
 	// See schema/additional_properties.go.
 	keyword(KwAdditionalProperties,
 		aka("additional properties", "additional-properties"),
@@ -307,8 +303,8 @@ var keywords = []Keyword{
 
 	// Parameter-location directive.
 	// Not part of the formal schema- body grammar.
-	// Recognised here so the lexer can hand a typed token to the parameters dispatch path; the schema
-	// parser treats it as a context-invalid warning when seen outside that path.
+	// Recognised here so the lexer can hand a typed token to the parameters dispatch path; the schema parser treats it as
+	// a context-invalid warning when seen outside that path.
 	//
 	// See README §keyword-table ("`in:` is a parameter-location directive").
 	keyword(KwIn,
@@ -317,26 +313,24 @@ var keywords = []Keyword{
 
 	// Name directive — the canonical field-naming keyword.
 	//
-	// Like `in:`, this is a structural keyword rather than part of the schema-body grammar: it renames
-	// the published name of a field at every field site — a swagger:parameters field (the JSON
-	// parameter name), a swagger:response field (the response header / Headers map key) and a
-	// swagger:model property or interface method (the JSON property name) — always overriding the
-	// json-tag / Go-field derivation.
+	// Like `in:`, this is a structural keyword rather than part of the schema-body grammar: it renames the published name
+	// of a field at every field site — a swagger:parameters field (the JSON parameter name), a swagger:response field
+	// (the response header / Headers map key) and a swagger:model property or interface method (the JSON property name)
+	// — always overriding the json-tag / Go-field derivation.
 	//
-	// Legal in CtxParam, CtxHeader and CtxSchema so it is removed from the description prose and
-	// silently ignored by the (Simple)Schema walker (isFullSchemaOnly stays false; no shape rule, so
-	// checkShape passes) at all three; the parameters / responses / schema builders read the value via
-	// GetString(KwName).
+	// Legal in CtxParam, CtxHeader and CtxSchema so it is removed from the description prose and silently ignored by the
+	// (Simple)Schema walker (isFullSchemaOnly stays false; no shape rule, so checkShape passes) at all three; the
+	// parameters / responses / schema builders read the value via GetString(KwName).
 	//
-	// The older `swagger:name` annotation remains honoured as a legacy form (and is the only form on
-	// interface methods historically), but `name:` takes precedence when both appear.
+	// The older `swagger:name` annotation remains honoured as a legacy form (and is the only form on interface methods
+	// historically), but `name:` takes precedence when both appear.
 	// See README §keyword-table. (doc-quirk G2.)
 	keyword(KwName, asString(), ctx(CtxParam, CtxHeader, CtxSchema)),
 
 	// List-shaped keywords.
-	// KwSchemes uses asRawBlock() so multi-line bodies (`Schemes:\n - http\n - https`) populate the
-	// same way they do for Consumes/Produces; the inline comma-list form (`Schemes: http, https`)
-	// still works via the inline-value capture in collectRawBlock.
+	// KwSchemes uses asRawBlock() so multi-line bodies (`Schemes:\n - http\n - https`) populate the same way they do for
+	// Consumes/Produces; the inline comma-list form (`Schemes: http, https`) still works via the inline-value capture in
+	// collectRawBlock.
 	//
 	// Block.GetList unifies both surfaces.
 	// See README §keyword-table.
@@ -365,13 +359,13 @@ var keywords = []Keyword{
 		ctx(CtxMeta)),
 	keyword(KwResponses, asRawBlock(), ctx(CtxRoute, CtxOperation)),
 	keyword(KwParameters, asRawBlock(), ctx(CtxRoute, CtxOperation)),
-	// `examples:` is a YAML map keyed by mime type (`examples:` then an indented `application/json:
-	// {…}`) populating spec.Response.examples on a `swagger:response`.
-	// OAS2 reserves the PLURAL `examples` for responses; the singular `example` above is the schema /
-	// param / header / items decorator.
+	// `examples:` is a YAML map keyed by mime type (`examples:` then an indented `application/json: {…}`) populating
+	// spec.Response.examples on a `swagger:response`.
+	// OAS2 reserves the PLURAL `examples` for responses; the singular `example` above is the schema / param / header /
+	// items decorator.
 	//
-	// Only the struct- based `swagger:response` path needs this keyword — the `swagger:operation`
-	// YAML path carries examples for free via the spec unmarshal.
+	// Only the struct- based `swagger:response` path needs this keyword — the `swagger:operation` YAML path carries
+	// examples for free via the spec unmarshal.
 	// The body is YAML-parsed downstream, so it joins the yamlBody set in the lexer.
 	// See features/response-examples-by-mime.
 	keyword(KwExamples, asRawBlock(), ctx(CtxResponse)),
@@ -391,28 +385,26 @@ var keywords = []Keyword{
 		asRawBlock(),
 		ctx(CtxMeta, CtxRoute, CtxOperation, CtxSchema)),
 	// `Tags:` block.
-	// On swagger:meta it is a YAML list of tag objects ({name, description, externalDocs}) populating
-	// spec.Swagger.Tags.
+	// On swagger:meta it is a YAML list of tag objects ({name, description, externalDocs}) populating spec.Swagger.Tags.
 	//
-	// On swagger:route/operation it is a plain string list of tag names, unioned onto the operation's
-	// tags (the same names may also appear on the swagger:route header line).
-	// The single keyword carries two shapes; the consuming builder decides which (the meta walker
-	// unmarshals objects, the route walker reads AsList).
+	// On swagger:route/operation it is a plain string list of tag names, unioned onto the operation's tags (the same names
+	// may also appear on the swagger:route header line).
+	// The single keyword carries two shapes; the consuming builder decides which (the meta walker unmarshals objects, the
+	// route walker reads AsList).
 	//
 	// See go-swagger/go-swagger#2655.
 	keyword(KwTags, asRawBlock(), ctx(CtxMeta, CtxRoute, CtxOperation)),
 }
 
-// specPointer records where a keyword's value renders in the produced spec: the JSON-pointer
-// segments (relative to the node the keyword decorates, or the document root for the meta-only
-// keywords) and, optionally, the contexts where that node is actually produced when they differ
-// from the keyword's lexical Contexts.
+// specPointer records where a keyword's value renders in the produced spec: the JSON-pointer segments (relative to the
+// node the keyword decorates, or the document root for the meta-only keywords) and, optionally, the contexts where that
+// node is actually produced when they differ from the keyword's lexical Contexts.
 type specPointer struct {
 	segs []string
 	// ctxs overrides the render contexts; nil means "use the keyword's Contexts".
 	//
-	// Set only where lexical legality and node production diverge — e.g. `deprecated` is legal on a
-	// schema but only renders a node on operations.
+	// Set only where lexical legality and node production diverge — e.g. `deprecated` is legal on a schema but only
+	// renders a node on operations.
 	ctxs []KeywordContext
 }
 
@@ -455,12 +447,12 @@ var specPointers = map[string]specPointer{
 	KwBasePath: {segs: []string{KwBasePath}},
 }
 
-// PointerPath returns the JSON-pointer segments where kw's value renders, when kw produces an
-// addressable node legal in ctx.
+// PointerPath returns the JSON-pointer segments where kw's value renders, when kw produces an addressable node legal in
+// ctx.
 //
 // Consumers (the builder walkers) prepend the decorated node's base pointer and any items depth.
-// The ctx gate reuses the keyword's lexical Contexts unless the entry overrides them, so a keyword
-// is never anchored in a context where its node does not exist.
+// The ctx gate reuses the keyword's lexical Contexts unless the entry overrides them, so a keyword is never anchored in
+// a context where its node does not exist.
 func PointerPath(kw Keyword, ctx KeywordContext) ([]string, bool) {
 	sp, ok := specPointers[kw.Name]
 	if !ok {
@@ -476,8 +468,7 @@ func PointerPath(kw Keyword, ctx KeywordContext) ([]string, bool) {
 	return nil, false
 }
 
-// Lookup returns the Keyword matching name (canonical or alias), case-insensitive on the
-// canonical/alias spellings.
+// Lookup returns the Keyword matching name (canonical or alias), case-insensitive on the canonical/alias spellings.
 //
 // The second return value reports whether a match was found.
 func Lookup(name string) (Keyword, bool) {

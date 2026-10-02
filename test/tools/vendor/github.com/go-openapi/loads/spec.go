@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 
@@ -110,7 +109,7 @@ func Analyzed(data json.RawMessage, version string, options ...LoaderOption) (*D
 		version = "2.0"
 	}
 	if version != "2.0" {
-		return nil, fmt.Errorf("spec version %q is not supported: %w", version, ErrLoads)
+		return nil, fmt.Errorf("%w: spec version %q is not supported", ErrLoads, version)
 	}
 
 	raw, err := trimData(data) // trim blanks, then convert yaml docs into json
@@ -120,12 +119,12 @@ func Analyzed(data json.RawMessage, version string, options ...LoaderOption) (*D
 
 	swspec := new(spec.Swagger)
 	if err = json.Unmarshal(raw, swspec); err != nil {
-		return nil, errors.Join(err, ErrLoads)
+		return nil, errLoads(err)
 	}
 
 	origsqspec, err := cloneSpec(swspec)
 	if err != nil {
-		return nil, errors.Join(err, ErrLoads)
+		return nil, errLoads(err)
 	}
 
 	d := &Document{
@@ -153,12 +152,12 @@ func trimData(in json.RawMessage) (json.RawMessage, error) {
 	// assume yaml doc: convert it to json
 	yml, err := yamlutils.BytesToYAMLDoc(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("analyzed: %w: %w", err, ErrLoads)
+		return nil, fmt.Errorf("analyzed: %w", errLoads(err))
 	}
 
 	d, err := yamlutils.YAMLToJSON(yml)
 	if err != nil {
-		return nil, fmt.Errorf("analyzed: %w: %w", err, ErrLoads)
+		return nil, fmt.Errorf("analyzed: %w", errLoads(err))
 	}
 
 	return d, nil
