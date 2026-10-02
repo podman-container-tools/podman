@@ -70,12 +70,13 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 			}
 			return false
 		}, nil
-	case "status":
+	case "status", "status!":
 		for _, filterValue := range filterValues {
 			if _, err := define.StringToContainerStatus(filterValue); err != nil {
 				return nil, err
 			}
 		}
+		negate := filter == "status!"
 		return func(c *libpod.Container) bool {
 			status, err := c.State()
 			if err != nil {
@@ -85,15 +86,17 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 			if status == define.ContainerStateStopped {
 				state = "exited"
 			}
+			matched := false
 			for _, filterValue := range filterValues {
 				if filterValue == "stopped" {
 					filterValue = "exited"
 				}
 				if state == filterValue {
-					return true
+					matched = true
+					break
 				}
 			}
-			return false
+			return matched != negate
 		}, nil
 	case "ancestor":
 		// This needs to refine to match docker
