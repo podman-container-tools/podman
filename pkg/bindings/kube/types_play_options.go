@@ -33,6 +33,21 @@ func (o *PlayOptions) GetAnnotations() map[string]string {
 	return o.Annotations
 }
 
+// WithLabels set field Labels to given value
+func (o *PlayOptions) WithLabels(value map[string]string) *PlayOptions {
+	o.Labels = value
+	return o
+}
+
+// GetLabels returns value of field Labels
+func (o *PlayOptions) GetLabels() map[string]string {
+	if o.Labels == nil {
+		var z map[string]string
+		return z
+	}
+	return o.Labels
+}
+
 // WithAuthfile set field Authfile to given value
 func (o *PlayOptions) WithAuthfile(value string) *PlayOptions {
 	o.Authfile = &value

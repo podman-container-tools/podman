@@ -65,6 +65,9 @@ func (ic *ContainerEngine) PlayKube(_ context.Context, body io.Reader, opts enti
 	if opts.Annotations != nil {
 		options.WithAnnotations(opts.Annotations)
 	}
+	if opts.Labels != nil {
+		options.WithLabels(opts.Labels)
+	}
 	options.WithNoHostname(opts.NoHostname).WithNoHosts(opts.NoHosts).WithUserns(opts.Userns).WithValidate(string(opts.Validate))
 	if s := opts.SkipTLSVerify; s != types.OptionalBoolUndefined {
 		options.WithSkipTLSVerify(s == types.OptionalBoolTrue)

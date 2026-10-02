@@ -444,6 +444,63 @@ _EOF
 }
 
 # bats test_tags=ci:parallel
+@test "podman kube --label" {
+    _write_test_yaml command=/home/podman/pause
+
+    RANDOMSTRING=$(random_string 15)
+    LABEL_WITH_DASH="label-$(random_string 5)"
+    run_podman kube play --label "name=$RANDOMSTRING"  \
+        --label "lab=$LABEL_WITH_DASH" $TESTYAML
+    run_podman inspect --format "{{ .Config.Labels }}" $PODCTRNAME
+    is "$output" ".*name:$RANDOMSTRING" "Label should be added to pod"
+    is "$output" ".*lab:$LABEL_WITH_DASH" "Label with dash should be added to pod"
+
+    # Invalid label: Kubernetes label values cannot contain commas.
+    # Labels are validated in the engine, so podman-remote wraps the
+    # error in a "playing YAML file:" prefix; local podman does not.
+    run_podman 125 kube play --label "foo=bar,baz" $TESTYAML
+    if is_remote; then
+        assert "$output" == 'Error: playing YAML file: invalid label value "bar,baz" for key "foo"' "invalid label error"
+    else
+        assert "$output" == 'Error: invalid label value "bar,baz" for key "foo"' "invalid label error"
+    fi
+
+    run_podman pod rm -t 0 -f $PODNAME
+
+    # Labels should also be applied to PVCs and secrets created by kube play
+    VOLUME_AND_SECRET_YAML=$PODMAN_TMPDIR/pvc-secret-$RANDOMSTRING.yaml
+    cat > $VOLUME_AND_SECRET_YAML <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-$RANDOMSTRING
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-$RANDOMSTRING
+type: Opaque
+data:
+  key: dmFsdWU=
+EOF
+
+    run_podman kube play --label "verify=$LABEL_WITH_DASH" $VOLUME_AND_SECRET_YAML
+    run_podman volume inspect --format "{{ .Labels }}" pvc-$RANDOMSTRING
+    is "$output" ".*verify:$LABEL_WITH_DASH" "Label should be added to volume"
+    run_podman secret inspect --format "{{ .Spec.Labels }}" secret-$RANDOMSTRING
+    is "$output" ".*verify:$LABEL_WITH_DASH" "Label should be added to secret"
+
+    run_podman volume rm pvc-$RANDOMSTRING
+    run_podman secret rm secret-$RANDOMSTRING
+}
+
+# bats test_tags=ci:parallel
 @test "podman play Yaml deprecated --no-trunc annotation" {
    skip "FIXME: I can't figure out what this test is supposed to do"
    RANDOMSTRING=$(random_string 65)

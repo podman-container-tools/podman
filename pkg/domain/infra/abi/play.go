@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,6 +50,8 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 	"sigs.k8s.io/yaml"
 )
+
+var labelValueRegexp = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$`)
 
 // sdNotifyAnnotation allows for configuring service-global and
 // container-specific sd-notify modes.
@@ -362,15 +365,21 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
-			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
-			podTemplateSpec.Spec = podYAML.Spec
-
 			for name, val := range options.Annotations {
 				if podYAML.Annotations == nil {
 					podYAML.Annotations = make(map[string]string)
 				}
 				podYAML.Annotations[name] = val
 			}
+
+			// Merge CLI-specified labels into the pod's labels and validate them.
+			podYAML.Labels = mergeLabels(podYAML.Labels, options.Labels)
+			if err := validateLabels(podYAML.Labels); err != nil {
+				return nil, err
+			}
+
+			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
+			podTemplateSpec.Spec = podYAML.Spec
 
 			if err := annotations.ValidateAnnotations(podYAML.Annotations); err != nil {
 				return nil, err
@@ -491,6 +500,12 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				pvcYAML.Annotations[name] = val
 			}
 
+			// Merge CLI-provided labels into the PVC's labels and validate them.
+			pvcYAML.Labels = mergeLabels(pvcYAML.Labels, options.Labels)
+			if err := validateLabels(pvcYAML.Labels); err != nil {
+				return nil, err
+			}
+
 			if options.IsRemote {
 				if _, ok := pvcYAML.Annotations[util.VolumeImportSourceAnnotation]; ok {
 					return nil, fmt.Errorf("importing volumes is not supported for remote requests")
@@ -521,6 +536,12 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
+
+			// Merge CLI-provided labels into the secret's labels and validate them.
+			secret.ObjectMeta.Labels = mergeLabels(secret.ObjectMeta.Labels, options.Labels)
+			if err := validateLabels(secret.ObjectMeta.Labels); err != nil {
+				return nil, err
+			}
 
 			r, err := ic.playKubeSecret(&secret)
 			if err != nil {
@@ -1985,9 +2006,6 @@ func (ic *ContainerEngine) playKubeSecret(secret *v1.Secret) (*entities.SecretCr
 	secretsPath := ic.Libpod.GetSecretsStorageDir()
 	opts := make(map[string]string)
 	opts["path"] = filepath.Join(secretsPath, "filedriver")
-	// maybe k8sName(data)...
-	// using this does not allow the user to use the name given to the secret
-	// but keeping secret.Name as the ID can lead to a collision.
 
 	s, err := secretsManager.Lookup(secret.Name)
 	if err == nil {
@@ -2013,6 +2031,7 @@ func (ic *ContainerEngine) playKubeSecret(secret *v1.Secret) (*entities.SecretCr
 	storeOpts := secrets.StoreOptions{
 		DriverOpts: opts,
 		Metadata:   meta,
+		Labels:     secret.ObjectMeta.Labels,
 	}
 
 	secretID, err := secretsManager.Store(secret.Name, data, "file", storeOpts)
@@ -2061,4 +2080,45 @@ func expandForKube(s *specgen.SpecGenerator) {
 	for i, subCmd := range s.Command {
 		s.Command[i] = expansion.Expand(subCmd, mapping)
 	}
+}
+
+// mergeLabels merges the CLI-provided labels into the labels of a resource from
+// Kubernetes YAML, with CLI labels taking precedence. It returns nil if both
+// maps are empty, so callers can keep passing nil (rather than an empty map)
+// downstream.
+func mergeLabels(resourceLabels, cliLabels map[string]string) map[string]string {
+	if len(resourceLabels) == 0 && len(cliLabels) == 0 {
+		return nil
+	}
+
+	merged := maps.Clone(resourceLabels)
+	if merged == nil {
+		// resourceLabels was nil, so fall back to a copy of the CLI labels;
+		// maps.Copy into a nil map is a no-op and would drop them.
+		merged = maps.Clone(cliLabels)
+	} else {
+		maps.Copy(merged, cliLabels)
+	}
+	return merged
+}
+
+// validateLabels validates that label keys and values conform to Kubernetes label rules.
+// Label keys are validated individually with annotations.IsQualifiedName, which
+// enforces the Kubernetes qualified-name rules for keys, including the maximum
+// key length (63 characters for the name part after any optional "/" prefix).
+func validateLabels(labels map[string]string) error {
+	const maxLen = 63
+
+	for k := range labels {
+		if err := annotations.IsQualifiedName(k); err != nil {
+			return fmt.Errorf("invalid label key: %w", err)
+		}
+	}
+
+	for k, v := range labels {
+		if len(v) > maxLen || (len(v) > 0 && !labelValueRegexp.MatchString(v)) {
+			return fmt.Errorf("invalid label value %q for key %q", v, k)
+		}
+	}
+	return nil
 }

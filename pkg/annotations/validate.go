@@ -37,9 +37,9 @@ const DNS1123SubdomainMaxLength int = 253
 
 var dns1123SubdomainRegexp = regexp.Delayed("^" + dns1123SubdomainFmt + "$")
 
-// isDNS1123Subdomain tests for a string that conforms to the definition of a
+// IsDNS1123Subdomain tests for a string that conforms to the definition of a
 // subdomain in DNS (RFC 1123).
-func isDNS1123Subdomain(value string) error {
+func IsDNS1123Subdomain(value string) error {
 	if len(value) > DNS1123SubdomainMaxLength {
 		return fmt.Errorf("prefix part must be no more than %d characters", DNS1123SubdomainMaxLength)
 	}
@@ -61,11 +61,11 @@ const (
 
 var qualifiedNameRegexp = regexp.Delayed("^" + qualifiedNameFmt + "$")
 
-// isQualifiedName tests whether the value passed is what Kubernetes calls a
-// "qualified name".  This is a format used in various places throughout the
-// system.  If the value is not valid, a list of error strings is returned.
-// Otherwise an empty list (or nil) is returned.
-func isQualifiedName(value string) error {
+// IsQualifiedName validates keys that follow Kubernetes qualified-name rules
+// (used by annotations AND labels): an optional DNS-1123 subdomain prefix and
+// '/', followed by a name of up to 63 characters. It returns an error if the
+// value does not conform.
+func IsQualifiedName(value string) error {
 	parts := strings.Split(value, "/")
 	var name string
 
@@ -77,7 +77,7 @@ func isQualifiedName(value string) error {
 		prefix, name = parts[0], parts[1]
 		if len(prefix) == 0 {
 			return fmt.Errorf("prefix part of %s must be non-empty", value)
-		} else if err := isDNS1123Subdomain(prefix); err != nil {
+		} else if err := IsDNS1123Subdomain(prefix); err != nil {
 			return err
 		}
 	default:
@@ -117,7 +117,7 @@ func ValidateAnnotations(annotations map[string]string) error {
 	for k := range annotations {
 		// The rule is QualifiedName except that case doesn't matter,
 		// so convert to lowercase before checking.
-		if err := isQualifiedName(strings.ToLower(k)); err != nil {
+		if err := IsQualifiedName(strings.ToLower(k)); err != nil {
 			return err
 		}
 	}
