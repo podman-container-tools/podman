@@ -52,6 +52,8 @@ func main() {
 		// had a specific job to do as a subprocess, and it's done.
 		return
 	}
+	// Logging is actually initialized in setEarlyLogLevel, which is (via PodmanConfig()) called
+	// from init functions, before this runs.
 	logiface.SetLogger(logrusLogger{})
 
 	if filepath.Base(os.Args[0]) == registry.PodmanSh ||

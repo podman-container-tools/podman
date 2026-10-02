@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/docker/go-plugins-helpers/volume"
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"github.com/spf13/cobra"
 )
 
@@ -61,8 +64,10 @@ func before(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
 	logrus.SetLevel(level)
+	slog.SetLogLoggerLevel(lslog.Level(level).Level())
 
 	return nil
 }

@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/config"
 	_ "go.podman.io/podman/v6/cmd/podman/completion"
@@ -48,12 +51,15 @@ func init() {
 }
 
 func before() error {
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
 	if globalLogLevel != "" {
 		parsedLogLevel, err := logrus.ParseLevel(globalLogLevel)
 		if err != nil {
 			return fmt.Errorf("parsing log level %q: %w", globalLogLevel, err)
 		}
 		logrus.SetLevel(parsedLogLevel)
+		slog.SetLogLoggerLevel(lslog.Level(parsedLogLevel).Level())
 	}
 	if err := storeBefore(); err != nil {
 		return fmt.Errorf("setting up storage: %w", err)

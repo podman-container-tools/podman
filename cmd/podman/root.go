@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.podman.io/common/pkg/completion"
@@ -509,6 +511,7 @@ func loggingHook() {
 		os.Exit(1)
 	}
 	logrus.SetLevel(level)
+	slog.SetLogLoggerLevel(lslog.Level(level).Level())
 
 	if logrus.IsLevelEnabled(logrus.InfoLevel) {
 		logrus.Infof("%s filtering at log level %s", os.Args[0], logrus.GetLevel())
