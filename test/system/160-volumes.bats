@@ -283,6 +283,29 @@ EOF
     run_podman volume rm $volname
 }
 
+@test "podman volume export mounted volume with multiple files" {
+    local myvoldir=${PODMAN_TMPDIR}/volume_$(random_string)
+    mkdir -p "$myvoldir"
+    local num_files=25
+    for i in $(seq 1 $num_files); do
+        echo "test content $i" > "$myvoldir/file_$i.txt"
+    done
+
+    local volname="myvol_$(random_string 10)"
+    run_podman volume create -o type=bind -o device="$myvoldir" "$volname"
+    assert "$output" == "$volname" "volume create emits the name it was given"
+
+    local tarfile=${PODMAN_TMPDIR}/export_$(random_string).tar
+    run_podman volume export "$volname" --output="$tarfile"
+    assert "$output" = ""
+
+    run tar -tf "$tarfile"
+    assert "${#lines[@]}" -eq $num_files "all files were exported from volume"
+    rm -f "$tarfile"
+
+    run_podman volume rm "$volname"
+}
+
 # Podman volume user test
 @test "podman volume user test" {
     is_rootless || skip "only meaningful when run rootless"

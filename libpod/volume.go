@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -297,6 +298,19 @@ func (v *Volume) NeedsMount() bool {
 	return v.needsMount()
 }
 
+type volumeExportReadCloser struct {
+	io.ReadCloser
+	vol *Volume
+}
+
+func (v *volumeExportReadCloser) Close() error {
+	err := v.ReadCloser.Close()
+	v.vol.lock.Lock()
+	defer v.vol.lock.Unlock()
+	unmountErr := v.vol.unmount(false)
+	return errors.Join(err, unmountErr)
+}
+
 // Export volume to tar.
 // Returns a ReadCloser which points to a tar of all the volume's contents.
 func (v *Volume) Export() (io.ReadCloser, error) {
@@ -307,21 +321,21 @@ func (v *Volume) Export() (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		v.lock.Lock()
-		defer v.lock.Unlock()
-
-		if err := v.unmount(false); err != nil {
-			logrus.Errorf("Error unmounting volume %s: %v", v.Name(), err)
-		}
-	}()
 
 	volContents, err := utils.TarWithChroot(mountPoint)
 	if err != nil {
+		v.lock.Lock()
+		if unmountErr := v.unmount(false); unmountErr != nil {
+			logrus.Errorf("Error unmounting volume %s: %v", v.Name(), unmountErr)
+		}
+		v.lock.Unlock()
 		return nil, fmt.Errorf("creating tar of volume %s contents: %w", v.Name(), err)
 	}
 
-	return volContents, nil
+	return &volumeExportReadCloser{
+		ReadCloser: volContents,
+		vol:        v,
+	}, nil
 }
 
 // Import a volume from a tar file, provided as an io.Reader.
