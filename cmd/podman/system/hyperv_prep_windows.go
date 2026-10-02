@@ -4,6 +4,7 @@ package system
 
 import (
 	"bufio"
+	jsonpkg "encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
+	"go.podman.io/common/pkg/report"
+	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/cmd/podman/validate"
 	"go.podman.io/podman/v6/pkg/machine/hyperv"
@@ -24,6 +27,12 @@ const (
 	mountsFlag    = "mounts"
 	defaultMounts = 2
 )
+
+// hypervPrepStatus represents the status of Hyper-V preparation
+type hypervPrepStatus struct {
+	IsGroupMember      bool `json:"isGroupMember"`
+	HasRegistryEntries bool `json:"hasRegistryEntries"`
+}
 
 var (
 	hypervPrepDescription = `Command for Windows administrators who need to configure an host for running Hyper-V-based Podman machines.
@@ -44,11 +53,13 @@ var (
 		ValidArgsFunction: completion.AutocompleteNone,
 		Example: `podman system hyperv-prep
 podman system hyperv-prep --status
+podman system hyperv-prep --status --format=json
 podman system hyperv-prep --reset --force`,
 	}
 	showStatus   bool
 	resetEntries bool
 	mounts       int
+	format       string
 )
 
 func init() {
@@ -61,6 +72,8 @@ func init() {
 	flags.BoolVar(&resetEntries, "reset", false, "Remove all Podman vsock registry entries and optionally remove user from Hyper-V Administrators group")
 	flags.BoolVarP(&force, "force", "f", false, "Don't ask for confirmation during reset. Valid only when used with --reset.")
 	flags.IntVar(&mounts, mountsFlag, defaultMounts, "Number of vsock entries to create for mount purpose")
+	flags.StringVar(&format, "format", "", "Format the status output as JSON")
+	_ = hypervPrepCommand.RegisterFlagCompletionFunc("format", common.AutocompleteFormat(nil))
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "reset", mountsFlag)
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "force")
 	_ = hypervPrepCommand.RegisterFlagCompletionFunc(mountsFlag, completion.AutocompleteNone)
@@ -69,11 +82,19 @@ func init() {
 func hypervPrep(_ *cobra.Command, _ []string) error {
 	// --status can run without administrator privileges
 	if showStatus {
-		if err := doStatusForRegistries(); err != nil {
-			return err
+		switch {
+		case report.IsJSON(format):
+			status := collectStatus()
+			return printStatusJSON(status)
+		case format == "":
+			if err := doStatusForRegistries(); err != nil {
+				return err
+			}
+			doStatusForGroupMembership()
+			return nil
+		default:
+			return errors.New("only supported value for '--format' is 'json'")
 		}
-		doStatusForGroupMembership()
-		return nil
 	}
 
 	if !windows.HasAdminRights() {
@@ -91,6 +112,39 @@ func hypervPrep(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	return doPreparationForGroupMembership()
+}
+
+// collectStatus gathers the current Hyper-V preparation status
+func collectStatus() *hypervPrepStatus {
+	isGroupMember := hyperv.IsHyperVAdminsGroupMember()
+
+	// Check for registry entries
+	// Note: Error handling matches doStatusForRegistries() - errors are logged at debug level
+	// and we continue. This means hasRegistryEntries may be false due to an error.
+	purposes := []vsock.HVSockPurpose{vsock.Network, vsock.Events, vsock.Fileserver}
+	hasRegistryEntries := false
+	for _, purpose := range purposes {
+		entries, err := vsock.LoadAllHVSockRegistryEntriesByPurpose(purpose)
+		if err == nil && len(entries) > 0 {
+			hasRegistryEntries = true
+			break
+		}
+	}
+
+	return &hypervPrepStatus{
+		IsGroupMember:      isGroupMember,
+		HasRegistryEntries: hasRegistryEntries,
+	}
+}
+
+// printStatusJSON outputs the status in JSON format
+func printStatusJSON(status *hypervPrepStatus) error {
+	b, err := jsonpkg.MarshalIndent(status, "", "    ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(b))
+	return nil
 }
 
 func doPreparationForRegistries() error {
