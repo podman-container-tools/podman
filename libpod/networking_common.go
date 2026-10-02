@@ -296,13 +296,13 @@ func (c *Container) getContainerNetworkInfo() (*define.InspectNetworkSettings, e
 
 	netStatus := c.getNetworkStatus()
 	// If this is empty, we're probably using pasta
-	if len(netStatus) == 0 {
-		return settings, nil
-	}
+	// We still need to populate network information even if netStatus is empty
 
 	// If we have networks - handle that here
 	if len(networks) > 0 {
-		if len(networks) != len(netStatus) {
+		// When netStatus is empty (pasta case), we still want to populate network information
+		// even without IP addresses from netStatus
+		if len(netStatus) > 0 && len(networks) != len(netStatus) {
 			return nil, fmt.Errorf("network inspection mismatch: asked to join %d network(s) %v, but have information on %d network(s): %w", len(networks), networks, len(netStatus), define.ErrInternal)
 		}
 
@@ -310,7 +310,10 @@ func (c *Container) getContainerNetworkInfo() (*define.InspectNetworkSettings, e
 
 		isDefaultNet := false
 		for _, network := range networks {
-			result := netStatus[network.Name]
+			var result types.StatusBlock
+			if len(netStatus) > 0 {
+				result = netStatus[network.Name]
+			}
 			addedNet := new(define.InspectAdditionalNetwork)
 			addedNet.NetworkID = getNetworkID(network.Name)
 			addedNet.Aliases = network.Aliases
