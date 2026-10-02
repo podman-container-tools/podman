@@ -12,6 +12,29 @@ import (
 	"go.podman.io/podman/v6/pkg/specgen"
 )
 
+func TestInheritNamedVolumesExcludesNoInherit(t *testing.T) {
+	regularInfraVolume := &specgen.NamedVolume{
+		Name: "shared",
+		Dest: "/shared",
+	}
+	internalInfraVolume := &specgen.NamedVolume{
+		Name:      "holder",
+		Dest:      "/run/podman/emptydir/holder",
+		NoInherit: true,
+	}
+	containerVolume := &specgen.NamedVolume{
+		Name: "container",
+		Dest: "/container",
+	}
+
+	volumes := inheritNamedVolumes(
+		[]*specgen.NamedVolume{regularInfraVolume, internalInfraVolume},
+		[]*specgen.NamedVolume{containerVolume},
+	)
+
+	assert.Equal(t, []*specgen.NamedVolume{regularInfraVolume, containerVolume}, volumes)
+}
+
 // TestApplyInfraInheritMountOptionsDoNotLeak verifies that mount options from
 // one mount do not leak into another when calling applyInfraInherit.
 func TestApplyInfraInheritMountOptionsDoNotLeak(t *testing.T) {

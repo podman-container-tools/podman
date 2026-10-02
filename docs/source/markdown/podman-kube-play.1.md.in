@@ -32,8 +32,8 @@ Only five volume types are supported by kube play, the *hostPath*, *emptyDir*, *
 
 - When using the *hostPath* volume type, only the  *default (empty)*, *DirectoryOrCreate*, *Directory*, *FileOrCreate*, *File*, *Socket*, *CharDevice* and *BlockDevice* subtypes are supported. Podman interprets the value of *hostPath* *path* as a file path when it contains at least one forward slash, otherwise Podman treats the value as the name of a named volume.
 - When using a *persistentVolumeClaim*, the value for *claimName* is the name for the Podman named volume.
-- When using an *emptyDir* volume, Podman creates an anonymous volume that is attached the containers running inside the pod and is deleted once the pod is removed.
-- When using an *configMap* volume, Podman creates an anonymous volume that is attached the containers running inside the pod and is deleted once the pod is removed.
+- When using an *emptyDir* volume, Podman creates an anonymous volume that is shared by the containers that mount it and is deleted once the pod is removed. If *medium* is set to *Memory*, the volume is backed by tmpfs, and *sizeLimit* sets its size limit.
+- When using a *configMap* volume, Podman creates an anonymous volume populated with the ConfigMap data and mounts it into the containers that reference it. The volume is deleted once the pod is removed.
 - When using an *image* volume, Podman creates a read-only image volume with an empty subpath (the whole image is mounted). The image must already exist locally. It is supported in rootful mode only.
 
 Note: The default restart policy for containers is `always`.  You can change the default by setting the `restartPolicy` field in the spec.
