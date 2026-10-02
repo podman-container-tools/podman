@@ -1184,7 +1184,7 @@ func (c *Container) Stat(ctx context.Context, containerPath string) (*define.Fil
 	var mountPoint string
 	var err error
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = c.state.Mountpoint.PathWithoutProtection()
 	} else {
 		mountPoint, err = c.mount()
 		if err != nil {

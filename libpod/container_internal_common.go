@@ -23,7 +23,6 @@ import (
 
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/checkpoint-restore/go-criu/v8/stats"
-	securejoin "github.com/cyphar/filepath-securejoin"
 	runcuser "github.com/moby/sys/user"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/runtime-tools/generate"
@@ -253,7 +252,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	}
 
 	overrides := c.getUserOverrides()
-	execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint, c.config.User, overrides)
+	execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint.PathWithoutProtection(), c.config.User, overrides)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -624,7 +623,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 				return nil, nil, err
 			}
 
-			destIsFile, err := containerPathIsFile(c.state.Mountpoint, artifactMount.Dest)
+			destIsFile, err := containerPathIsFile(c.state.Mountpoint.PathWithoutProtection(), artifactMount.Dest)
 			// When the file does not exists and the artifact has only a single blob to mount
 			// assume it is a file so we use the dest path as direct mount.
 			if err != nil && len(paths) == 1 && errors.Is(err, fs.ErrNotExist) {
@@ -688,7 +687,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 
 	// Add addition groups if c.config.GroupAdd is not empty
 	if len(c.config.Groups) > 0 {
-		gids, err := lookup.GetContainerGroups(c.config.Groups, c.state.Mountpoint, overrides)
+		gids, err := lookup.GetContainerGroups(c.config.Groups, c.state.Mountpoint.PathWithoutProtection(), overrides)
 		if err != nil {
 			return nil, nil, fmt.Errorf("looking up supplemental groups for container %s: %w", c.ID(), err)
 		}
@@ -805,11 +804,11 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		// Easy solution: use securejoin to do a scoped evaluation of
 		// the links, then trim off the mount prefix.
 		if m.Type == define.TypeTmpfs {
-			finalPath, err := securejoin.SecureJoin(c.state.Mountpoint, m.Destination)
+			finalPath, err := c.state.Mountpoint.Join(m.Destination)
 			if err != nil {
 				return nil, nil, fmt.Errorf("resolving symlinks for mount destination %s: %w", m.Destination, err)
 			}
-			trimmedPath := strings.TrimPrefix(finalPath, strings.TrimSuffix(c.state.Mountpoint, "/"))
+			trimmedPath := strings.TrimPrefix(finalPath, strings.TrimSuffix(c.state.Mountpoint.PathWithoutProtection(), "/"))
 			m.Destination = trimmedPath
 		}
 		g.AddMount(m)
@@ -923,7 +922,7 @@ func (c *Container) resolveWorkDir() error {
 		return nil
 	}
 
-	resolvedWorkdir, err := securejoin.SecureJoin(c.state.Mountpoint, workdir)
+	resolvedWorkdir, err := c.state.Mountpoint.Join(workdir)
 	if err != nil {
 		return err
 	}
@@ -942,7 +941,7 @@ func (c *Container) resolveWorkDir() error {
 		if errors.Is(err, os.ErrNotExist) {
 			// Check if path is a symlink, securejoin resolves and follows the links
 			// so the path will be different from the normal join if it is one.
-			if resolvedWorkdir != filepath.Join(c.state.Mountpoint, workdir) {
+			if resolvedWorkdir != filepath.Join(c.state.Mountpoint.PathWithoutProtection(), workdir) {
 				// Path must be a symlink to non existing directory.
 				// It could point to mounts that are only created later so that make
 				// an assumption here and let's just continue and let the oci runtime
@@ -965,7 +964,7 @@ func (c *Container) resolveWorkDir() error {
 	}
 
 	// Ensure container entrypoint is created (if required).
-	uid, gid, _, err := chrootuser.GetUser(c.state.Mountpoint, c.User())
+	uid, gid, _, err := chrootuser.GetUser(c.state.Mountpoint.PathWithoutProtection(), c.User())
 	if err != nil {
 		return fmt.Errorf("looking up %s inside of the container %s: %w", c.User(), c.ID(), err)
 	}
@@ -1233,7 +1232,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 			return fmt.Errorf("exporting root file-system diff for %q: %w", c.ID(), err)
 		}
 
-		addToTarFiles, err = crutils.CRCreateRootFsDiffTar(&rootFsChanges, c.state.Mountpoint, c.bundlePath())
+		addToTarFiles, err = crutils.CRCreateRootFsDiffTar(&rootFsChanges, c.state.Mountpoint.PathWithoutProtection(), c.bundlePath())
 		if err != nil {
 			return err
 		}
@@ -1749,7 +1748,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 
 	// Restoring from an import means that we are doing migration
 	if options.TargetFile != "" || options.CheckpointImageID != "" {
-		g.SetRootPath(c.state.Mountpoint)
+		g.SetRootPath(c.state.Mountpoint.PathWithoutProtection())
 	}
 
 	// We want to have the same network namespace as before.
@@ -1918,11 +1917,11 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 
 	// Before actually restarting the container, apply the root file-system changes
 	if !options.IgnoreRootfs {
-		if err := crutils.CRApplyRootFsDiffTar(c.bundlePath(), c.state.Mountpoint); err != nil {
+		if err := crutils.CRApplyRootFsDiffTar(c.bundlePath(), c.state.Mountpoint.PathWithoutProtection()); err != nil {
 			return nil, 0, err
 		}
 
-		if err := crutils.CRRemoveDeletedFiles(c.ID(), c.bundlePath(), c.state.Mountpoint); err != nil {
+		if err := crutils.CRRemoveDeletedFiles(c.ID(), c.bundlePath(), c.state.Mountpoint.PathWithoutProtection()); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -2241,7 +2240,7 @@ rootless=%d
 	}
 
 	// Add Subscription Mounts
-	subscriptionMounts := subscriptions.MountsWithUIDGID(c.config.MountLabel, c.state.RunDir, c.runtime.config.Containers.DefaultMountsFile, c.state.Mountpoint, c.RootUID(), c.RootGID(), rootless.IsRootless(), false)
+	subscriptionMounts := subscriptions.MountsWithUIDGID(c.config.MountLabel, c.state.RunDir, c.runtime.config.Containers.DefaultMountsFile, c.state.Mountpoint.PathWithoutProtection(), c.RootUID(), c.RootGID(), rootless.IsRootless(), false)
 	for _, mount := range subscriptionMounts {
 		if _, ok := c.state.BindMounts[mount.Destination]; !ok {
 			c.state.BindMounts[mount.Destination] = mount.Source
@@ -2497,7 +2496,7 @@ func (c *Container) addHosts() error {
 	if baseHostsFileConf == "" {
 		baseHostsFileConf = c.runtime.config.Containers.BaseHostsFile
 	}
-	baseHostFile, err := etchosts.GetBaseHostFile(baseHostsFileConf, c.state.Mountpoint)
+	baseHostFile, err := etchosts.GetBaseHostFile(baseHostsFileConf, c.state.Mountpoint.PathWithoutProtection())
 	if err != nil {
 		return err
 	}
@@ -2607,13 +2606,13 @@ func (c *Container) generateCurrentUserGroupEntry() (string, int, error) {
 	}
 
 	// Look up group name to see if it exists in the image.
-	_, err = lookup.GetGroup(c.state.Mountpoint, g.Name)
+	_, err = lookup.GetGroup(c.state.Mountpoint.PathWithoutProtection(), g.Name)
 	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", 0, err
 	}
 
 	// Look up GID to see if it exists in the image.
-	_, err = lookup.GetGroup(c.state.Mountpoint, g.Gid)
+	_, err = lookup.GetGroup(c.state.Mountpoint.PathWithoutProtection(), g.Gid)
 	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", 0, err
 	}
@@ -2657,7 +2656,7 @@ func (c *Container) generateUserGroupEntry(addedGID int) (string, error) {
 	}
 
 	// Check if the group already exists
-	g, err := lookup.GetGroup(c.state.Mountpoint, group)
+	g, err := lookup.GetGroup(c.state.Mountpoint.PathWithoutProtection(), group)
 	if !errors.Is(err, runcuser.ErrNoGroupEntries) {
 		return "", err
 	}
@@ -2750,7 +2749,7 @@ func (c *Container) generateCurrentUserPasswdEntry() (string, int, int, error) {
 func (c *Container) setHomeEnvIfNeeded() error {
 	getExecUserHome := func() (string, error) {
 		overrides := c.getUserOverrides()
-		execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint, c.config.User, overrides)
+		execUser, err := lookup.GetUserGroupInfo(c.state.Mountpoint.PathWithoutProtection(), c.config.User, overrides)
 		if err != nil {
 			if slices.Contains(c.config.HostUsers, c.config.User) {
 				execUser, err = lookupHostUser(c.config.User)
@@ -2782,13 +2781,13 @@ func (c *Container) setHomeEnvIfNeeded() error {
 
 func (c *Container) userPasswdEntry(u *user.User) (string, error) {
 	// Look up the user to see if it exists in the container image.
-	_, err := lookup.GetUser(c.state.Mountpoint, u.Username)
+	_, err := lookup.GetUser(c.state.Mountpoint.PathWithoutProtection(), u.Username)
 	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
 
 	// Look up the UID to see if it exists in the container image.
-	_, err = lookup.GetUser(c.state.Mountpoint, u.Uid)
+	_, err = lookup.GetUser(c.state.Mountpoint.PathWithoutProtection(), u.Uid)
 	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
@@ -2847,7 +2846,7 @@ func (c *Container) generateUserPasswdEntry(addedUID int) (string, error) {
 	}
 
 	// Look up the user to see if it exists in the container image
-	_, err = lookup.GetUser(c.state.Mountpoint, userspec)
+	_, err = lookup.GetUser(c.state.Mountpoint.PathWithoutProtection(), userspec)
 	if !errors.Is(err, runcuser.ErrNoPasswdEntries) {
 		return "", err
 	}
@@ -2857,7 +2856,7 @@ func (c *Container) generateUserPasswdEntry(addedUID int) (string, error) {
 		if err == nil {
 			gid = int(ugid)
 		} else {
-			group, err := lookup.GetGroup(c.state.Mountpoint, groupspec)
+			group, err := lookup.GetGroup(c.state.Mountpoint.PathWithoutProtection(), groupspec)
 			if err != nil {
 				return "", fmt.Errorf("unable to get gid %s from group file: %w", groupspec, err)
 			}
@@ -2953,7 +2952,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 		switch {
 		case ro && needsWrite:
 			logrus.Debugf("Making /etc/passwd for container %s", c.ID())
-			originPasswdFile, err := securejoin.SecureJoin(c.state.Mountpoint, "/etc/passwd")
+			originPasswdFile, err := c.state.Mountpoint.Join("/etc/passwd")
 			if err != nil {
 				return "", "", fmt.Errorf("creating path to container %s /etc/passwd: %w", c.ID(), err)
 			}
@@ -2971,7 +2970,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 			passwdPath = passwdFile
 		case !ro && needsWrite:
 			logrus.Debugf("Modifying container %s /etc/passwd", c.ID())
-			containerPasswd, err := securejoin.SecureJoin(c.state.Mountpoint, "/etc/passwd")
+			containerPasswd, err := c.state.Mountpoint.Join("/etc/passwd")
 			if err != nil {
 				return "", "", fmt.Errorf("looking up location of container %s /etc/passwd: %w", c.ID(), err)
 			}
@@ -2999,7 +2998,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 		switch {
 		case ro && needsWrite:
 			logrus.Debugf("Making /etc/group for container %s", c.ID())
-			originGroupFile, err := securejoin.SecureJoin(c.state.Mountpoint, "/etc/group")
+			originGroupFile, err := c.state.Mountpoint.Join("/etc/group")
 			if err != nil {
 				return "", "", fmt.Errorf("creating path to container %s /etc/group: %w", c.ID(), err)
 			}
@@ -3017,7 +3016,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 			groupPath = groupFile
 		case !ro && needsWrite:
 			logrus.Debugf("Modifying container %s /etc/group", c.ID())
-			containerGroup, err := securejoin.SecureJoin(c.state.Mountpoint, "/etc/group")
+			containerGroup, err := c.state.Mountpoint.Join("/etc/group")
 			if err != nil {
 				return "", "", fmt.Errorf("looking up location of container %s /etc/group: %w", c.ID(), err)
 			}
@@ -3160,7 +3159,7 @@ func (c *Container) fixVolumePermissionsUnlocked(v *ContainerNamedVolume, vol *V
 			return nil
 		}
 
-		finalPath, err := securejoin.SecureJoin(c.state.Mountpoint, v.Dest)
+		finalPath, err := c.state.Mountpoint.Join(v.Dest)
 		if err != nil {
 			return err
 		}

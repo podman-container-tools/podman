@@ -16,6 +16,7 @@ import (
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/pkg/chrootuser"
 	"go.podman.io/buildah/util"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/rootless"
@@ -41,7 +42,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 
 	// Optimization: only mount if the container is not already.
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = c.state.Mountpoint.PathWithoutProtection()
 		unmount = func() {}
 	} else {
 		// NOTE: make sure to unmount in error paths.
@@ -49,7 +50,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		if err != nil {
 			return nil, err
 		}
-		c.state.Mountpoint = mountPoint
+		c.state.Mountpoint = protectedroot.NewPathRoot(mountPoint)
 		if err := c.save(); err != nil {
 			return nil, err
 		}
@@ -74,7 +75,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 			}
 
 			if c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited) {
-				c.state.Mountpoint = ""
+				c.state.Mountpoint = nil
 				if err := c.save(); err != nil {
 					logrus.Errorf("Writing container %s state: %v", c.ID(), err)
 				}
@@ -242,7 +243,7 @@ func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Wr
 
 	// Optimization: only mount if the container is not already.
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = c.state.Mountpoint.PathWithoutProtection()
 		unmount = func() {}
 	} else {
 		// NOTE: make sure to unmount in error paths.

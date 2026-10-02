@@ -20,6 +20,7 @@ import (
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/env"
@@ -1443,12 +1444,13 @@ func generateKubeSecurityContext(c *Container) (*v1.SecurityContext, bool, error
 		}
 
 		mountpoint := c.state.Mountpoint
-		if mountpoint == "" {
+		if mountpoint == nil {
 			var err error
-			mountpoint, err = c.mount()
+			mountpointString, err := c.mount()
 			if err != nil {
 				return nil, false, fmt.Errorf("failed to mount %s mountpoint: %w", c.ID(), err)
 			}
+			mountpoint = protectedroot.NewPathRoot(mountpointString)
 			defer func() {
 				if err := c.unmount(false); err != nil {
 					logrus.Errorf("Failed to unmount container: %v", err)
@@ -1457,7 +1459,7 @@ func generateKubeSecurityContext(c *Container) (*v1.SecurityContext, bool, error
 		}
 		logrus.Debugf("Looking in container for user: %s", c.User())
 
-		execUser, err := lookup.GetUserGroupInfo(mountpoint, c.User(), nil)
+		execUser, err := lookup.GetUserGroupInfo(mountpoint.PathWithoutProtection(), c.User(), nil)
 		if err != nil {
 			return nil, false, err
 		}

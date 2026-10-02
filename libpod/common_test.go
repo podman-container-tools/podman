@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/lock"
 )
@@ -66,7 +67,7 @@ func getTestContainer(id, name string, manager lock.Manager) (*Container, error)
 			ConfigPath: "/does/not/exist/specs/" + id,
 			RunDir:     "/does/not/exist/tmp/",
 			Mounted:    true,
-			Mountpoint: "/does/not/exist/tmp/" + id,
+			Mountpoint: protectedroot.NewPathRoot("/does/not/exist/tmp/" + id),
 			PID:        1234,
 			ExecSessions: map[string]*ExecSession{
 				"abcd": {
