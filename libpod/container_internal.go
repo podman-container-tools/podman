@@ -1255,7 +1255,8 @@ func (c *Container) initAndStart(ctx context.Context) (retErr error) {
 // Internal function to start a container without taking the pod lock.
 // Please note that this DOES take the container lock.
 // Intended to be used in pod-related functions.
-func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (finalErr error) {
+// The returned PID has the same meaning as for Start.
+func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (_ int, finalErr error) {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -1271,19 +1272,27 @@ func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (finalEr
 		}()
 
 		if err := c.syncContainer(); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	if err := c.prepareToStart(ctx, recursive); err != nil {
-		return err
+		if errors.Is(err, define.ErrCtrStateRunning) {
+			return c.state.PID, err
+		}
+		return 0, err
 	}
 
 	// Start the container
 	if err := c.start(); err != nil {
-		return err
+		return 0, err
 	}
-	return c.waitForHealthy(ctx)
+	// waitForHealthy can release the lock, so read the PID before calling it.
+	pid := c.state.PID
+	if err := c.waitForHealthy(ctx); err != nil {
+		return 0, err
+	}
+	return pid, nil
 }
 
 // Internal, non-locking function to start a container
