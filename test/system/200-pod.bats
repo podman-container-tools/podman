@@ -363,7 +363,7 @@ EOF
 # bats test_tags=ci:parallel
 @test "podman pod create should fail when infra-name is already in use" {
     local infra_name="infra_container_$(safename)"
-    local infra_image="quay.io/libpod/k8s-pause:3.5"
+    local infra_image="quay.io/libpod/k8s-pause:3.5-nowin"
     local pod_name="p-$(safename)"
 
     run_podman --noout pod create --name $pod_name --infra-name "$infra_name" --infra-image "$infra_image"
