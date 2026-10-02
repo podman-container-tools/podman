@@ -1383,6 +1383,15 @@ func (ic *ContainerEngine) pullImageWithPolicy(ctx context.Context, writer io.Wr
 	pullOptions.Username = options.Username
 	pullOptions.Password = options.Password
 	pullOptions.InsecureSkipTLSVerify = options.SkipTLSVerify
+	if options.Platform != "" {
+		os, arch, variant, err := bparse.Platform(options.Platform)
+		if err != nil {
+			return nil, fmt.Errorf("parsing platform: %w", err)
+		}
+		pullOptions.OS = os
+		pullOptions.Architecture = arch
+		pullOptions.Variant = variant
+	}
 
 	pulledImages, err := ic.Libpod.LibimageRuntime().Pull(ctx, image, pullPolicy, pullOptions)
 	if err != nil {

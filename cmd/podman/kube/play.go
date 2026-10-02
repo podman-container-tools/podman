@@ -183,6 +183,10 @@ func playFlags(cmd *cobra.Command) {
 	flags.StringArrayVar(&playOptions.ConfigMaps, configmapFlagName, []string{}, "`Pathname` of a YAML file containing a kubernetes configmap")
 	_ = cmd.RegisterFlagCompletionFunc(configmapFlagName, completion.AutocompleteDefault)
 
+	platformFlagName := "platform"
+	flags.StringVar(&playOptions.Platform, platformFlagName, "", "Specify the platform for selecting the image.")
+	_ = cmd.RegisterFlagCompletionFunc(platformFlagName, completion.AutocompletePlatform)
+
 	noTruncFlagName := "no-trunc"
 	flags.BoolVar(&playOptions.UseLongAnnotations, noTruncFlagName, false, "Use annotations that are not truncated to the Kubernetes maximum length of 63 characters")
 	_ = flags.MarkHidden(noTruncFlagName)

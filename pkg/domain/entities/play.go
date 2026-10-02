@@ -122,6 +122,8 @@ type PlayKubeOptions struct {
 	Validate KubeValidateMode
 	// MultiplePods allows creating of multiple Pods
 	MultiplePods bool
+	// Platform specifies the platform for selecting the image.
+	Platform string
 }
 
 // PlayKubePod represents a single pod and associated containers created by play kube
