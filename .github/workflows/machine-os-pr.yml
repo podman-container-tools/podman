@@ -99,7 +99,7 @@ jobs:
           --owner packit \
           --project "podman-container-tools-podman-${EVENT_NUMBER}" \
           podman \
-          ${SHA::9}
+          "${SHA::9}"
 
       - name: Push
         if: steps.getversion.outputs.update == 'true'
@@ -146,14 +146,15 @@ jobs:
           VERSION: ${{ steps.getversion.outputs.version }}
         run: |
           bumpbranch="pr${EVENT_NUMBER}"
+          # shellcheck disable=SC2016 # Backticks are Markdown here.
           body=$(printf 'Triggered by https://github.com/%s/pull/%s\n\n```release-note\nRelease v%s\n```\n' \
           "$PODMAN_REPO" "${EVENT_NUMBER}" "${VERSION}")
-          uri=`gh pr create \
+          uri=$(gh pr create \
             --title "Bump Podman to v${VERSION}" \
             --body  "$body" \
             --head "podmanbot:$bumpbranch" \
             --base "${GITHUB_BASE_REF}" \
-            --repo "$UPSTREAM_MACHINE_OS"`
+            --repo "$UPSTREAM_MACHINE_OS")
           echo "uri=$uri" >> "$GITHUB_OUTPUT"
 
       - name: Comment PR link

@@ -1,0 +1,26 @@
+# This is deliberately a separate workflow -- so that it still runs when
+# another workflow file is broken.
+name: actionlint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["**"]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: kjanat/actionlint@08bb2c4f0d039744455b87aef1c647fb8b66d37b # v1.17.0

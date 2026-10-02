@@ -31,11 +31,11 @@ jobs:
 
           if [ "$merged" == "true" ]; then
             echo "PR is merged"
-            echo "pr_state=merged" >> $GITHUB_OUTPUT
-            echo "merge_sha=$merge_sha" >> $GITHUB_OUTPUT
+            echo "pr_state=merged" >> "$GITHUB_OUTPUT"
+            echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
           else
             echo "PR is open"
-            echo "pr_state=open" >> $GITHUB_OUTPUT
+            echo "pr_state=open" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check user authorization
@@ -52,10 +52,10 @@ jobs:
 
           if [ "$permission" == "admin" ] || [ "$permission" == "write" ]; then
             echo "User $COMMENT_AUTHOR has $permission permission, authorized"
-            echo "authorized=true" >> $GITHUB_OUTPUT
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
           else
             echo "User $COMMENT_AUTHOR has $permission permission, not authorized"
-            echo "authorized=false" >> $GITHUB_OUTPUT
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Parse cherry-pick command
@@ -69,10 +69,10 @@ jobs:
 
           if [ -z "$branch" ]; then
             echo "Could not parse branch from comment"
-            echo "branch=" >> $GITHUB_OUTPUT
+            echo "branch=" >> "$GITHUB_OUTPUT"
           else
             echo "Target branch: $branch"
-            echo "branch=$branch" >> $GITHUB_OUTPUT
+            echo "branch=$branch" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout repository
@@ -155,9 +155,11 @@ jobs:
           if echo "$commits" | xargs -r git cherry-pick -x; then
             echo "Cherry-pick to $TARGET_BRANCH successful"
             git push origin "$cherry_pick_branch"
-            echo "cherry_pick_branch=$cherry_pick_branch" >> $GITHUB_OUTPUT
-            echo "original_title=$original_title" >> $GITHUB_OUTPUT
-            echo "success=true" >> $GITHUB_OUTPUT
+            {
+              echo "cherry_pick_branch=$cherry_pick_branch"
+              echo "original_title=$original_title"
+              echo "success=true"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "Cherry-pick to $TARGET_BRANCH failed"
             git cherry-pick --abort || true
@@ -177,10 +179,11 @@ jobs:
           cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${TARGET_BRANCH}"
           original_title=$(gh api "repos/${REPO}/pulls/$PR_NUMBER" -q '.title')
 
+          # shellcheck disable=SC2016 # Backticks are Markdown here.
           printf -v body 'Cherry-pick of #%s to `%s`.\n\nRequested by @%s\n\nOriginal merge commit: %s' \
             "$PR_NUMBER" "$TARGET_BRANCH" "$COMMENT_AUTHOR" "$MERGE_SHA"
 
-          gh api repos/${REPO}/pulls \
+          gh api "repos/${REPO}/pulls" \
             --method POST \
             -f base="$TARGET_BRANCH" \
             -f head="$cherry_pick_branch" \
@@ -217,13 +220,13 @@ jobs:
             grep -oP "Queued cherry-pick to \`\K[^\`]+" | sort -u | paste -sd,)
 
           echo "Found branches: $branches"
-          echo "branches=$branches" >> $GITHUB_OUTPUT
+          echo "branches=$branches" >> "$GITHUB_OUTPUT"
 
           if [ -z "$branches" ]; then
             echo "No cherry-pick requests found"
-            echo "has_requests=false" >> $GITHUB_OUTPUT
+            echo "has_requests=false" >> "$GITHUB_OUTPUT"
           else
-            echo "has_requests=true" >> $GITHUB_OUTPUT
+            echo "has_requests=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout repository
@@ -304,8 +307,8 @@ jobs:
             fi
           done
 
-          echo "successful_branches=${successful_branches%,}" >> $GITHUB_OUTPUT
-          echo "original_title=$original_title" >> $GITHUB_OUTPUT
+          echo "successful_branches=${successful_branches%,}" >> "$GITHUB_OUTPUT"
+          echo "original_title=$original_title" >> "$GITHUB_OUTPUT"
 
       - name: Create cherry-pick PRs
         if: steps.find-requests.outputs.has_requests == 'true' && steps.cherry-pick.outputs.successful_branches != ''
@@ -322,10 +325,11 @@ jobs:
             cherry_pick_branch="cherry-pick-${PR_NUMBER}-to-${branch}"
             echo "Creating PR for $cherry_pick_branch"
 
+            # shellcheck disable=SC2016 # Backticks are Markdown here.
             printf -v body 'Cherry-pick of #%s to `%s`.\n\nOriginal merge commit: %s' \
               "$PR_NUMBER" "$branch" "$MERGE_SHA"
 
-            gh api repos/${REPO}/pulls \
+            gh api "repos/${REPO}/pulls" \
               --method POST \
               -f base="$branch" \
               -f head="$cherry_pick_branch" \

@@ -100,7 +100,7 @@ jobs:
         id: gv
         run: |
           v=$(awk -F':=' '/^GOLANGCI_LINT_VERSION/ {gsub(/ /,"",$2); print $2; exit}' Makefile)
-          echo "version=v${v}" >> $GITHUB_OUTPUT
+          echo "version=v${v}" >> "$GITHUB_OUTPUT"
 
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
@@ -379,7 +379,7 @@ jobs:
       distro: ${{ matrix.distro }}
       mode: ${{ matrix.mode }}
       priv: ${{ matrix.priv }}
-      timeout: ${{ matrix.timeout || 30 }}
+      timeout: 30
       # Top level if does not work because it does not have access to the matrix context.
       # However we can hack around by passing this input argument and the workflow_call
       # can then use this in the if condition to make it work that way.
@@ -464,7 +464,7 @@ jobs:
           VERSION=$(go list -m -f '{{.Version}}' github.com/containers/gvisor-tap-vsock)
           echo "Installing gvproxy $VERSION"
           sudo mkdir -p /usr/local/libexec/podman/
-          sudo curl --fail -L -o /usr/local/libexec/podman/gvproxy https://github.com/containers/gvisor-tap-vsock/releases/download/$VERSION/gvproxy-linux-${{ matrix.os.arch }}
+          sudo curl --fail -L -o /usr/local/libexec/podman/gvproxy "https://github.com/containers/gvisor-tap-vsock/releases/download/$VERSION/gvproxy-linux-${{ matrix.os.arch }}"
           sudo chmod +x /usr/local/libexec/podman/gvproxy
 
       - name: "Install dependencies"
