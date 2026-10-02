@@ -1389,6 +1389,16 @@ func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, p
 		args = append(args, "--log-size-max", strconv.FormatInt(size, 10))
 	}
 
+	// Log rotation options: --log-rotate enables rotation; --log-max-files
+	// sets the number of backup files to keep.
+	// If max-file is not specified, conmon keeps 1 backup file by default when --log-rotate is passed.
+	if ctr.LogRotate() {
+		args = append(args, "--log-rotate")
+	}
+	if logMaxFiles := ctr.LogMaxFiles(); logMaxFiles > 0 {
+		args = append(args, "--log-max-files", strconv.FormatUint(uint64(logMaxFiles), 10))
+	}
+
 	if ociLogPath != "" {
 		args = append(args, "--runtime-arg", "--log-format=json", "--runtime-arg", "--log", fmt.Sprintf("--runtime-arg=%s", ociLogPath))
 	}

@@ -438,6 +438,62 @@ class ContainerTestCase(APITestCase):
         self.assertEqual(2000, out["HostConfig"]["MemorySwap"])
         self.assertEqual(1000, out["HostConfig"]["Memory"])
 
+    def test_log_rotation(self):
+        # Libpod create endpoint with log rotation options in SpecGenerator
+        r = requests.post(
+            self.podman_url + "/v1.4.0/libpod/containers/create",
+            json={
+                "image": "alpine:latest",
+                "name": "log_rotate_libpod",
+                "command": ["top"],
+                "log_configuration": {
+                    "driver": "k8s-file",
+                    "options": {
+                        "max-file": "5",
+                        "log-rotate": "true",
+                    },
+                },
+            },
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        payload = r.json()
+        container_id = payload["Id"]
+        self.assertIsNotNone(container_id)
+
+        r = requests.get(self.podman_url + f"/v1.40/containers/{container_id}/json")
+        self.assertEqual(r.status_code, 200, r.text)
+        out = r.json()
+        self.assertEqual("5", out["HostConfig"]["LogConfig"]["Config"]["max-file"])
+        self.assertEqual("true", out["HostConfig"]["LogConfig"]["Config"]["log-rotate"])
+
+        # Compat create endpoint with log rotation options in HostConfig.LogConfig
+        r = requests.post(
+            self.podman_url + "/v1.40/containers/create?name=log_rotate_compat",
+            json={
+                "Image": "alpine:latest",
+                "Cmd": ["top"],
+                "HostConfig": {
+                    "LogConfig": {
+                        "Type": "k8s-file",
+                        "Config": {
+                            "max-file": "3",
+                            "log-rotate": "true",
+                        },
+                    },
+                },
+            },
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        payload = r.json()
+        container_id = payload["Id"]
+        self.assertIsNotNone(container_id)
+
+        r = requests.get(self.podman_url + f"/v1.40/containers/{container_id}/json")
+        self.assertEqual(r.status_code, 200, r.text)
+        out = r.json()
+        self.assertEqual("3", out["HostConfig"]["LogConfig"]["Config"]["max-file"])
+        self.assertEqual("true", out["HostConfig"]["LogConfig"]["Config"]["log-rotate"])
+
     def test_host_config_port_bindings(self):
         # create a container with two ports exposed, but only one of the ports bound
         r = requests.post(

@@ -99,7 +99,7 @@ BuildRequires: sqlite-devel
 BuildRequires: systemd
 BuildRequires: systemd-devel
 Requires: catatonit
-Requires: conmon >= 2:2.1.7-2
+Requires: conmon >= 2:2.2.0
 # Podman 6 requires the new config file layout.
 Requires: containers-common-extra >= 5:0.68.0
 %if %{defined sequoia}
