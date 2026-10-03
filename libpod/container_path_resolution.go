@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/common/libimage"
 	"go.podman.io/podman/v6/libpod/define"
 )
 
@@ -26,25 +28,33 @@ func (c *Container) pathAbs(path string) string {
 	return path
 }
 
-// pathResolution holds a resolved path and, for a volume subpath, the mount
-// that keeps its root stable until the operation is done.
+// pathResolution holds a resolved path and any mounts that keep its root stable
+// until the operation is done.
 type pathResolution struct {
-	root   string
-	path   string
-	volume *Volume
-	mount  *safeMountInfo
+	root        string
+	path        string
+	volume      *Volume
+	image       *libimage.Image
+	imageVolume *ContainerImageVolume
+	mount       *safeMountInfo
 }
 
 func (r pathResolution) close() {
 	if r.mount != nil {
 		r.mount.Close()
 	}
+	if r.image != nil {
+		if err := r.image.Unmount(false); err != nil {
+			logrus.Errorf("Unmounting image %s after copy: %v", r.image.ID(), err)
+		}
+	}
 }
 
 // resolvePath resolves the container's mount point and the container path as
 // specified by the user. Both may resolve outside the container's mount point
-// when the path hits a volume or bind mount. The caller must close the result.
-func (c *Container) resolvePath(mountPoint string, containerPath string) (pathResolution, error) {
+// when the path hits a volume, image mount, or bind mount. The caller must close
+// the result.
+func (c *Container) resolvePath(ctx context.Context, mountPoint string, containerPath string) (pathResolution, error) {
 	// Let's first make sure we have a path relative to the mount point.
 	pathRelativeToContainerMountPoint := c.pathAbs(containerPath)
 	resolvedPathOnTheContainerMountPoint := filepath.Join(mountPoint, pathRelativeToContainerMountPoint)
@@ -101,6 +111,34 @@ func (c *Container) resolvePath(mountPoint string, containerPath string) (pathRe
 			return pathResolution{root: mountPoint, path: absolutePathOnTheVolumeMount, volume: volume, mount: safeMount}, nil
 		}
 
+		if imageVolume := findImageVolume(c, searchPath); imageVolume != nil {
+			image, _, err := c.runtime.LibimageRuntime().LookupImage(imageVolume.Source, nil)
+			if err != nil {
+				return pathResolution{}, err
+			}
+			imageMountPoint, err := image.Mount(ctx, nil, "")
+			if err != nil {
+				return pathResolution{}, err
+			}
+			resolved := pathResolution{image: image, imageVolume: imageVolume}
+			if imageVolume.SubPath != "" {
+				resolved.mount, err = c.safeMountSubPath(imageMountPoint, imageVolume.SubPath)
+				if err != nil {
+					resolved.close()
+					return pathResolution{}, err
+				}
+				imageMountPoint = resolved.mount.mountPoint
+			}
+			pathRelativeToImage := strings.TrimPrefix(pathRelativeToContainerMountPoint, searchPath)
+			resolved.root = imageMountPoint
+			resolved.path, err = securejoin.SecureJoin(imageMountPoint, pathRelativeToImage)
+			if err != nil {
+				resolved.close()
+				return pathResolution{}, err
+			}
+			return resolved, nil
+		}
+
 		if mount := findBindMount(c, searchPath); mount != nil {
 			logrus.Debugf("Container path %q resolved to bind mount %q:%q on path %q", containerPath, mount.Source, mount.Destination, searchPath)
 			// We found a matching bind mount for searchPath.  We
@@ -125,6 +163,17 @@ func (c *Container) resolvePath(mountPoint string, containerPath string) (pathRe
 
 	// No volume, no bind mount but just a normal path on the container.
 	return pathResolution{root: mountPoint, path: resolvedPathOnTheContainerMountPoint}, nil
+}
+
+// findImageVolume checks whether containerPath matches an image mount's destination.
+func findImageVolume(c *Container, containerPath string) *ContainerImageVolume {
+	cleanedContainerPath := filepath.Clean(containerPath)
+	for _, volume := range c.config.ImageVolumes {
+		if cleanedContainerPath == filepath.Clean(volume.Dest) {
+			return volume
+		}
+	}
+	return nil
 }
 
 // findVolume checks if the specified containerPath matches the destination

@@ -687,6 +687,47 @@ load helpers
     run_podman volume rm "$volume"
 }
 
+@test "podman cp from image mount subpath" {
+    skip_if_rootless "image mounts require rootful storage in this test"
+
+    local source="cp-image-source-$(safename)"
+    local image="cp-image-$(safename)"
+    local container="cp-image-container-$(safename)"
+    local outputdir="$PODMAN_TMPDIR/cp-image-output"
+    mkdir -p "$outputdir"
+
+    run_podman run --name "$source" --network=none $IMAGE sh -c \
+               'mkdir -p /image-data/sub; echo IMAGE_SUBPATH_MARKER >/image-data/sub/probe; echo IMAGE_ONLY >/etc/os-release; ln -s probe /image-data/sub/relative-link; ln -s /etc/os-release /image-data/sub/absolute-link'
+    run_podman commit -q "$source" "$image"
+    run_podman rm "$source"
+
+    run_podman create --name "$container" --network=none \
+               --mount "type=image,source=$image,target=/data,subpath=/image-data/sub" \
+               $IMAGE sleep 120
+
+    run_podman cp "$container:/data/probe" "$outputdir/created"
+    is "$(< "$outputdir/created")" "IMAGE_SUBPATH_MARKER"
+    run_podman cp "$container:/data/relative-link" "$outputdir/relative-link"
+    is "$(< "$outputdir/relative-link")" "IMAGE_SUBPATH_MARKER"
+    run_podman cp "$container:/etc/os-release" "$outputdir/rootfs-os-release"
+    run_podman cp "$container:/data/absolute-link" "$outputdir/absolute-link"
+    cmp "$outputdir/rootfs-os-release" "$outputdir/absolute-link"
+
+    echo HOST_FILE >"$outputdir/hostfile"
+    run_podman 125 cp "$outputdir/hostfile" "$container:/data/hostfile"
+
+    run_podman start "$container"
+    run_podman cp "$container:/data/probe" "$outputdir/running"
+    is "$(< "$outputdir/running")" "IMAGE_SUBPATH_MARKER"
+    run_podman exec "$container" test ! -e /data/hostfile
+
+    run_podman stop -t 0 "$container"
+    run_podman cp "$container:/data/probe" "$outputdir/stopped"
+    is "$(< "$outputdir/stopped")" "IMAGE_SUBPATH_MARKER"
+
+    run_podman rm "$container"
+    run_podman rmi "$image"
+}
 
 @test "podman cp file from host to container mount" {
     srcdir=$PODMAN_TMPDIR/cp-test-mount-src
