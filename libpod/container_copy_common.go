@@ -133,7 +133,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		}
 	}
 
-	resolved, err := c.resolveCopyTarget(mountPoint, path)
+	resolved, err := c.resolveCopyTarget(ctx, mountPoint, path)
 	if err != nil {
 		unmount()
 		return nil, err
@@ -141,6 +141,12 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 	cleanup := func() {
 		resolved.close()
 		unmount()
+	}
+	if resolved.image != nil {
+		// The image is mounted directly here, without the container's writable
+		// overlay. Writing to it would modify the image or fail on a read-only mount.
+		cleanup()
+		return nil, fmt.Errorf("cannot copy into an image mount without its writable overlay")
 	}
 
 	if resolved.volume != nil {
