@@ -125,6 +125,7 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 		Build            bool              `schema:"build"`
 		NoPodPrefix      bool              `schema:"noPodPrefix"`
 		MultiplePods     bool              `schema:"multiplePods"`
+		Platform         string            `schema:"platform"`
 	}{
 		TLSVerify: true,
 		Start:     true,
@@ -210,6 +211,7 @@ func KubePlay(w http.ResponseWriter, r *http.Request) {
 		ContextDir:         contextDirectory,
 		NoPodPrefix:        query.NoPodPrefix,
 		MultiplePods:       query.MultiplePods,
+		Platform:           query.Platform,
 	}
 	if _, found := r.URL.Query()["build"]; found {
 		options.Build = types.NewOptionalBool(query.Build)

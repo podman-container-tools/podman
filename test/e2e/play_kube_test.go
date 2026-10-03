@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -3784,6 +3785,104 @@ spec:
 		Expect(logs).Should(Exit(0))
 		Expect(logs.ErrorToString()).To(ContainSubstring("Operation not permitted"))
 	})
+
+	DescribeTable("with --platform selects container and init container images", func(platform, arch, policy string) {
+		otherPlatform := "linux/amd64"
+		if arch == "amd64" {
+			otherPlatform = "linux/arm64"
+		}
+		if policy == "Never" {
+			otherPlatform = platform
+		}
+		podmanTest.PodmanExitCleanly("pull", "--quiet", "--platform", otherPlatform, ALPINE)
+
+		pod := getPod(
+			withCtr(getCtr(withImage(ALPINE), withPullPolicy(policy))),
+			withPodInitCtr(getCtr(withName("init"), withImage(ALPINE), withPullPolicy(policy), withInitCtr())),
+		)
+		Expect(generateKubeYaml("pod", pod, kubeYaml)).To(Succeed())
+
+		kube := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform", platform, kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(Exit(0))
+
+		for _, name := range []string{getCtrNameInPod(pod), pod.Name + "-init"} {
+			ctr := podmanTest.PodmanExitCleanly("container", "inspect", "--format", "{{.Image}}", name)
+			image := podmanTest.PodmanExitCleanly("image", "inspect", ctr.OutputToString())
+			data := image.InspectImageJSON()
+			Expect(data).To(HaveLen(1))
+			Expect(data[0].Os).To(Equal("linux"))
+			Expect(data[0].Architecture).To(Equal(arch))
+		}
+	},
+		Entry("IfNotPresent replaces a different architecture", "linux/arm64", "arm64", "IfNotPresent"),
+		Entry("Always selects the requested architecture", "linux/amd64", "amd64", "Always"),
+		Entry("Never uses a matching local image", "linux/amd64", "amd64", "Never"),
+		Entry("architecture aliases are normalized", "linux/x86_64", "amd64", "Always"),
+	)
+
+	It("with --platform and Never rejects a different local architecture", func() {
+		platform, otherPlatform := "linux/amd64", "linux/arm64"
+		if runtime.GOARCH == "amd64" {
+			platform, otherPlatform = otherPlatform, platform
+		}
+		podmanTest.PodmanExitCleanly("pull", "--quiet", "--platform", otherPlatform, ALPINE)
+		const image = "localhost/platform-never:latest"
+		podmanTest.PodmanExitCleanly("tag", ALPINE, image)
+		ctr := getCtr(withImage(image), withPullPolicy("Never"))
+		Expect(generateKubeYaml("pod", getPod(withCtr(ctr)), kubeYaml)).To(Succeed())
+
+		kube := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform", platform, kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(ExitWithError(125, "image not known"))
+	})
+
+	It("with --platform rejects invalid syntax before creating pods", func() {
+		Expect(generateKubeYaml("pod", getPod(), kubeYaml)).To(Succeed())
+		kube := podmanTest.Podman([]string{"kube", "play", "--platform=linux/amd64/invalid/extra", kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(ExitWithError(125, "invalid platform syntax"))
+		pods := podmanTest.PodmanExitCleanly("pod", "ps", "--quiet")
+		Expect(pods.OutputToString()).To(BeEmpty())
+	})
+
+	It("with --platform reports an unavailable architecture", func() {
+		pod := getPod(withCtr(getCtr(withImage(ALPINE), withPullPolicy("Always"))))
+		Expect(generateKubeYaml("pod", pod, kubeYaml)).To(Succeed())
+		kube := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform=linux/bogus", kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(ExitWithError(125, `no image found in manifest list for architecture "bogus"`))
+	})
+
+	DescribeTable("with --platform builds the requested architecture and variant", func(forceBuild bool) {
+		SkipIfRemote("kube play --build is not supported in remote mode")
+		const image = "platform-build"
+		buildDir := filepath.Join(podmanTest.TempDir, image)
+		Expect(os.MkdirAll(buildDir, 0o755)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(buildDir, "Containerfile"), []byte("FROM scratch\nARG TARGETPLATFORM\nLABEL platform-test=$TARGETPLATFORM\n"), 0o644)).To(Succeed())
+		podmanTest.PodmanExitCleanly("build", "--quiet", "--platform=linux/amd64", "-t", image, buildDir)
+		pod := getPod(withCtr(getCtr(withImage(image))))
+		Expect(generateKubeYaml("pod", pod, kubeYaml)).To(Succeed())
+
+		args := []string{"kube", "play", "--start=false", "--platform=linux/arm/v7"}
+		if forceBuild {
+			args = append(args, "--build", "--context-dir", podmanTest.TempDir)
+		}
+		args = append(args, kubeYaml)
+		kube := podmanTest.PodmanWithOptions(PodmanExecOptions{CWD: podmanTest.TempDir}, args...)
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(Exit(0))
+		ctr := podmanTest.PodmanExitCleanly("container", "inspect", "--format", "{{.Image}}", getCtrNameInPod(pod))
+		inspect := podmanTest.PodmanExitCleanly("image", "inspect", ctr.OutputToString())
+		data := inspect.InspectImageJSON()
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].Os).To(Equal("linux"))
+		Expect(data[0].Architecture).To(Equal("arm"))
+		Expect(data[0].Labels).To(HaveKeyWithValue("platform-test", "linux/arm/v7"))
+	},
+		Entry("explicit build", true),
+		Entry("automatic build replaces a different architecture", false),
+	)
 
 	It("with pull policy of never should be 125", func() {
 		ctr := getCtr(withPullPolicy("never"), withImage(BB_GLIBC))

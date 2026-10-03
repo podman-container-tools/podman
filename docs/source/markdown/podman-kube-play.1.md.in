@@ -263,6 +263,20 @@ This option conflicts with host added in the Kubernetes YAML.
 
 Do not prefix container name with pod name.
 
+#### **--platform**=*OS/ARCH[/VARIANT]*
+
+Select the platform for images used by the containers and init containers in the YAML,
+for example `linux/amd64` or `linux/arm/v7`. The selected platform also applies to
+images built from Containerfiles. Infrastructure and service container images are
+not affected.
+
+The image pull policy in the YAML still applies. With `imagePullPolicy: Never`,
+the image must already exist in local storage, as with **podman pull --policy=never**.
+
+This option selects images; it does not enable emulation. Running containers or
+build steps for a non-native architecture requires emulation on the machine
+running the Podman engine.
+
 #### **--publish**=*[[ip:][hostPort]:]containerPort[/protocol]*
 
 Define or override a port definition in the YAML file.

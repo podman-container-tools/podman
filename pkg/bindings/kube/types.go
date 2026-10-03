@@ -69,6 +69,8 @@ type PlayOptions struct {
 	NoPodPrefix      *bool
 	// MultiplePods allows creating of multiple Pods
 	MultiplePods *bool
+	// Platform selects the OS, architecture and variant of workload images.
+	Platform *string
 }
 
 // ApplyOptions are optional options for applying kube YAML files to a k8s cluster

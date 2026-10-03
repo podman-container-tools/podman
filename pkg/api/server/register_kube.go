@@ -98,6 +98,10 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    default: false
 	//    description: use annotations that are not truncated to the Kubernetes maximum length of 63 characters
 	//  - in: query
+	//    name: platform
+	//    type: string
+	//    description: Select the OS/architecture[/variant] for workload images, including builds. Does not affect infrastructure or service containers.
+	//  - in: query
 	//    name: publishPorts
 	//    type: array
 	//    description: publish a container's port, or a range of ports, to the host

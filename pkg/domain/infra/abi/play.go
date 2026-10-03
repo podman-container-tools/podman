@@ -43,6 +43,7 @@ import (
 	"go.podman.io/podman/v6/pkg/specgenutil"
 	"go.podman.io/podman/v6/pkg/systemd/notifyproxy"
 	"go.podman.io/podman/v6/pkg/util"
+	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/chrootarchive"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/stringid"
@@ -232,6 +233,11 @@ func k8sName(content []byte, suffix string) string {
 }
 
 func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options entities.PlayKubeOptions) (_ *entities.PlayKubeReport, finalErr error) {
+	if options.Platform != "" {
+		if _, _, _, err := bparse.Platform(options.Platform); err != nil {
+			return nil, err
+		}
+	}
 	if options.ServiceContainer && options.Start == types.OptionalBoolFalse { // Sanity check to be future proof
 		return nil, fmt.Errorf("running a service container requires starting the pod(s)")
 	}
@@ -1320,9 +1326,23 @@ func (ic *ContainerEngine) buildImageFromContainerfile(ctx context.Context, cwd 
 	if err != nil {
 		return nil, err
 	}
+	lookupOptions := &libimage.LookupImageOptions{}
+	if options.Platform != "" {
+		lookupOptions.OS, lookupOptions.Architecture, lookupOptions.Variant, err = bparse.Platform(options.Platform)
+		if err != nil {
+			return nil, err
+		}
+	}
 	existsLocally, err := ic.Libpod.LibimageRuntime().Exists(image)
 	if err != nil {
 		return nil, err
+	}
+	if existsLocally && options.Platform != "" {
+		_, _, err = ic.Libpod.LibimageRuntime().LookupImage(image, lookupOptions)
+		if err != nil && !errors.Is(err, storage.ErrImageUnknown) {
+			return nil, err
+		}
+		existsLocally = err == nil
 	}
 	if (len(buildFile) > 0) && ((!existsLocally && options.Build != types.OptionalBoolFalse) || (options.Build == types.OptionalBoolTrue)) {
 		buildOpts := new(buildahDefine.BuildOptions)
@@ -1335,6 +1355,13 @@ func (ic *ContainerEngine) buildImageFromContainerfile(ctx context.Context, cwd 
 		buildOpts.Isolation = isolation
 		buildOpts.CommonBuildOpts = commonOpts
 		buildOpts.SystemContext = options.SystemContext
+		if options.Platform != "" {
+			buildOpts.Platforms = []struct{ OS, Arch, Variant string }{{
+				OS:      lookupOptions.OS,
+				Arch:    lookupOptions.Architecture,
+				Variant: lookupOptions.Variant,
+			}}
+		}
 		buildOpts.Output = image
 		buildOpts.ContextDirectory = filepath.Dir(buildFile)
 		buildOpts.ReportWriter = writer
@@ -1376,6 +1403,13 @@ func (ic *ContainerEngine) pullImageWithPolicy(ctx context.Context, writer io.Wr
 	}
 	// This ensures the image is the image store
 	pullOptions := &libimage.PullOptions{}
+	if options.Platform != "" {
+		var err error
+		pullOptions.OS, pullOptions.Architecture, pullOptions.Variant, err = bparse.Platform(options.Platform)
+		if err != nil {
+			return nil, err
+		}
+	}
 	pullOptions.AuthFilePath = options.Authfile
 	pullOptions.CertDirPath = options.CertDir
 	pullOptions.SignaturePolicyPath = options.SignaturePolicy

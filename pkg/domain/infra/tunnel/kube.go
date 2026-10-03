@@ -77,6 +77,9 @@ func (ic *ContainerEngine) PlayKube(_ context.Context, body io.Reader, opts enti
 	options.WithNoTrunc(opts.UseLongAnnotations)
 	options.WithNoPodPrefix(opts.NoPodPrefix)
 	options.WithMultiplePods(opts.MultiplePods)
+	if opts.Platform != "" {
+		options.WithPlatform(opts.Platform)
+	}
 	return play.KubeWithBody(ic.ClientCtx, body, options)
 }
 
