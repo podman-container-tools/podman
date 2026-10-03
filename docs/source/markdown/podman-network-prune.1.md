@@ -38,12 +38,12 @@ Do not prompt for confirmation
 
 Prune networks:
 ```
-podman network prune
+$ podman network prune
 ```
 
 Prune all networks created not created in the last two hours:
 ```
-podman network prune --filter until=2h
+$ podman network prune --filter until=2h
 ```
 
 ## SEE ALSO

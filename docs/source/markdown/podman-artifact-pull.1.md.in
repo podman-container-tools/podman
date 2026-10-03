@@ -43,7 +43,7 @@ $ podman artifact pull quay.io/foobar/artifact:special
 Pull an artifact from a registry
 
 ```
-podman artifact pull quay.io/baude/artifact:josey
+$ podman artifact pull quay.io/baude/artifact:josey
 Getting image source signatures
 Copying blob e741c35a27bb done   |
 Copying config 44136fa355 done   |

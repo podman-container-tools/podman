@@ -45,23 +45,23 @@ Administrators group membership status.
 Create the required registry entries and add the current user to the Hyper-V
 Administrators group:
 ```
-podman system hyperv-prep
+PS> podman system hyperv-prep
 ```
 
 Show existing registry entries and group membership status:
 ```
-podman system hyperv-prep --status
+PS> podman system hyperv-prep --status
 ```
 
 Remove all Podman VSock registry entries and the current user from the Hyper-V
 Administrators group (with confirmation prompts):
 ```
-podman system hyperv-prep --reset
+PS> podman system hyperv-prep --reset
 ```
 
 Reset without confirmation prompts:
 ```
-podman system hyperv-prep --reset --force
+PS> podman system hyperv-prep --reset --force
 ```
 
 ## SEE ALSO

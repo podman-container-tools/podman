@@ -88,7 +88,7 @@ Sign the pushed images with a sigstore signature using a private key at the spec
 
 Push manifest list to container registry:
 ```
-podman manifest push mylist:v1.11 docker://registry.example.org/mylist:v1.11
+$ podman manifest push mylist:v1.11 docker://registry.example.org/mylist:v1.11
 ```
 
 ## SEE ALSO

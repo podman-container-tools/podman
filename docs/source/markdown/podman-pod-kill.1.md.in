@@ -22,27 +22,27 @@ Sends signal to all containers associated with a pod.
 
 Kill pod with a given name:
 ```
-podman pod kill mywebserver
+$ podman pod kill mywebserver
 ```
 
 Kill pod with a given ID:
 ```
-podman pod kill 860a4b23
+$ podman pod kill 860a4b23
 ```
 
 Terminate pod by sending `TERM` signal:
 ```
-podman pod kill --signal TERM 860a4b23
+$ podman pod kill --signal TERM 860a4b23
 ```
 
 Kill the latest pod. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
 ```
-podman pod kill --latest
+$ podman pod kill --latest
 ```
 
 Terminate all pods by sending `KILL` signal:
 ```
-podman pod kill --all
+$ podman pod kill --all
 ```
 
 ## SEE ALSO

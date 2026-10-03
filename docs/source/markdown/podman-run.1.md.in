@@ -672,7 +672,7 @@ files or source code.
 Example:
 
 ```
-podman run --mount type=bind,src=/etc/config,dst=/app/config alpine cat /app/config/file.conf
+$ podman run --mount type=bind,src=/etc/config,dst=/app/config alpine cat /app/config/file.conf
 ```
 
 #### Volume mounts
@@ -684,8 +684,8 @@ isolated from direct host paths.
 Example:
 
 ```
-podman volume create mydata
-podman run --mount type=volume,src=mydata,dst=/var/lib/data postgres
+$ podman volume create mydata
+$ podman run --mount type=volume,src=mydata,dst=/var/lib/data postgres
 ```
 
 #### Tmpfs mounts
@@ -698,7 +698,7 @@ sensitive data that should not persist to disk.
 Example:
 
 ```
-podman run --mount type=tmpfs,dst=/cache,tmpfs-size=64m alpine
+$ podman run --mount type=tmpfs,dst=/cache,tmpfs-size=64m alpine
 ```
 
 #### Artifact, devpts, image, glob, and ramfs mounts
@@ -743,7 +743,7 @@ requirement for MLS systems. Specifying the level in the following command
 allows the same content to be shared between containers.
 
 ```
-podman run --security-opt label=level:s0:c100,c200 -i -t fedora bash
+$ podman run --security-opt label=level:s0:c100,c200 -i -t fedora bash
 ```
 
 An MLS example might be:
@@ -853,7 +853,7 @@ shows how to use an additional image store for a one-time run of busybox
 using global options.
 
 ```
-podman --log-level=debug --storage-opt "additionalimagestore=/tmp/readonly-images" run busybox /bin/sh
+$ podman --log-level=debug --storage-opt "additionalimagestore=/tmp/readonly-images" run busybox /bin/sh
 ```
 
 ### Configure timezone in a container

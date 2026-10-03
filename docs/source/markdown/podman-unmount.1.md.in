@@ -44,22 +44,22 @@ Note: Other processes can fail if the mount point they are using is removed with
 
 Unmount container with a given ID:
 ```
-podman container unmount containerID
+$ podman container unmount containerID
 ```
 
 Unmount multiple containers with given IDs:
 ```
-podman unmount containerID1 containerID2 containerID3
+$ podman unmount containerID1 containerID2 containerID3
 ```
 
 Unmount all containers:
 ```
-podman unmount --all
+$ podman unmount --all
 ```
 
 Force umount container with given ID:
 ```
-podman umount --force containerID
+$ podman umount --force containerID
 ```
 
 ## SEE ALSO

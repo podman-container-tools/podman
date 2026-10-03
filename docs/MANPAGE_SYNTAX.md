@@ -115,6 +115,13 @@ Text for SUBHEADINGS.
 ## EXAMPLES
 All EXAMPLES are listed in this section. This section should be at the end of each man page. Each EXAMPLE is always in one box. The box starts and ends with the last written line, **not** with a blank line. The `$` in front of the commands indicates that it can be run as a normal user, while the commands starting with `#` can only be run as root. If there is the need for a comment in a box the comment should have `###` in front of it.
 
+`hack/xref-helpmsgs-manpages`, run by `make man-page-check`, checks for a missing
+prompt on an initial `podman` or `sudo podman` command in fenced EXAMPLE or
+EXAMPLES blocks. This check covers unlabelled blocks and blocks labelled `sh`,
+`bash`, `shell`, or `console`. Later lines may be output, shell continuations,
+or file contents, so they are not checked. Choosing the correct prompt and
+including output where possible still require review.
+
 Description of the EXAMPLE
 ```
 ### Example comment

@@ -368,10 +368,10 @@ sed('podman-version.1.md', sub {
 sed('podman-volume-prune.1.md', sub {
         my $line = shift;
 
-        if ($line =~ /^\|\s+driver\s+\|/) {
+        if ($line =~ /^\|\s+label\s+\|/) {
             $line = "| name! | sdfsdf |\n" . $line;
         }
-        if ($line =~ /^\|\s+opt\s+\|/) {
+        if ($line =~ /^\|\s+until\s+\|/) {
             $line .= $line;
         }
 
@@ -379,7 +379,7 @@ sed('podman-volume-prune.1.md', sub {
     },
 
     "podman-volume-prune.1.md:NNN: filter 'name!' only allowed immediately after its positive",
-    "podman-volume-prune.1.md:NNN: filter specifier 'opt' is a dup",
+    "podman-volume-prune.1.md:NNN: filter specifier 'until' is a dup",
 );
 
 # DONE with fault injection. Reread man pages and verify warnings.

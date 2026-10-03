@@ -26,34 +26,34 @@ Signal all running and paused containers.
 
 Kill container with a given name:
 ```
-podman kill mywebserver
+$ podman kill mywebserver
 ```
 
 Kill container with a given ID:
 ```
-podman kill 860a4b23
+$ podman kill 860a4b23
 ```
 
 Terminate container by sending `TERM` signal:
 ```
-podman kill --signal TERM 860a4b23
+$ podman kill --signal TERM 860a4b23
 ```
 
 Kill the latest container. (This option is not available with the remote Podman client, including Mac and Windows
 (excluding WSL2) machines):
 ```
-podman kill --latest
+$ podman kill --latest
 ```
 
 Terminate all containers by sending `KILL` signal:
 ```
-podman kill --signal KILL -a
+$ podman kill --signal KILL -a
 ```
 
 Kill containers using ID specified in a given files:
 ```
-podman kill --cidfile /home/user/cidfile-1
-podman kill --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2
+$ podman kill --cidfile /home/user/cidfile-1
+$ podman kill --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2
 ```
 
 ## SEE ALSO

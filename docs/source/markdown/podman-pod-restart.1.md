@@ -26,26 +26,26 @@ Instead of providing the pod name or ID, restart the last created pod. (This opt
 
 Restart pod with a given name:
 ```
-podman pod restart mywebserverpod
+$ podman pod restart mywebserverpod
 cc8f0bea67b1a1a11aec1ecd38102a1be4b145577f21fc843c7c83b77fc28907
 ```
 
 Restart multiple pods with given IDs:
 ```
-podman pod restart 490eb 3557fb
+$ podman pod restart 490eb 3557fb
 490eb241aaf704d4dd2629904410fe4aa31965d9310a735f8755267f4ded1de5
 3557fbea6ad61569de0506fe037479bd9896603c31d3069a6677f23833916fab
 ```
 
 Restart the last created pod:
 ```
-podman pod restart --latest
+$ podman pod restart --latest
 3557fbea6ad61569de0506fe037479bd9896603c31d3069a6677f23833916fab
 ```
 
 Restart all pods:
 ```
-podman pod restart --all
+$ podman pod restart --all
 19456b4cd557eaf9629825113a552681a6013f8c8cad258e36ab825ef536e818
 3557fbea6ad61569de0506fe037479bd9896603c31d3069a6677f23833916fab
 490eb241aaf704d4dd2629904410fe4aa31965d9310a735f8755267f4ded1de5

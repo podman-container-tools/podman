@@ -219,7 +219,7 @@ $ podman machine init myvm
 Initialize and start a new Podman machine in one step.
 
 ```
-podman machine init --now
+$ podman machine init --now
 ```
 
 Initialize the default Podman machine pulling the content from the internet defaulting to rootful mode. The default is rootless.

@@ -571,9 +571,33 @@ sub podman_man {
     my $previous_flag = '';
     my $previous_format = '';
     my $previous_filter = '';
+    my $fence = '';
+    my $first_example_line = 0;
   LINE:
     while (my $line = <$fh>) {
         chomp $line;
+        if ($fence) {
+            if ($line =~ /^ {0,3}(`+|~+)[ \t]*$/
+                && substr($1, 0, 1) eq substr($fence, 0, 1)
+                && length($1) >= length($fence)) {
+                $fence = '';
+            }
+            elsif ($first_example_line && $line =~ /\S/ && $line !~ /^\s*###\s/) {
+                # Only inspect the first command: later lines may be output,
+                # shell continuations, or the contents of a here-document.
+                if ($line =~ /^\s*(?:sudo\s+)?podman(?:\s|$)/) {
+                    warn "$ME: $subpath:$.: example command needs a '\$' (rootless) or '#' (root-only) prompt\n";
+                    ++$Errs;
+                }
+                $first_example_line = 0;
+            }
+            next LINE;
+        }
+        if ($line =~ /^ {0,3}(`{3,}|~{3,})(.*)$/) {
+            $fence = $1;
+            $first_example_line = $section eq 'examples' && $2 =~ /^\s*(?:sh|bash|shell|console)?\s*$/;
+            next LINE;
+        }
         next LINE unless $line;		# skip empty lines
 
         # First line (page title) must match the command name.
@@ -600,6 +624,9 @@ sub podman_man {
         }
         elsif ($line =~ /^\#\#\s+SEE\s+ALSO/) {
             $section = 'see-also';
+        }
+        elsif ($line =~ /^##\s+EXAMPLES?\s*$/) {
+            $section = 'examples';
         }
         # New section or subsection within SEE ALSO: disable the '**' rules.
         elsif ($line =~ /^\#\#+/ && $section eq 'see-also') {

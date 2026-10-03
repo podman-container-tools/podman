@@ -18,11 +18,11 @@ If a specified manifest does not exist in the local storage, ignore it and do no
 ## EXAMPLES
 
 ```
-podman manifest rm listid
+$ podman manifest rm listid
 ```
 
 ```
-podman manifest rm --ignore listid1 listid2
+$ podman manifest rm --ignore listid1 listid2
 ```
 
 ## SEE ALSO

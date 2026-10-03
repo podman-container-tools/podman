@@ -27,28 +27,28 @@ Pause all running containers.
 
 Pause specified container:
 ```
-podman pause mywebserver
+$ podman pause mywebserver
 ```
 
 Pause container by partial container ID:
 ```
-podman pause 860a4b23
+$ podman pause 860a4b23
 ```
 
 Pause all **running** containers:
 ```
-podman pause --all
+$ podman pause --all
 ```
 
 Pause container using ID specified in given files:
 ```
-podman pause --cidfile /home/user/cidfile-1
-podman pause --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2
+$ podman pause --cidfile /home/user/cidfile-1
+$ podman pause --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2
 ```
 
 Pause the latest container. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
 ```
-podman pause --latest
+$ podman pause --latest
 ```
 
 ## SEE ALSO

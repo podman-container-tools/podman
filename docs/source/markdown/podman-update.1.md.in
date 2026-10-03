@@ -103,22 +103,22 @@ Note: Ulimit changes apply after container restart.
 
 Update a container with a new cpu quota and period:
 ```
-podman update --cpus=0.5 ctrID
+$ podman update --cpus=0.5 ctrID
 ```
 
 Update the latest container with a new cpu value:
 ```
-podman update --latest --cpus=1
+$ podman update --latest --cpus=1
 ```
 
 Update a container's ulimit:
 ```
-podman update --ulimit nofile=1024:1024 ctrID
+$ podman update --ulimit nofile=1024:1024 ctrID
 ```
 
 Update a container with multiple options at ones:
 ```
-podman update --cpus 5 --cpuset-cpus 0 --cpu-shares 123 --cpuset-mems 0 \\
+$ podman update --cpus 5 --cpuset-cpus 0 --cpu-shares 123 --cpuset-mems 0 \\
   --memory 1G --memory-swap 2G --memory-reservation 2G \\
   --blkio-weight-device /dev/sda:123 --blkio-weight 123 \\
   --device-read-bps /dev/sda:10mb --device-write-bps /dev/sda:10mb \\

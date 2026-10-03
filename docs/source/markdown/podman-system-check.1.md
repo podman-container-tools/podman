@@ -46,12 +46,12 @@ depend on damaged images, and those damaged images, as well.
 
 A reasonably quick check:
 ```
-podman system check --quick --repair --force
+$ podman system check --quick --repair --force
 ```
 
 A more thorough check:
 ```
-podman system check --repair --max=1h --force
+$ podman system check --repair --max=1h --force
 ```
 
 ## SEE ALSO

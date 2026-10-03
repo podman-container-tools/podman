@@ -118,7 +118,7 @@ d4ff818577bc193b309b355b02ebc9220427090057b54a59e73b79bdfe139b83
 
 Pull multiple images with/without short name resolution.
 ```
-podman pull busybox:musl alpine quay.io/libpod/cirros
+$ podman pull busybox:musl alpine quay.io/libpod/cirros
 Trying to pull docker.io/library/busybox:musl...
 Getting image source signatures
 Copying blob 0c52b060233b [--------------------------------------] 0.0b / 0.0b

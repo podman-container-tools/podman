@@ -85,17 +85,17 @@ Trust may be updated using the command **podman image trust set** for an existin
 
 Accept all unsigned images from a registry:
 ```
-sudo podman image trust set --signature-policy /etc/containers/policy.json --type accept docker.io
+$ sudo podman image trust set --signature-policy /etc/containers/policy.json --type accept docker.io
 ```
 
 Modify default trust policy:
 ```
-sudo podman image trust set --signature-policy /etc/containers/policy.json -t reject default
+$ sudo podman image trust set --signature-policy /etc/containers/policy.json -t reject default
 ```
 
 Display system trust policy:
 ```
-podman image trust show
+$ podman image trust show
 TRANSPORT      NAME                        TYPE        ID                   STORE
 all            default                     reject
 repository     docker.io/library           accept
@@ -107,7 +107,7 @@ docker-daemon                              accept
 
 Display trust policy file:
 ```
-podman image trust show --raw
+$ podman image trust show --raw
 {
     "default": [
         {
@@ -154,7 +154,7 @@ podman image trust show --raw
 
 Display trust as JSON:
 ```
-podman image trust show --json
+$ podman image trust show --json
 [
   {
     "transport": "all",

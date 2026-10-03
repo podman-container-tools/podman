@@ -143,19 +143,19 @@ configuration information.
 
 Add specified default image from source manifest list to destination manifest list:
 ```
-podman manifest add mylist:v1.11 docker://fedora
+$ podman manifest add mylist:v1.11 docker://fedora
 71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
 ```
 
 Add all images from source manifest list to destination manifest list:
 ```
-podman manifest add --all mylist:v1.11 docker://fedora
+$ podman manifest add --all mylist:v1.11 docker://fedora
 71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
 ```
 
 Add selected image matching arch and variant from source manifest list to destination manifest list:
 ```
-podman manifest add --arch arm64 --variant v8 mylist:v1.11 docker://71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
+$ podman manifest add --arch arm64 --variant v8 mylist:v1.11 docker://71c201d10fffdcac52968a000d85a0a016ca1c7d5473948000d3131c1773d965
 ```
 
 ## SEE ALSO

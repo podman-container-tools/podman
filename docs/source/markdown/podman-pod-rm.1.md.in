@@ -34,28 +34,28 @@ The --force option must be specified to use the --time option.
 
 Remove pod with a given name:
 ```
-podman pod rm mywebserverpod
+$ podman pod rm mywebserverpod
 ```
 
 Remove multiple pods with given names and/or IDs:
 ```
-podman pod rm mywebserverpod myflaskserverpod 860a4b23
+$ podman pod rm mywebserverpod myflaskserverpod 860a4b23
 ```
 
 Forcefully remove pod with a given ID:
 ```
-podman pod rm -f 860a4b23
+$ podman pod rm -f 860a4b23
 ```
 
 Forcefully remove all pods:
 ```
-podman pod rm -f -a
-podman pod rm -fa
+$ podman pod rm -f -a
+$ podman pod rm -fa
 ```
 
 Remove pod using ID specified in a given file:
 ```
-podman pod rm --pod-id-file /path/to/id/file
+$ podman pod rm --pod-id-file /path/to/id/file
 ```
 
 ## Exit Status

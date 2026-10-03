@@ -41,22 +41,22 @@ The default is **true** when attaching, **false** otherwise.
 
 Start specified container:
 ```
-podman start mywebserver
+$ podman start mywebserver
 ```
 
 Start multiple containers:
 ```
-podman start 860a4b231279 5421ab43b45
+$ podman start 860a4b231279 5421ab43b45
 ```
 
 Start specified container in interactive mode with terminal attached:
 ```
-podman start --interactive --attach 860a4b231279
+$ podman start --interactive --attach 860a4b231279
 ```
 
 Start last created container in interactive mode (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines):
 ```
-podman start -i -l
+$ podman start -i -l
 ```
 
 Start containers by label:

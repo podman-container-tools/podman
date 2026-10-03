@@ -21,7 +21,7 @@ Force the container to disconnect from a network
 
 Disconnect container from specified network:
 ```
-podman network disconnect test web
+$ podman network disconnect test web
 ```
 
 

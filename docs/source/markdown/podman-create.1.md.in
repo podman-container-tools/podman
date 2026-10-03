@@ -420,7 +420,7 @@ $ podman create --annotation HELLO=WORLD alpine ls
 
 Create a container using a local image, allocating a pseudo-TTY, keeping stdin open and name it myctr:
 ```
-  podman create -t -i --name myctr alpine ls
+  $ podman create -t -i --name myctr alpine ls
 ```
 
 Running a container in a new user namespace requires a mapping of

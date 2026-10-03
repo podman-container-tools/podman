@@ -284,6 +284,7 @@ help: ## Print this help message
 .check-self-tests:
 	hack/markdown-preprocess.t
 	hack/swagger-check.t
+	hack/xref-helpmsgs-manpages-examples.t
 	hack/ci/pr-removes-fixed-skips.t
 	hack/ci/pr-should-include-tests.t
 	hack/ci/logformatter.t

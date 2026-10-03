@@ -104,7 +104,7 @@ openssl rand -base64 378000 | podman secret create --replace my_secret -
 
 Mount a local file-based secret securely in a container.
 ```
-podman run --rm --secret source=my_secret,type=mount,uid=1001,gid=1001,mode=440 docker.io/library/alpine ls -l /run/secrets/my_secret
+$ podman run --rm --secret source=my_secret,type=mount,uid=1001,gid=1001,mode=440 docker.io/library/alpine ls -l /run/secrets/my_secret
 ```
 
 Create gpg encrypted secret based on a local file using the pass driver.

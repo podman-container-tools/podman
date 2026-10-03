@@ -37,32 +37,32 @@ By default, `podman pod logs` retrieves logs for all the containers available wi
 
 To view a pod's logs:
 ```
-podman pod logs -t podIdorName
+$ podman pod logs -t podIdorName
 ```
 
 To view logs of a specific container on the pod:
 ```
-podman pod logs -c ctrIdOrName podIdOrName
+$ podman pod logs -c ctrIdOrName podIdOrName
 ```
 
 To view all pod logs:
 ```
-podman pod logs -t --since 0 myserver-pod-1
+$ podman pod logs -t --since 0 myserver-pod-1
 ```
 
 To view a pod's logs since a certain time:
 ```
-podman pod logs -t --since 2017-08-07T10:10:09.055837383-04:00 myserver-pod-1
+$ podman pod logs -t --since 2017-08-07T10:10:09.055837383-04:00 myserver-pod-1
 ```
 
 To view a pod's logs generated in the last 10 minutes:
 ```
-podman pod logs --since 10m myserver-pod-1
+$ podman pod logs --since 10m myserver-pod-1
 ```
 
 To view a pod's logs until 30 minutes ago:
 ```
-podman pod logs --until 30m myserver-pod-1
+$ podman pod logs --until 30m myserver-pod-1
 ```
 
 ## SEE ALSO

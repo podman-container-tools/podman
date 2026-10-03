@@ -63,7 +63,7 @@ Error: nothing: image not known
 
 Remove an image but keep any parents of it.
 ```
-podman rmi --no-prune d29200bf974d
+$ podman rmi --no-prune d29200bf974d
 Deleted: d29200bf974dbc48dc66c23c4031548531b6b5943e5f25ee7bda232e3b6b27f4
 ```
 

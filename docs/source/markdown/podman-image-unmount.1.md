@@ -34,22 +34,22 @@ Note: Other processes using the file system can fail if the mount point is remov
 
 Unmount image with a given ID:
 ```
-podman image unmount imageID
+$ podman image unmount imageID
 ```
 
 Unmount multiple images with given IDs:
 ```
-podman image unmount imageID1 imageID2 imageID3
+$ podman image unmount imageID1 imageID2 imageID3
 ```
 
 Unmount all images:
 ```
-podman image unmount --all
+$ podman image unmount --all
 ```
 
 Force unmount image with a given ID:
 ```
-podman image unmount --force imageID
+$ podman image unmount --force imageID
 ```
 
 ## SEE ALSO
