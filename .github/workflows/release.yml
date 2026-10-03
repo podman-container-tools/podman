@@ -68,10 +68,39 @@ jobs:
       version: ${{ steps.getversion.outputs.version }}
       buildonly: ${{ steps.buildonly.outputs.buildonly }}
 
+  gate-machine-os-release:
+    name: Gate on podman-machine-os release
+    runs-on: ubuntu-latest
+    needs: check
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILDONLY: ${{ needs.check.outputs.buildonly }}
+      VERSION: ${{ needs.check.outputs.version }}
+      MACHINE_OS_REPO: podman-container-tools/podman-machine-os
+    steps:
+    - name: Verify matching podman-machine-os release exists
+      run: |
+        if [[ "$BUILDONLY" == "true" ]]
+        then
+          echo "::notice::Skipping podman-machine-os release gate for build-only run"
+          exit 0
+        fi
+
+        if ! gh release view "$VERSION" --repo "$MACHINE_OS_REPO" >/dev/null
+        then
+          echo "::error::Missing matching release '$VERSION' in $MACHINE_OS_REPO"
+          echo "::error::Release Podman Machine OS before cutting the Podman release."
+          exit 1
+        fi
+
+        echo "::notice::Found matching podman-machine-os release '$VERSION'"
+
   build-artifacts:
     name: Build Artifacts
     uses: ./.github/workflows/release-build-artifacts.yml
-    needs: check
+    needs: [check, gate-machine-os-release]
     with:
       version: ${{ needs.check.outputs.version }}
     secrets:
@@ -94,7 +123,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     if: needs.check.outputs.buildonly == 'false'
-    needs: [check, build-artifacts]
+    needs: [check, gate-machine-os-release, build-artifacts]
     permissions:
       contents: write
     env:
