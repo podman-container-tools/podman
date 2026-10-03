@@ -172,9 +172,11 @@ options are:
 * **security_model=[model]**: specify 9p security model (see below)
 
 Note: The following destinations are forbidden for volumes: `/bin`, `/boot`, `/dev`, `/etc`,
-`/home`, `/proc`, `/root`, `/run`, `/sbin`, `/sys`, `/tmp`, `/usr`, and `/var`. Subdirectories
-of these destinations are allowed but users should be careful to not mount to important directories
-as unexpected results may occur.
+`/home`, `/proc`, `/root`, `/run`, `/sbin`, `/sys`, `/tmp`, `/usr`, and `/var`. Additionally,
+`/var/lib/containers/storage` is forbidden due to virtiofs filesystem limitations that cannot
+handle the multiple UIDs/GIDs required for container storage (particularly relevant on macOS and
+other platforms using virtiofs). Subdirectories of these destinations are allowed but users should
+be careful to not mount to important directories as unexpected results may occur.
 
 
 The 9p security model [determines] https://wiki.qemu.org/Documentation/9psetup#Starting_the_Guest_directly
