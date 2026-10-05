@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"go.podman.io/storage/internal/xattrs"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/system"
 	"golang.org/x/sys/unix"
@@ -19,15 +20,14 @@ func getOverlayOpaqueXattrName() string {
 	return GetOverlayXattrName("opaque")
 }
 
-func getWhiteoutConverter(format WhiteoutFormat, data any, options *TarOptions) tarWhiteoutConverter {
+func getWhiteoutConverter(format WhiteoutFormat, data any) tarWhiteoutConverter {
 	if format == OverlayWhiteoutFormat {
 		var roLayers []string = nil
 		if rolayers, ok := data.([]string); ok && len(rolayers) > 0 {
 			roLayers = rolayers
 		}
 		return overlayWhiteoutConverter{
-			rolayers:               roLayers,
-			runningInMinimalChroot: options != nil && options.InternalRunningInMinimalChroot,
+			rolayers: roLayers,
 		}
 	}
 	return nil
@@ -35,13 +35,6 @@ func getWhiteoutConverter(format WhiteoutFormat, data any, options *TarOptions) 
 
 type overlayWhiteoutConverter struct {
 	rolayers []string
-	// runningInMinimalChroot indicates that we are confined to a fairly strict chroot,
-	// so we don’t need to worry about Lgetxattr / Llistxattr escaping the source directory.
-	//
-	// We need this because:
-	// - getxattrat() would be ideal, but requires Linux 6.13, and as of 2026-05 that might still be too new
-	// - Our fallback is to open "/proc/self/fd/$fd" of an O_PATH file handle, but /proc is not available in these chroots.
-	runningInMinimalChroot bool
 }
 
 func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi os.FileInfo) (*tar.Header, error) {
@@ -50,14 +43,14 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 	})
 }
 
-func (o overlayWhiteoutConverter) convertWrite(hdr *tar.Header, root *os.Root, fsPath string, fi os.FileInfo) (*tar.Header, error) {
-	if !o.runningInMinimalChroot {
+func (o overlayWhiteoutConverter) convertWrite(hdr *tar.Header, xattrHandle *xattrs.Handle, parentRoot *os.Root, fsBasename string, fi os.FileInfo) (*tar.Header, error) {
+	if xattrHandle != nil {
 		return o.convertWriteWithGetxattr(hdr, fi, func(attrName string) ([]byte, error) {
-			return system.RootLgetxattr(root, fsPath, attrName)
+			return xattrHandle.Getxattr(attrName)
 		})
 	} else {
 		return o.convertWriteWithGetxattr(hdr, fi, func(attrName string) ([]byte, error) {
-			return system.Lgetxattr(filepath.Join(root.Name(), filepath.FromSlash(fsPath)), attrName)
+			return system.Lgetxattr(filepath.Join(parentRoot.Name(), filepath.FromSlash(fsBasename)), attrName)
 		})
 	}
 }

@@ -1,6 +1,6 @@
 //go:build !freebsd
 
-package system
+package stat
 
 type platformStatT struct{}
 

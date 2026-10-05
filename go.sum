@@ -279,6 +279,8 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJ
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFdJifH4BDsTlE89Zl93FEloxaWZfGcifgq8=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/mtrmac/container-libs/storage v0.0.0-20261005192443-07044521505d h1:ILmbP/2NILM8zavS4eQ0LuJ/RoSDTuWc/ChN0SnSGLA=
+github.com/mtrmac/container-libs/storage v0.0.0-20261005192443-07044521505d/go.mod h1:8Kk+xYSGf1trCghvoBPUljR2f64/cL28ax4tyqPz564=
 github.com/nxadm/tail v1.4.11 h1:8feyoE3OzPrcshW5/MJ4sGESc5cqmGkGCWlco4l0bqY=
 github.com/nxadm/tail v1.4.11/go.mod h1:OTaG3NK980DZzxbRq6lEuzgU+mug70nY11sMd4JXXHc=
 github.com/onsi/ginkgo/v2 v2.33.0 h1:C8gBA6Uc2ZEubiV+SXiu5tZnMTwEmXHgkJwGozKtZf8=
@@ -383,8 +385,8 @@ github.com/u-root/u-root v0.12.1-0.20240114161452-ab3534910ced h1:G0F7Hmwph1Ojoz
 github.com/u-root/u-root v0.12.1-0.20240114161452-ab3534910ced/go.mod h1:jtkuv6BVn5jo/WAHgQ1k9XfzHEe1hZmq9yDUvbgL+Iw=
 github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 h1:pyC9PaHYZFgEKFdlp3G8RaCKgVpHZnecvArXvPXcFkM=
 github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701/go.mod h1:P3a5rG4X7tI17Nn3aOIAYr5HbIMukwXG0urG0WuL8OA=
-github.com/ulikunitz/xz v0.5.16 h1:ld6NyySjx5lowVKwJvMRLnW5nxKX/xnpSiFYZ/Lxur0=
-github.com/ulikunitz/xz v0.5.16/go.mod h1:H9Rt/W6/Qj27PGauhQc6nfCDy7vHpzsOThBSaYDoEhw=
+github.com/ulikunitz/xz v0.5.17 h1:flR0y/x1hgM8EGV1AW3Xll6T413G0glV8UfBwR617V4=
+github.com/ulikunitz/xz v0.5.17/go.mod h1:H9Rt/W6/Qj27PGauhQc6nfCDy7vHpzsOThBSaYDoEhw=
 github.com/vbatts/tar-split v0.12.3 h1:Cd46rkGXI3Td4yrVNwU8ripbxFaQbmesqhjBUUYAJSw=
 github.com/vbatts/tar-split v0.12.3/go.mod h1:sQOc6OlqGCr7HkGx/IDBeKiTIvqhmj8KffNhEXG4Nq0=
 github.com/vbauerster/cupwriter v0.0.5 h1:pxlPgxPLIebXh8lJPOZmn2TmjPE8+PqJIFkKkr7hI9I=
@@ -439,8 +441,6 @@ go.podman.io/common v0.69.2-0.20260915153640-acbb1e7d4c83 h1:93qUV1dyXqtXlPpuc6D
 go.podman.io/common v0.69.2-0.20260915153640-acbb1e7d4c83/go.mod h1:mt3eezMU4SakgJgPDBxX4lmkM35TovdA3KulR4/Xg/k=
 go.podman.io/image/v5 v5.41.2-0.20260915153640-acbb1e7d4c83 h1:btfTsEmQzvtc1ZvoqtQEzyhbZrQQ71sJ/QcoREGe3d4=
 go.podman.io/image/v5 v5.41.2-0.20260915153640-acbb1e7d4c83/go.mod h1:z3DTFpv+LKUf3CaV1//8F8ZTGdcpNh1n+Ck4+Kp9HUY=
-go.podman.io/storage v1.64.1-0.20260915153640-acbb1e7d4c83 h1:clVNwOis15Rm8bOMLvBCZ3vsFf0ChY18z/ALDzmzdo0=
-go.podman.io/storage v1.64.1-0.20260915153640-acbb1e7d4c83/go.mod h1:oZKqd1pCW5z7wD54+0LR8nsUeZi8qkwbZs4Ld6UP+Os=
 go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
 go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=

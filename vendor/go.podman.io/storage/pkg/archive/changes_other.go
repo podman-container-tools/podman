@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.podman.io/storage/internal/rootlookupcache"
+	"go.podman.io/storage/internal/stat"
+	"go.podman.io/storage/internal/xattrs"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/system"
 )
@@ -49,6 +52,8 @@ func collectFileInfo(sourceDir string, idMappings *idtools.IDMappings) (*FileInf
 		return nil, err
 	}
 	defer root.Close()
+	rootCache := rootlookupcache.NewCache(root)
+	defer rootCache.Close()
 
 	rootFileInfo := newRootFileInfo(idMappings)
 
@@ -81,10 +86,11 @@ func collectFileInfo(sourceDir string, idMappings *idtools.IDMappings) (*FileInf
 			idMappings: idMappings,
 		}
 
-		s, err := system.RootLstat(root, fsPath)
+		fi, err := d.Info() // This is free and never fails, root.FS().ReadDir() always calls lstatat() to get this data.
 		if err != nil {
 			return err
 		}
+		s := stat.FromFileInfo(fi)
 
 		// Don't cross mount points. This ignores file mounts to avoid
 		// generating a diff which deletes all files following the
@@ -93,10 +99,21 @@ func collectFileInfo(sourceDir string, idMappings *idtools.IDMappings) (*FileInf
 			return filepath.SkipDir
 		}
 
+		parentRoot, fsBasename, err := rootCache.PreparePath(fsPath)
+		if err != nil {
+			return err
+		}
 		info.stat = s
-		info.capability, _ = system.RootLgetxattr(root, fsPath, "security.capability")
+		info.capability, _ = func() ([]byte, error) { // A scope for defer
+			h, err := xattrs.NewLHandle(parentRoot, fsBasename, rootCache)
+			if err != nil {
+				return nil, err
+			}
+			defer h.Close()
+			return h.Getxattr("security.capability")
+		}()
 		if s.IsSymlink() {
-			info.target, err = root.Readlink(fsPath)
+			info.target, err = parentRoot.Readlink(fsBasename)
 			if err != nil {
 				return err
 			}

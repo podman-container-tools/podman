@@ -1,4 +1,4 @@
-package system
+package stat
 
 import "syscall"
 
@@ -11,8 +11,8 @@ func (s StatT) Flags() uint32 {
 	return s.flags
 }
 
-// fromStatT converts a syscall.Stat_t type to a system.Stat_t type
-func fromStatT(s *syscall.Stat_t) (*StatT, error) {
+// FromStatT converts a syscall.Stat_t type to a StatT type
+func FromStatT(s *syscall.Stat_t) *StatT {
 	st := &StatT{
 		size: s.Size,
 		mode: uint32(s.Mode),
@@ -24,5 +24,5 @@ func fromStatT(s *syscall.Stat_t) (*StatT, error) {
 	}
 	st.flags = s.Flags
 	st.dev = s.Dev
-	return st, nil
+	return st
 }

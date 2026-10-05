@@ -18,6 +18,7 @@ import (
 
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/storage/internal/rootlookupcache"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/pools"
@@ -94,7 +95,7 @@ func aufsMetadataSkip(fsPath string) (bool, error) {
 	return skip, err
 }
 
-func aufsDeletedFile(root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
+func aufsDeletedFile(rootCache *rootlookupcache.Cache, fsPath string, fi os.FileInfo) (string, error) {
 	f := path.Base(fsPath)
 
 	// If there is a whiteout, then the file was removed
@@ -142,14 +143,14 @@ func isENOTDIR(err error) bool {
 
 type (
 	skipChange     func(string) (bool, error)
-	deleteChange   func(*os.Root, string, os.FileInfo) (string, error)
+	deleteChange   func(*rootlookupcache.Cache, string, os.FileInfo) (string, error)
 	whiteoutChange func(string, string) (bool, error)
 )
 
 // changes walks the path rw and determines changes for the files in the path,
 // with respect to the parent layers.
 //
-// deleteConverter returns "" for most files; if path (relative to rw, per fs.ValidPath) indicates a deletion,
+// deleteConverter returns "" for most files; if fsPath (relative to rw, per fs.ValidPath) indicates a deletion,
 // it returns the path (relative to rw, per fs.ValidPath) of the file that was deleted.
 //
 // skipCondition, if not nil, should return true if a file path (relative to rw, per fs.ValidPath) should be skipped.
@@ -173,6 +174,8 @@ func changes(layers []string, rw string, deleteConverter deleteChange, skipCondi
 		return nil, err
 	}
 	defer root.Close()
+	rootCache := rootlookupcache.NewCache(root)
+	defer rootCache.Close()
 
 	err = fs.WalkDir(root.FS(), ".", func(fsPath string, dirEntry fs.DirEntry, err error) error {
 		if err != nil {
@@ -198,7 +201,9 @@ func changes(layers []string, rw string, deleteConverter deleteChange, skipCondi
 			Path: filepath.FromSlash("/" + fsPath), // We have skipped ".", and no other fsPath values start with "." or "/", so blindly prepending "/" is safe.
 		}
 
-		deletedFile, err := deleteConverter(root, fsPath, f)
+		// We _usually_ don’t do I/O on root/fsPath; even overlayDeletedFile does it only for directories.
+		// So we don’t unconditionally do rootCache.PreparePath(), but let the deleteConverter do it if necessary.
+		deletedFile, err := deleteConverter(rootCache, fsPath, f)
 		if err != nil {
 			return err
 		}
@@ -466,6 +471,8 @@ func ChangesSizeWithError(newDir string, changes []Change) (int64, error) {
 		return -1, err
 	}
 	defer root.Close()
+	rootCache := rootlookupcache.NewCache(root)
+	defer rootCache.Close()
 
 	var (
 		size int64
@@ -473,7 +480,16 @@ func ChangesSizeWithError(newDir string, changes []Change) (int64, error) {
 	)
 	for _, change := range changes {
 		if change.Kind == ChangeModify || change.Kind == ChangeAdd {
-			fileInfo, err := root.Lstat(strings.TrimPrefix(filepath.ToSlash(change.Path), "/"))
+			fsFilePath := strings.TrimPrefix(filepath.ToSlash(change.Path), "/")
+
+			parentRoot, fsBasename, err := rootCache.PreparePath(fsFilePath)
+			if err != nil {
+				// We don’t _fail_ on these errors, this is intended to be at least minimally-useful
+				// with concurrent modifications happening.
+				logrus.Errorf("Can't prepare %q in %q: %s", fsFilePath, newDir, err)
+				continue
+			}
+			fileInfo, err := parentRoot.Lstat(fsBasename)
 			if err != nil {
 				// We don’t _fail_ on these errors, this is intended to be at least minimally-useful
 				// with concurrent modifications happening.
@@ -514,7 +530,7 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 	// concurrently modified.
 
 	reader, writer := io.Pipe()
-	go func() {
+	producer := func() error {
 		ta := newTarWriter(idtools.NewIDMappingsFromMaps(uidMaps, gidMaps), writer, nil, nil, false)
 
 		// this buffer is needed for the duration of this piped stream
@@ -524,10 +540,11 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 
 		root, err := os.OpenRoot(dir)
 		if err != nil {
-			writer.CloseWithError(err)
-			return
+			return err
 		}
 		defer root.Close()
+		rootCache := rootlookupcache.NewCache(root)
+		defer rootCache.Close()
 
 		// In general we log errors here but ignore them because
 		// during e.g. a diff operation the container can continue
@@ -551,13 +568,27 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 				}
 			} else {
 				relPath := change.Path[1:]
-				headers, err := ta.prepareAddFile(root, filepath.ToSlash(relPath), relPath)
+				fsPath := filepath.ToSlash(relPath)
+
+				parentRoot, fsBasename, err := rootCache.PreparePath(fsPath)
+				if err != nil {
+					logrus.Debugf("Can't open parent of %q in %q: %s", change.Path, root.Name(), err)
+					continue
+				}
+
+				fi, err := parentRoot.Lstat(fsBasename)
 				if err != nil {
 					logrus.Debugf("Can't add file %q in %q to tar: %s", change.Path, root.Name(), err)
-				} else if headers != nil {
-					if err := ta.addFile(root, headers); err != nil {
-						writer.CloseWithError(err)
-						return
+					continue
+				}
+				headers, err := ta.prepareAddFile(parentRoot, fsBasename, fi, relPath, rootCache)
+				if err != nil {
+					logrus.Debugf("Can't add file %q in %q to tar: %s", change.Path, root.Name(), err)
+					continue
+				}
+				if headers != nil {
+					if err := ta.addFile(parentRoot, headers); err != nil {
+						return err
 					}
 				}
 			}
@@ -566,6 +597,13 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 		// Make sure to check the error on Close.
 		if err := ta.TarWriter.Close(); err != nil {
 			logrus.Debugf("Can't close layer: %s", err)
+		}
+		return nil
+	}
+	go func() {
+		if err := producer(); err != nil {
+			writer.CloseWithError(err)
+			return
 		}
 		if err := writer.Close(); err != nil {
 			logrus.Debugf("failed close Changes writer: %s", err)

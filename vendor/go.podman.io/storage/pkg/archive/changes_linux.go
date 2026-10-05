@@ -17,6 +17,9 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/cyphar/filepath-securejoin/pathrs-lite"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/storage/internal/rootlookupcache"
+	"go.podman.io/storage/internal/stat"
+	"go.podman.io/storage/internal/xattrs"
 	"go.podman.io/storage/pkg/idtools"
 	"go.podman.io/storage/pkg/system"
 	"golang.org/x/sys/unix"
@@ -31,10 +34,10 @@ import (
 // directly. Eliminating stat calls in this way can save up to seconds on large
 // images.
 type walker struct {
-	root1         *os.Root
-	root2         *os.Root
 	rootFileInfo1 *FileInfo
 	rootFileInfo2 *FileInfo
+	rootCache1    *rootlookupcache.Cache
+	rootCache2    *rootlookupcache.Cache
 }
 
 // collectFileInfoForChanges returns a complete representation of the trees
@@ -52,17 +55,21 @@ func collectFileInfoForChanges(dir1, dir2 string, idmap1, idmap2 *idtools.IDMapp
 		return nil, nil, err
 	}
 	defer root1.Close()
+	rootCache1 := rootlookupcache.NewCache(root1)
+	defer rootCache1.Close()
 	root2, err := os.OpenRoot(dir2)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer root2.Close()
+	rootCache2 := rootlookupcache.NewCache(root2)
+	defer rootCache2.Close()
 
 	w := &walker{
-		root1:         root1,
-		root2:         root2,
 		rootFileInfo1: newRootFileInfo(idmap1),
 		rootFileInfo2: newRootFileInfo(idmap2),
+		rootCache1:    rootCache1,
+		rootCache2:    rootCache2,
 	}
 
 	i1, err := root1.Lstat(".")
@@ -74,16 +81,18 @@ func collectFileInfoForChanges(dir1, dir2 string, idmap1, idmap2 *idtools.IDMapp
 		return nil, nil, err
 	}
 
-	if err := w.walk(".", i1, i2); err != nil {
+	if err := w.walk(".", ".", root1, root2, i1, i2); err != nil {
 		return nil, nil, err
 	}
 
 	return w.rootFileInfo1, w.rootFileInfo2, nil
 }
 
-// Given a FileInfo, its path info, and a reference to the root of the tree
-// being constructed, register this file with the tree.
-func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) error {
+// Register file fsPath with rootFI, which is accessible as parentRoot/fsBasename (coming from rootCache)
+// and for which fi is already available.
+//
+// parentRoot+fi can be simultaneously nil, in that case do nothing.
+func walkchunk(rootFI *FileInfo, fsPath string, parentRoot *os.Root, fsBasename string, fi os.FileInfo, rootCache *rootlookupcache.Cache) error {
 	// WARNING: This is called in contexts where the contents of root may be maliciously
 	// concurrently modified.
 
@@ -102,12 +111,14 @@ func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) e
 		idMappings: rootFI.idMappings,
 		target:     "",
 	}
-	stat, err := system.FromStatT(fi.Sys().(*syscall.Stat_t))
+	info.stat = stat.FromFileInfo(fi)
+	var err error
+	xattrHandle, err := xattrs.NewLHandle(parentRoot, fsBasename, rootCache)
 	if err != nil {
 		return err
 	}
-	info.stat = stat
-	info.capability, err = system.RootLgetxattr(root, fsPath, "security.capability") // lgetxattr(2): fs access
+	defer xattrHandle.Close()
+	info.capability, err = xattrHandle.Getxattr("security.capability") // lgetxattr(2): fs access
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err
 	}
@@ -115,16 +126,16 @@ func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) e
 	if err != nil {
 		return err
 	}
-	xattrs, err := system.RootLlistxattr(root, fsPath)
+	xattrs, err := xattrHandle.Listxattr()
 	if err != nil && !errors.Is(err, system.ENOTSUP) {
 		return err
 	}
 	for _, key := range xattrs {
 		if strings.HasPrefix(key, "user.") {
-			value, err := system.RootLgetxattr(root, fsPath, key)
+			value, err := xattrHandle.Getxattr(key)
 			if err != nil {
 				if errors.Is(err, system.E2BIG) {
-					logrus.Errorf("archive: Skipping xattr for file %q in %q since value is too big: %s", fsPath, root.Name(), key)
+					logrus.Errorf("archive: Skipping xattr for file %q in %q since value is too big: %s", fsBasename, parentRoot.Name(), key)
 					continue
 				}
 				return err
@@ -136,7 +147,7 @@ func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) e
 		}
 	}
 	if fi.Mode()&os.ModeSymlink != 0 {
-		info.target, err = root.Readlink(fsPath)
+		info.target, err = parentRoot.Readlink(fsBasename)
 		if err != nil {
 			return err
 		}
@@ -147,17 +158,22 @@ func walkchunk(root *os.Root, fsPath string, fi os.FileInfo, rootFI *FileInfo) e
 
 // Walk a subtree rooted at the same path in both trees being iterated. For
 // example, /docker/overlay/1234/a/b/c/d and /docker/overlay/8888/a/b/c/d
-func (w *walker) walk(fsPath string, i1, i2 os.FileInfo) (err error) {
+// parentRoot1+i1, and parentRoot2+i2, may be nil.
+// fsPath is path within the subtree, per fs.ValidPath;
+// the files are accessible as parentRootN/fsBasename.
+//
+// NOTE: parentRootN comes from w.rootcacheN, and may be invalidated by this function using the cache.
+func (w *walker) walk(fsPath string, fsBasename string, parentRoot1, parentRoot2 *os.Root, i1, i2 os.FileInfo) (err error) {
 	// WARNING: This is called in contexts where the contents of w.root1 or w.root2 may be maliciously
 	// concurrently modified.
 
 	// Register these nodes with the return trees, unless we're still at the
 	// (already-created) roots:
 	if fsPath != "." {
-		if err := walkchunk(w.root1, fsPath, i1, w.rootFileInfo1); err != nil {
+		if err := walkchunk(w.rootFileInfo1, fsPath, parentRoot1, fsBasename, i1, w.rootCache1); err != nil {
 			return err
 		}
-		if err := walkchunk(w.root2, fsPath, i2, w.rootFileInfo2); err != nil {
+		if err := walkchunk(w.rootFileInfo2, fsPath, parentRoot2, fsBasename, i2, w.rootCache2); err != nil {
 			return err
 		}
 	}
@@ -182,13 +198,13 @@ func (w *walker) walk(fsPath string, i1, i2 os.FileInfo) (err error) {
 	// Fetch the names of all the files contained in both directories being walked:
 	var names1, names2 []nameIno
 	if is1Dir {
-		names1, err = readdirnames(w.root1, fsPath) // getdents(2): fs access
+		names1, err = readdirnames(parentRoot1, fsBasename) // getdents(2): fs access
 		if err != nil {
 			return err
 		}
 	}
 	if is2Dir {
-		names2, err = readdirnames(w.root2, fsPath) // getdents(2): fs access
+		names2, err = readdirnames(parentRoot2, fsBasename) // getdents(2): fs access
 		if err != nil {
 			return err
 		}
@@ -231,24 +247,42 @@ func (w *walker) walk(fsPath string, i1, i2 os.FileInfo) (err error) {
 		ix2++
 	}
 
+	// NOTE: parentRootN can be invalidated from now on, and can no longer be used.
+
 	// For each of the names present in either or both of the directories being
 	// iterated, stat the name under each root, and recurse the pair of them:
 	for _, name := range names {
 		fsFname := path.Join(fsPath, name)
+		// We need to look up childRootN from the cache in each iteration because w.walk might have invalidated them.
+		//
+		// Locally, w.walk() could return a value indicating whether it used the cache, and we could avoid the cache lookup
+		// for leaf directories.
+		//
+		// Ideally, the cache could be directly controlled by our walk, e.g. we know when we are leaving a directory never to return,
+		// and we know when we are returning to a previously-used parent.
+		var childRoot1, childRoot2 *os.Root
 		var cInfo1, cInfo2 os.FileInfo
 		if is1Dir {
-			cInfo1, err = w.root1.Lstat(fsFname) // lstat(2): fs access
+			childRoot1, err = w.rootCache1.RootForDir(fsPath)
+			if err != nil {
+				return err
+			}
+			cInfo1, err = childRoot1.Lstat(name) // lstat(2): fs access
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
 		}
 		if is2Dir {
-			cInfo2, err = w.root2.Lstat(fsFname) // lstat(2): fs access
+			childRoot2, err = w.rootCache2.RootForDir(fsPath)
+			if err != nil {
+				return err
+			}
+			cInfo2, err = childRoot2.Lstat(name) // lstat(2): fs access
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
 		}
-		if err = w.walk(fsFname, cInfo1, cInfo2); err != nil {
+		if err = w.walk(fsFname, name, childRoot1, childRoot2, cInfo1, cInfo2); err != nil { // May invalidate childRootN
 			return err
 		}
 	}
@@ -340,8 +374,8 @@ func OverlayChanges(layers []string, rw string) ([]Change, error) {
 	// WARNING: This is called in contexts where the contents of rw (but not layers) may be maliciously
 	// concurrently modified.
 
-	dc := func(root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
-		r, err := overlayDeletedFile(layers, root, fsPath, fi)
+	dc := func(rootCache *rootlookupcache.Cache, fsPath string, fi os.FileInfo) (string, error) {
+		r, err := overlayDeletedFile(layers, rootCache, fsPath, fi)
 		if err != nil {
 			return "", fmt.Errorf("overlay deleted file query: %w", err)
 		}
@@ -370,7 +404,7 @@ func overlayLowerContainsWhiteout(root, fsPath string) (bool, error) {
 	return false, nil
 }
 
-func overlayDeletedFile(layers []string, root *os.Root, fsPath string, fi os.FileInfo) (string, error) {
+func overlayDeletedFile(layers []string, rootCache *rootlookupcache.Cache, fsPath string, fi os.FileInfo) (string, error) {
 	// If it's a whiteout item, then a file or directory with that name is removed by this layer.
 	if fi.Mode()&os.ModeCharDevice != 0 {
 		if isWhiteOut(fi) {
@@ -382,7 +416,18 @@ func overlayDeletedFile(layers []string, root *os.Root, fsPath string, fi os.Fil
 		return "", nil
 	}
 	// If the directory isn't marked as opaque, then it's just a normal directory.
-	opaque, err := system.RootLgetxattr(root, fsPath, getOverlayOpaqueXattrName())
+	parentRoot, fsBasename, err := rootCache.PreparePath(fsPath)
+	if err != nil {
+		return "", err
+	}
+	opaque, err := func() ([]byte, error) { // A scope for defer
+		xattrHandle, err := xattrs.NewLHandle(parentRoot, fsBasename, rootCache)
+		if err != nil {
+			return nil, err
+		}
+		defer xattrHandle.Close()
+		return xattrHandle.Getxattr(getOverlayOpaqueXattrName())
+	}()
 	if err != nil {
 		return "", fmt.Errorf("failed querying overlay opaque xattr: %w", err)
 	}
