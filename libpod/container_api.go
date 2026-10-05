@@ -13,6 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/resize"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/pkg/domain/entities"
@@ -480,7 +481,11 @@ func (c *Container) Mount() (string, error) {
 	}
 
 	defer c.newContainerEvent(events.Mount)
-	return c.mount()
+	mount, err := c.mount()
+	if err != nil {
+		return "", err
+	}
+	return mount.PathWithoutProtectionTodo(), nil
 }
 
 // Unmount unmounts a container's filesystem on the host
@@ -1181,10 +1186,10 @@ func (c *Container) Stat(ctx context.Context, containerPath string) (*define.Fil
 		}
 	}
 
-	var mountPoint string
+	var mountPoint *protectedroot.PathRoot
 	var err error
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint.PathWithoutProtectionTodo()
+		mountPoint = c.state.Mountpoint
 	} else {
 		mountPoint, err = c.mount()
 		if err != nil {
@@ -1197,7 +1202,7 @@ func (c *Container) Stat(ctx context.Context, containerPath string) (*define.Fil
 		}()
 	}
 
-	info, resolved, err := c.stat(ctx, mountPoint, containerPath)
+	info, resolved, err := c.stat(ctx, mountPoint.PathWithoutProtectionTodo(), containerPath)
 	resolved.close()
 	return info, err
 }
