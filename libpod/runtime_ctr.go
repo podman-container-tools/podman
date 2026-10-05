@@ -22,7 +22,6 @@ import (
 	"go.podman.io/buildah"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
-	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/libpod/shutdown"
@@ -76,7 +75,7 @@ func (r *Runtime) PrepareVolumeOnCreateContainer(ctx context.Context, ctr *Conta
 	if err == nil {
 		// Finish up mountStorage
 		ctr.state.Mounted = true
-		ctr.state.Mountpoint = protectedroot.NewPathRootTodo(mountPoint)
+		ctr.state.Mountpoint = mountPoint
 		if err = ctr.save(); err != nil {
 			logrus.Errorf("Saving container %s state: %v", ctr.ID(), err)
 		}

@@ -40,7 +40,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		ctrNS                           string
 		networkStatus                   map[string]types.StatusBlock
 		createNetNSErr, mountStorageErr error
-		mountPoint                      string
+		mountPoint                      *protectedroot.PathRoot
 		tmpStateLock                    sync.Mutex
 	)
 
@@ -82,7 +82,7 @@ func (c *Container) prepare(ctx context.Context) error {
 
 		// Finish up mountStorage
 		c.state.Mounted = true
-		c.state.Mountpoint = protectedroot.NewPathRootTodo(mountPoint)
+		c.state.Mountpoint = mountPoint
 
 		logrus.Debugf("Created root filesystem for container %s at %s", c.ID(), c.state.Mountpoint)
 	}()
