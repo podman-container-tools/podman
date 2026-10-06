@@ -35,6 +35,18 @@ var _ = Describe("Podman update", func() {
 		podmanTest.CheckFileInContainerSubstring(ctrID, "/sys/fs/cgroup/pids.max", "max")
 	})
 
+	It("podman update rootless cgroupfs unlimited pids-limit sets no limit", func() {
+		SkipIfRemote("--cgroup-manager is a server option")
+		SkipIfNotRootless("the pids limit is only omitted rootless")
+		podmanTest.CgroupManager = "cgroupfs"
+		testCtr := "test-ctr-name"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", testCtr, ALPINE, "top")
+		for _, limit := range []string{"-1", "0"} {
+			podmanTest.PodmanExitCleanly("update", "--pids-limit", limit, testCtr)
+			podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.PidsLimit", "0")
+		}
+	})
+
 	It("podman update container all options v2", func() {
 		SkipIfRootless("many of these handlers are not enabled while rootless in CI")
 		skipWithoutDevNullb0()

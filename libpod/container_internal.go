@@ -2894,6 +2894,16 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		if err := json.Unmarshal(resourcesToUpdate, c.config.Spec.Linux.Resources); err != nil {
 			return err
 		}
+		// Lifting a pids limit the container does not have changes nothing.
+		var oldPids *spec.LinuxPids
+		if oldConfig.Spec.Linux != nil && oldConfig.Spec.Linux.Resources != nil {
+			oldPids = oldConfig.Spec.Linux.Resources.Pids
+		}
+		if pids := c.config.Spec.Linux.Resources.Pids; pids != nil &&
+			(oldPids == nil || util.PidsLimitUnlimited(oldPids.Limit)) &&
+			util.SkipUnlimitedPids(pids.Limit, c.CgroupManager()) {
+			c.config.Spec.Linux.Resources.Pids = nil
+		}
 		updateOptions.Resources = c.config.Spec.Linux.Resources
 	}
 
