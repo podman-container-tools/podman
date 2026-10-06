@@ -165,6 +165,22 @@ var _ = Describe("Podman update", func() {
 		podmanTest.CheckFileInContainer(testCtr, memoryCgroup, mem512m)
 	})
 
+	It("podman update reverts changes the runtime rejects", func() {
+		testCtr := "test-ctr-name"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", testCtr, ALPINE, "top")
+
+		// No host has CPU 9999, so the runtime cannot apply this.
+		update := podmanTest.Podman([]string{"update", "--cpuset-cpus", "9999", testCtr})
+		update.WaitWithDefaultTimeout()
+		Expect(update).Should(ExitWithError(125, "update"))
+
+		// Running, inspect reads the on-disk spec; stopped, the stored config.
+		podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.CpusetCpus", "")
+		podmanTest.PodmanExitCleanly("stop", "-t0", testCtr)
+		podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.CpusetCpus", "")
+		podmanTest.PodmanExitCleanly("start", testCtr)
+	})
+
 	It("podman update sets restart policy", func() {
 		restartPolicyName := ".HostConfig.RestartPolicy.Name"
 		restartPolicyRetries := ".HostConfig.RestartPolicy.MaximumRetryCount"
