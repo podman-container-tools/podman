@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -79,12 +80,12 @@ func (c *Container) joinMountAndExec(f func() error) error {
 	return <-errChan
 }
 
-func (c *Container) resolveCopyTarget(mountPoint string, containerPath string) (pathResolution, error) {
+func (c *Container) resolveCopyTarget(ctx context.Context, mountPoint string, containerPath string) (pathResolution, error) {
 	// If the container is running, we will execute the copy
 	// inside the container's mount namespace so we return a path
 	// relative to the container's root.
 	if c.state.State == define.ContainerStateRunning {
 		return pathResolution{root: "/", path: c.pathAbs(containerPath)}, nil
 	}
-	return c.resolvePath(mountPoint, containerPath)
+	return c.resolvePath(ctx, mountPoint, containerPath)
 }
