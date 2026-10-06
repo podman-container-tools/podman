@@ -1443,7 +1443,7 @@ func generateKubeSecurityContext(c *Container) (*v1.SecurityContext, bool, error
 		}
 
 		mountpoint := c.state.Mountpoint
-		if mountpoint == "" {
+		if mountpoint == nil {
 			var err error
 			mountpoint, err = c.mount()
 			if err != nil {
@@ -1457,7 +1457,7 @@ func generateKubeSecurityContext(c *Container) (*v1.SecurityContext, bool, error
 		}
 		logrus.Debugf("Looking in container for user: %s", c.User())
 
-		execUser, err := lookup.GetUserGroupInfo(mountpoint, c.User(), nil)
+		execUser, err := lookup.GetUserGroupInfo(mountpoint.PathWithoutProtectionTodo(), c.User(), nil)
 		if err != nil {
 			return nil, false, err
 		}

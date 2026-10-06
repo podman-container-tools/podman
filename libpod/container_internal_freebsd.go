@@ -17,6 +17,7 @@ import (
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
@@ -39,7 +40,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		ctrNS                           string
 		networkStatus                   map[string]types.StatusBlock
 		createNetNSErr, mountStorageErr error
-		mountPoint                      string
+		mountPoint                      *protectedroot.PathRoot
 		tmpStateLock                    sync.Mutex
 	)
 

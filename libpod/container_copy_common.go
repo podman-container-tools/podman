@@ -16,6 +16,7 @@ import (
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/pkg/chrootuser"
 	"go.podman.io/buildah/util"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/rootless"
@@ -26,7 +27,7 @@ import (
 
 func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noOverwriteDirNonDir bool, rename map[string]string, reader io.Reader) (func() error, error) {
 	var (
-		mountPoint   string
+		mountPoint   *protectedroot.PathRoot
 		unmount      func()
 		cleanupFuncs []func()
 		err          error
@@ -74,7 +75,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 			}
 
 			if c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited) {
-				c.state.Mountpoint = ""
+				c.state.Mountpoint = nil
 				if err := c.save(); err != nil {
 					logrus.Errorf("Writing container %s state: %v", c.ID(), err)
 				}
@@ -92,7 +93,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		// containers that have never started.
 		if len(c.config.NamedVolumes) > 0 {
 			for _, v := range c.config.NamedVolumes {
-				vol, err := c.mountNamedVolume(ctx, v, mountPoint)
+				vol, err := c.mountNamedVolume(ctx, v, mountPoint.PathWithoutProtectionTodo())
 				if err != nil {
 					unmount()
 					return nil, err
@@ -133,7 +134,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		}
 	}
 
-	resolved, err := c.resolveCopyTarget(mountPoint, path)
+	resolved, err := c.resolveCopyTarget(mountPoint.PathWithoutProtectionTodo(), path)
 	if err != nil {
 		unmount()
 		return nil, err
@@ -194,7 +195,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 	var idPair *idtools.IDPair
 	if chown {
 		// Make sure we chown the files to the container's main user and group ID.
-		user, err := getContainerUser(c, mountPoint)
+		user, err := getContainerUser(c, mountPoint.PathWithoutProtectionTodo())
 		if err != nil {
 			cleanup()
 			return nil, err
@@ -235,7 +236,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 
 func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Writer) (func() error, error) {
 	var (
-		mountPoint string
+		mountPoint *protectedroot.PathRoot
 		unmount    func()
 		err        error
 	)
@@ -257,7 +258,7 @@ func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Wr
 		}
 	}
 
-	statInfo, resolved, err := c.stat(ctx, mountPoint, path)
+	statInfo, resolved, err := c.stat(ctx, mountPoint.PathWithoutProtectionTodo(), path)
 	if err != nil {
 		resolved.close()
 		unmount()
@@ -271,7 +272,7 @@ func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Wr
 	// We optimistically chown to the host user.  In case of a hypothetical
 	// container-to-container copy, the reading side will chown back to the
 	// container user.
-	user, err := getContainerUser(c, mountPoint)
+	user, err := getContainerUser(c, mountPoint.PathWithoutProtectionTodo())
 	if err != nil {
 		cleanup()
 		return nil, err

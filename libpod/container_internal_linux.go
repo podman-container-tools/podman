@@ -24,6 +24,7 @@ import (
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/cgroups"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/rootless"
@@ -64,7 +65,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		netNS                           string
 		networkStatus                   map[string]types.StatusBlock
 		createNetNSErr, mountStorageErr error
-		mountPoint                      string
+		mountPoint                      *protectedroot.PathRoot
 		tmpStateLock                    sync.Mutex
 	)
 
