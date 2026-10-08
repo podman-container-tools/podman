@@ -292,7 +292,15 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 		}, filterValueError
 	case "command":
 		return func(c *libpod.Container) bool {
-			return util.StringMatchRegexSlice(c.Command()[0], filterValues)
+			// The command is empty when the container was created without an
+			// explicit command and the image supplied no CMD, e.g. when
+			// --entrypoint was given on its own. Such a container can never
+			// match a command filter.
+			command := c.Command()
+			if len(command) == 0 {
+				return false
+			}
+			return util.StringMatchRegexSlice(command[0], filterValues)
 		}, nil
 	case "should-start-on-boot":
 		wantRestart := false
@@ -371,6 +379,9 @@ func GenerateExternalContainerFilterFuncs(filter string, filterValues []string, 
 		}, nil
 	case "command":
 		return func(listContainer *types.ListContainer) bool {
+			if len(listContainer.Command) == 0 {
+				return false
+			}
 			return util.StringMatchRegexSlice(listContainer.Command[0], filterValues)
 		}, nil
 	case "ancestor":
