@@ -1,9 +1,15 @@
 # Podman Documentation
 
 The online man pages and other documents regarding Podman can be found at
-[Read The Docs](https://podman.readthedocs.io).  The man pages
+[Read The Docs](https://podman.readthedocs.io) / [docs.podman.io](https://docs.podman.io).  The man pages
 can be found under the [Commands](https://podman.readthedocs.io/en/latest/Commands.html)
 link on that page.
+
+### Documentation Versions
+
+- **`stable`** ([docs.podman.io/en/stable](https://docs.podman.io/en/stable/)): Reflects the latest officially released stable version of Podman, matching standard installed packages.
+- **`latest`** ([docs.podman.io/en/latest](https://docs.podman.io/en/latest/)): Generated directly from the `main` development branch. It contains in-development features, new CLI flags, and unreleased changes that may not yet be present in your installed version.
+- **Specific Release Versions** (e.g. `https://docs.podman.io/en/v5.4.0/`): Available for viewing documentation pinned to a specific release tag.
 
 # Build the Docs
 
@@ -41,7 +47,7 @@ build process, see the [`.readthedocs.yaml`](../.readthedocs.yaml) file.
 The swagger file can be downloaded from `https://docs.podman.io/en/latest/_static/swagger.yaml`.
 Note the latest link always contains the latest yaml from the main branch, if you like a specific
 version replace `latest` with the version, i.e. for `v6.0.0` `https://docs.podman.io/en/v6.0.0/_static/swagger.yaml`.
-Also this new process is only done since v5.8.4. Earlier swagger.yml files where
+Also this new process is only done since v5.8.4. Earlier swagger.yml files were
 uploaded [here](https://storage.googleapis.com/libpod-master-releases).
 
 ## Local Testing
