@@ -30,7 +30,10 @@ use quadlet files. See **podman-quadlet**(1) and **podman-systemd.unit**(5).
 
 #### **--cdi-spec-dir**=*path*
 
-The CDI spec directory path (may be set multiple times). Default path is `/etc/cdi`.
+The CDI spec directory path. When used multiple times, paths from later options have higher precedence.
+
+Default paths are `/etc/cdi` and `/var/run/cdi`, in ascending order of precedence.
+This can be configured using `engine.cdi_spec_dirs` in `containers.conf`.
 
 #### **--cgroup-manager**=*manager*
 
