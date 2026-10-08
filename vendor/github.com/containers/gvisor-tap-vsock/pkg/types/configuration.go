@@ -22,6 +22,12 @@ type Configuration struct {
 	// IP address of the virtual gateway
 	GatewayIP string `yaml:"gatewayIP,omitempty"`
 
+	// IP address of the device in the virtual network
+	DeviceIP string `yaml:"deviceIP,omitempty"`
+
+	// IP address of the host in the virtual network
+	HostIP string `yaml:"hostIP,omitempty"`
+
 	// MAC address of the virtual gateway
 	GatewayMacAddress string `yaml:"gatewayMacAddress,omitempty"`
 
@@ -53,6 +59,12 @@ type Configuration struct {
 
 	// EC2 Metadata Service Access
 	Ec2MetadataAccess bool `yaml:"ec2MetadataAccess,omitempty"`
+
+	// Maximum number of in-flight TCP connection forwarding attempts (default: 128)
+	TCPMaxInFlight int `yaml:"tcpMaxInFlight,omitempty"`
+
+	// Timeout in seconds for outbound TCP connection attempts (default: 30)
+	TCPConnectTimeout int `yaml:"tcpConnectTimeout,omitempty"`
 }
 
 type Protocol string
@@ -74,6 +86,10 @@ type Zone struct {
 	Name      string   `yaml:"name,omitempty"`
 	Records   []Record `yaml:"records,omitempty"`
 	DefaultIP net.IP   `yaml:"defaultIP,omitempty"`
+	// Protected zones cannot be modified or overwritten via the API.
+	// Set this in the YAML configuration or in code to prevent a zone
+	// from being changed at runtime.
+	Protected bool `yaml:"protected,omitempty"`
 }
 
 type Record struct {
