@@ -43,6 +43,7 @@ Valid options for `[Kube]` are listed below:
 | Network=host                        | --network host                                                   |
 | PodmanArgs=\-\-annotation=key=value | --annotation=key=value                                           |
 | PublishPort=8080:80                 | --publish 8080:80                                                |
+| ServiceName=name                    | Name the systemd unit `name.service`                             |
 | SetWorkingDirectory=yaml            | Set `WorkingDirectory` of unit file to location of the YAML file |
 | UserNS=keep-id:uid=200,gid=210      | --userns keep-id:uid=200,gid=210                                 |
 | Yaml=/tmp/kube.yaml                 | podman kube play /tmp/kube.yaml                                  |
@@ -88,6 +89,13 @@ Equivalent to the Podman `--force` option.
 @@option quadlet:podman-args
 
 @@option quadlet:publish
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit after the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 ### `SetWorkingDirectory=yaml`
 
