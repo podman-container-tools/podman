@@ -93,13 +93,13 @@ jobs:
           VERSION: ${{ steps.getversion.outputs.version }}
         run: |
           # Check if version is actually higher than one on podman.io
-          prevversion=`grep -P "(?<=export const LATEST_VERSION = ')(\d.\d.\d)" -o static/data/global.ts`
+          prevversion=$(grep -P "(?<=export const LATEST_VERSION = ')(\d.\d.\d)" -o static/data/global.ts)
           echo "Version currently on site: ${prevversion}"
           echo "Version to update to: ${VERSION}"
           # sort -V -C returns 0 if args are ascending version order
-          if echo "${prevversion},${VERSION}" | tr ',' '\n' | sort -V -C && [[ "${prevversion}" != "${version}" ]]
+          if echo "${prevversion},${VERSION}" | tr ',' '\n' | sort -V -C && [[ "${prevversion}" != "${VERSION}" ]]
           then
-            echo "needsUpdate=true" >> $GITHUB_OUTPUT
+            echo "needsUpdate=true" >> "$GITHUB_OUTPUT"
             echo "This release is a higher version, so we need to update podman.io"
           else
             echo "SKIPPING: This release is not a higher version, no need to update."
@@ -132,7 +132,7 @@ jobs:
           git config --local user.name "${GITHUB_ACTOR}"
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           bumpbranch="bump-podmanv${VERSION}"
-          git checkout -b $bumpbranch
+          git checkout -b "$bumpbranch"
           git add static/data/global.ts
           git commit --signoff -m "Bump Podman to v${VERSION}"
           git remote -v

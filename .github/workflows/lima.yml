@@ -82,7 +82,7 @@ jobs:
 
       - name: Output failure log as GITHUB_STEP_SUMMARY
         if: failure()
-        run: hack/ci/github_log_summary.py hack/ci/logs/*.html > $GITHUB_STEP_SUMMARY || true
+        run: hack/ci/github_log_summary.py hack/ci/logs/*.html > "$GITHUB_STEP_SUMMARY" || true
 
       # TODO: figure out how to cache the binaries from the build job to the actual test tasks
       # - name: Upload binaries as artifact

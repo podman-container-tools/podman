@@ -128,8 +128,8 @@ jobs:
         cache: false
     - name: Create Keychain
       run: |
-        echo $APPLICATION_CERTIFICATE | base64 --decode -o appcert.p12
-        echo $INSTALLER_CERTIFICATE | base64 --decode -o instcert.p12
+        echo "$APPLICATION_CERTIFICATE" | base64 --decode -o appcert.p12
+        echo "$INSTALLER_CERTIFICATE" | base64 --decode -o instcert.p12
 
         security create-keychain -p "$KEYCHAIN_PWD" build.keychain
         security default-keychain -s build.keychain

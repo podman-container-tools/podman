@@ -28,15 +28,15 @@ jobs:
               devbump="${version%-*}-dev"
               echo "::notice:: is a rc - bumping z down to $devbump"
           else
-              arr=($(echo "$version" | tr . '\n'))
-              arr[2]=$((${arr[2]}+1))
+              IFS=. read -ra arr <<< "$version"
+              arr[2]=$((arr[2]+1))
               devbump="$(IFS=. ; echo "${arr[*]}")-dev"
               echo "::notice:: bumping z up to $devbump"
           fi
 
           sed --sandbox -i -e "s/const RawVersion = \".*\"/const RawVersion = \"${devbump}\"/g" version/rawversion/version.go
 
-          echo "devbump=$devbump" >> $GITHUB_OUTPUT
+          echo "devbump=$devbump" >> "$GITHUB_OUTPUT"
       - name: Push
         env:
           DEVBUMP: ${{ steps.bump.outputs.devbump }}
@@ -46,7 +46,7 @@ jobs:
           git config --local user.name "${GITHUB_ACTOR}"
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           bumpbranch="bump-${DEVBUMP}"
-          git checkout -b $bumpbranch
+          git checkout -b "$bumpbranch"
           git add version/rawversion/version.go
           git commit --signoff -m "Bump Podman to v${DEVBUMP}"
           git remote add podmanbot https://github.com/podmanbot/podman
@@ -77,7 +77,7 @@ jobs:
         run: |
           bumpbranch="bump-${DEVBUMP}"
           base=${GITHUB_REF_NAME%.*}
-          body=$(printf '```release-note\nNone\n```\n')
+          body=$'```release-note\nNone\n```'
           gh pr create \
             --title "Bump Podman to v${DEVBUMP}" \
             --body  "$body" \
@@ -101,11 +101,11 @@ jobs:
       - name: Check version on main
         id: check
         run: |
-          mainvers=`grep -P '(?<=const RawVersion = ")(\d.\d)' -o version/rawversion/version.go`
+          mainvers=$(grep -P '(?<=const RawVersion = ")(\d.\d)' -o version/rawversion/version.go)
           releasevers=${GITHUB_REF_NAME#v}
           if echo "${mainvers},${releasevers}" | tr ',' '\n' | sort -V -C
           then
-              echo "bump=true" >> $GITHUB_OUTPUT
+              echo "bump=true" >> "$GITHUB_OUTPUT"
               echo "Main is lower than release, so we need to bump main"
           else
               echo "::notice:: SKIPPING: Main is higher than release, no need to bump"
@@ -116,15 +116,15 @@ jobs:
         run: |
           releasevers=${GITHUB_REF_NAME#v}
 
-          arr=($(echo "$releasevers" | tr . '\n'))
-          arr[1]=$((${arr[1]}+1))
+          IFS=. read -ra arr <<< "$releasevers"
+          arr[1]=$((arr[1]+1))
           arr[2]=0
           devbump="$(IFS=. ; echo "${arr[*]}")-dev"
           echo "::notice:: Bumping main to: $devbump"
 
           sed --sandbox -i -e "s/const RawVersion = \".*\"/const RawVersion = \"${devbump}\"/g" version/rawversion/version.go
 
-          echo "devbump=$devbump" >> $GITHUB_OUTPUT
+          echo "devbump=$devbump" >> "$GITHUB_OUTPUT"
       - name: Push
         if: steps.check.outputs.bump == 'true'
         env:
@@ -135,7 +135,7 @@ jobs:
           git config --local user.name "${GITHUB_ACTOR}"
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           bumpbranch="bump-main-${DEVBUMP}"
-          git checkout -b $bumpbranch
+          git checkout -b "$bumpbranch"
           git add version/rawversion/version.go
           git commit --signoff -m "Bump main to v${DEVBUMP}"
           git remote add podmanbot https://github.com/podmanbot/podman
@@ -165,7 +165,7 @@ jobs:
           GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
         run: |
           bumpbranch="bump-main-${DEVBUMP}"
-          body=$(printf '```release-note\nNone\n```\n')
+          body=$'```release-note\nNone\n```'
           gh pr create \
             --title "Bump main to v${DEVBUMP}" \
             --body  "$body" \
