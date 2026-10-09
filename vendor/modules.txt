@@ -120,8 +120,8 @@ github.com/containerd/typeurl/v2
 # github.com/containernetworking/plugins v1.9.1
 ## explicit; go 1.24.2
 github.com/containernetworking/plugins/pkg/ns
-# github.com/containers/gvisor-tap-vsock v0.8.9
-## explicit; go 1.25.0
+# github.com/containers/gvisor-tap-vsock v0.9.0
+## explicit; go 1.26.0
 github.com/containers/gvisor-tap-vsock/pkg/types
 # github.com/containers/libhvee v0.11.0
 ## explicit; go 1.25.0

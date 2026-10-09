@@ -61,8 +61,8 @@ github.com/containernetworking/cni v1.3.0 h1:v6EpN8RznAZj9765HhXQrtXgX+ECGebEYEm
 github.com/containernetworking/cni v1.3.0/go.mod h1:Bs8glZjjFfGPHMw6hQu82RUgEPNGEaBb9KS5KtNMnJ4=
 github.com/containernetworking/plugins v1.9.1 h1:8oU6WsIsU3bpnNZuvHp74a6cE1MJwbj2P7s4/yTUNlA=
 github.com/containernetworking/plugins v1.9.1/go.mod h1:fj7kS55qg3o/RgS+WGsF3+ZxwIImMPusQZKzBpcSr4c=
-github.com/containers/gvisor-tap-vsock v0.8.9 h1:6b7pqxFcKJ0EycBt1V4zPo3FQtgLLgs50AYkbFIb9eU=
-github.com/containers/gvisor-tap-vsock v0.8.9/go.mod h1:OfqLraPkar5xMQcGbl9czDDSM6/xelt0HJpyB3es6v0=
+github.com/containers/gvisor-tap-vsock v0.9.0 h1:wu/FkG0i0ThG1FiloQOx45W99EnZBGn0YXwZ1OD/Kw4=
+github.com/containers/gvisor-tap-vsock v0.9.0/go.mod h1:FioitCwxk4Yo9zLQKRp2IvSdX707iOdVz5KwDu8WItM=
 github.com/containers/libhvee v0.11.0 h1:lh9sN2vl0pWrozAjvudsJaKLN1H6YXaohSn/cCxSSLI=
 github.com/containers/libhvee v0.11.0/go.mod h1:4eTPJpxhHsXWaKXF5KI3/IuN1U/wbTvupLzKfSB8p0E=
 github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 h1:Qzk5C6cYglewc+UyGf6lc8Mj2UaPTHy/iF2De0/77CA=
@@ -112,8 +112,8 @@ github.com/docker/go-plugins-helpers v0.0.0-20240701071450-45e2431495c8 h1:IMfrF
 github.com/docker/go-plugins-helpers v0.0.0-20240701071450-45e2431495c8/go.mod h1:LFyLie6XcDbyKGeVK6bHe+9aJTYCxWLBg5IrJZOaXKA=
 github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=
 github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
-github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
-github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
+github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=
+github.com/dustin/go-humanize v1.1.0/go.mod h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI=
 github.com/ebitengine/purego v0.11.1 h1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=
 github.com/ebitengine/purego v0.11.1/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/fatih/color v1.19.0 h1:Zp3PiM21/9Ld6FzSKyL5c/BULoe/ONr9KlbYVOfG8+w=

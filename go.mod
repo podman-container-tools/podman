@@ -10,7 +10,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/checkpoint-restore/checkpointctl v1.6.0
 	github.com/checkpoint-restore/go-criu/v8 v8.4.0
-	github.com/containers/gvisor-tap-vsock v0.8.9
+	github.com/containers/gvisor-tap-vsock v0.9.0
 	github.com/containers/libhvee v0.11.0
 	github.com/containers/ocicrypt v1.3.2
 	github.com/containers/psgo v1.10.0
