@@ -50,6 +50,7 @@ func (c *Container) newContainerEventWithInspectData(status events.Status, healt
 	e.Image = c.config.RootfsImageName
 	e.Type = events.Container
 	e.HealthStatus = healthCheckResult.Status
+	e.HealthStatusChanged = healthCheckResult.IsStatusChanged
 	if c.HealthCheckLogDestination() == define.HealthCheckEventsLoggerDestination {
 		if len(healthCheckResult.Log) > 0 {
 			logData, err := json.Marshal(healthCheckResult.Log[len(healthCheckResult.Log)-1])
