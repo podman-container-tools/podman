@@ -343,3 +343,23 @@ func Scp(ctx context.Context, source, _ *string, options ScpOptions) (reports.Sc
 
 	return rep, response.Process(&rep)
 }
+
+// ExportRootfs streams the extracted root filesystem of an image as a tar archive.
+// this returns a flat filesystem tarball suitable for `podman build --output`.
+func ExportRootfs(ctx context.Context, nameOrID string, w io.Writer) error {
+	conn, err := bindings.GetClient(ctx)
+	if err != nil {
+		return err
+	}
+	response, err := conn.DoRequest(ctx, nil, http.MethodGet, "/images/%s/rootfs", nil, nil, nameOrID)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.IsSuccess() || response.IsRedirection() {
+		_, err = io.Copy(w, response.Body)
+		return err
+	}
+	return response.Process(nil)
+}
