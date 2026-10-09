@@ -1198,7 +1198,7 @@ ENTRYPOINT ["sleep","99999"]
 		if podmanTest.CgroupManager == "cgroupfs" || !isRootless() {
 			Expect(inspect[0].HostConfig.CgroupParent).To(BeEmpty())
 		} else if podmanTest.CgroupManager == "systemd" {
-			Expect(inspect[0].HostConfig).To(HaveField("CgroupParent", "user.slice"))
+			Expect(inspect[0].HostConfig).To(HaveField("CgroupParent", "containers.slice"))
 		}
 
 		podCreate2 := podmanTest.Podman([]string{"pod", "create", "--share", "cgroup,ipc,net,uts", "--share-parent=false", "--infra-name", "cgroupCtr"})
