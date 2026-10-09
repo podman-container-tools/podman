@@ -16,7 +16,6 @@ var ifaceRex = regexp.MustCompile(`^interface\s\{\s*\}$`)
 // It depends only on the configured principal type and whether the user provided
 // a custom (non-nullable) interface.
 func principalIsNullable(principal string, customIface bool) bool {
-	debugLogf("Principal: %s, %t, isnullable: %t", principal, customIface, principal != iface && !customIface)
 	return principal != iface && !customIface
 }
 

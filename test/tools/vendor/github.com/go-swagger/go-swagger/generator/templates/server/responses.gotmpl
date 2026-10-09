@@ -73,7 +73,7 @@ type {{ pascalize .Name }} struct {
 // Min Items: {{ .MinItems }}{{ end }}{{ if .UniqueItems }}
 // Unique: true{{ end }}{{ if .HasDefault }}
 // Default: {{ printGoLiteral .Default }}{{ end }}
-  {{ .ID }} {{ .GoType }} `json:"{{.Name}}{{ if not .Required }},omitempty{{ end }}{{ if .IsJSONString }},string{{ end }}"`
+  {{ .ID }} {{ .GoType }} {{ jsonFieldTag .Name (not .Required) .IsJSONString }}
   {{ end }}
   {{ if .Schema }}{{ with .Schema }}
   {{- if .Description }}

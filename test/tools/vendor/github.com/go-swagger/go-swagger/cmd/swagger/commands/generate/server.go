@@ -30,14 +30,15 @@ type Server struct {
 	schemeOptions
 	mediaOptions
 
-	SkipModels             bool   `description:"no models will be generated when this flag is specified"           long:"skip-models"`
-	SkipOperations         bool   `description:"no operations will be generated when this flag is specified"       long:"skip-operations"`
-	SkipSupport            bool   `description:"no supporting files will be generated when this flag is specified" long:"skip-support"`
-	ExcludeMain            bool   `description:"exclude main function, so just generate the library"               long:"exclude-main"`
-	ExcludeSpec            bool   `description:"don't embed the swagger specification"                             long:"exclude-spec"`
-	FlagStrategy           string `choice:"go-flags"                                                               choice:"pflag"                 choice:"flag"    default:"go-flags"                                      description:"the strategy to provide flags for the server" long:"flag-strategy"`
-	CompatibilityMode      string `choice:"modern"                                                                 choice:"intermediate"          default:"modern" description:"the compatibility mode for the tls server" long:"compatibility-mode"`
-	RegenerateConfigureAPI bool   `description:"Force regeneration of configureapi.go"                             long:"regenerate-configureapi"`
+	SkipModels             bool   `description:"no models will be generated when this flag is specified"                                                                     long:"skip-models"`
+	SkipOperations         bool   `description:"no operations will be generated when this flag is specified"                                                                 long:"skip-operations"`
+	SkipSupport            bool   `description:"no supporting files will be generated when this flag is specified"                                                           long:"skip-support"`
+	ExcludeMain            bool   `description:"exclude main function, so just generate the library"                                                                         long:"exclude-main"`
+	ExcludeSpec            bool   `description:"don't embed the swagger specification"                                                                                       long:"exclude-spec"`
+	FlagStrategy           string `choice:"go-flags"                                                                                                                         choice:"pflag"                 choice:"flag"    default:"go-flags"                                      description:"the strategy to provide flags for the server" long:"flag-strategy"`
+	CompatibilityMode      string `choice:"modern"                                                                                                                           choice:"intermediate"          default:"modern" description:"the compatibility mode for the tls server" long:"compatibility-mode"`
+	RegenerateConfigureAPI bool   `description:"Force regeneration of configureapi.go"                                                                                       long:"regenerate-configureapi"`
+	WithGoRunGoGenerate    bool   `description:"emit //go:generate directives that invoke swagger via 'go run' instead of assuming a pre-installed binary (see issue #3000)" long:"with-go-run"`
 
 	Name string `description:"the name of the application, defaults to a mangled value of info.title" long:"name" short:"A"`
 	// TODO(fredbi): CmdName string `long:"cmd-name" short:"A" description:"the name of the server command, when main is generated (defaults to {name}-server)"`
@@ -46,9 +47,14 @@ type Server struct {
 	WithContext bool `description:"handlers get a context as first arg (deprecated)" long:"with-context"`
 }
 
+// Usage documents the spec argument in the help message.
+func (s Server) Usage() string {
+	return usageWithSpec("server")
+}
+
 // Execute runs this command.
-func (s *Server) Execute(_ []string) error {
-	return createSwagger(s)
+func (s *Server) Execute(args []string) error {
+	return createSwagger(s, args)
 }
 
 // apply options.
@@ -77,6 +83,7 @@ func (s *Server) apply(opts *generator.GenOpts) {
 	opts.FlagStrategy = s.FlagStrategy
 	opts.CompatibilityMode = s.CompatibilityMode
 	opts.RegenerateConfigureAPI = s.RegenerateConfigureAPI
+	opts.WithGoRunGoGenerate = s.WithGoRunGoGenerate
 
 	opts.Name = s.Name
 	opts.MainPackage = s.MainTarget

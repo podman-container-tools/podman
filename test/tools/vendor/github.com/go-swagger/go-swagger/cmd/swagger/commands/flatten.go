@@ -25,6 +25,13 @@ type FlattenSpec struct {
 	Format  string         `choice:"yaml"                                                                          choice:"json"  default:"json" description:"the format for the spec document" long:"format"`
 }
 
+// Usage documents the spec argument in the help message.
+//
+// It replaces the "[flatten-OPTIONS]" placeholder the flags parser renders by default.
+func (c FlattenSpec) Usage() string {
+	return "[flatten-OPTIONS] {spec}"
+}
+
 // Execute flattens the spec.
 func (c *FlattenSpec) Execute(args []string) error {
 	if len(args) != 1 {

@@ -4,11 +4,11 @@
 
 | Total Contributors | Total Contributions |
 | --- | --- |
-| 57  | 671  |
+| 57  | 695  |
 
 | Username | All Time Contribution Count | All Commits |
 | --- | --- | --- |
-| @fredbi | 417 | <https://github.com/go-openapi/codescan/commits?author=fredbi> |
+| @fredbi | 440 | <https://github.com/go-openapi/codescan/commits?author=fredbi> |
 | @casualjim | 149 | <https://github.com/go-openapi/codescan/commits?author=casualjim> |
 | @emilgpa | 10 | <https://github.com/go-openapi/codescan/commits?author=emilgpa> |
 | @jredville | 6 | <https://github.com/go-openapi/codescan/commits?author=jredville> |
@@ -23,15 +23,15 @@
 | @mfranczy | 3 | <https://github.com/go-openapi/codescan/commits?author=mfranczy> |
 | @jucardi | 3 | <https://github.com/go-openapi/codescan/commits?author=jucardi> |
 | @Huckletoon | 3 | <https://github.com/go-openapi/codescan/commits?author=Huckletoon> |
+| @KT-Doan | 2 | <https://github.com/go-openapi/codescan/commits?author=KT-Doan> |
 | @lyydsheep | 2 | <https://github.com/go-openapi/codescan/commits?author=lyydsheep> |
 | @okhowang | 2 | <https://github.com/go-openapi/codescan/commits?author=okhowang> |
 | @invzhi | 2 | <https://github.com/go-openapi/codescan/commits?author=invzhi> |
 | @cce | 2 | <https://github.com/go-openapi/codescan/commits?author=cce> |
 | @autumn31 | 2 | <https://github.com/go-openapi/codescan/commits?author=autumn31> |
 | @Pungyeon | 2 | <https://github.com/go-openapi/codescan/commits?author=Pungyeon> |
-| @zasran | 2 | <https://github.com/go-openapi/codescan/commits?author=zasran> |
 | @bfirsh | 2 | <https://github.com/go-openapi/codescan/commits?author=bfirsh> |
-| @iamtheddrman | 1 | <https://github.com/go-openapi/codescan/commits?author=iamtheddrman> |
+| @zasran | 2 | <https://github.com/go-openapi/codescan/commits?author=zasran> |
 | @aristari | 1 | <https://github.com/go-openapi/codescan/commits?author=aristari> |
 | @seanbrant | 1 | <https://github.com/go-openapi/codescan/commits?author=seanbrant> |
 | @thaJeztah | 1 | <https://github.com/go-openapi/codescan/commits?author=thaJeztah> |
@@ -48,6 +48,7 @@
 | @tptpp | 1 | <https://github.com/go-openapi/codescan/commits?author=tptpp> |
 | @wych42 | 1 | <https://github.com/go-openapi/codescan/commits?author=wych42> |
 | @youyuanwu | 1 | <https://github.com/go-openapi/codescan/commits?author=youyuanwu> |
+| @iamtheddrman | 1 | <https://github.com/go-openapi/codescan/commits?author=iamtheddrman> |
 | @afagundes | 1 | <https://github.com/go-openapi/codescan/commits?author=afagundes> |
 | @bjyoungblood | 1 | <https://github.com/go-openapi/codescan/commits?author=bjyoungblood> |
 | @ethantkoenig | 1 | <https://github.com/go-openapi/codescan/commits?author=ethantkoenig> |
@@ -60,7 +61,6 @@
 | @McSwitch | 1 | <https://github.com/go-openapi/codescan/commits?author=McSwitch> |
 | @chenziliang | 1 | <https://github.com/go-openapi/codescan/commits?author=chenziliang> |
 | @kenjones-cisco | 1 | <https://github.com/go-openapi/codescan/commits?author=kenjones-cisco> |
-| @KT-Doan | 1 | <https://github.com/go-openapi/codescan/commits?author=KT-Doan> |
 | @neilgarb | 1 | <https://github.com/go-openapi/codescan/commits?author=neilgarb> |
 | @NeilLuno | 1 | <https://github.com/go-openapi/codescan/commits?author=NeilLuno> |
 | @gaplyk | 1 | <https://github.com/go-openapi/codescan/commits?author=gaplyk> |

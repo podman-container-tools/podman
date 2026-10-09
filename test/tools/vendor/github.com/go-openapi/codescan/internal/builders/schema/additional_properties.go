@@ -29,7 +29,7 @@ import (
 // is dropped with a diagnostic — it only ever rides on top of an object.
 // See [§additional-properties](./README.md#additional-properties).
 func (s *Builder) classifierAdditionalProperties(schema *oaispec.Schema, pos token.Position) {
-	arg, ok := s.findAnnotationArg(s.Decl.Comments, grammar.AnnAdditionalProperties)
+	arg, ok := s.findAnnotationArg(s.Decl.Comments(), grammar.AnnAdditionalProperties)
 	if !ok {
 		return
 	}

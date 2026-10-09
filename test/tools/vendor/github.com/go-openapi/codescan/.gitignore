@@ -20,6 +20,9 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Go workspace: commit go.work, ignore the generated checksum file
+go.work.sum
+
 # env file
 .env
 
@@ -29,3 +32,23 @@ profile.cov
 .mcp.json
 .worktrees
 go.work.sum
+internal/exportdata/exportdata.zip
+
+# stray binaries from "go build ./hack/..."
+/genexportdata
+/genspec
+/genspec-wasi
+/loader-benchmark
+
+# and from "go build ./..." run inside a command's own module, which drops the
+# binary beside its main package rather than at the repo root
+/cmd/genspec/genspec
+/cmd/genspec-tui/genspec-tui
+/cmd/genspec-wasi/genspec-wasi
+
+# benchmark corpora: the archive is committed, the tree it unpacks to is not
+internal/benchmarks/testdata/corpus/
+
+# loader-benchmark scratch: generated version modules, built probes, raw measurements
+internal/benchmarks/loader-benchmark/.work/
+internal/benchmarks/loader-benchmark/results/

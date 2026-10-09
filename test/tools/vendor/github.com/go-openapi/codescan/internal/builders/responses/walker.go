@@ -13,18 +13,17 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// headerItemsLevelTarget pairs a 1-indexed nesting depth (matching grammar.Property.ItemsDepth)
-// with an *oaispec.Items target into which items-level validations at that depth must be written.
+// headerItemsLevelTarget pairs a 1-indexed nesting depth (matching grammar.Property.ItemsDepth) with an *oaispec.Items
+// target into which items-level validations at that depth must be written.
 type headerItemsLevelTarget struct {
 	level int
 	items *oaispec.Items
 }
 
-// collectHeaderItemsLevels walks the AST array layers of a response header field and returns the
-// (level, items) pairs reachable from the header's items chain.
+// collectHeaderItemsLevels walks the AST array layers of a response header field and returns the (level, items) pairs
+// reachable from the header's items chain.
 //
-// Mirrors items.ParseArrayTypes' shape on the grammar path; identical recursion shape to
-// parameters' equivalent helper.
+// Mirrors items.ParseArrayTypes' shape on the grammar path; identical recursion shape to parameters' equivalent helper.
 //
 // Starting level is 1 — `items.maximum:` has ItemsDepth=1 in the grammar lexer.
 // Named/aliased array types opt out (parity with v1's tagger pipeline).
@@ -63,20 +62,20 @@ func collectHeaderItemsLevels(expr ast.Expr, it *oaispec.Items, level int) []hea
 	}
 }
 
-// applyBlockToDecl parses the top-level response doc through grammar and writes the description to
-// resp.Description via the grammar parser's prose accumulator, plus the response-level `examples:`
-// block (the only keyword the response decl level accepts).
+// applyBlockToDecl parses the top-level response doc through grammar and writes the description to resp.Description via
+// the grammar parser's prose accumulator, plus the response-level `examples:` block (the only keyword the response decl
+// level accepts).
 func (r *Builder) applyBlockToDecl(resp *oaispec.Response) {
-	block := r.ParseBlock(r.Decl.Comments)
-	resp.Description = r.overriddenDescription(r.CleanGoDoc(block.Prose()), r.Decl.Comments)
+	block := r.ParseBlock(r.Decl.Comments())
+	resp.Description = r.overriddenDescription(r.CleanGoDoc(block.Prose()), r.Decl.Comments())
 	r.applyResponseExamples(block, resp)
 }
 
-// overriddenDescription returns the swagger:description override for cg when present (empty
-// included — godoc suppression, D7), else the godoc-derived fallback.
+// overriddenDescription returns the swagger:description override for cg when present (empty included — godoc
+// suppression, D7), else the godoc-derived fallback.
 //
-// A swagger:title on a response / header target is rejected with a context-invalid diagnostic:
-// OpenAPI 2.0 Response and Header objects have no `title` field.
+// A swagger:title on a response / header target is rejected with a context-invalid diagnostic: OpenAPI 2.0 Response and
+// Header objects have no `title` field.
 func (r *Builder) overriddenDescription(fallback string, cg *ast.CommentGroup) string {
 	titleOv, descOv := r.HarvestOverrides(cg)
 	if titleOv.Present {
@@ -90,14 +89,13 @@ func (r *Builder) overriddenDescription(fallback string, cg *ast.CommentGroup) s
 	return fallback
 }
 
-// applyResponseExamples parses a response-level `examples:` block — a YAML map keyed by mime type
-// (`examples:` then `application/json: {…}`) — onto resp.Examples (the OAS2 Response.examples
-// field).
+// applyResponseExamples parses a response-level `examples:` block — a YAML map keyed by mime type (`examples:` then
+// `application/json: {…}`) — onto resp.Examples (the OAS2 Response.examples field).
 //
-// This is the plural, response-scoped keyword (go-swagger#2871); the singular schema `example:` is
-// handled per-field / per-body elsewhere.
-// The `swagger:operation` YAML path already carries examples for free via the spec unmarshal —
-// this covers only the struct-based `swagger:response`.
+// This is the plural, response-scoped keyword (go-swagger#2871); the singular schema `example:` is handled per-field /
+// per-body elsewhere.
+// The `swagger:operation` YAML path already carries examples for free via the spec unmarshal — this covers only the
+// struct-based `swagger:response`.
 func (r *Builder) applyResponseExamples(block grammar.Block, resp *oaispec.Response) {
 	var prop grammar.Property
 	var found bool
@@ -127,13 +125,13 @@ func (r *Builder) applyResponseExamples(block grammar.Block, resp *oaispec.Respo
 	}
 }
 
-// applyBlockToHeader parses afld.Doc through grammar and dispatches description, header
-// validations, items-level validations, and user-authored vendor extensions into ps.
+// applyBlockToHeader parses afld.Doc through grammar and dispatches description, header validations, items-level
+// validations, and user-authored vendor extensions into ps.
 //
 // # Details
 //
-// See [§dispatch](./README.md#dispatch) — the three-phase Walker dispatch for headers, the
-// omitted `required:` write, and how items-level validations chain.
+// See [§dispatch](./README.md#dispatch) — the three-phase Walker dispatch for headers, the omitted `required:`
+// write, and how items-level validations chain.
 func (r *Builder) applyBlockToHeader(afld *ast.Field, header *oaispec.Header) {
 	block := r.ParseBlock(afld.Doc)
 

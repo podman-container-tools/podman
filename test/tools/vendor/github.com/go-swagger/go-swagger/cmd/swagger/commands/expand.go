@@ -30,6 +30,13 @@ type ExpandSpec struct {
 	Format  string         `choice:"yaml"                                                                          choice:"json"  default:"json" description:"the format for the spec document" long:"format"`
 }
 
+// Usage documents the spec argument in the help message.
+//
+// It replaces the "[expand-OPTIONS]" placeholder the flags parser renders by default.
+func (c ExpandSpec) Usage() string {
+	return "[expand-OPTIONS] {spec}"
+}
+
 // Execute expands the spec.
 func (c *ExpandSpec) Execute(args []string) error {
 	if len(args) != 1 {

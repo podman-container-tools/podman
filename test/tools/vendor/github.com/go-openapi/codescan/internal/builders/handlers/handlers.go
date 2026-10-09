@@ -24,8 +24,8 @@ import (
 // ExtensionTarget is the minimal surface a Walker.Extension consumer needs to write a vendor
 // extension.
 //
-// Implemented by every oaispec object that embeds VendorExtensible (Schema, Parameter, Header,
-// Response, Operation, …) via the AddExtension method promoted from the embed.
+// Implemented by every oaispec object that embeds VendorExtensible (Schema, Parameter, Header, Response, Operation, …)
+// via the AddExtension method promoted from the embed.
 type ExtensionTarget interface {
 	AddExtension(key string, value any)
 }
@@ -35,8 +35,7 @@ type ExtensionTarget interface {
 //
 // # Details
 //
-// See [§extensions](./README.md#extensions) for the SkipExtensions interaction and the
-// wrap-for-side-effects pattern.
+// See [§extensions](./README.md#extensions) for the SkipExtensions interaction and the wrap-for-side-effects pattern.
 func Extension(target ExtensionTarget) func(grammar.Extension) {
 	return func(ext grammar.Extension) {
 		if !classify.IsAllowedExtension(ext.Name) {
@@ -46,8 +45,7 @@ func Extension(target ExtensionTarget) func(grammar.Extension) {
 	}
 }
 
-// Number returns a Walker.Number callback that routes `maximum:` / `minimum:` / `multipleOf:` onto
-// v.
+// Number returns a Walker.Number callback that routes `maximum:` / `minimum:` / `multipleOf:` onto v.
 func Number(v ifaces.ValidationBuilder) func(grammar.Property, float64, bool) {
 	return func(pr grammar.Property, val float64, exclusive bool) {
 		if !pr.IsTyped() {
@@ -93,9 +91,8 @@ func Integer(v ifaces.ValidationBuilder, diag func(grammar.Diagnostic)) func(gra
 	}
 }
 
-// UnsupportedSimpleSchemaString returns a Walker.String callback that emits
-// CodeUnsupportedInSimpleSchema for full-Schema-only string keywords (`patternProperties:`) that
-// reach a SimpleSchema site.
+// UnsupportedSimpleSchemaString returns a Walker.String callback that emits CodeUnsupportedInSimpleSchema for
+// full-Schema-only string keywords (`patternProperties:`) that reach a SimpleSchema site.
 //
 // The SimpleSchema-legal string keywords (`pattern:`, `collectionFormat:`) are handled by their own
 // callbacks and ignored here.
@@ -197,16 +194,14 @@ func PatternString(v ifaces.ValidationBuilder) func(grammar.Property, string) {
 
 // CollectionFormatString returns a Walker.String callback for the `collectionFormat:` keyword.
 //
-// Tries the Walker-supplied typed string first and falls back to strings.TrimSpace(pr.Value) when
-// the grammar's closed-vocab string-enum rejected the source, so values outside the OAS v2
-// vocabulary round-trip verbatim.
+// Tries the Walker-supplied typed string first and falls back to strings.TrimSpace(pr.Value) when the grammar's
+// closed-vocab string-enum rejected the source, so values outside the OAS v2 vocabulary round-trip verbatim.
 //
 // SimpleSchema-only — schema-level Validations don't expose SetCollectionFormat.
 //
 // # Details
 //
-// See [§collection-format-fallback](./README.md#collection-format-fallback) for the rationale
-// behind the lax fallback.
+// See [§collection-format-fallback](./README.md#collection-format-fallback) for the rationale behind the lax fallback.
 func CollectionFormatString(v ifaces.OperationValidationBuilder) func(grammar.Property, string) {
 	return func(pr grammar.Property, val string) {
 		if pr.Keyword.Name != grammar.KwCollectionFormat {
@@ -222,8 +217,7 @@ func CollectionFormatString(v ifaces.OperationValidationBuilder) func(grammar.Pr
 	}
 }
 
-// ComposeString returns a Walker.String callback that fans the payload out to every non-nil handler
-// in order.
+// ComposeString returns a Walker.String callback that fans the payload out to every non-nil handler in order.
 //
 // The canonical use is to combine PatternString + CollectionFormatString in one Walker.String slot.
 func ComposeString(hs ...func(grammar.Property, string)) func(grammar.Property, string) {
@@ -236,8 +230,7 @@ func ComposeString(hs ...func(grammar.Property, string)) func(grammar.Property, 
 	}
 }
 
-// Raw returns a Walker.Raw callback for `default:` / `example:` / `enum:` (Shape=ShapeRawValue per
-// the lexer table).
+// Raw returns a Walker.Raw callback for `default:` / `example:` / `enum:` (Shape=ShapeRawValue per the lexer table).
 //
 // `default` and `example` coerce against scheme via validations.CoerceValue; `enum` is delegated to
 // v.SetEnum which routes through validations.CoerceEnum inside the adapter.
@@ -245,22 +238,20 @@ func ComposeString(hs ...func(grammar.Property, string)) func(grammar.Property, 
 // errSink controls coercion-error semantics:
 //
 //   - errSink == nil  → swallow silently. The response-header path
-//     uses this posture so that a malformed default/example on a
-//     header doesn't fail the build.
+//     uses this posture so that a malformed default/example on a header doesn't fail the build.
 //   - errSink != nil  → invoked with the first ParseValueFromSchema
 //     error. Returning true short-circuits subsequent Raw
 //     callbacks within this Walker (the closure's `stopped` flag);
 //     returning false continues. Parameters use this to bubble the
-//     error up so the build surfaces a malformed default/example
-//     as a hard failure.
+//     error up so the build surfaces a malformed default/example as a hard failure.
 //
 // diag receives a CodeUnsupportedInSimpleSchema warning when a full-Schema-only raw keyword (e.g.
 // externalDocs:) appears on this SimpleSchema site; the keyword is dropped. diag may be nil.
 //
 // # Details
 //
-// See [§raw-errsink](./README.md#raw-errsink) for the per-dispatcher wiring and the integration
-// tests that exercise the parameter-path hard-failure behaviour.
+// See [§raw-errsink](./README.md#raw-errsink) for the per-dispatcher wiring and the integration tests
+// that exercise the parameter-path hard-failure behaviour.
 func Raw(v ifaces.ValidationBuilder, scheme *oaispec.SimpleSchema, errSink func(error) bool,
 	diag func(grammar.Diagnostic),
 ) func(grammar.Property) {
@@ -291,8 +282,7 @@ func Raw(v ifaces.ValidationBuilder, scheme *oaispec.SimpleSchema, errSink func(
 		case grammar.KwEnum:
 			v.SetEnum(pr.Value)
 		default:
-			// Full-Schema-only raw keyword (externalDocs:) on a SimpleSchema site — drop with a
-			// diagnostic.
+			// Full-Schema-only raw keyword (externalDocs:) on a SimpleSchema site — drop with a diagnostic.
 			if diag != nil && !IsSimpleSchemaKeyword(pr.Keyword.Name) {
 				diag(grammar.Warnf(
 					pr.Pos,
