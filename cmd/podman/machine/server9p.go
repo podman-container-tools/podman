@@ -42,7 +42,7 @@ func init() {
 
 var serveDirs []string
 
-func remoteDirServer(_ *cobra.Command, args []string) error {
+func remoteDirServer(cmd *cobra.Command, args []string) error {
 	pid, err := strconv.Atoi(args[0])
 	if err != nil {
 		return fmt.Errorf("parsing PID: %w", err)
@@ -77,6 +77,7 @@ func remoteDirServer(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening gvproxy PID: %w", err)
 	}
+checking:
 	for {
 		running, err := p.IsRunning()
 		if err != nil {
@@ -85,8 +86,11 @@ func remoteDirServer(_ *cobra.Command, args []string) error {
 		if !running {
 			break
 		}
-
-		time.Sleep(1 * time.Second)
+		select {
+		case <-cmd.Context().Done():
+			break checking
+		case <-time.After(1 * time.Second):
+		}
 	}
 
 	logrus.Infof("Exiting cleanly as PID %d has died", pid)

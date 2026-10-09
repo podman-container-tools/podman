@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 )
@@ -12,8 +13,8 @@ var (
 	gvproxy       = "gvproxy"
 )
 
-func pgrep(n string) (string, error) {
-	out, err := exec.Command("pgrep", n).Output()
+func pgrep(ctx context.Context, n string) (string, error) {
+	out, err := exec.CommandContext(ctx, "pgrep", n).Output()
 	return string(out), err
 }
 

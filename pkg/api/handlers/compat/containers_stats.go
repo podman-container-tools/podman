@@ -39,13 +39,13 @@ func StatsContainer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := utils.GetName(r)
-	ctnr, err := runtime.LookupContainer(name)
+	ctnr, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
 	}
 
-	stats, err := ctnr.GetContainerStats(nil)
+	stats, err := ctnr.GetContainerStats(r.Context(), nil)
 	if err != nil {
 		err = fmt.Errorf("failed to obtain Container %s stats: %w", name, err)
 		utils.Error(w, statsErrorStatus(err), err)
@@ -88,7 +88,7 @@ streamLabel: // A label to flatten the scope
 		logrus.Debugf("Client connection (container stats) cancelled")
 
 	default:
-		stats, err = ctnr.GetContainerStats(stats)
+		stats, err = ctnr.GetContainerStats(r.Context(), stats)
 		if err != nil {
 			if wroteContent {
 				logrus.Errorf("Unable to get container stats: %v", err)
@@ -97,7 +97,7 @@ streamLabel: // A label to flatten the scope
 			}
 			return
 		}
-		s, err := statsContainerJSON(ctnr, stats, preCPUStats, onlineCPUs)
+		s, err := statsContainerJSON(r.Context(), ctnr, stats, preCPUStats, onlineCPUs)
 		if err != nil {
 			if wroteContent {
 				logrus.Errorf("Unable to build container stats response: %v", err)

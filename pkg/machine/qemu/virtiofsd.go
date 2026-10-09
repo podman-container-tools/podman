@@ -3,6 +3,7 @@
 package qemu
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,8 +37,9 @@ func newVirtiofsdSpawner(runtimeDir *define.VMFile) (*virtiofsdSpawner, error) {
 }
 
 // createVirtiofsCmd returns a new command instance configured to launch virtiofsd.
-func (v *virtiofsdSpawner) createVirtiofsCmd(directory, socketPath string) *exec.Cmd {
-	cmd := exec.Command(v.binaryPath,
+func (v *virtiofsdSpawner) createVirtiofsCmd(ctx context.Context, directory, socketPath string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx,
+		v.binaryPath,
 		"--sandbox", "none",
 		"--socket-path", socketPath,
 		"--shared-dir", ".",
@@ -63,7 +65,7 @@ type virtiofsdHelperCmd struct {
 }
 
 // spawnForMount returns on success a combination of qemu commandline and child process for virtiofsd
-func (v *virtiofsdSpawner) spawnForMount(hostmnt *vmconfigs.Mount) ([]string, *virtiofsdHelperCmd, error) {
+func (v *virtiofsdSpawner) spawnForMount(ctx context.Context, hostmnt *vmconfigs.Mount) ([]string, *virtiofsdHelperCmd, error) {
 	logrus.Debugf("Initializing virtiofsd mount for %s", hostmnt.Source)
 	// By far the most common failure to spawn virtiofsd will be a typo'd source directory,
 	// so let's synchronously check that ourselves here.
@@ -81,7 +83,7 @@ func (v *virtiofsdSpawner) spawnForMount(hostmnt *vmconfigs.Mount) ([]string, *v
 		"-device", fmt.Sprintf("vhost-user-fs-pci,queue-size=1024,chardev=%s,tag=%s", virtiofsChar, hostmnt.Tag),
 	}
 	// TODO: Honor hostmnt.readonly somehow here (add an option to virtiofsd)
-	virtiofsdCmd := v.createVirtiofsCmd(hostmnt.Source, virtiofsCharPath.Path)
+	virtiofsdCmd := v.createVirtiofsCmd(ctx, hostmnt.Source, virtiofsCharPath.Path)
 	if err := virtiofsdCmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("failed to start virtiofsd")
 	}

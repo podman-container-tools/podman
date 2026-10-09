@@ -2,13 +2,17 @@
 
 package libpod
 
-import "go.podman.io/podman/v6/libpod/define"
+import (
+	"context"
+
+	"go.podman.io/podman/v6/libpod/define"
+)
 
 // GetPodStatus determines the status of the pod based on the
 // statuses of the containers in the pod.
 // Returns a string representation of the pod status
-func (p *Pod) GetPodStatus() (string, error) {
-	ctrStatuses, err := p.Status()
+func (p *Pod) GetPodStatus(ctx context.Context) (string, error) {
+	ctrStatuses, err := p.Status(ctx)
 	if err != nil {
 		return define.PodStateErrored, err
 	}

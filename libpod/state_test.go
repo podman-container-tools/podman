@@ -62,7 +62,7 @@ func TestAddAndGetContainer(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.Container(testCtr.ID())
+		retrievedCtr, err := state.Container(t.Context(), testCtr.ID())
 		assert.NoError(t, err)
 
 		testContainersEqual(t, retrievedCtr, testCtr, true)
@@ -82,7 +82,7 @@ func TestAddAndGetContainerFromMultiple(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.Container(testCtr1.ID())
+		retrievedCtr, err := state.Container(t.Context(), testCtr1.ID())
 		assert.NoError(t, err)
 
 		testContainersEqual(t, retrievedCtr, testCtr1, true)
@@ -97,7 +97,7 @@ func TestGetContainerPodSameIDFails(t *testing.T) {
 		err = state.AddPod(testPod)
 		assert.NoError(t, err)
 
-		_, err = state.Container(testPod.ID())
+		_, err = state.Container(t.Context(), testPod.ID())
 		assert.Error(t, err)
 	})
 }
@@ -122,7 +122,7 @@ func TestAddDuplicateCtrIDFails(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ctrs))
 	})
@@ -141,7 +141,7 @@ func TestAddDuplicateCtrNameFails(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ctrs))
 	})
@@ -160,7 +160,7 @@ func TestAddCtrPodDupIDFails(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -190,7 +190,7 @@ func TestAddCtrDepInPodFails(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		require.Len(t, ctrs, 1)
 
@@ -200,21 +200,21 @@ func TestAddCtrDepInPodFails(t *testing.T) {
 
 func TestGetNonexistentContainerFails(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		_, err := state.Container("does not exist")
+		_, err := state.Container(t.Context(), "does not exist")
 		assert.Error(t, err)
 	})
 }
 
 func TestGetContainerWithEmptyIDFails(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		_, err := state.Container("")
+		_, err := state.Container(t.Context(), "")
 		assert.Error(t, err)
 	})
 }
 
 func TestLookupContainerWithEmptyIDFails(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		_, err := state.LookupContainer("")
+		_, err := state.LookupContainer(t.Context(), "")
 		assert.Error(t, err)
 
 		_, err = state.LookupContainerID("")
@@ -224,7 +224,7 @@ func TestLookupContainerWithEmptyIDFails(t *testing.T) {
 
 func TestLookupNonexistentContainerFails(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		_, err := state.LookupContainer("does not exist")
+		_, err := state.LookupContainer(t.Context(), "does not exist")
 		assert.Error(t, err)
 
 		_, err = state.LookupContainerID("does not exist")
@@ -240,7 +240,7 @@ func TestLookupContainerByFullID(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.LookupContainer(testCtr.ID())
+		retrievedCtr, err := state.LookupContainer(t.Context(), testCtr.ID())
 		assert.NoError(t, err)
 		testContainersEqual(t, retrievedCtr, testCtr, true)
 
@@ -258,7 +258,7 @@ func TestLookupContainerByUniquePartialID(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.LookupContainer(testCtr.ID()[0:8])
+		retrievedCtr, err := state.LookupContainer(t.Context(), testCtr.ID()[0:8])
 		assert.NoError(t, err)
 		testContainersEqual(t, retrievedCtr, testCtr, true)
 
@@ -281,7 +281,7 @@ func TestLookupContainerByNonUniquePartialIDFails(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		_, err = state.LookupContainer(testCtr1.ID()[0:8])
+		_, err = state.LookupContainer(t.Context(), testCtr1.ID()[0:8])
 		assert.Error(t, err)
 
 		_, err = state.LookupContainerID(testCtr1.ID()[0:8])
@@ -297,7 +297,7 @@ func TestLookupContainerByName(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.LookupContainer(testCtr.Name())
+		retrievedCtr, err := state.LookupContainer(t.Context(), testCtr.Name())
 		assert.NoError(t, err)
 		testContainersEqual(t, retrievedCtr, testCtr, true)
 
@@ -315,7 +315,7 @@ func TestLookupCtrByPodNameFails(t *testing.T) {
 		err = state.AddPod(testPod)
 		assert.NoError(t, err)
 
-		_, err = state.LookupContainer(testPod.Name())
+		_, err = state.LookupContainer(t.Context(), testPod.Name())
 		assert.Error(t, err)
 
 		_, err = state.LookupContainerID(testPod.Name())
@@ -331,7 +331,7 @@ func TestLookupCtrByPodIDFails(t *testing.T) {
 		err = state.AddPod(testPod)
 		assert.NoError(t, err)
 
-		_, err = state.LookupContainer(testPod.ID())
+		_, err = state.LookupContainer(t.Context(), testPod.ID())
 		assert.Error(t, err)
 
 		_, err = state.LookupContainerID(testPod.ID())
@@ -390,7 +390,7 @@ func TestSaveAndUpdateContainer(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		retrievedCtr, err := state.Container(testCtr.ID())
+		retrievedCtr, err := state.Container(t.Context(), testCtr.ID())
 		require.NoError(t, err)
 
 		retrievedCtr.state.State = define.ContainerStateStopped
@@ -451,14 +451,14 @@ func TestRemoveContainer(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ctrs))
 
 		err = state.RemoveContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs2, err := state.AllContainers(false)
+		ctrs2, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs2))
 	})
@@ -476,7 +476,7 @@ func TestRemoveNonexistentContainerFails(t *testing.T) {
 
 func TestGetAllContainersOnNewStateIsEmpty(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -490,7 +490,7 @@ func TestGetAllContainersWithOneContainer(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		require.Len(t, ctrs, 1)
 
@@ -511,7 +511,7 @@ func TestGetAllContainersTwoContainers(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs))
 	})
@@ -700,7 +700,7 @@ func TestCannotRemoveContainerWithDependency(t *testing.T) {
 		err = state.RemoveContainer(testCtr1)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs))
 	})
@@ -724,7 +724,7 @@ func TestCannotRemoveContainerWithGenericDependency(t *testing.T) {
 		err = state.RemoveContainer(testCtr1)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs))
 	})
@@ -751,7 +751,7 @@ func TestCanRemoveContainerAfterDependencyRemoved(t *testing.T) {
 		err = state.RemoveContainer(testCtr1)
 		assert.NoError(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -779,7 +779,7 @@ func TestCanRemoveContainerAfterDependencyRemovedDuplicate(t *testing.T) {
 		err = state.RemoveContainer(testCtr1)
 		assert.NoError(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -801,7 +801,7 @@ func TestCannotUsePodAsDependency(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -817,7 +817,7 @@ func TestCannotUseBadIDAsDependency(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -833,7 +833,7 @@ func TestCannotUseBadIDAsGenericDependency(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.AllContainers(false)
+		ctrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -868,7 +868,7 @@ func TestRewriteContainerConfigRewritesConfig(t *testing.T) {
 		err = state.RewriteContainerConfig(testCtr, testCtr.config)
 		assert.NoError(t, err)
 
-		testCtrFromState, err := state.Container(testCtr.ID())
+		testCtrFromState, err := state.Container(t.Context(), testCtr.ID())
 		assert.NoError(t, err)
 
 		testContainersEqual(t, testCtrFromState, testCtr, true)
@@ -1609,7 +1609,7 @@ func TestPodContainersByIDMultipleContainers(t *testing.T) {
 
 func TestPodContainersInvalidPod(t *testing.T) {
 	runForAllStates(t, func(t *testing.T, state State, _ lock.Manager) {
-		_, err := state.PodContainers(&Pod{config: &PodConfig{}})
+		_, err := state.PodContainers(t.Context(), &Pod{config: &PodConfig{}})
 		assert.Error(t, err)
 	})
 }
@@ -1619,7 +1619,7 @@ func TestPodContainersPodNotInState(t *testing.T) {
 		testPod, err := getTestPod1(manager)
 		assert.NoError(t, err)
 
-		_, err = state.PodContainers(testPod)
+		_, err = state.PodContainers(t.Context(), testPod)
 		assert.Error(t, err)
 	})
 }
@@ -1632,7 +1632,7 @@ func TestPodContainersEmptyPod(t *testing.T) {
 		err = state.AddPod(testPod)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -1654,7 +1654,7 @@ func TestPodContainersOneContainer(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		require.Len(t, ctrs, 1)
 
@@ -1682,28 +1682,28 @@ func TestPodContainersMultipleContainers(t *testing.T) {
 		err = state.AddPod(testPod)
 		assert.NoError(t, err)
 
-		ctrs0, err := state.PodContainers(testPod)
+		ctrs0, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs0))
 
 		err = state.AddContainer(testCtr1)
 		assert.NoError(t, err)
 
-		ctrs1, err := state.PodContainers(testPod)
+		ctrs1, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ctrs1))
 
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		ctrs2, err := state.PodContainers(testPod)
+		ctrs2, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs2))
 
 		err = state.AddContainer(testCtr3)
 		assert.NoError(t, err)
 
-		ctrs3, err := state.PodContainers(testPod)
+		ctrs3, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(ctrs3))
 	})
@@ -1796,7 +1796,7 @@ func TestRemovePodContainersPreservesCtrOutsidePod(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(allCtrs))
 	})
@@ -1922,11 +1922,11 @@ func TestAddContainerToPodSucceeds(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		require.Len(t, ctrs, 1)
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		require.Len(t, allCtrs, 1)
 
@@ -1957,11 +1957,11 @@ func TestAddContainerToPodTwoContainers(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(allCtrs))
 	})
@@ -1988,11 +1988,11 @@ func TestAddContainerToPodWithAddContainer(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		require.Len(t, ctrs, 1)
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(allCtrs))
 
@@ -2021,11 +2021,11 @@ func TestAddContainerToPodCtrIDConflict(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(allCtrs))
 	})
@@ -2052,11 +2052,11 @@ func TestAddContainerToPodCtrNameConflict(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(allCtrs))
 	})
@@ -2077,11 +2077,11 @@ func TestAddContainerToPodPodIDConflict(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(allCtrs))
 	})
@@ -2133,7 +2133,7 @@ func TestAddContainerToPodPodDependencyFails(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -2155,7 +2155,7 @@ func TestAddContainerToPodBadDependencyFails(t *testing.T) {
 		err = state.AddContainer(testCtr)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 	})
@@ -2183,11 +2183,11 @@ func TestAddContainerToPodDependencyOutsidePodFails(t *testing.T) {
 		err = state.AddContainer(testCtr2)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(allCtrs))
 
@@ -2259,11 +2259,11 @@ func TestRemoveContainerFromPodSucceeds(t *testing.T) {
 		err = state.RemoveContainer(testCtr)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(allCtrs))
 	})
@@ -2295,11 +2295,11 @@ func TestRemoveContainerFromPodWithDependencyFails(t *testing.T) {
 		err = state.RemoveContainer(testCtr1)
 		assert.Error(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(allCtrs))
 	})
@@ -2334,11 +2334,11 @@ func TestRemoveContainerFromPodWithDependencySucceedsAfterDepRemoved(t *testing.
 		err = state.RemoveContainer(testCtr1)
 		assert.NoError(t, err)
 
-		ctrs, err := state.PodContainers(testPod)
+		ctrs, err := state.PodContainers(t.Context(), testPod)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ctrs))
 
-		allCtrs, err := state.AllContainers(false)
+		allCtrs, err := state.AllContainers(t.Context(), false)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(allCtrs))
 	})

@@ -3,6 +3,7 @@
 package shim
 
 import (
+	"context"
 	"io/fs"
 	"net"
 	"os"
@@ -17,24 +18,24 @@ import (
 
 func setGvproxyProcessAttributes(_ *exec.Cmd) {}
 
-func cleanupStaleHostForwarder(_ *vmconfigs.MachineConfig, _ vmconfigs.VMProvider) error {
+func cleanupStaleHostForwarder(_ context.Context, _ *vmconfigs.MachineConfig, _ vmconfigs.VMProvider) error {
 	return nil
 }
 
-func setupMachineSockets(mc *vmconfigs.MachineConfig, dirs *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
+func setupMachineSockets(ctx context.Context, mc *vmconfigs.MachineConfig, dirs *define.MachineDirs) ([]string, string, machine.APIForwardingState, error) {
 	hostSocket, err := mc.APISocket()
 	if err != nil {
 		return nil, "", 0, err
 	}
 
-	forwardSock, state, err := setupForwardingLinks(hostSocket, dirs.DataDir)
+	forwardSock, state, err := setupForwardingLinks(ctx, hostSocket, dirs.DataDir)
 	if err != nil {
 		return nil, "", 0, err
 	}
 	return []string{hostSocket.GetPath()}, forwardSock, state, nil
 }
 
-func setupForwardingLinks(hostSocket, dataDir *define.VMFile) (string, machine.APIForwardingState, error) {
+func setupForwardingLinks(ctx context.Context, hostSocket, dataDir *define.VMFile) (string, machine.APIForwardingState, error) {
 	// Sets up a cooperative link structure to help a separate privileged
 	// service manage /var/run/docker.sock (currently only on MacOS via
 	// podman-mac-helper, but potentially other OSs in the future).
@@ -82,7 +83,7 @@ func setupForwardingLinks(hostSocket, dataDir *define.VMFile) (string, machine.A
 			return hostSocket.GetPath(), machine.MachineLocal, nil
 		}
 
-		_ = userGlobalSocket.Delete()
+		_ = userGlobalSocket.Delete(ctx)
 
 		if err := os.Symlink(hostSocket.GetPath(), userGlobalSocket.GetPath()); err != nil {
 			logrus.Warnf("could not create user global API forwarding link: %v", err)

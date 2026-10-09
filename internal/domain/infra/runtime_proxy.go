@@ -13,8 +13,8 @@ import (
 	"go.podman.io/storage"
 )
 
-func NewLibpodTestingRuntime(flags *flag.FlagSet, opts *entities.PodmanConfig) (ientities.TestingEngine, error) {
-	r, err := infra.GetRuntime(context.Background(), flags, opts)
+func NewLibpodTestingRuntime(ctx context.Context, flags *flag.FlagSet, opts *entities.PodmanConfig) (ientities.TestingEngine, error) {
+	r, err := infra.GetRuntime(ctx, flags, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -61,7 +61,7 @@ func start(cmd *cobra.Command, args []string) error {
 	}
 
 	shouldUpdate := processSystemConnUpdate(cmd, setDefaultSystemConn)
-	if err := shim.Start(mc, vmProvider, startOpts, shouldUpdate); err != nil {
+	if err := shim.Start(cmd.Context(), mc, vmProvider, startOpts, shouldUpdate); err != nil {
 		return err
 	}
 	fmt.Printf("Machine %q started successfully\n", vmName)

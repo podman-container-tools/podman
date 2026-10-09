@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"maps"
 
@@ -13,7 +14,7 @@ import (
 
 // Inspect provides detailed information about the configuration of the given
 // volume.
-func (v *Volume) Inspect() (*define.InspectVolumeData, error) {
+func (v *Volume) Inspect(ctx context.Context) (*define.InspectVolumeData, error) {
 	if !v.valid {
 		return nil, define.ErrVolumeRemoved
 	}
@@ -41,7 +42,7 @@ func (v *Volume) Inspect() (*define.InspectVolumeData, error) {
 		// Need to query the volume driver.
 		req := new(pluginapi.GetRequest)
 		req.Name = v.Name()
-		resp, err := plugin.GetVolume(req)
+		resp, err := plugin.GetVolume(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("retrieving volume %s information from plugin %s: %w", v.Name(), v.Driver(), err)
 		}

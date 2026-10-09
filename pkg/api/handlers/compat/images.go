@@ -144,7 +144,7 @@ func CommitContainer(w http.ResponseWriter, r *http.Request) {
 		}
 		options.CommitOptions.OverrideConfig = overrideConfig
 	}
-	ctr, err := runtime.LookupContainer(query.Container)
+	ctr, err := runtime.LookupContainer(r.Context(), query.Container)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return

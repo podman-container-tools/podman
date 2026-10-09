@@ -223,7 +223,7 @@ func initMachine(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if something on the hypervisor exists with the same name
-	exists, err := shim.VMExistsOnHyperVisor(initOpts.Name)
+	exists, err := shim.VMExistsOnHyperVisor(cmd.Context(), initOpts.Name)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func initMachine(cmd *cobra.Command, args []string) error {
 	// 	return err
 	// }
 
-	err = shim.Init(initOpts, machineProvider)
+	err = shim.Init(cmd.Context(), initOpts, machineProvider)
 	if err != nil {
 		// ErrRelaunchSucceeded is not a real error: it signals that
 		// an elevated child process completed init successfully.

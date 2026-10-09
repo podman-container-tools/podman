@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -1210,7 +1211,7 @@ var _ = Describe("Podman checkpoint", func() {
 			share,
 		)
 
-		It(testName, func() {
+		It(testName, func(ctx context.Context) {
 			Skip("FIXME: #24571 - not working an super flaky, don't waste CI time on it")
 			podName := "test_pod"
 
@@ -1218,7 +1219,7 @@ var _ = Describe("Podman checkpoint", func() {
 				Skip(fmt.Sprintf("check CRIU pod version error: %v", err))
 			}
 
-			if !crutils.CRRuntimeSupportsPodCheckpointRestore(podmanTest.OCIRuntime) {
+			if !crutils.CRRuntimeSupportsPodCheckpointRestore(ctx, podmanTest.OCIRuntime) {
 				Skip("runtime does not support pod restore: " + podmanTest.OCIRuntime)
 			}
 

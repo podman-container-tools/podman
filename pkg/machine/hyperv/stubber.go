@@ -4,6 +4,7 @@ package hyperv
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -61,12 +62,12 @@ func (h HyperVStubber) RequireExclusiveActive() bool {
 	return true
 }
 
-func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConfig, builder *ignition.IgnitionBuilder) error {
+func (h HyperVStubber) CreateVM(ctx context.Context, _ define.CreateVMOpts, mc *vmconfigs.MachineConfig, builder *ignition.IgnitionBuilder) error {
 	var err error
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
 	callbackFuncs.Add(createErrorLogCallback(&err))
-	go callbackFuncs.CleanOnSignal(false)
+	go callbackFuncs.CleanOnSignal(ctx, false)
 
 	hwConfig := hypervctl.HardwareConfig{
 		CPUs:     uint16(mc.Resources.CPUs),
@@ -115,7 +116,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 	}
 
 	// Callback to remove any created vsock entries in the Windows Registry if the creation fails
-	removeRegistryEntriesCallBack := func() error {
+	removeRegistryEntriesCallBack := func(context.Context) error {
 		// Allow removal only if user is Admin and this is the first machine created.
 		// If there are already existing machines, the vsock entries should remain.
 		//
@@ -185,7 +186,7 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 		return err
 	}
 
-	vmRemoveCallback := func() error {
+	vmRemoveCallback := func(context.Context) error {
 		vm, err := vmm.GetMachine(mc.Name)
 		if err != nil {
 			return err
@@ -194,11 +195,11 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 	}
 
 	callbackFuncs.Add(vmRemoveCallback)
-	err = resizeDisk(mc.Resources.DiskSize, mc.ImagePath)
+	err = resizeDisk(ctx, mc.Resources.DiskSize, mc.ImagePath)
 	return err
 }
 
-func (h HyperVStubber) Exists(name string) (bool, error) {
+func (h HyperVStubber) Exists(_ context.Context, name string) (bool, error) {
 	// If the user lacks permissions, WMI will throw an access denied error.
 	// We return false to prevent breaking commands like `init`
 	// that loop over all providers to verify machine name uniqueness.
@@ -220,14 +221,14 @@ func (h HyperVStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.NineP
 }
 
-func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) error {
+func (h HyperVStubber) MountVolumesToVM(ctx context.Context, mc *vmconfigs.MachineConfig, _ bool) error {
 	var (
 		err        error
 		executable string
 	)
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
-	go callbackFuncs.CleanOnSignal(true)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
+	go callbackFuncs.CleanOnSignal(ctx, true)
 
 	if len(mc.Mounts) == 0 {
 		return nil
@@ -272,7 +273,7 @@ func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) err
 
 	logrus.Debugf("Going to start 9p server using command: %s %v", executable, p9ServerArgs)
 
-	fsCmd := exec.Command(executable, p9ServerArgs...)
+	fsCmd := exec.CommandContext(ctx, executable, p9ServerArgs...)
 	// Set SysProcAttr CREATE_NO_WINDOW or
 	// the server9p process will be killed
 	// when the parent window is closed
@@ -302,7 +303,7 @@ func (h HyperVStubber) MountVolumesToVM(mc *vmconfigs.MachineConfig, _ bool) err
 	return err
 }
 
-func (h HyperVStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error, error) {
+func (h HyperVStubber) Remove(_ context.Context, mc *vmconfigs.MachineConfig) ([]string, func(context.Context) error, error) {
 	// Allow removal in these two cases:
 	// 1. if the user is Admin
 	// 2. if the user has Hyper-V admin rights and there are 2+ *NEW* machines.
@@ -328,7 +329,7 @@ func (h HyperVStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() err
 		return nil, nil, err
 	}
 
-	rmFunc := func() error {
+	rmFunc := func(context.Context) error {
 		// Remove ignition registry entries - not a fatal error
 		// for vm removal
 		// TODO we could improve this by recommending an action be done
@@ -404,8 +405,8 @@ func launchElevate(message string) error {
 }
 
 // createErrorLogCallback creates a callback function that logs errors to file when --reexec is detected
-func createErrorLogCallback(err *error) func() error {
-	return func() error {
+func createErrorLogCallback(err *error) func(context.Context) error {
+	return func(context.Context) error {
 		if *err != nil && windows.IsReExecuting() {
 			windows.LogErrorToFile(*err)
 		}
@@ -563,12 +564,12 @@ func (h HyperVStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil
 }
 
-func (h HyperVStubber) StartNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
+func (h HyperVStubber) StartNetworking(_ context.Context, mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
 	cmd.AddEndpoint(fmt.Sprintf("vsock://%s", mc.HyperVHypervisor.NetworkVSock.KeyName))
 	return nil
 }
 
-func (h HyperVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
+func (h HyperVStubber) StartVM(ctx context.Context, mc *vmconfigs.MachineConfig) (func(context.Context) error, func() error, error) {
 	if err := h.canStartOrStop(mc); err != nil {
 		return nil, nil, err
 	}
@@ -579,16 +580,16 @@ func (h HyperVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func(
 	}
 
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
 	callbackFuncs.Add(createErrorLogCallback(&err))
-	go callbackFuncs.CleanOnSignal(true)
+	go callbackFuncs.CleanOnSignal(ctx, true)
 
 	if mc.IsFirstBoot() {
 		// this is added because if the machine does not start
 		// properly on first boot, the next boot will be considered
 		// the first boot again and the addition of the ignition
 		// entries will fail because the key/value pairs already exist.
-		rmIgnCallbackFunc := func() error {
+		rmIgnCallbackFunc := func(context.Context) error {
 			return removeIgnitionFromRegistry(mc, vm)
 		}
 		callbackFuncs.Add(rmIgnCallbackFunc)
@@ -612,7 +613,7 @@ func (h HyperVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func(
 		return nil, nil, err
 	}
 
-	startCallback := func() error {
+	startCallback := func(context.Context) error {
 		return vm.Stop()
 	}
 	callbackFuncs.Add(startCallback)
@@ -623,7 +624,7 @@ func (h HyperVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func(
 // State is returns the state as a define.status.  for hyperv, state differs from others because
 // state is determined by the VM itself.  normally this can be done with vm.State() and a conversion
 // but doing here as well.  this requires a little more interaction with the hypervisor
-func (h HyperVStubber) State(mc *vmconfigs.MachineConfig, bypass bool) (define.Status, error) {
+func (h HyperVStubber) State(_ context.Context, mc *vmconfigs.MachineConfig, bypass bool) (define.Status, error) {
 	// If the user does not have permissions, WMI will fail with an error anyway.
 	if err := VerifyHyperVPermissions(); err != nil {
 		if bypass {
@@ -640,7 +641,7 @@ func (h HyperVStubber) State(mc *vmconfigs.MachineConfig, bypass bool) (define.S
 	return stateConversion(vm.State())
 }
 
-func (h HyperVStubber) StopVM(mc *vmconfigs.MachineConfig, hardStop bool) error {
+func (h HyperVStubber) StopVM(_ context.Context, mc *vmconfigs.MachineConfig, hardStop bool) error {
 	if err := h.canStartOrStop(mc); err != nil {
 		return err
 	}
@@ -665,7 +666,7 @@ func (h HyperVStubber) StopVM(mc *vmconfigs.MachineConfig, hardStop bool) error 
 }
 
 // TODO should this be plumbed higher into the code stack?
-func (h HyperVStubber) StopHostNetworking(mc *vmconfigs.MachineConfig, vmType define.VMType) error {
+func (h HyperVStubber) StopHostNetworking(_ context.Context, mc *vmconfigs.MachineConfig, vmType define.VMType) error {
 	err := machine.StopWinProxy(mc.Name, vmType)
 	// in podman 4, this was a "soft" error; keeping behavior as such
 	if err != nil {
@@ -697,7 +698,7 @@ func stateConversion(s hypervctl.EnabledState) (define.Status, error) {
 	return define.Unknown, fmt.Errorf("unknown state: %q", s.String())
 }
 
-func (h HyperVStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
+func (h HyperVStubber) SetProviderAttrs(ctx context.Context, mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
 	if err := VerifyHyperVPermissions(); err != nil {
 		return err
 	}
@@ -720,7 +721,7 @@ func (h HyperVStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define
 	}
 
 	if opts.DiskSize != nil {
-		if err := resizeDisk(*opts.DiskSize, mc.ImagePath); err != nil {
+		if err := resizeDisk(ctx, *opts.DiskSize, mc.ImagePath); err != nil {
 			return err
 		}
 	}
@@ -788,17 +789,17 @@ func (h HyperVStubber) PrepareIgnition(mc *vmconfigs.MachineConfig, _ *ignition.
 	return &ignOpts, nil
 }
 
-func (h HyperVStubber) PostStartNetworking(_ *vmconfigs.MachineConfig, _ bool) error {
+func (h HyperVStubber) PostStartNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
-func (h HyperVStubber) UpdateSSHPort(_ *vmconfigs.MachineConfig, _ int) error {
+func (h HyperVStubber) UpdateSSHPort(_ context.Context, _ *vmconfigs.MachineConfig, _ int) error {
 	// managed by gvproxy on this backend, so nothing to do
 	return nil
 }
 
-func resizeDisk(newSize strongunits.GiB, imagePath *define.VMFile) error {
-	resize := exec.Command("powershell", "-command", fmt.Sprintf("Resize-VHD \"$ENV:IMAGE_PATH\" %d", newSize.ToBytes()))
+func resizeDisk(ctx context.Context, newSize strongunits.GiB, imagePath *define.VMFile) error {
+	resize := exec.CommandContext(ctx, "powershell", "-command", fmt.Sprintf("Resize-VHD \"$ENV:IMAGE_PATH\" %d", newSize.ToBytes()))
 	logrus.Debug(resize.Args)
 	resize.Stdout = os.Stdout
 	resize.Stderr = os.Stderr

@@ -109,7 +109,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 					vol.lock.Lock()
 					defer vol.lock.Unlock()
 
-					if err := vol.unmount(false); err != nil {
+					if err := vol.unmount(ctx, false); err != nil {
 						return err
 					}
 
@@ -133,7 +133,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		}
 	}
 
-	resolved, err := c.resolveCopyTarget(mountPoint, path)
+	resolved, err := c.resolveCopyTarget(ctx, mountPoint, path)
 	if err != nil {
 		unmount()
 		return nil, err

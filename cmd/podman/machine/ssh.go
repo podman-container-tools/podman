@@ -41,7 +41,7 @@ func init() {
 	_ = sshCmd.RegisterFlagCompletionFunc(usernameFlagName, completion.AutocompleteNone)
 }
 
-func ssh(_ *cobra.Command, args []string) error {
+func ssh(cmd *cobra.Command, args []string) error {
 	var (
 		err        error
 		exists     bool
@@ -87,7 +87,7 @@ func ssh(_ *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	state, err := vmProvider.State(mc, false)
+	state, err := vmProvider.State(cmd.Context(), mc, false)
 	if err != nil {
 		return err
 	}
@@ -103,6 +103,6 @@ func ssh(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	err = machine.LocalhostSSHShell(sshOpts.Username, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, sshOpts.Args)
+	err = machine.LocalhostSSHShell(cmd.Context(), sshOpts.Username, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, sshOpts.Args)
 	return utils.HandleOSExecError(err)
 }

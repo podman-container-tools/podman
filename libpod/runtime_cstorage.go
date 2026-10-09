@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -60,7 +61,7 @@ func (r *Runtime) StorageContainer(idOrName string) (*storage.Container, error) 
 // The container WILL NOT be removed if it exists in libpod.
 // Accepts ID or full name of container.
 // If force is set, the container will be unmounted first to ensure removal.
-func (r *Runtime) RemoveStorageContainer(idOrName string, force bool) error {
+func (r *Runtime) RemoveStorageContainer(ctx context.Context, idOrName string, force bool) error {
 	targetID, err := r.store.Lookup(idOrName)
 	if err != nil {
 		if errors.Is(err, storage.ErrLayerUnknown) {
@@ -89,7 +90,7 @@ func (r *Runtime) RemoveStorageContainer(idOrName string, force bool) error {
 	}
 
 	// Error out if this is an image-backed volume
-	allVols, err := r.state.AllVolumes()
+	allVols, err := r.state.AllVolumes(ctx)
 	if err != nil {
 		return err
 	}

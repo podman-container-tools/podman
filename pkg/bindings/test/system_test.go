@@ -1,6 +1,7 @@
 package bindings_test
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -24,14 +25,14 @@ var _ = Describe("Podman system", Serial, func() {
 		newpod string
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		bt = newBindingTest()
 		bt.RestoreImagesFromCache()
 		newpod = "newpod"
 		bt.Podcreate(&newpod)
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

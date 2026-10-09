@@ -1,11 +1,13 @@
 package e2e_test
 
+import "context"
+
 type infoMachine struct {
 	format string
 	cmd    []string
 }
 
-func (i *infoMachine) buildCmd(_ *machineTestBuilder) []string {
+func (i *infoMachine) buildCmd(_ context.Context, _ *machineTestBuilder) []string {
 	cmd := []string{"machine", "info"}
 	if len(i.format) > 0 {
 		cmd = append(cmd, "--format", i.format)

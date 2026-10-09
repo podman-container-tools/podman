@@ -3,6 +3,7 @@
 package certificates
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -16,7 +17,7 @@ import (
 // For consistency with the Go stdlib, if the environment variables
 // SSL_CERT_FILE and SSL_CERT_DIR are set, they override the system
 // default locations.
-func extractHostCertificates() []*x509.Certificate {
+func extractHostCertificates(context.Context) []*x509.Certificate {
 	var certificates []*x509.Certificate
 
 	if certFile, ok := os.LookupEnv("SSL_CERT_FILE"); ok {

@@ -80,7 +80,7 @@ func cp(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	state, err := vmProvider.State(mc, false)
+	state, err := vmProvider.State(cmd.Context(), mc, false)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,8 @@ func cp(cmd *cobra.Command, args []string) error {
 	if mc.HostUser.Rootful {
 		username = "root"
 	}
-	err = machine.LocalhostSSHCopy(username,
+	err = machine.LocalhostSSHCopy(cmd.Context(),
+		username,
 		sshConfig.IdentityPath,
 		sshConfig.Port,
 		srcPath,

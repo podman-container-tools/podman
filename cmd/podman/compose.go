@@ -98,7 +98,7 @@ func composeProvider() (string, error) {
 
 // composeDockerHost returns the value to be set in the DOCKER_HOST environment
 // variable.
-func composeDockerHost() (string, error) {
+func composeDockerHost(ctx context.Context) (string, error) {
 	if value, ok := os.LookupEnv("DOCKER_HOST"); ok {
 		return value, nil
 	}
@@ -141,7 +141,7 @@ func composeDockerHost() (string, error) {
 		}
 		return conf.URI, nil
 	}
-	uri, err := getMachineConn(conf.URI, parsedConnection)
+	uri, err := getMachineConn(ctx, conf.URI, parsedConnection)
 	if err != nil {
 		return "", fmt.Errorf("get machine connection URI: %w", err)
 	}
@@ -149,8 +149,8 @@ func composeDockerHost() (string, error) {
 }
 
 // composeEnv returns the compose-specific environment variables.
-func composeEnv() ([]string, error) {
-	hostValue, err := composeDockerHost()
+func composeEnv(ctx context.Context) ([]string, error) {
+	hostValue, err := composeDockerHost(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func composeProviderExec(ctx context.Context, args []string, stdout io.Writer, s
 		return err
 	}
 
-	env, err := composeEnv()
+	env, err := composeEnv(ctx)
 	if err != nil {
 		return err
 	}

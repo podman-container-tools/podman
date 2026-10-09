@@ -58,7 +58,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 	addRlimits(s, &g)
 
 	// NAMESPACES
-	if err := specConfigureNamespaces(s, &g, rt, pod); err != nil {
+	if err := specConfigureNamespaces(ctx, s, &g, rt, pod); err != nil {
 		return nil, err
 	}
 	configSpec := g.Config

@@ -2,6 +2,7 @@ package bindings_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -30,7 +31,7 @@ var _ = Describe("Podman images", func() {
 		err error
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		// tempdir, err = CreateTempDirInTempDir()
 		// if err != nil {
 		//	os.Exit(1)
@@ -42,7 +43,7 @@ var _ = Describe("Podman images", func() {
 		bt.RestoreImagesFromCache()
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -389,7 +390,7 @@ var _ = Describe("Podman images", func() {
 		registryOptions := &podmanRegistry.Options{
 			PodmanPath: getPodmanBinary(),
 		}
-		registry, err := podmanRegistry.StartWithOptions(registryOptions)
+		registry, err := podmanRegistry.StartWithOptions(bt.conn, registryOptions)
 		Expect(err).ToNot(HaveOccurred())
 
 		var writer bytes.Buffer

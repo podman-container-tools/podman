@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -18,10 +19,10 @@ import (
 // for a given container.  The previousStats is used to correctly
 // calculate cpu percentages. You should pass nil if there is no
 // previous stat for this container.
-func (c *Container) getPlatformContainerStats(stats *define.ContainerStats, previousStats *define.ContainerStats) error {
+func (c *Container) getPlatformContainerStats(ctx context.Context, stats *define.ContainerStats, previousStats *define.ContainerStats) error {
 	now := uint64(time.Now().UnixNano())
 
-	jailName, err := c.jailName()
+	jailName, err := c.jailName(ctx)
 	if err != nil {
 		return fmt.Errorf("getting jail name: %w", err)
 	}

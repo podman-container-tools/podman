@@ -30,7 +30,7 @@ func TestGetSeccompConfigFromFile(t *testing.T) {
 	s := specgen.NewSpecGenerator("", false)
 	s.SeccompProfilePath = profilePath
 
-	config, err := getSeccompConfig(s, &spec.Spec{}, nil)
+	config, err := getSeccompConfig(t.Context(), s, &spec.Spec{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, spec.ActAllow, config.DefaultAction)
 	require.Len(t, config.Syscalls, 1)
@@ -42,7 +42,7 @@ func TestGetSeccompConfigInline(t *testing.T) {
 	s := specgen.NewSpecGenerator("", false)
 	s.SeccompProfile = testSeccompProfile
 
-	config, err := getSeccompConfig(s, &spec.Spec{}, nil)
+	config, err := getSeccompConfig(t.Context(), s, &spec.Spec{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, spec.ActAllow, config.DefaultAction)
 	require.Len(t, config.Syscalls, 1)
@@ -54,6 +54,6 @@ func TestGetSeccompConfigRejectsInvalidInlineProfile(t *testing.T) {
 	s := specgen.NewSpecGenerator("", false)
 	s.SeccompProfile = "{invalid JSON"
 
-	_, err := getSeccompConfig(s, &spec.Spec{}, nil)
+	_, err := getSeccompConfig(t.Context(), s, &spec.Spec{}, nil)
 	require.ErrorContains(t, err, "loading inline seccomp profile failed")
 }

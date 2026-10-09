@@ -260,6 +260,7 @@ func ps(cmd *cobra.Command, _ []string) error {
 	case listOpts.Watch > 0:
 		// responses will grow to the largest number of processes reported on, but will not thrash the gc
 		var responses []psReporter
+	waiting:
 		for ; ; responses = responses[:0] {
 			ctnrs, err := getResponses(cmd.Context())
 			if err != nil {
@@ -282,7 +283,11 @@ func ps(cmd *cobra.Command, _ []string) error {
 				return err
 			}
 
-			time.Sleep(time.Duration(listOpts.Watch) * time.Second)
+			select {
+			case <-cmd.Context().Done():
+				break waiting
+			case <-time.After(time.Duration(listOpts.Watch) * time.Second):
+			}
 		}
 	default:
 		if err := headers(); err != nil {

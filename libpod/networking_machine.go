@@ -31,14 +31,13 @@ type machineExpose struct {
 	Protocol string `json:"protocol"`
 }
 
-func requestMachinePorts(expose bool, ports []types.PortMapping) error {
+func requestMachinePorts(ctx context.Context, expose bool, ports []types.PortMapping) error {
 	url := "http://" + machineGvproxyEndpoint + "/services/forwarder/"
 	if expose {
 		url += "expose"
 	} else {
 		url += "unexpose"
 	}
-	ctx := context.Background()
 	client := &http.Client{
 		Transport: &http.Transport{
 			// make sure to not set a proxy here so explicitly ignore the proxy
@@ -69,7 +68,7 @@ func requestMachinePorts(expose bool, ports []types.PortMapping) error {
 				if err := json.NewEncoder(buf).Encode(machinePort); err != nil {
 					if expose {
 						// in case of an error make sure to unexpose the other ports
-						if cerr := requestMachinePorts(false, ports[:num]); cerr != nil {
+						if cerr := requestMachinePorts(ctx, false, ports[:num]); cerr != nil {
 							logrus.Errorf("failed to free gvproxy machine ports: %v", cerr)
 						}
 					}
@@ -78,7 +77,7 @@ func requestMachinePorts(expose bool, ports []types.PortMapping) error {
 				if err := makeMachineRequest(ctx, client, url, buf, machinePort); err != nil {
 					if expose {
 						// in case of an error make sure to unexpose the other ports
-						if cerr := requestMachinePorts(false, ports[:num]); cerr != nil {
+						if cerr := requestMachinePorts(ctx, false, ports[:num]); cerr != nil {
 							logrus.Errorf("failed to free gvproxy machine ports: %v", cerr)
 						}
 					}
@@ -140,17 +139,17 @@ func unspecifiedHostIP(host string) bool {
 }
 
 // exposeMachinePorts exposes the ports for podman machine via gvproxy
-func (r *Runtime) exposeMachinePorts(ports []types.PortMapping) error {
+func (r *Runtime) exposeMachinePorts(ctx context.Context, ports []types.PortMapping) error {
 	if !machine.IsGvProxyBased() {
 		return nil
 	}
-	return requestMachinePorts(true, ports)
+	return requestMachinePorts(ctx, true, ports)
 }
 
 // unexposeMachinePorts closes the ports for podman machine via gvproxy
-func (r *Runtime) unexposeMachinePorts(ports []types.PortMapping) error {
+func (r *Runtime) unexposeMachinePorts(ctx context.Context, ports []types.PortMapping) error {
 	if !machine.IsGvProxyBased() {
 		return nil
 	}
-	return requestMachinePorts(false, ports)
+	return requestMachinePorts(ctx, false, ports)
 }

@@ -1,6 +1,7 @@
 package shim
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -30,7 +31,7 @@ var (
 	ErrSSHNotListening = errors.New("machine is not listening on ssh port")
 )
 
-func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider, dirs *define.MachineDirs, hostSocks []string) error {
+func startHostForwarder(ctx context.Context, mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider, dirs *define.MachineDirs, hostSocks []string) error {
 	forwardUser := mc.SSH.RemoteUsername
 
 	// TODO should this go up the stack higher or
@@ -76,7 +77,7 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 
 	// This allows a provider to perform additional setup as well as
 	// add in any provider specific options for gvproxy
-	if err := provider.StartNetworking(mc, &cmd); err != nil {
+	if err := provider.StartNetworking(ctx, mc, &cmd); err != nil {
 		return err
 	}
 
@@ -91,25 +92,25 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 	return nil
 }
 
-func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, error) {
+func startNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, error) {
 	// An externally stopped VM can leave its host proxy behind. On Windows,
 	// clean up a verified orphan before checking the SSH port; otherwise the
 	// orphan itself can cause an unnecessary port reassignment.
-	if err := cleanupStaleHostForwarder(mc, provider); err != nil {
+	if err := cleanupStaleHostForwarder(ctx, mc, provider); err != nil {
 		return "", 0, err
 	}
 
 	// Check if SSH port is in use, and reassign if necessary
-	if !ports.IsLocalPortAvailable(mc.SSH.Port) {
+	if !ports.IsLocalPortAvailable(ctx, mc.SSH.Port) {
 		logrus.Warnf("detected port conflict on machine ssh port [%d], reassigning", mc.SSH.Port)
-		if err := reassignSSHPort(mc, provider); err != nil {
+		if err := reassignSSHPort(ctx, mc, provider); err != nil {
 			return "", 0, err
 		}
 	}
 
 	// Provider has its own networking code path (e.g. WSL)
 	if provider.UseProviderNetworkSetup() {
-		return "", 0, provider.StartNetworking(mc, nil)
+		return "", 0, provider.StartNetworking(ctx, mc, nil)
 	}
 
 	dirs, err := env.GetMachineDirs(provider.VMType())
@@ -117,12 +118,12 @@ func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider)
 		return "", 0, err
 	}
 
-	hostSocks, forwardSock, forwardingState, err := setupMachineSockets(mc, dirs)
+	hostSocks, forwardSock, forwardingState, err := setupMachineSockets(ctx, mc, dirs)
 	if err != nil {
 		return "", 0, err
 	}
 
-	if err := startHostForwarder(mc, provider, dirs, hostSocks); err != nil {
+	if err := startHostForwarder(ctx, mc, provider, dirs, hostSocks); err != nil {
 		return "", 0, err
 	}
 
@@ -169,7 +170,7 @@ func conductVMReadinessCheck(mc *vmconfigs.MachineConfig, maxBackoffs int, backo
 	return connected, sshError, err
 }
 
-func reassignSSHPort(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
+func reassignSSHPort(ctx context.Context, mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
 	newPort, err := ports.AllocateMachinePort()
 	if err != nil {
 		return err
@@ -196,7 +197,7 @@ func reassignSSHPort(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider)
 	}
 
 	// Update the backend's settings if relevant (e.g. WSL)
-	if err := provider.UpdateSSHPort(mc, newPort); err != nil {
+	if err := provider.UpdateSSHPort(ctx, mc, newPort); err != nil {
 		return err
 	}
 

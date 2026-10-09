@@ -4,6 +4,7 @@ package libpod
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"os"
 	"slices"
@@ -189,7 +190,7 @@ func (s *BoltState) getContainerStateDB(id []byte, ctr *Container, ctrsBkt *bolt
 	return nil
 }
 
-func (s *BoltState) getContainerFromDB(id []byte, ctr *Container, ctrsBkt *bolt.Bucket, loadState bool) error {
+func (s *BoltState) getContainerFromDB(ctx context.Context, id []byte, ctr *Container, ctrsBkt *bolt.Bucket, loadState bool) error {
 	if err := s.getContainerConfigFromDB(id, ctr.config, ctrsBkt); err != nil {
 		return err
 	}
@@ -221,7 +222,7 @@ func (s *BoltState) getContainerFromDB(id []byte, ctr *Container, ctrsBkt *bolt.
 			// OCI runtime for it using the full path.
 			if strings.HasPrefix(runtimeName, "/") {
 				if stat, err := os.Stat(runtimeName); err == nil && !stat.IsDir() {
-					newOCIRuntime, err := newConmonOCIRuntime(runtimeName, []string{runtimeName}, s.runtime.conmonPath, s.runtime.runtimeFlags, s.runtime.config)
+					newOCIRuntime, err := newConmonOCIRuntime(ctx, runtimeName, []string{runtimeName}, s.runtime.conmonPath, s.runtime.runtimeFlags, s.runtime.config)
 					if err == nil {
 						// The runtime lock should
 						// protect against concurrent
@@ -275,7 +276,7 @@ func (s *BoltState) getPodFromDB(id []byte, pod *Pod, podBkt *bolt.Bucket) error
 	return nil
 }
 
-func (s *BoltState) getVolumeFromDB(name []byte, volume *Volume, volBkt *bolt.Bucket) error {
+func (s *BoltState) getVolumeFromDB(ctx context.Context, name []byte, volume *Volume, volBkt *bolt.Bucket) error {
 	volDB := volBkt.Bucket(name)
 	if volDB == nil {
 		return fmt.Errorf("volume with name %s not found: %w", string(name), define.ErrNoSuchVolume)
@@ -304,7 +305,7 @@ func (s *BoltState) getVolumeFromDB(name []byte, volume *Volume, volBkt *bolt.Bu
 		if !volume.UsesVolumeDriver() {
 			return nil, nil
 		}
-		return volume.runtime.getVolumePlugin(volume.config)
+		return volume.runtime.getVolumePlugin(ctx, volume.config)
 	})
 
 	// Get the lock

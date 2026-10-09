@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"context"
 	"errors"
 	"os"
 	"syscall"
@@ -49,7 +50,7 @@ func ProxyExecSignals(ctr *libpod.Container, sessionID string) {
 }
 
 // ProxySignals ...
-func ProxySignals(ctr *libpod.Container) {
+func ProxySignals(ctx context.Context, ctr *libpod.Container) {
 	// Stop catching the shutdown signals (SIGINT, SIGTERM) - they're going
 	// to the container now.
 	shutdown.Stop() //nolint: errcheck
@@ -63,7 +64,7 @@ func ProxySignals(ctr *libpod.Container) {
 		for s := range sigBuffer {
 			syscallSignal := s.(syscall.Signal)
 
-			if err := ctr.Kill(uint(syscallSignal)); err != nil {
+			if err := ctr.Kill(ctx, uint(syscallSignal)); err != nil {
 				// If the container is no longer running/removed do not log it as error.
 				if errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrNoSuchCtr) || errors.Is(err, define.ErrCtrRemoved) {
 					logrus.Infof("Ceasing signal forwarding to container %s as it has stopped", ctr.ID())

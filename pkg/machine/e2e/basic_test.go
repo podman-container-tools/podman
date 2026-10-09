@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -25,10 +26,10 @@ import (
 const TESTIMAGE = "quay.io/libpod/testimage:20241011"
 
 var _ = Describe("run basic podman commands", func() {
-	It("Basic ops", func() {
+	It("Basic ops", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -47,25 +48,25 @@ var _ = Describe("run basic podman commands", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		ssh := new(sshMachine).withSSHCommand([]string{"cat /etc/containers/podman-machine-tmpfile"})
-		sshRun, err := mb.setName(name).setCmd(ssh).run()
+		sshRun, err := mb.setName(name).setCmd(ctx, ssh).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshRun).To(Exit(0))
 		Expect(sshRun.outputToString()).To(Equal(content))
 
 		// check some basic podman commands
 		bm := basicMachine{}
-		imgs, err := mb.setCmd(bm.withPodmanCommand([]string{"images", "-q"})).run()
+		imgs, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"images", "-q"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(imgs).To(Exit(0))
 		Expect(imgs.outputToStringSlice()).To(BeEmpty())
 
-		newImgs, err := mb.setCmd(bm.withPodmanCommand([]string{"pull", TESTIMAGE})).run()
+		newImgs, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"pull", TESTIMAGE})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(newImgs).To(Exit(0))
 		Expect(newImgs.outputToStringSlice()).To(HaveLen(1))
 
 		// seccomp option as regression test for https://github.com/containers/podman/issues/26855
-		runAlp, err := mb.setCmd(bm.withPodmanCommand([]string{"run", "--security-opt", "seccomp=unconfined", TESTIMAGE, "cat", "/etc/os-release"})).run()
+		runAlp, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"run", "--security-opt", "seccomp=unconfined", TESTIMAGE, "cat", "/etc/os-release"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(runAlp).To(Exit(0))
 		Expect(runAlp.outputToString()).To(ContainSubstring("Alpine Linux"))
@@ -75,17 +76,17 @@ var _ = Describe("run basic podman commands", func() {
 		err = os.WriteFile(cfile, []byte("FROM "+TESTIMAGE+"\nRUN ip addr\n"), 0o644)
 		Expect(err).ToNot(HaveOccurred())
 
-		build, err := mb.setCmd(bm.withPodmanCommand([]string{"build", contextDir})).run()
+		build, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"build", contextDir})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(build).To(Exit(0))
 		Expect(build.outputToString()).To(ContainSubstring("COMMIT"))
 
-		rmCon, err := mb.setCmd(bm.withPodmanCommand([]string{"rm", "-a"})).run()
+		rmCon, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"rm", "-a"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rmCon).To(Exit(0))
 	})
 
-	It("Volume ops", func() {
+	It("Volume ops", func(ctx context.Context) {
 		tDir, err := filepath.Abs(GinkgoT().TempDir())
 		Expect(err).ToNot(HaveOccurred())
 		roFile := filepath.Join(tDir, "attr-test-file")
@@ -103,19 +104,19 @@ var _ = Describe("run basic podman commands", func() {
 		if isVmtype(define.QemuVirt) {
 			i.withVolume(tDir)
 		}
-		session, err := mb.setName(name).setCmd(i).run()
+		session, err := mb.setName(name).setCmd(ctx, i).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		bm := basicMachine{}
 		// Test relabel works on all platforms
-		runAlp, err := mb.setCmd(bm.withPodmanCommand([]string{"run", "-v", tDir + ":/test:Z", TESTIMAGE, "ls", "/test/attr-test-file"})).run()
+		runAlp, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"run", "-v", tDir + ":/test:Z", TESTIMAGE, "ls", "/test/attr-test-file"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(runAlp).To(Exit(0))
 
 		// Test overlay works on all platforms except Hyper-V (see #26210)
 		if !isVmtype(define.HyperVVirt) {
-			runAlp, err = mb.setCmd(bm.withPodmanCommand([]string{"run", "-v", tDir + ":/test:O", TESTIMAGE, "ls", "/test/attr-test-file"})).run()
+			runAlp, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"run", "-v", tDir + ":/test:O", TESTIMAGE, "ls", "/test/attr-test-file"})).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(runAlp).To(Exit(0))
 		}
@@ -124,23 +125,23 @@ var _ = Describe("run basic podman commands", func() {
 		cf := filepath.Join(tDir, "Containerfile")
 		err = os.WriteFile(cf, []byte("FROM "+TESTIMAGE+"\nRUN ls /test/attr-test-file\n"), 0o644)
 		Expect(err).ToNot(HaveOccurred())
-		build, err := mb.setCmd(bm.withPodmanCommand([]string{"build", "-t", name, "-v", tDir + ":/test", tDir})).run()
+		build, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"build", "-t", name, "-v", tDir + ":/test", tDir})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(build).To(Exit(0))
 
 		// check we can use a single character volume name as mount
-		volumeCreate, err := mb.setCmd(bm.withPodmanCommand([]string{"volume", "create", "a"})).run()
+		volumeCreate, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"volume", "create", "a"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(volumeCreate).To(Exit(0))
 
-		run, err := mb.setCmd(bm.withPodmanCommand([]string{"run", "-v", "a:/test:Z", TESTIMAGE, "true"})).run()
+		run, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"run", "-v", "a:/test:Z", TESTIMAGE, "true"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(run).To(Exit(0))
 
 		if isVmtype(define.QemuVirt) {
 			// ensure we are actually using virtiofs on linux
 			ssh := new(sshMachine).withSSHCommand([]string{"findmnt", "-no", "FSTYPE", tDir})
-			findmnt, err := mb.setName(name).setCmd(ssh).run()
+			findmnt, err := mb.setName(name).setCmd(ctx, ssh).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(findmnt).To(Exit(0))
 			Expect(findmnt.outputToString()).To(ContainSubstring("virtiofs"))
@@ -162,18 +163,18 @@ var _ = Describe("run basic podman commands", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		bm = basicMachine{}
-		build, err = mb.setCmd(bm.withPodmanCommand([]string{"build", "-t", name, "--build-context", "test-context=" + additionalContextDir, mainContextDir})).run()
+		build, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"build", "-t", name, "--build-context", "test-context=" + additionalContextDir, mainContextDir})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(build).To(Exit(0))
 		Expect(build.outputToString()).To(ContainSubstring("COMMIT"))
 
-		run, err = mb.setCmd(bm.withPodmanCommand([]string{"run", name, "cat", "/test1", "/test2"})).run()
+		run, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"run", name, "cat", "/test1", "/test2"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(run).To(Exit(0))
 		Expect(run.outputToString()).To(And(ContainSubstring("test1-"+name), ContainSubstring("test2-"+name)))
 	})
 
-	It("Volume should be disabled by command line and work with --import-native-ca", func() {
+	It("Volume should be disabled by command line and work with --import-native-ca", func(ctx context.Context) {
 		skipIfWSL("Requires standard volume handling")
 
 		name := randomString()
@@ -183,18 +184,18 @@ var _ = Describe("run basic podman commands", func() {
 		i.withVolume("")
 		// test that --import-native-ca also works without volumes
 		i.withImportNativeCA(true)
-		session, err := mb.setName(name).setCmd(i).run()
+		session, err := mb.setName(name).setCmd(ctx, i).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		ssh9p := new(sshMachine).withSSHCommand([]string{"findmnt", "-no", "FSTYPE", "-t", "9p"})
-		findmnt9p, err := mb.setName(name).setCmd(ssh9p).run()
+		findmnt9p, err := mb.setName(name).setCmd(ctx, ssh9p).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(findmnt9p).To(Exit(0))
 		Expect(findmnt9p.outputToString()).To(BeEmpty())
 
 		sshVirtiofs := new(sshMachine).withSSHCommand([]string{"findmnt", "-no", "FSTYPE", "-t", "virtiofs"})
-		findmntVirtiofs, err := mb.setName(name).setCmd(sshVirtiofs).run()
+		findmntVirtiofs, err := mb.setName(name).setCmd(ctx, sshVirtiofs).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(findmntVirtiofs).To(Exit(0))
 		Expect(findmntVirtiofs.outputToString()).To(BeEmpty())
@@ -202,37 +203,37 @@ var _ = Describe("run basic podman commands", func() {
 		certFilePath := "/etc/pki/ca-trust/source/anchors"
 		certFileName := "host-ca-certs.pem"
 		sshMachine := sshMachine{}
-		sshCertFile, err := mb.setName(name).setCmd(sshMachine.withSSHCommand([]string{"ls", certFilePath})).run()
+		sshCertFile, err := mb.setName(name).setCmd(ctx, sshMachine.withSSHCommand([]string{"ls", certFilePath})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshCertFile).To(Exit(0))
 		Expect(sshCertFile.outputToString()).To(Equal(certFileName))
 	})
 
-	It("Podman ops with port forwarding and gvproxy", func() {
+	It("Podman ops with port forwarding and gvproxy", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		ctrName := "test"
 		bm := basicMachine{}
-		runAlp, err := mb.setCmd(bm.withPodmanCommand([]string{
+		runAlp, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{
 			"run", "-dt", "--name", ctrName, "-p", "62544:80",
 			"--stop-signal", "SIGKILL", TESTIMAGE,
 			"/bin/busybox-extras", "httpd", "-f", "-p", "80",
-		})).run()
+		})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(runAlp).To(Exit(0))
 		_, id, _ := strings.Cut(TESTIMAGE, ":")
 		testHTTPServer("62544", false, id+"\n")
 
 		// Test exec in machine scenario: https://github.com/containers/podman/issues/20821
-		exec, err := mb.setCmd(bm.withPodmanCommand([]string{"exec", ctrName, "true"})).run()
+		exec, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", ctrName, "true"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 
-		out, err := pgrep(gvproxy)
+		out, err := pgrep(ctx, gvproxy)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(out).ToNot(BeEmpty())
 
@@ -244,31 +245,31 @@ var _ = Describe("run basic podman commands", func() {
 		url2 := "http://host.docker.internal:" + port
 		s := startLocalHTTPServer(port, msg)
 		defer s.Close()
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", ctrName, "wget", "-q", "-O-", url1})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", ctrName, "wget", "-q", "-O-", url1})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(msg))
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", ctrName, "wget", "-q", "-O-", url2})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", ctrName, "wget", "-q", "-O-", url2})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(msg))
 
-		rmCon, err := mb.setCmd(bm.withPodmanCommand([]string{"rm", "-af"})).run()
+		rmCon, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"rm", "-af"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rmCon).To(Exit(0))
 		testHTTPServer("62544", true, "")
 
 		stop := new(stopMachine)
-		stopSession, err := mb.setCmd(stop).run()
+		stopSession, err := mb.setCmd(ctx, stop).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopSession).To(Exit(0))
 
 		// gxproxy should exit after machine is stopped
-		out, _ = pgrep(gvproxy)
+		out, _ = pgrep(ctx, gvproxy)
 		Expect(out).ToNot(ContainSubstring(gvproxy))
 	})
 
-	It("podman volume on non-standard path", func() {
+	It("podman volume on non-standard path", func(ctx context.Context) {
 		skipIfWSL("Requires standard volume handling")
 		dir, err := os.MkdirTemp("", "machine-volume")
 		Expect(err).ToNot(HaveOccurred())
@@ -282,28 +283,28 @@ var _ = Describe("run basic podman commands", func() {
 		name := randomString()
 		machinePath := "/does/not/exist"
 		init := new(initMachine).withVolume(fmt.Sprintf("%s:%s", dir, machinePath)).withImage(mb.imagePath).withNow()
-		session, err := mb.setName(name).setCmd(init).run()
+		session, err := mb.setName(name).setCmd(ctx, init).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		// Must use path.Join to ensure forward slashes are used, even on Windows.
 		ssh := new(sshMachine).withSSHCommand([]string{"cat", path.Join(machinePath, testFile)})
-		ls, err := mb.setName(name).setCmd(ssh).run()
+		ls, err := mb.setName(name).setCmd(ctx, ssh).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ls).To(Exit(0))
 		Expect(ls.outputToString()).To(ContainSubstring(testString))
 	})
 
-	It("CVE-2025-6032 regression test - HTTP", func() {
+	It("CVE-2025-6032 regression test - HTTP", func(ctx context.Context) {
 		// ensure that trying to pull from a local HTTP server fails and the connection will be rejected
 		// ensure that tlsVerify is true by default
-		testImagePullTLS(nil, nil)
+		testImagePullTLS(ctx, nil, nil)
 	})
 
-	It("CVE-2025-6032 regression test - HTTPS unknown cert", func() {
+	It("CVE-2025-6032 regression test - HTTPS unknown cert", func(ctx context.Context) {
 		// ensure that trying to pull from a local HTTPS server with invalid certs fails and the connection will be rejected
 		// ensure that tlsVerify is true by default
-		testImagePullTLS(&TLSConfig{
+		testImagePullTLS(ctx, &TLSConfig{
 			// Key/Cert was generated with:
 			// openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 \
 			// -nodes -keyout test-tls.key -out test-tls.crt -subj "/CN=test.podman.io" -addext "subjectAltName=IP:127.0.0.1"
@@ -312,17 +313,17 @@ var _ = Describe("run basic podman commands", func() {
 		}, nil)
 	})
 
-	It("machine init should not fail on TLS validation with --tls-verfy=false - HTTP", func() {
+	It("machine init should not fail on TLS validation with --tls-verfy=false - HTTP", func(ctx context.Context) {
 		// ensure that trying to pull from a local HTTP server doesn't fail when --tls-verify=false is set
 		tlsVerify := false
-		testImagePullTLS(nil, &tlsVerify)
+		testImagePullTLS(ctx, nil, &tlsVerify)
 	})
 
-	It("machine init should not fail on TLS validation with --tls-verfy=false - HTTPS", func() {
+	It("machine init should not fail on TLS validation with --tls-verfy=false - HTTPS", func(ctx context.Context) {
 		// ensure that trying to pull from a local HTTPS server with invalid certs
 		// doesn't fail due to tls validation when --tls-verify=false is set
 		tlsVerify := false
-		testImagePullTLS(&TLSConfig{
+		testImagePullTLS(ctx, &TLSConfig{
 			// Key/Cert was generated with:
 			// openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 \
 			// -nodes -keyout test-tls.key -out test-tls.crt -subj "/CN=test.podman.io" -addext "subjectAltName=IP:127.0.0.1"
@@ -383,7 +384,7 @@ type TLSConfig struct {
 
 // setup a local webserver in the test and then point podman machine init to it
 // to verify the connection details.
-func testImagePullTLS(tls *TLSConfig, tlsVerify *bool) {
+func testImagePullTLS(ctx context.Context, tls *TLSConfig, tlsVerify *bool) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	Expect(err).ToNot(HaveOccurred())
 	serverAddr := listener.Addr().String()
@@ -421,7 +422,7 @@ func testImagePullTLS(tls *TLSConfig, tlsVerify *bool) {
 	}
 
 	name := randomString()
-	session, err := mb.setName(name).setCmd(i).run()
+	session, err := mb.setName(name).setCmd(ctx, i).run(ctx)
 
 	Expect(err).ToNot(HaveOccurred())
 	Expect(session).To(Exit(125))

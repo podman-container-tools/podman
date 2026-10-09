@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -27,7 +28,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func (r *ConmonOCIRuntime) createRootlessContainer(ctr *Container, restoreOptions *ContainerCheckpointOptions, hideFiles bool) (int64, error) {
+func (r *ConmonOCIRuntime) createRootlessContainer(ctx context.Context, ctr *Container, restoreOptions *ContainerCheckpointOptions, hideFiles bool) (int64, error) {
 	type result struct {
 		restoreDuration int64
 		err             error
@@ -133,7 +134,7 @@ func (r *ConmonOCIRuntime) createRootlessContainer(ctr *Container, restoreOption
 					}
 				}
 			}
-			return r.createOCIContainer(ctr, restoreOptions)
+			return r.createOCIContainer(ctx, ctr, restoreOptions)
 		}()
 		ch <- result{
 			restoreDuration: restoreDuration,

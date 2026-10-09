@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -18,7 +19,7 @@ import (
 // Migrate stops the rootless pause process and performs any necessary database
 // migrations that are required. It can also migrate all containers to a new OCI
 // runtime, if requested.
-func (r *Runtime) Migrate(newRuntime string, migrateDB bool) error {
+func (r *Runtime) Migrate(ctx context.Context, newRuntime string, migrateDB bool) error {
 	// Acquire the alive lock and hold it.
 	// Ensures that we don't let other Podman commands run while we are
 	// rewriting things in the DB.
@@ -33,12 +34,12 @@ func (r *Runtime) Migrate(newRuntime string, migrateDB bool) error {
 		return define.ErrRuntimeStopped
 	}
 
-	runningContainers, err := r.GetRunningContainers()
+	runningContainers, err := r.GetRunningContainers(ctx)
 	if err != nil {
 		return err
 	}
 
-	allCtrs, err := r.state.AllContainers(false)
+	allCtrs, err := r.state.AllContainers(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -46,7 +47,7 @@ func (r *Runtime) Migrate(newRuntime string, migrateDB bool) error {
 	logrus.Infof("Stopping all containers")
 	for _, ctr := range runningContainers {
 		fmt.Printf("stopped %s\n", ctr.ID())
-		if err := ctr.Stop(); err != nil {
+		if err := ctr.Stop(ctx); err != nil {
 			return fmt.Errorf("cannot stop container %s: %w", ctr.ID(), err)
 		}
 	}
@@ -111,7 +112,7 @@ func (r *Runtime) Migrate(newRuntime string, migrateDB bool) error {
 			}
 		}
 
-		if err := r.migrateDB(); err != nil {
+		if err := r.migrateDB(ctx); err != nil {
 			return fmt.Errorf("migrating database from BoltDB to SQLite: %w", err)
 		}
 	}
@@ -130,7 +131,7 @@ func (r *Runtime) checkCanMigrate() error {
 	return nil
 }
 
-func (r *Runtime) migrateDB() error {
+func (r *Runtime) migrateDB(ctx context.Context) error {
 	boltPath := getBoltDBPath(r)
 	// Get us a Bolt database
 	oldState, err := NewBoltState(boltPath, r)
@@ -140,7 +141,7 @@ func (r *Runtime) migrateDB() error {
 
 	// Migrate volumes, then pods, then containers.
 	// Containers must be last as the pods they are part of and volumes they use must already exist.
-	allVolumes, err := oldState.AllVolumes()
+	allVolumes, err := oldState.AllVolumes(ctx)
 	if err != nil {
 		return fmt.Errorf("retrieving volumes from boltdb: %w", err)
 	}
@@ -182,7 +183,7 @@ func (r *Runtime) migrateDB() error {
 
 	// Containers must be done as a graph due to dependencies.
 	// The state will error if we add a container before its dependencies.
-	allCtrs, err := oldState.AllContainers(true)
+	allCtrs, err := oldState.AllContainers(ctx, true)
 	if err != nil {
 		return fmt.Errorf("retrieving containers from boltdb: %w", err)
 	}

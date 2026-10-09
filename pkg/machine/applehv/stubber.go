@@ -3,6 +3,7 @@
 package applehv
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -40,7 +41,7 @@ func (a *AppleHVStubber) RequireExclusiveActive() bool {
 	return true
 }
 
-func (a *AppleHVStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, ignBuilder *ignition.IgnitionBuilder) error {
+func (a *AppleHVStubber) CreateVM(_ context.Context, opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, ignBuilder *ignition.IgnitionBuilder) error {
 	mc.AppleHypervisor = new(vmconfigs.AppleHVConfig)
 	mc.AppleHypervisor.Vfkit = vfkit.Helper{}
 	bl := vfConfig.NewEFIBootloader(fmt.Sprintf("%s/efi-bl-%s", opts.Dirs.DataDir.GetPath(), opts.Name), true)
@@ -77,7 +78,7 @@ func (a *AppleHVStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.Machin
 	return apple.ResizeDisk(mc, mc.Resources.DiskSize)
 }
 
-func (a *AppleHVStubber) Exists(_ string) (bool, error) {
+func (a *AppleHVStubber) Exists(context.Context, string) (bool, error) {
 	// not applicable for applehv
 	return false, nil
 }
@@ -86,7 +87,7 @@ func (a *AppleHVStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.VirtIOFS
 }
 
-func (a *AppleHVStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
+func (a *AppleHVStubber) MountVolumesToVM(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	// virtiofs: nothing to do here
 	return nil
 }
@@ -95,19 +96,19 @@ func (a *AppleHVStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil
 }
 
-func (a *AppleHVStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
-	state, err := a.State(mc, false)
+func (a *AppleHVStubber) SetProviderAttrs(ctx context.Context, mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
+	state, err := a.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
 	return apple.SetProviderAttrs(mc, opts, state)
 }
 
-func (a *AppleHVStubber) StartNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
-	return apple.StartGenericNetworking(mc, cmd)
+func (a *AppleHVStubber) StartNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
+	return apple.StartGenericNetworking(ctx, mc, cmd)
 }
 
-func (a *AppleHVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
+func (a *AppleHVStubber) StartVM(ctx context.Context, mc *vmconfigs.MachineConfig) (func(context.Context) error, func() error, error) {
 	bl := mc.AppleHypervisor.Vfkit.VirtualMachine.Bootloader
 	if bl == nil {
 		return nil, nil, fmt.Errorf("unable to determine boot loader for this machine")
@@ -125,14 +126,14 @@ func (a *AppleHVStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, fun
 			mc.AppleHypervisor.Vfkit.Rosetta = rosettaNew
 		}
 	}
-	return apple.StartGenericAppleVM(mc, vfkitCommand, bl, mc.AppleHypervisor.Vfkit.Endpoint)
+	return apple.StartGenericAppleVM(ctx, mc, vfkitCommand, bl, mc.AppleHypervisor.Vfkit.Endpoint)
 }
 
-func (a *AppleHVStubber) StopHostNetworking(_ *vmconfigs.MachineConfig, _ define.VMType) error {
+func (a *AppleHVStubber) StopHostNetworking(context.Context, *vmconfigs.MachineConfig, define.VMType) error {
 	return nil
 }
 
-func (a *AppleHVStubber) UpdateSSHPort(_ *vmconfigs.MachineConfig, _ int) error {
+func (a *AppleHVStubber) UpdateSSHPort(context.Context, *vmconfigs.MachineConfig, int) error {
 	// managed by gvproxy on this backend, so nothing to do
 	return nil
 }
@@ -145,7 +146,7 @@ func (a *AppleHVStubber) PrepareIgnition(_ *vmconfigs.MachineConfig, _ *ignition
 	return nil, nil
 }
 
-func (a *AppleHVStubber) PostStartNetworking(_ *vmconfigs.MachineConfig, _ bool) error {
+func (a *AppleHVStubber) PostStartNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 

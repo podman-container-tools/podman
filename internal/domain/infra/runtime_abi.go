@@ -13,13 +13,13 @@ import (
 )
 
 // NewTestingEngine factory provides a libpod runtime for testing-specific operations
-func NewTestingEngine(facts *entities.PodmanConfig) (ientities.TestingEngine, error) {
+func NewTestingEngine(ctx context.Context, facts *entities.PodmanConfig) (ientities.TestingEngine, error) {
 	switch facts.EngineMode {
 	case entities.ABIMode:
-		r, err := NewLibpodTestingRuntime(facts.FlagSet, facts)
+		r, err := NewLibpodTestingRuntime(ctx, facts.FlagSet, facts)
 		return r, err
 	case entities.TunnelMode:
-		ctx, err := bindings.NewConnectionWithOptions(context.Background(), bindings.Options{
+		ctx, err := bindings.NewConnectionWithOptions(ctx, bindings.Options{
 			URI:         facts.URI,
 			Identity:    facts.Identity,
 			TLSCertFile: facts.TLSCertFile,

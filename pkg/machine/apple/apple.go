@@ -64,7 +64,7 @@ func SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions, state
 }
 
 // StartGenericAppleVM is wrapped by apple provider methods and starts the vm
-func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootloader vfConfig.Bootloader, endpoint string) (func() error, func() error, error) {
+func StartGenericAppleVM(ctx context.Context, mc *vmconfigs.MachineConfig, cmdBinary string, bootloader vfConfig.Bootloader, endpoint string) (func(context.Context) error, func() error, error) {
 	var ignitionSocket *define.VMFile
 
 	// Add networking
@@ -167,7 +167,7 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := ignitionSocket.Delete(); err != nil {
+		if err := ignitionSocket.Delete(ctx); err != nil {
 			logrus.Errorf("unable to delete ignition socket: %q", err)
 		}
 
@@ -188,7 +188,7 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	}
 
 	logrus.Debugf("listening for ready on: %s", readySocket.GetPath())
-	if err := readySocket.Delete(); err != nil {
+	if err := readySocket.Delete(ctx); err != nil {
 		logrus.Warnf("unable to delete previous ready socket: %q", err)
 	}
 	readyListen, err := net.Listen("unix", readySocket.GetPath())
@@ -235,7 +235,7 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 			return nil, nil, err
 		}
 
-		cmd = exec.Command("/usr/bin/open", "-Wa", "Terminal", kdFile.Path)
+		cmd = exec.CommandContext(ctx, "/usr/bin/open", "-Wa", "Terminal", kdFile.Path)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -292,7 +292,7 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 			close(done)
 		}()
 		processErrChan := make(chan error)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		// The VM readiness will be communicated on readyChan. In the
 		// meantime, the following goroutine checks every 500ms that the VM
@@ -334,16 +334,16 @@ func StartGenericAppleVM(mc *vmconfigs.MachineConfig, cmdBinary string, bootload
 	// uses to release the resources associated with cmd.Process.
 	// It's important to execute it after waitForReadyFunc completes,
 	// otherwise cmd.Process methods won't work anymore.
-	relCmdFunc := func() error {
+	relCmdFunc := func(ctx context.Context) error {
 		if err := cmd.Process.Release(); err != nil {
 			logrus.Errorf("error releasing VM Start command associated resources: %v", err)
 		}
 		if ignitionSocket != nil {
-			if err := ignitionSocket.Delete(); err != nil {
+			if err := ignitionSocket.Delete(ctx); err != nil {
 				logrus.Errorf("unable to delete ignition socket: %v", err)
 			}
 		}
-		if err := readySocket.Delete(); err != nil {
+		if err := readySocket.Delete(ctx); err != nil {
 			logrus.Errorf("unable to delete ready socket: %v", err)
 		}
 		return nil
@@ -373,13 +373,13 @@ func CheckProcessRunning(processName string, pid int) error {
 }
 
 // StartGenericNetworking is wrapped by apple provider methods
-func StartGenericNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
+func StartGenericNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
 	gvProxySock, err := mc.GVProxySocket()
 	if err != nil {
 		return err
 	}
 	// make sure it does not exist before gvproxy is called
-	if err := gvProxySock.Delete(); err != nil {
+	if err := gvProxySock.Delete(ctx); err != nil {
 		logrus.Error(err)
 	}
 	cmd.AddVfkitSocket(fmt.Sprintf("unixgram://%s", gvProxySock.GetPath()))

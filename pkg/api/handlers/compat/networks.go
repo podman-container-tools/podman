@@ -148,7 +148,7 @@ func InspectNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ic := abi.ContainerEngine{Libpod: runtime}
-	statuses, err := ic.GetContainerNetStatuses()
+	statuses, err := ic.GetContainerNetStatuses(r.Context())
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -273,7 +273,7 @@ func ListNetworks(w http.ResponseWriter, r *http.Request) {
 		utils.InternalServerError(w, err)
 		return
 	}
-	statuses, err := ic.GetContainerNetStatuses()
+	statuses, err := ic.GetContainerNetStatuses(r.Context())
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -506,7 +506,7 @@ func Connect(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}
-	err := runtime.ConnectContainerToNetwork(netConnect.Container, name, netOpts)
+	err := runtime.ConnectContainerToNetwork(r.Context(), netConnect.Container, name, netOpts)
 	if err != nil {
 		if errors.Is(err, define.ErrNoSuchCtr) {
 			utils.ContainerNotFound(w, netConnect.Container, err)
@@ -537,7 +537,7 @@ func Disconnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name, _ := normalizeNetworkName(runtime, utils.GetName(r))
-	err := runtime.DisconnectContainerFromNetwork(netDisconnect.Container, name, netDisconnect.Force)
+	err := runtime.DisconnectContainerFromNetwork(r.Context(), netDisconnect.Container, name, netDisconnect.Force)
 	if err != nil {
 		if errors.Is(err, define.ErrNoSuchCtr) {
 			utils.Error(w, http.StatusNotFound, err)

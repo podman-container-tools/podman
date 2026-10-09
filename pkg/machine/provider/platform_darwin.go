@@ -2,6 +2,7 @@ package provider
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -51,10 +52,10 @@ func GetAll() []vmconfigs.VMProvider {
 	return []vmconfigs.VMProvider{new(libkrun.LibKrunStubber), new(applehv.AppleHVStubber)}
 }
 
-func IsInstalled(provider define.VMType) (bool, error) {
+func IsInstalled(ctx context.Context, provider define.VMType) (bool, error) {
 	switch provider {
 	case define.AppleHvVirt:
-		ahv, err := appleHvInstalled()
+		ahv, err := appleHvInstalled(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -70,7 +71,7 @@ func IsInstalled(provider define.VMType) (bool, error) {
 	}
 }
 
-func appleHvInstalled() (bool, error) {
+func appleHvInstalled(ctx context.Context) (bool, error) {
 	var outBuf bytes.Buffer
 	// Apple's Virtualization.Framework is only supported on MacOS 11.0+,
 	// but to use EFI MacOS 13.0+ is required
@@ -79,7 +80,7 @@ func appleHvInstalled() (bool, error) {
 		return false, err
 	}
 
-	cmd := exec.Command("sw_vers", "--productVersion")
+	cmd := exec.CommandContext(ctx, "sw_vers", "--productVersion")
 	cmd.Stdout = &outBuf
 	if err := cmd.Run(); err != nil {
 		return false, fmt.Errorf("unable to check current macOS version using `sw_vers --productVersion`: %w", err)

@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 )
@@ -14,7 +15,7 @@ type startMachine struct {
 	updateConnection *bool
 }
 
-func (s *startMachine) buildCmd(m *machineTestBuilder) []string {
+func (s *startMachine) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "start"}
 	if len(m.name) > 0 {
 		cmd = append(cmd, m.name)

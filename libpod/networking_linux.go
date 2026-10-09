@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -18,14 +19,14 @@ import (
 )
 
 // Create and configure a new network namespace for a container
-func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, reload bool) (status map[string]types.StatusBlock, rerr error) {
-	if err := r.exposeMachinePorts(ctr.config.PortMappings); err != nil {
+func (r *Runtime) configureNetNS(ctx context.Context, ctr *Container, ctrNS string, reload bool) (status map[string]types.StatusBlock, rerr error) {
+	if err := r.exposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 		return nil, err
 	}
 	defer func() {
 		// make sure to unexpose the gvproxy ports when an error happens
 		if rerr != nil {
-			if err := r.unexposeMachinePorts(ctr.config.PortMappings); err != nil {
+			if err := r.unexposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 				logrus.Errorf("failed to free gvproxy machine ports: %v", err)
 			}
 		}
@@ -46,7 +47,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, reload bool) (sta
 		return nil, nil
 	}
 
-	netOpts := ctr.getNetworkOptions(networks)
+	netOpts := ctr.getNetworkOptions(ctx, networks)
 	netStatus, err := r.setUpNetwork(ctrNS, netOpts)
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, reload bool) (sta
 }
 
 // Create and configure a new network namespace for a container
-func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.StatusBlock, retErr error) {
+func (r *Runtime) createNetNS(ctx context.Context, ctr *Container) (n string, q map[string]types.StatusBlock, retErr error) {
 	ctrNS, err := netns.NewNS()
 	if err != nil {
 		return "", nil, fmt.Errorf("creating network namespace for container %s: %w", ctr.ID(), err)
@@ -99,19 +100,19 @@ func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.Stat
 	logrus.Debugf("Made network namespace at %s for container %s", ctrNS.Path(), ctr.ID())
 
 	var networkStatus map[string]types.StatusBlock
-	networkStatus, err = r.configureNetNS(ctr, ctrNS.Path(), false)
+	networkStatus, err = r.configureNetNS(ctx, ctr, ctrNS.Path(), false)
 	return ctrNS.Path(), networkStatus, err
 }
 
 // Configure the network namespace using the container process
-func (r *Runtime) setupNetNS(ctr *Container) error {
+func (r *Runtime) setupNetNS(ctx context.Context, ctr *Container) error {
 	nsProcess := fmt.Sprintf("/proc/%d/ns/net", ctr.state.PID)
 	nsPath, err := netns.NewNSFrom(nsProcess)
 	if err != nil {
 		return err
 	}
 
-	networkStatus, err := r.configureNetNS(ctr, nsPath, false)
+	networkStatus, err := r.configureNetNS(ctx, ctr, nsPath, false)
 
 	// Assign NetNS attributes to container
 	ctr.state.NetNS = nsPath
@@ -120,8 +121,8 @@ func (r *Runtime) setupNetNS(ctr *Container) error {
 }
 
 // Tear down a network namespace, undoing all state associated with it.
-func (r *Runtime) teardownNetNS(ctr *Container) error {
-	if err := r.unexposeMachinePorts(ctr.config.PortMappings); err != nil {
+func (r *Runtime) teardownNetNS(ctx context.Context, ctr *Container) error {
+	if err := r.unexposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 		// do not return an error otherwise we would prevent network cleanup
 		logrus.Errorf("failed to free gvproxy machine ports: %v", err)
 	}
@@ -129,7 +130,7 @@ func (r *Runtime) teardownNetNS(ctr *Container) error {
 	// Do not check the error here, we want to always umount the netns
 	// This will ensure that the container interface will be deleted
 	// even when there is a network backend bug.
-	prevErr := r.teardownNetwork(ctr)
+	prevErr := r.teardownNetwork(ctx, ctr)
 
 	// First unmount the namespace
 	if err := netns.UnmountNS(ctr.state.NetNS); err != nil {
@@ -144,19 +145,19 @@ func (r *Runtime) teardownNetNS(ctr *Container) error {
 	return prevErr
 }
 
-func getContainerNetNS(ctr *Container) (string, *Container, error) {
+func getContainerNetNS(ctx context.Context, ctr *Container) (string, *Container, error) {
 	if ctr.state.NetNS != "" {
 		return ctr.state.NetNS, nil, nil
 	}
 	if ctr.config.NetNsCtr != "" {
-		c, err := ctr.runtime.GetContainer(ctr.config.NetNsCtr)
+		c, err := ctr.runtime.GetContainer(ctx, ctr.config.NetNsCtr)
 		if err != nil {
 			return "", nil, err
 		}
 		if err = c.syncContainer(); err != nil {
 			return "", c, err
 		}
-		netNs, c2, err := getContainerNetNS(c)
+		netNs, c2, err := getContainerNetNS(ctx, c)
 		if c2 != nil {
 			c = c2
 		}
@@ -166,10 +167,10 @@ func getContainerNetNS(ctr *Container) (string, *Container, error) {
 }
 
 // Returns a map of interface name to statistics for that interface.
-func getContainerNetIO(ctr *Container) (map[string]define.ContainerNetworkStats, error) {
+func getContainerNetIO(ctx context.Context, ctr *Container) (map[string]define.ContainerNetworkStats, error) {
 	perNetworkStats := make(map[string]define.ContainerNetworkStats)
 
-	netNSPath, _, netPathErr := getContainerNetNS(ctr)
+	netNSPath, _, netPathErr := getContainerNetNS(ctx, ctr)
 	if netPathErr != nil {
 		return nil, netPathErr
 	}

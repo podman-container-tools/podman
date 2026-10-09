@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type sshMachine struct {
 	/*
 		--username string   Username to use when ssh-ing into the VM.
@@ -9,7 +11,7 @@ type sshMachine struct {
 	sshCommand []string
 }
 
-func (s *sshMachine) buildCmd(m *machineTestBuilder) []string {
+func (s *sshMachine) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "ssh"}
 	if len(m.name) > 0 {
 		cmd = append(cmd, m.name)

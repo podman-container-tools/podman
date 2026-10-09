@@ -4,6 +4,7 @@ package libpod
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -32,7 +33,7 @@ func init() {
 
 // Top gathers statistics about the running processes in a container. It returns a
 // []string for output
-func (c *Container) Top(descriptors []string) ([]string, error) {
+func (c *Container) Top(ctx context.Context, descriptors []string) ([]string, error) {
 	conStat, err := c.State()
 	if err != nil {
 		return nil, fmt.Errorf("unable to look up state for %s: %w", c.ID(), err)
@@ -74,14 +75,14 @@ func (c *Container) Top(descriptors []string) ([]string, error) {
 		}
 	}
 
-	jailName, err := c.jailName()
+	jailName, err := c.jailName(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting jail name: %w", err)
 	}
 
 	args := append([]string{"-J", jailName}, psDescriptors...)
 
-	output, err := execPS(args)
+	output, err := execPS(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("executing ps(1): %w", err)
 	}
@@ -89,8 +90,8 @@ func (c *Container) Top(descriptors []string) ([]string, error) {
 	return output, nil
 }
 
-func execPS(args []string) ([]string, error) {
-	cmd := exec.Command("ps", args...)
+func execPS(ctx context.Context, args []string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "ps", args...)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

@@ -2,7 +2,11 @@
 
 package libpod
 
-import "go.podman.io/common/libnetwork/types"
+import (
+	"context"
+
+	"go.podman.io/common/libnetwork/types"
+)
 
 // State is a storage backend for libpod's current state.
 // A State is only initialized once per instance of libpod.
@@ -26,7 +30,7 @@ type State interface { //nolint:interfacebloat
 	Refresh() error
 
 	// Name() returns the name of the current state.
-	Name() string
+	Name(ctx context.Context) string
 
 	// GetDBConfig retrieves several paths configured within the database
 	// when it was created - namely, Libpod root and tmp dirs, c/storage
@@ -50,13 +54,13 @@ type State interface { //nolint:interfacebloat
 	GetPodName(id string) (string, error)
 
 	// Return a container from the database from its full ID.
-	Container(id string) (*Container, error)
+	Container(ctx context.Context, id string) (*Container, error)
 	// Return a container ID from the database by full or partial ID or full
 	// name.
 	LookupContainerID(idOrName string) (string, error)
 	// Return a container from the database by full or partial ID or full
 	// name.
-	LookupContainer(idOrName string) (*Container, error)
+	LookupContainer(ctx context.Context, idOrName string) (*Container, error)
 	// Check if a container with the given full ID exists in the database.
 	HasContainer(id string) (bool, error)
 	// Adds container to state.
@@ -80,7 +84,7 @@ type State interface { //nolint:interfacebloat
 	ContainerInUse(ctr *Container) ([]string, error)
 	// Retrieves all containers presently in state.
 	// If `loadState` is set, the containers' state will be loaded as well.
-	AllContainers(loadState bool) ([]*Container, error)
+	AllContainers(ctx context.Context, loadState bool) ([]*Container, error)
 
 	// Get networks the container is currently connected to.
 	GetNetworks(ctr *Container) ([]types.NamedPerNetworkOptions, error)
@@ -175,7 +179,7 @@ type State interface { //nolint:interfacebloat
 	// Get the IDs of all containers in a pod.
 	PodContainersByID(pod *Pod) ([]string, error)
 	// Get all the containers in a pod.
-	PodContainers(pod *Pod) ([]*Container, error)
+	PodContainers(ctx context.Context, pod *Pod) ([]*Container, error)
 	// Adds pod to state.
 	// The pod's name must not be shared by any other pods.
 	// The pod's ID must be globally unique - not shared with either
@@ -198,10 +202,10 @@ type State interface { //nolint:interfacebloat
 
 	// Volume accepts full name of volume
 	// If the volume doesn't exist, an error will be returned
-	Volume(volName string) (*Volume, error)
+	Volume(ctx context.Context, volName string) (*Volume, error)
 	// LookupVolume accepts an unambiguous partial name or full name of a
 	// volume. Ambiguous names will result in an error.
-	LookupVolume(name string) (*Volume, error)
+	LookupVolume(ctx context.Context, name string) (*Volume, error)
 	// HasVolume returns true if volName exists in the state,
 	// otherwise it returns false
 	HasVolume(volName string) (bool, error)
@@ -223,5 +227,5 @@ type State interface { //nolint:interfacebloat
 	// SaveVolume saves a volume's state to the database.
 	SaveVolume(volume *Volume) error
 	// AllVolumes returns all the volumes available in the state
-	AllVolumes() ([]*Volume, error)
+	AllVolumes(ctx context.Context) ([]*Volume, error)
 }

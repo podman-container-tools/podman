@@ -3,6 +3,7 @@
 package filters
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -13,10 +14,10 @@ import (
 	"go.podman.io/podman/v6/pkg/util"
 )
 
-func GenerateVolumeFilters(filter string, filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
+func GenerateVolumeFilters(ctx context.Context, filter string, filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
 	switch filter {
 	case "after", "since":
-		return createAfterFilterVolumeFunction(filterValues, runtime)
+		return createAfterFilterVolumeFunction(ctx, filterValues, runtime)
 	case "name":
 		return func(v *libpod.Volume) bool {
 			return util.StringMatchRegexSlice(v.Name(), filterValues)
@@ -89,10 +90,10 @@ func GenerateVolumeFilters(filter string, filterValues []string, runtime *libpod
 	return nil, fmt.Errorf("%q is an invalid volume filter", filter)
 }
 
-func GeneratePruneVolumeFilters(filter string, filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
+func GeneratePruneVolumeFilters(ctx context.Context, filter string, filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
 	switch filter {
 	case "after", "since":
-		return createAfterFilterVolumeFunction(filterValues, runtime)
+		return createAfterFilterVolumeFunction(ctx, filterValues, runtime)
 	case "anonymous":
 		return createAnonymousFilterVolumeFunction(filterValues)
 	case "label":
@@ -145,10 +146,10 @@ func createUntilFilterVolumeFunction(filterValues []string) (libpod.VolumeFilter
 	}, nil
 }
 
-func createAfterFilterVolumeFunction(filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
+func createAfterFilterVolumeFunction(ctx context.Context, filterValues []string, runtime *libpod.Runtime) (libpod.VolumeFilter, error) {
 	var createTime time.Time
 	for _, filterValue := range filterValues {
-		vol, err := runtime.LookupVolume(filterValue)
+		vol, err := runtime.LookupVolume(ctx, filterValue)
 		if err != nil {
 			return nil, err
 		}

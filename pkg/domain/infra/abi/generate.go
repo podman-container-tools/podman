@@ -21,9 +21,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func (ic *ContainerEngine) GenerateSystemd(_ context.Context, nameOrID string, options entities.GenerateSystemdOptions) (*entities.GenerateSystemdReport, error) {
+func (ic *ContainerEngine) GenerateSystemd(ctx context.Context, nameOrID string, options entities.GenerateSystemdOptions) (*entities.GenerateSystemdReport, error) {
 	// First assume it's a container.
-	ctr, ctrErr := ic.Libpod.LookupContainer(nameOrID)
+	ctr, ctrErr := ic.Libpod.LookupContainer(ctx, nameOrID)
 	if ctrErr == nil {
 		// Generate the unit for the container.
 		name, content, err := generate.ContainerUnit(ctr, options)
@@ -41,27 +41,27 @@ func (ic *ContainerEngine) GenerateSystemd(_ context.Context, nameOrID string, o
 	}
 
 	// Generate the units for the pod and all its containers.
-	units, err := generate.PodUnits(pod, options)
+	units, err := generate.PodUnits(ctx, pod, options)
 	if err != nil {
 		return nil, err
 	}
 	return &entities.GenerateSystemdReport{Units: units}, nil
 }
 
-func (ic *ContainerEngine) GenerateSpec(_ context.Context, opts *entities.GenerateSpecOptions) (*entities.GenerateSpecReport, error) {
+func (ic *ContainerEngine) GenerateSpec(ctx context.Context, opts *entities.GenerateSpecOptions) (*entities.GenerateSpecReport, error) {
 	var spec *specgen.SpecGenerator
 	var pspec *specgen.PodSpecGenerator
 	var err error
-	if _, err := ic.Libpod.LookupContainer(opts.ID); err == nil {
+	if _, err := ic.Libpod.LookupContainer(ctx, opts.ID); err == nil {
 		spec = &specgen.SpecGenerator{}
-		_, _, err = generateUtils.ConfigToSpec(ic.Libpod, spec, opts.ID)
+		_, _, err = generateUtils.ConfigToSpec(ctx, ic.Libpod, spec, opts.ID)
 		if err != nil {
 			return nil, err
 		}
 	} else if p, err := ic.Libpod.LookupPod(opts.ID); err == nil {
 		pspec = &specgen.PodSpecGenerator{}
 		pspec.Name = p.Name()
-		_, err := generateUtils.PodConfigToSpec(ic.Libpod, pspec,
+		_, err := generateUtils.PodConfigToSpec(ctx, ic.Libpod, pspec,
 			&entities.ContainerCreateOptions{
 				HealthLogDestination: define.DefaultHealthCheckLocalDestination,
 				HealthMaxLogCount:    define.DefaultHealthMaxLogCount,
@@ -79,9 +79,9 @@ func (ic *ContainerEngine) GenerateSpec(_ context.Context, opts *entities.Genera
 	// rename if we are looking to consume the output and make a new entity
 	if opts.Name {
 		if spec != nil {
-			spec.Name = generateUtils.CheckName(ic.Libpod, spec.Name, true)
+			spec.Name = generateUtils.CheckName(ctx, ic.Libpod, spec.Name, true)
 		} else {
-			pspec.Name = generateUtils.CheckName(ic.Libpod, pspec.Name, false)
+			pspec.Name = generateUtils.CheckName(ctx, ic.Libpod, pspec.Name, false)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (ic *ContainerEngine) GenerateKube(ctx context.Context, nameOrIDs []string,
 	// Lookup for podman objects.
 	for _, nameOrID := range nameOrIDs {
 		// Let's assume it's a container, so get the container.
-		ctr, err := ic.Libpod.LookupContainer(nameOrID)
+		ctr, err := ic.Libpod.LookupContainer(ctx, nameOrID)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no such container") {
 				return nil, err
@@ -168,7 +168,7 @@ func (ic *ContainerEngine) GenerateKube(ctx context.Context, nameOrIDs []string,
 		}
 
 		// Or volume.
-		vol, err := ic.Libpod.LookupVolume(nameOrID)
+		vol, err := ic.Libpod.LookupVolume(ctx, nameOrID)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no such volume") {
 				return nil, err

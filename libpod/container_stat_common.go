@@ -22,7 +22,7 @@ import (
 func (c *Container) statOnHost(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, pathResolution, error) {
 	// Now resolve the container's path.  It may hit a volume, it may hit a
 	// bind mount, it may be relative.
-	resolved, err := c.resolvePath(mountPoint, containerPath)
+	resolved, err := c.resolvePath(ctx, mountPoint, containerPath)
 	if err != nil {
 		return nil, pathResolution{}, err
 	}

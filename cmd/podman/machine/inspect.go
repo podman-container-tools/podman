@@ -63,7 +63,7 @@ func inspect(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		state, err := vmProvider.State(mc, false)
+		state, err := vmProvider.State(cmd.Context(), mc, false)
 		if err != nil {
 			return err
 		}

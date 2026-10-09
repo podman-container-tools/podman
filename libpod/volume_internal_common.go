@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -27,7 +28,7 @@ const pseudoCtrID = "2f73349cfc4630255319c6c8dfc1b46a8996ace9d14d8e07563b1659159
 // Must be done while the volume is locked.
 // Is a no-op on volumes that do not require a mount (as defined by
 // volumeNeedsMount()).
-func (v *Volume) mount() error {
+func (v *Volume) mount(ctx context.Context) error {
 	if !v.needsMount() {
 		return nil
 	}
@@ -58,7 +59,7 @@ func (v *Volume) mount() error {
 		req := new(pluginapi.MountRequest)
 		req.Name = v.Name()
 		req.ID = pseudoCtrID
-		mountPoint, err := plugin.MountVolume(req)
+		mountPoint, err := plugin.MountVolume(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -108,7 +109,7 @@ func (v *Volume) mount() error {
 	}
 
 	mountArgs = append(mountArgs, volDevice, v.config.MountPoint)
-	mountCmd := exec.Command(mountPath, mountArgs...)
+	mountCmd := exec.CommandContext(ctx, mountPath, mountArgs...)
 
 	logrus.Debugf("Running mount command: %s %s", mountPath, strings.Join(mountArgs, " "))
 	if output, err := mountCmd.CombinedOutput(); err != nil {
@@ -132,7 +133,7 @@ func (v *Volume) mount() error {
 // the volume will really be unmounted, as no further containers are using the
 // volume.
 // If force is set, the volume will be unmounted regardless of mount counter.
-func (v *Volume) unmount(force bool) error {
+func (v *Volume) unmount(ctx context.Context, force bool) error {
 	if !v.needsMount() {
 		return nil
 	}
@@ -165,7 +166,7 @@ func (v *Volume) unmount(force bool) error {
 			req := new(pluginapi.UnmountRequest)
 			req.Name = v.Name()
 			req.ID = pseudoCtrID
-			if err := plugin.UnmountVolume(req); err != nil {
+			if err := plugin.UnmountVolume(ctx, req); err != nil {
 				return err
 			}
 

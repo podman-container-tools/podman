@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"runtime"
 
 	jsoniter "github.com/json-iterator/go"
@@ -12,43 +13,43 @@ import (
 )
 
 var _ = Describe("podman inspect stop", func() {
-	It("inspect bad name", func() {
+	It("inspect bad name", func(ctx context.Context) {
 		i := inspectMachine{}
 		reallyLongName := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		session, err := mb.setName(reallyLongName).setCmd(&i).run()
+		session, err := mb.setName(reallyLongName).setCmd(ctx, &i).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 	})
 
-	It("inspect two machines", func() {
+	It("inspect two machines", func(ctx context.Context) {
 		i := new(initMachine)
-		foo1, err := mb.setName("foo1").setCmd(i.withFakeImage(mb)).run()
+		foo1, err := mb.setName("foo1").setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(foo1).To(Exit(0))
 
 		ii := new(initMachine)
-		foo2, err := mb.setName("foo2").setCmd(ii.withFakeImage(mb)).run()
+		foo2, err := mb.setName("foo2").setCmd(ctx, ii.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(foo2).To(Exit(0))
 
 		inspect := new(inspectMachine)
 		inspect = inspect.withFormat("{{.Name}}")
-		inspectSession, err := mb.setName("foo1").setCmd(inspect).run()
+		inspectSession, err := mb.setName("foo1").setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.Bytes()).To(ContainSubstring("foo1"))
 	})
 
-	It("inspect with go format", func() {
+	It("inspect with go format", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		// regular inspect should
 		inspectJSON := new(inspectMachine)
-		inspectSession, err := mb.setName(name).setCmd(inspectJSON).run()
+		inspectSession, err := mb.setName(name).setCmd(ctx, inspectJSON).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 
@@ -63,7 +64,7 @@ var _ = Describe("podman inspect stop", func() {
 
 		inspect := new(inspectMachine)
 		inspect = inspect.withFormat("{{.Name}}")
-		inspectSession, err = mb.setName(name).setCmd(inspect).run()
+		inspectSession, err = mb.setName(name).setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.Bytes()).To(ContainSubstring(name))
@@ -71,24 +72,24 @@ var _ = Describe("podman inspect stop", func() {
 		// check invalid template returns error
 		inspect = new(inspectMachine)
 		inspect = inspect.withFormat("{{.Abcde}}")
-		inspectSession, err = mb.setName(name).setCmd(inspect).run()
+		inspectSession, err = mb.setName(name).setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(125))
 		Expect(inspectSession.errorToString()).To(ContainSubstring("can't evaluate field Abcde in type machine.InspectInfo"))
 	})
 
-	It("inspect shows a unique socket name per machine", func() {
+	It("inspect shows a unique socket name per machine", func(ctx context.Context) {
 		var socks []string
 		for range 2 {
 			name := randomString()
 			i := new(initMachine)
-			session, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+			session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(session).To(Exit(0))
 
 			// regular inspect should
 			inspectJSON := new(inspectMachine)
-			inspectSession, err := mb.setName(name).setCmd(inspectJSON).run()
+			inspectSession, err := mb.setName(name).setCmd(ctx, inspectJSON).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(inspectSession).To(Exit(0))
 

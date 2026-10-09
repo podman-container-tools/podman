@@ -3,6 +3,7 @@
 package filters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -18,7 +19,7 @@ import (
 // GeneratePodFilterFunc takes a filter and filtervalue (key, value)
 // and generates a libpod function that can be used to filter
 // pods
-func GeneratePodFilterFunc(filter string, filterValues []string, r *libpod.Runtime) (
+func GeneratePodFilterFunc(ctx context.Context, filter string, filterValues []string, r *libpod.Runtime) (
 	func(pod *libpod.Pod) bool, error,
 ) {
 	switch filter {
@@ -37,7 +38,7 @@ func GeneratePodFilterFunc(filter string, filterValues []string, r *libpod.Runti
 		}, nil
 	case "ctr-names":
 		return func(p *libpod.Pod) bool {
-			ctrs, err := p.AllContainers()
+			ctrs, err := p.AllContainers(ctx)
 			if err != nil {
 				return false
 			}
@@ -70,7 +71,7 @@ func GeneratePodFilterFunc(filter string, filterValues []string, r *libpod.Runti
 			}
 		}
 		return func(p *libpod.Pod) bool {
-			ctrStatuses, err := p.Status()
+			ctrStatuses, err := p.Status(ctx)
 			if err != nil {
 				return false
 			}
@@ -108,7 +109,7 @@ func GeneratePodFilterFunc(filter string, filterValues []string, r *libpod.Runti
 			}
 		}
 		return func(p *libpod.Pod) bool {
-			status, err := p.GetPodStatus()
+			status, err := p.GetPodStatus(ctx)
 			if err != nil {
 				return false
 			}
@@ -148,7 +149,7 @@ func GeneratePodFilterFunc(filter string, filterValues []string, r *libpod.Runti
 			inputNetNames = append(inputNetNames, net.Name)
 		}
 		return func(p *libpod.Pod) bool {
-			infra, err := p.InfraContainer()
+			infra, err := p.InfraContainer(ctx)
 			// no infra, quick out
 			if err != nil {
 				return false

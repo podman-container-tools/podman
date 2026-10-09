@@ -5,6 +5,7 @@ package libpod
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -27,7 +28,7 @@ import (
 )
 
 // Info returns the store and host information
-func (r *Runtime) info() (*define.Info, error) {
+func (r *Runtime) info(ctx context.Context) (*define.Info, error) {
 	info := define.Info{}
 	versionInfo, err := define.GetVersion()
 	if err != nil {
@@ -35,14 +36,14 @@ func (r *Runtime) info() (*define.Info, error) {
 	}
 	info.Version = versionInfo
 	// get host information
-	hostInfo, err := r.hostInfo()
+	hostInfo, err := r.hostInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting host info: %w", err)
 	}
 	info.Host = hostInfo
 
 	// get store information
-	storeInfo, err := r.storeInfo()
+	storeInfo, err := r.storeInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting store info: %w", err)
 	}
@@ -79,7 +80,7 @@ func (r *Runtime) info() (*define.Info, error) {
 }
 
 // top-level "host" info
-func (r *Runtime) hostInfo() (*define.HostInfo, error) {
+func (r *Runtime) hostInfo(ctx context.Context) (*define.HostInfo, error) {
 	// let's say OS, arch, number of cpus, amount of memory, maybe os distribution/version, hostname, kernel version, uptime
 	mi, err := system.ReadMemInfo()
 	if err != nil {
@@ -111,7 +112,7 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 	info := define.HostInfo{
 		Arch:                  runtime.GOARCH,
 		BuildahVersion:        buildah.Version,
-		DatabaseBackend:       r.state.Name(),
+		DatabaseBackend:       r.state.Name(ctx),
 		Linkmode:              linkmode.Linkmode(),
 		CPUs:                  runtime.NumCPU(),
 		CPUUtilization:        cpuUtil,
@@ -142,7 +143,7 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 		return nil, err
 	}
 
-	conmonInfo, ociruntimeInfo, err := r.defaultOCIRuntime.RuntimeInfo()
+	conmonInfo, ociruntimeInfo, err := r.defaultOCIRuntime.RuntimeInfo(ctx)
 	if err != nil {
 		logrus.Errorf("Getting info on OCI runtime %s: %v", r.defaultOCIRuntime.Name(), err)
 	} else {
@@ -207,10 +208,10 @@ func cdiDeviceInfo(deviceNames []string) []define.DeviceInfo {
 	return devices
 }
 
-func (r *Runtime) getContainerStoreInfo() (define.ContainerStore, error) {
+func (r *Runtime) getContainerStoreInfo(ctx context.Context) (define.ContainerStore, error) {
 	var paused, running, stopped int
 	cs := define.ContainerStore{}
-	cons, err := r.GetAllContainers()
+	cons, err := r.GetAllContainers(ctx)
 	if err != nil {
 		return cs, err
 	}
@@ -241,13 +242,13 @@ func (r *Runtime) getContainerStoreInfo() (define.ContainerStore, error) {
 }
 
 // top-level "store" info
-func (r *Runtime) storeInfo() (*define.StoreInfo, error) {
+func (r *Runtime) storeInfo(ctx context.Context) (*define.StoreInfo, error) {
 	// let's say storage driver in use, number of images, number of containers
 	images, err := r.store.Images()
 	if err != nil {
 		return nil, fmt.Errorf("getting number of images: %w", err)
 	}
-	conInfo, err := r.getContainerStoreInfo()
+	conInfo, err := r.getContainerStoreInfo(ctx)
 	if err != nil {
 		return nil, err
 	}

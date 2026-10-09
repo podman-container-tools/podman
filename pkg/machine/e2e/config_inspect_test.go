@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type inspectMachine struct {
 	/*
 		--format string   Format volume output using JSON or a Go template
@@ -8,7 +10,7 @@ type inspectMachine struct {
 	format string
 }
 
-func (i *inspectMachine) buildCmd(m *machineTestBuilder) []string {
+func (i *inspectMachine) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "inspect"}
 	if len(i.format) > 0 {
 		cmd = append(cmd, "--format", i.format)

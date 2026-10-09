@@ -126,12 +126,12 @@ func restService(ctx context.Context, flags *pflag.FlagSet, cfg *entities.Podman
 	maybeMoveToSubCgroup()
 
 	maybeStartServiceReaper()
-	server, err := api.NewServerWithSettings(libpodRuntime, listener, opts)
+	server, err := api.NewServerWithSettings(ctx, libpodRuntime, listener, opts)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := server.Shutdown(true); err != nil {
+		if err := server.Shutdown(ctx, true); err != nil {
 			logrus.Warnf("Error when stopping API service: %s", err)
 		}
 	}()

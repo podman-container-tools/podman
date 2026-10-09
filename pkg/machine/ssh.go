@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -20,12 +21,12 @@ func LocalhostSSH(username, identityPath, name string, sshPort int, inputArgs []
 }
 
 // LocalhostSSHShellForceTerm runs the native ssh shell client and forces a terminal (-t)
-func LocalhostSSHShellForceTerm(username, identityPath, name string, sshPort int, inputArgs []string) error {
-	return localhostNativeSSH(username, identityPath, name, sshPort, inputArgs, os.Stdin, true)
+func LocalhostSSHShellForceTerm(ctx context.Context, username, identityPath, name string, sshPort int, inputArgs []string) error {
+	return localhostNativeSSH(ctx, username, identityPath, name, sshPort, inputArgs, os.Stdin, true)
 }
 
-func LocalhostSSHShell(username, identityPath, name string, sshPort int, inputArgs []string) error {
-	return localhostNativeSSH(username, identityPath, name, sshPort, inputArgs, os.Stdin, false)
+func LocalhostSSHShell(ctx context.Context, username, identityPath, name string, sshPort int, inputArgs []string) error {
+	return localhostNativeSSH(ctx, username, identityPath, name, sshPort, inputArgs, os.Stdin, false)
 }
 
 func LocalhostSSHSilent(username, identityPath, name string, sshPort int, inputArgs []string) error {
@@ -37,7 +38,7 @@ func LocalhostSSHWithStdin(username, identityPath, name string, sshPort int, inp
 }
 
 // LocalhostSSHCopy uses scp to copy files from/to a localhost machine using ssh.
-func LocalhostSSHCopy(username, identityPath string, sshPort int, srcPath, destPath string, isSrcFromGuest, quiet bool) error {
+func LocalhostSSHCopy(ctx context.Context, username, identityPath string, sshPort int, srcPath, destPath string, isSrcFromGuest, quiet bool) error {
 	var src, dest string
 	if isSrcFromGuest {
 		src = username + "@localhost:" + srcPath
@@ -52,7 +53,7 @@ func LocalhostSSHCopy(username, identityPath string, sshPort int, srcPath, destP
 		"-i", identityPath,
 		"-P", strconv.Itoa(sshPort),
 		src, dest)
-	cmd := exec.Command("scp", args...)
+	cmd := exec.CommandContext(ctx, "scp", args...)
 	if !quiet {
 		cmd.Stdout = os.Stdout
 	}
@@ -126,7 +127,7 @@ func createLocalhostConfig(user string, identityPath string) (*ssh.ClientConfig,
 	}, nil
 }
 
-func localhostNativeSSH(username, identityPath, name string, sshPort int, inputArgs []string, stdin io.Reader, forceTerm bool) error {
+func localhostNativeSSH(ctx context.Context, username, identityPath, name string, sshPort int, inputArgs []string, stdin io.Reader, forceTerm bool) error {
 	sshDestination := username + "@localhost"
 	port := strconv.Itoa(sshPort)
 	interactive := true
@@ -149,7 +150,7 @@ func localhostNativeSSH(username, identityPath, name string, sshPort int, inputA
 		fmt.Printf("Connecting to vm %s. To close connection, use `~.` or `exit`\n", name)
 	}
 
-	cmd := exec.Command("ssh", args...)
+	cmd := exec.CommandContext(ctx, "ssh", args...)
 	logrus.Debugf("Executing: ssh %v\n", args)
 
 	if err := setupIOPassthrough(cmd, interactive, stdin); err != nil {

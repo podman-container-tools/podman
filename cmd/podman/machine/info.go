@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -56,7 +57,7 @@ func info(cmd *cobra.Command, _ []string) error {
 	}
 	info.Version = version
 
-	host, err := hostInfo()
+	host, err := hostInfo(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func info(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func hostInfo() (*entities.MachineHostInfo, error) {
+func hostInfo(ctx context.Context) (*entities.MachineHostInfo, error) {
 	host := entities.MachineHostInfo{}
 
 	host.Arch = runtime.GOARCH
@@ -122,7 +123,7 @@ func hostInfo() (*entities.MachineHostInfo, error) {
 			host.DefaultMachine = vm.Name
 		}
 		// If machine is running or starting, it is automatically the current machine
-		state, err := machineProvider.State(vm, false)
+		state, err := machineProvider.State(ctx, vm, false)
 		if err != nil {
 			return nil, err
 		}

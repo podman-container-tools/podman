@@ -28,7 +28,7 @@ func (ic *ContainerEngine) NetworkUpdate(_ context.Context, netName string, opti
 	return nil
 }
 
-func (ic *ContainerEngine) NetworkList(_ context.Context, options entities.NetworkListOptions) ([]types.Network, error) {
+func (ic *ContainerEngine) NetworkList(ctx context.Context, options entities.NetworkListOptions) ([]types.Network, error) {
 	// dangling filter is not provided by netutil
 	var wantDangling bool
 
@@ -55,7 +55,7 @@ func (ic *ContainerEngine) NetworkList(_ context.Context, options entities.Netwo
 	}
 
 	if filterDangling {
-		danglingFilterFunc, err := ic.createDanglingFilterFunc(wantDangling)
+		danglingFilterFunc, err := ic.createDanglingFilterFunc(ctx, wantDangling)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,7 @@ func (ic *ContainerEngine) NetworkList(_ context.Context, options entities.Netwo
 	return nets, err
 }
 
-func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string, _ entities.InspectOptions) ([]entities.NetworkInspectReport, []error, error) {
+func (ic *ContainerEngine) NetworkInspect(ctx context.Context, namesOrIds []string, _ entities.InspectOptions) ([]entities.NetworkInspectReport, []error, error) {
 	var errs []error
 	networks := make([]entities.NetworkInspectReport, 0, len(namesOrIds))
 	for _, name := range namesOrIds {
@@ -89,7 +89,7 @@ func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string
 		// The function has to walk and lock all containers, to avoid the extra
 		// work when no network is found only do this once we know we have at least
 		// one network: https://github.com/podman-container-tools/podman/issues/29647
-		statuses, err := ic.GetContainerNetStatuses()
+		statuses, err := ic.GetContainerNetStatuses(ctx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get network status for containers: %w", err)
 		}
@@ -112,8 +112,8 @@ func (ic *ContainerEngine) NetworkInspect(_ context.Context, namesOrIds []string
 	return networks, errs, nil
 }
 
-func (ic *ContainerEngine) NetworkReload(_ context.Context, names []string, options entities.NetworkReloadOptions) ([]*entities.NetworkReloadReport, error) {
-	containers, err := getContainers(ic.Libpod, getContainersOptions{all: options.All, latest: options.Latest, names: names})
+func (ic *ContainerEngine) NetworkReload(ctx context.Context, names []string, options entities.NetworkReloadOptions) ([]*entities.NetworkReloadReport, error) {
+	containers, err := getContainers(ctx, ic.Libpod, getContainersOptions{all: options.All, latest: options.Latest, names: names})
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (ic *ContainerEngine) NetworkReload(_ context.Context, names []string, opti
 	for _, ctr := range containers {
 		report := new(entities.NetworkReloadReport)
 		report.Id = ctr.ID()
-		report.Err = ctr.ReloadNetwork()
+		report.Err = ctr.ReloadNetwork(ctx)
 		// ignore errors for invalid ctr state and network mode when --all is used
 		if options.All && (errors.Is(report.Err, define.ErrCtrStateInvalid) ||
 			errors.Is(report.Err, define.ErrNetworkModeInvalid)) {
@@ -138,7 +138,7 @@ func (ic *ContainerEngine) NetworkRm(ctx context.Context, namesOrIds []string, o
 	reports := make([]*entities.NetworkRmReport, 0, len(namesOrIds))
 	for _, name := range namesOrIds {
 		report := entities.NetworkRmReport{Name: name}
-		containers, err := ic.Libpod.GetAllContainers()
+		containers, err := ic.Libpod.GetAllContainers(ctx)
 		if err != nil {
 			return reports, err
 		}
@@ -203,12 +203,12 @@ func (ic *ContainerEngine) NetworkCreate(_ context.Context, network types.Networ
 }
 
 // NetworkDisconnect removes a container from a given network
-func (ic *ContainerEngine) NetworkDisconnect(_ context.Context, networkname string, options entities.NetworkDisconnectOptions) error {
-	return ic.Libpod.DisconnectContainerFromNetwork(options.Container, networkname, options.Force)
+func (ic *ContainerEngine) NetworkDisconnect(ctx context.Context, networkname string, options entities.NetworkDisconnectOptions) error {
+	return ic.Libpod.DisconnectContainerFromNetwork(ctx, options.Container, networkname, options.Force)
 }
 
-func (ic *ContainerEngine) NetworkConnect(_ context.Context, networkname string, options entities.NetworkConnectOptions) error {
-	return ic.Libpod.ConnectContainerToNetwork(options.Container, networkname, options.PerNetworkOptions)
+func (ic *ContainerEngine) NetworkConnect(ctx context.Context, networkname string, options entities.NetworkConnectOptions) error {
+	return ic.Libpod.ConnectContainerToNetwork(ctx, options.Container, networkname, options.PerNetworkOptions)
 }
 
 // NetworkExists checks if the given network exists
@@ -227,13 +227,13 @@ func (ic *ContainerEngine) NetworkExists(_ context.Context, networkname string) 
 }
 
 // Network prune removes unused networks
-func (ic *ContainerEngine) NetworkPrune(_ context.Context, options entities.NetworkPruneOptions) ([]*entities.NetworkPruneReport, error) {
+func (ic *ContainerEngine) NetworkPrune(ctx context.Context, options entities.NetworkPruneOptions) ([]*entities.NetworkPruneReport, error) {
 	// get all filters
 	filters, err := netutil.GenerateNetworkPruneFilters(options.Filters)
 	if err != nil {
 		return nil, err
 	}
-	danglingFilterFunc, err := ic.createDanglingFilterFunc(true)
+	danglingFilterFunc, err := ic.createDanglingFilterFunc(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -254,8 +254,8 @@ func (ic *ContainerEngine) NetworkPrune(_ context.Context, options entities.Netw
 }
 
 // danglingFilter function is special and not implemented in libnetwork filters
-func (ic *ContainerEngine) createDanglingFilterFunc(wantDangling bool) (types.FilterFunc, error) {
-	cons, err := ic.Libpod.GetAllContainers()
+func (ic *ContainerEngine) createDanglingFilterFunc(ctx context.Context, wantDangling bool) (types.FilterFunc, error) {
+	cons, err := ic.Libpod.GetAllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +293,8 @@ type ContainerNetStatus struct {
 	Status map[string]types.StatusBlock
 }
 
-func (ic *ContainerEngine) GetContainerNetStatuses() ([]ContainerNetStatus, error) {
-	cons, err := ic.Libpod.GetAllContainers()
+func (ic *ContainerEngine) GetContainerNetStatuses(ctx context.Context) ([]ContainerNetStatus, error) {
+	cons, err := ic.Libpod.GetAllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}

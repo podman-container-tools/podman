@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,10 +46,10 @@ func cleanupPlatform() {
 }
 
 // pgrep emulates the pgrep linux command
-func pgrep(n string) (string, error) {
+func pgrep(ctx context.Context, n string) (string, error) {
 	// add filter to find the process and do no display a header
 	args := []string{"/fi", fmt.Sprintf("IMAGENAME eq %s", n), "/nh"}
-	out, err := exec.Command("tasklist.exe", args...).Output()
+	out, err := exec.CommandContext(ctx, "tasklist.exe", args...).Output()
 	if err != nil {
 		return "", err
 	}
@@ -60,10 +61,10 @@ func pgrep(n string) (string, error) {
 	return strOut, nil
 }
 
-func runWslCommand(cmdArgs []string) *machineSession {
+func runWslCommand(ctx context.Context, cmdArgs []string) *machineSession {
 	binary := "wsl"
 	GinkgoWriter.Println(binary + " " + strings.Join(cmdArgs, " "))
-	c := exec.Command(binary, cmdArgs...)
+	c := exec.CommandContext(ctx, binary, cmdArgs...)
 	session, err := Start(c, GinkgoWriter, GinkgoWriter)
 	if err != nil {
 		Fail(fmt.Sprintf("Unable to start session: %q", err))

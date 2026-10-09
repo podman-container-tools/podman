@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -53,7 +54,7 @@ func TestMachine(t *testing.T) {
 
 var testProvider vmconfigs.VMProvider
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx context.Context) {
 	var (
 		err       error
 		pullError error
@@ -67,7 +68,7 @@ var _ = BeforeSuite(func() {
 	if testDiskProvider == define.LibKrun {
 		testDiskProvider = define.AppleHvVirt // libkrun uses the applehv image for testing
 	}
-	pullError = pullOCITestDisk(tmpDir, testDiskProvider)
+	pullError = pullOCITestDisk(ctx, tmpDir, testDiskProvider)
 
 	if pullError != nil {
 		Fail(fmt.Sprintf("failed to pull disk: %q", pullError))

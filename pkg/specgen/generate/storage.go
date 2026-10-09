@@ -33,7 +33,7 @@ func finalizeMounts(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Ru
 	}
 
 	// Get volumes-from mounts
-	volFromMounts, volFromVolumes, err := getVolumesFrom(s.VolumesFrom, rt)
+	volFromMounts, volFromVolumes, err := getVolumesFrom(ctx, s.VolumesFrom, rt)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -265,7 +265,7 @@ func getImageVolumes(ctx context.Context, img *libimage.Image, s *specgen.SpecGe
 	return mounts, volumes, nil
 }
 
-func getVolumesFrom(volumesFrom []string, runtime *libpod.Runtime) (map[string]spec.Mount, map[string]*specgen.NamedVolume, error) {
+func getVolumesFrom(ctx context.Context, volumesFrom []string, runtime *libpod.Runtime) (map[string]spec.Mount, map[string]*specgen.NamedVolume, error) {
 	finalMounts := make(map[string]spec.Mount)
 	finalNamedVolumes := make(map[string]*specgen.NamedVolume)
 
@@ -296,7 +296,7 @@ func getVolumesFrom(volumesFrom []string, runtime *libpod.Runtime) (map[string]s
 			options = splitOpts
 		}
 
-		ctr, err := runtime.LookupContainer(idOrName)
+		ctr, err := runtime.LookupContainer(ctx, idOrName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("looking up container %q for volumes-from: %w", idOrName, err)
 		}

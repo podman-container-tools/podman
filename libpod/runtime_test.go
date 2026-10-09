@@ -17,7 +17,7 @@ func Test_generateName(t *testing.T) {
 
 	// Test that (*Runtime).generateName returns different names
 	// if called twice.
-	n1, _ := r.generateName()
-	n2, _ := r.generateName()
+	n1, _ := r.generateName(t.Context())
+	n2, _ := r.generateName(t.Context())
 	assert.NotEqual(t, n1, n2)
 }

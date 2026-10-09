@@ -1,10 +1,12 @@
 package e2e_test
 
+import "context"
+
 type basicMachine struct {
 	args []string
 }
 
-func (s *basicMachine) buildCmd(_ *machineTestBuilder) []string {
+func (s *basicMachine) buildCmd(_ context.Context, _ *machineTestBuilder) []string {
 	cmd := []string{"-r"}
 	if len(s.args) > 0 {
 		cmd = append(cmd, s.args...)

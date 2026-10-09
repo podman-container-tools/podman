@@ -3,6 +3,7 @@
 package libkrun
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -26,7 +27,7 @@ type LibKrunStubber struct {
 	vmconfigs.AppleHVConfig
 }
 
-func (l *LibKrunStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, builder *ignition.IgnitionBuilder) error {
+func (l *LibKrunStubber) CreateVM(_ context.Context, opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, builder *ignition.IgnitionBuilder) error {
 	mc.LibKrunHypervisor = new(vmconfigs.LibKrunConfig)
 	mc.LibKrunHypervisor.KRun = vfkit.Helper{}
 
@@ -58,7 +59,7 @@ func (l *LibKrunStubber) PrepareIgnition(_ *vmconfigs.MachineConfig, _ *ignition
 	return nil, nil
 }
 
-func (l *LibKrunStubber) Exists(_ string) (bool, error) {
+func (l *LibKrunStubber) Exists(context.Context, string) (bool, error) {
 	// not applicable for libkrun (same as applehv)
 	return false, nil
 }
@@ -67,51 +68,51 @@ func (l *LibKrunStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.VirtIOFS
 }
 
-func (l *LibKrunStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
+func (l *LibKrunStubber) MountVolumesToVM(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
-func (l *LibKrunStubber) Remove(_ *vmconfigs.MachineConfig) ([]string, func() error, error) {
-	return []string{}, func() error { return nil }, nil
+func (l *LibKrunStubber) Remove(context.Context, *vmconfigs.MachineConfig) ([]string, func(context.Context) error, error) {
+	return []string{}, func(context.Context) error { return nil }, nil
 }
 
 func (l *LibKrunStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil
 }
 
-func (l *LibKrunStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
-	state, err := l.State(mc, false)
+func (l *LibKrunStubber) SetProviderAttrs(ctx context.Context, mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
+	state, err := l.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
 	return apple.SetProviderAttrs(mc, opts, state)
 }
 
-func (l *LibKrunStubber) StartNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
-	return apple.StartGenericNetworking(mc, cmd)
+func (l *LibKrunStubber) StartNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
+	return apple.StartGenericNetworking(ctx, mc, cmd)
 }
 
-func (l *LibKrunStubber) PostStartNetworking(_ *vmconfigs.MachineConfig, _ bool) error {
+func (l *LibKrunStubber) PostStartNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
-func (l *LibKrunStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
+func (l *LibKrunStubber) StartVM(ctx context.Context, mc *vmconfigs.MachineConfig) (func(context.Context) error, func() error, error) {
 	bl := mc.LibKrunHypervisor.KRun.VirtualMachine.Bootloader
 	if bl == nil {
 		return nil, nil, fmt.Errorf("unable to determine boot loader for this machine")
 	}
-	return apple.StartGenericAppleVM(mc, krunkitBinary, bl, mc.LibKrunHypervisor.KRun.Endpoint)
+	return apple.StartGenericAppleVM(ctx, mc, krunkitBinary, bl, mc.LibKrunHypervisor.KRun.Endpoint)
 }
 
-func (l *LibKrunStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
+func (l *LibKrunStubber) State(_ context.Context, mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
 	return mc.LibKrunHypervisor.KRun.State()
 }
 
-func (l *LibKrunStubber) StopVM(mc *vmconfigs.MachineConfig, hardStop bool) error {
+func (l *LibKrunStubber) StopVM(_ context.Context, mc *vmconfigs.MachineConfig, hardStop bool) error {
 	return mc.LibKrunHypervisor.KRun.Stop(hardStop, true)
 }
 
-func (l *LibKrunStubber) StopHostNetworking(_ *vmconfigs.MachineConfig, _ define.VMType) error {
+func (l *LibKrunStubber) StopHostNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ define.VMType) error {
 	return nil
 }
 
@@ -131,7 +132,7 @@ func (l *LibKrunStubber) RequireExclusiveActive() bool {
 	return true
 }
 
-func (l *LibKrunStubber) UpdateSSHPort(_ *vmconfigs.MachineConfig, _ int) error {
+func (l *LibKrunStubber) UpdateSSHPort(_ context.Context, _ *vmconfigs.MachineConfig, _ int) error {
 	return nil
 }
 

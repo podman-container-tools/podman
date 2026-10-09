@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 
 	"go.podman.io/podman/v6/libpod/define"
@@ -11,7 +12,7 @@ import (
 
 // RenumberLocks reassigns lock numbers for all containers and pods in the
 // state. This should NOT be run while there are other Libpod
-func (r *Runtime) RenumberLocks() error {
+func (r *Runtime) RenumberLocks(ctx context.Context) error {
 	// TODO: It would be desirable to make it impossible to call this until all
 	// other libpod sessions are dead.
 	// Possibly use a read-write file lock, with all non-renumber podmans owning the
@@ -38,7 +39,7 @@ func (r *Runtime) RenumberLocks() error {
 		return err
 	}
 
-	allCtrs, err := r.state.AllContainers(false)
+	allCtrs, err := r.state.AllContainers(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func (r *Runtime) RenumberLocks() error {
 			return err
 		}
 	}
-	allVols, err := r.state.AllVolumes()
+	allVols, err := r.state.AllVolumes(ctx)
 	if err != nil {
 		return err
 	}
@@ -92,5 +93,5 @@ func (r *Runtime) RenumberLocks() error {
 
 	r.NewSystemEvent(events.Renumber)
 
-	return r.Shutdown(false)
+	return r.Shutdown(ctx, false)
 }

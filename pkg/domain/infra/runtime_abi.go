@@ -11,27 +11,26 @@ import (
 )
 
 // NewContainerEngine factory provides a libpod runtime for container-related operations
-func NewContainerEngine(facts *entities.PodmanConfig) (entities.ContainerEngine, error) {
+func NewContainerEngine(ctx context.Context, facts *entities.PodmanConfig) (entities.ContainerEngine, error) {
 	switch facts.EngineMode {
 	case entities.ABIMode:
-		r, err := NewLibpodRuntime(facts.FlagSet, facts)
+		r, err := NewLibpodRuntime(ctx, facts.FlagSet, facts)
 		return r, err
 	case entities.TunnelMode:
-		ctx, err := newConnectionWithoutLock(context.Background(), facts)
+		ctx, err := newConnectionWithoutLock(ctx, facts)
 		return &tunnel.ContainerEngine{ClientCtx: ctx}, err
 	}
 	return nil, fmt.Errorf("runtime mode '%v' is not supported", facts.EngineMode)
 }
 
 // NewImageEngine factory provides a libpod runtime for image-related operations
-func NewImageEngine(facts *entities.PodmanConfig) (entities.ImageEngine, error) {
+func NewImageEngine(ctx context.Context, facts *entities.PodmanConfig) (entities.ImageEngine, error) {
 	switch facts.EngineMode {
 	case entities.ABIMode:
-		r, err := NewLibpodImageRuntime(facts.FlagSet, facts)
+		r, err := NewLibpodImageRuntime(ctx, facts.FlagSet, facts)
 		return r, err
 	case entities.TunnelMode:
-		// TODO: look at me!
-		ctx, err := newConnectionWithoutLock(context.Background(), facts)
+		ctx, err := newConnectionWithoutLock(ctx, facts)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", err, facts.URI)
 		}

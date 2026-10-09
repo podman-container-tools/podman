@@ -126,7 +126,7 @@ func (r *Runtime) Reset(ctx context.Context) error {
 		}
 	}
 
-	ctrs, err := r.GetAllContainers()
+	ctrs, err := r.GetAllContainers(ctx)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (r *Runtime) Reset(ctx context.Context) error {
 	}
 
 	// Volumes before images, as volumes can mount images.
-	volumes, err := r.state.AllVolumes()
+	volumes, err := r.state.AllVolumes(ctx)
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func (r *Runtime) Reset(ctx context.Context) error {
 	}
 
 	// Shut down the runtime, it's no longer usable after mass-deletion.
-	if err := r.Shutdown(false); err != nil {
+	if err := r.Shutdown(ctx, false); err != nil {
 		if prevError != nil {
 			logrus.Error(prevError)
 		}

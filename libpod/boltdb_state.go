@@ -4,6 +4,7 @@ package libpod
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -132,7 +133,7 @@ func (s *BoltState) UpdateContainer(ctr *Container) error {
 
 // AllContainers retrieves all the containers in the database
 // If `loadState` is set, the containers' state will be loaded as well.
-func (s *BoltState) AllContainers(loadState bool) ([]*Container, error) {
+func (s *BoltState) AllContainers(ctx context.Context, loadState bool) ([]*Container, error) {
 	if !s.valid {
 		return nil, define.ErrDBClosed
 	}
@@ -169,7 +170,7 @@ func (s *BoltState) AllContainers(loadState bool) ([]*Container, error) {
 			ctr.config = new(ContainerConfig)
 			ctr.state = new(ContainerState)
 
-			if err := s.getContainerFromDB(id, ctr, ctrBucket, loadState); err != nil {
+			if err := s.getContainerFromDB(ctx, id, ctr, ctrBucket, loadState); err != nil {
 				logrus.Errorf("Error retrieving container from database: %v", err)
 			} else {
 				ctrs = append(ctrs, ctr)
@@ -434,7 +435,7 @@ func (s *BoltState) UpdateVolume(volume *Volume) error {
 }
 
 // AllVolumes returns all volumes present in the state
-func (s *BoltState) AllVolumes() ([]*Volume, error) {
+func (s *BoltState) AllVolumes(ctx context.Context) ([]*Volume, error) {
 	if !s.valid {
 		return nil, define.ErrDBClosed
 	}
@@ -469,7 +470,7 @@ func (s *BoltState) AllVolumes() ([]*Volume, error) {
 			volume.config = new(VolumeConfig)
 			volume.state = new(VolumeState)
 
-			if err := s.getVolumeFromDB(id, volume, volBucket); err != nil {
+			if err := s.getVolumeFromDB(ctx, id, volume, volBucket); err != nil {
 				if !errors.Is(err, define.ErrNSMismatch) {
 					logrus.Errorf("Retrieving volume %s from the database: %v", string(id), err)
 				}

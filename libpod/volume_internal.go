@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +15,7 @@ import (
 )
 
 // Creates a new volume
-func newVolume(runtime *Runtime) *Volume {
+func newVolume(ctx context.Context, runtime *Runtime) *Volume {
 	volume := new(Volume)
 	volume.config = new(VolumeConfig)
 	volume.state = new(VolumeState)
@@ -27,7 +28,7 @@ func newVolume(runtime *Runtime) *Volume {
 		if !volume.UsesVolumeDriver() {
 			return nil, nil
 		}
-		return volume.runtime.getVolumePlugin(volume.config)
+		return volume.runtime.getVolumePlugin(ctx, volume.config)
 	})
 	return volume
 }

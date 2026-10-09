@@ -1,6 +1,7 @@
 package trust
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -20,24 +21,24 @@ type Policy struct {
 }
 
 // PolicyDescription returns an user-focused description of the policy in policyPath and registries.d data from registriesDirPath.
-func PolicyDescription(policyPath, registriesDirPath string) ([]*Policy, error) {
-	return policyDescriptionWithGPGIDReader(policyPath, registriesDirPath, getGPGIdFromKeyPath)
+func PolicyDescription(ctx context.Context, policyPath, registriesDirPath string) ([]*Policy, error) {
+	return policyDescriptionWithGPGIDReader(ctx, policyPath, registriesDirPath, getGPGIdFromKeyPath)
 }
 
 // policyDescriptionWithGPGIDReader is PolicyDescription with a gpgIDReader parameter. It exists only to make testing easier.
-func policyDescriptionWithGPGIDReader(policyPath, registriesDirPath string, idReader gpgIDReader) ([]*Policy, error) {
+func policyDescriptionWithGPGIDReader(ctx context.Context, policyPath, registriesDirPath string, idReader gpgIDReader) ([]*Policy, error) {
 	policyContentStruct, err := getPolicy(policyPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not read trust policies: %w", err)
 	}
-	res, err := getPolicyShowOutput(policyContentStruct, registriesDirPath, idReader)
+	res, err := getPolicyShowOutput(ctx, policyContentStruct, registriesDirPath, idReader)
 	if err != nil {
 		return nil, fmt.Errorf("could not show trust policies: %w", err)
 	}
 	return res, nil
 }
 
-func getPolicyShowOutput(policyContentStruct policyContent, systemRegistriesDirPath string, idReader gpgIDReader) ([]*Policy, error) {
+func getPolicyShowOutput(ctx context.Context, policyContentStruct policyContent, systemRegistriesDirPath string, idReader gpgIDReader) ([]*Policy, error) {
 	var output []*Policy
 
 	registryConfigs, err := loadAndMergeConfig(systemRegistriesDirPath)
@@ -51,7 +52,7 @@ func getPolicyShowOutput(policyContentStruct policyContent, systemRegistriesDirP
 			Name:      "* (default)",
 			RepoName:  "default",
 		}
-		output = append(output, descriptionsOfPolicyRequirements(policyContentStruct.Default, template, registryConfigs, "", idReader)...)
+		output = append(output, descriptionsOfPolicyRequirements(ctx, policyContentStruct.Default, template, registryConfigs, "", idReader)...)
 	}
 	transports := slices.Collect(maps.Keys(policyContentStruct.Transports))
 	sort.Strings(transports)
@@ -70,14 +71,14 @@ func getPolicyShowOutput(policyContentStruct policyContent, systemRegistriesDirP
 				Name:      repo,
 				RepoName:  repo,
 			}
-			output = append(output, descriptionsOfPolicyRequirements(repoval, template, registryConfigs, repo, idReader)...)
+			output = append(output, descriptionsOfPolicyRequirements(ctx, repoval, template, registryConfigs, repo, idReader)...)
 		}
 	}
 	return output, nil
 }
 
 // descriptionsOfPolicyRequirements turns reqs into user-readable policy entries, with Transport/Name/Reponame coming from template, potentially looking up scope (which may be "") in registryConfigs.
-func descriptionsOfPolicyRequirements(reqs []repoContent, template Policy, registryConfigs *registryConfiguration, scope string, idReader gpgIDReader) []*Policy {
+func descriptionsOfPolicyRequirements(ctx context.Context, reqs []repoContent, template Policy, registryConfigs *registryConfiguration, scope string, idReader gpgIDReader) []*Policy {
 	res := make([]*Policy, 0, len(reqs))
 
 	var lookasidePath string
@@ -99,13 +100,13 @@ func descriptionsOfPolicyRequirements(reqs []repoContent, template Policy, regis
 		case "signedBy":
 			uids := []string{}
 			if len(repoele.KeyPath) > 0 {
-				uids = append(uids, idReader(repoele.KeyPath)...)
+				uids = append(uids, idReader(ctx, repoele.KeyPath)...)
 			}
 			for _, path := range repoele.KeyPaths {
-				uids = append(uids, idReader(path)...)
+				uids = append(uids, idReader(ctx, path)...)
 			}
 			if len(repoele.KeyData) > 0 {
-				uids = append(uids, getGPGIdFromKeyData(idReader, repoele.KeyData)...)
+				uids = append(uids, getGPGIdFromKeyData(ctx, idReader, repoele.KeyData)...)
 			}
 			gpgIDString = strings.Join(uids, ", ")
 

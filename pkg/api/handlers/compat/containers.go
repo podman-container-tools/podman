@@ -3,6 +3,7 @@
 package compat
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -148,7 +149,7 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(*filterMap) > 0 {
 		for k, v := range *filterMap {
-			generatedFunc, err := filters.GenerateContainerFilterFuncs(k, v, runtime)
+			generatedFunc, err := filters.GenerateContainerFilterFuncs(r.Context(), k, v, runtime)
 			if err != nil {
 				utils.InternalServerError(w, err)
 				return
@@ -161,7 +162,7 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !all {
-		runningOnly, err := filters.GenerateContainerFilterFuncs("status", []string{define.ContainerStateRunning.String()}, runtime)
+		runningOnly, err := filters.GenerateContainerFilterFuncs(r.Context(), "status", []string{define.ContainerStateRunning.String()}, runtime)
 		if err != nil {
 			utils.InternalServerError(w, err)
 			return
@@ -169,7 +170,7 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 		filterFuncs = append(filterFuncs, runningOnly)
 	}
 
-	containers, err := runtime.GetContainers(false, filterFuncs...)
+	containers, err := runtime.GetContainers(r.Context(), false, filterFuncs...)
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -190,7 +191,7 @@ func ListContainers(w http.ResponseWriter, r *http.Request) {
 		includeHealth = true
 	}
 	for _, ctnr := range containers {
-		api, err := LibpodToContainer(ctnr, query.Size, includeHealth)
+		api, err := LibpodToContainer(r.Context(), ctnr, query.Size, includeHealth)
 		if err != nil {
 			if errors.Is(err, define.ErrNoSuchCtr) {
 				// container was removed between the initial fetch of the list and conversion
@@ -220,12 +221,12 @@ func GetContainer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := utils.GetName(r)
-	ctnr, err := runtime.LookupContainer(name)
+	ctnr, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
 	}
-	api, err := LibpodToContainerJSON(ctnr, query.Size)
+	api, err := LibpodToContainerJSON(r.Context(), ctnr, query.Size)
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -323,7 +324,7 @@ func convertSecondaryIPPrefixLen(input *define.InspectNetworkSettings, output *h
 	}
 }
 
-func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handlers.Container, error) {
+func LibpodToContainer(ctx context.Context, l *libpod.Container, sz bool, includeHealth bool) (*handlers.Container, error) {
 	imageID, imageName := l.Image()
 
 	var (
@@ -394,7 +395,7 @@ func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handl
 		}
 	}
 
-	inspect, err := l.Inspect(false)
+	inspect, err := l.Inspect(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -510,9 +511,9 @@ func LibpodToContainer(l *libpod.Container, sz bool, includeHealth bool) (*handl
 }
 
 //nolint:staticcheck // LegacyImageInspect is deprecated but kept for Docker API compat < v1.52
-func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageInspect, error) {
+func LibpodToContainerJSON(ctx context.Context, l *libpod.Container, sz bool) (*handlers.LegacyImageInspect, error) {
 	imageID, imageName := l.Image()
-	inspect, err := l.Inspect(sz)
+	inspect, err := l.Inspect(ctx, sz)
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +677,7 @@ func LibpodToContainerJSON(l *libpod.Container, sz bool) (*handlers.LegacyImageI
 
 	config := handlers.ContainerConfig{
 		Config: container.Config{
-			Hostname:        l.Hostname(),
+			Hostname:        l.Hostname(ctx),
 			Domainname:      inspect.Config.DomainName,
 			User:            l.User(),
 			AttachStdin:     inspect.Config.AttachStdin,
@@ -764,7 +765,7 @@ func RenameContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctr, err := runtime.LookupContainer(name)
+	ctr, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
@@ -786,7 +787,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
 
-	ctr, err := runtime.LookupContainer(name)
+	ctr, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
@@ -928,7 +929,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		Rlimits:                         rlimits,
 	}
 
-	if err := ctr.Update(updateOptions); err != nil {
+	if err := ctr.Update(r.Context(), updateOptions); err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("updating container: %w", err))
 		return
 	}

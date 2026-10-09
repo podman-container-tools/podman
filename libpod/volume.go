@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -281,17 +282,17 @@ func (v *Volume) UsesVolumeDriver() bool {
 	return v.config.Driver != define.VolumeDriverLocal && v.config.Driver != ""
 }
 
-func (v *Volume) Mount() (string, error) {
+func (v *Volume) Mount(ctx context.Context) (string, error) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
-	err := v.mount()
+	err := v.mount(ctx)
 	return v.mountPoint(), err
 }
 
-func (v *Volume) Unmount() error {
+func (v *Volume) Unmount(ctx context.Context) error {
 	v.lock.Lock()
 	defer v.lock.Unlock()
-	return v.unmount(false)
+	return v.unmount(ctx, false)
 }
 
 func (v *Volume) NeedsMount() bool {
@@ -307,15 +308,15 @@ func (v *volumeExportReadCloser) Close() error {
 	err := v.ReadCloser.Close()
 	v.vol.lock.Lock()
 	defer v.vol.lock.Unlock()
-	unmountErr := v.vol.unmount(false)
+	unmountErr := v.vol.unmount(context.TODO(), false)
 	return errors.Join(err, unmountErr)
 }
 
 // Export volume to tar.
 // Returns a ReadCloser which points to a tar of all the volume's contents.
-func (v *Volume) Export() (io.ReadCloser, error) {
+func (v *Volume) Export(ctx context.Context) (io.ReadCloser, error) {
 	v.lock.Lock()
-	err := v.mount()
+	err := v.mount(ctx)
 	mountPoint := v.mountPoint()
 	v.lock.Unlock()
 	if err != nil {
@@ -325,7 +326,7 @@ func (v *Volume) Export() (io.ReadCloser, error) {
 	volContents, err := utils.TarWithChroot(mountPoint)
 	if err != nil {
 		v.lock.Lock()
-		if unmountErr := v.unmount(false); unmountErr != nil {
+		if unmountErr := v.unmount(ctx, false); unmountErr != nil {
 			logrus.Errorf("Error unmounting volume %s: %v", v.Name(), unmountErr)
 		}
 		v.lock.Unlock()
@@ -338,10 +339,10 @@ func (v *Volume) Export() (io.ReadCloser, error) {
 	}, nil
 }
 
-// Import a volume from a tar file, provided as an io.Reader.
-func (v *Volume) Import(r io.Reader) error {
+// Import imports a volume from a tar file, provided as an io.Reader.
+func (v *Volume) Import(ctx context.Context, r io.Reader) error {
 	v.lock.Lock()
-	err := v.mount()
+	err := v.mount(ctx)
 	mountPoint := v.mountPoint()
 	v.lock.Unlock()
 	if err != nil {
@@ -351,7 +352,7 @@ func (v *Volume) Import(r io.Reader) error {
 		v.lock.Lock()
 		defer v.lock.Unlock()
 
-		if err := v.unmount(false); err != nil {
+		if err := v.unmount(ctx, false); err != nil {
 			logrus.Errorf("Error unmounting volume %s: %v", v.Name(), err)
 		}
 	}()

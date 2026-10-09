@@ -3,6 +3,7 @@ package e2e_test
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,7 +18,7 @@ import (
 )
 
 var _ = Describe("run cp commands", func() {
-	It("podman cp", func() {
+	It("podman cp", func(ctx context.Context) {
 		const (
 			file            = "foo.txt"
 			directory       = "foo-dir"
@@ -57,17 +58,17 @@ var _ = Describe("run cp commands", func() {
 
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		bm := basicMachine{}
-		newImgs, err := mb.setCmd(bm.withPodmanCommand([]string{"pull", TESTIMAGE})).run()
+		newImgs, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"pull", TESTIMAGE})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(newImgs).To(Exit(0))
 		Expect(newImgs.outputToStringSlice()).To(HaveLen(1))
 
-		createAlp, err := mb.setCmd(bm.withPodmanCommand([]string{"create", "--name", containerName, TESTIMAGE, "top"})).run()
+		createAlp, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"create", "--name", containerName, TESTIMAGE, "top"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(createAlp).To(Exit(0))
 		Expect(createAlp.outputToStringSlice()).To(HaveLen(1))
@@ -77,7 +78,7 @@ var _ = Describe("run cp commands", func() {
 		// Create a second container to test copying between containers
 		// This container is named "C" to also test that Windows prefers
 		// to treat C:\ as a local file path instead of a container name
-		createAlp, err = mb.setCmd(bm.withPodmanCommand([]string{"create", "--name", "C", TESTIMAGE, "top"})).run()
+		createAlp, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"create", "--name", "C", TESTIMAGE, "top"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(createAlp).To(Exit(0))
 		Expect(createAlp.outputToStringSlice()).To(HaveLen(1))
@@ -86,52 +87,52 @@ var _ = Describe("run cp commands", func() {
 
 		By("copy from host to container by id")
 		// Copy a single file into the container
-		cpFile, err := mb.setCmd(bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, file), containerID + ":/tmp/"})).run()
+		cpFile, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, file), containerID + ":/tmp/"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpFile).To(Exit(0))
 
 		// Copy a directory into the container
-		cpDir, err := mb.setCmd(bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, directory), containerID + ":/tmp"})).run()
+		cpDir, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, directory), containerID + ":/tmp"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpDir).To(Exit(0))
 
-		start, err := mb.setCmd(bm.withPodmanCommand([]string{"start", containerID})).run()
+		start, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"start", containerID})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(start).To(Exit(0))
 
 		// Check the single file is created with the appropriate mode, uid, gid
-		exec, err := mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", file)})).run()
+		exec, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", file)})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(fmt.Sprintf("%o %d %d", sourceFileStat.Mode().Perm(), 0, 0)))
 
 		// Check the directory is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", directory)})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", directory)})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(fmt.Sprintf("%o %d %d", sourceDirStat.Mode().Perm(), 0, 0)))
 
 		// Check the file in the directory is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", directory, fileInDirectory)})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", path.Join("/tmp", directory, fileInDirectory)})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(fmt.Sprintf("%o %d %d", sourceFileInDirStat.Mode().Perm(), 0, 0)))
 
 		By("copy from host to container by name")
 		// Copy a single renamed file into the container
-		cpFile, err = mb.setCmd(bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, file), containerName + ":/tmp/rename.txt"})).run()
+		cpFile, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", filepath.Join(sourceDir, file), containerName + ":/tmp/rename.txt"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpFile).To(Exit(0))
 
 		// Check the single file is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/rename.txt"})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/rename.txt"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(fmt.Sprintf("%o %d %d", sourceFileStat.Mode().Perm(), 0, 0)))
 
 		By("copy from container to host")
 		// Copy the file back from the container to the host
-		cpFile, err = mb.setCmd(bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", file), destinationDir + string(os.PathSeparator)})).run()
+		cpFile, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", file), destinationDir + string(os.PathSeparator)})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpFile).To(Exit(0))
 
@@ -143,7 +144,7 @@ var _ = Describe("run cp commands", func() {
 		Expect(destinationFileStat.ModTime()).To(BeTemporally("~", sourceFileStat.ModTime(), time.Second))
 
 		// Copy a directory back from the container to the host
-		cpDir, err = mb.setCmd(bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", directory), destinationDir + string(os.PathSeparator)})).run()
+		cpDir, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", directory), destinationDir + string(os.PathSeparator)})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpDir).To(Exit(0))
 
@@ -193,40 +194,40 @@ var _ = Describe("run cp commands", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Testing stdin copy with archive mode disabled (ownership will be determined by the tar file)
-		cpTar, err := mb.setCmd(bm.withPodmanCommand([]string{"cp", "-a=false", "-", containerID + ":/tmp"})).setStdin(tarBuffer).run()
+		cpTar, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", "-a=false", "-", containerID + ":/tmp"})).setStdin(tarBuffer).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpTar).To(Exit(0))
 
 		// Check the directory is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/stdin-dir"})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/stdin-dir"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal("640 0 1000"))
 
 		// Check the file is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/stdin-dir/file.txt"})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", containerID, "stat", "-c", "%a %u %g", "/tmp/stdin-dir/file.txt"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal("755 1000 0"))
 
 		By("copy from container to container")
 		// Copy the file from the first container to the second container (with renaming)
-		cpFile, err = mb.setCmd(bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", file), destinationContainerID + ":" + path.Join("/tmp", "destination.txt")})).run()
+		cpFile, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"cp", containerID + ":" + path.Join("/tmp", file), destinationContainerID + ":" + path.Join("/tmp", "destination.txt")})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cpFile).To(Exit(0))
 
-		start, err = mb.setCmd(bm.withPodmanCommand([]string{"start", destinationContainerID})).run()
+		start, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"start", destinationContainerID})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(start).To(Exit(0))
 
 		// Check the single file is created with the appropriate mode, uid, gid
-		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", destinationContainerID, "stat", "-c", "%a %u %g", path.Join("/tmp", "destination.txt")})).run()
+		exec, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"exec", destinationContainerID, "stat", "-c", "%a %u %g", path.Join("/tmp", "destination.txt")})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal(fmt.Sprintf("%o %d %d", sourceFileStat.Mode().Perm(), 0, 0)))
 	})
 
-	It("podman machine cp", func() {
+	It("podman machine cp", func(ctx context.Context) {
 		// HOST FILE SYSTEM
 		// ~/<ginkgo_tmp>
 		//   * foo.txt
@@ -276,35 +277,35 @@ var _ = Describe("run cp commands", func() {
 		sshMachine := sshMachine{}
 
 		By("host file to guest")
-		session, err := mb.setName(name).setCmd(initMachine.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, initMachine.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		// copy the file into the guest
-		session, err = mb.setCmd(cp.withQuiet().withSrc(filePath).withDest(name + ":~/" + file)).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(filePath).withDest(name+":~/"+file)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		// verify the guest has the file
-		session, err = mb.setName(name).setCmd(sshMachine.withSSHCommand([]string{"ls"})).run()
+		session, err = mb.setName(name).setCmd(ctx, sshMachine.withSSHCommand([]string{"ls"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 		Expect(session.outputToString()).To(Equal(file))
 
 		// try to copy the file to a location in the guest where permission will get denied
-		session, err = mb.setCmd(cp.withQuiet().withSrc(filePath).withDest(name + ":/etc/tmp.txt")).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(filePath).withDest(name+":/etc/tmp.txt")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("scp: dest open \"/etc/tmp.txt\": Permission denied"))
 
 		By("host directory to guest")
 		// copy contents into the guest
-		session, err = mb.setCmd(cp.withQuiet().withSrc(directoryPath).withDest(name + ":~/" + directory)).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(directoryPath).withDest(name+":~/"+directory)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		// verify the content is in the guest
-		session, err = mb.setName(name).setCmd(sshMachine.withSSHCommand([]string{"ls", directory})).run()
+		session, err = mb.setName(name).setCmd(ctx, sshMachine.withSSHCommand([]string{"ls", directory})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 		Expect(session.outputToString()).To(Equal(fileInDirectory))
@@ -312,7 +313,7 @@ var _ = Describe("run cp commands", func() {
 		By("guest file to host")
 		// copy contents to the host
 		guestToHostFilePath := filepath.Join(GinkgoT().TempDir(), guestToHostFile)
-		session, err = mb.setCmd(cp.withQuiet().withSrc(name + ":~/" + file).withDest(guestToHostFilePath)).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(name+":~/"+file).withDest(guestToHostFilePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 		// check the contents are on the host
@@ -327,7 +328,7 @@ var _ = Describe("run cp commands", func() {
 			err = os.MkdirAll(hostDirPath, 0o444)
 			Expect(err).ToNot(HaveOccurred())
 			hostFileInDirPath := filepath.Join(hostDirPath, file)
-			session, err = mb.setCmd(cp.withQuiet().withSrc(name + ":~/" + file).withDest(hostFileInDirPath)).run()
+			session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(name+":~/"+file).withDest(hostFileInDirPath)).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(session).To(Exit(125))
 			Expect(session.errorToString()).To(ContainSubstring(fmt.Sprintf("scp: open local \"%s\": Permission denied", hostFileInDirPath)))
@@ -336,7 +337,7 @@ var _ = Describe("run cp commands", func() {
 		By("guest directory to host")
 		// copy contents to the host
 		guestToHostDirPath := filepath.Join(GinkgoT().TempDir(), guestToHostDir)
-		session, err = mb.setCmd(cp.withQuiet().withSrc(name + ":~/" + directory).withDest(guestToHostDirPath)).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(name+":~/"+directory).withDest(guestToHostDirPath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 		// check the contents are on the host
@@ -344,14 +345,14 @@ var _ = Describe("run cp commands", func() {
 
 		By("attempt copying file to a new directory")
 		// copy the file to a guest directory
-		session, err = mb.setCmd(cp.withQuiet().withSrc(filePath).withDest(name + ":~/directory/")).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(filePath).withDest(name+":~/directory/")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("scp: dest open \"directory/\": Failure"))
 
 		// try copying a guest file to a host directory
 		hostDirPath := filepath.Join(GinkgoT().TempDir(), "directory") + string(filepath.Separator)
-		session, err = mb.setCmd(cp.withQuiet().withSrc(name + ":~/" + file).withDest(hostDirPath)).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(name+":~/"+file).withDest(hostDirPath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		switch runtime.GOOS {
@@ -367,13 +368,13 @@ var _ = Describe("run cp commands", func() {
 
 		By("attempt copying directory to a file")
 		// try copying a local directory to a guest file
-		session, err = mb.setCmd(cp.withQuiet().withSrc(GinkgoT().TempDir() + string(filepath.Separator)).withDest(name + ":~/" + directory + "/" + fileInDirectory + "/")).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(GinkgoT().TempDir()+string(filepath.Separator)).withDest(name+":~/"+directory+"/"+fileInDirectory+"/")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("/foo-dir/bar.txt\" exists but is not a directory"))
 
 		// try copying the guest directory to a local file
-		session, err = mb.setCmd(cp.withQuiet().withSrc(name + ":~/" + directory + "/").withDest(filePath + string(filepath.Separator))).run()
+		session, err = mb.setCmd(ctx, cp.withQuiet().withSrc(name+":~/"+directory+"/").withDest(filePath+string(filepath.Separator))).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 

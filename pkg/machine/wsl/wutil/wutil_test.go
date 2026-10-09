@@ -145,7 +145,7 @@ func TestMatchOutputLine(t *testing.T) {
 }
 
 func TestNewWSLCommand(t *testing.T) {
-	cmd := NewWSLCommand("--status")
+	cmd := NewWSLCommand(t.Context(), "--status")
 	assert.Contains(t, cmd.Path, "wsl")
 	assert.Equal(t, []string{"--status"}, cmd.Args[1:])
 	assert.Contains(t, cmd.Env, "WSL_UTF8=1")

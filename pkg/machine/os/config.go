@@ -12,7 +12,7 @@ import (
 // Manager is the interface for operations on a Podman machine's OS
 type Manager interface {
 	// Apply machine OS changes from an OCI image.
-	Apply(image string, opts ApplyOptions) error
+	Apply(ctx context.Context, image string, opts ApplyOptions) error
 	// Upgrade the machine OS
 	Upgrade(ctx context.Context, opts UpgradeOptions) error
 }

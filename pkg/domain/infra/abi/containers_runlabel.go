@@ -88,7 +88,7 @@ func (ic *ContainerEngine) ContainerRunlabel(ctx context.Context, label string, 
 		for i, entry := range cmd {
 			if entry == "--name" {
 				name := cmd[i+1]
-				ctr, err := ic.Libpod.LookupContainer(name)
+				ctr, err := ic.Libpod.LookupContainer(ctx, name)
 				if err != nil {
 					if !errors.Is(err, define.ErrNoSuchCtr) {
 						logrus.Debugf("Error occurred searching for container %s: %v", name, err)
@@ -106,7 +106,7 @@ func (ic *ContainerEngine) ContainerRunlabel(ctx context.Context, label string, 
 		}
 	}
 
-	return utils.ExecCmdWithStdStreams(stdIn, stdOut, stdErr, env, cmd[0], cmd[1:]...)
+	return utils.ExecCmdWithStdStreams(ctx, stdIn, stdOut, stdErr, env, cmd[0], cmd[1:]...)
 }
 
 // generateRunlabelCommand generates the to-be-executed command as a string

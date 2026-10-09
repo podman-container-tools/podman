@@ -73,7 +73,7 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 			return nil, nil, nil, fmt.Errorf("retrieving pod %s: %w", s.Pod, err)
 		}
 		if pod.HasInfraContainer() {
-			infra, err = pod.InfraContainer()
+			infra, err = pod.InfraContainer(ctx)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -84,7 +84,7 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 	compatibleOptions := &libpod.InfraInherit{}
 	var infraSpec *specs.Spec
 	if infra != nil {
-		options, infraSpec, compatibleOptions, err = Inherit(infra, s, rt)
+		options, infraSpec, compatibleOptions, err = Inherit(ctx, infra, s, rt)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -96,28 +96,28 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 
 	// Set defaults for unset namespaces
 	if s.PidNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("pid", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "pid", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		s.PidNS = defaultNS
 	}
 	if s.IpcNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("ipc", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "ipc", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		s.IpcNS = defaultNS
 	}
 	if s.UtsNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("uts", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "uts", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		s.UtsNS = defaultNS
 	}
 	if s.UserNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("user", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "user", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -133,14 +133,14 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		s.IDMappings = mappings
 	}
 	if s.NetNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("net", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "net", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		s.NetNS = defaultNS
 	}
 	if s.CgroupNS.IsDefault() {
-		defaultNS, err := GetDefaultNamespaceMode("cgroup", rtc, pod)
+		defaultNS, err := GetDefaultNamespaceMode(ctx, "cgroup", rtc, pod)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -259,7 +259,7 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 	command := makeCommand(s, imageData)
 
 	infraVol := len(compatibleOptions.Mounts) > 0 || len(compatibleOptions.Volumes) > 0 || len(compatibleOptions.ImageVolumes) > 0 || len(compatibleOptions.OverlayVolumes) > 0
-	opts, err := createContainerOptions(rt, s, pod, finalVolumes, finalOverlays, imageData, command, infraVol, *compatibleOptions)
+	opts, err := createContainerOptions(ctx, rt, s, pod, finalVolumes, finalOverlays, imageData, command, infraVol, *compatibleOptions)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -380,7 +380,7 @@ func isCDIDevice(device string) bool {
 	return parser.IsQualifiedName(device)
 }
 
-func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *libpod.Pod, volumes []*specgen.NamedVolume, overlays []*specgen.OverlayVolume, imageData *libimage.ImageData, command []string, infraVolumes bool, compatibleOptions libpod.InfraInherit) ([]libpod.CtrCreateOption, error) {
+func createContainerOptions(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGenerator, pod *libpod.Pod, volumes []*specgen.NamedVolume, overlays []*specgen.OverlayVolume, imageData *libimage.ImageData, command []string, infraVolumes bool, compatibleOptions libpod.InfraInherit) ([]libpod.CtrCreateOption, error) {
 	var options []libpod.CtrCreateOption
 	var err error
 
@@ -606,7 +606,7 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		options = append(options, libpod.WithSecLabels(s.SelinuxOpts))
 	} else if pod != nil && len(compatibleOptions.SelinuxOpts) == 0 {
 		// duplicate the security options from the pod
-		processLabel, err := pod.ProcessLabel()
+		processLabel, err := pod.ProcessLabel(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -624,7 +624,7 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 	}
 
 	// Get namespace related options
-	namespaceOpts, err := namespaceOptions(s, rt, pod, imageData)
+	namespaceOpts, err := namespaceOptions(ctx, s, rt, pod, imageData)
 	if err != nil {
 		return nil, err
 	}
@@ -725,7 +725,7 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 	if len(s.DependencyContainers) > 0 {
 		deps := make([]*libpod.Container, 0, len(s.DependencyContainers))
 		for _, ctr := range s.DependencyContainers {
-			depCtr, err := rt.LookupContainer(ctr)
+			depCtr, err := rt.LookupContainer(ctx, ctr)
 			if err != nil {
 				return nil, fmt.Errorf("%q is not a valid container, cannot be used as a dependency: %w", ctr, err)
 			}
@@ -746,9 +746,9 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 	return options, nil
 }
 
-func Inherit(infra *libpod.Container, s *specgen.SpecGenerator, rt *libpod.Runtime) (opts []libpod.CtrCreateOption, infraS *specs.Spec, compat *libpod.InfraInherit, err error) {
+func Inherit(ctx context.Context, infra *libpod.Container, s *specgen.SpecGenerator, rt *libpod.Runtime) (opts []libpod.CtrCreateOption, infraS *specs.Spec, compat *libpod.InfraInherit, err error) {
 	inheritSpec := &specgen.SpecGenerator{}
-	_, compatibleOptions, err := ConfigToSpec(rt, inheritSpec, infra.ID())
+	_, compatibleOptions, err := ConfigToSpec(ctx, rt, inheritSpec, infra.ID())
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type listMachine struct {
 	/*
 		--format string   Format volume output using JSON or a Go template (default "{{.Name}}\t{{.VMType}}\t{{.Created}}\t{{.LastUp}}\t{{.CPUs}}\t{{.Memory}}\t{{.DiskSize}}\n")
@@ -15,7 +17,7 @@ type listMachine struct {
 	cmd []string
 }
 
-func (i *listMachine) buildCmd(_ *machineTestBuilder) []string {
+func (i *listMachine) buildCmd(_ context.Context, _ *machineTestBuilder) []string {
 	cmd := []string{"machine", "list"}
 	if len(i.format) > 0 {
 		cmd = append(cmd, "--format", i.format)

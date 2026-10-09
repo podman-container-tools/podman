@@ -32,7 +32,7 @@ type Schedule struct {
 	platformBuilders map[string]string // target->connection
 }
 
-func newFarmWithBuilders(_ context.Context, name string, cons []config.Connection, localEngine entities.ImageEngine, buildLocal bool) (*Farm, error) {
+func newFarmWithBuilders(ctx context.Context, name string, cons []config.Connection, localEngine entities.ImageEngine, buildLocal bool) (*Farm, error) {
 	farm := &Farm{
 		builders:    make(map[string]entities.ImageEngine),
 		localEngine: localEngine,
@@ -46,13 +46,7 @@ func newFarmWithBuilders(_ context.Context, name string, cons []config.Connectio
 	for _, con := range cons {
 		builderGroup.Go(func() error {
 			fmt.Printf("Connecting to %q\n", con.Name)
-			engine, err := infra.NewImageEngine(&entities.PodmanConfig{
-				EngineMode:   entities.TunnelMode,
-				URI:          con.URI,
-				Identity:     con.Identity,
-				MachineMode:  con.IsMachine,
-				FarmNodeName: con.Name,
-			})
+			engine, err := infra.NewImageEngine(ctx, &entities.PodmanConfig{EngineMode: entities.TunnelMode, URI: con.URI, Identity: con.Identity, MachineMode: con.IsMachine, FarmNodeName: con.Name})
 			if err != nil {
 				return fmt.Errorf("initializing image engine at %q: %w", con.URI, err)
 			}

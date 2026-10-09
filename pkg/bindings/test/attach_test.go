@@ -2,6 +2,7 @@ package bindings_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -19,12 +20,12 @@ var _ = Describe("Podman containers attach", func() {
 		s  *gexec.Session
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		bt = newBindingTest()
 		bt.RestoreImagesFromCache()
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 

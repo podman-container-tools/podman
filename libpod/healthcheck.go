@@ -24,7 +24,7 @@ import (
 // HealthCheck verifies the state and validity of the healthcheck configuration
 // on the container and then executes the healthcheck
 func (r *Runtime) HealthCheck(ctx context.Context, name string) (define.HealthCheckStatus, error) {
-	container, err := r.LookupContainer(name)
+	container, err := r.LookupContainer(ctx, name)
 	if err != nil {
 		return define.HealthCheckContainerNotFound, fmt.Errorf("unable to look up %s to perform a health check: %w", name, err)
 	}
@@ -44,7 +44,7 @@ func (r *Runtime) HealthCheck(ctx context.Context, name string) (define.HealthCh
 
 	hcStatus, logStatus, err := container.runHealthCheck(ctx, isStartupHC)
 	if !isStartupHC {
-		if err := container.processHealthCheckStatus(logStatus); err != nil {
+		if err := container.processHealthCheckStatus(ctx, logStatus); err != nil {
 			return hcStatus, err
 		}
 	}
@@ -123,7 +123,7 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 	hcResult := define.HealthCheckSuccess
 	config := new(ExecConfig)
 	config.Command = newCommand
-	exitCode, hcErr := c.healthCheckExec(config, c.HealthCheckConfig().Timeout, streams)
+	exitCode, hcErr := c.healthCheckExec(ctx, config, c.HealthCheckConfig().Timeout, streams)
 	timeEnd := time.Now()
 	if hcErr != nil {
 		hcResult = define.HealthCheckFailure
@@ -192,13 +192,13 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 		return hcResult, healthCheckResult.Status, hcErr
 	}
 	if c.runtime.config.Engine.HealthcheckEvents {
-		c.newContainerHealthCheckEvent(healthCheckResult)
+		c.newContainerHealthCheckEvent(ctx, healthCheckResult)
 	}
 
 	return hcResult, healthCheckResult.Status, hcErr
 }
 
-func (c *Container) processHealthCheckStatus(status string) error {
+func (c *Container) processHealthCheckStatus(ctx context.Context, status string) error {
 	if status != define.HealthCheckUnhealthy {
 		return nil
 	}
@@ -207,7 +207,7 @@ func (c *Container) processHealthCheckStatus(status string) error {
 	case define.HealthCheckOnFailureActionNone: // Nothing to do
 
 	case define.HealthCheckOnFailureActionKill:
-		if err := c.Kill(uint(unix.SIGKILL)); err != nil {
+		if err := c.Kill(ctx, uint(unix.SIGKILL)); err != nil {
 			return fmt.Errorf("killing container health-check turned unhealthy: %w", err)
 		}
 
@@ -216,12 +216,12 @@ func (c *Container) processHealthCheckStatus(status string) error {
 		// the container would be restarted in the context of a
 		// transient systemd unit which may cause undesired side
 		// effects.
-		if err := c.Stop(); err != nil {
+		if err := c.Stop(ctx); err != nil {
 			return fmt.Errorf("restarting/stopping container after health-check turned unhealthy: %w", err)
 		}
 
 	case define.HealthCheckOnFailureActionStop:
-		if err := c.Stop(); err != nil {
+		if err := c.Stop(ctx); err != nil {
 			return fmt.Errorf("stopping container after health-check turned unhealthy: %w", err)
 		}
 
@@ -293,10 +293,10 @@ func (c *Container) recreateHealthCheckTimer(ctx context.Context, isStartup bool
 		interval = c.config.StartupHealthCheckConfig.StartInterval.String()
 	}
 
-	if err := c.createTimer(interval, isStartup); err != nil {
+	if err := c.createTimer(ctx, interval, isStartup); err != nil {
 		return fmt.Errorf("recreating container %s (isStartup: %t) healthcheck: %w", c.ID(), isStartup, err)
 	}
-	if err := c.startTimer(isStartup); err != nil {
+	if err := c.startTimer(ctx, isStartup); err != nil {
 		return fmt.Errorf("restarting container %s (isStartup: %t) healthcheck timer: %w", c.ID(), isStartup, err)
 	}
 

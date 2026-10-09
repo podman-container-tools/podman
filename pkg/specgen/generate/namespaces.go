@@ -3,6 +3,7 @@
 package generate
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -40,7 +41,7 @@ func userNSConflictsWithPod(pod *libpod.Pod, mode specgen.NamespaceMode) error {
 }
 
 // Get the default namespace mode for any given namespace type.
-func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod) (specgen.Namespace, error) {
+func GetDefaultNamespaceMode(ctx context.Context, nsType string, cfg *config.Config, pod *libpod.Pod) (specgen.Namespace, error) {
 	// The default for most is private
 	toReturn := specgen.Namespace{}
 	toReturn.NSMode = specgen.Private
@@ -53,19 +54,19 @@ func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod)
 		podMode := false
 		switch {
 		case nsType == "pid" && pod.SharesPID():
-			if pod.NamespaceMode(spec.PIDNamespace) == host {
+			if pod.NamespaceMode(ctx, spec.PIDNamespace) == host {
 				toReturn.NSMode = specgen.Host
 				return toReturn, nil
 			}
 			podMode = true
 		case nsType == "ipc" && pod.SharesIPC():
-			if pod.NamespaceMode(spec.IPCNamespace) == host {
+			if pod.NamespaceMode(ctx, spec.IPCNamespace) == host {
 				toReturn.NSMode = specgen.Host
 				return toReturn, nil
 			}
 			podMode = true
 		case nsType == "uts" && pod.SharesUTS():
-			if pod.NamespaceMode(spec.UTSNamespace) == host {
+			if pod.NamespaceMode(ctx, spec.UTSNamespace) == host {
 				toReturn.NSMode = specgen.Host
 				return toReturn, nil
 			}
@@ -75,13 +76,13 @@ func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod)
 			// if --userns=host then pod.SharesUser == false
 			podMode = true
 		case nsType == "net" && pod.SharesNet():
-			if pod.NetworkMode() == host {
+			if pod.NetworkMode(ctx) == host {
 				toReturn.NSMode = specgen.Host
 				return toReturn, nil
 			}
 			podMode = true
 		case nsType == "cgroup" && pod.SharesCgroup():
-			if pod.NamespaceMode(spec.CgroupNamespace) == host {
+			if pod.NamespaceMode(ctx, spec.CgroupNamespace) == host {
 				toReturn.NSMode = specgen.Host
 				return toReturn, nil
 			}
@@ -121,7 +122,7 @@ func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod)
 // joining a pod.
 // TODO: Consider grouping options that are not directly attached to a namespace
 // elsewhere.
-func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.Pod, imageData *libimage.ImageData) ([]libpod.CtrCreateOption, error) {
+func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.Pod, imageData *libimage.ImageData) ([]libpod.CtrCreateOption, error) {
 	toReturn := []libpod.CtrCreateOption{}
 
 	// If pod is not nil, get infra container.
@@ -134,7 +135,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 			return nil, fmt.Errorf("looking up pod %s infra container: %w", pod.ID(), err)
 		}
 		if infraID != "" {
-			ctr, err := rt.GetContainer(infraID)
+			ctr, err := rt.GetContainer(ctx, infraID)
 			if err != nil {
 				return nil, fmt.Errorf("retrieving pod %s infra container %s: %w", pod.ID(), infraID, err)
 			}
@@ -152,7 +153,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		}
 		toReturn = append(toReturn, libpod.WithPIDNSFrom(infraCtr))
 	case specgen.FromContainer:
-		pidCtr, err := rt.LookupContainer(s.PidNS.Value)
+		pidCtr, err := rt.LookupContainer(ctx, s.PidNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share pid namespace with: %w", err)
 		}
@@ -177,7 +178,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		toReturn = append(toReturn, libpod.WithIPCNSFrom(infraCtr))
 		toReturn = append(toReturn, libpod.WithShmDir(infraCtr.ShmDir()))
 	case specgen.FromContainer:
-		ipcCtr, err := rt.LookupContainer(s.IpcNS.Value)
+		ipcCtr, err := rt.LookupContainer(ctx, s.IpcNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share ipc namespace with: %w", err)
 		}
@@ -207,7 +208,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		if pod == nil || infraCtr == nil {
 			return nil, errNoInfra
 		}
-		if pod.NamespaceMode(spec.UTSNamespace) == host {
+		if pod.NamespaceMode(ctx, spec.UTSNamespace) == host {
 			// adding infra as a nsCtr is not what we want to do when uts == host
 			// this leads the new ctr to try to add an ns path which is should not in this mode
 			logrus.Debug("pod has host uts, not adding infra as a nsCtr")
@@ -216,7 +217,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 			toReturn = append(toReturn, libpod.WithUTSNSFrom(infraCtr))
 		}
 	case specgen.FromContainer:
-		utsCtr, err := rt.LookupContainer(s.UtsNS.Value)
+		utsCtr, err := rt.LookupContainer(ctx, s.UtsNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share uts namespace with: %w", err)
 		}
@@ -264,7 +265,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		}
 		toReturn = append(toReturn, libpod.WithUserNSFrom(infraCtr))
 	case specgen.FromContainer:
-		userCtr, err := rt.LookupContainer(s.UserNS.Value)
+		userCtr, err := rt.LookupContainer(ctx, s.UserNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share user namespace with: %w", err)
 		}
@@ -298,7 +299,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		}
 		toReturn = append(toReturn, libpod.WithCgroupNSFrom(infraCtr))
 	case specgen.FromContainer:
-		cgroupCtr, err := rt.LookupContainer(s.CgroupNS.Value)
+		cgroupCtr, err := rt.LookupContainer(ctx, s.CgroupNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share cgroup namespace with: %w", err)
 		}
@@ -335,7 +336,7 @@ func namespaceOptions(s *specgen.SpecGenerator, rt *libpod.Runtime, pod *libpod.
 		}
 		toReturn = append(toReturn, libpod.WithNetNSFrom(infraCtr))
 	case specgen.FromContainer:
-		netCtr, err := rt.LookupContainer(s.NetNS.Value)
+		netCtr, err := rt.LookupContainer(ctx, s.NetNS.Value)
 		if err != nil {
 			return nil, fmt.Errorf("looking up container to share net namespace with: %w", err)
 		}

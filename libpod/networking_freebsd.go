@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"crypto/rand"
 	jdec "encoding/json"
 	"errors"
@@ -46,22 +47,22 @@ type NetstatAddress struct {
 // This is called after the container's jail is created but before its
 // started. We can use this to initialise the container's vnet when we don't
 // have a separate vnet jail (which is the case in FreeBSD 13.3 and later).
-func (r *Runtime) setupNetNS(ctr *Container) error {
-	networkStatus, err := r.configureNetNS(ctr, ctr.ID(), false)
+func (r *Runtime) setupNetNS(ctx context.Context, ctr *Container) error {
+	networkStatus, err := r.configureNetNS(ctx, ctr, ctr.ID(), false)
 	ctr.state.NetNS = ctr.ID()
 	ctr.state.NetworkStatus = networkStatus
 	return err
 }
 
 // Create and configure a new network namespace for a container
-func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, _ bool) (status map[string]types.StatusBlock, rerr error) {
-	if err := r.exposeMachinePorts(ctr.config.PortMappings); err != nil {
+func (r *Runtime) configureNetNS(ctx context.Context, ctr *Container, ctrNS string, _ bool) (status map[string]types.StatusBlock, rerr error) {
+	if err := r.exposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 		return nil, err
 	}
 	defer func() {
 		// make sure to unexpose the gvproxy ports when an error happens
 		if rerr != nil {
-			if err := r.unexposeMachinePorts(ctr.config.PortMappings); err != nil {
+			if err := r.unexposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 				logrus.Errorf("failed to free gvproxy machine ports: %v", err)
 			}
 		}
@@ -76,7 +77,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, _ bool) (status m
 		return nil, nil
 	}
 
-	netOpts := ctr.getNetworkOptions(networks)
+	netOpts := ctr.getNetworkOptions(ctx, networks)
 	netStatus, err := r.setUpNetwork(ctrNS, netOpts)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func (r *Runtime) configureNetNS(ctr *Container, ctrNS string, _ bool) (status m
 }
 
 // Create and configure a new network namespace for a container
-func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.StatusBlock, retErr error) {
+func (r *Runtime) createNetNS(ctx context.Context, ctr *Container) (n string, q map[string]types.StatusBlock, retErr error) {
 	b := make([]byte, 16)
 	_, err := rand.Reader.Read(b)
 	if err != nil {
@@ -112,7 +113,7 @@ func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.Stat
 	logrus.Debugf("Created vnet jail %s for container %s", netns, ctr.ID())
 
 	var networkStatus map[string]types.StatusBlock
-	networkStatus, err = r.configureNetNS(ctr, netns, false)
+	networkStatus, err = r.configureNetNS(ctx, ctr, netns, false)
 	if err != nil {
 		jconf := jail.NewConfig()
 		jconf.Set("persist", false)
@@ -125,12 +126,12 @@ func (r *Runtime) createNetNS(ctr *Container) (n string, q map[string]types.Stat
 }
 
 // Tear down a network namespace, undoing all state associated with it.
-func (r *Runtime) teardownNetNS(ctr *Container) error {
-	if err := r.unexposeMachinePorts(ctr.config.PortMappings); err != nil {
+func (r *Runtime) teardownNetNS(ctx context.Context, ctr *Container) error {
+	if err := r.unexposeMachinePorts(ctx, ctr.config.PortMappings); err != nil {
 		// do not return an error otherwise we would prevent network cleanup
 		logrus.Errorf("failed to free gvproxy machine ports: %v", err)
 	}
-	if err := r.teardownNetwork(ctr); err != nil {
+	if err := r.teardownNetwork(ctx, ctr); err != nil {
 		return err
 	}
 
@@ -158,7 +159,7 @@ func (r *Runtime) teardownNetNS(ctr *Container) error {
 
 // TODO (5.0): return the statistics per network interface
 // This would allow better compat with docker.
-func getContainerNetIO(ctr *Container) (map[string]define.ContainerNetworkStats, error) {
+func getContainerNetIO(ctx context.Context, ctr *Container) (map[string]define.ContainerNetworkStats, error) {
 	if ctr.state.NetNS == "" {
 		// If NetNS is nil, it was set as none, and no netNS
 		// was set up this is a valid state and thus return no
@@ -168,12 +169,12 @@ func getContainerNetIO(ctr *Container) (map[string]define.ContainerNetworkStats,
 
 	// First try running 'netstat -j' - this lets us retrieve stats from
 	// containers which don't have a separate vnet jail.
-	cmd := exec.Command("netstat", "-j", ctr.state.NetNS, "-bi", "--libxo", "json")
+	cmd := exec.CommandContext(ctx, "netstat", "-j", ctr.state.NetNS, "-bi", "--libxo", "json")
 	out, err := cmd.Output()
 	if err != nil {
 		// Fall back to using jexec so that this still works on 13.2
 		// which does not have the -j flag.
-		cmd := exec.Command("jexec", ctr.state.NetNS, "netstat", "-bi", "--libxo", "json")
+		cmd := exec.CommandContext(ctx, "jexec", ctr.state.NetNS, "netstat", "-bi", "--libxo", "json")
 		out, err = cmd.Output()
 	}
 	if err != nil {

@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"context"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -52,7 +53,7 @@ var (
 
 // extractHostCertificates extracts trusted CA certificates from the prederfined
 // Windows certificate stores
-func extractHostCertificates() []*x509.Certificate {
+func extractHostCertificates(context.Context) []*x509.Certificate {
 	var certificates []*x509.Certificate
 	for _, location := range winStoresLocations {
 		for _, store := range predefinedWinStores {

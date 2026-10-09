@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ type initMachine struct {
 	cmd []string
 }
 
-func (i *initMachine) buildCmd(m *machineTestBuilder) []string {
+func (i *initMachine) buildCmd(ctx context.Context, m *machineTestBuilder) []string {
 	diskSize := defaultDiskSize
 	cmd := []string{"machine", "init"}
 	if i.cpus != nil {
@@ -94,7 +95,7 @@ func (i *initMachine) buildCmd(m *machineTestBuilder) []string {
 	// when we create a new VM remove it again as cleanup
 	DeferCleanup(func() {
 		r := new(rmMachine)
-		session, err := m.setName(name).setCmd(r.withForce()).run()
+		session, err := m.setName(name).setCmd(ctx, r.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred(), "error occurred rm'ing machine")
 		// Some test create a invalid VM so the VM does not exists in this case we have to ignore the error.
 		// It would be much better if rm -f would behave like other commands and ignore not exists errors.

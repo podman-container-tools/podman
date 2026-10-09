@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -16,24 +17,24 @@ import (
 )
 
 var _ = Describe("podman machine init - windows only", func() {
-	It("init with user mode networking", func() {
+	It("init with user mode networking", func(ctx context.Context) {
 		if testProvider.VMType() != define.WSLVirt {
 			Skip("test is only supported by WSL")
 		}
 		i := new(initMachine)
 		name := randomString()
-		session, err := mb.setName(name).setCmd(i.withFakeImage(mb).withUserModeNetworking(true)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb).withUserModeNetworking(true)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		defer func() {
-			runWslCommand([]string{"--terminate", "podman-net-usermode"})
-			runWslCommand([]string{"--unregister", "podman-net-usermode"})
+			runWslCommand(ctx, []string{"--terminate", "podman-net-usermode"})
+			runWslCommand(ctx, []string{"--unregister", "podman-net-usermode"})
 		}()
 
 		inspect := new(inspectMachine)
 		inspect = inspect.withFormat("{{.UserModeNetworking}}")
-		inspectSession, err := mb.setName(name).setCmd(inspect).run()
+		inspectSession, err := mb.setName(name).setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.outputToString()).To(Equal("true"))
@@ -43,7 +44,7 @@ var _ = Describe("podman machine init - windows only", func() {
 		Expect(err).ToNot(HaveOccurred())
 		defer listener.Close()
 	})
-	It("init should not should not overwrite existing HyperV vms", func() {
+	It("init should not should not overwrite existing HyperV vms", func(ctx context.Context) {
 		skipIfNotVmtype(define.HyperVVirt, "HyperV test only")
 		name := randomString()
 		vhdxPath := filepath.Join(testDir, fmt.Sprintf("%s.vhdx", name))
@@ -72,13 +73,13 @@ var _ = Describe("podman machine init - windows only", func() {
 			}
 		}()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("already exists on hypervisor"))
 	})
 
-	It("init should not overwrite existing WSL vms", func() {
+	It("init should not overwrite existing WSL vms", func(ctx context.Context) {
 		skipIfNotVmtype(define.WSLVirt, "WSL test only")
 
 		name := randomString()
@@ -90,7 +91,7 @@ var _ = Describe("podman machine init - windows only", func() {
 
 		// create a bogus machine
 		i := new(initMachine)
-		session, err := mb.setName("foobarexport").setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setName("foobarexport").setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -98,24 +99,24 @@ var _ = Describe("podman machine init - windows only", func() {
 		// a vm outside the context of podman-machine and also
 		// so we dont have to download a distribution from microsoft
 		// servers
-		exportSession := runWslCommand([]string{"--export", "podman-foobarexport", exportedPath})
+		exportSession := runWslCommand(ctx, []string{"--export", "podman-foobarexport", exportedPath})
 		Expect(exportSession).To(Exit(0))
 
 		// importing the machine and creating a vm
-		importSession := runWslCommand([]string{"--import", distName, distrDir, exportedPath})
+		importSession := runWslCommand(ctx, []string{"--import", distName, distrDir, exportedPath})
 		Expect(importSession).To(Exit(0))
 
 		defer func() {
-			runWslCommand([]string{"--unregister", distName})
+			runWslCommand(ctx, []string{"--unregister", distName})
 		}()
 
 		// Trying to make a vm with the same name as an existing name should result in a 125
-		checkSession, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		checkSession, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(checkSession).To(Exit(125))
 	})
 
-	It("init should create hvsock entries if they do not exist, otherwise should reuse existing ones", func() {
+	It("init should create hvsock entries if they do not exist, otherwise should reuse existing ones", func(ctx context.Context) {
 		skipIfNotVmtype(define.HyperVVirt, "HyperV test only")
 
 		name := randomString()
@@ -135,7 +136,7 @@ var _ = Describe("podman machine init - windows only", func() {
 
 		// Execute init for the first machine. This should create new HVSock entries
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -157,7 +158,7 @@ var _ = Describe("podman machine init - windows only", func() {
 		// Execute init	for another machine. This should reuse the existing HVSock entries created above
 		otherName := randomString()
 		i = new(initMachine)
-		session, err = mb.setName(otherName).setCmd(i.withImage(mb.imagePath)).run()
+		session, err = mb.setName(otherName).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -180,7 +181,7 @@ var _ = Describe("podman machine init - windows only", func() {
 
 		// remove first created machine
 		rm := rmMachine{}
-		removeSession, err := mb.setName(name).setCmd(rm.withForce()).run()
+		removeSession, err := mb.setName(name).setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession).To(Exit(0))
 
@@ -199,7 +200,7 @@ var _ = Describe("podman machine init - windows only", func() {
 
 		// remove second created machine
 		rm = rmMachine{}
-		removeSession, err = mb.setName(otherName).setCmd(rm.withForce()).run()
+		removeSession, err = mb.setName(otherName).setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession).To(Exit(0))
 

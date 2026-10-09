@@ -16,7 +16,7 @@ import (
 	"go.podman.io/podman/v6/pkg/specgen"
 )
 
-func getSeccompConfig(s *specgen.SpecGenerator, configSpec *spec.Spec, img *libimage.Image) (*spec.LinuxSeccomp, error) {
+func getSeccompConfig(ctx context.Context, s *specgen.SpecGenerator, configSpec *spec.Spec, img *libimage.Image) (*spec.LinuxSeccomp, error) {
 	var seccompConfig *spec.LinuxSeccomp
 	var err error
 	scp, err := seccomp.LookupPolicy(s.SeccompPolicy)
@@ -28,7 +28,7 @@ func getSeccompConfig(s *specgen.SpecGenerator, configSpec *spec.Spec, img *libi
 		if img == nil {
 			return nil, errors.New("cannot read seccomp profile without a valid image")
 		}
-		labels, err := img.Labels(context.Background())
+		labels, err := img.Labels(ctx)
 		if err != nil {
 			return nil, err
 		}

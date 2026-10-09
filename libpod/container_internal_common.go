@@ -248,7 +248,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 		}
 	}()
 
-	if err := c.makeBindMounts(); err != nil {
+	if err := c.makeBindMounts(ctx); err != nil {
 		return nil, nil, err
 	}
 
@@ -304,7 +304,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 
 	// Add named volumes
 	for _, namedVol := range c.config.NamedVolumes {
-		volume, err := c.runtime.GetVolume(namedVol.Name)
+		volume, err := c.runtime.GetVolume(ctx, namedVol.Name)
 		if err != nil {
 			return nil, nil, fmt.Errorf("retrieving volume %s to add to container %s: %w", namedVol.Name, c.ID(), err)
 		}
@@ -744,7 +744,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	}
 
 	// Add shared namespaces from other containers. Also handles userns=auto
-	if err := c.addSharedNamespaces(&g); err != nil {
+	if err := c.addSharedNamespaces(ctx, &g); err != nil {
 		return nil, nil, err
 	}
 
@@ -1057,9 +1057,9 @@ func (c *Container) mountNotifySocket(g generate.Generator) error {
 	return nil
 }
 
-func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) error {
+func (c *Container) addCheckpointImageMetadata(ctx context.Context, importBuilder *buildah.Builder) error {
 	// Get information about host environment
-	hostInfo, err := c.Runtime().hostInfo()
+	hostInfo, err := c.Runtime().hostInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("getting host info: %w", err)
 	}
@@ -1153,17 +1153,17 @@ func (c *Container) createCheckpointImage(ctx context.Context, options Container
 
 	options.TargetFile = path.Join(tmpDir, "checkpoint.tar")
 
-	if err := c.exportCheckpoint(options); err != nil {
+	if err := c.exportCheckpoint(ctx, options); err != nil {
 		return err
 	}
 
 	// Copy checkpoint from temporary tar file in the image
 	addAndCopyOptions := buildah.AddAndCopyOptions{}
-	if err := importBuilder.Add("", true, addAndCopyOptions, options.TargetFile); err != nil {
+	if err := importBuilder.AddContext(ctx, "", true, addAndCopyOptions, options.TargetFile); err != nil {
 		return err
 	}
 
-	if err := c.addCheckpointImageMetadata(importBuilder); err != nil {
+	if err := c.addCheckpointImageMetadata(ctx, importBuilder); err != nil {
 		return err
 	}
 
@@ -1181,7 +1181,7 @@ func (c *Container) createCheckpointImage(ctx context.Context, options Container
 	return nil
 }
 
-func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
+func (c *Container) exportCheckpoint(ctx context.Context, options ContainerCheckpointOptions) error {
 	if len(c.Dependencies()) == 1 {
 		// Check if the dependency is an infra container. If it is we can checkpoint
 		// the container out of the Pod.
@@ -1259,7 +1259,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 				return fmt.Errorf("creating %q: %w", volumeTarFileFullPath, err)
 			}
 
-			volume, err := c.runtime.GetVolume(v.Name)
+			volume, err := c.runtime.GetVolume(ctx, v.Name)
 			if err != nil {
 				return err
 			}
@@ -1326,11 +1326,11 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 	return nil
 }
 
-func (c *Container) checkpointRestoreSupported(version int) error {
+func (c *Container) checkpointRestoreSupported(ctx context.Context, version int) error {
 	if err := criu.CheckForCriu(version); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 		return err
 	}
-	if !c.ociRuntime.SupportsCheckpoint() {
+	if !c.ociRuntime.SupportsCheckpoint(ctx) {
 		return errors.New("configured runtime does not support checkpoint/restore")
 	}
 	return nil
@@ -1343,7 +1343,7 @@ func (c *Container) checkpointRestoreSupported(version int) error {
 //
 // Freezing is best-effort: containers without cgroups cannot be frozen and a
 // freeze failure is non-fatal.
-func (c *Container) freezeForCheckpoint(options ContainerCheckpointOptions) func() {
+func (c *Container) freezeForCheckpoint(ctx context.Context, options ContainerCheckpointOptions) func() {
 	noop := func() {}
 
 	if !options.KeepRunning || options.PreCheckPoint {
@@ -1358,7 +1358,7 @@ func (c *Container) freezeForCheckpoint(options ContainerCheckpointOptions) func
 	// Use c.pause()/c.unpause() so the paused state is recorded in the
 	// database. If the checkpoint is then interrupted (e.g. by SIGKILL) Podman
 	// still knows the container is frozen and can recover it to a sane state.
-	if err := c.pause(); err != nil {
+	if err := c.pause(ctx); err != nil {
 		// Do not hard-fail a previously working checkpoint: warn that
 		// consistency cannot be guaranteed and continue.
 		logrus.Warnf("Freezing container %s during checkpoint failed, the file system of a --leave-running checkpoint may be inconsistent with CRIU images: %v", c.ID(), err)
@@ -1366,7 +1366,7 @@ func (c *Container) freezeForCheckpoint(options ContainerCheckpointOptions) func
 	}
 
 	return func() {
-		if err := c.unpause(); err != nil {
+		if err := c.unpause(ctx); err != nil {
 			logrus.Errorf("Thawing container %s after checkpoint: %v", c.ID(), err)
 		}
 	}
@@ -1386,7 +1386,7 @@ func (c *Container) freezeForCheckpoint(options ContainerCheckpointOptions) func
 // Containers running without cgroups cannot be frozen and keep the previous,
 // weaker guarantee. A freeze failure is non-fatal so existing setups keep working.
 func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointOptions) (*define.CRIUCheckpointRestoreStatistics, int64, error) {
-	if err := c.checkpointRestoreSupported(criu.MinCriuVersion); err != nil {
+	if err := c.checkpointRestoreSupported(ctx, criu.MinCriuVersion); err != nil {
 		return nil, 0, err
 	}
 
@@ -1413,9 +1413,9 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 	// Freeze a live checkpoint so its file system is captured at the same
 	// instant as the memory image; the deferred thaw runs once the checkpoint
 	// has been written.
-	defer c.freezeForCheckpoint(options)()
+	defer c.freezeForCheckpoint(ctx, options)()
 
-	runtimeCheckpointDuration, err := c.ociRuntime.CheckpointContainer(c, options)
+	runtimeCheckpointDuration, err := c.ociRuntime.CheckpointContainer(ctx, c, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1451,7 +1451,7 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 		return nil, 0, err
 	}
 
-	defer c.newContainerEvent(events.Checkpoint)
+	defer c.newContainerEvent(ctx, events.Checkpoint)
 
 	// There is a bug from criu: https://github.com/checkpoint-restore/criu/issues/116
 	// We have to change the symbolic link from absolute path to relative path
@@ -1463,7 +1463,7 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 	}
 
 	if options.TargetFile != "" {
-		if err := c.exportCheckpoint(options); err != nil {
+		if err := c.exportCheckpoint(ctx, options); err != nil {
 			return nil, 0, err
 		}
 	} else {
@@ -1621,11 +1621,11 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 		}
 		return criu.PodCriuVersion
 	}()
-	if err := c.checkpointRestoreSupported(minCriuVersion); err != nil {
+	if err := c.checkpointRestoreSupported(ctx, minCriuVersion); err != nil {
 		return nil, 0, err
 	}
 
-	if options.Pod != "" && !crutils.CRRuntimeSupportsPodCheckpointRestore(c.ociRuntime.Path()) {
+	if options.Pod != "" && !crutils.CRRuntimeSupportsPodCheckpointRestore(ctx, c.ociRuntime.Path()) {
 		return nil, 0, fmt.Errorf("runtime %s does not support pod restore", c.ociRuntime.Path())
 	}
 
@@ -1765,7 +1765,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 			return nil, 0, fmt.Errorf("pod %q cannot be retrieved: %w", options.Pod, err)
 		}
 
-		infraContainer, err := pod.InfraContainer()
+		infraContainer, err := pod.InfraContainer(ctx)
 		if err != nil {
 			return nil, 0, fmt.Errorf("cannot retrieved infra container from pod %q: %w", options.Pod, err)
 		}
@@ -1834,7 +1834,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 		}
 	}
 
-	if err := c.makeBindMounts(); err != nil {
+	if err := c.makeBindMounts(ctx); err != nil {
 		return nil, 0, err
 	}
 
@@ -1898,7 +1898,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 			}
 			defer volumeFile.Close()
 
-			volume, err := c.runtime.GetVolume(v.Name)
+			volume, err := c.runtime.GetVolume(ctx, v.Name)
 			if err != nil {
 				return nil, 0, fmt.Errorf("failed to retrieve volume %s: %w", v.Name, err)
 			}
@@ -1932,11 +1932,11 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 	// However restore starts the container right away. This means that if we do the call afterwards there is a
 	// short interval where the file is still empty. Thus I decided to call it before which makes it not working
 	// with PostConfigureNetNS (userns) but as this does not work anyway today so I don't see it as problem.
-	if err := c.completeNetworkSetup(); err != nil {
+	if err := c.completeNetworkSetup(ctx); err != nil {
 		return nil, 0, fmt.Errorf("complete network setup: %w", err)
 	}
 
-	runtimeRestoreDuration, err = c.ociRuntime.CreateContainer(c, &options)
+	runtimeRestoreDuration, err = c.ociRuntime.CreateContainer(ctx, c, &options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -2019,7 +2019,7 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 }
 
 // Retrieves a container's "root" net namespace container dependency.
-func (c *Container) getRootNetNsDepCtr() (depCtr *Container, err error) {
+func (c *Container) getRootNetNsDepCtr(ctx context.Context) (depCtr *Container, err error) {
 	containersVisited := map[string]int{c.config.ID: 1}
 	nextCtr := c.config.NetNsCtr
 	for nextCtr != "" {
@@ -2029,7 +2029,7 @@ func (c *Container) getRootNetNsDepCtr() (depCtr *Container, err error) {
 		}
 		containersVisited[nextCtr] = 1
 
-		depCtr, err = c.runtime.state.Container(nextCtr)
+		depCtr, err = c.runtime.state.Container(ctx, nextCtr)
 		if err != nil {
 			return nil, fmt.Errorf("fetching dependency %s of container %s: %w", c.config.NetNsCtr, c.ID(), err)
 		}
@@ -2058,11 +2058,11 @@ func (c *Container) mountIntoRootDirs(mountName string, mountPath string) error 
 }
 
 // Make standard bind mounts to include in the container
-func (c *Container) makeBindMounts() error {
+func (c *Container) makeBindMounts(ctx context.Context) error {
 	if c.state.BindMounts == nil {
 		c.state.BindMounts = make(map[string]string)
 	}
-	netDisabled, err := c.NetworkDisabled()
+	netDisabled, err := c.NetworkDisabled(ctx)
 	if err != nil {
 		return err
 	}
@@ -2091,7 +2091,7 @@ func (c *Container) makeBindMounts() error {
 			// We want /etc/resolv.conf and /etc/hosts from the
 			// other container. Unless we're not creating both of
 			// them.
-			depCtr, err := c.getRootNetNsDepCtr()
+			depCtr, err := c.getRootNetNsDepCtr(ctx)
 			if err != nil {
 				return fmt.Errorf("fetching network namespace dependency container for container %s: %w", c.ID(), err)
 			}
@@ -2192,7 +2192,7 @@ func (c *Container) makeBindMounts() error {
 		}
 	}
 
-	runPath, err := c.getPlatformRunPath()
+	runPath, err := c.getPlatformRunPath(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot determine run directory for container: %w", err)
 	}
@@ -2274,7 +2274,7 @@ rootless=%d
 		}
 	}
 
-	return c.makeHostnameBindMount()
+	return c.makeHostnameBindMount(ctx)
 }
 
 // createResolvConf create the resolv.conf file and bind mount it
@@ -2455,9 +2455,9 @@ func getLocalhostHostEntry(c *Container) etchosts.HostEntries {
 }
 
 // getHostsEntries returns the container ip host entries for the correct netmode
-func (c *Container) getHostsEntries() etchosts.HostEntries {
+func (c *Container) getHostsEntries(ctx context.Context) etchosts.HostEntries {
 	var entries etchosts.HostEntries
-	names := []string{c.Hostname(), c.config.Name}
+	names := []string{c.Hostname(ctx), c.config.Name}
 	switch {
 	case c.config.NetMode.IsBridge():
 		entries = etchosts.GetNetworkHostEntries(c.state.NetworkStatus, names...)
@@ -2483,13 +2483,13 @@ func (c *Container) createHostsFile() error {
 	return c.bindMountRootFile(targetFile, config.DefaultHostsFile)
 }
 
-func (c *Container) addHosts() error {
+func (c *Container) addHosts(ctx context.Context) error {
 	targetFile, ok := c.state.BindMounts[config.DefaultHostsFile]
 	if !ok {
 		// no host file nothing to do
 		return nil
 	}
-	containerIPsEntries := c.getHostsEntries()
+	containerIPsEntries := c.getHostsEntries(ctx)
 
 	// Consider container level BaseHostsFile configuration first.
 	// If it is empty, fallback to containers.conf level configuration.
@@ -2531,7 +2531,7 @@ func (c *Container) addHosts() error {
 		NetworkInterface: c.runtime.network,
 		Exclude:          exclude,
 		PreferIP:         preferIP,
-		HostNetwork:      c.HostNetwork(),
+		HostNetwork:      c.HostNetwork(ctx),
 	})
 
 	return etchosts.New(&etchosts.Params{
@@ -3075,8 +3075,8 @@ func hasIdmapOption(options []string) bool {
 }
 
 // Fix ownership and permissions of the specified volume if necessary.
-func (c *Container) fixVolumePermissions(v *ContainerNamedVolume) error {
-	vol, err := c.runtime.state.Volume(v.Name)
+func (c *Container) fixVolumePermissions(ctx context.Context, v *ContainerNamedVolume) error {
+	vol, err := c.runtime.state.Volume(ctx, v.Name)
 	if err != nil {
 		return fmt.Errorf("retrieving named volume %s for container %s: %w", v.Name, c.ID(), err)
 	}

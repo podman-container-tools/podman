@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -34,7 +35,7 @@ func readPIDFileWithRetry(f define.VMFile) ([]byte, error) {
 }
 
 // CleanupGVProxy reads the --pid-file for gvproxy attempts to stop it
-func CleanupGVProxy(f define.VMFile) error {
+func CleanupGVProxy(ctx context.Context, f define.VMFile) error {
 	gvPid, err := readPIDFileWithRetry(f)
 	if err != nil {
 		// The file will also be removed by gvproxy when it exits so
@@ -48,12 +49,12 @@ func CleanupGVProxy(f define.VMFile) error {
 	if err != nil {
 		return fmt.Errorf("unable to convert pid to integer: %w", err)
 	}
-	return cleanupGVProxy(proxyPid, f)
+	return cleanupGVProxy(ctx, proxyPid, f)
 }
 
-func cleanupGVProxy(proxyPID int, f define.VMFile) error {
+func cleanupGVProxy(ctx context.Context, proxyPID int, f define.VMFile) error {
 	if err := waitOnProcess(proxyPID); err != nil {
 		return err
 	}
-	return removeGVProxyPIDFile(f)
+	return removeGVProxyPIDFile(ctx, f)
 }

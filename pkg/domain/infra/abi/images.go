@@ -172,7 +172,7 @@ func (ir *ImageEngine) Mount(ctx context.Context, nameOrIDs []string, opts entit
 			return nil, fmt.Errorf("cannot mount using driver %s in rootless mode", driver)
 		}
 
-		became, ret, err := rootless.BecomeRootInUserNS("")
+		became, ret, err := rootless.BecomeRootInUserNS(ctx, "")
 		if err != nil {
 			return nil, err
 		}
@@ -695,9 +695,9 @@ func (ir *ImageEngine) Remove(ctx context.Context, images []string, opts entitie
 }
 
 // Shutdown Libpod engine
-func (ir *ImageEngine) Shutdown(_ context.Context) {
+func (ir *ImageEngine) Shutdown(ctx context.Context) {
 	shutdownSync.Do(func() {
-		_ = ir.Libpod.Shutdown(false)
+		_ = ir.Libpod.Shutdown(ctx, false)
 	})
 }
 
@@ -793,7 +793,7 @@ func (ir *ImageEngine) Sign(ctx context.Context, names []string, options entitie
 }
 
 func (ir *ImageEngine) Scp(ctx context.Context, src, dst string, opts entities.ImageScpOptions) (*entities.ImageScpReport, error) {
-	report, err := domainUtils.ExecuteTransfer(src, dst, opts.ScpExecuteTransferOptions)
+	report, err := domainUtils.ExecuteTransfer(ctx, src, dst, opts.ScpExecuteTransferOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +809,7 @@ func (ir *ImageEngine) Scp(ctx context.Context, src, dst string, opts entities.I
 	return &entities.ImageScpReport{}, nil
 }
 
-func Transfer(_ context.Context, source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, opts entities.ScpTransferOptions) (*entities.ScpTransferReport, error) {
+func Transfer(ctx context.Context, source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, opts entities.ScpTransferOptions) (*entities.ScpTransferReport, error) {
 	if source.User == "" {
 		return nil, fmt.Errorf("you must define a user when transferring from root to rootless storage: %w", define.ErrInvalidArg)
 	}
@@ -819,13 +819,13 @@ func Transfer(_ context.Context, source entities.ScpTransferImageOptions, dest e
 	}
 	rep := entities.ScpTransferReport{}
 	if rootless.IsRootless() && (len(dest.User) == 0 || dest.User == "root") { // if we are rootless and do not have a destination user we can just use sudo
-		return &rep, transferRootless(source, dest, podman, opts)
+		return &rep, transferRootless(ctx, source, dest, podman, opts)
 	}
-	return &rep, transferRootful(source, dest, podman, opts)
+	return &rep, transferRootful(ctx, source, dest, podman, opts)
 }
 
 // TransferRootless creates new podman processes using exec.Command and sudo, transferring images between the given source and destination users
-func transferRootless(source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, podman string, opts entities.ScpTransferOptions) error {
+func transferRootless(ctx context.Context, source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, podman string, opts entities.ScpTransferOptions) error {
 	var cmdSave *exec.Cmd
 	saveCommand := slices.Clone(opts.ParentFlags)
 	loadCommand := slices.Clone(opts.ParentFlags)
@@ -844,9 +844,9 @@ func transferRootless(source entities.ScpTransferImageOptions, dest entities.Scp
 	loadCommand = append(loadCommand, []string{"--input", dest.File}...)
 
 	if source.User == "root" {
-		cmdSave = exec.Command("sudo", podman)
+		cmdSave = exec.CommandContext(ctx, "sudo", podman)
 	} else {
-		cmdSave = exec.Command(podman)
+		cmdSave = exec.CommandContext(ctx, podman)
 	}
 	cmdSave = domainUtils.CreateSCPCommand(cmdSave, saveCommand)
 	logrus.Debugf("Executing save command: %q", cmdSave)
@@ -857,20 +857,20 @@ func transferRootless(source entities.ScpTransferImageOptions, dest entities.Scp
 
 	var cmdLoad *exec.Cmd
 	if source.User != "root" {
-		cmdLoad = exec.Command("sudo", podman)
+		cmdLoad = exec.CommandContext(ctx, "sudo", podman)
 	} else {
-		cmdLoad = exec.Command(podman)
+		cmdLoad = exec.CommandContext(ctx, podman)
 	}
 	cmdLoad = domainUtils.CreateSCPCommand(cmdLoad, loadCommand)
 	logrus.Debugf("Executing load command: %q", cmdLoad)
 	if len(dest.Tag) > 0 {
-		return domainUtils.ScpTag(cmdLoad, podman, dest)
+		return domainUtils.ScpTag(ctx, cmdLoad, podman, dest)
 	}
 	return cmdLoad.Run()
 }
 
 // transferRootful creates new podman processes using exec.Command and a new uid/gid alongside a cleared environment
-func transferRootful(source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, podman string, opts entities.ScpTransferOptions) error {
+func transferRootful(ctx context.Context, source entities.ScpTransferImageOptions, dest entities.ScpTransferImageOptions, podman string, opts entities.ScpTransferOptions) error {
 	basicCommand := make([]string, 0, len(opts.ParentFlags)+1)
 	basicCommand = append(basicCommand, podman)
 	basicCommand = append(basicCommand, opts.ParentFlags...)
@@ -924,17 +924,17 @@ func transferRootful(source entities.ScpTransferImageOptions, dest entities.ScpT
 			return err
 		}
 	}
-	_, err = execTransferPodman(uSave, saveCommand, false)
+	_, err = execTransferPodman(ctx, uSave, saveCommand, false)
 	if err != nil {
 		return err
 	}
-	out, err := execTransferPodman(uLoad, loadCommand, len(dest.Tag) > 0)
+	out, err := execTransferPodman(ctx, uLoad, loadCommand, len(dest.Tag) > 0)
 	if err != nil {
 		return err
 	}
 	if out != nil {
 		image := domainUtils.ExtractImage(out)
-		_, err := execTransferPodman(uLoad, []string{podman, "tag", image, dest.Tag}, false)
+		_, err := execTransferPodman(ctx, uLoad, []string{podman, "tag", image, dest.Tag}, false)
 		return err
 	}
 	return nil
@@ -947,8 +947,8 @@ func lookupUser(u string) (*user.User, error) {
 	return user.Lookup(u)
 }
 
-func execTransferPodman(execUser *user.User, command []string, needToTag bool) ([]byte, error) {
-	cmdLogin, err := domainUtils.LoginUser(execUser.Username)
+func execTransferPodman(ctx context.Context, execUser *user.User, command []string, needToTag bool) ([]byte, error) {
+	cmdLogin, err := domainUtils.LoginUser(ctx, execUser.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -958,7 +958,7 @@ func execTransferPodman(execUser *user.User, command []string, needToTag bool) (
 		_ = cmdLogin.Wait()
 	}()
 
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TERM=" + os.Getenv("TERM")}
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout

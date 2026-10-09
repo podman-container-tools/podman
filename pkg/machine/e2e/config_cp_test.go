@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type cpMachine struct {
 	quiet bool
 	src   string
@@ -8,7 +10,7 @@ type cpMachine struct {
 	cmd []string
 }
 
-func (c *cpMachine) buildCmd(_ *machineTestBuilder) []string {
+func (c *cpMachine) buildCmd(_ context.Context, _ *machineTestBuilder) []string {
 	cmd := []string{"machine", "cp"}
 
 	if c.quiet {

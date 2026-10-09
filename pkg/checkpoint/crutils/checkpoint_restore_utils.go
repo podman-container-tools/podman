@@ -2,6 +2,7 @@ package crutils
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -216,10 +217,10 @@ func CRCreateFileWithLabel(directory, fileName, fileLabel string) error {
 // supports checkpointing. The checkpoint restore interface has no definition
 // but crun implements all commands just as runc does. What runc does is the
 // official definition of the checkpoint/restore interface.
-func CRRuntimeSupportsCheckpointRestore(runtimePath string) bool {
+func CRRuntimeSupportsCheckpointRestore(ctx context.Context, runtimePath string) bool {
 	// Check if the runtime implements checkpointing. Currently only
 	// runc's and crun's checkpoint/restore implementation is supported.
-	cmd := exec.Command(runtimePath, "checkpoint", "--help")
+	cmd := exec.CommandContext(ctx, runtimePath, "checkpoint", "--help")
 	if err := cmd.Start(); err != nil {
 		return false
 	}
@@ -233,8 +234,8 @@ func CRRuntimeSupportsCheckpointRestore(runtimePath string) bool {
 // supports restoring into existing Pods. The runtime needs to support
 // the CRIU option --lsm-mount-context and the existence of this is checked
 // by this function. In addition it is necessary to at least have CRIU 3.16.
-func CRRuntimeSupportsPodCheckpointRestore(runtimePath string) bool {
-	cmd := exec.Command(runtimePath, "restore", "--lsm-mount-context")
+func CRRuntimeSupportsPodCheckpointRestore(ctx context.Context, runtimePath string) bool {
+	cmd := exec.CommandContext(ctx, runtimePath, "restore", "--lsm-mount-context")
 	out, _ := cmd.CombinedOutput()
 
 	// check for runc

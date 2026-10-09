@@ -3,6 +3,7 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -48,7 +49,7 @@ func GetByVMType(resolvedVMType define.VMType) (vmconfigs.VMProvider, error) {
 	return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
 }
 
-func IsInstalled(provider define.VMType) (bool, error) {
+func IsInstalled(_ context.Context, provider define.VMType) (bool, error) {
 	switch provider {
 	case define.QemuVirt:
 		cfg, err := config.Default()

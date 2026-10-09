@@ -4,6 +4,7 @@ package rootless
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -87,7 +88,7 @@ func GetRootlessGID() int {
 	return unshare.GetRootlessGID()
 }
 
-func tryMappingTool(uid bool, pid int, hostID int, mappings []idtools.IDMap) error {
+func tryMappingTool(ctx context.Context, uid bool, pid int, hostID int, mappings []idtools.IDMap) error {
 	tool := "newuidmap"
 	mode := os.ModeSetuid
 	cap := capability.CAP_SETUID
@@ -107,7 +108,7 @@ func tryMappingTool(uid bool, pid int, hostID int, mappings []idtools.IDMap) err
 		return append(l, strconv.Itoa(a), strconv.Itoa(b), strconv.Itoa(c))
 	}
 
-	args := []string{path, strconv.Itoa(pid)}
+	args := []string{strconv.Itoa(pid)}
 	args = appendTriplet(args, 0, hostID, 1)
 	for _, i := range mappings {
 		if hostID >= i.HostID && hostID < i.HostID+i.Size {
@@ -121,10 +122,7 @@ func tryMappingTool(uid bool, pid int, hostID int, mappings []idtools.IDMap) err
 		}
 		args = appendTriplet(args, i.ContainerID+1, i.HostID, i.Size)
 	}
-	cmd := exec.Cmd{
-		Path: path,
-		Args: args,
-	}
+	cmd := exec.CommandContext(ctx, path, args...)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		logrus.Errorf("running `%s`: %s", strings.Join(args, " "), output)
@@ -212,7 +210,7 @@ func copyMappings(from, to string) error {
 	return os.WriteFile(to, content, 0o600)
 }
 
-func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
+func becomeRootInUserNS(ctx context.Context, stateDir string) (_ bool, _ int, retErr error) {
 	hasCapSysAdmin, err := unshare.HasCapSysAdmin()
 	if err != nil {
 		return false, 0, err
@@ -300,7 +298,7 @@ func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
 	}
 
 	if uids != nil && !uidsMapped {
-		err := tryMappingTool(true, pid, os.Geteuid(), uids)
+		err := tryMappingTool(ctx, true, pid, os.Geteuid(), uids)
 		// If some mappings were specified, do not ignore the error
 		if err != nil && len(uids) > 0 {
 			return false, -1, err
@@ -328,7 +326,7 @@ func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
 		gidsMapped = true
 	}
 	if gids != nil && !gidsMapped {
-		err := tryMappingTool(false, pid, os.Getegid(), gids)
+		err := tryMappingTool(ctx, false, pid, os.Getegid(), gids)
 		// If some mappings were specified, do not ignore the error
 		if err != nil && len(gids) > 0 {
 			return false, -1, err
@@ -418,8 +416,8 @@ func waitAndProxySignalsToChild(pid C.int) (bool, int, error) {
 // into a new user namespace and the return code from the re-executed podman process.
 // If podman was re-executed the caller needs to propagate the error code returned by the child
 // process.
-func BecomeRootInUserNS(stateDir string) (bool, int, error) {
-	return becomeRootInUserNS(stateDir)
+func BecomeRootInUserNS(ctx context.Context, stateDir string) (bool, int, error) {
+	return becomeRootInUserNS(ctx, stateDir)
 }
 
 // isPauseProcess checks if the given PID has _PODMAN_PAUSE=1 in its environment.

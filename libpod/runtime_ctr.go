@@ -66,7 +66,7 @@ func (r *Runtime) PrepareVolumeOnCreateContainer(ctx context.Context, ctr *Conta
 	}
 
 	defer func() {
-		if err := ctr.cleanupStorage(); err != nil {
+		if err := ctr.cleanupStorage(ctx); err != nil {
 			logrus.Errorf("Cleaning up container storage %s: %v", ctr.ID(), err)
 		}
 	}()
@@ -116,7 +116,7 @@ func (r *Runtime) RestoreContainer(ctx context.Context, rSpec *spec.Spec, config
 
 // RenameContainer renames the given container.
 // Returns a copy of the container that has been renamed if successful.
-func (r *Runtime) RenameContainer(_ context.Context, ctr *Container, newName string) (*Container, error) {
+func (r *Runtime) RenameContainer(ctx context.Context, ctr *Container, newName string) (*Container, error) {
 	ctr.lock.Lock()
 	defer ctr.lock.Unlock()
 
@@ -163,7 +163,7 @@ func (r *Runtime) RenameContainer(_ context.Context, ctr *Container, newName str
 		return nil, err
 	}
 
-	ctr.newContainerEvent(events.Rename)
+	ctr.newContainerEvent(ctx, events.Rename)
 	return ctr, nil
 }
 
@@ -330,7 +330,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	}
 
 	// Validate the container
-	if err := ctr.validate(); err != nil {
+	if err := ctr.validate(ctx); err != nil {
 		return nil, err
 	}
 	if ctr.config.IsInfra {
@@ -479,7 +479,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	}
 	defer func() {
 		if retErr != nil {
-			if err := ctr.teardownStorage(); err != nil {
+			if err := ctr.teardownStorage(ctx); err != nil {
 				logrus.Errorf("Removing partially-created container root filesystem: %v", err)
 			}
 		}
@@ -516,7 +516,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 			isAnonymous = true
 		} else {
 			// Check if it already exists
-			_, err := r.state.Volume(vol.Name)
+			_, err := r.state.Volume(ctx, vol.Name)
 			if err == nil {
 				// The volume exists, we're good
 				// Make sure to drop all volume-opt options as they only apply to
@@ -618,11 +618,11 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	}
 
 	if ctr.runtime.config.Engine.EventsContainerCreateInspectData {
-		if err := ctr.newContainerEventWithInspectData(events.Create, define.HealthCheckResults{}, true); err != nil {
+		if err := ctr.newContainerEventWithInspectData(ctx, events.Create, define.HealthCheckResults{}, true); err != nil {
 			return nil, err
 		}
 	} else {
-		ctr.newContainerEvent(events.Create)
+		ctr.newContainerEvent(ctx, events.Create)
 	}
 	return ctr, nil
 }
@@ -880,7 +880,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 	}
 
 	if c.state.State == define.ContainerStatePaused {
-		if err := c.ociRuntime.KillContainer(c, 9, false); err != nil {
+		if err := c.ociRuntime.KillContainer(ctx, c, 9, false); err != nil {
 			retErr = err
 			return removedCtrs, removedPods, retErr
 		}
@@ -908,7 +908,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 			}
 		}
 		for _, depCtr := range deps {
-			dep, err := r.GetContainer(depCtr)
+			dep, err := r.GetContainer(ctx, depCtr)
 			if err != nil {
 				retErr = err
 				return removedCtrs, removedPods, retErr
@@ -945,7 +945,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 		}
 		// Ignore ErrConmonDead - we couldn't retrieve the container's
 		// exit code properly, but it's still stopped.
-		if err := c.stop(time); err != nil && !errors.Is(err, define.ErrConmonDead) {
+		if err := c.stop(ctx, time); err != nil && !errors.Is(err, define.ErrConmonDead) {
 			retErr = fmt.Errorf("cannot remove container %s as it could not be stopped: %w", c.ID(), err)
 			return removedCtrs, removedPods, retErr
 		}
@@ -987,7 +987,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 	// removing the exec sessions might temporarily unlock the container's lock.  Using it
 	// after setting the state to ContainerStateRemoving will prevent that the container is
 	// restarted
-	if err := c.removeAllExecSessions(); err != nil {
+	if err := c.removeAllExecSessions(ctx); err != nil {
 		reportErrorf("removing exec sessions: %w", err)
 	}
 
@@ -1002,7 +1002,7 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 	}
 
 	// Stop the container's storage
-	if err := c.teardownStorage(); err != nil {
+	if err := c.teardownStorage(ctx); err != nil {
 		reportErrorf("cleaning up storage: %w", err)
 	}
 
@@ -1028,14 +1028,14 @@ func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmO
 	// Set container as invalid so it can no longer be used
 	c.valid = false
 
-	c.newContainerEvent(events.Remove)
+	c.newContainerEvent(ctx, events.Remove)
 
 	if !opts.RemoveVolume {
 		return removedCtrs, removedPods, retErr
 	}
 
 	for _, v := range c.config.NamedVolumes {
-		if volume, err := runtime.state.Volume(v.Name); err == nil {
+		if volume, err := runtime.state.Volume(ctx, v.Name); err == nil {
 			if !volume.Anonymous() {
 				continue
 			}
@@ -1089,7 +1089,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 	}
 
 	// Begin by trying a normal removal. Valid containers will be removed normally.
-	tmpCtr, err := r.state.Container(id)
+	tmpCtr, err := r.state.Container(ctx, id)
 	if err == nil {
 		logrus.Infof("Container %s successfully retrieved from state, attempting normal removal", id)
 		// Assume force = true for the evict case
@@ -1159,7 +1159,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 	}
 
 	if c.IsService() {
-		report, err := c.canStopServiceContainer()
+		report, err := c.canStopServiceContainer(ctx)
 		if err != nil {
 			return id, err
 		}
@@ -1180,7 +1180,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 	}
 
 	// Remove container from c/storage
-	if err := r.RemoveStorageContainer(id, true); err != nil {
+	if err := r.RemoveStorageContainer(ctx, id, true); err != nil {
 		if cleanupErr == nil {
 			cleanupErr = err
 		}
@@ -1191,7 +1191,7 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 	}
 
 	for _, v := range c.config.NamedVolumes {
-		if volume, err := r.state.Volume(v.Name); err == nil {
+		if volume, err := r.state.Volume(ctx, v.Name); err == nil {
 			if !volume.Anonymous() {
 				continue
 			}
@@ -1205,12 +1205,12 @@ func (r *Runtime) evictContainer(ctx context.Context, idOrName string, removeVol
 }
 
 // GetContainer retrieves a container by its ID
-func (r *Runtime) GetContainer(id string) (*Container, error) {
+func (r *Runtime) GetContainer(ctx context.Context, id string) (*Container, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	return r.state.Container(id)
+	return r.state.Container(ctx, id)
 }
 
 // HasContainer checks if a container with the given ID is present
@@ -1224,11 +1224,11 @@ func (r *Runtime) HasContainer(id string) (bool, error) {
 
 // LookupContainer looks up a container by its name or a partial ID
 // If a partial ID is not unique, an error will be returned
-func (r *Runtime) LookupContainer(idOrName string) (*Container, error) {
+func (r *Runtime) LookupContainer(ctx context.Context, idOrName string) (*Container, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
-	return r.state.LookupContainer(idOrName)
+	return r.state.LookupContainer(ctx, idOrName)
 }
 
 // LookupContainerId looks up a container id by its name or a partial ID
@@ -1245,12 +1245,12 @@ func (r *Runtime) LookupContainerID(idOrName string) (string, error) {
 // Filters can be provided which will determine what containers are included in
 // the output. Multiple filters are handled by ANDing their output, so only
 // containers matching all filters are returned
-func (r *Runtime) GetContainers(loadState bool, filters ...ContainerFilter) ([]*Container, error) {
+func (r *Runtime) GetContainers(ctx context.Context, loadState bool, filters ...ContainerFilter) ([]*Container, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	ctrs, err := r.state.AllContainers(loadState)
+	ctrs, err := r.state.AllContainers(ctx, loadState)
 	if err != nil {
 		return nil, err
 	}
@@ -1282,25 +1282,25 @@ func applyContainersFilters(containers []*Container, filters ...ContainerFilter)
 }
 
 // GetAllContainers is a helper function for GetContainers
-func (r *Runtime) GetAllContainers() ([]*Container, error) {
-	return r.state.AllContainers(false)
+func (r *Runtime) GetAllContainers(ctx context.Context) ([]*Container, error) {
+	return r.state.AllContainers(ctx, false)
 }
 
 // GetRunningContainers is a helper function for GetContainers
-func (r *Runtime) GetRunningContainers() ([]*Container, error) {
+func (r *Runtime) GetRunningContainers(ctx context.Context) ([]*Container, error) {
 	running := func(c *Container) bool {
 		state, _ := c.State()
 		return state == define.ContainerStateRunning
 	}
-	return r.GetContainers(false, running)
+	return r.GetContainers(ctx, false, running)
 }
 
 // GetContainersByList is a helper function for GetContainers
 // which takes a []string of container IDs or names
-func (r *Runtime) GetContainersByList(containers []string) ([]*Container, error) {
+func (r *Runtime) GetContainersByList(ctx context.Context, containers []string) ([]*Container, error) {
 	ctrs := make([]*Container, 0, len(containers))
 	for _, inputContainer := range containers {
-		ctr, err := r.LookupContainer(inputContainer)
+		ctr, err := r.LookupContainer(ctx, inputContainer)
 		if err != nil {
 			return ctrs, fmt.Errorf("unable to look up container %s: %w", inputContainer, err)
 		}
@@ -1310,10 +1310,10 @@ func (r *Runtime) GetContainersByList(containers []string) ([]*Container, error)
 }
 
 // GetLatestContainer returns a container object of the latest created container.
-func (r *Runtime) GetLatestContainer() (*Container, error) {
+func (r *Runtime) GetLatestContainer(ctx context.Context) (*Container, error) {
 	lastCreatedIndex := -1
 	var lastCreatedTime time.Time
-	ctrs, err := r.GetAllContainers()
+	ctrs, err := r.GetAllContainers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find latest container: %w", err)
 	}
@@ -1332,7 +1332,7 @@ func (r *Runtime) GetLatestContainer() (*Container, error) {
 
 // GetExecSessionContainer gets the container that a given exec session ID is
 // attached to.
-func (r *Runtime) GetExecSessionContainer(id string) (*Container, error) {
+func (r *Runtime) GetExecSessionContainer(ctx context.Context, id string) (*Container, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
@@ -1342,12 +1342,12 @@ func (r *Runtime) GetExecSessionContainer(id string) (*Container, error) {
 		return nil, err
 	}
 
-	return r.state.Container(ctrID)
+	return r.state.Container(ctx, ctrID)
 }
 
-// PruneContainers removes stopped and exited containers from localstorage.  A set of optional filters
+// PruneContainers removes stopped and exited containers from local storage.  A set of optional filters
 // can be provided to be more granular.
-func (r *Runtime) PruneContainers(filterFuncs []ContainerFilter) ([]*reports.PruneReport, error) {
+func (r *Runtime) PruneContainers(ctx context.Context, filterFuncs []ContainerFilter) ([]*reports.PruneReport, error) {
 	preports := make([]*reports.PruneReport, 0)
 	// We add getting the exited and stopped containers via a filter
 	containerStateFilter := func(c *Container) bool {
@@ -1366,7 +1366,7 @@ func (r *Runtime) PruneContainers(filterFuncs []ContainerFilter) ([]*reports.Pru
 		return false
 	}
 	filterFuncs = append(filterFuncs, containerStateFilter)
-	delContainers, err := r.GetContainers(false, filterFuncs...)
+	delContainers, err := r.GetContainers(ctx, false, filterFuncs...)
 	if err != nil {
 		return nil, err
 	}
@@ -1382,7 +1382,7 @@ func (r *Runtime) PruneContainers(filterFuncs []ContainerFilter) ([]*reports.Pru
 			continue
 		}
 		var time *uint
-		err = r.RemoveContainer(context.Background(), c, false, false, time)
+		err = r.RemoveContainer(ctx, c, false, false, time)
 		if err != nil {
 			report.Err = err
 		} else {
@@ -1394,8 +1394,8 @@ func (r *Runtime) PruneContainers(filterFuncs []ContainerFilter) ([]*reports.Pru
 }
 
 // MountStorageContainer mounts the storage container's root filesystem
-func (r *Runtime) MountStorageContainer(id string) (string, error) {
-	if _, err := r.GetContainer(id); err == nil {
+func (r *Runtime) MountStorageContainer(ctx context.Context, id string) (string, error) {
+	if _, err := r.GetContainer(ctx, id); err == nil {
 		return "", fmt.Errorf("ctr %s is a libpod container: %w", id, define.ErrCtrExists)
 	}
 	container, err := r.store.Container(id)
@@ -1410,8 +1410,8 @@ func (r *Runtime) MountStorageContainer(id string) (string, error) {
 }
 
 // UnmountStorageContainer unmounts the storage container's root filesystem
-func (r *Runtime) UnmountStorageContainer(id string, force bool) (bool, error) {
-	if _, err := r.GetContainer(id); err == nil {
+func (r *Runtime) UnmountStorageContainer(ctx context.Context, id string, force bool) (bool, error) {
+	if _, err := r.GetContainer(ctx, id); err == nil {
 		return false, fmt.Errorf("ctr %s is a libpod container: %w", id, define.ErrCtrExists)
 	}
 	container, err := r.store.Container(id)
@@ -1423,9 +1423,9 @@ func (r *Runtime) UnmountStorageContainer(id string, force bool) (bool, error) {
 
 // MountedStorageContainer returns whether a storage container is mounted
 // along with the mount path
-func (r *Runtime) IsStorageContainerMounted(id string) (bool, string, error) {
+func (r *Runtime) IsStorageContainerMounted(ctx context.Context, id string) (bool, string, error) {
 	var path string
-	if _, err := r.GetContainer(id); err == nil {
+	if _, err := r.GetContainer(ctx, id); err == nil {
 		return false, "", fmt.Errorf("ctr %s is a libpod container: %w", id, define.ErrCtrExists)
 	}
 

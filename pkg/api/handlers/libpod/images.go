@@ -548,7 +548,7 @@ func CommitContainer(w http.ResponseWriter, r *http.Request) {
 	options.Pause = query.Pause
 	options.Squash = query.Squash
 	options.Changes = util.DecodeChanges(query.Changes)
-	ctr, err := runtime.LookupContainer(query.Container)
+	ctr, err := runtime.LookupContainer(r.Context(), query.Container)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return
@@ -765,7 +765,7 @@ func ImageScp(w http.ResponseWriter, r *http.Request) {
 	opts.SSHMode = ssh.GolangMode
 	opts.CompressionFormat = query.CompressionFormat
 	opts.CompressionLevel = query.CompressionLevel
-	report, err := domainUtils.ExecuteTransfer(sourceArg, query.Destination, opts)
+	report, err := domainUtils.ExecuteTransfer(r.Context(), sourceArg, query.Destination, opts)
 	if err != nil {
 		// The transfer validates its options, so a rejected compression format or
 		// level is the caller's mistake rather than a fault on this end.

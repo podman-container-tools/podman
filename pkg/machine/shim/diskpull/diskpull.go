@@ -10,14 +10,14 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/stdpull"
 )
 
-func GetDisk(userInputPath string, dirs *define.MachineDirs, imagePath *define.VMFile, vmType define.VMType, name string, skipTlsVerify types.OptionalBool) error {
+func GetDisk(ctx context.Context, userInputPath string, dirs *define.MachineDirs, imagePath *define.VMFile, vmType define.VMType, name string, skipTlsVerify types.OptionalBool) error {
 	var (
 		err    error
 		mydisk ocipull.Disker
 	)
 
 	if userInputPath == "" || strings.HasPrefix(userInputPath, "docker://") {
-		mydisk, err = ocipull.NewOCIArtifactPull(context.Background(), dirs, userInputPath, name, vmType, imagePath, skipTlsVerify)
+		mydisk, err = ocipull.NewOCIArtifactPull(ctx, dirs, userInputPath, name, vmType, imagePath, skipTlsVerify)
 	} else {
 		if strings.HasPrefix(userInputPath, "http") {
 			// TODO probably should use tempdir instead of datadir

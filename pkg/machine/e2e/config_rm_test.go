@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type rmMachine struct {
 	/*
 	  -f, --force           Stop and do not prompt before rming
@@ -14,7 +16,7 @@ type rmMachine struct {
 	cmd []string
 }
 
-func (i *rmMachine) buildCmd(m *machineTestBuilder) []string {
+func (i *rmMachine) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "rm"}
 	if i.force {
 		cmd = append(cmd, "--force")

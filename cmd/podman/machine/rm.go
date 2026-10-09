@@ -62,7 +62,7 @@ func rm(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := shim.Remove(mc, vmProvider, destroyOptions); err != nil {
+	if err := shim.Remove(cmd.Context(), mc, vmProvider, destroyOptions); err != nil {
 		// ErrRelaunchSucceeded is not a real error: it signals that
 		// an elevated child process completed the removal successfully.
 		// Exit gracefully.

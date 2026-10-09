@@ -3,6 +3,7 @@
 package ps
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -28,14 +29,14 @@ import (
 // A true return will include the container list, a false return will exclude it.
 type ExternalContainerFilter func(*entities.ListContainer) bool
 
-func GetContainerLists(runtime *libpod.Runtime, options entities.ContainerListOptions) ([]entities.ListContainer, error) {
+func GetContainerLists(ctx context.Context, runtime *libpod.Runtime, options entities.ContainerListOptions) ([]entities.ListContainer, error) {
 	pss := []entities.ListContainer{}
 	filterFuncs := make([]libpod.ContainerFilter, 0, len(options.Filters))
 	filterExtFuncs := make([]entities.ExternalContainerFilter, 0, len(options.Filters))
 	all := options.All || options.Last > 0
 	if len(options.Filters) > 0 {
 		for k, v := range options.Filters {
-			generatedFunc, err := filters.GenerateContainerFilterFuncs(k, v, runtime)
+			generatedFunc, err := filters.GenerateContainerFilterFuncs(ctx, k, v, runtime)
 			if err != nil && !options.External {
 				return nil, err
 			}
@@ -57,7 +58,7 @@ func GetContainerLists(runtime *libpod.Runtime, options entities.ContainerListOp
 		all = true
 	}
 	if !all {
-		runningOnly, err := filters.GenerateContainerFilterFuncs("status", []string{define.ContainerStateRunning.String()}, runtime)
+		runningOnly, err := filters.GenerateContainerFilterFuncs(ctx, "status", []string{define.ContainerStateRunning.String()}, runtime)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +72,7 @@ func GetContainerLists(runtime *libpod.Runtime, options entities.ContainerListOp
 	// This may return slightly outdated states but that's acceptable for
 	// listing containers; any state is outdated the point a container lock
 	// gets released.
-	cons, err := runtime.GetContainers(true, filterFuncs...)
+	cons, err := runtime.GetContainers(ctx, true, filterFuncs...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func GetContainerLists(runtime *libpod.Runtime, options entities.ContainerListOp
 		}
 	}
 	for _, con := range cons {
-		listCon, err := ListContainerBatch(runtime, con, options)
+		listCon, err := ListContainerBatch(ctx, runtime, con, options)
 		switch {
 		// ignore both no ctr and no such pod errors as it means the ctr is gone now
 		case errors.Is(err, define.ErrNoSuchCtr), errors.Is(err, define.ErrNoSuchPod):
@@ -166,7 +167,7 @@ func applyExternalContainersFilters(containersList []*entities.ListContainer, fi
 
 // ListContainerBatch is used in ps to reduce performance hits by "batching"
 // locks.
-func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities.ContainerListOptions) (entities.ListContainer, error) {
+func ListContainerBatch(ctx context.Context, rt *libpod.Runtime, ctr *libpod.Container, opts entities.ContainerListOptions) (entities.ListContainer, error) {
 	var (
 		conConfig                               *libpod.ContainerConfig
 		conState                                define.ContainerStatus
@@ -187,7 +188,7 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 
 	batchErr := ctr.Batch(func(c *libpod.Container) error {
 		if opts.Sync {
-			if err := c.Sync(); err != nil {
+			if err := c.Sync(ctx); err != nil {
 				return fmt.Errorf("unable to update container state from OCI runtime: %w", err)
 			}
 		}
@@ -216,7 +217,7 @@ func ListContainerBatch(rt *libpod.Runtime, ctr *libpod.Container, opts entities
 			return fmt.Errorf("unable to obtain container pid: %w", err)
 		}
 
-		portMappings, err = c.PortMappings()
+		portMappings, err = c.PortMappings(ctx)
 		if err != nil {
 			return err
 		}

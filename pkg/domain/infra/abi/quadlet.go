@@ -33,7 +33,7 @@ func (ic *ContainerEngine) QuadletInstall(ctx context.Context, pathsOrURLs []str
 	}
 
 	// Fail if systemd isn't available to the current user
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to systemd dbus: %w", err)
 	}
@@ -500,7 +500,7 @@ func detectQuadletType(content string) (string, error) {
 func (ic *ContainerEngine) QuadletList(ctx context.Context, options entities.QuadletListOptions) ([]*entities.ListQuadlet, error) {
 	// Is systemd available to the current user?
 	// We cannot proceed if not.
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to systemd dbus: %w", err)
 	}
@@ -582,7 +582,7 @@ func (ic *ContainerEngine) QuadletRemove(ctx context.Context, quadlets []string,
 
 	// Is systemd available to the current user?
 	// We cannot proceed if not.
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to systemd dbus: %w", err)
 	}

@@ -32,7 +32,7 @@ func TestExtractHostCertificatesFromSSLCertFile(t *testing.T) {
 
 	t.Setenv("SSL_CERT_FILE", certFile)
 
-	certs := extractHostCertificates()
+	certs := extractHostCertificates(t.Context())
 	require.Len(t, certs, 1)
 	assert.Equal(t, "Test CA", certs[0].Subject.CommonName)
 }
@@ -43,7 +43,7 @@ func TestExtractHostCertificatesFromSSLCertDir(t *testing.T) {
 
 	t.Setenv("SSL_CERT_DIR", certDir)
 
-	certs := extractHostCertificates()
+	certs := extractHostCertificates(t.Context())
 	require.Len(t, certs, 1)
 	assert.Equal(t, "Test CA", certs[0].Subject.CommonName)
 }

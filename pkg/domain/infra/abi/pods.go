@@ -97,7 +97,7 @@ func (ic *ContainerEngine) PodLogs(ctx context.Context, nameOrID string, options
 		return err
 	}
 	// Get pod containers
-	podCtrs, err := pod[0].AllContainers()
+	podCtrs, err := pod[0].AllContainers(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func (ic *ContainerEngine) PodUnpause(ctx context.Context, namesOrIds []string, 
 		return nil, err
 	}
 	for _, p := range pods {
-		status, err := p.GetPodStatus()
+		status, err := p.GetPodStatus(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -311,8 +311,8 @@ func (ic *ContainerEngine) prunePodHelper(ctx context.Context) ([]*entities.PodP
 	return reports, nil
 }
 
-func (ic *ContainerEngine) PodCreate(_ context.Context, specg entities.PodSpec) (*entities.PodCreateReport, error) {
-	pod, err := generate.MakePod(&specg, ic.Libpod)
+func (ic *ContainerEngine) PodCreate(ctx context.Context, specg entities.PodSpec) (*entities.PodCreateReport, error) {
+	pod, err := generate.MakePod(ctx, &specg, ic.Libpod)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (ic *ContainerEngine) PodCreate(_ context.Context, specg entities.PodSpec) 
 
 func (ic *ContainerEngine) PodClone(ctx context.Context, podClone entities.PodCloneOptions) (*entities.PodCloneReport, error) {
 	spec := specgen.NewPodSpecGenerator()
-	p, err := generate.PodConfigToSpec(ic.Libpod, spec, &podClone.InfraOptions, podClone.ID)
+	p, err := generate.PodConfigToSpec(ctx, ic.Libpod, spec, &podClone.InfraOptions, podClone.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -362,12 +362,12 @@ func (ic *ContainerEngine) PodClone(ctx context.Context, podClone entities.PodCl
 	}
 
 	podSpec := entities.PodSpec{PodSpecGen: *spec}
-	pod, err := generate.MakePod(&podSpec, ic.Libpod)
+	pod, err := generate.MakePod(ctx, &podSpec, ic.Libpod)
 	if err != nil {
 		return nil, err
 	}
 
-	ctrs, err := p.AllContainers()
+	ctrs, err := p.AllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +404,7 @@ func (ic *ContainerEngine) PodClone(ctx context.Context, podClone entities.PodCl
 	return &entities.PodCloneReport{Id: pod.ID()}, nil
 }
 
-func (ic *ContainerEngine) PodTop(_ context.Context, options entities.PodTopOptions) (*entities.StringSliceReport, error) {
+func (ic *ContainerEngine) PodTop(ctx context.Context, options entities.PodTopOptions) (*entities.StringSliceReport, error) {
 	var (
 		pod *libpod.Pod
 		err error
@@ -422,16 +422,16 @@ func (ic *ContainerEngine) PodTop(_ context.Context, options entities.PodTopOpti
 
 	// Run Top.
 	report := &entities.StringSliceReport{}
-	report.Value, err = pod.GetPodPidInformation(options.Descriptors)
+	report.Value, err = pod.GetPodPidInformation(ctx, options.Descriptors)
 	return report, err
 }
 
-func (ic *ContainerEngine) listPodReportFromPod(p *libpod.Pod) (*entities.ListPodsReport, error) {
-	status, err := p.GetPodStatus()
+func (ic *ContainerEngine) listPodReportFromPod(ctx context.Context, p *libpod.Pod) (*entities.ListPodsReport, error) {
+	status, err := p.GetPodStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cons, err := p.AllContainers()
+	cons, err := p.AllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +458,7 @@ func (ic *ContainerEngine) listPodReportFromPod(p *libpod.Pod) (*entities.ListPo
 	}
 	networks := []string{}
 	if len(infraID) > 0 {
-		infra, err := p.InfraContainer()
+		infra, err := p.InfraContainer(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +481,7 @@ func (ic *ContainerEngine) listPodReportFromPod(p *libpod.Pod) (*entities.ListPo
 	}, nil
 }
 
-func (ic *ContainerEngine) PodPs(_ context.Context, options entities.PodPSOptions) ([]*entities.ListPodsReport, error) {
+func (ic *ContainerEngine) PodPs(ctx context.Context, options entities.PodPSOptions) ([]*entities.ListPodsReport, error) {
 	var (
 		err error
 		pds = []*libpod.Pod{}
@@ -489,7 +489,7 @@ func (ic *ContainerEngine) PodPs(_ context.Context, options entities.PodPSOption
 
 	filters := make([]libpod.PodFilter, 0, len(options.Filters))
 	for k, v := range options.Filters {
-		f, err := dfilters.GeneratePodFilterFunc(k, v, ic.Libpod)
+		f, err := dfilters.GeneratePodFilterFunc(ctx, k, v, ic.Libpod)
 		if err != nil {
 			return nil, err
 		}
@@ -510,7 +510,7 @@ func (ic *ContainerEngine) PodPs(_ context.Context, options entities.PodPSOption
 
 	reports := make([]*entities.ListPodsReport, 0, len(pds))
 	for _, p := range pds {
-		r, err := ic.listPodReportFromPod(p)
+		r, err := ic.listPodReportFromPod(ctx, p)
 		if err != nil {
 			if errors.Is(err, define.ErrNoSuchPod) || errors.Is(err, define.ErrNoSuchCtr) {
 				continue
@@ -522,13 +522,13 @@ func (ic *ContainerEngine) PodPs(_ context.Context, options entities.PodPSOption
 	return reports, nil
 }
 
-func (ic *ContainerEngine) PodInspect(_ context.Context, nameOrIDs []string, options entities.InspectOptions) ([]*entities.PodInspectReport, []error, error) {
+func (ic *ContainerEngine) PodInspect(ctx context.Context, nameOrIDs []string, options entities.InspectOptions) ([]*entities.PodInspectReport, []error, error) {
 	if options.Latest {
 		pod, err := ic.Libpod.GetLatestPod()
 		if err != nil {
 			return nil, nil, err
 		}
-		inspect, err := pod.Inspect()
+		inspect, err := pod.Inspect(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -554,7 +554,7 @@ func (ic *ContainerEngine) PodInspect(_ context.Context, nameOrIDs []string, opt
 			return nil, nil, err
 		}
 
-		inspect, err := pod.Inspect()
+		inspect, err := pod.Inspect(ctx)
 		if err != nil {
 			// ErrNoSuchPod is non-fatal, other errors will be
 			// treated as fatal.

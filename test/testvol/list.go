@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -11,17 +12,17 @@ var listCmd = &cobra.Command{
 	Short: "list all volumes",
 	Long:  `List all volumes from the volume plugin listening on --sock-name`,
 	Args:  cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		return listVol(config.sockName)
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return listVol(cmd.Context(), config.sockName)
 	},
 }
 
-func listVol(sockName string) error {
-	plugin, err := getPlugin(sockName)
+func listVol(ctx context.Context, sockName string) error {
+	plugin, err := getPlugin(ctx, sockName)
 	if err != nil {
 		return err
 	}
-	vols, err := plugin.ListVolumes()
+	vols, err := plugin.ListVolumes(ctx)
 	if err != nil {
 		return err
 	}

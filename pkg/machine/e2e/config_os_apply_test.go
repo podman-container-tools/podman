@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type applyMachineOS struct {
 	imageName string
 	restart   bool
@@ -7,7 +9,7 @@ type applyMachineOS struct {
 	cmd []string
 }
 
-func (a *applyMachineOS) buildCmd(m *machineTestBuilder) []string {
+func (a *applyMachineOS) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "os", "apply"}
 	if a.restart {
 		cmd = append(cmd, "--restart")

@@ -213,7 +213,7 @@ type Container interface {
 // the process after a given timeout. If the (optional) container stopped
 // running before the `READY` is received, the waiting gets canceled and
 // ErrNoReadyMessage is returned.
-func (p *NotifyProxy) Wait() error {
+func (p *NotifyProxy) Wait(ctx context.Context) error {
 	// If the proxy has a container we need to watch it as it may exit
 	// without sending a READY message. The goroutine below returns when
 	// the container exits OR when the function returns (see deferred the
@@ -222,7 +222,7 @@ func (p *NotifyProxy) Wait() error {
 	if p.container != nil {
 		// Create a cancellable context to make sure the goroutine
 		// below terminates on function return.
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		go func() {
 			for {

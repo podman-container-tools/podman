@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -47,7 +48,7 @@ func (c *Container) convertPortMappings() []types.PortMapping {
 	return newPorts
 }
 
-func (c *Container) getNetworkOptions(networkOpts []types.NamedPerNetworkOptions) types.NetworkOptions {
+func (c *Container) getNetworkOptions(ctx context.Context, networkOpts []types.NamedPerNetworkOptions) types.NetworkOptions {
 	nameservers := make([]string, 0, len(c.runtime.config.Containers.DNSServers.Get())+len(c.config.DNSServer))
 	nameservers = append(nameservers, c.runtime.config.Containers.DNSServers.Get()...)
 	for _, ip := range c.config.DNSServer {
@@ -57,7 +58,7 @@ func (c *Container) getNetworkOptions(networkOpts []types.NamedPerNetworkOptions
 		ContainerID:       c.config.ID,
 		ContainerName:     getNetworkPodName(c),
 		DNSServers:        nameservers,
-		ContainerHostname: c.NetworkHostname(),
+		ContainerHostname: c.NetworkHostname(ctx),
 		NetworkStatus:     c.getNetworkStatus(),
 		NetworkOrder:      networkNamesFromOpts(networkOpts),
 	}
@@ -117,7 +118,7 @@ func (r *Runtime) teardownNetworkBackend(ns string, opts types.NetworkOptions) e
 
 // Tear down a container's network backend configuration, but do not tear down the
 // namespace itself.
-func (r *Runtime) teardownNetwork(ctr *Container) error {
+func (r *Runtime) teardownNetwork(ctx context.Context, ctr *Container) error {
 	if ctr.state.NetNS == "" {
 		// The container has no network namespace, we're set
 		return nil
@@ -142,7 +143,7 @@ func (r *Runtime) teardownNetwork(ctr *Container) error {
 	// Note: pasta/pesto port teardown is handled inside container-libs
 	// netavark Teardown(), so no explicit pesto cleanup is needed here.
 
-	netOpts := ctr.getNetworkOptions(networks)
+	netOpts := ctr.getNetworkOptions(ctx, networks)
 	return r.teardownNetworkBackend(ctr.state.NetNS, netOpts)
 }
 
@@ -161,7 +162,7 @@ func isBridgeNetMode(n namespaces.NetworkMode) error {
 // firewall configuration.
 // Efforts will be made to preserve MAC and IP addresses.
 // Only works on containers with bridge networking.
-func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.StatusBlock, error) {
+func (r *Runtime) reloadContainerNetwork(ctx context.Context, ctr *Container) (map[string]types.StatusBlock, error) {
 	if ctr.state.NetNS == "" {
 		return nil, fmt.Errorf("container %s network is not configured, refusing to reload: %w", ctr.ID(), define.ErrCtrStateInvalid)
 	}
@@ -172,7 +173,7 @@ func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.Statu
 
 	// store the old status before unsetting it
 	netStatus := ctr.getNetworkStatus()
-	err := r.teardownNetwork(ctr)
+	err := r.teardownNetwork(ctx, ctr)
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -207,14 +208,14 @@ func (r *Runtime) reloadContainerNetwork(ctr *Container) (map[string]types.Statu
 	}
 	ctr.perNetworkOpts = newNetworkOpts
 
-	return r.configureNetNS(ctr, ctr.state.NetNS, true)
+	return r.configureNetNS(ctx, ctr, ctr.state.NetNS, true)
 }
 
 // Produce an InspectNetworkSettings containing information on the container
 // network.
-func (c *Container) getContainerNetworkInfo() (*define.InspectNetworkSettings, error) {
+func (c *Container) getContainerNetworkInfo(ctx context.Context) (*define.InspectNetworkSettings, error) {
 	if c.config.NetNsCtr != "" {
-		netNsCtr, err := c.runtime.GetContainer(c.config.NetNsCtr)
+		netNsCtr, err := c.runtime.GetContainer(ctx, c.config.NetNsCtr)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +229,7 @@ func (c *Container) getContainerNetworkInfo() (*define.InspectNetworkSettings, e
 		}
 		logrus.Debugf("Container %s shares network namespace, retrieving network info of container %s", c.ID(), c.config.NetNsCtr)
 
-		return netNsCtr.getContainerNetworkInfo()
+		return netNsCtr.getContainerNetworkInfo(ctx)
 	}
 
 	settings := new(define.InspectNetworkSettings)
@@ -394,7 +395,7 @@ func resultToBasicNetworkConfig(result types.StatusBlock) define.InspectBasicNet
 }
 
 // NetworkDisconnect removes a container from the network
-func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
+func (c *Container) NetworkDisconnect(ctx context.Context, nameOrID, netName string, _ bool) error {
 	// only the bridge mode supports networks
 	if err := isBridgeNetMode(c.config.NetMode); err != nil {
 		return err
@@ -503,7 +504,7 @@ func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
 		// update /etc/hosts file
 		if file, ok := c.state.BindMounts[config.DefaultHostsFile]; ok {
 			// sync the names with c.getHostsEntries()
-			names := []string{c.Hostname(), c.config.Name}
+			names := []string{c.Hostname(ctx), c.config.Name}
 			rm := etchosts.GetNetworkHostEntries(map[string]types.StatusBlock{netName: oldStatus}, names...)
 			if len(rm) > 0 {
 				// make sure to lock this file to prevent concurrent writes when
@@ -526,7 +527,7 @@ func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
 }
 
 // ConnectNetwork connects a container to a given network
-func (c *Container) NetworkConnect(nameOrID, netName string, netOpts types.PerNetworkOptions) error {
+func (c *Container) NetworkConnect(ctx context.Context, nameOrID, netName string, netOpts types.PerNetworkOptions) error {
 	// only the bridge mode supports networks
 	if err := isBridgeNetMode(c.config.NetMode); err != nil {
 		return err
@@ -623,7 +624,7 @@ func (c *Container) NetworkConnect(nameOrID, netName string, netOpts types.PerNe
 	// if we do not add do it here we will get the wrong existing entries which will throw of the logic
 	// we could also copy the map but this does not seem worth it
 	// sync the hostNames with c.getHostsEntries()
-	hostNames := []string{c.Hostname(), c.config.Name}
+	hostNames := []string{c.Hostname(ctx), c.config.Name}
 	oldHostEntries := etchosts.GetNetworkHostEntries(networkStatus, hostNames...)
 
 	// update network status
@@ -724,21 +725,21 @@ func (c *Container) dnsNamesForNetwork(aliases []string) []string {
 }
 
 // DisconnectContainerFromNetwork removes a container from its network
-func (r *Runtime) DisconnectContainerFromNetwork(nameOrID, netName string, force bool) error {
-	ctr, err := r.LookupContainer(nameOrID)
+func (r *Runtime) DisconnectContainerFromNetwork(ctx context.Context, nameOrID, netName string, force bool) error {
+	ctr, err := r.LookupContainer(ctx, nameOrID)
 	if err != nil {
 		return err
 	}
-	return ctr.NetworkDisconnect(nameOrID, netName, force)
+	return ctr.NetworkDisconnect(ctx, nameOrID, netName, force)
 }
 
 // ConnectContainerToNetwork connects a container to a network
-func (r *Runtime) ConnectContainerToNetwork(nameOrID, netName string, netOpts types.PerNetworkOptions) error {
-	ctr, err := r.LookupContainer(nameOrID)
+func (r *Runtime) ConnectContainerToNetwork(ctx context.Context, nameOrID, netName string, netOpts types.PerNetworkOptions) error {
+	ctr, err := r.LookupContainer(ctx, nameOrID)
 	if err != nil {
 		return err
 	}
-	return ctr.NetworkConnect(nameOrID, netName, netOpts)
+	return ctr.NetworkConnect(ctx, nameOrID, netName, netOpts)
 }
 
 // normalizeNetworkName takes a network name, a partial or a full network ID and

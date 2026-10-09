@@ -71,7 +71,7 @@ func PruneContainers(w http.ResponseWriter, r *http.Request) {
 func PruneContainersHelper(r *http.Request, filterFuncs []libpod.ContainerFilter) ([]*reports.PruneReport, error) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 
-	report, err := runtime.PruneContainers(filterFuncs)
+	report, err := runtime.PruneContainers(r.Context(), filterFuncs)
 	if err != nil {
 		return nil, err
 	}

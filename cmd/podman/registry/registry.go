@@ -46,7 +46,7 @@ func ImageEngine() entities.ImageEngine {
 func NewImageEngine(cmd *cobra.Command, _ []string) (entities.ImageEngine, error) {
 	if imageEngine == nil {
 		podmanOptions.FlagSet = cmd.Flags()
-		engine, err := infra.NewImageEngine(&podmanOptions)
+		engine, err := infra.NewImageEngine(cmd.Context(), &podmanOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func NewContainerEngine(cmd *cobra.Command, _ []string) (entities.ContainerEngin
 				logrus.Debugf("Performing database migration, BoltDB checks will be relaxed")
 			}
 		}
-		engine, err := infra.NewContainerEngine(&podmanOptions)
+		engine, err := infra.NewContainerEngine(cmd.Context(), &podmanOptions)
 		if err != nil {
 			return nil, err
 		}

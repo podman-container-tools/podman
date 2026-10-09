@@ -35,7 +35,7 @@ func TestWaitAndClose(t *testing.T) {
 		require.NoError(t, err, "proxy should close successfully")
 	}()
 	go func() {
-		ch <- proxy.Wait()
+		ch <- proxy.Wait(t.Context())
 	}()
 
 	sendMessage(t, proxy, "foo\n")

@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -54,10 +55,10 @@ func GetAll() []vmconfigs.VMProvider {
 	}
 }
 
-func IsInstalled(provider define.VMType) (bool, error) {
+func IsInstalled(ctx context.Context, provider define.VMType) (bool, error) {
 	switch provider {
 	case define.WSLVirt:
-		return wutil.IsWSLInstalled(), nil
+		return wutil.IsWSLInstalled(ctx), nil
 	case define.HyperVVirt:
 		service, err := hypervctl.NewLocalHyperVService()
 		if err == nil {

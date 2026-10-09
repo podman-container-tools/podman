@@ -1,6 +1,7 @@
 package vmconfigs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,7 +145,7 @@ func (mc *MachineConfig) SetRootful(rootful bool) error {
 	return nil
 }
 
-func (mc *MachineConfig) Remove(machines map[string]bool, saveIgnition, saveImage bool) ([]string, func() error, error) {
+func (mc *MachineConfig) Remove(machines map[string]bool, saveIgnition, saveImage bool) ([]string, func(context.Context) error, error) {
 	ignitionFile, err := mc.IgnitionFile()
 	if err != nil {
 		return nil, nil, err
@@ -184,36 +185,36 @@ func (mc *MachineConfig) Remove(machines map[string]bool, saveIgnition, saveImag
 		ignitionFile.GetPath()
 	}
 
-	mcRemove := func() error {
+	mcRemove := func(ctx context.Context) error {
 		var errs []error
 		if err := connection.RemoveConnections(machines, mc.Name, mc.Name+"-root"); err != nil {
 			errs = append(errs, err)
 		}
 
 		if !saveIgnition {
-			if err := ignitionFile.Delete(); err != nil {
+			if err := ignitionFile.Delete(ctx); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if !saveImage {
-			if err := mc.ImagePath.Delete(); err != nil {
+			if err := mc.ImagePath.Delete(ctx); err != nil {
 				errs = append(errs, err)
 			}
 		}
-		if err := readySocket.Delete(); err != nil {
+		if err := readySocket.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
-		if err := gvProxySocket.Delete(); err != nil {
+		if err := gvProxySocket.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
-		if err := apiSocket.Delete(); err != nil {
+		if err := apiSocket.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
-		if err := logPath.Delete(); err != nil {
+		if err := logPath.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
 
-		if err := mc.configPath.Delete(); err != nil {
+		if err := mc.configPath.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
 

@@ -17,7 +17,7 @@ func TestInjectEnvSecrets(t *testing.T) {
 	state, manager := getEmptySqliteState(t)
 	defer state.Close()
 
-	// ctx := context.Background()
+	// ctx := t.Context()
 	runtime := &Runtime{
 		state:       state,
 		lockManager: manager,

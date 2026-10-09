@@ -131,5 +131,5 @@ func setMachine(cmd *cobra.Command, args []string) error {
 
 	// At this point, we have the known changed information, etc
 	// Walk through changes to the providers if they need them
-	return shim.Set(mc, vmProvider, setOpts)
+	return shim.Set(cmd.Context(), mc, vmProvider, setOpts)
 }

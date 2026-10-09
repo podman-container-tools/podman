@@ -3,7 +3,6 @@
 package libpod
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -143,7 +142,7 @@ func TestParseIDMapMountOption(t *testing.T) {
 }
 
 func TestPostDeleteHooks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 
 	statePath := filepath.Join(dir, "state")

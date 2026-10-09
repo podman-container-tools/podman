@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -105,6 +106,6 @@ func waitOnProcess(processID int) error {
 
 // removeGVProxyPIDFile is just a wrapper to vmfile delete so we handle differently
 // on windows
-func removeGVProxyPIDFile(f define.VMFile) error {
-	return f.Delete()
+func removeGVProxyPIDFile(ctx context.Context, f define.VMFile) error {
+	return f.Delete(ctx)
 }

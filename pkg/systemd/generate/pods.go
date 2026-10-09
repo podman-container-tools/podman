@@ -4,6 +4,7 @@ package generate
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -131,7 +132,7 @@ WantedBy=default.target
 // PodUnits generates systemd units for the specified pod and its containers.
 // Based on the options, the return value might be the content of all units or
 // the files they been written to.
-func PodUnits(pod *libpod.Pod, options entities.GenerateSystemdOptions) (map[string]string, error) {
+func PodUnits(ctx context.Context, pod *libpod.Pod, options entities.GenerateSystemdOptions) (map[string]string, error) {
 	if options.TemplateUnitFile {
 		return nil, errors.New("--template is not supported for pods")
 	}
@@ -141,7 +142,7 @@ func PodUnits(pod *libpod.Pod, options entities.GenerateSystemdOptions) (map[str
 		return nil, fmt.Errorf("generating systemd unit files: Pod %q has no infra container", pod.Name())
 	}
 
-	podInfo, err := generatePodInfo(pod, options)
+	podInfo, err := generatePodInfo(ctx, pod, options)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +153,7 @@ func PodUnits(pod *libpod.Pod, options entities.GenerateSystemdOptions) (map[str
 	}
 
 	// Compute the container-dependency graph for the Pod.
-	containers, err := pod.AllContainers()
+	containers, err := pod.AllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -210,10 +211,10 @@ func PodUnits(pod *libpod.Pod, options entities.GenerateSystemdOptions) (map[str
 	return units, nil
 }
 
-func generatePodInfo(pod *libpod.Pod, options entities.GenerateSystemdOptions) (*podInfo, error) {
+func generatePodInfo(ctx context.Context, pod *libpod.Pod, options entities.GenerateSystemdOptions) (*podInfo, error) {
 	// Generate a systemdgen.containerInfo for the infra container. This
 	// containerInfo acts as the main service of the pod.
-	infraCtr, err := pod.InfraContainer()
+	infraCtr, err := pod.InfraContainer(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not find infra container: %w", err)
 	}

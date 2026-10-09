@@ -1,6 +1,7 @@
 package os
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os/exec"
@@ -120,10 +121,10 @@ func (b *BootcHost) getLocalOSOCIInfo() (reference.Named, *semver.Version, error
 	return named, &tagAsVersion, err
 }
 
-func (b *BootcHost) getLocalOsImageDigest() (digest.Digest, error) {
+func (b *BootcHost) getLocalOsImageDigest(ctx context.Context) (digest.Digest, error) {
 	args := []string{"container", "image", "metadata", "--repo", "/ostree/repo", "docker://" + b.GetBootedImageRef()}
 	logrus.Debugf("executing : ostree %s", strings.Join(args, " "))
-	cmd := exec.Command("ostree", args...)
+	cmd := exec.CommandContext(ctx, "ostree", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -137,8 +138,8 @@ func (b *BootcHost) getLocalOsImageDigest() (digest.Digest, error) {
 
 // newBootcHost creates a new BootcHost by executing 'sudo bootc status --format json'
 // and unmarshaling the output
-func newBootcHost() (*BootcHost, error) {
-	cmd := exec.Command("sudo", "bootc", "status", "--format", "json")
+func newBootcHost(ctx context.Context) (*BootcHost, error) {
+	cmd := exec.CommandContext(ctx, "sudo", "bootc", "status", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err

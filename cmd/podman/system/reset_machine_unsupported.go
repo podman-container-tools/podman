@@ -2,6 +2,8 @@
 
 package system
 
-func resetMachine() error {
+import "context"
+
+func resetMachine(context.Context) error {
 	return nil
 }

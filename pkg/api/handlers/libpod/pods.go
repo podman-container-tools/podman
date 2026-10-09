@@ -74,7 +74,7 @@ func PodCreate(w http.ResponseWriter, r *http.Request) {
 		psg.InfraContainerSpec.RawImageName = psg.InfraImage
 	}
 	podSpecComplete := entities.PodSpec{PodSpecGen: psg}
-	pod, err := generate.MakePod(&podSpecComplete, runtime)
+	pod, err := generate.MakePod(r.Context(), &podSpecComplete, runtime)
 	if err != nil {
 		httpCode := http.StatusInternalServerError
 		if errors.Is(err, define.ErrPodExists) {
@@ -115,7 +115,7 @@ func PodInspect(w http.ResponseWriter, r *http.Request) {
 		utils.PodNotFound(w, name, err)
 		return
 	}
-	podData, err := pod.Inspect()
+	podData, err := pod.Inspect(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, err)
 		return
@@ -151,7 +151,7 @@ func PodStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := pod.GetPodStatus()
+	status, err := pod.GetPodStatus(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, err)
 		return
@@ -201,7 +201,7 @@ func PodStart(w http.ResponseWriter, r *http.Request) {
 		utils.PodNotFound(w, name, err)
 		return
 	}
-	status, err := pod.GetPodStatus()
+	status, err := pod.GetPodStatus(r.Context())
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -423,7 +423,7 @@ loop: // break out of for/select infinite` loop
 		case <-r.Context().Done():
 			break loop
 		default:
-			output, err := pod.GetPodPidInformation([]string{query.PsArgs})
+			output, err := pod.GetPodPidInformation(r.Context(), []string{query.PsArgs})
 			if err != nil {
 				if !wroteContent {
 					utils.InternalServerError(w, err)
@@ -504,7 +504,7 @@ func PodKill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logrus.Debugf("Killing pod %s with signal %d", pod.ID(), sig)
-	podStates, err := pod.Status()
+	podStates, err := pod.Status(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, err)
 		return

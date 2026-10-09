@@ -294,7 +294,7 @@ func TestRemoteCompressCommandAgainstRealCompressors(t *testing.T) {
 			archiveFile := argv[len(argv)-1]
 			require.NoError(t, os.WriteFile(archiveFile, payload, 0o600))
 
-			out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+			out, err := exec.CommandContext(t.Context(), argv[0], argv[1:]...).CombinedOutput()
 			require.NoError(t, err, "%s failed: %s", bin, out)
 
 			compressed, err := os.ReadFile(compressedFile)
@@ -420,7 +420,7 @@ func TestExecuteTransferRejectsBadCompressionBeforeDoingAnything(t *testing.T) {
 			tmp := t.TempDir()
 			t.Setenv("TMPDIR", tmp)
 
-			_, err := ExecuteTransfer("alpine", "QA::", entities.ScpExecuteTransferOptions{ScpCompressionOptions: tt.opts})
+			_, err := ExecuteTransfer(t.Context(), "alpine", "QA::", entities.ScpExecuteTransferOptions{ScpCompressionOptions: tt.opts})
 			assert.ErrorContains(t, err, tt.wantErr)
 			assert.ErrorIs(t, err, define.ErrInvalidArg)
 

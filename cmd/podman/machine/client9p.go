@@ -75,6 +75,7 @@ func client9p(ctx context.Context, portNum uint32, mountPath string) error {
 		conn    *vsock.Conn
 		retries = 20
 	)
+retry:
 	for range retries {
 		// Host connects to non-hypervisor processes on the host running the VM.
 		conn, err = vsock.Dial(vsock.Host, portNum, nil)
@@ -83,7 +84,11 @@ func client9p(ctx context.Context, portNum uint32, mountPath string) error {
 		if err == nil {
 			break
 		}
-		time.Sleep(250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			break retry
+		case <-time.After(250 * time.Millisecond):
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("dialing vsock port %d: %w", portNum, err)

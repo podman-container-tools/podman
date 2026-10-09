@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -61,13 +62,13 @@ func storeAfter() error {
 	return nil
 }
 
-func testingEngineBefore(podmanConfig *entities.PodmanConfig) (err error) {
+func testingEngineBefore(ctx context.Context, podmanConfig *entities.PodmanConfig) (err error) {
 	podmanConfig.StorageDriver = globalStorageOptions.GraphDriverName
 	podmanConfig.GraphRoot = globalStorageOptions.GraphRoot
 	podmanConfig.Runroot = globalStorageOptions.RunRoot
 	podmanConfig.ImageStore = globalStorageOptions.ImageStore
 	podmanConfig.StorageOpts = globalStorageOptions.GraphDriverOptions
 	podmanConfig.TransientStore = globalStorageOptions.TransientStore
-	testingEngine, err = infra.NewTestingEngine(podmanConfig)
+	testingEngine, err = infra.NewTestingEngine(ctx, podmanConfig)
 	return err
 }

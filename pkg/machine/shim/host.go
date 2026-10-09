@@ -2,6 +2,7 @@ package shim
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -34,7 +35,7 @@ import (
 
 // List is done at the host level to allow for a *possible* future where
 // more than one provider is used
-func List(vmstubbers []vmconfigs.VMProvider, _ machine.ListOptions) ([]*machine.ListResponse, error) {
+func List(ctx context.Context, vmstubbers []vmconfigs.VMProvider, _ machine.ListOptions) ([]*machine.ListResponse, error) {
 	lrs := make([]*machine.ListResponse, 0)
 	mcs, err := getMCsOverProviders(vmstubbers)
 	if err != nil {
@@ -42,7 +43,7 @@ func List(vmstubbers []vmconfigs.VMProvider, _ machine.ListOptions) ([]*machine.
 	}
 	for name, mc := range mcs {
 		// set bypass=true so it doesn't fail the entire list if one provider can't determine state
-		state, err := mc.Provider.State(mc.MachineConfig, true)
+		state, err := mc.Provider.State(ctx, mc.MachineConfig, true)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +69,7 @@ func List(vmstubbers []vmconfigs.VMProvider, _ machine.ListOptions) ([]*machine.
 	return lrs, nil
 }
 
-func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
+func Init(ctx context.Context, opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 	var (
 		err            error
 		imageExtension string
@@ -82,13 +83,13 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 		// Skip cleanup so we don't remove resources (e.g. the disk image)
 		// that the child process created and that are now in use.
 		if !errors.Is(err, machineDefine.ErrRelaunchSucceeded) {
-			callbackFuncs.CleanIfErr(&err)
+			callbackFuncs.CleanIfErr(ctx, &err)
 		}
 	}()
 	// The following goroutine will block waiting
 	// for a termination signal. If no signal is received
 	// the routine is aborted when the main goroutine terminates.
-	go callbackFuncs.CleanOnSignal(false)
+	go callbackFuncs.CleanOnSignal(ctx, false)
 
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
@@ -99,7 +100,7 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 	if err != nil {
 		return err
 	}
-	sshKey, err := machine.GetSSHKeys(sshIdentityPath)
+	sshKey, err := machine.GetSSHKeys(ctx, sshIdentityPath)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 		// "http|https://path"
 		// "/path
 		// "docker://quay.io/something/someManifest
-		if err := diskpull.GetDisk(opts.Image, dirs, mc.ImagePath, mp.VMType(), mc.Name, opts.SkipTlsVerify); err != nil {
+		if err := diskpull.GetDisk(ctx, opts.Image, dirs, mc.ImagePath, mp.VMType(), mc.Name, opts.SkipTlsVerify); err != nil {
 			return err
 		}
 		callbackFuncs.Add(mc.ImagePath.Delete)
@@ -284,16 +285,16 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 	// CreateVM could cause the init command to be re-launched in some cases (e.g. wsl)
 	// so we need to avoid creating the machine config or connections before this check happens.
 	// when relaunching, the invoked 'init' command will be responsible to set up the machine
-	err = mp.CreateVM(createOpts, mc, &ignBuilder)
+	err = mp.CreateVM(ctx, createOpts, mc, &ignBuilder)
 	if err != nil {
 		return err
 	}
-	rmVM := func() error {
+	rmVM := func(ctx context.Context) error {
 		if err == nil {
 			return nil
 		}
-		if _, rm, _ := mp.Remove(mc); rm != nil {
-			return rm()
+		if _, rm, _ := mp.Remove(ctx, mc); rm != nil {
+			return rm(ctx)
 		}
 		return nil
 	}
@@ -304,7 +305,7 @@ func Init(opts machineDefine.InitOptions, mp vmconfigs.VMProvider) error {
 		return err
 	}
 
-	cleanup := func() error {
+	cleanup := func(context.Context) error {
 		machines, err := provider.GetAllMachinesAndRootfulness()
 		if err != nil {
 			return err
@@ -341,10 +342,10 @@ func VMExists(name string) (*vmconfigs.MachineConfig, vmconfigs.VMProvider, erro
 
 // VMExistsOnHyperVisor actually checks the managing hypervisor (like WSL, HyperV)
 // to make sure a VM with the same name does not happen to exist.
-func VMExistsOnHyperVisor(name string) (bool, error) {
+func VMExistsOnHyperVisor(ctx context.Context, name string) (bool, error) {
 	providers := provider.GetAll()
 	for _, p := range providers {
-		exists, err := p.Exists(name)
+		exists, err := p.Exists(ctx, name)
 		if err != nil {
 			return false, err
 		}
@@ -356,7 +357,7 @@ func VMExistsOnHyperVisor(name string) (bool, error) {
 }
 
 // checkExclusiveActiveVM checks if any of the machines are already running
-func checkExclusiveActiveVM(currentProvider vmconfigs.VMProvider, mc *vmconfigs.MachineConfig) error {
+func checkExclusiveActiveVM(ctx context.Context, currentProvider vmconfigs.VMProvider, mc *vmconfigs.MachineConfig) error {
 	providers := provider.GetAll()
 	// Check if any other machines are running; if so, we error
 	localMachines, err := getMCsOverProviders(providers)
@@ -365,7 +366,7 @@ func checkExclusiveActiveVM(currentProvider vmconfigs.VMProvider, mc *vmconfigs.
 	}
 
 	for name, localMachine := range localMachines {
-		state, err := localMachine.Provider.State(localMachine.MachineConfig, false)
+		state, err := localMachine.Provider.State(ctx, localMachine.MachineConfig, false)
 		if err != nil {
 			return err
 		}
@@ -415,7 +416,7 @@ func getMCsOverProviders(vmstubbers []vmconfigs.VMProvider) (map[string]knownMac
 }
 
 // Stop stops the machine as well as supporting binaries/processes
-func Stop(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool) error {
+func Stop(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool) error {
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
 		return err
@@ -428,11 +429,11 @@ func Stop(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool) e
 		return fmt.Errorf("reload config: %w", err)
 	}
 
-	return stopLocked(mc, mp, dirs, hardStop)
+	return stopLocked(ctx, mc, mp, dirs, hardStop)
 }
 
 // StopThenStart stops and starts the machine while holding its lock.
-func StopThenStart(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool, opts machine.StartOptions, updateSystemConn *bool) error {
+func StopThenStart(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardStop bool, opts machine.StartOptions, updateSystemConn *bool) error {
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
 		return err
@@ -445,7 +446,7 @@ func StopThenStart(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardSto
 		return err
 	}
 
-	err = stopLocked(mc, mp, dirs, hardStop)
+	err = stopLocked(ctx, mc, mp, dirs, hardStop)
 	if err != nil {
 		return err
 	}
@@ -457,16 +458,16 @@ func StopThenStart(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, hardSto
 	}
 
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
-	go callbackFuncs.CleanOnSignal(opts.Quiet)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
+	go callbackFuncs.CleanOnSignal(ctx, opts.Quiet)
 
-	err = startLocked(mc, mp, dirs, opts, updateSystemConn, &callbackFuncs)
+	err = startLocked(ctx, mc, mp, dirs, opts, updateSystemConn, &callbackFuncs)
 	return err
 }
 
 // stopLocked stops the machine and expects the caller to hold the machine's lock.
-func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, hardStop bool) error {
-	state, err := mp.State(mc, false)
+func stopLocked(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, hardStop bool) error {
+	state, err := mp.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
@@ -479,7 +480,7 @@ func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mach
 	}
 
 	// Provider stops the machine
-	if err := mp.StopVM(mc, hardStop); err != nil {
+	if err := mp.StopVM(ctx, mc, hardStop); err != nil {
 		return err
 	}
 
@@ -488,7 +489,7 @@ func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mach
 	if err != nil {
 		return err
 	}
-	if err := readySocket.Delete(); err != nil {
+	if err := readySocket.Delete(ctx); err != nil {
 		return err
 	}
 
@@ -498,7 +499,7 @@ func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mach
 		if err != nil {
 			return err
 		}
-		if err := machine.CleanupGVProxy(*gvproxyPidFile); err != nil {
+		if err := machine.CleanupGVProxy(ctx, *gvproxyPidFile); err != nil {
 			return fmt.Errorf("unable to clean up gvproxy: %w", err)
 		}
 	}
@@ -508,18 +509,18 @@ func stopLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mach
 	return mc.Write()
 }
 
-func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.StartOptions, updateSystemConn *bool) error {
+func Start(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.StartOptions, updateSystemConn *bool) error {
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
 		return err
 	}
 
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
 	// The following goroutine will block waiting
 	// for a termination signal. If no signal is received
 	// the routine is aborted when the main goroutine terminates.
-	go callbackFuncs.CleanOnSignal(opts.Quiet)
+	go callbackFuncs.CleanOnSignal(ctx, opts.Quiet)
 
 	if !opts.ReExec {
 		mc.Lock()
@@ -529,7 +530,7 @@ func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.St
 		//   - defer mcunlock()
 		//   - defer callbackFuncs.CleanIfErr()
 		var mcUnlockOnce sync.Once
-		mcunlock := func() error { //nolint: unparam
+		mcunlock := func(context.Context) error { //nolint: unparam
 			mcUnlockOnce.Do(func() {
 				logrus.Debug("unlocking machine config")
 				mc.Unlock()
@@ -540,7 +541,7 @@ func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.St
 		// callbackFuncs are invoked when errors occurs or term signals
 		// are received. Thus we need to defer mcunlock for when Start()
 		// completes successfully
-		defer func() { _ = mcunlock() }()
+		defer func() { _ = mcunlock(ctx) }()
 	}
 
 	err = mc.Refresh()
@@ -549,12 +550,12 @@ func Start(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.St
 		return err
 	}
 
-	err = startLocked(mc, mp, dirs, opts, updateSystemConn, &callbackFuncs)
+	err = startLocked(ctx, mc, mp, dirs, opts, updateSystemConn, &callbackFuncs)
 	return err
 }
 
 // startLocked starts the machine and expects the caller to hold the machine's lock.
-func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, opts machine.StartOptions, updateSystemConn *bool, callbackFuncs *machine.CleanupCallback) error {
+func startLocked(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *machineDefine.MachineDirs, opts machine.StartOptions, updateSystemConn *bool, callbackFuncs *machine.CleanupCallback) error {
 	var updateDefaultConnection bool
 
 	defaultBackoff := 500 * time.Millisecond
@@ -582,7 +583,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 		//   - defer startLockUnlock()
 		//   - defer callbackFuncs.CleanIfErr()
 		var startLockOnce sync.Once
-		startLockUnlock := func() error { //nolint: unparam
+		startLockUnlock := func(context.Context) error { //nolint: unparam
 			startLockOnce.Do(startLock.Unlock)
 			return nil
 		}
@@ -590,14 +591,14 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 		// callbackFuncs are invoked when errors occurs or term signals
 		// are received. Thus we need to defer startLockUnlock for when
 		// Start() completes successfully
-		defer func() { _ = startLockUnlock() }()
+		defer func() { _ = startLockUnlock(ctx) }()
 
-		if err := checkExclusiveActiveVM(mp, mc); err != nil {
+		if err := checkExclusiveActiveVM(ctx, mp, mc); err != nil {
 			return err
 		}
 	} else {
 		// still should make sure we do not start the same machine twice
-		state, err := mp.State(mc, false)
+		state, err := mp.State(ctx, mc, false)
 		if err != nil {
 			return err
 		}
@@ -640,7 +641,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	}
 
 	// Set starting to false on exit
-	startingFalse := func() error {
+	startingFalse := func(context.Context) error {
 		mc.Starting = false
 		if writeErr := mc.Write(); writeErr != nil {
 			logrus.Error("Error writing machine starting state to false: ", writeErr)
@@ -652,7 +653,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	// callbackFuncs are invoked when errors occurs or term signals
 	// are received. Thus we need to defer startingFalse for when
 	// Start() completes successfully
-	defer func() { _ = startingFalse() }()
+	defer func() { _ = startingFalse(ctx) }()
 
 	gvproxyPidFile, err := dirs.RuntimeDir.AppendToNewVMFile("gvproxy.pid", nil)
 	if err != nil {
@@ -660,14 +661,14 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	}
 
 	// start gvproxy and set up the API socket forwarding
-	forwardSocketPath, forwardingState, err := startNetworking(mc, mp)
+	forwardSocketPath, forwardingState, err := startNetworking(ctx, mc, mp)
 	if err != nil {
 		return err
 	}
 
 	// Stop gvproxy if Start() fails or termination signal is received
-	cleanGv := func() error {
-		if cleanGvErr := machine.CleanupGVProxy(*gvproxyPidFile); cleanGvErr != nil {
+	cleanGv := func(ctx context.Context) error {
+		if cleanGvErr := machine.CleanupGVProxy(ctx, *gvproxyPidFile); cleanGvErr != nil {
 			return fmt.Errorf("unable to clean up gvproxy: %w", cleanGvErr)
 		}
 		return nil
@@ -682,7 +683,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	//               Cmd.Process (typically cmd.Process.Release())
 	// - waitForReady: waits until the VM process is ready and returns an
 	//                 error it fails to start
-	releaseCmd, waitForReady, err := mp.StartVM(mc)
+	releaseCmd, waitForReady, err := mp.StartVM(ctx, mc)
 	if err != nil {
 		return err
 	}
@@ -691,7 +692,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 		// callbackFuncs are invoked when errors occurs or term signals
 		// are received. Thus we need to defer releaseCmd for when
 		// Start() completes successfully
-		defer func() { _ = releaseCmd() }()
+		defer func() { _ = releaseCmd(ctx) }()
 	}
 	if waitForReady == nil {
 		return errors.New("no valid wait function returned")
@@ -704,13 +705,13 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 		machine.PrintRootlessWarning(mc.Name)
 	}
 
-	err = mp.PostStartNetworking(mc, opts.NoInfo)
+	err = mp.PostStartNetworking(ctx, mc, opts.NoInfo)
 	if err != nil {
 		return err
 	}
 
 	stateF := func() (machineDefine.Status, error) {
-		return mp.State(mc, true)
+		return mp.State(ctx, mc, true)
 	}
 
 	connected, sshError, err := conductVMReadinessCheck(mc, maxBackoffs, defaultBackoff, stateF)
@@ -731,14 +732,14 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	}
 
 	// mount the volumes to the VM
-	if err = mp.MountVolumesToVM(mc, opts.Quiet); err != nil {
+	if err = mp.MountVolumesToVM(ctx, mc, opts.Quiet); err != nil {
 		return err
 	}
 
 	// Import native CA certificates if enabled (must run after volumes are
 	// mounted so the certificate file is accessible via the mounted path)
 	if mc.ImportNativeCA {
-		if err := certificates.ImportNativeCertificates(mc, mp.VMType()); err != nil {
+		if err := certificates.ImportNativeCertificates(ctx, mc, mp.VMType()); err != nil {
 			// Warn the user but continue the machine startup process
 			logrus.Warnf("Failed to import native CA certificates: %v", err)
 			fmt.Println("Warning: Failed to import host trusted CA certificates. The machine will start without them.")
@@ -795,7 +796,7 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 	return updateConnectionFunc()
 }
 
-func Set(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machineDefine.SetOptions) error {
+func Set(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machineDefine.SetOptions) error {
 	mc.Lock()
 	defer mc.Unlock()
 
@@ -822,7 +823,7 @@ func Set(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machineDefin
 		mc.ImportNativeCA = *opts.ImportNativeCA
 	}
 
-	if err := mp.SetProviderAttrs(mc, opts); err != nil {
+	if err := mp.SetProviderAttrs(ctx, mc, opts); err != nil {
 		return err
 	}
 
@@ -830,7 +831,7 @@ func Set(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machineDefin
 	return mc.Write()
 }
 
-func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.RemoveOptions) error {
+func Remove(ctx context.Context, mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.RemoveOptions) error {
 	dirs, err := env.GetMachineDirs(mp.VMType())
 	if err != nil {
 		return err
@@ -843,7 +844,7 @@ func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.R
 		return fmt.Errorf("reload config: %w", err)
 	}
 
-	state, err := mp.State(mc, false)
+	state, err := mp.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
@@ -864,7 +865,7 @@ func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.R
 		return err
 	}
 
-	providerFiles, providerRm, err := mp.Remove(mc)
+	providerFiles, providerRm, err := mp.Remove(ctx, mc)
 	if err != nil {
 		return err
 	}
@@ -891,7 +892,7 @@ func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.R
 	}
 
 	if state == machineDefine.Running {
-		if err := stopLocked(mc, mp, dirs, true); err != nil {
+		if err := stopLocked(ctx, mc, mp, dirs, true); err != nil {
 			return err
 		}
 	}
@@ -900,11 +901,11 @@ func Remove(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, opts machine.R
 	// All actual removal of files and vms should occur after this
 	//
 
-	if err := providerRm(); err != nil {
+	if err := providerRm(ctx); err != nil {
 		logrus.Errorf("failed to remove virtual machine from provider for %q: %v", mc.Name, err)
 	}
 
-	if err := genericRm(); err != nil {
+	if err := genericRm(ctx); err != nil {
 		return fmt.Errorf("failed to remove machines files: %w", err)
 	}
 	return nil
@@ -917,7 +918,7 @@ func confirmationMessage(files []string) {
 	}
 }
 
-func Reset(mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
+func Reset(ctx context.Context, mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
 	var resetErrors *multierror.Error
 	removeDirs := []*machineDefine.MachineDirs{}
 
@@ -940,7 +941,7 @@ func Reset(mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
 		}
 
 		for _, mc := range mcs {
-			err := Stop(mc, p, true)
+			err := Stop(ctx, mc, p, true)
 			if err != nil {
 				resetErrors = multierror.Append(resetErrors, err)
 			}
@@ -948,13 +949,13 @@ func Reset(mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
 			if err != nil {
 				resetErrors = multierror.Append(resetErrors, err)
 			}
-			_, providerRm, err := p.Remove(mc)
+			_, providerRm, err := p.Remove(ctx, mc)
 			if err != nil {
 				resetErrors = multierror.Append(resetErrors, err)
 			}
 
 			if genericRm != nil {
-				if err := genericRm(); err != nil {
+				if err := genericRm(ctx); err != nil {
 					resetErrors = multierror.Append(resetErrors, err)
 				}
 			}
@@ -962,7 +963,7 @@ func Reset(mps []vmconfigs.VMProvider, _ machine.ResetOptions) error {
 			// If a provider (like Hyper-V) encountered an error during the removal setup
 			// phase (e.g., a cancelled 'runas' elevation), it returns nil for the function.
 			if providerRm != nil {
-				if err := providerRm(); err != nil {
+				if err := providerRm(ctx); err != nil {
 					resetErrors = multierror.Append(resetErrors, err)
 				}
 			}

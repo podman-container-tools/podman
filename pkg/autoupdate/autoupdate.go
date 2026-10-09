@@ -130,7 +130,7 @@ func AutoUpdate(ctx context.Context, runtime *libpod.Runtime, options entities.A
 	}
 
 	// Connect to DBUS.
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		logrus.Error(err.Error())
 		allErrors = append(allErrors, err)
@@ -356,7 +356,7 @@ func (u *updater) restartSystemdUnit(ctx context.Context, unit string) error {
 func (u *updater) assembleTasks(ctx context.Context) []error {
 	filterFuncs := make([]libpod.ContainerFilter, 0, len(u.options.Filters))
 	for key, values := range u.options.Filters {
-		filter, err := filters.GenerateContainerFilterFuncs(key, values, u.runtime)
+		filter, err := filters.GenerateContainerFilterFuncs(ctx, key, values, u.runtime)
 		if err != nil {
 			return []error{err}
 		}
@@ -370,7 +370,7 @@ func (u *updater) assembleTasks(ctx context.Context) []error {
 		return []error{err}
 	}
 
-	allContainers, err := u.runtime.GetContainers(false, filterFuncs...)
+	allContainers, err := u.runtime.GetContainers(ctx, false, filterFuncs...)
 	if err != nil {
 		return []error{err}
 	}
@@ -411,7 +411,7 @@ func (u *updater) assembleTasks(ctx context.Context) []error {
 
 		// Make sure the container runs in a systemd unit which is
 		// stored as a label at container creation.
-		unit, exists, err := u.systemdUnitForContainer(ctr, labels)
+		unit, exists, err := u.systemdUnitForContainer(ctx, ctr, labels)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -462,7 +462,7 @@ func (u *updater) assembleTasks(ctx context.Context) []error {
 // systemdUnitForContainer returns the name of the container's systemd unit.
 // If the container is part of a pod, the pod's infra container's systemd unit
 // is returned.  This allows for auto update to restart the pod's systemd unit.
-func (u *updater) systemdUnitForContainer(c *libpod.Container, labels map[string]string) (string, bool, error) {
+func (u *updater) systemdUnitForContainer(ctx context.Context, c *libpod.Container, labels map[string]string) (string, bool, error) {
 	podID := c.ConfigNoCopy().Pod
 	if podID == "" {
 		unit, exists := labels[systemdDefine.EnvVariable]
@@ -474,7 +474,7 @@ func (u *updater) systemdUnitForContainer(c *libpod.Container, labels map[string
 		return "", false, fmt.Errorf("looking up pod's systemd unit: %w", err)
 	}
 
-	infra, err := pod.InfraContainer()
+	infra, err := pod.InfraContainer(ctx)
 	if err != nil {
 		return "", false, fmt.Errorf("looking up pod's systemd unit: %w", err)
 	}

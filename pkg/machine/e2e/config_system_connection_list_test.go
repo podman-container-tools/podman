@@ -1,5 +1,7 @@
 package e2e_test
 
+import "context"
+
 type listSystemConnection struct {
 	/*
 		--format string   Custom Go template for printing connections
@@ -8,7 +10,7 @@ type listSystemConnection struct {
 	format string
 }
 
-func (l *listSystemConnection) buildCmd(_ *machineTestBuilder) []string {
+func (l *listSystemConnection) buildCmd(_ context.Context, _ *machineTestBuilder) []string {
 	cmd := []string{"system", "connection", "list"}
 	if len(l.format) > 0 {
 		cmd = append(cmd, "--format", l.format)

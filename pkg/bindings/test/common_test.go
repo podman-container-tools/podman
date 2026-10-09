@@ -64,8 +64,8 @@ type bindingTest struct {
 	conn            context.Context
 }
 
-func (b *bindingTest) NewConnection() error {
-	connText, err := NewConnection(context.Background(), b.sock)
+func (b *bindingTest) NewConnection(ctx context.Context) error {
+	connText, err := NewConnection(ctx, b.sock)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (b *bindingTest) runPodman(command []string) *Session {
 		cmd = append(cmd, "--storage", val)
 	}
 	cmd = append(cmd, command...)
-	c := exec.Command(podmanBinary, cmd...)
+	c := exec.CommandContext(b.conn, podmanBinary, cmd...)
 	fmt.Printf("Running: %s %s\n", podmanBinary, strings.Join(cmd, " "))
 	session, err := Start(c, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 	if err != nil {

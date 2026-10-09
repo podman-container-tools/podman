@@ -20,18 +20,18 @@ const (
 )
 
 var _ = Describe("run podman API test calls", func() {
-	It("client connect to machine socket", func() {
+	It("client connect to machine socket", func(ctx context.Context) {
 		if runtime.GOOS == "windows" {
 			Skip("Go docker client doesn't support unix socket on Windows")
 		}
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspectJSON := new(inspectMachine)
-		inspectSession, err := mb.setName(name).setCmd(inspectJSON).run()
+		inspectSession, err := mb.setName(name).setCmd(ctx, inspectJSON).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 
@@ -43,11 +43,11 @@ var _ = Describe("run podman API test calls", func() {
 		// check with docker client
 		cli, err := client.New(client.WithHost("unix://" + sockPath))
 		Expect(err).ToNot(HaveOccurred())
-		_, err = cli.Ping(context.Background(), client.PingOptions{})
+		_, err = cli.Ping(ctx, client.PingOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		// check with curl
-		cmd := exec.Command("curl", "--unix-socket", sockPath, "http://d/v5.0.0/libpod/info")
+		cmd := exec.CommandContext(ctx, "curl", "--unix-socket", sockPath, "http://d/v5.0.0/libpod/info")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
@@ -58,7 +58,7 @@ var _ = Describe("run podman API test calls", func() {
 			pipePath := inspectInfo[0].ConnectionInfo.PodmanPipe.GetPath()
 			cli, err := client.New(client.WithHost(NamedPipeProto + filepath.ToSlash(pipePath)))
 			Expect(err).ToNot(HaveOccurred())
-			_, err = cli.Ping(context.Background(), client.PingOptions{})
+			_, err = cli.Ping(ctx, client.PingOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		}
 	})

@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -19,12 +20,12 @@ import (
 // is a tab-separated string.
 //
 // For more details, please refer to github.com/containers/psgo.
-func (p *Pod) GetPodPidInformation(descriptors []string) ([]string, error) {
+func (p *Pod) GetPodPidInformation(ctx context.Context, descriptors []string) ([]string, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	pids := make([]string, 0)
-	ctrsInPod, err := p.allContainers()
+	ctrsInPod, err := p.allContainers(ctx)
 	if err != nil {
 		return nil, err
 	}

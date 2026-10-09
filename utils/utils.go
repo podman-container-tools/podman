@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -19,8 +20,8 @@ import (
 
 // ExecCmd executes a command with args and returns its output as a string along
 // with an error, if any.
-func ExecCmd(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+func ExecCmd(ctx context.Context, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -35,8 +36,8 @@ func ExecCmd(name string, args ...string) (string, error) {
 }
 
 // ExecCmdWithStdStreams execute a command with the specified standard streams.
-func ExecCmdWithStdStreams(stdin io.Reader, stdout, stderr io.Writer, env []string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+func ExecCmdWithStdStreams(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, env []string, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

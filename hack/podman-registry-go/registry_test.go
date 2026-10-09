@@ -20,7 +20,7 @@ func TestStartAndStopMultipleRegistries(t *testing.T) {
 	// Start registries.
 	var errors *multierror.Error
 	for range 3 {
-		reg, err := StartWithOptions(registryOptions)
+		reg, err := StartWithOptions(t.Context(), registryOptions)
 		if err != nil {
 			errors = multierror.Append(errors, err)
 			continue
@@ -35,9 +35,9 @@ func TestStartAndStopMultipleRegistries(t *testing.T) {
 	// Stop registries.
 	for _, reg := range registries {
 		// Make sure we can stop it properly.
-		errors = multierror.Append(errors, reg.Stop())
+		errors = multierror.Append(errors, reg.Stop(t.Context()))
 		// Stopping an already stopped registry is fine as well.
-		errors = multierror.Append(errors, reg.Stop())
+		errors = multierror.Append(errors, reg.Stop(t.Context()))
 	}
 
 	require.NoError(t, errors.ErrorOrNil())

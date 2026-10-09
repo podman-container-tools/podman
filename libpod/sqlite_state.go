@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -101,7 +102,7 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 }
 
 // Name gets the name of the current DB backend.
-func (s *SQLiteState) Name() string {
+func (s *SQLiteState) Name(context.Context) string {
 	return config.DBBackendSQLite.String()
 }
 
@@ -519,7 +520,7 @@ func (s *SQLiteState) GetPodName(id string) (string, error) {
 }
 
 // Container retrieves a single container from the state by its full ID
-func (s *SQLiteState) Container(id string) (*Container, error) {
+func (s *SQLiteState) Container(ctx context.Context, id string) (*Container, error) {
 	if id == "" {
 		return nil, define.ErrEmptyID
 	}
@@ -538,7 +539,7 @@ func (s *SQLiteState) Container(id string) (*Container, error) {
 	ctr.state = new(ContainerState)
 	ctr.runtime = s.runtime
 
-	if err := finalizeCtrSqlite(ctr); err != nil {
+	if err := finalizeCtrSqlite(ctx, ctr); err != nil {
 		return nil, err
 	}
 
@@ -589,7 +590,7 @@ func (s *SQLiteState) LookupContainerID(idOrName string) (string, error) {
 
 // LookupContainer retrieves a container from the state by full or unique
 // partial ID or name
-func (s *SQLiteState) LookupContainer(idOrName string) (*Container, error) {
+func (s *SQLiteState) LookupContainer(ctx context.Context, idOrName string) (*Container, error) {
 	if idOrName == "" {
 		return nil, define.ErrEmptyID
 	}
@@ -639,7 +640,7 @@ func (s *SQLiteState) LookupContainer(idOrName string) (*Container, error) {
 		return nil, fmt.Errorf("unmarshalling container config JSON: %w", err)
 	}
 
-	if err := finalizeCtrSqlite(ctr); err != nil {
+	if err := finalizeCtrSqlite(ctx, ctr); err != nil {
 		return nil, err
 	}
 
@@ -826,7 +827,7 @@ func (s *SQLiteState) ContainerInUse(ctr *Container) (_ []string, defErr error) 
 
 // AllContainers retrieves all the containers in the database
 // If `loadState` is set, the containers' state will be loaded as well.
-func (s *SQLiteState) AllContainers(loadState bool) ([]*Container, error) {
+func (s *SQLiteState) AllContainers(ctx context.Context, loadState bool) ([]*Container, error) {
 	if !s.valid {
 		return nil, define.ErrDBClosed
 	}
@@ -893,7 +894,7 @@ func (s *SQLiteState) AllContainers(loadState bool) ([]*Container, error) {
 	}
 
 	for _, ctr := range ctrs {
-		if err := finalizeCtrSqlite(ctr); err != nil {
+		if err := finalizeCtrSqlite(ctx, ctr); err != nil {
 			return nil, err
 		}
 	}
@@ -1597,7 +1598,7 @@ func (s *SQLiteState) PodContainersByID(pod *Pod) ([]string, error) {
 }
 
 // PodContainers returns all the containers present in the given pod
-func (s *SQLiteState) PodContainers(pod *Pod) ([]*Container, error) {
+func (s *SQLiteState) PodContainers(ctx context.Context, pod *Pod) ([]*Container, error) {
 	if !s.valid {
 		return nil, define.ErrDBClosed
 	}
@@ -1644,7 +1645,7 @@ func (s *SQLiteState) PodContainers(pod *Pod) ([]*Container, error) {
 	}
 
 	for _, ctr := range ctrs {
-		if err := finalizeCtrSqlite(ctr); err != nil {
+		if err := finalizeCtrSqlite(ctx, ctr); err != nil {
 			return nil, err
 		}
 	}
@@ -2208,7 +2209,7 @@ func (s *SQLiteState) SaveVolume(volume *Volume) (defErr error) {
 }
 
 // AllVolumes returns all volumes present in the state.
-func (s *SQLiteState) AllVolumes() ([]*Volume, error) {
+func (s *SQLiteState) AllVolumes(ctx context.Context) ([]*Volume, error) {
 	if !s.valid {
 		return nil, define.ErrDBClosed
 	}
@@ -2235,7 +2236,7 @@ func (s *SQLiteState) AllVolumes() ([]*Volume, error) {
 			return nil, fmt.Errorf("unmarshalling volume config: %w", err)
 		}
 
-		if err := finalizeVolumeSqlite(vol); err != nil {
+		if err := finalizeVolumeSqlite(ctx, vol); err != nil {
 			return nil, err
 		}
 
@@ -2249,7 +2250,7 @@ func (s *SQLiteState) AllVolumes() ([]*Volume, error) {
 }
 
 // Volume retrieves a volume from full name.
-func (s *SQLiteState) Volume(name string) (*Volume, error) {
+func (s *SQLiteState) Volume(ctx context.Context, name string) (*Volume, error) {
 	if name == "" {
 		return nil, define.ErrEmptyID
 	}
@@ -2278,7 +2279,7 @@ func (s *SQLiteState) Volume(name string) (*Volume, error) {
 		return nil, fmt.Errorf("unmarshalling volume %s config JSON: %w", name, err)
 	}
 
-	if err := finalizeVolumeSqlite(vol); err != nil {
+	if err := finalizeVolumeSqlite(ctx, vol); err != nil {
 		return nil, err
 	}
 
@@ -2286,7 +2287,7 @@ func (s *SQLiteState) Volume(name string) (*Volume, error) {
 }
 
 // LookupVolume locates a volume from a unique partial name.
-func (s *SQLiteState) LookupVolume(name string) (*Volume, error) {
+func (s *SQLiteState) LookupVolume(ctx context.Context, name string) (*Volume, error) {
 	if name == "" {
 		return nil, define.ErrEmptyID
 	}
@@ -2331,7 +2332,7 @@ func (s *SQLiteState) LookupVolume(name string) (*Volume, error) {
 		return nil, fmt.Errorf("unmarshalling volume %s config JSON: %w", name, err)
 	}
 
-	if err := finalizeVolumeSqlite(vol); err != nil {
+	if err := finalizeVolumeSqlite(ctx, vol); err != nil {
 		return nil, err
 	}
 

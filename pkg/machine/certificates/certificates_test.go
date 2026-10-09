@@ -27,7 +27,7 @@ func verifyCertificateFile(filePath string) error {
 }
 
 func TestExtractAndSaveCertificates(t *testing.T) {
-	certs := extractHostCertificates()
+	certs := extractHostCertificates(t.Context())
 	assert.NotEmpty(t, certs)
 
 	filePath := filepath.Join(t.TempDir(), "cert.pem")

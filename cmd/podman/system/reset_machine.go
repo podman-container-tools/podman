@@ -3,6 +3,8 @@
 package system
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/pkg/machine/connection"
 	"go.podman.io/podman/v6/pkg/machine/define"
@@ -13,7 +15,7 @@ import (
 	"go.podman.io/podman/v6/utils"
 )
 
-func resetMachine() error {
+func resetMachine(ctx context.Context) error {
 	provider, err := p.Get()
 	if err != nil {
 		return err
@@ -36,13 +38,13 @@ func resetMachine() error {
 	}
 
 	for _, mc := range mcs {
-		state, err := provider.State(mc, false)
+		state, err := provider.State(ctx, mc, false)
 		if err != nil {
 			logrus.Errorf("unable to determine state of %s: %q", mc.Name, err)
 		}
 
 		if state == define.Running {
-			if err := shim.Stop(mc, provider, true); err != nil {
+			if err := shim.Stop(ctx, mc, provider, true); err != nil {
 				logrus.Errorf("unable to stop running machine %s: %q", mc.Name, err)
 			}
 		}
@@ -53,12 +55,12 @@ func resetMachine() error {
 
 		// the thinking here is that the we dont need to remove machine specific files because
 		// we will nuke them all at the end of this.  Just do what provider needs
-		_, providerRm, err := provider.Remove(mc)
+		_, providerRm, err := provider.Remove(ctx, mc)
 		if err != nil {
 			logrus.Errorf("unable to prepare provider machine removal: %q", err)
 		}
 
-		if err := providerRm(); err != nil {
+		if err := providerRm(ctx); err != nil {
 			logrus.Errorf("unable remove machine %s from provider: %q", mc.Name, err)
 		}
 	}

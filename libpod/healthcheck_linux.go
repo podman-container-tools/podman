@@ -20,7 +20,7 @@ import (
 )
 
 // createTimer systemd timers for healthchecks of a container
-func (c *Container) createTimer(interval string, isStartup bool) error {
+func (c *Container) createTimer(ctx context.Context, interval string, isStartup bool) error {
 	if c.disableHealthCheckSystemd(isStartup) {
 		return nil
 	}
@@ -48,13 +48,13 @@ func (c *Container) createTimer(interval string, isStartup bool) error {
 
 	cmd = append(cmd, "healthcheck", "run", "--ignore-result", c.ID())
 
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get systemd connection to add healthchecks: %w", err)
 	}
 	conn.Close()
 	logrus.Debugf("creating systemd-transient files: %s %s", "systemd-run", cmd)
-	systemdRun := exec.Command("systemd-run", cmd...)
+	systemdRun := exec.CommandContext(ctx, "systemd-run", cmd...)
 	if output, err := systemdRun.CombinedOutput(); err != nil {
 		exitError := &exec.ExitError{}
 		if errors.As(err, &exitError) {
@@ -83,7 +83,7 @@ func systemdOpSuccessful(c chan string) error {
 }
 
 // startTimer starts a systemd timer for the healthchecks
-func (c *Container) startTimer(isStartup bool) error {
+func (c *Container) startTimer(ctx context.Context, isStartup bool) error {
 	if c.disableHealthCheckSystemd(isStartup) {
 		return nil
 	}
@@ -93,7 +93,7 @@ func (c *Container) startTimer(isStartup bool) error {
 		hcUnitName = c.hcUnitName(isStartup, true)
 	}
 
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get systemd connection to start healthchecks: %w", err)
 	}
@@ -101,7 +101,7 @@ func (c *Container) startTimer(isStartup bool) error {
 
 	startFile := fmt.Sprintf("%s.service", hcUnitName)
 	startChan := make(chan string)
-	if _, err := conn.RestartUnitContext(context.Background(), startFile, "fail", startChan); err != nil {
+	if _, err := conn.RestartUnitContext(ctx, startFile, "fail", startChan); err != nil {
 		return err
 	}
 	if err := systemdOpSuccessful(startChan); err != nil {
@@ -117,7 +117,7 @@ func (c *Container) removeTransientFiles(ctx context.Context, isStartup bool, un
 	if c.disableHealthCheckSystemd(isStartup) {
 		return nil
 	}
-	conn, err := systemd.ConnectToDBUS()
+	conn, err := systemd.ConnectToDBUS(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get systemd connection to remove healthchecks: %w", err)
 	}

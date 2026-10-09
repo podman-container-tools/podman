@@ -126,7 +126,7 @@ func dbusAuthRootlessConnection(createBus func(opts ...godbus.ConnOption) (*godb
 	return conn, nil
 }
 
-func newRootlessConnection() (*dbus.Conn, error) {
+func newRootlessConnection(ctx context.Context) (*dbus.Conn, error) {
 	return dbus.NewConnection(func() (*godbus.Conn, error) {
 		return dbusAuthRootlessConnection(func(_ ...godbus.ConnOption) (*godbus.Conn, error) {
 			path := filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "systemd", "private")
@@ -134,16 +134,16 @@ func newRootlessConnection() (*dbus.Conn, error) {
 			if err != nil {
 				return nil, err
 			}
-			return godbus.Dial(fmt.Sprintf("unix:path=%s", path))
+			return godbus.Dial(fmt.Sprintf("unix:path=%s", path), godbus.WithContext(ctx))
 		})
 	})
 }
 
-// ConnectToDBUS returns a DBUS connection.  It works both as root and non-root
-// users.
-func ConnectToDBUS() (*dbus.Conn, error) {
+// ConnectToDBUS returns a DBUS connection.  It works both as root and
+// non-root users.
+func ConnectToDBUS(ctx context.Context) (*dbus.Conn, error) {
 	if rootless.IsRootless() {
-		return newRootlessConnection()
+		return newRootlessConnection(ctx)
 	}
-	return dbus.NewSystemdConnectionContext(context.Background())
+	return dbus.NewSystemdConnectionContext(ctx)
 }

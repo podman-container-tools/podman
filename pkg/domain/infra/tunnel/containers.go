@@ -455,7 +455,7 @@ func (ic *ContainerEngine) ContainerCheckpoint(_ context.Context, namesOrIds []s
 	return reports, nil
 }
 
-func (ic *ContainerEngine) ContainerRestore(_ context.Context, namesOrIds []string, opts entities.RestoreOptions) ([]*entities.RestoreReport, error) {
+func (ic *ContainerEngine) ContainerRestore(ctx context.Context, namesOrIds []string, opts entities.RestoreOptions) ([]*entities.RestoreReport, error) {
 	if opts.ImportPrevious != "" {
 		return nil, fmt.Errorf("--import-previous is not supported on the remote client")
 	}
@@ -496,7 +496,7 @@ func (ic *ContainerEngine) ContainerRestore(_ context.Context, namesOrIds []stri
 		}
 	} else {
 		getImageOptions := new(images.GetOptions).WithSize(false)
-		hostInfo, err := ic.Info(context.Background())
+		hostInfo, err := ic.Info(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -546,7 +546,7 @@ func (ic *ContainerEngine) ContainerCreate(_ context.Context, s *specgen.SpecGen
 	return &entities.ContainerCreateReport{Id: response.ID}, nil
 }
 
-func (ic *ContainerEngine) ContainerLogs(_ context.Context, nameOrIDs []string, opts entities.ContainerLogsOptions) error {
+func (ic *ContainerEngine) ContainerLogs(ctx context.Context, nameOrIDs []string, opts entities.ContainerLogsOptions) error {
 	since := opts.Since.Format(time.RFC3339)
 	until := opts.Until.Format(time.RFC3339)
 	tail := strconv.FormatInt(opts.Tail, 10)
@@ -558,7 +558,7 @@ func (ic *ContainerEngine) ContainerLogs(_ context.Context, nameOrIDs []string, 
 	var err error
 	stdoutCh := make(chan string)
 	stderrCh := make(chan string)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		err = containers.Logs(ic.ClientCtx, nameOrIDs[0], options, stdoutCh, stderrCh)
 		cancel()

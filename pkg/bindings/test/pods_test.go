@@ -1,6 +1,7 @@
 package bindings_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"slices"
@@ -27,14 +28,14 @@ var _ = Describe("Podman pods", func() {
 		err    error
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		bt = newBindingTest()
 		newpod = "newpod"
 		bt.RestoreImagesFromCache()
 		bt.Podcreate(&newpod)
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

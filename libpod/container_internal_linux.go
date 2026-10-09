@@ -77,7 +77,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		defer wg.Done()
 		if c.state.State == define.ContainerStateStopped {
 			// networking should not be reused after a stop
-			if err := c.cleanupNetwork(); err != nil {
+			if err := c.cleanupNetwork(ctx); err != nil {
 				createNetNSErr = err
 				return
 			}
@@ -91,7 +91,7 @@ func (c *Container) prepare(ctx context.Context) error {
 				return
 			}
 
-			netNS, networkStatus, createNetNSErr = c.runtime.createNetNS(c)
+			netNS, networkStatus, createNetNSErr = c.runtime.createNetNS(ctx, c)
 			if createNetNSErr != nil {
 				return
 			}
@@ -139,7 +139,7 @@ func (c *Container) prepare(ctx context.Context) error {
 	// Only trigger storage cleanup if mountStorage was successful.
 	// Otherwise, we may mess up mount counters.
 	if createNetNSErr != nil && mountStorageErr == nil {
-		if err := c.cleanupStorage(); err != nil {
+		if err := c.cleanupStorage(ctx); err != nil {
 			// createErr is guaranteed non-nil, so print
 			// unconditionally
 			logrus.Errorf("Preparing container %s: %v", c.ID(), createErr)
@@ -150,7 +150,7 @@ func (c *Container) prepare(ctx context.Context) error {
 	// It's OK to unconditionally trigger network cleanup. If the network
 	// isn't ready it will do nothing.
 	if createErr != nil {
-		if err := c.cleanupNetwork(); err != nil {
+		if err := c.cleanupNetwork(ctx); err != nil {
 			logrus.Errorf("Preparing container %s: %v", c.ID(), createErr)
 			createErr = fmt.Errorf("cleaning up container %s network after setup failure: %w", c.ID(), err)
 		}
@@ -174,11 +174,11 @@ func (c *Container) prepare(ctx context.Context) error {
 }
 
 // cleanupNetwork unmounts and cleans up the container's network
-func (c *Container) cleanupNetwork() error {
+func (c *Container) cleanupNetwork(ctx context.Context) error {
 	if c.config.NetNsCtr != "" {
 		return nil
 	}
-	netDisabled, err := c.NetworkDisabled()
+	netDisabled, err := c.NetworkDisabled(ctx)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (c *Container) cleanupNetwork() error {
 	}
 
 	// Stop the container's network namespace (if it has one)
-	neterr := c.runtime.teardownNetNS(c)
+	neterr := c.runtime.teardownNetNS(ctx, c)
 	c.state.NetNS = ""
 	c.state.NetworkStatus = nil
 
@@ -209,8 +209,8 @@ func (c *Container) cleanupNetwork() error {
 
 // reloadNetwork reloads the network for the given container, recreating
 // firewall rules.
-func (c *Container) reloadNetwork() error {
-	result, err := c.runtime.reloadContainerNetwork(c)
+func (c *Container) reloadNetwork(ctx context.Context) error {
+	result, err := c.runtime.reloadContainerNetwork(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -295,14 +295,14 @@ func (c *Container) setupSystemd(mounts []spec.Mount, g generate.Generator) {
 }
 
 // Add an existing container's namespace to the spec
-func (c *Container) addNamespaceContainer(g *generate.Generator, ns LinuxNS, ctr string, specNS spec.LinuxNamespaceType) error {
-	nsCtr, err := c.runtime.state.Container(ctr)
+func (c *Container) addNamespaceContainer(ctx context.Context, g *generate.Generator, ns LinuxNS, ctr string, specNS spec.LinuxNamespaceType) error {
+	nsCtr, err := c.runtime.state.Container(ctx, ctr)
 	if err != nil {
 		return fmt.Errorf("retrieving dependency %s of container %s from state: %w", ctr, c.ID(), err)
 	}
 
 	if specNS == spec.UTSNamespace {
-		hostname := nsCtr.Hostname()
+		hostname := nsCtr.Hostname(ctx)
 		// Joining an existing namespace, cannot set the hostname
 		g.SetHostname("")
 		g.AddProcessEnv("HOSTNAME", hostname)
@@ -404,29 +404,29 @@ func (c *Container) addSystemdMounts(g *generate.Generator) error {
 	return nil
 }
 
-func (c *Container) addSharedNamespaces(g *generate.Generator) error {
+func (c *Container) addSharedNamespaces(ctx context.Context, g *generate.Generator) error {
 	if c.config.IPCNsCtr != "" {
-		if err := c.addNamespaceContainer(g, IPCNS, c.config.IPCNsCtr, spec.IPCNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, IPCNS, c.config.IPCNsCtr, spec.IPCNamespace); err != nil {
 			return err
 		}
 	}
 	if c.config.MountNsCtr != "" {
-		if err := c.addNamespaceContainer(g, MountNS, c.config.MountNsCtr, spec.MountNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, MountNS, c.config.MountNsCtr, spec.MountNamespace); err != nil {
 			return err
 		}
 	}
 	if c.config.NetNsCtr != "" {
-		if err := c.addNamespaceContainer(g, NetNS, c.config.NetNsCtr, spec.NetworkNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, NetNS, c.config.NetNsCtr, spec.NetworkNamespace); err != nil {
 			return err
 		}
 	}
 	if c.config.PIDNsCtr != "" {
-		if err := c.addNamespaceContainer(g, PIDNS, c.config.PIDNsCtr, spec.PIDNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, PIDNS, c.config.PIDNsCtr, spec.PIDNamespace); err != nil {
 			return err
 		}
 	}
 	if c.config.UserNsCtr != "" {
-		if err := c.addNamespaceContainer(g, UserNS, c.config.UserNsCtr, spec.UserNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, UserNS, c.config.UserNsCtr, spec.UserNamespace); err != nil {
 			return err
 		}
 		if len(g.Config.Linux.UIDMappings) == 0 {
@@ -454,7 +454,7 @@ func (c *Container) addSharedNamespaces(g *generate.Generator) error {
 	// Set the HOSTNAME environment variable unless explicitly overridden by
 	// the user (already present in OCI spec). If we don't have a UTS ns,
 	// set it to the host's hostname instead.
-	hostname := c.Hostname()
+	hostname := c.Hostname(ctx)
 	foundUTS := false
 
 	for _, i := range c.config.Spec.Linux.Namespaces {
@@ -483,12 +483,12 @@ func (c *Container) addSharedNamespaces(g *generate.Generator) error {
 	}
 
 	if c.config.UTSNsCtr != "" {
-		if err := c.addNamespaceContainer(g, UTSNS, c.config.UTSNsCtr, spec.UTSNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, UTSNS, c.config.UTSNsCtr, spec.UTSNamespace); err != nil {
 			return err
 		}
 	}
 	if c.config.CgroupNsCtr != "" {
-		if err := c.addNamespaceContainer(g, CgroupNS, c.config.CgroupNsCtr, spec.CgroupNamespace); err != nil {
+		if err := c.addNamespaceContainer(ctx, g, CgroupNS, c.config.CgroupNsCtr, spec.CgroupNamespace); err != nil {
 			return err
 		}
 	}
@@ -595,7 +595,7 @@ func setVolumeAtime(mountPoint string, st os.FileInfo) error {
 	return nil
 }
 
-func (c *Container) makeHostnameBindMount() error {
+func (c *Container) makeHostnameBindMount(ctx context.Context) error {
 	if c.config.UseImageHostname {
 		return nil
 	}
@@ -603,7 +603,7 @@ func (c *Container) makeHostnameBindMount() error {
 	// Make /etc/hostname
 	// This should never change, so no need to recreate if it exists
 	if _, ok := c.state.BindMounts["/etc/hostname"]; !ok {
-		hostnamePath, err := c.writeStringToRundir("hostname", c.Hostname()+"\n")
+		hostnamePath, err := c.writeStringToRundir("hostname", c.Hostname(ctx)+"\n")
 		if err != nil {
 			return fmt.Errorf("creating hostname file for container %s: %w", c.ID(), err)
 		}
@@ -711,7 +711,7 @@ func (c *Container) makePlatformMtabLink(etcInTheContainerFd, rootUID, rootGID i
 	return nil
 }
 
-func (c *Container) getPlatformRunPath() (string, error) {
+func (c *Container) getPlatformRunPath(context.Context) (string, error) {
 	return "/run", nil
 }
 

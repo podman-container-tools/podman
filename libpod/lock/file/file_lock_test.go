@@ -58,7 +58,7 @@ func TestLockAndUnlock(t *testing.T) {
 	lslocks, err := exec.LookPath("lslocks")
 	if err == nil {
 		lockPath := l.getLockPath(lock)
-		out, err := exec.Command(lslocks, "--json", "-p", strconv.Itoa(os.Getpid())).CombinedOutput()
+		out, err := exec.CommandContext(t.Context(), lslocks, "--json", "-p", strconv.Itoa(os.Getpid())).CombinedOutput()
 		assert.NoError(t, err)
 
 		assert.Contains(t, string(out), lockPath)

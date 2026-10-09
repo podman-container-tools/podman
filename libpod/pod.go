@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -117,11 +118,11 @@ func (p *Pod) Name() string {
 }
 
 // MountLabel returns the SELinux label associated with the pod
-func (p *Pod) MountLabel() (string, error) {
+func (p *Pod) MountLabel(ctx context.Context) (string, error) {
 	if !p.HasInfraContainer() {
 		return "", nil
 	}
-	ctr, err := p.infraContainer()
+	ctr, err := p.infraContainer(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -240,8 +241,8 @@ func (p *Pod) BlkiThrottleWriteBps() []define.InspectBlkioThrottleDevice {
 }
 
 // NetworkMode returns the Network mode given by the user ex: pod, private...
-func (p *Pod) NetworkMode() string {
-	infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
+func (p *Pod) NetworkMode(ctx context.Context) string {
+	infra, err := p.runtime.GetContainer(ctx, p.state.InfraContainerID)
 	if err != nil {
 		return ""
 	}
@@ -249,8 +250,8 @@ func (p *Pod) NetworkMode() string {
 }
 
 // Namespace Mode returns the given NS mode provided by the user ex: host, private...
-func (p *Pod) NamespaceMode(kind specs.LinuxNamespaceType) string {
-	infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
+func (p *Pod) NamespaceMode(ctx context.Context, kind specs.LinuxNamespaceType) string {
+	infra, err := p.runtime.GetContainer(ctx, p.state.InfraContainerID)
 	if err != nil {
 		return ""
 	}
@@ -270,11 +271,11 @@ func (p *Pod) NamespaceMode(kind specs.LinuxNamespaceType) string {
 }
 
 // CPUQuota returns the pod CPU quota
-func (p *Pod) VolumesFrom() []string {
+func (p *Pod) VolumesFrom(ctx context.Context) []string {
 	if p.state.InfraContainerID == "" {
 		return nil
 	}
-	infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
+	infra, err := p.runtime.GetContainer(ctx, p.state.InfraContainerID)
 	if err != nil {
 		return nil
 	}
@@ -387,17 +388,17 @@ func (p *Pod) AllContainersByID() ([]string, error) {
 }
 
 // AllContainers retrieves the containers in the pod
-func (p *Pod) AllContainers() ([]*Container, error) {
+func (p *Pod) AllContainers(ctx context.Context) ([]*Container, error) {
 	if !p.valid {
 		return nil, define.ErrPodRemoved
 	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	return p.allContainers()
+	return p.allContainers(ctx)
 }
 
-func (p *Pod) allContainers() ([]*Container, error) {
-	return p.runtime.state.PodContainers(p)
+func (p *Pod) allContainers(ctx context.Context) ([]*Container, error) {
+	return p.runtime.state.PodContainers(ctx, p)
 }
 
 // HasInfraContainer returns whether the pod will create an infra container
@@ -428,7 +429,7 @@ func (p *Pod) InfraContainerID() (string, error) {
 }
 
 // infraContainer is the unlocked version of InfraContainer which returns the infra container
-func (p *Pod) infraContainer() (*Container, error) {
+func (p *Pod) infraContainer(ctx context.Context) (*Container, error) {
 	id, err := p.infraContainerID()
 	if err != nil {
 		return nil, err
@@ -437,14 +438,14 @@ func (p *Pod) infraContainer() (*Container, error) {
 		return nil, fmt.Errorf("pod has no infra container: %w", define.ErrNoSuchCtr)
 	}
 
-	return p.runtime.state.Container(id)
+	return p.runtime.state.Container(ctx, id)
 }
 
 // InfraContainer returns the infra container.
-func (p *Pod) InfraContainer() (*Container, error) {
+func (p *Pod) InfraContainer(ctx context.Context) (*Container, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	return p.infraContainer()
+	return p.infraContainer(ctx)
 }
 
 // TODO add pod batching
@@ -458,20 +459,20 @@ type PodContainerStats struct {
 }
 
 // GetPodStats returns the stats for each of its containers
-func (p *Pod) GetPodStats() (map[string]*define.ContainerStats, error) {
+func (p *Pod) GetPodStats(ctx context.Context) (map[string]*define.ContainerStats, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if err := p.updatePod(); err != nil {
 		return nil, err
 	}
-	containers, err := p.runtime.state.PodContainers(p)
+	containers, err := p.runtime.state.PodContainers(ctx, p)
 	if err != nil {
 		return nil, err
 	}
 	newContainerStats := make(map[string]*define.ContainerStats)
 	for _, c := range containers {
-		newStats, err := c.GetContainerStats(nil)
+		newStats, err := c.GetContainerStats(ctx, nil)
 		if err != nil {
 			// If the container wasn't running ignore it
 			if errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped) {
@@ -485,11 +486,11 @@ func (p *Pod) GetPodStats() (map[string]*define.ContainerStats, error) {
 }
 
 // ProcessLabel returns the SELinux label associated with the pod
-func (p *Pod) ProcessLabel() (string, error) {
+func (p *Pod) ProcessLabel(ctx context.Context) (string, error) {
 	if !p.HasInfraContainer() {
 		return "", nil
 	}
-	ctr, err := p.infraContainer()
+	ctr, err := p.infraContainer(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -498,10 +499,10 @@ func (p *Pod) ProcessLabel() (string, error) {
 
 // initContainers returns the list of initcontainers
 // in a pod sorted by create time
-func (p *Pod) initContainers() ([]*Container, error) {
+func (p *Pod) initContainers(ctx context.Context) ([]*Container, error) {
 	initCons := make([]*Container, 0)
 	// the pod is already locked when this is called
-	cons, err := p.allContainers()
+	cons, err := p.allContainers(ctx)
 	if err != nil {
 		return nil, err
 	}

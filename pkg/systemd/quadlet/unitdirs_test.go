@@ -149,7 +149,7 @@ func TestUnitDirs(t *testing.T) {
 
 		// because chroot is only available for root,
 		// unshare the namespace and map user to root
-		c := exec.Command("/proc/self/exe", os.Args[1:]...)
+		c := exec.CommandContext(t.Context(), "/proc/self/exe", os.Args[1:]...)
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr

@@ -21,12 +21,12 @@ var _ = Describe("Podman secrets", func() {
 		err      error
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		bt = newBindingTest()
 		bt.RestoreImagesFromCache()
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		connText, err = bindings.NewConnection(context.Background(), bt.sock) //nolint:fatcontext
+		connText, err = bindings.NewConnection(ctx, bt.sock) //nolint:fatcontext
 		Expect(err).ToNot(HaveOccurred())
 	})
 

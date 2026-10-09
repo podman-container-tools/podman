@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -32,10 +33,10 @@ const (
 // - export all the certificates in a single file in the machine data folder
 // - check if the file is already mounted in the guest or transfer via SCP
 // - update the guest trust store to include the certificates
-func ImportNativeCertificates(mc *vmconfigs.MachineConfig, vmType define.VMType) error {
+func ImportNativeCertificates(ctx context.Context, mc *vmconfigs.MachineConfig, vmType define.VMType) error {
 	logrus.Debugf("Importing the host CA certificates into machine %q", mc.Name)
 	// Extract certificates from the host system store
-	certs := deduplicateCertificates(extractHostCertificates())
+	certs := deduplicateCertificates(extractHostCertificates(ctx))
 	if len(certs) == 0 {
 		logrus.Debugf("No native CA certificates found to import")
 		return nil
@@ -49,7 +50,7 @@ func ImportNativeCertificates(mc *vmconfigs.MachineConfig, vmType define.VMType)
 	logrus.Debugf("Saved the certificates to file %q", certFilePath)
 	// Copy or transfer via SCP the file with the certificates to the anchors
 	// folder in the guest
-	err = copyOrTransferFileToGuestAnchorsFolder(mc, vmType, certFilePath)
+	err = copyOrTransferFileToGuestAnchorsFolder(ctx, mc, vmType, certFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to transfer or copy the certs file in the guest anchors folder: %w", err)
 	}
@@ -83,7 +84,7 @@ func saveCertificatesToFile(mc *vmconfigs.MachineConfig, certs []*x509.Certifica
 // copyOrTransferFileToGuestAnchorsFolder copies or transfers hostFilePath to
 // the guest anchor folder, depending on whether the file is already mounted in
 // the guest or not.
-func copyOrTransferFileToGuestAnchorsFolder(mc *vmconfigs.MachineConfig, vmType define.VMType, hostFilePath string) error {
+func copyOrTransferFileToGuestAnchorsFolder(ctx context.Context, mc *vmconfigs.MachineConfig, vmType define.VMType, hostFilePath string) error {
 	// Look for the file in the machine mounts
 	mounts := mc.Mounts
 	if localMap, ok := localapi.IsPathAvailableOnMachine(mounts, vmType, hostFilePath); ok {
@@ -94,7 +95,7 @@ func copyOrTransferFileToGuestAnchorsFolder(mc *vmconfigs.MachineConfig, vmType 
 	}
 	// Transfer the certificate file to the guest OS
 	logrus.Debugf("The certificates file isn't mounted in the guest, transfer it via SCP.")
-	return machine.LocalhostSSHCopy(
+	return machine.LocalhostSSHCopy(ctx,
 		"root", // need root to copy to /etc/pki/ca-trust/source/anchors/
 		mc.SSH.IdentityPath,
 		mc.SSH.Port,

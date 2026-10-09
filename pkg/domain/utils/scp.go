@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -18,7 +19,7 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
 
-func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (*entities.ScpExecuteTransferReport, error) {
+func ExecuteTransfer(ctx context.Context, src, dst string, opts entities.ScpExecuteTransferOptions) (*entities.ScpExecuteTransferReport, error) {
 	source := entities.ScpTransferImageOptions{}
 	dest := entities.ScpTransferImageOptions{}
 	sshInfo := entities.ImageScpConnections{}
@@ -138,7 +139,7 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			loadCmd = append(loadCmd, "-q")
 		}
 		loadCmd = append(loadCmd, "--input", dest.File)
-		id, err := ExecPodman(dest, podman, loadCmd)
+		id, err := ExecPodman(ctx, dest, podman, loadCmd)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +157,7 @@ func ExecuteTransfer(src, dst string, opts entities.ScpExecuteTransferOptions) (
 			saveCmd = append(saveCmd, "-q")
 		}
 		saveCmd = append(saveCmd, "--output", source.File, source.Image)
-		_, err = ExecPodman(dest, podman, saveCmd)
+		_, err = ExecPodman(ctx, dest, podman, saveCmd)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +222,7 @@ func CreateSCPCommand(cmd *exec.Cmd, command []string) *exec.Cmd {
 }
 
 // ScpTag is a helper function for native podman to tag an image after a local load from image SCP
-func ScpTag(cmd *exec.Cmd, podman string, dest entities.ScpTransferImageOptions) error {
+func ScpTag(ctx context.Context, cmd *exec.Cmd, podman string, dest entities.ScpTransferImageOptions) error {
 	cmd.Stdout = nil
 	out, err := cmd.Output() // this function captures the output temporarily in order to execute the next command
 	if err != nil {
@@ -229,9 +230,9 @@ func ScpTag(cmd *exec.Cmd, podman string, dest entities.ScpTransferImageOptions)
 	}
 	image := ExtractImage(out)
 	if cmd.Args[0] == "sudo" { // transferRootless will need the sudo since we are loading to sudo from a user acct
-		cmd = exec.Command("sudo", podman, "tag", image, dest.Tag)
+		cmd = exec.CommandContext(ctx, "sudo", podman, "tag", image, dest.Tag)
 	} else {
-		cmd = exec.Command(podman, "tag", image, dest.Tag)
+		cmd = exec.CommandContext(ctx, podman, "tag", image, dest.Tag)
 	}
 	cmd.Stdout = os.Stdout
 	return cmd.Run()
@@ -246,7 +247,7 @@ func ExtractImage(out []byte) string {
 }
 
 // LoginUser starts the user process on the host so that image scp can use systemd-run
-func LoginUser(user string) (*exec.Cmd, error) {
+func LoginUser(ctx context.Context, user string) (*exec.Cmd, error) {
 	sleep, err := exec.LookPath("sleep")
 	if err != nil {
 		return nil, err
@@ -255,7 +256,7 @@ func LoginUser(user string) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(machinectl, "shell", "-q", user+"@.host", sleep, "inf")
+	cmd := exec.CommandContext(ctx, machinectl, "shell", "-q", user+"@.host", sleep, "inf")
 	err = cmd.Start()
 	return cmd, err
 }
@@ -412,13 +413,13 @@ func saveToRemote(run remoteRunner, opts entities.ScpSaveToRemoteOptions) (*enti
 }
 
 // execPodman executes the podman save/load command given the podman binary
-func ExecPodman(dest entities.ScpTransferImageOptions, podman string, command []string) (string, error) {
-	cmd := exec.Command(podman)
+func ExecPodman(ctx context.Context, dest entities.ScpTransferImageOptions, podman string, command []string) (string, error) {
+	cmd := exec.CommandContext(ctx, podman)
 	CreateSCPCommand(cmd, command[1:])
 	logrus.Debugf("Executing podman command: %q", cmd)
 	if strings.Contains(strings.Join(command, " "), "load") { // need to tag
 		if len(dest.Tag) > 0 {
-			return "", ScpTag(cmd, podman, dest)
+			return "", ScpTag(ctx, cmd, podman, dest)
 		}
 		cmd.Stdout = nil
 		out, err := cmd.Output()

@@ -5,6 +5,7 @@ package wsl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,16 +37,16 @@ var (
 
 // TODO like provisionWSL, i think this needs to be pushed to use common
 // paths and types where possible
-func unprovisionWSL(mc *vmconfigs.MachineConfig) error {
-	return unprovisionWSLByName(mc.Name)
+func unprovisionWSL(ctx context.Context, mc *vmconfigs.MachineConfig) error {
+	return unprovisionWSLByName(ctx, mc.Name)
 }
 
-func unprovisionWSLByName(name string) error {
+func unprovisionWSLByName(ctx context.Context, name string) error {
 	dist := env.WithPodmanPrefix(name)
-	if err := terminateDist(dist); err != nil {
+	if err := terminateDist(ctx, dist); err != nil {
 		logrus.Error(err)
 	}
-	if err := unregisterDist(dist); err != nil {
+	if err := unregisterDist(ctx, dist); err != nil {
 		logrus.Error(err)
 	}
 
@@ -61,7 +62,7 @@ func unprovisionWSLByName(name string) error {
 // TODO there are some differences here that I dont fully groak but I think
 // we should push this stuff be more common (dir names, etc) and also use
 // typed things where possible like vmfiles
-func provisionWSLDist(name string, imagePath string, prompt string) (string, error) {
+func provisionWSLDist(ctx context.Context, name string, imagePath string, prompt string) (string, error) {
 	vmDataDir, err := env.GetDataDir(vmtype)
 	if err != nil {
 		return "", err
@@ -82,7 +83,7 @@ func provisionWSLDist(name string, imagePath string, prompt string) (string, err
 	// 1. Wsl/Service/RegisterDistro/CreateVm/HCS/ERROR_NOT_SUPPORTED
 	// 2. Wsl/Service/RegisterDistro/CreateVm/HCS/HCS_E_SERVICE_NOT_AVAILABLE
 	cmdOutput := &bytes.Buffer{}
-	cmd := wutil.NewWSLCommand("--import", dist, distTarget, imagePath, "--version", "2")
+	cmd := wutil.NewWSLCommand(ctx, "--import", dist, distTarget, imagePath, "--version", "2")
 	err = runCmdPassThroughTee(cmdOutput, cmd)
 	decodedStr := strings.ToLower(cmdOutput.String())
 	for _, substr := range []string{"hcs/error_not_supported", "hcs/hcs_e_service_not_available"} {
@@ -97,32 +98,32 @@ func provisionWSLDist(name string, imagePath string, prompt string) (string, err
 	// From now on, unregister the WSL distribution in case of error.
 	defer func() {
 		if err != nil {
-			if e := unprovisionWSLByName(name); e != nil {
+			if e := unprovisionWSLByName(ctx, name); e != nil {
 				logrus.Error(e)
 			}
 		}
 	}()
 
 	// Fixes newuidmap
-	if err = wslInvoke(dist, "rpm", "--restore", "shadow-utils"); err != nil {
+	if err = wslInvoke(ctx, dist, "rpm", "--restore", "shadow-utils"); err != nil {
 		return "", fmt.Errorf("package permissions restore of shadow-utils on guest OS failed: %w", err)
 	}
 
-	if err = wslInvoke(dist, "mkdir", "-p", "/usr/local/bin"); err != nil {
+	if err = wslInvoke(ctx, dist, "mkdir", "-p", "/usr/local/bin"); err != nil {
 		return "", fmt.Errorf("could not create /usr/local/bin: %w", err)
 	}
 
-	if err = wslInvoke(dist, "ln", "-f", "-s", gvForwarderPath, "/usr/local/bin/vm"); err != nil {
+	if err = wslInvoke(ctx, dist, "ln", "-f", "-s", gvForwarderPath, "/usr/local/bin/vm"); err != nil {
 		return "", fmt.Errorf("could not setup compatibility link: %w", err)
 	}
 
 	return dist, nil
 }
 
-func createKeys(mc *vmconfigs.MachineConfig, dist string) error {
+func createKeys(ctx context.Context, mc *vmconfigs.MachineConfig, dist string) error {
 	user := mc.SSH.RemoteUsername
 
-	if err := terminateDist(dist); err != nil {
+	if err := terminateDist(ctx, dist); err != nil {
 		return fmt.Errorf("could not cycle WSL dist: %w", err)
 	}
 
@@ -137,7 +138,7 @@ func createKeys(mc *vmconfigs.MachineConfig, dist string) error {
 
 	key := string(pubKey)
 
-	if err := wslPipe(key+"\n", dist, "sh", "-c", "mkdir -p /root/.ssh;"+
+	if err := wslPipe(ctx, key+"\n", dist, "sh", "-c", "mkdir -p /root/.ssh;"+
 		"cat >> /root/.ssh/authorized_keys; chmod 600 /root/.ssh/authorized_keys"); err != nil {
 		return fmt.Errorf("could not create root authorized keys on guest OS: %w", err)
 	}
@@ -145,58 +146,58 @@ func createKeys(mc *vmconfigs.MachineConfig, dist string) error {
 	userAuthCmd := withUser("mkdir -p /home/[USER]/.ssh;"+
 		"cat >> /home/[USER]/.ssh/authorized_keys; chown -R [USER]:[USER] /home/[USER]/.ssh;"+
 		"chmod 600 /home/[USER]/.ssh/authorized_keys", user)
-	if err := wslPipe(key+"\n", dist, "sh", "-c", userAuthCmd); err != nil {
+	if err := wslPipe(ctx, key+"\n", dist, "sh", "-c", userAuthCmd); err != nil {
 		return fmt.Errorf("could not create '%s' authorized keys on guest OS: %w", user, err)
 	}
 
 	return nil
 }
 
-func configureSystem(mc *vmconfigs.MachineConfig, dist string, ansibleConfig *vmconfigs.AnsibleConfig) error {
+func configureSystem(ctx context.Context, mc *vmconfigs.MachineConfig, dist string, ansibleConfig *vmconfigs.AnsibleConfig) error {
 	user := mc.SSH.RemoteUsername
-	if err := wslInvoke(dist, "sh", "-c", fmt.Sprintf(appendPort, mc.SSH.Port, mc.SSH.Port)); err != nil {
+	if err := wslInvoke(ctx, dist, "sh", "-c", fmt.Sprintf(appendPort, mc.SSH.Port, mc.SSH.Port)); err != nil {
 		return fmt.Errorf("could not configure SSH port for guest OS: %w", err)
 	}
 
-	if err := wslPipe(withUser(configServices, user), dist, "sh"); err != nil {
+	if err := wslPipe(ctx, withUser(configServices, user), dist, "sh"); err != nil {
 		return fmt.Errorf("could not configure systemd settings for guest OS: %w", err)
 	}
 
-	if err := wslPipe(sudoers, dist, "sh", "-c", "cat >> /etc/sudoers"); err != nil {
+	if err := wslPipe(ctx, sudoers, dist, "sh", "-c", "cat >> /etc/sudoers"); err != nil {
 		return fmt.Errorf("could not add wheel to sudoers: %w", err)
 	}
 
-	if err := wslPipe(overrideSysusers, dist, "sh", "-c",
+	if err := wslPipe(ctx, overrideSysusers, dist, "sh", "-c",
 		"cat > /etc/systemd/system/systemd-sysusers.service.d/override.conf"); err != nil {
 		return fmt.Errorf("could not generate systemd-sysusers override for guest OS: %w", err)
 	}
 
 	if ansibleConfig != nil {
-		if err := wslPipe(ansibleConfig.Contents, dist, "sh", "-c", fmt.Sprintf("cat > %s", ansibleConfig.PlaybookPath)); err != nil {
+		if err := wslPipe(ctx, ansibleConfig.Contents, dist, "sh", "-c", fmt.Sprintf("cat > %s", ansibleConfig.PlaybookPath)); err != nil {
 			return fmt.Errorf("could not generate playbook file for guest os: %w", err)
 		}
 	}
 
-	if err := enableUserLinger(mc, dist); err != nil {
+	if err := enableUserLinger(ctx, mc, dist); err != nil {
 		return err
 	}
 
-	if err := setupPodmanDockerSock(dist, mc.HostUser.Rootful); err != nil {
+	if err := setupPodmanDockerSock(ctx, dist, mc.HostUser.Rootful); err != nil {
 		return err
 	}
 
-	if err := wslInvoke(dist, "sh", "-c", "echo wsl > /etc/podman-machine"); err != nil {
+	if err := wslInvoke(ctx, dist, "sh", "-c", "echo wsl > /etc/podman-machine"); err != nil {
 		return fmt.Errorf("could not create podman-machine file for guest OS: %w", err)
 	}
 
-	if err := configureBindMounts(dist, user); err != nil {
+	if err := configureBindMounts(ctx, dist, user); err != nil {
 		return err
 	}
 
-	return changeDistUserModeNetworking(dist, user, mc.ImagePath.GetPath(), mc.WSLHypervisor.UserModeNetworking)
+	return changeDistUserModeNetworking(ctx, dist, user, mc.ImagePath.GetPath(), mc.WSLHypervisor.UserModeNetworking)
 }
 
-func configureBindMounts(dist string, user string) error {
+func configureBindMounts(ctx context.Context, dist string, user string) error {
 	winPath, err := configfile.UserConfigPath()
 	if err != nil {
 		return err
@@ -208,29 +209,29 @@ func configureBindMounts(dist string, user string) error {
 
 	quotedWslPath := stringutils.ShellQuoteArguments([]string{wslPath})
 	bindMountConfigDirSystemServiceFormatted := fmt.Sprintf(bindMountConfigDirSystemService, quotedWslPath)
-	if err := wslPipe(bindMountConfigDirSystemServiceFormatted, dist, "sh", "-c", "cat > "+configBindSysUnitPath); err != nil {
+	if err := wslPipe(ctx, bindMountConfigDirSystemServiceFormatted, dist, "sh", "-c", "cat > "+configBindSysUnitPath); err != nil {
 		return fmt.Errorf("could not create podman config mount service file for guest OS: %w", err)
 	}
 
-	if err := wslPipe(fmt.Sprintf(bindMountSystemService, dist), dist, "sh", "-c", "cat > /etc/systemd/system/podman-mnt-bindings.service"); err != nil {
+	if err := wslPipe(ctx, fmt.Sprintf(bindMountSystemService, dist), dist, "sh", "-c", "cat > /etc/systemd/system/podman-mnt-bindings.service"); err != nil {
 		return fmt.Errorf("could not create podman binding service file for guest OS: %w", err)
 	}
 
-	if err := wslPipe(getConfigBindServicesScript(user), dist, "sh"); err != nil {
+	if err := wslPipe(ctx, getConfigBindServicesScript(user), dist, "sh"); err != nil {
 		return fmt.Errorf("could not configure podman binding services for guest OS: %w", err)
 	}
 
 	catUserService := "cat > " + getUserUnitPath(user)
-	if err := wslPipe(getBindMountUserService(dist), dist, "sh", "-c", catUserService); err != nil {
+	if err := wslPipe(ctx, getBindMountUserService(dist), dist, "sh", "-c", catUserService); err != nil {
 		return fmt.Errorf("could not create podman binding user service file for guest OS: %w", err)
 	}
 
-	if err := wslPipe(getBindMountFsTab(dist), dist, "sh", "-c", "cat >> /etc/fstab"); err != nil {
+	if err := wslPipe(ctx, getBindMountFsTab(dist), dist, "sh", "-c", "cat >> /etc/fstab"); err != nil {
 		return fmt.Errorf("could not create podman binding fstab entry for guest OS: %w", err)
 	}
 
 	catGroupDropin := fmt.Sprintf("cat > %s/%s", podmanSocketDropinPath, "10-group.conf")
-	if err := wslPipe(overrideSocketGroup, dist, "sh", "-c", catGroupDropin); err != nil {
+	if err := wslPipe(ctx, overrideSocketGroup, dist, "sh", "-c", catGroupDropin); err != nil {
 		return fmt.Errorf("could not configure podman socket group override: %w", err)
 	}
 
@@ -253,41 +254,41 @@ func getBindMountFsTab(dist string) string {
 	return fmt.Sprintf(bindMountFsTab, dist)
 }
 
-func setupPodmanDockerSock(dist string, rootful bool) error {
+func setupPodmanDockerSock(ctx context.Context, dist string, rootful bool) error {
 	content := ignition.GetPodmanDockerTmpConfig(1000, rootful, true)
 
-	if err := wslPipe(content, dist, "sh", "-c", "cat > "+ignition.PodmanDockerTmpConfPath); err != nil {
+	if err := wslPipe(ctx, content, dist, "sh", "-c", "cat > "+ignition.PodmanDockerTmpConfPath); err != nil {
 		return fmt.Errorf("could not create internal docker sock conf: %w", err)
 	}
 
 	return nil
 }
 
-func enableUserLinger(mc *vmconfigs.MachineConfig, dist string) error {
+func enableUserLinger(ctx context.Context, mc *vmconfigs.MachineConfig, dist string) error {
 	lingerCmd := "mkdir -p /var/lib/systemd/linger; touch /var/lib/systemd/linger/" + mc.SSH.RemoteUsername
-	if err := wslInvoke(dist, "sh", "-c", lingerCmd); err != nil {
+	if err := wslInvoke(ctx, dist, "sh", "-c", lingerCmd); err != nil {
 		return fmt.Errorf("could not enable linger for remote user on guest OS: %w", err)
 	}
 
 	return nil
 }
 
-func installScripts(dist string) error {
-	if err := wslPipe(enterns, dist, "sh", "-c",
+func installScripts(ctx context.Context, dist string) error {
+	if err := wslPipe(ctx, enterns, dist, "sh", "-c",
 		"cat > /usr/local/bin/enterns; chmod 755 /usr/local/bin/enterns"); err != nil {
 		return fmt.Errorf("could not create enterns script for guest OS: %w", err)
 	}
 
-	if err := wslPipe(profile, dist, "sh", "-c",
+	if err := wslPipe(ctx, profile, dist, "sh", "-c",
 		"cat > /etc/profile.d/enterns.sh"); err != nil {
 		return fmt.Errorf("could not create motd profile script for guest OS: %w", err)
 	}
 
-	if err := wslPipe(wslmotd, dist, "sh", "-c", "cat > /etc/wslmotd"); err != nil {
+	if err := wslPipe(ctx, wslmotd, dist, "sh", "-c", "cat > /etc/wslmotd"); err != nil {
 		return fmt.Errorf("could not create a WSL MOTD for guest OS: %w", err)
 	}
 
-	if err := wslPipe(bootstrap, dist, "sh", "-c",
+	if err := wslPipe(ctx, bootstrap, dist, "sh", "-c",
 		"cat > /root/bootstrap; chmod 755 /root/bootstrap"); err != nil {
 		return fmt.Errorf("could not create bootstrap script for guest OS: %w", err)
 	}
@@ -295,15 +296,15 @@ func installScripts(dist string) error {
 	return nil
 }
 
-func writeWslConf(dist string, user string) error {
-	if err := wslPipe(withUser(wslConf, user), dist, "sh", "-c", "cat > /etc/wsl.conf"); err != nil {
+func writeWslConf(ctx context.Context, dist string, user string) error {
+	if err := wslPipe(ctx, withUser(wslConf, user), dist, "sh", "-c", "cat > /etc/wsl.conf"); err != nil {
 		return fmt.Errorf("could not configure wsl config for guest OS: %w", err)
 	}
 
 	return nil
 }
 
-func attemptFeatureInstall(reExec, admin bool) error {
+func attemptFeatureInstall(ctx context.Context, reExec, admin bool) error {
 	if !winVersionAtLeast(10, 0, 18362) {
 		return errors.New("your version of Windows does not support WSL. Update to Windows 10 Build 19041 or later")
 	} else if !winVersionAtLeast(10, 0, 19041) {
@@ -327,7 +328,7 @@ func attemptFeatureInstall(reExec, admin bool) error {
 	if !reExec && !admin {
 		return launchElevate("install the Windows WSL Features")
 	}
-	return installWsl()
+	return installWsl(ctx)
 }
 
 func launchElevate(operation string) error {
@@ -351,19 +352,19 @@ func launchElevate(operation string) error {
 	return define.ErrRelaunchSucceeded
 }
 
-func installWsl() error {
+func installWsl(ctx context.Context) error {
 	log, err := winutil.GetElevatedOutputFileWrite()
 	if err != nil {
 		return err
 	}
 	defer log.Close()
-	cmd := exec.Command("dism", "/online", "/enable-feature",
+	cmd := exec.CommandContext(ctx, "dism", "/online", "/enable-feature",
 		"/featurename:Microsoft-Windows-Subsystem-Linux", "/all", "/norestart")
 	if err := runCmdPassThroughTee(log, cmd); isMsiError(err) {
 		return fmt.Errorf("could not enable WSL Feature: %w", err)
 	}
 
-	cmd = exec.Command("dism", "/online", "/enable-feature",
+	cmd = exec.CommandContext(ctx, "dism", "/online", "/enable-feature",
 		"/featurename:VirtualMachinePlatform", "/all", "/norestart")
 	if err = runCmdPassThroughTee(log, cmd); isMsiError(err) {
 		return fmt.Errorf("could not enable Virtual Machine Feature: %w", err)
@@ -395,22 +396,22 @@ func withUser(s string, user string) string {
 	return strings.ReplaceAll(s, "[USER]", user)
 }
 
-func wslCmd(dist string, arg ...string) *exec.Cmd {
+func wslCmd(ctx context.Context, dist string, arg ...string) *exec.Cmd {
 	preArgs := []string{"-u", "root", "-d", dist}
 	newArgs := make([]string, 0, len(preArgs)+len(arg))
 	newArgs = append(newArgs, preArgs...)
 	newArgs = append(newArgs, arg...)
 
-	return wutil.NewWSLCommand(newArgs...)
+	return wutil.NewWSLCommand(ctx, newArgs...)
 }
 
-func wslInvoke(dist string, arg ...string) error {
-	cmd := wslCmd(dist, arg...)
+func wslInvoke(ctx context.Context, dist string, arg ...string) error {
+	cmd := wslCmd(ctx, dist, arg...)
 	return runCmdPassThrough(cmd)
 }
 
-func wslPipe(input string, dist string, arg ...string) error {
-	cmd := wslCmd(dist, arg...)
+func wslPipe(ctx context.Context, input string, dist string, arg ...string) error {
+	cmd := wslCmd(ctx, dist, arg...)
 	return pipeCmdPassThrough(cmd, input)
 }
 
@@ -470,16 +471,16 @@ func setupWslProxyEnv() (hasProxy bool) {
 	return hasProxy
 }
 
-func isWSLRunning(dist string) (bool, error) {
-	return wslCheckExists(dist, true)
+func isWSLRunning(ctx context.Context, dist string) (bool, error) {
+	return wslCheckExists(ctx, dist, true)
 }
 
-func isWSLExist(dist string) (bool, error) {
-	return wslCheckExists(dist, false)
+func isWSLExist(ctx context.Context, dist string) (bool, error) {
+	return wslCheckExists(ctx, dist, false)
 }
 
-func wslCheckExists(dist string, running bool) (bool, error) {
-	all, err := getAllWSLDistros(running)
+func wslCheckExists(ctx context.Context, dist string, running bool) (bool, error) {
+	all, err := getAllWSLDistros(ctx, running)
 	if err != nil {
 		return false, err
 	}
@@ -488,12 +489,12 @@ func wslCheckExists(dist string, running bool) (bool, error) {
 	return exists, nil
 }
 
-func getAllWSLDistros(running bool) (map[string]struct{}, error) {
+func getAllWSLDistros(ctx context.Context, running bool) (map[string]struct{}, error) {
 	args := []string{"-l", "--quiet"}
 	if running {
 		args = append(args, "--running")
 	}
-	cmd := wutil.NewWSLCommand(args...)
+	cmd := wutil.NewWSLCommand(ctx, args...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -521,8 +522,8 @@ func getAllWSLDistros(running bool) (map[string]struct{}, error) {
 	return all, nil
 }
 
-func isSystemdRunning(dist string) (bool, error) {
-	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
+func isSystemdRunning(ctx context.Context, dist string) (bool, error) {
+	cmd := wutil.NewWSLCommand(ctx, "-u", "root", "-d", dist, "sh")
 	cmd.Stdin = strings.NewReader(sysdpid + "\necho $SYSDPID\n")
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -551,8 +552,8 @@ func isSystemdRunning(dist string) (bool, error) {
 	return result, nil
 }
 
-func terminateDist(dist string) error {
-	cmd := wutil.NewWSLCommand("--terminate", dist)
+func terminateDist(ctx context.Context, dist string) error {
+	cmd := wutil.NewWSLCommand(ctx, "--terminate", dist)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("command %s %v failed: %w (%s)", cmd.Path, cmd.Args[1:], err, strings.TrimSpace(string(out)))
@@ -560,8 +561,8 @@ func terminateDist(dist string) error {
 	return nil
 }
 
-func unregisterDist(dist string) error {
-	cmd := wutil.NewWSLCommand("--unregister", dist)
+func unregisterDist(ctx context.Context, dist string) error {
+	cmd := wutil.NewWSLCommand(ctx, "--unregister", dist)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("command %s %v failed: %w (%s)", cmd.Path, cmd.Args[1:], err, strings.TrimSpace(string(out)))
@@ -569,16 +570,16 @@ func unregisterDist(dist string) error {
 	return nil
 }
 
-func isRunning(name string) (bool, error) {
+func isRunning(ctx context.Context, name string) (bool, error) {
 	dist := env.WithPodmanPrefix(name)
-	wsl, err := isWSLRunning(dist)
+	wsl, err := isWSLRunning(ctx, dist)
 	if err != nil {
 		return false, err
 	}
 
 	sysd := false
 	if wsl {
-		sysd, err = isSystemdRunning(dist)
+		sysd, err = isSystemdRunning(ctx, dist)
 		if err != nil {
 			return false, err
 		}

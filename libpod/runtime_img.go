@@ -28,7 +28,7 @@ func (r *Runtime) RemoveContainersForImageCallback(ctx context.Context, force bo
 		if !r.valid {
 			return define.ErrRuntimeStopped
 		}
-		ctrs, err := r.state.AllContainers(false)
+		ctrs, err := r.state.AllContainers(ctx, false)
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func (r *Runtime) RemoveContainersForImageCallback(ctx context.Context, force bo
 		}
 
 		// Need to handle volumes with the image driver
-		vols, err := r.state.AllVolumes()
+		vols, err := r.state.AllVolumes(ctx)
 		if err != nil {
 			return err
 		}
@@ -81,14 +81,14 @@ func (r *Runtime) RemoveContainersForImageCallback(ctx context.Context, force bo
 // IsExternalContainerCallback returns a callback that be used in `libimage` to
 // figure out whether a given container is an external one.  A container is
 // considered external if it is not present in libpod's database.
-func (r *Runtime) IsExternalContainerCallback(_ context.Context) libimage.IsExternalContainerFunc {
+func (r *Runtime) IsExternalContainerCallback(ctx context.Context) libimage.IsExternalContainerFunc {
 	// NOTE: pruning external containers is subject to race conditions
 	// (e.g., when a container gets removed). To address this and similar
 	// races, pruning had to happen inside c/storage.  Containers has to be
 	// labeled with "podman/libpod" along with callbacks similar to
 	// libimage.
 	return func(idOrName string) (bool, error) {
-		_, err := r.LookupContainer(idOrName)
+		_, err := r.LookupContainer(ctx, idOrName)
 		if err == nil {
 			return false, nil
 		}
@@ -123,6 +123,7 @@ func (r *Runtime) Build(ctx context.Context, options buildahDefine.BuildOptions,
 	// share the network interface between podman and buildah
 	options.NetworkInterface = r.network
 	id, ref, err := imagebuildah.BuildDockerfiles(ctx, r.store, options, dockerfiles...)
+	logrus.Errorf("build returned %v", err)
 	// Write event for build completion
 	r.newImageBuildCompleteEvent(id)
 	return id, ref, err

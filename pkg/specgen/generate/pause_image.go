@@ -12,7 +12,7 @@ import (
 // PullInfraImage pulls down the specified image or the one set in
 // containers.conf. If none is set, it returns an empty string. In this
 // case, the rootfs-based pause image is used by libpod.
-func PullInfraImage(rt *libpod.Runtime, imageName string) (string, error) {
+func PullInfraImage(ctx context.Context, rt *libpod.Runtime, imageName string) (string, error) {
 	rtConfig, err := rt.GetConfigNoCopy()
 	if err != nil {
 		return "", err
@@ -23,7 +23,7 @@ func PullInfraImage(rt *libpod.Runtime, imageName string) (string, error) {
 	}
 
 	if imageName != "" {
-		_, err := rt.LibimageRuntime().Pull(context.Background(), imageName, config.PullPolicyMissing, nil)
+		_, err := rt.LibimageRuntime().Pull(ctx, imageName, config.PullPolicyMissing, nil)
 		if err != nil {
 			return "", err
 		}

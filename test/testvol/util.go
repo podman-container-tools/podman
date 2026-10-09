@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -22,8 +23,8 @@ func getPluginName(pathOrName string) string {
 	return strings.TrimSuffix(filepath.Base(pathOrName), ".sock")
 }
 
-func getPlugin(sockNameOrPath string) (*plugin.VolumePlugin, error) {
+func getPlugin(ctx context.Context, sockNameOrPath string) (*plugin.VolumePlugin, error) {
 	path := getSocketPath(sockNameOrPath)
 	name := getPluginName(sockNameOrPath)
-	return plugin.GetVolumePlugin(name, path, nil, nil)
+	return plugin.GetVolumePlugin(ctx, name, path, nil, nil)
 }

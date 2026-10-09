@@ -26,7 +26,7 @@ import (
 
 // FindMachineByPort finds a running machine that matches the given connection port.
 // It returns the machine configuration and provider, or an error if not found.
-func FindMachineByPort(connectionURI string, parsedConnection *url.URL) (*vmconfigs.MachineConfig, vmconfigs.VMProvider, error) {
+func FindMachineByPort(ctx context.Context, connectionURI string, parsedConnection *url.URL) (*vmconfigs.MachineConfig, vmconfigs.VMProvider, error) {
 	for _, machineProvider := range provider.GetAll() {
 		logrus.Debugf("Checking provider: %s", machineProvider.VMType())
 		dirs, err := env.GetMachineDirs(machineProvider.VMType())
@@ -55,7 +55,7 @@ func FindMachineByPort(connectionURI string, parsedConnection *url.URL) (*vmconf
 				continue
 			}
 
-			state, err := machineProvider.State(mc, false)
+			state, err := machineProvider.State(ctx, mc, false)
 			if err != nil {
 				logrus.Debugf("Failed to get machine state for %s: %v", mc.Name, err)
 				continue
@@ -74,8 +74,8 @@ func FindMachineByPort(connectionURI string, parsedConnection *url.URL) (*vmconf
 
 // getMachineMountsAndVMType retrieves the mounts and VM type of a machine based on the connection URI and parsed URL.
 // It returns a slice of mounts, the VM type, or an error if the machine cannot be found or is not running.
-func getMachineMountsAndVMType(connectionURI string, parsedConnection *url.URL) ([]*vmconfigs.Mount, define.VMType, error) {
-	mc, machineProvider, err := FindMachineByPort(connectionURI, parsedConnection)
+func getMachineMountsAndVMType(ctx context.Context, connectionURI string, parsedConnection *url.URL) ([]*vmconfigs.Mount, define.VMType, error) {
+	mc, machineProvider, err := FindMachineByPort(ctx, connectionURI, parsedConnection)
 	if err != nil {
 		return nil, define.UnknownVirt, err
 	}
@@ -149,7 +149,7 @@ func CheckPathOnRunningMachine(ctx context.Context, path string) (*LocalAPIMap, 
 		return nil, false
 	}
 
-	mounts, vmType, err := getMachineMountsAndVMType(conn.URI.String(), conn.URI)
+	mounts, vmType, err := getMachineMountsAndVMType(ctx, conn.URI.String(), conn.URI)
 	if err != nil {
 		logrus.Debugf("Failed to get machine mounts: %v", err)
 		return nil, false
@@ -173,7 +173,7 @@ func CheckIfImageBuildPathsOnRunningMachine(ctx context.Context, containerFiles 
 		return nil, options, false
 	}
 
-	mounts, vmType, err := getMachineMountsAndVMType(conn.URI.String(), conn.URI)
+	mounts, vmType, err := getMachineMountsAndVMType(ctx, conn.URI.String(), conn.URI)
 	if err != nil {
 		logrus.Debugf("Failed to get machine mounts: %v", err)
 		return nil, options, false
@@ -259,7 +259,7 @@ func getVmProviderType(ctx context.Context) (define.VMType, error) {
 		return define.UnknownVirt, err
 	}
 
-	_, vmProvider, err := FindMachineByPort(conn.URI.String(), conn.URI)
+	_, vmProvider, err := FindMachineByPort(ctx, conn.URI.String(), conn.URI)
 	if err != nil {
 		logrus.Debugf("Failed to get machine hypervisor type: %v", err)
 		return define.UnknownVirt, err

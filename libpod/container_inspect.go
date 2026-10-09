@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -20,7 +21,7 @@ import (
 
 // inspectLocked inspects a container for low-level information.
 // The caller must held c.lock.
-func (c *Container) inspectLocked(size bool) (*define.InspectContainerData, error) {
+func (c *Container) inspectLocked(ctx context.Context, size bool) (*define.InspectContainerData, error) {
 	storeCtr, err := c.runtime.store.Container(c.ID())
 	if err != nil {
 		return nil, fmt.Errorf("getting container from store %q: %w", c.ID(), err)
@@ -33,11 +34,11 @@ func (c *Container) inspectLocked(size bool) (*define.InspectContainerData, erro
 	if err != nil {
 		return nil, fmt.Errorf("getting graph driver info %q: %w", c.ID(), err)
 	}
-	return c.getContainerInspectData(size, driverData)
+	return c.getContainerInspectData(ctx, size, driverData)
 }
 
 // Inspect a container for low-level information
-func (c *Container) Inspect(size bool) (*define.InspectContainerData, error) {
+func (c *Container) Inspect(ctx context.Context, size bool) (*define.InspectContainerData, error) {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -47,7 +48,7 @@ func (c *Container) Inspect(size bool) (*define.InspectContainerData, error) {
 		}
 	}
 
-	return c.inspectLocked(size)
+	return c.inspectLocked(ctx, size)
 }
 
 func (c *Container) volumesFrom() ([]string, error) {
@@ -61,7 +62,7 @@ func (c *Container) volumesFrom() ([]string, error) {
 	return nil, nil
 }
 
-func (c *Container) getContainerInspectData(size bool, driverData *define.DriverData) (*define.InspectContainerData, error) {
+func (c *Container) getContainerInspectData(ctx context.Context, size bool, driverData *define.DriverData) (*define.InspectContainerData, error) {
 	config := c.config
 	runtimeInfo := c.state
 	ctrSpec, err := c.specFromState()
@@ -101,7 +102,7 @@ func (c *Container) getContainerInspectData(size bool, driverData *define.Driver
 	}
 
 	namedVolumes, mounts := c.SortUserVolumes(ctrSpec)
-	inspectMounts, err := c.GetMounts(namedVolumes, c.config.ImageVolumes, mounts)
+	inspectMounts, err := c.GetMounts(ctx, namedVolumes, c.config.ImageVolumes, mounts)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +207,7 @@ func (c *Container) getContainerInspectData(size bool, driverData *define.Driver
 		data.State.Health = nil
 	}
 
-	networkConfig, err := c.getContainerNetworkInfo()
+	networkConfig, err := c.getContainerNetworkInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +218,7 @@ func (c *Container) getContainerInspectData(size bool, driverData *define.Driver
 		addInspectPortsExpose(c.config.ExposedPorts, data.NetworkSettings.Ports)
 	}
 
-	inspectConfig := c.generateInspectContainerConfig(ctrSpec)
+	inspectConfig := c.generateInspectContainerConfig(ctx, ctrSpec)
 	data.Config = inspectConfig
 
 	hostConfig, err := c.generateInspectContainerHostConfig(ctrSpec, namedVolumes, mounts)
@@ -245,7 +246,7 @@ func (c *Container) getContainerInspectData(size bool, driverData *define.Driver
 // Get inspect-formatted mounts list.
 // Only includes user-specified mounts. Only includes bind mounts and named
 // volumes, not tmpfs volumes.
-func (c *Container) GetMounts(namedVolumes []*ContainerNamedVolume, imageVolumes []*ContainerImageVolume, mounts []spec.Mount) ([]define.InspectMount, error) {
+func (c *Container) GetMounts(ctx context.Context, namedVolumes []*ContainerNamedVolume, imageVolumes []*ContainerImageVolume, mounts []spec.Mount) ([]define.InspectMount, error) {
 	inspectMounts := []define.InspectMount{}
 
 	// No mounts, return early
@@ -264,7 +265,7 @@ func (c *Container) GetMounts(namedVolumes []*ContainerNamedVolume, imageVolumes
 
 		// For src and driver, we need to look up the named
 		// volume.
-		volFromDB, err := c.runtime.state.Volume(volume.Name)
+		volFromDB, err := c.runtime.state.Volume(ctx, volume.Name)
 		if err != nil {
 			return nil, fmt.Errorf("looking up volume %s in container %s config: %w", volume.Name, c.ID(), err)
 		}
@@ -373,10 +374,10 @@ func parseMountOptionsForInspect(options []string, mount *define.InspectMount) {
 }
 
 // Generate the InspectContainerConfig struct for the Config field of Inspect.
-func (c *Container) generateInspectContainerConfig(spec *spec.Spec) *define.InspectContainerConfig {
+func (c *Container) generateInspectContainerConfig(ctx context.Context, spec *spec.Spec) *define.InspectContainerConfig {
 	ctrConfig := new(define.InspectContainerConfig)
 
-	ctrConfig.Hostname = c.Hostname()
+	ctrConfig.Hostname = c.Hostname(ctx)
 	ctrConfig.User = c.config.User
 	if spec.Process != nil {
 		ctrConfig.Tty = spec.Process.Terminal

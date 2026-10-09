@@ -115,7 +115,7 @@ func cleanupStaleProxy(pipeName string, recordedPID uint32, cleanup func() error
 
 // CleanupStaleGVProxy stops a gvproxy process left behind by an externally
 // stopped VM when its named pipe and PID file still exist.
-func CleanupStaleGVProxy(pipeName string, pidFile define.VMFile) error {
+func CleanupStaleGVProxy(ctx context.Context, pipeName string, pidFile define.VMFile) error {
 	if PipeNameAvailable(pipeName, 0) {
 		return nil
 	}
@@ -130,7 +130,7 @@ func CleanupStaleGVProxy(pipeName string, pidFile define.VMFile) error {
 	}
 
 	return cleanupStaleProxy(pipeName, uint32(pid), func() error {
-		return cleanupGVProxy(pid, pidFile)
+		return cleanupGVProxy(ctx, pid, pidFile)
 	})
 }
 
@@ -155,8 +155,8 @@ func CleanupStaleWinProxy(name string, vmtype define.VMType) error {
 	})
 }
 
-func LaunchWinProxy(opts WinProxyOpts, noInfo bool) {
-	globalName, pipeName, err := launchWinProxy(opts)
+func LaunchWinProxy(ctx context.Context, opts WinProxyOpts, noInfo bool) {
+	globalName, pipeName, err := launchWinProxy(ctx, opts)
 	if !noInfo {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "API forwarding for Docker API clients is not available due to the following startup failures.")
@@ -179,7 +179,7 @@ func LaunchWinProxy(opts WinProxyOpts, noInfo bool) {
 	}
 }
 
-func launchWinProxy(opts WinProxyOpts) (bool, string, error) {
+func launchWinProxy(ctx context.Context, opts WinProxyOpts) (bool, string, error) {
 	machinePipe := env.WithPodmanPrefix(opts.Name)
 	if !PipeNameAvailable(machinePipe, MachineNameWait) {
 		return false, "", fmt.Errorf("could not start api proxy since expected pipe is not available: %s (an existing proxy process like win-sshproxy or gvproxy may still be running from a previous machine session; try terminating it and retrying)", machinePipe)
@@ -223,7 +223,7 @@ func launchWinProxy(opts WinProxyOpts) (bool, string, error) {
 	}
 	args = append(args, hostURL.String(), dest, opts.IdentityPath)
 
-	cmd := exec.Command(command, args...)
+	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS,
 	}

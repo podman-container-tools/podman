@@ -4,6 +4,7 @@ package wutil
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,14 +31,14 @@ type wslStatus struct {
 	wslFeatureEnabled bool
 }
 
-func NewWSLCommand(arg ...string) *exec.Cmd {
-	cmd := exec.Command("wsl", arg...)
+func NewWSLCommand(ctx context.Context, arg ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "wsl", arg...)
 	cmd.Env = append(os.Environ(), "WSL_UTF8=1")
 	return cmd
 }
 
-func SilentExec(command string, args ...string) error {
-	cmd := NewWSLCommand(args...)
+func SilentExec(ctx context.Context, command string, args ...string) error {
+	cmd := NewWSLCommand(ctx, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -47,15 +48,15 @@ func SilentExec(command string, args ...string) error {
 	return nil
 }
 
-func SilentExecCmd(args ...string) *exec.Cmd {
-	cmd := NewWSLCommand(args...)
+func SilentExecCmd(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := NewWSLCommand(ctx, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
 	return cmd
 }
 
-func parseWSLStatus() wslStatus {
+func parseWSLStatus(ctx context.Context) wslStatus {
 	onceStatus.Do(func() {
-		cmd := SilentExecCmd("--status")
+		cmd := SilentExecCmd(ctx, "--status")
 		out, err := cmd.StdoutPipe()
 		cmd.Stderr = nil
 		if err != nil {
@@ -82,13 +83,13 @@ func parseWSLStatus() wslStatus {
 	return status
 }
 
-func IsWSLInstalled() bool {
-	status := parseWSLStatus()
+func IsWSLInstalled(ctx context.Context) bool {
+	status := parseWSLStatus(ctx)
 	return status.installed && status.vmpFeatureEnabled
 }
 
-func IsWSLStoreVersionInstalled() bool {
-	cmd := SilentExecCmd("--version")
+func IsWSLStoreVersionInstalled(ctx context.Context) bool {
+	cmd := SilentExecCmd(ctx, "--version")
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Run(); err != nil {

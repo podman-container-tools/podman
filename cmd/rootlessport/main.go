@@ -39,7 +39,7 @@ func main() {
 	if os.Args[0] == ReexecChildKey {
 		err = child()
 	} else {
-		err = parent()
+		err = parent(context.Background())
 	}
 	if err != nil {
 		fmt.Println(err)
@@ -76,7 +76,7 @@ func loadConfig(r io.Reader) (*rootlessport.Config, io.ReadCloser, io.WriteClose
 	return &cfg, exitFile, readyFile, nil
 }
 
-func parent() error {
+func parent(ctx context.Context) error {
 	// load config from stdin
 	cfg, exitR, readyW, err := loadConfig(os.Stdin)
 	if err != nil {
@@ -190,7 +190,7 @@ outer:
 
 	// let parent expose ports
 	logrus.Infof("Exposing ports %v", cfg.Mappings)
-	if err := exposePorts(driver, cfg.Mappings, cfg.ChildIP); err != nil {
+	if err := exposePorts(ctx, driver, cfg.Mappings, cfg.ChildIP); err != nil {
 		return err
 	}
 
@@ -217,7 +217,7 @@ outer:
 			logrus.Warnf("Failed to close the socketDir fd: %v", err)
 		}
 		defer socket.Close()
-		go serve(socket, driver)
+		go serve(ctx, socket, driver)
 	}
 
 	logrus.Info("Ready")
@@ -245,14 +245,13 @@ outer:
 	return nil
 }
 
-func serve(listener net.Listener, pm rkport.Manager) {
+func serve(ctx context.Context, listener net.Listener, pm rkport.Manager) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			// we cannot log this error, stderr is already closed
 			continue
 		}
-		ctx := context.TODO()
 		err = handler(ctx, conn, pm)
 		if err != nil {
 			_, _ = conn.Write([]byte(err.Error()))
@@ -292,8 +291,7 @@ func handler(ctx context.Context, conn io.Reader, pm rkport.Manager) error {
 	return nil
 }
 
-func exposePorts(pm rkport.Manager, portMappings []types.PortMapping, childIP string) error {
-	ctx := context.TODO()
+func exposePorts(ctx context.Context, pm rkport.Manager, portMappings []types.PortMapping, childIP string) error {
 	for _, port := range portMappings {
 		for protocol := range strings.SplitSeq(port.Protocol, ",") {
 			hostIP := port.HostIP

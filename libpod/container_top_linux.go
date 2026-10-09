@@ -5,6 +5,7 @@ package libpod
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -184,7 +185,7 @@ func remountReadOnly(path string) (string, error) {
 
 // Top gathers statistics about the running processes in a container. It returns a
 // []string for output
-func (c *Container) Top(descriptors []string) ([]string, error) {
+func (c *Container) Top(ctx context.Context, descriptors []string) ([]string, error) {
 	if c.config.NoCgroups {
 		return nil, fmt.Errorf("cannot run top on container %s as it did not create a cgroup: %w", c.ID(), define.ErrNoCgroups)
 	}
@@ -238,19 +239,19 @@ func (c *Container) Top(descriptors []string) ([]string, error) {
 	if c.config.Spec.Process.Capabilities != nil &&
 		!slices.Contains(c.config.Spec.Process.Capabilities.Effective, "CAP_SYS_PTRACE") {
 		var retry bool
-		output, retry, err = c.execPS(psDescriptors)
+		output, retry, err = c.execPS(ctx, psDescriptors)
 		if err != nil {
 			if !retry {
 				return nil, err
 			}
 			logrus.Warnf("Falling back to container ps(1), could not execute ps(1) from the host: %v", err)
-			output, err = c.execPSinContainer(psDescriptors)
+			output, err = c.execPSinContainer(ctx, psDescriptors)
 			if err != nil {
 				return nil, fmt.Errorf("executing ps(1) in container: %w", err)
 			}
 		}
 	} else {
-		output, err = c.execPSinContainer(psDescriptors)
+		output, err = c.execPSinContainer(ctx, psDescriptors)
 		if err != nil {
 			return nil, fmt.Errorf("executing ps(1) in container: %w", err)
 		}
@@ -297,7 +298,7 @@ func (c *Container) GetContainerPidInformation(descriptors []string) ([]string, 
 }
 
 // execute ps(1) from the host within the container pid namespace
-func (c *Container) execPS(psArgs []string) ([]string, bool, error) {
+func (c *Container) execPS(ctx context.Context, psArgs []string) ([]string, bool, error) {
 	rPipe, wPipe, err := os.Pipe()
 	if err != nil {
 		return nil, false, err
@@ -331,7 +332,7 @@ func (c *Container) execPS(psArgs []string) ([]string, bool, error) {
 
 	args := append([]string{podmanTopCommand, strconv.Itoa(c.state.PID), userns, psPath}, psArgs...)
 
-	cmd := reexec.Command(args...)
+	cmd := reexec.CommandContext(ctx, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Unshareflags: unix.CLONE_NEWNS,
 	}
@@ -369,7 +370,7 @@ func (c *Container) execPS(psArgs []string) ([]string, bool, error) {
 
 // execPS executes ps(1) with the specified args in the container via exec session.
 // This should be a bit safer then execPS() but it requires ps(1) to be installed in the container.
-func (c *Container) execPSinContainer(args []string) ([]string, error) {
+func (c *Container) execPSinContainer(ctx context.Context, args []string) ([]string, error) {
 	rPipe, wPipe, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -399,7 +400,7 @@ func (c *Container) execPSinContainer(args []string) ([]string, error) {
 	cmd := append([]string{"ps"}, args...)
 	config := new(ExecConfig)
 	config.Command = cmd
-	ec, err := c.Exec(config, streams, nil, nil)
+	ec, err := c.Exec(ctx, config, streams, nil, nil)
 	wPipe.Close()
 	if err != nil {
 		return nil, err

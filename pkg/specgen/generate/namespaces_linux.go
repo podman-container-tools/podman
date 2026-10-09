@@ -3,6 +3,7 @@
 package generate
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -15,7 +16,7 @@ import (
 	"go.podman.io/storage/pkg/fileutils"
 )
 
-func specConfigureNamespaces(s *specgen.SpecGenerator, g *generate.Generator, rt *libpod.Runtime, pod *libpod.Pod) error {
+func specConfigureNamespaces(ctx context.Context, s *specgen.SpecGenerator, g *generate.Generator, rt *libpod.Runtime, pod *libpod.Pod) error {
 	// PID
 	switch s.PidNS.NSMode {
 	case specgen.Path:
@@ -79,11 +80,11 @@ func specConfigureNamespaces(s *specgen.SpecGenerator, g *generate.Generator, rt
 		case s.UtsNS.NSMode == specgen.FromPod:
 			hostname = pod.Hostname()
 		case s.UtsNS.NSMode == specgen.FromContainer:
-			utsCtr, err := rt.LookupContainer(s.UtsNS.Value)
+			utsCtr, err := rt.LookupContainer(ctx, s.UtsNS.Value)
 			if err != nil {
 				return fmt.Errorf("looking up container to share uts namespace with: %w", err)
 			}
-			hostname = utsCtr.Hostname()
+			hostname = utsCtr.Hostname(ctx)
 		case (s.NetNS.NSMode == specgen.Host && hostname == "") || s.UtsNS.NSMode == specgen.Host:
 			tmpHostname, err := os.Hostname()
 			if err != nil {

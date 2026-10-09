@@ -15,20 +15,20 @@ import (
 )
 
 // PodStats implements printing stats about pods.
-func (ic *ContainerEngine) PodStats(_ context.Context, namesOrIds []string, options entities.PodStatsOptions) ([]*entities.PodStatsReport, error) {
+func (ic *ContainerEngine) PodStats(ctx context.Context, namesOrIds []string, options entities.PodStatsOptions) ([]*entities.PodStatsReport, error) {
 	// Get the (running) pods and convert them to the entities format.
 	pods, err := getPodsByContext(options.All, options.Latest, namesOrIds, ic.Libpod)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get list of pods: %w", err)
 	}
-	return ic.podsToStatsReport(pods)
+	return ic.podsToStatsReport(ctx, pods)
 }
 
 // podsToStatsReport converts a slice of pods into a corresponding slice of stats reports.
-func (ic *ContainerEngine) podsToStatsReport(pods []*libpod.Pod) ([]*entities.PodStatsReport, error) {
+func (ic *ContainerEngine) podsToStatsReport(ctx context.Context, pods []*libpod.Pod) ([]*entities.PodStatsReport, error) {
 	reports := []*entities.PodStatsReport{}
 	for i := range pods { // Access by index to prevent potential loop-variable leaks.
-		podStats, err := pods[i].GetPodStats()
+		podStats, err := pods[i].GetPodStats(ctx)
 		if err != nil {
 			// pod was removed, skip it
 			if errors.Is(err, define.ErrNoSuchPod) {

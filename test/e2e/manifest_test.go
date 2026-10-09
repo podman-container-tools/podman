@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -628,7 +629,7 @@ RUN touch /file
 		}
 	})
 
-	It("authenticated push", func() {
+	It("authenticated push", func(ctx context.Context) {
 		registryOptions := &podmanRegistry.Options{
 			PodmanPath: podmanTest.PodmanBinary,
 			PodmanArgs: podmanTest.MakeOptions(nil, PodmanExecOptions{}),
@@ -640,10 +641,10 @@ RUN touch /file
 		if IsRemote() {
 			registryOptions.PodmanArgs = getRemoteOptions(podmanTest, nil)
 		}
-		registry, err := podmanRegistry.StartWithOptions(registryOptions)
+		registry, err := podmanRegistry.StartWithOptions(ctx, registryOptions)
 		Expect(err).ToNot(HaveOccurred())
 		defer func() {
-			err := registry.Stop()
+			err := registry.Stop(ctx)
 			Expect(err).ToNot(HaveOccurred())
 		}()
 

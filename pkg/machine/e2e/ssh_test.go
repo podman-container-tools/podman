@@ -1,6 +1,8 @@
 package e2e_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gexec"
@@ -8,30 +10,30 @@ import (
 )
 
 var _ = Describe("podman machine ssh", func() {
-	It("bad machine name", func() {
+	It("bad machine name", func(ctx context.Context) {
 		name := randomString()
 		ssh := &sshMachine{}
-		session, err := mb.setName(name).setCmd(ssh).run()
+		session, err := mb.setName(name).setCmd(ctx, ssh).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("not exist"))
 	})
 
-	It("ssh to non-running machine", func() {
+	It("ssh to non-running machine", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		ssh := &sshMachine{}
-		sshSession, err := mb.setName(name).setCmd(ssh).run()
+		sshSession, err := mb.setName(name).setCmd(ctx, ssh).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession.errorToString()).To(ContainSubstring("is not running"))
 		Expect(sshSession).To(Exit(125))
 	})
 
-	It("ssh to running machine and check os-type", func() {
+	It("ssh to running machine and check os-type", func(ctx context.Context) {
 		wsl := testProvider.VMType() == define.WSLVirt
 
 		// setting this name instead of randomized because we want to test when the
@@ -39,7 +41,7 @@ var _ = Describe("podman machine ssh", func() {
 
 		name := "podman-machine-default"
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow().withUpdateConnection(new(true))).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow().withUpdateConnection(new(true))).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -53,7 +55,7 @@ var _ = Describe("podman machine ssh", func() {
 		// check without the machine name
 		mcs = append(mcs, bm.withPodmanCommand([]string{"machine", "ssh", "cat", "/etc/os-release"}))
 		for _, mc := range mcs {
-			sshSession, err := mb.setCmd(mc).run()
+			sshSession, err := mb.setCmd(ctx, mc).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sshSession).To(Exit(0))
 
@@ -64,7 +66,7 @@ var _ = Describe("podman machine ssh", func() {
 			}
 		}
 		// keep exit code
-		sshSession, err := mb.setName(name).setCmd(ssh.withSSHCommand([]string{"false"})).run()
+		sshSession, err := mb.setName(name).setCmd(ctx, ssh.withSSHCommand([]string{"false"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession).To(Exit(1))
 		Expect(sshSession.outputToString()).To(Equal(""))

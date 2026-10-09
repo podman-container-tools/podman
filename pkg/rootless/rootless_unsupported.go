@@ -3,6 +3,7 @@
 package rootless
 
 import (
+	"context"
 	"errors"
 	"os"
 
@@ -23,7 +24,7 @@ func IsRootless() bool {
 // into a new user namespace and the return code from the re-executed podman process.
 // If podman was re-executed the caller needs to propagate the error code returned by the child
 // process.  It is a convenience function for BecomeRootInUserNSWithOpts with a default configuration.
-func BecomeRootInUserNS(_ string) (bool, int, error) {
+func BecomeRootInUserNS(context.Context, string) (bool, int, error) {
 	return false, -1, errors.New("this function is not supported on this os")
 }
 

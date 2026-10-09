@@ -1,6 +1,7 @@
 package bindings_test
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -21,7 +22,7 @@ var _ = Describe("Podman images", func() {
 		err      error
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		registryOptions := &podmanRegistry.Options{
 			PodmanPath: getPodmanBinary(),
 		}
@@ -29,21 +30,21 @@ var _ = Describe("Podman images", func() {
 		// Note: we need to start the registry **before** setting up
 		// the test. Otherwise, the registry is not reachable for
 		// currently unknown reasons.
-		registry, err = podmanRegistry.StartWithOptions(registryOptions)
+		registry, err = podmanRegistry.StartWithOptions(ctx, registryOptions)
 		Expect(err).ToNot(HaveOccurred())
 
 		bt = newBindingTest()
 		bt.RestoreImagesFromCache()
 		s = bt.startAPIService()
 		time.Sleep(1 * time.Second)
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		s.Kill()
 		bt.cleanup()
-		err := registry.Stop()
+		err := registry.Stop(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

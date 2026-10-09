@@ -1,6 +1,7 @@
 package certificates
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"os/exec"
@@ -14,10 +15,10 @@ var macKeychains = []string{
 }
 
 // extractHostCertificates extracts trusted CA certificates from the macOS system keychains
-func extractHostCertificates() []*x509.Certificate {
+func extractHostCertificates(ctx context.Context) []*x509.Certificate {
 	var certificates []*x509.Certificate
 	for _, keychain := range macKeychains {
-		certs := extractFromKeychain(keychain)
+		certs := extractFromKeychain(ctx, keychain)
 		certificates = append(certificates, certs...)
 	}
 	return certificates
@@ -25,11 +26,11 @@ func extractHostCertificates() []*x509.Certificate {
 
 // extractFromKeychain extracts certificates from a specific macOS keychain file
 // using the `security` command-line tool.
-func extractFromKeychain(keychainPath string) []*x509.Certificate {
+func extractFromKeychain(ctx context.Context, keychainPath string) []*x509.Certificate {
 	// find-certificate [-h] [-a] [-c name] [-e emailAddress] [-m] [-p] [-Z] [keychain...]
 	// -a  Find all matching certificates, not just the first one
 	// -p  Output certificate in pem format
-	out, err := exec.Command("security", "find-certificate", "-a", "-p", keychainPath).Output()
+	out, err := exec.CommandContext(ctx, "security", "find-certificate", "-a", "-p", keychainPath).Output()
 	if err != nil {
 		logrus.Debugf("Failed to extract certificates from keychain %s: %v", keychainPath, err)
 		return nil

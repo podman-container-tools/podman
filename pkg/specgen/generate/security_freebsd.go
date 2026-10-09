@@ -3,6 +3,8 @@
 package generate
 
 import (
+	"context"
+
 	"github.com/opencontainers/runtime-tools/generate"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/pkg/config"
@@ -12,7 +14,7 @@ import (
 
 // setLabelOpts sets the label options of the SecurityConfig according to the
 // input.
-func setLabelOpts(_ *specgen.SpecGenerator, _ *libpod.Runtime, _ specgen.Namespace, _ specgen.Namespace) error {
+func setLabelOpts(_ context.Context, _ *specgen.SpecGenerator, _ *libpod.Runtime, _ specgen.Namespace, _ specgen.Namespace) error {
 	return nil
 }
 

@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -19,55 +20,55 @@ import (
 )
 
 var _ = Describe("podman machine start", func() {
-	It("bad start name", func() {
+	It("bad start name", func(ctx context.Context) {
 		i := startMachine{}
 		reallyLongName := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		session, err := mb.setName(reallyLongName).setCmd(&i).run()
+		session, err := mb.setName(reallyLongName).setCmd(ctx, &i).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 		Expect(session.errorToString()).To(ContainSubstring("VM does not exist"))
 	})
 
-	It("start machine already started and stop machine already stopped", func() {
+	It("start machine already started and stop machine already stopped", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		machineTestBuilderInit := mb.setName(name).setCmd(i.withImage(mb.imagePath))
-		session, err := machineTestBuilderInit.run()
+		machineTestBuilderInit := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath))
+		session, err := machineTestBuilderInit.run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		starttime := time.Now()
 		s := new(startMachine)
 		// suppress output with no info and check for that.
-		startSession, err := mb.setCmd(s.withNoInfo()).run()
+		startSession, err := mb.setCmd(ctx, s.withNoInfo()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 		Expect(startSession.outputToString()).ToNot(ContainSubstring("API forwarding"))
 
-		info, ec, err := mb.toInspectInfo()
+		info, ec, err := mb.toInspectInfo(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ec).To(BeZero())
 		Expect(info[0].State).To(Equal(define.Running))
 
-		startSession, err = mb.setCmd(s).run()
+		startSession, err = mb.setCmd(ctx, s).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(125))
 		Expect(startSession.errorToString()).To(ContainSubstring(fmt.Sprintf("Error: unable to start %q: already running", machineTestBuilderInit.name)))
 
 		stop := new(stopMachine)
-		stopSession, err := mb.setCmd(stop).run()
+		stopSession, err := mb.setCmd(ctx, stop).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopSession).To(Exit(0))
 
 		// Stopping it again should not result in an error
-		stopAgain, err := mb.setCmd(stop).run()
+		stopAgain, err := mb.setCmd(ctx, stop).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopAgain).To(Exit(0))
 		Expect(stopAgain.outputToString()).To(ContainSubstring(fmt.Sprintf("Machine \"%s\" stopped successfully", name)))
 
 		// Stopping a machine should update the last up time
 		inspect := new(inspectMachine)
-		inspectSession, err := mb.setName(name).setCmd(inspect.withFormat("{{.LastUp.Format \"2006-01-02T15:04:05Z07:00\"}}")).run()
+		inspectSession, err := mb.setName(name).setCmd(ctx, inspect.withFormat("{{.LastUp.Format \"2006-01-02T15:04:05Z07:00\"}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		lastupTime, err := time.Parse(time.RFC3339, inspectSession.outputToString())
@@ -75,20 +76,20 @@ var _ = Describe("podman machine start", func() {
 		Expect(lastupTime).To(BeTemporally(">", starttime))
 	})
 
-	It("start machine with conflict on SSH port", func() {
+	It("start machine with conflict on SSH port", func(ctx context.Context) {
 		i := new(initMachine)
-		session, err := mb.setCmd(i.withImage(mb.imagePath)).run()
+		session, err := mb.setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspect := new(inspectMachine)
-		inspectSession, err := mb.setCmd(inspect.withFormat("{{.SSHConfig.Port}}")).run()
+		inspectSession, err := mb.setCmd(ctx, inspect.withFormat("{{.SSHConfig.Port}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		inspectPort := inspectSession.outputToString()
 
 		connections := new(listSystemConnection)
-		connectionsSession, err := mb.setCmd(connections.withFormat("{{.URI}}")).run()
+		connectionsSession, err := mb.setCmd(ctx, connections.withFormat("{{.URI}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(connectionsSession).To(Exit(0))
 		connectionURLs := connectionsSession.outputToStringSlice()
@@ -103,21 +104,21 @@ var _ = Describe("podman machine start", func() {
 
 		s := new(startMachine)
 		// Also test with quiet to ensure no extra stout is logged but the error is still logged.
-		startSession, err := mb.setCmd(s.withQuiet()).run()
+		startSession, err := mb.setCmd(ctx, s.withQuiet()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 		Expect(startSession.errorToString()).To(ContainSubstring("detected port conflict on machine ssh port"))
 		Expect(startSession.outputToString()).To(Equal(fmt.Sprintf("Machine %q started successfully", mb.name)))
 
 		inspect2 := new(inspectMachine)
-		inspectSession2, err := mb.setCmd(inspect2.withFormat("{{.SSHConfig.Port}}")).run()
+		inspectSession2, err := mb.setCmd(ctx, inspect2.withFormat("{{.SSHConfig.Port}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession2).To(Exit(0))
 		inspectPort2 := inspectSession2.outputToString()
 		Expect(inspectPort2).To(Not(Equal(inspectPort)))
 
 		connections2 := new(listSystemConnection)
-		connectionsSession2, err := mb.setCmd(connections2.withFormat("{{.URI}}")).run()
+		connectionsSession2, err := mb.setCmd(ctx, connections2.withFormat("{{.URI}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(connectionsSession2).To(Exit(0))
 		connectionURLs2 := connectionsSession2.outputToStringSlice()
@@ -126,16 +127,16 @@ var _ = Describe("podman machine start", func() {
 		Expect(connectionPorts2).To(HaveEach(inspectPort2))
 	})
 
-	It("start only starts specified machine and remove running machine", func() {
+	It("start only starts specified machine and remove running machine", func(ctx context.Context) {
 		j := initMachine{}
 		dontstartme := randomString()
-		session2, err := mb.setName(dontstartme).setCmd(j.withFakeImage(mb)).run()
+		session2, err := mb.setName(dontstartme).setCmd(ctx, j.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session2).To(Exit(0))
 
 		i := initMachine{}
 		startme := randomString()
-		session, err := mb.setName(startme).setCmd(i.withImage(mb.imagePath)).run()
+		session, err := mb.setName(startme).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -143,7 +144,7 @@ var _ = Describe("podman machine start", func() {
 		// Provide a buffer as stdin to simulate non-tty input (e.g., piped or redirected stdin)
 		// When stdin is not a tty, the command should not prompt for connection updates
 		stdinBuf := bytes.NewBufferString("n\n")
-		session3, err := mb.setName(startme).setCmd(s).setStdin(stdinBuf).run()
+		session3, err := mb.setName(startme).setCmd(ctx, s).setStdin(stdinBuf).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session3).Should(Exit(0))
 		// Verify that the prompt message did not appear (no prompting when stdin is not a tty)
@@ -152,48 +153,48 @@ var _ = Describe("podman machine start", func() {
 
 		inspect := new(inspectMachine)
 		inspect = inspect.withFormat("{{.State}}")
-		inspectSession, err := mb.setName(startme).setCmd(inspect).run()
+		inspectSession, err := mb.setName(startme).setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.outputToString()).To(Equal(define.Running))
 
 		inspect2 := new(inspectMachine)
 		inspect2 = inspect2.withFormat("{{.State}}")
-		inspectSession2, err := mb.setName(dontstartme).setCmd(inspect2).run()
+		inspectSession2, err := mb.setName(dontstartme).setCmd(ctx, inspect2).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession2).To(Exit(0))
 		Expect(inspectSession2.outputToString()).To(Not(Equal(define.Running)))
 
 		rm := new(rmMachine)
 		// Removing a running machine should fail
-		stop, err := mb.setName(startme).setCmd(rm).run()
+		stop, err := mb.setName(startme).setCmd(ctx, rm).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stop).To(Exit(125))
 		Expect(stop.errorToString()).To(ContainSubstring(fmt.Sprintf("vm \"%s\" cannot be destroyed", startme)))
 
 		// Removing again with force should work
-		stopAgain, err := mb.setCmd(rm.withForce()).run()
+		stopAgain, err := mb.setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopAgain).To(Exit(0))
 
 		// Inspect to be sure it is gone
 		inspect3 := new(inspectMachine)
-		inspectSession3, err := mb.setName(startme).setCmd(inspect3).run()
+		inspectSession3, err := mb.setName(startme).setCmd(ctx, inspect3).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession3).To(Exit(125))
 		Expect(inspectSession3.errorToString()).To(ContainSubstring("VM does not exist"))
 	})
 
-	It("start two machines in parallel", func() {
+	It("start two machines in parallel", func(ctx context.Context) {
 		skipIfVmtype(define.AppleHvVirt, "parallel machine start is not supported on Apple Hypervisor")
 		i := initMachine{}
 		machine1 := "m1-" + randomString()
-		session, err := mb.setName(machine1).setCmd(i.withImage(mb.imagePath)).run()
+		session, err := mb.setName(machine1).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		machine2 := "m2-" + randomString()
-		session, err = mb.setName(machine2).setCmd(i.withImage(mb.imagePath)).run()
+		session, err = mb.setName(machine2).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(session).To(Exit(0))
 
 		var startSession1, startSession2 *machineSession
@@ -204,7 +205,7 @@ var _ = Describe("podman machine start", func() {
 			defer GinkgoRecover()
 			defer wg.Done()
 			s := &startMachine{}
-			startSession1, err = mb.setName(machine1).setCmd(s.withUpdateConnection(new(false))).run()
+			startSession1, err = mb.setName(machine1).setCmd(ctx, s.withUpdateConnection(new(false))).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 		}()
 		go func() {
@@ -217,7 +218,7 @@ var _ = Describe("podman machine start", func() {
 			// second run.
 			nmb, err := newMB()
 			Expect(err).ToNot(HaveOccurred())
-			startSession2, err = nmb.setName(machine2).setCmd(s.withUpdateConnection(new(false))).run()
+			startSession2, err = nmb.setName(machine2).setCmd(ctx, s.withUpdateConnection(new(false))).run(ctx)
 			Expect(err).ToNot(HaveOccurred())
 		}()
 		wg.Wait()
@@ -239,94 +240,94 @@ var _ = Describe("podman machine start", func() {
 		}
 	})
 
-	It("machine start with --update-connection", func() {
+	It("machine start with --update-connection", func(ctx context.Context) {
 		// Add a connection and verify it was set to the default
 		defConnName := "QA"
-		err := addSystemConnection(defConnName, true)
+		err := addSystemConnection(ctx, defConnName, true)
 		Expect(err).ToNot(HaveOccurred())
 
-		listings, err := getSystemConnectionsAsSysConns()
+		listings, err := getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(defConnName)).To(BeTrue())
 
 		// Create a new machine
 		i := initMachine{}
 		machineName := randomString()
-		initSession, err := mb.setName(machineName).setCmd(i.withImage(mb.imagePath)).run()
+		initSession, err := mb.setName(machineName).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
 		// Start the new machine with --update-connection=false
 		s := startMachine{}
-		startSession, err := mb.setName(machineName).setCmd(s.withUpdateConnection(new(false))).run()
+		startSession, err := mb.setName(machineName).setCmd(ctx, s.withUpdateConnection(new(false))).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
 		// We started the machine with --update-connection=false so it should not be default
-		listings, err = getSystemConnectionsAsSysConns()
+		listings, err = getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(defConnName)).To(BeTrue())
 
 		// Stop the machine
 		halt := stopMachine{}
-		stopSession, err := mb.setName(machineName).setCmd(halt).run()
+		stopSession, err := mb.setName(machineName).setCmd(ctx, halt).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopSession).To(Exit(0))
 
 		// Start the new machine with --update-connection
-		startSession, err = mb.setName(machineName).setCmd(s.withUpdateConnection(new(true))).run()
+		startSession, err = mb.setName(machineName).setCmd(ctx, s.withUpdateConnection(new(true))).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
 		// We set true so the new default connection should have changed
-		listings, err = getSystemConnectionsAsSysConns()
+		listings, err = getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(machineName)).To(BeTrue())
 	})
-	It("machine init --now with --update-connection", func() {
+	It("machine init --now with --update-connection", func(ctx context.Context) {
 		// Add a connection and verify it was set to the default
 		defConnName := "QA"
-		err := addSystemConnection(defConnName, true)
+		err := addSystemConnection(ctx, defConnName, true)
 		Expect(err).ToNot(HaveOccurred())
 
-		listings, err := getSystemConnectionsAsSysConns()
+		listings, err := getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(defConnName)).To(BeTrue())
 
 		// Create a new machine
 		i := initMachine{}
 		machineName1 := randomString()
-		initSession, err := mb.setName(machineName1).setCmd(i.withImage(mb.imagePath).withUpdateConnection(new(false)).withNow()).run()
+		initSession, err := mb.setName(machineName1).setCmd(ctx, i.withImage(mb.imagePath).withUpdateConnection(new(false)).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
 		// We started the machine with --update-connection=false so it should not be default
-		listings, err = getSystemConnectionsAsSysConns()
+		listings, err = getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(defConnName)).To(BeTrue())
 
 		// Stop the machine
 		halt := stopMachine{}
-		stopSession, err := mb.setName(machineName1).setCmd(halt).run()
+		stopSession, err := mb.setName(machineName1).setCmd(ctx, halt).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopSession).To(Exit(0))
 
 		// Create another machine
 		machineName2 := randomString()
-		initSession2, err := mb.setName(machineName2).setCmd(i.withImage(mb.imagePath).withUpdateConnection(new(true)).withNow()).run()
+		initSession2, err := mb.setName(machineName2).setCmd(ctx, i.withImage(mb.imagePath).withUpdateConnection(new(true)).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession2).To(Exit(0))
 
-		listings, err = getSystemConnectionsAsSysConns()
+		listings, err = getSystemConnectionsAsSysConns(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(listings.IsDefault(machineName2)).To(BeTrue())
 	})
-	It("machine init --now with --import-native-ca with mounted data folder", func() {
+	It("machine init --now with --import-native-ca with mounted data folder", func(ctx context.Context) {
 		// Create a new machine
 		i := initMachine{}
 		initCommand := i.withImage(mb.imagePath).withImportNativeCA(true).withNow()
 		m := randomString()
-		initSession, err := mb.setName(m).setCmd(initCommand).run()
+		initSession, err := mb.setName(m).setCmd(ctx, initCommand).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
@@ -334,12 +335,12 @@ var _ = Describe("podman machine start", func() {
 		certFilePath := "/etc/pki/ca-trust/source/anchors"
 		certFileName := "host-ca-certs.pem"
 		sshMachine := sshMachine{}
-		sshCertFile, err := mb.setName(m).setCmd(sshMachine.withSSHCommand([]string{"ls", certFilePath})).run()
+		sshCertFile, err := mb.setName(m).setCmd(ctx, sshMachine.withSSHCommand([]string{"ls", certFilePath})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshCertFile).To(Exit(0))
 		Expect(sshCertFile.outputToString()).To(Equal(certFileName))
 	})
-	It("start interrupted by SIGTERM while waiting for VM start", func() {
+	It("start interrupted by SIGTERM while waiting for VM start", func(ctx context.Context) {
 		if !isVmtype(define.AppleHvVirt) && !isVmtype(define.LibKrun) {
 			Skip("SIGTERM interruption is supported on macOS only")
 		}
@@ -354,17 +355,17 @@ var _ = Describe("podman machine start", func() {
 		}
 
 		i := new(initMachine)
-		initSession, err := mb.setCmd(i.withImage(mb.imagePath)).run()
+		initSession, err := mb.setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
 		s := new(startMachine)
-		startSession, err := mb.setCmd(s).runWithoutWait()
+		startSession, err := mb.setCmd(ctx, s).runWithoutWait(ctx)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Wait 45s for the VM process spawned by `podman machine start`
 		Eventually(func() error {
-			_, err := exec.Command("pgrep", vmProcess).Output()
+			_, err := exec.CommandContext(ctx, "pgrep", vmProcess).Output()
 			return err
 		}, 45*time.Second, 500*time.Millisecond).Should(Succeed())
 
@@ -378,23 +379,23 @@ var _ = Describe("podman machine start", func() {
 
 		// Wait 30s for the VM process to return (SIGTERM has been forwarded)
 		Eventually(func() error {
-			_, err := exec.Command("pgrep", vmProcess).Output()
+			_, err := exec.CommandContext(ctx, "pgrep", vmProcess).Output()
 			return err
 		}, 30*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 
 		// Verify machine state is Stopped
 		inspect := new(inspectMachine)
-		inspectSession, err := mb.setCmd(inspect.withFormat("{{.State}}")).run()
+		inspectSession, err := mb.setCmd(ctx, inspect.withFormat("{{.State}}")).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.outputToString()).To(Equal(define.Stopped))
 
 		// Verify no orphan gvproxy
-		_, err = pgrep(gvproxy)
+		_, err = pgrep(ctx, gvproxy)
 		Expect(err).To(HaveOccurred(), "gvproxy should not be running after SIGTERM cleanup")
 
 		// Restart without interrupting and confirm that completes without error
-		startSession, err = mb.setCmd(s).run()
+		startSession, err = mb.setCmd(ctx, s).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 	})
@@ -419,7 +420,7 @@ func mapToPort(uris []string) ([]string, error) {
 	return ports, nil
 }
 
-func addSystemConnection(name string, setDefault bool) error {
+func addSystemConnection(ctx context.Context, name string, setDefault bool) error {
 	addConn := []string{
 		"system", "connection", "add",
 		fmt.Sprintf("--default=%s", strconv.FormatBool(setDefault)),
@@ -428,7 +429,7 @@ func addSystemConnection(name string, setDefault bool) error {
 		"ssh://root@podman.test:2222/run/podman/podman.sock",
 	}
 	mb.cmd = addConn
-	addConnSession, err := mb.run()
+	addConnSession, err := mb.run(ctx)
 	if err != nil {
 		return err
 	}
@@ -474,9 +475,9 @@ func (s SysConns) GetDefault() (SysConn, error) {
 	return SysConn{}, fmt.Errorf("no default connection found")
 }
 
-func getSystemConnectionsAsSysConns() (SysConns, error) {
+func getSystemConnectionsAsSysConns(ctx context.Context) (SysConns, error) {
 	connections := new(listSystemConnection)
-	connSession, err := mb.setCmd(connections.withFormat("json")).run()
+	connSession, err := mb.setCmd(ctx, connections.withFormat("json")).run(ctx)
 	if err != nil {
 		return nil, err
 	}

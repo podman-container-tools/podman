@@ -1,6 +1,7 @@
 package vmconfigs
 
 import (
+	"context"
 	"time"
 
 	gvproxy "github.com/containers/gvisor-tap-vsock/pkg/types"
@@ -59,25 +60,25 @@ type MachineConfig struct {
 }
 
 type VMProvider interface { //nolint:interfacebloat
-	CreateVM(opts define.CreateVMOpts, mc *MachineConfig, builder *ignition.IgnitionBuilder) error
+	CreateVM(ctx context.Context, opts define.CreateVMOpts, mc *MachineConfig, builder *ignition.IgnitionBuilder) error
 	PrepareIgnition(mc *MachineConfig, ignBuilder *ignition.IgnitionBuilder) (*ignition.ReadyUnitOpts, error)
-	Exists(name string) (bool, error)
+	Exists(ctx context.Context, name string) (bool, error)
 	MountType() VolumeMountType
-	MountVolumesToVM(mc *MachineConfig, quiet bool) error
-	Remove(mc *MachineConfig) ([]string, func() error, error)
+	MountVolumesToVM(ctx context.Context, mc *MachineConfig, quiet bool) error
+	Remove(ctx context.Context, mc *MachineConfig) ([]string, func(context.Context) error, error)
 	RemoveAndCleanMachines(dirs *define.MachineDirs) error
-	SetProviderAttrs(mc *MachineConfig, opts define.SetOptions) error
-	StartNetworking(mc *MachineConfig, cmd *gvproxy.GvproxyCommand) error
-	PostStartNetworking(mc *MachineConfig, noInfo bool) error
-	StartVM(mc *MachineConfig) (func() error, func() error, error)
-	State(mc *MachineConfig, bypass bool) (define.Status, error)
-	StopVM(mc *MachineConfig, hardStop bool) error
-	StopHostNetworking(mc *MachineConfig, vmType define.VMType) error
+	SetProviderAttrs(ctx context.Context, mc *MachineConfig, opts define.SetOptions) error
+	StartNetworking(ctx context.Context, mc *MachineConfig, cmd *gvproxy.GvproxyCommand) error
+	PostStartNetworking(ctx context.Context, mc *MachineConfig, noInfo bool) error
+	StartVM(ctx context.Context, mc *MachineConfig) (func(context.Context) error, func() error, error)
+	State(ctx context.Context, mc *MachineConfig, bypass bool) (define.Status, error)
+	StopVM(ctx context.Context, mc *MachineConfig, hardStop bool) error
+	StopHostNetworking(ctx context.Context, mc *MachineConfig, vmType define.VMType) error
 	VMType() define.VMType
 	UserModeNetworkEnabled(mc *MachineConfig) bool
 	UseProviderNetworkSetup() bool
 	RequireExclusiveActive() bool
-	UpdateSSHPort(mc *MachineConfig, port int) error
+	UpdateSSHPort(ctx context.Context, mc *MachineConfig, port int) error
 	GetRosetta(mc *MachineConfig) (bool, error)
 }
 

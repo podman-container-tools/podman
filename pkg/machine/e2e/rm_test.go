@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,34 +12,34 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/define"
 )
 
-var _ = Describe("podman machine rm", func() {
+var _ = Describe("podman machine rm", func(ctx context.Context) {
 	It("bad init name", func() {
 		i := rmMachine{}
 		reallyLongName := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		session, err := mb.setName(reallyLongName).setCmd(&i).run()
+		session, err := mb.setName(reallyLongName).setCmd(ctx, &i).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(125))
 	})
 
-	It("Remove machine", func() {
+	It("Remove machine", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 		rm := rmMachine{}
-		removeSession, err := mb.setCmd(rm.withForce()).run()
+		removeSession, err := mb.setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession).To(Exit(0))
 
 		// Inspecting a non-existent machine should fail
 		// which means it is gone
-		_, ec, err := mb.toInspectInfo()
+		_, ec, err := mb.toInspectInfo(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ec).To(Equal(125))
 
 		// Removing non-existent machine should fail
-		removeSession2, err := mb.setCmd(rm.withForce()).run()
+		removeSession2, err := mb.setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession2).To(Exit(125))
 		Expect(removeSession2.errorToString()).To(ContainSubstring(fmt.Sprintf("%s: VM does not exist", name)))
@@ -46,52 +47,52 @@ var _ = Describe("podman machine rm", func() {
 		// Ensure that the system connections have the right rootfulness
 		name = randomString()
 		i = new(initMachine)
-		session, err = mb.setName(name).setCmd(i.withFakeImage(mb)).run()
+		session, err = mb.setName(name).setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		name2 := randomString()
 		i = new(initMachine)
-		session, err = mb.setName(name2).setCmd(i.withFakeImage(mb).withRootful(true)).run()
+		session, err = mb.setName(name2).setCmd(ctx, i.withFakeImage(mb).withRootful(true)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		bm := basicMachine{}
-		sysConnOutput, err := mb.setCmd(bm.withPodmanCommand([]string{"system", "connection", "list", "--format", "{{.Name}}--{{.Default}}"})).run()
+		sysConnOutput, err := mb.setCmd(ctx, bm.withPodmanCommand([]string{"system", "connection", "list", "--format", "{{.Name}}--{{.Default}}"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sysConnOutput.outputToString()).To(ContainSubstring(name + "--true"))
 
 		rm = rmMachine{}
-		removeSession, err = mb.setName(name).setCmd(rm.withForce()).run()
+		removeSession, err = mb.setName(name).setCmd(ctx, rm.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession).To(Exit(0))
 
-		sysConnOutput, err = mb.setCmd(bm.withPodmanCommand([]string{"system", "connection", "list", "--format", "{{.Name}}--{{.Default}}"})).run()
+		sysConnOutput, err = mb.setCmd(ctx, bm.withPodmanCommand([]string{"system", "connection", "list", "--format", "{{.Name}}--{{.Default}}"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sysConnOutput.outputToString()).To(ContainSubstring(name2 + "-root--true"))
 	})
 
-	It("machine rm --save-ignition --save-image", func() {
+	It("machine rm --save-ignition --save-image", func(ctx context.Context) {
 		i := new(initMachine)
-		session, err := mb.setCmd(i.withFakeImage(mb)).run()
+		session, err := mb.setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspect := new(inspectMachine)
 		inspect = inspect.withFormat("{{.SSHConfig.IdentityPath}}")
-		inspectSession, err := mb.setCmd(inspect).run()
+		inspectSession, err := mb.setCmd(ctx, inspect).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		key := inspectSession.outputToString()
 		pubkey := key + ".pub"
 
 		rm := rmMachine{}
-		removeSession, err := mb.setCmd(rm.withForce().withSaveIgnition().withSaveImage()).run()
+		removeSession, err := mb.setCmd(ctx, rm.withForce().withSaveIgnition().withSaveImage()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(removeSession).To(Exit(0))
 
 		// Inspecting a non-existent machine should fail
 		// which means it is gone
-		_, ec, err := mb.toInspectInfo()
+		_, ec, err := mb.toInspectInfo(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ec).To(Equal(125))
 
@@ -110,24 +111,24 @@ var _ = Describe("podman machine rm", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	It("Remove machine sharing ssh key with another machine", func() {
+	It("Remove machine sharing ssh key with another machine", func(ctx context.Context) {
 		expectedIdentityPathSuffix := filepath.Join(".local", "share", "containers", "podman", "machine", define.DefaultIdentityName)
 
 		fooName := "foo"
 		foo := new(initMachine)
-		session, err := mb.setName(fooName).setCmd(foo.withFakeImage(mb)).run()
+		session, err := mb.setName(fooName).setCmd(ctx, foo.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		barName := "bar"
 		bar := new(initMachine)
-		session, err = mb.setName(barName).setCmd(bar.withUpdateConnection(new(false)).withImage(mb.imagePath).withNow()).run()
+		session, err = mb.setName(barName).setCmd(ctx, bar.withUpdateConnection(new(false)).withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspectFoo := new(inspectMachine)
 		inspectFoo = inspectFoo.withFormat("{{.SSHConfig.IdentityPath}}")
-		inspectSession, err := mb.setName(fooName).setCmd(inspectFoo).run()
+		inspectSession, err := mb.setName(fooName).setCmd(ctx, inspectFoo).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.outputToString()).To(ContainSubstring(expectedIdentityPathSuffix))
@@ -135,39 +136,39 @@ var _ = Describe("podman machine rm", func() {
 
 		inspectBar := new(inspectMachine)
 		inspectBar = inspectBar.withFormat("{{.SSHConfig.IdentityPath}}")
-		inspectSession, err = mb.setName(barName).setCmd(inspectBar).run()
+		inspectSession, err = mb.setName(barName).setCmd(ctx, inspectBar).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		Expect(inspectSession.outputToString()).To(Equal(fooIdentityPath))
 
 		rmFoo := new(rmMachine)
-		stop, err := mb.setName(fooName).setCmd(rmFoo.withForce()).run()
+		stop, err := mb.setName(fooName).setCmd(ctx, rmFoo.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stop).To(Exit(0))
 
 		// removal of foo should not affect the ability to ssh into the bar machine
 		sshBar := new(sshMachine)
-		sshSession, err := mb.setName(barName).setCmd(sshBar.withSSHCommand([]string{"echo", "foo"})).run()
+		sshSession, err := mb.setName(barName).setCmd(ctx, sshBar.withSSHCommand([]string{"echo", "foo"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession).To(Exit(0))
 	})
 
-	It("Removing all machines doesn't delete ssh keys", func() {
+	It("Removing all machines doesn't delete ssh keys", func(ctx context.Context) {
 		fooName := "foo"
 		foo := new(initMachine)
-		session, err := mb.setName(fooName).setCmd(foo.withFakeImage(mb)).run()
+		session, err := mb.setName(fooName).setCmd(ctx, foo.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspectFoo := new(inspectMachine)
 		inspectFoo = inspectFoo.withFormat("{{.SSHConfig.IdentityPath}}")
-		inspectSession, err := mb.setName(fooName).setCmd(inspectFoo).run()
+		inspectSession, err := mb.setName(fooName).setCmd(ctx, inspectFoo).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 		fooIdentityPath := inspectSession.outputToString()
 
 		rmFoo := new(rmMachine)
-		stop, err := mb.setName(fooName).setCmd(rmFoo.withForce()).run()
+		stop, err := mb.setName(fooName).setCmd(ctx, rmFoo.withForce()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stop).To(Exit(0))
 

@@ -43,7 +43,7 @@ func TopContainer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := utils.GetName(r)
-	c, err := runtime.LookupContainer(name)
+	c, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
@@ -69,7 +69,7 @@ loop: // break out of for/select infinite` loop
 		case <-r.Context().Done():
 			break loop
 		default:
-			output, err := c.Top(args)
+			output, err := c.Top(r.Context(), args)
 			if err != nil {
 				if !statusWritten {
 					utils.InternalServerError(w, err)

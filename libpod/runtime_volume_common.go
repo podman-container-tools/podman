@@ -46,7 +46,7 @@ func (r *Runtime) NewVolume(ctx context.Context, options ...VolumeCreateOption) 
 // The createPluginVolume can be set to true to make it not create the volume in the volume plugin,
 // this is required for the UpdateVolumePlugins() function. If you are not sure, set this to false.
 func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, options ...VolumeCreateOption) (_ *Volume, deferredErr error) {
-	volume := newVolume(r)
+	volume := newVolume(ctx, r)
 	for _, option := range options {
 		if err := option(volume); err != nil {
 			return nil, fmt.Errorf("running volume create option: %w", err)
@@ -68,7 +68,7 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 	}
 	if exists {
 		if volume.ignoreIfExists {
-			existingVolume, err := r.state.Volume(volume.config.Name)
+			existingVolume, err := r.state.Volume(ctx, volume.config.Name)
 			if err != nil {
 				return nil, fmt.Errorf("reading volume from state: %w", err)
 			}
@@ -165,7 +165,7 @@ func (r *Runtime) newVolume(ctx context.Context, noCreatePluginVolume bool, opti
 		// TODO: reevaluate this once we actually have volume plugins in
 		// use in production - it may be safe, but I can't tell without
 		// knowing what the actual plugin does...
-		if err := makeVolumeInPluginIfNotExist(volume.config.Name, volume.config.Options, plugin); err != nil {
+		if err := makeVolumeInPluginIfNotExist(ctx, volume.config.Name, volume.config.Options, plugin); err != nil {
 			return nil, err
 		}
 	} else {
@@ -268,12 +268,12 @@ func (r *Runtime) UpdateVolumePlugins(ctx context.Context) *define.VolumeReload 
 	)
 
 	for driverName, socket := range r.config.Engine.VolumePlugins {
-		driver, err := volplugin.GetVolumePlugin(driverName, socket, nil, r.config)
+		driver, err := volplugin.GetVolumePlugin(ctx, driverName, socket, nil, r.config)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		vols, err := driver.ListVolumes()
+		vols, err := driver.ListVolumes(ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to read volumes from plugin %q: %w", driverName, err))
 			continue
@@ -294,7 +294,7 @@ func (r *Runtime) UpdateVolumePlugins(ctx context.Context) *define.VolumeReload 
 		}
 	}
 
-	libpodVolumes, err := r.state.AllVolumes()
+	libpodVolumes, err := r.state.AllVolumes(ctx)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("cannot delete dangling plugin volumes: failed to read libpod volumes: %w", err))
 	}
@@ -333,7 +333,7 @@ func (r *Runtime) UpdateVolumePlugins(ctx context.Context) *define.VolumeReload 
 
 // makeVolumeInPluginIfNotExist makes a volume in the given volume plugin if it
 // does not already exist.
-func makeVolumeInPluginIfNotExist(name string, options map[string]string, plugin *volplugin.VolumePlugin) error {
+func makeVolumeInPluginIfNotExist(ctx context.Context, name string, options map[string]string, plugin *volplugin.VolumePlugin) error {
 	// Ping the volume plugin to see if it exists first.
 	// If it does, use the existing volume in the plugin.
 	// Options may not match exactly, but not much we can do about
@@ -342,7 +342,7 @@ func makeVolumeInPluginIfNotExist(name string, options map[string]string, plugin
 	needsCreate := true
 	getReq := new(pluginapi.GetRequest)
 	getReq.Name = name
-	if resp, err := plugin.GetVolume(getReq); err == nil {
+	if resp, err := plugin.GetVolume(ctx, getReq); err == nil {
 		// TODO: What do we do if we get a 200 response, but the
 		// Volume is nil? The docs on the Plugin API are very
 		// nonspecific, so I don't know if this is valid or
@@ -356,7 +356,7 @@ func makeVolumeInPluginIfNotExist(name string, options map[string]string, plugin
 		createReq := new(pluginapi.CreateRequest)
 		createReq.Name = name
 		createReq.Options = options
-		if err := plugin.CreateVolume(createReq); err != nil {
+		if err := plugin.CreateVolume(ctx, createReq); err != nil {
 			return fmt.Errorf("creating volume %q in plugin %s: %w", name, plugin.Name, err)
 		}
 	}
@@ -393,7 +393,7 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 
 		// We need to remove all containers using the volume
 		for _, dep := range deps {
-			ctr, err := r.state.Container(dep)
+			ctr, err := r.state.Container(ctx, dep)
 			if err != nil {
 				// If the container's removed, no point in
 				// erroring.
@@ -426,7 +426,7 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 	}
 
 	// If the volume is still mounted - force unmount it
-	if err := v.unmount(true); err != nil {
+	if err := v.unmount(ctx, true); err != nil {
 		if force {
 			// If force is set, evict the volume, even if errors
 			// occur. Otherwise we'll never be able to get rid of
@@ -453,7 +453,7 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 		} else {
 			getReq := new(pluginapi.GetRequest)
 			getReq.Name = v.Name()
-			if _, err := plugin.GetVolume(getReq); err != nil {
+			if _, err := plugin.GetVolume(ctx, getReq); err != nil {
 				canRemove = false
 				removalErr = fmt.Errorf("volume %s could not be retrieved from plugin %s, but it has been removed from Podman: %w", v.Name(), v.Driver(), err)
 			}
@@ -461,7 +461,7 @@ func (r *Runtime) removeVolume(ctx context.Context, v *Volume, force bool, timeo
 		if canRemove {
 			req := new(pluginapi.RemoveRequest)
 			req.Name = v.Name()
-			if err := plugin.RemoveVolume(req); err != nil {
+			if err := plugin.RemoveVolume(ctx, req); err != nil {
 				return fmt.Errorf("volume %s could not be removed from plugin %s: %w", v.Name(), v.Driver(), err)
 			}
 		}

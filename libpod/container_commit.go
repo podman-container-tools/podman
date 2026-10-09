@@ -56,17 +56,17 @@ func (c *Container) Commit(ctx context.Context, destImage string, options Contai
 		handlerName := fmt.Sprintf("commit-unpause-%s", c.ID())
 		if err := shutdown.Register(handlerName, func(sig os.Signal) error {
 			logrus.Debugf("Received %v, unpausing container %q", sig, c.ID())
-			return c.unpause()
+			return c.unpause(ctx)
 		}); err != nil && !errors.Is(err, shutdown.ErrHandlerExists) {
 			logrus.Errorf("Registering shutdown handler for container %q: %v", c.ID(), err)
 		}
-		if err := c.pause(); err != nil {
+		if err := c.pause(ctx); err != nil {
 			_ = shutdown.Unregister(handlerName)
 			return nil, fmt.Errorf("pausing container %q to commit: %w", c.ID(), err)
 		}
 		defer func() {
 			_ = shutdown.Unregister(handlerName)
-			if err := c.unpause(); err != nil {
+			if err := c.unpause(ctx); err != nil {
 				logrus.Errorf("Unpausing container %q: %v", c.ID(), err)
 			}
 		}()
@@ -145,7 +145,7 @@ func (c *Container) Commit(ctx context.Context, destImage string, options Contai
 		// default.
 		for _, v := range c.config.NamedVolumes {
 			if slices.Contains(c.config.UserVolumes, v.Dest) {
-				vol, err := c.runtime.GetVolume(v.Name)
+				vol, err := c.runtime.GetVolume(ctx, v.Name)
 				if err != nil {
 					return nil, fmt.Errorf("volume %s used in container %s has been removed: %w", v.Name, c.ID(), err)
 				}
@@ -176,7 +176,7 @@ func (c *Container) Commit(ctx context.Context, destImage string, options Contai
 	if err != nil {
 		return nil, err
 	}
-	defer c.newContainerEvent(events.Commit)
+	defer c.newContainerEvent(ctx, events.Commit)
 	img, _, err := c.runtime.libimageRuntime.LookupImage(id, nil)
 	if err != nil {
 		return nil, err

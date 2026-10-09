@@ -4,6 +4,7 @@ package wsl
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -25,25 +26,25 @@ type WSLStubber struct {
 	vmconfigs.WSLConfig
 }
 
-func (w WSLStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, _ *ignition.IgnitionBuilder) error {
+func (w WSLStubber) CreateVM(ctx context.Context, opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, _ *ignition.IgnitionBuilder) error {
 	var err error
 	// cleanup half-baked files if init fails at any point
 	callbackFuncs := machine.CleanUp()
-	defer callbackFuncs.CleanIfErr(&err)
-	go callbackFuncs.CleanOnSignal(false)
+	defer callbackFuncs.CleanIfErr(ctx, &err)
+	go callbackFuncs.CleanOnSignal(ctx, false)
 	mc.WSLHypervisor = new(vmconfigs.WSLConfig)
 
 	_ = setupWslProxyEnv()
 
 	if opts.UserModeNetworking {
-		if err = verifyWSLUserModeCompat(); err != nil {
+		if err = verifyWSLUserModeCompat(ctx); err != nil {
 			return err
 		}
 		mc.WSLHypervisor.UserModeNetworking = true
 	}
 
 	const prompt = "Importing operating system into WSL (this may take a few minutes on a new WSL install)..."
-	dist, err := provisionWSLDist(mc.Name, mc.ImagePath.GetPath(), prompt)
+	dist, err := provisionWSLDist(ctx, mc.Name, mc.ImagePath.GetPath(), prompt)
 	if err != nil {
 		if errors.Is(err, ErrWslNotSupported) {
 			// If error is Wsl/Service/RegisterDistro/CreateVm/HCS/ERROR_NOT_SUPPORTED
@@ -52,65 +53,65 @@ func (w WSLStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConf
 			// Relaunching 'podman machine init' in elevated mode will attempt to reconfigure the WSL machine.
 			admin := windows.HasAdminRights()
 
-			return attemptFeatureInstall(opts.ReExec, admin)
+			return attemptFeatureInstall(ctx, opts.ReExec, admin)
 		}
 		return err
 	}
 
-	unprovisionCallbackFunc := func() error {
-		return unprovisionWSL(mc)
+	unprovisionCallbackFunc := func(ctx context.Context) error {
+		return unprovisionWSL(ctx, mc)
 	}
 	callbackFuncs.Add(unprovisionCallbackFunc)
 
 	if mc.WSLHypervisor.UserModeNetworking {
-		if err = installUserModeDist(dist, mc.ImagePath.GetPath()); err != nil {
-			_ = unregisterDist(dist)
+		if err = installUserModeDist(ctx, dist, mc.ImagePath.GetPath()); err != nil {
+			_ = unregisterDist(ctx, dist)
 			return err
 		}
 	}
 
 	fmt.Println("Configuring system...")
-	if err = configureSystem(mc, dist, mc.Ansible); err != nil {
+	if err = configureSystem(ctx, mc, dist, mc.Ansible); err != nil {
 		return err
 	}
 
-	if err = installScripts(dist); err != nil {
+	if err = installScripts(ctx, dist); err != nil {
 		return err
 	}
 
-	if err = createKeys(mc, dist); err != nil {
+	if err = createKeys(ctx, mc, dist); err != nil {
 		return err
 	}
 
 	// recycle vm
-	return terminateDist(dist)
+	return terminateDist(ctx, dist)
 }
 
 func (w WSLStubber) PrepareIgnition(_ *vmconfigs.MachineConfig, _ *ignition.IgnitionBuilder) (*ignition.ReadyUnitOpts, error) {
 	return nil, nil
 }
 
-func (w WSLStubber) Exists(name string) (bool, error) {
-	if !wutil.IsWSLInstalled() {
+func (w WSLStubber) Exists(ctx context.Context, name string) (bool, error) {
+	if !wutil.IsWSLInstalled(ctx) {
 		return false, nil
 	}
-	return isWSLExist(env.WithPodmanPrefix(name))
+	return isWSLExist(ctx, env.WithPodmanPrefix(name))
 }
 
 func (w WSLStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.Unknown
 }
 
-func (w WSLStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
+func (w WSLStubber) MountVolumesToVM(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
-func (w WSLStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error, error) {
+func (w WSLStubber) Remove(_ context.Context, mc *vmconfigs.MachineConfig) ([]string, func(context.Context) error, error) {
 	// Note: we could consider swapping the two conditionals
 	// below if we wanted to hard error on the wsl unregister
 	// of the vm
-	wslRemoveFunc := func() error {
-		cmd := wutil.NewWSLCommand("--unregister", env.WithPodmanPrefix(mc.Name))
+	wslRemoveFunc := func(ctx context.Context) error {
+		cmd := wutil.NewWSLCommand(ctx, "--unregister", env.WithPodmanPrefix(mc.Name))
 		if err := runCmdPassThrough(cmd); err != nil {
 			return err
 		}
@@ -124,8 +125,8 @@ func (w WSLStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil
 }
 
-func (w WSLStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
-	state, err := w.State(mc, false)
+func (w WSLStubber) SetProviderAttrs(ctx context.Context, mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
+	state, err := w.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
@@ -156,12 +157,12 @@ func (w WSLStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.Se
 	}
 
 	if opts.UserModeNetworking != nil && mc.WSLHypervisor.UserModeNetworking != *opts.UserModeNetworking {
-		if running, _ := isRunning(mc.Name); running {
+		if running, _ := isRunning(ctx, mc.Name); running {
 			return errors.New("user-mode networking can only be changed when the machine is not running")
 		}
 
 		dist := env.WithPodmanPrefix(mc.Name)
-		if err := changeDistUserModeNetworking(dist, mc.SSH.RemoteUsername, mc.ImagePath.GetPath(), *opts.UserModeNetworking); err != nil {
+		if err := changeDistUserModeNetworking(ctx, dist, mc.SSH.RemoteUsername, mc.ImagePath.GetPath(), *opts.UserModeNetworking); err != nil {
 			return fmt.Errorf("failure changing state of user-mode networking setting: %w", err)
 		}
 
@@ -171,10 +172,10 @@ func (w WSLStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.Se
 	return nil
 }
 
-func (w WSLStubber) StartNetworking(mc *vmconfigs.MachineConfig, _ *gvproxy.GvproxyCommand) error {
+func (w WSLStubber) StartNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, _ *gvproxy.GvproxyCommand) error {
 	// Startup user-mode networking if enabled
 	if mc.WSLHypervisor.UserModeNetworking {
-		return startUserModeNetworking(mc)
+		return startUserModeNetworking(ctx, mc)
 	}
 	return nil
 }
@@ -191,7 +192,7 @@ func (w WSLStubber) RequireExclusiveActive() bool {
 	return false
 }
 
-func (w WSLStubber) PostStartNetworking(mc *vmconfigs.MachineConfig, noInfo bool) error {
+func (w WSLStubber) PostStartNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, noInfo bool) error {
 	socket, err := mc.APISocket()
 	if err != nil {
 		return err
@@ -205,15 +206,15 @@ func (w WSLStubber) PostStartNetworking(mc *vmconfigs.MachineConfig, noInfo bool
 		VMType:         w.VMType(),
 		Socket:         socket,
 	}
-	machine.LaunchWinProxy(winProxyOpts, noInfo)
+	machine.LaunchWinProxy(ctx, winProxyOpts, noInfo)
 
 	return nil
 }
 
-func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
+func (w WSLStubber) StartVM(ctx context.Context, mc *vmconfigs.MachineConfig) (func(context.Context) error, func() error, error) {
 	dist := env.WithPodmanPrefix(mc.Name)
 
-	err := wslInvoke(dist, "/root/bootstrap")
+	err := wslInvoke(ctx, dist, "/root/bootstrap")
 	if err != nil {
 		return nil, nil, fmt.Errorf("the WSL bootstrap script failed: %w", err)
 	}
@@ -224,7 +225,7 @@ func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() e
 	// https://github.com/podman-container-tools/podman/issues/29749
 	// The issue about using the WSL supported systemd:
 	// https://github.com/podman-container-tools/podman/issues/15967
-	err = wslPipe(cgroupManager, dist, "sh", "-c", "cat > /usr/share/containers/containers.conf.d/999-podman-machine-wsl-cgroupfs.conf")
+	err = wslPipe(ctx, cgroupManager, dist, "sh", "-c", "cat > /usr/share/containers/containers.conf.d/999-podman-machine-wsl-cgroupfs.conf")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed creating the cgroupfs config file: %w", err)
 	}
@@ -236,8 +237,8 @@ func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() e
 	return nil, readyFunc, nil
 }
 
-func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
-	running, err := isRunning(mc.Name)
+func (w WSLStubber) State(ctx context.Context, mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
+	running, err := isRunning(ctx, mc.Name)
 	if err != nil {
 		return "", err
 	}
@@ -247,17 +248,17 @@ func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, e
 	return define.Stopped, nil
 }
 
-func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
+func (w WSLStubber) StopVM(ctx context.Context, mc *vmconfigs.MachineConfig, _ bool) error {
 	var err error
 
-	if running, err := isRunning(mc.Name); !running {
+	if running, err := isRunning(ctx, mc.Name); !running {
 		return err
 	}
 
 	dist := env.WithPodmanPrefix(mc.Name)
 
 	// Stop user-mode networking if enabled
-	if err := stopUserModeNetworking(mc); err != nil {
+	if err := stopUserModeNetworking(ctx, mc); err != nil {
 		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %v\n", err)
 	}
 
@@ -265,7 +266,7 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
 	}
 
-	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
+	cmd := wutil.NewWSLCommand(ctx, "-u", "root", "-d", dist, "sh")
 	cmd.Stdin = strings.NewReader(waitTerm)
 	out := &bytes.Buffer{}
 	cmd.Stderr = out
@@ -275,7 +276,7 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 		return fmt.Errorf("executing wait command: %w", err)
 	}
 
-	exitCmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "/usr/local/bin/enterns", "systemctl", "exit", "0")
+	exitCmd := wutil.NewWSLCommand(ctx, "-u", "root", "-d", dist, "/usr/local/bin/enterns", "systemctl", "exit", "0")
 	if err = exitCmd.Run(); err != nil {
 		return fmt.Errorf("stopping systemd: %w", err)
 	}
@@ -284,17 +285,17 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 		logrus.Warnf("Failed to wait for systemd to exit: (%s)", strings.TrimSpace(out.String()))
 	}
 
-	return terminateDist(dist)
+	return terminateDist(ctx, dist)
 }
 
-func (w WSLStubber) StopHostNetworking(mc *vmconfigs.MachineConfig, _ define.VMType) error {
-	return stopUserModeNetworking(mc)
+func (w WSLStubber) StopHostNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, _ define.VMType) error {
+	return stopUserModeNetworking(ctx, mc)
 }
 
-func (w WSLStubber) UpdateSSHPort(mc *vmconfigs.MachineConfig, port int) error {
+func (w WSLStubber) UpdateSSHPort(ctx context.Context, mc *vmconfigs.MachineConfig, port int) error {
 	dist := env.WithPodmanPrefix(mc.Name)
 
-	if err := wslInvoke(dist, "sh", "-c", fmt.Sprintf(changePort, port)); err != nil {
+	if err := wslInvoke(ctx, dist, "sh", "-c", fmt.Sprintf(changePort, port)); err != nil {
 		return fmt.Errorf("could not change SSH port for guest OS: %w", err)
 	}
 

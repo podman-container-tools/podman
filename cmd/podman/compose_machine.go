@@ -3,13 +3,14 @@
 package main
 
 import (
+	"context"
 	"net/url"
 
 	"go.podman.io/podman/v6/internal/localapi"
 )
 
-func getMachineConn(connectionURI string, parsedConnection *url.URL) (string, error) {
-	mc, machineProvider, err := localapi.FindMachineByPort(connectionURI, parsedConnection)
+func getMachineConn(ctx context.Context, connectionURI string, parsedConnection *url.URL) (string, error) {
+	mc, machineProvider, err := localapi.FindMachineByPort(ctx, connectionURI, parsedConnection)
 	if err != nil {
 		return "", err
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func (ic *ContainerEngine) ContainerCopyFromArchive(ctx context.Context, nameOrID, containerPath string, reader io.Reader, options entities.CopyOptions) (entities.ContainerCopyFunc, error) {
-	container, err := ic.Libpod.LookupContainer(nameOrID)
+	container, err := ic.Libpod.LookupContainer(ctx, nameOrID)
 	if err != nil {
 		return nil, err
 	}
@@ -18,7 +18,7 @@ func (ic *ContainerEngine) ContainerCopyFromArchive(ctx context.Context, nameOrI
 }
 
 func (ic *ContainerEngine) ContainerCopyToArchive(ctx context.Context, nameOrID, containerPath string, writer io.Writer) (entities.ContainerCopyFunc, error) {
-	container, err := ic.Libpod.LookupContainer(nameOrID)
+	container, err := ic.Libpod.LookupContainer(ctx, nameOrID)
 	if err != nil {
 		return nil, err
 	}

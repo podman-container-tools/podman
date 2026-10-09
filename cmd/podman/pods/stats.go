@@ -81,7 +81,8 @@ func stats(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	for ; ; time.Sleep(time.Second) {
+streaming:
+	for {
 		reports, err := registry.ContainerEngine().PodStats(cmd.Context(), args, statsOptions.PodStatsOptions)
 		if err != nil {
 			return err
@@ -103,7 +104,12 @@ func stats(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if statsOptions.NoStream {
-			break
+			break streaming
+		}
+		select {
+		case <-cmd.Context().Done():
+			break streaming
+		case <-time.After(time.Second):
 		}
 	}
 	return nil

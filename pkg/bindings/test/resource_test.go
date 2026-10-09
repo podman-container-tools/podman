@@ -30,10 +30,10 @@ var _ = Describe("Verify Podman resources", func() {
 		s  *Session
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		bt = newBindingTest()
 		s = bt.startAPIService()
-		err := bt.NewConnection()
+		err := bt.NewConnection(ctx)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
@@ -42,12 +42,12 @@ var _ = Describe("Verify Podman resources", func() {
 		bt.cleanup()
 	})
 
-	It("no leaked connections", func() {
-		conn, err := bindings.NewConnection(context.Background(), bt.sock)
+	It("no leaked connections", func(ctx context.Context) {
+		conn, err := bindings.NewConnection(ctx, bt.sock)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		// Record details on open file descriptors before using API
-		buffer := lsof()
+		buffer := lsof(ctx)
 
 		// Record open fd from /proc
 		start, err := readProc()
@@ -73,7 +73,7 @@ var _ = Describe("Verify Podman resources", func() {
 			fmt.Fprintf(GinkgoWriter, "Open FDs:\nlsof Before:\n%s\n", buffer)
 
 			// Record details on open file descriptors after using API
-			buffer := lsof()
+			buffer := lsof(ctx)
 			fmt.Fprintf(GinkgoWriter, "lsof After:\n%s\n", buffer)
 
 			// We know test has failed. Easier to let ginkgo format output.
@@ -82,8 +82,8 @@ var _ = Describe("Verify Podman resources", func() {
 	})
 })
 
-func lsof() string {
-	lsof := exec.Command("lsof", "+E", "-p", strconv.Itoa(os.Getpid()))
+func lsof(ctx context.Context) string {
+	lsof := exec.CommandContext(ctx, "lsof", "+E", "-p", strconv.Itoa(os.Getpid()))
 	buffer, err := lsof.Output()
 	Expect(err).ShouldNot(HaveOccurred())
 	return string(buffer)

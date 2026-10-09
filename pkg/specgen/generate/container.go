@@ -279,7 +279,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		}
 		sandboxID := p.ID()
 		if p.HasInfraContainer() {
-			infra, err := p.InfraContainer()
+			infra, err := p.InfraContainer(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -290,7 +290,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		// the pod is running.  we do not want to add init-ctrs to
 		// a running pod because it creates confusion for us.
 		if len(s.InitContainerType) > 0 {
-			containerStatuses, err := p.Status()
+			containerStatuses, err := p.Status(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -326,7 +326,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	// Unless already set via the CLI, check if we need to disable process
 	// labels or set the defaults.
 	if len(s.SelinuxOpts) == 0 {
-		if err := setLabelOpts(s, r, s.PidNS, s.IpcNS); err != nil {
+		if err := setLabelOpts(ctx, s, r, s.PidNS, s.IpcNS); err != nil {
 			return nil, err
 		}
 	}
@@ -379,8 +379,8 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 }
 
 // ConfigToSpec takes a completed container config and converts it back into a specgenerator for purposes of cloning an existing container
-func ConfigToSpec(rt *libpod.Runtime, specg *specgen.SpecGenerator, containerID string) (*libpod.Container, *libpod.InfraInherit, error) {
-	c, err := rt.LookupContainer(containerID)
+func ConfigToSpec(ctx context.Context, rt *libpod.Runtime, specg *specgen.SpecGenerator, containerID string) (*libpod.Container, *libpod.InfraInherit, error) {
+	c, err := rt.LookupContainer(ctx, containerID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -606,14 +606,14 @@ func mapSecurityConfig(c *libpod.ContainerConfig, s *specgen.SpecGenerator) {
 }
 
 // Check name looks for existing containers/pods with the same name, and modifies the given string until a new name is found
-func CheckName(rt *libpod.Runtime, n string, kind bool) string {
+func CheckName(ctx context.Context, rt *libpod.Runtime, n string, kind bool) string {
 	switch {
 	case strings.Contains(n, "-clone"):
 		ind := strings.Index(n, "-clone") + 6
 		num, err := strconv.Atoi(n[ind:])
 		if num == 0 && err != nil { // clone1 is hard to get with this logic, just check for it here.
 			if kind {
-				_, err = rt.LookupContainer(n + "1")
+				_, err = rt.LookupContainer(ctx, n+"1")
 			} else {
 				_, err = rt.LookupPod(n + "1")
 			}
@@ -631,7 +631,7 @@ func CheckName(rt *libpod.Runtime, n string, kind bool) string {
 			count++
 			tempN := n + strconv.Itoa(count)
 			if kind {
-				_, err = rt.LookupContainer(tempN)
+				_, err = rt.LookupContainer(ctx, tempN)
 			} else {
 				_, err = rt.LookupPod(tempN)
 			}

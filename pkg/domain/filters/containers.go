@@ -3,6 +3,7 @@
 package filters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -20,7 +21,7 @@ import (
 )
 
 // GenerateContainerFilterFuncs return ContainerFilter functions based of filter.
-func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpod.Runtime) (func(container *libpod.Container) bool, error) {
+func GenerateContainerFilterFuncs(ctx context.Context, filter string, filterValues []string, r *libpod.Runtime) (func(container *libpod.Container) bool, error) {
 	switch filter {
 	case "id":
 		return func(c *libpod.Container) bool {
@@ -127,7 +128,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 	case "before":
 		var createTime time.Time
 		for _, filterValue := range filterValues {
-			ctr, err := r.LookupContainer(filterValue)
+			ctr, err := r.LookupContainer(ctx, filterValue)
 			if err != nil {
 				return nil, err
 			}
@@ -141,7 +142,7 @@ func GenerateContainerFilterFuncs(filter string, filterValues []string, r *libpo
 	case "since":
 		var createTime time.Time
 		for _, filterValue := range filterValues {
-			ctr, err := r.LookupContainer(filterValue)
+			ctr, err := r.LookupContainer(ctx, filterValue)
 			if err != nil {
 				return nil, err
 			}

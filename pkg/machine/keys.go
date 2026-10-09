@@ -4,6 +4,7 @@ package machine
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,7 +18,7 @@ var sshCommand = []string{"ssh-keygen", "-N", "", "-t", "ed25519", "-f"}
 
 // CreateSSHKeys makes a priv and pub ssh key for interacting
 // the a VM.
-func CreateSSHKeys(writeLocation string) (string, error) {
+func CreateSSHKeys(ctx context.Context, writeLocation string) (string, error) {
 	// If the SSH key already exists, hard fail
 	if err := fileutils.Exists(writeLocation); err == nil {
 		return "", fmt.Errorf("SSH key already exists: %s", writeLocation)
@@ -25,7 +26,7 @@ func CreateSSHKeys(writeLocation string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(writeLocation), 0o700); err != nil {
 		return "", err
 	}
-	if err := generatekeys(writeLocation); err != nil {
+	if err := generatekeys(ctx, writeLocation); err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(writeLocation + ".pub")
@@ -37,7 +38,7 @@ func CreateSSHKeys(writeLocation string) (string, error) {
 
 // GetSSHKeys checks to see if there is a ssh key at the provided location.
 // If not, we create the priv and pub keys. The ssh key is then returned.
-func GetSSHKeys(identityPath string) (string, error) {
+func GetSSHKeys(ctx context.Context, identityPath string) (string, error) {
 	if err := fileutils.Exists(identityPath); err == nil {
 		b, err := os.ReadFile(identityPath + ".pub")
 		if err != nil {
@@ -46,13 +47,13 @@ func GetSSHKeys(identityPath string) (string, error) {
 		return strings.TrimSuffix(string(b), "\n"), nil
 	}
 
-	return CreateSSHKeys(identityPath)
+	return CreateSSHKeys(ctx, identityPath)
 }
 
 // generatekeys creates an ed25519 set of keys
-func generatekeys(writeLocation string) error {
+func generatekeys(ctx context.Context, writeLocation string) error {
 	args := append(append([]string{}, sshCommand[1:]...), writeLocation)
-	cmd := exec.Command(sshCommand[0], args...)
+	cmd := exec.CommandContext(ctx, sshCommand[0], args...)
 	stdErr := &bytes.Buffer{}
 	cmd.Stderr = stdErr
 

@@ -31,7 +31,7 @@ func StartContainer(w http.ResponseWriter, r *http.Request) {
 	}
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
-	con, err := runtime.LookupContainer(name)
+	con, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return

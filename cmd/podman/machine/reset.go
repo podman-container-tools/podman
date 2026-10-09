@@ -42,11 +42,11 @@ func init() {
 	flags.BoolVarP(&resetOptions.Force, formatFlagName, "f", false, "Do not prompt before reset")
 }
 
-func reset(_ *cobra.Command, _ []string) error {
+func reset(cmd *cobra.Command, _ []string) error {
 	allProviders := provider2.GetAll()
 	for _, p := range allProviders {
 		hasPerms := provider2.HasPermsForProvider(p.VMType())
-		isInstalled, err := provider2.IsInstalled(p.VMType())
+		isInstalled, err := provider2.IsInstalled(cmd.Context(), p.VMType())
 		if !hasPerms && (isInstalled || err != nil) && !resetOptions.Force {
 			logrus.Warnf("Managing %s machines require admin authority.", p.VMType().String())
 			logrus.Warnf("Continuing to reset may cause Podman to be unaware of remaining VMs in the VM manager.")
@@ -54,7 +54,7 @@ func reset(_ *cobra.Command, _ []string) error {
 	}
 
 	if !resetOptions.Force {
-		listResponse, err := shim.List(allProviders, machine.ListOptions{})
+		listResponse, err := shim.List(cmd.Context(), allProviders, machine.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func reset(_ *cobra.Command, _ []string) error {
 			return nil
 		}
 	}
-	return shim.Reset(allProviders, resetOptions)
+	return shim.Reset(cmd.Context(), allProviders, resetOptions)
 }
 
 func resetConfirmationMessage(listResponse []*machine.ListResponse) {

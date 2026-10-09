@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 
 	"go.podman.io/podman/v6/libpod/define"
@@ -11,7 +12,7 @@ import (
 // GetContainerStats gets the running stats for a given container.
 // The previousStats is used to correctly calculate cpu percentages. You
 // should pass nil if there is no previous stat for this container.
-func (c *Container) GetContainerStats(previousStats *define.ContainerStats) (*define.ContainerStats, error) {
+func (c *Container) GetContainerStats(ctx context.Context, previousStats *define.ContainerStats) (*define.ContainerStats, error) {
 	stats := new(define.ContainerStats)
 	stats.ContainerID = c.ID()
 	stats.Name = c.Name()
@@ -41,13 +42,13 @@ func (c *Container) GetContainerStats(previousStats *define.ContainerStats) (*de
 		}
 	}
 
-	netStats, err := getContainerNetIO(c)
+	netStats, err := getContainerNetIO(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	stats.Network = netStats
 
-	if err := c.getPlatformContainerStats(stats, previousStats); err != nil {
+	if err := c.getPlatformContainerStats(ctx, stats, previousStats); err != nil {
 		return nil, err
 	}
 	return stats, nil

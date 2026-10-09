@@ -48,7 +48,7 @@ func (c *Container) initUnlocked(ctx context.Context, recursive bool) (retErr er
 	}
 
 	if !recursive {
-		if err := c.checkDependenciesAndHandleError(); err != nil {
+		if err := c.checkDependenciesAndHandleError(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -114,7 +114,7 @@ func (c *Container) Start(ctx context.Context, recursive bool) error {
 // Either resources, restartPolicy or changedHealthCheckConfiguration must not be nil in the updateOptions.
 // If restartRetries is not nil, restartPolicy must be set and must be "on-failure".
 // Nil values of changedHealthCheckConfiguration are not updated.
-func (c *Container) Update(updateOptions *entities.ContainerUpdateOptions) error {
+func (c *Container) Update(ctx context.Context, updateOptions *entities.ContainerUpdateOptions) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -134,6 +134,7 @@ func (c *Container) Update(updateOptions *entities.ContainerUpdateOptions) error
 	}
 	if changedHealthCheck {
 		if err := c.updateHealthCheck(
+			ctx,
 			healthCheckConfig,
 			&HealthCheckConfig{Schema2HealthConfig: c.config.HealthCheckConfig},
 		); err != nil {
@@ -147,6 +148,7 @@ func (c *Container) Update(updateOptions *entities.ContainerUpdateOptions) error
 	}
 	if changedStartupHealthCheck {
 		if err := c.updateHealthCheck(
+			ctx,
 			startupHealthCheckConfig,
 			&StartupHealthCheckConfig{StartupHealthCheck: c.config.StartupHealthCheckConfig},
 		); err != nil {
@@ -162,8 +164,8 @@ func (c *Container) Update(updateOptions *entities.ContainerUpdateOptions) error
 		return err
 	}
 
-	defer c.newContainerEvent(events.Update)
-	return c.update(updateOptions)
+	defer c.newContainerEvent(ctx, events.Update)
+	return c.update(ctx, updateOptions)
 }
 
 // Attach to a container.
@@ -234,7 +236,7 @@ func (c *Container) Attach(ctx context.Context, streams *define.AttachStreams, k
 		// attach and start the container on a different thread.  waitForHealthy must
 		// be done later, as it requires to run on the same thread that holds the lock
 		// for the container.
-		if err := c.ociRuntime.Attach(c, opts); err != nil {
+		if err := c.ociRuntime.Attach(ctx, c, opts); err != nil {
 			attachChan <- err
 		}
 		close(attachChan)
@@ -244,7 +246,7 @@ func (c *Container) Attach(ctx context.Context, streams *define.AttachStreams, k
 	case err := <-attachChan:
 		return nil, err
 	case <-startedChan:
-		c.newContainerEvent(events.Attach)
+		c.newContainerEvent(ctx, events.Attach)
 	}
 
 	if start {
@@ -267,7 +269,7 @@ func (c *Container) RestartWithTimeout(ctx context.Context, timeout uint) error 
 		}
 	}
 
-	if err := c.checkDependenciesAndHandleError(); err != nil {
+	if err := c.checkDependenciesAndHandleError(ctx); err != nil {
 		return err
 	}
 
@@ -279,23 +281,23 @@ func (c *Container) RestartWithTimeout(ctx context.Context, timeout uint) error 
 // timeout, SIGKILL is used to attempt to forcibly stop the container
 // Default stop timeout is 10 seconds, but can be overridden when the container
 // is created
-func (c *Container) Stop() error {
+func (c *Container) Stop(ctx context.Context) error {
 	// Stop with the container's given timeout
-	return c.StopWithTimeout(c.config.StopTimeout)
+	return c.StopWithTimeout(ctx, c.config.StopTimeout)
 }
 
 // StopWithTimeout is a version of Stop that allows a timeout to be specified
 // manually. If timeout is 0, SIGKILL will be used immediately to kill the
 // container.
-func (c *Container) StopWithTimeout(timeout uint) (finalErr error) {
-	return c.StopWithArgs(timeout, true)
+func (c *Container) StopWithTimeout(ctx context.Context, timeout uint) (finalErr error) {
+	return c.StopWithArgs(ctx, timeout, true)
 }
 
 // StopService stops the container without marking it as stopped by user (e.g. for
 // systemd ExecStop). Containers with restart policy unless-stopped will be
 // eligible to start again on next boot.
-func (c *Container) StopService(timeout uint) (finalErr error) {
-	return c.StopWithArgs(timeout, false)
+func (c *Container) StopService(ctx context.Context, timeout uint) (finalErr error) {
+	return c.StopWithArgs(ctx, timeout, false)
 }
 
 // StopWithArgs is a version of Stop that allows a timeout to be specified manually
@@ -305,7 +307,7 @@ func (c *Container) StopService(timeout uint) (finalErr error) {
 // An explicit stop is treated as a user-driven lifecycle action. Because of
 // that, this path may not trigger automatic restart-policy handling in cleanup,
 // even when stoppedByUser is false.
-func (c *Container) StopWithArgs(timeout uint, stoppedByUser bool) (finalErr error) {
+func (c *Container) StopWithArgs(ctx context.Context, timeout uint, stoppedByUser bool) (finalErr error) {
 	// Have to lock the pod the container is a part of.
 	// This prevents running `podman stop` at the same time a
 	// `podman pod start` is running, which could lead to weird races.
@@ -343,11 +345,11 @@ func (c *Container) StopWithArgs(timeout uint, stoppedByUser bool) (finalErr err
 			return err
 		}
 	}
-	return c.stopInternal(timeout, stoppedByUser)
+	return c.stopInternal(ctx, timeout, stoppedByUser)
 }
 
 // Kill sends a signal to a container
-func (c *Container) Kill(signal uint) error {
+func (c *Container) Kill(ctx context.Context, signal uint) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -368,17 +370,17 @@ func (c *Container) Kill(signal uint) error {
 	}
 
 	// Hardcode all = false, we only use all when removing.
-	if err := c.ociRuntime.KillContainer(c, signal, false); err != nil {
+	if err := c.ociRuntime.KillContainer(ctx, c, signal, false); err != nil {
 		return err
 	}
 
 	c.state.StoppedByUser = true
 
-	c.newContainerEvent(events.Kill)
+	c.newContainerEvent(ctx, events.Kill)
 
 	// Make sure to wait for the container to exit in case of SIGKILL.
 	if signal == uint(unix.SIGKILL) {
-		return c.waitForConmonToExitAndSave()
+		return c.waitForConmonToExitAndSave(ctx)
 	}
 
 	return c.save()
@@ -442,13 +444,13 @@ func (c *Container) HTTPAttach(r *http.Request, w http.ResponseWriter, streams *
 
 	logrus.Infof("Performing HTTP Hijack attach to container %s", c.ID())
 
-	c.newContainerEvent(events.Attach)
+	c.newContainerEvent(r.Context(), events.Attach)
 	return c.ociRuntime.HTTPAttach(c, r, w, streams, detachKeys, cancel, hijackDone, streamAttach, streamLogs)
 }
 
 // AttachResize resizes the container's terminal, which is displayed by Attach
 // and HTTPAttach.
-func (c *Container) AttachResize(newSize resize.TerminalSize) error {
+func (c *Container) AttachResize(ctx context.Context, newSize resize.TerminalSize) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -464,12 +466,12 @@ func (c *Container) AttachResize(newSize resize.TerminalSize) error {
 
 	logrus.Infof("Resizing TTY of container %s", c.ID())
 
-	return c.ociRuntime.AttachResize(c, newSize)
+	return c.ociRuntime.AttachResize(ctx, c, newSize)
 }
 
 // Mount mounts a container's filesystem on the host
 // The path where the container has been mounted is returned
-func (c *Container) Mount() (string, error) {
+func (c *Container) Mount(ctx context.Context) (string, error) {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -479,12 +481,12 @@ func (c *Container) Mount() (string, error) {
 		}
 	}
 
-	defer c.newContainerEvent(events.Mount)
+	defer c.newContainerEvent(ctx, events.Mount)
 	return c.mount()
 }
 
 // Unmount unmounts a container's filesystem on the host
-func (c *Container) Unmount(force bool) error {
+func (c *Container) Unmount(ctx context.Context, force bool) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -512,12 +514,12 @@ func (c *Container) Unmount(force bool) error {
 			return fmt.Errorf("can't unmount %s last mount, it is still in use: %w", c.ID(), define.ErrInternal)
 		}
 	}
-	defer c.newContainerEvent(events.Unmount)
+	defer c.newContainerEvent(ctx, events.Unmount)
 	return c.unmount(force)
 }
 
 // Pause pauses a container
-func (c *Container) Pause() error {
+func (c *Container) Pause(ctx context.Context) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -533,12 +535,12 @@ func (c *Container) Pause() error {
 	if c.state.State != define.ContainerStateRunning {
 		return fmt.Errorf("%q is not running, can't pause: %w", c.state.State, define.ErrCtrStateInvalid)
 	}
-	defer c.newContainerEvent(events.Pause)
-	return c.pause()
+	defer c.newContainerEvent(ctx, events.Pause)
+	return c.pause(ctx)
 }
 
 // Unpause unpauses a container
-func (c *Container) Unpause() error {
+func (c *Container) Unpause(ctx context.Context) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -551,13 +553,13 @@ func (c *Container) Unpause() error {
 	if c.state.State != define.ContainerStatePaused {
 		return fmt.Errorf("%q is not paused, can't unpause: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
-	defer c.newContainerEvent(events.Unpause)
-	return c.unpause()
+	defer c.newContainerEvent(ctx, events.Unpause)
+	return c.unpause(ctx)
 }
 
 // Export exports a container's root filesystem as a tar archive
 // The archive will be saved as a file at the given path
-func (c *Container) Export(out io.Writer) error {
+func (c *Container) Export(ctx context.Context, out io.Writer) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -571,7 +573,7 @@ func (c *Container) Export(out io.Writer) error {
 		return fmt.Errorf("cannot mount container %s as it is being removed: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
 
-	defer c.newContainerEvent(events.Export)
+	defer c.newContainerEvent(ctx, events.Export)
 	return c.export(out)
 }
 
@@ -933,7 +935,7 @@ func (c *Container) Batch(batchFunc func(*Container) error) error {
 // cases where Conmon was killed unexpectedly, or runc was upgraded.
 // Running a manual Sync() ensures that container state will be correct in
 // such situations.
-func (c *Container) Sync() error {
+func (c *Container) Sync(ctx context.Context) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -943,7 +945,7 @@ func (c *Container) Sync() error {
 		return err
 	}
 
-	defer c.newContainerEvent(events.Sync)
+	defer c.newContainerEvent(ctx, events.Sync)
 	return nil
 }
 
@@ -955,7 +957,7 @@ func (c *Container) Sync() error {
 // downtime will result, as the rules are destroyed as part of this process.
 // At present, this only works on containers with bridge networking.
 // Requires that the container must be running or created.
-func (c *Container) ReloadNetwork() error {
+func (c *Container) ReloadNetwork(ctx context.Context) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -969,7 +971,7 @@ func (c *Container) ReloadNetwork() error {
 		return fmt.Errorf("cannot reload network unless container network has been configured: %w", define.ErrCtrStateInvalid)
 	}
 
-	return c.reloadNetwork()
+	return c.reloadNetwork(ctx)
 }
 
 // Refresh is DEPRECATED and REMOVED.
@@ -1100,12 +1102,12 @@ func (c *Container) Restore(ctx context.Context, options ContainerCheckpointOpti
 			return nil, 0, err
 		}
 	}
-	defer c.newContainerEvent(events.Restore)
+	defer c.newContainerEvent(ctx, events.Restore)
 	return c.restore(ctx, options)
 }
 
 // Indicate whether or not the container should restart
-func (c *Container) ShouldRestart(_ context.Context) bool {
+func (c *Container) ShouldRestart() bool {
 	logrus.Debugf("Checking if container %s should restart", c.ID())
 	if !c.batched {
 		c.lock.Lock()

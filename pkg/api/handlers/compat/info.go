@@ -3,6 +3,7 @@
 package compat
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/netip"
@@ -38,7 +39,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 	// 500 internal
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 
-	infoData, err := runtime.Info()
+	infoData, err := runtime.Info(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to obtain system memory info: %w", err))
 		return
@@ -54,7 +55,7 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to obtain podman versions: %w", err))
 		return
 	}
-	stateInfo := getContainersState(runtime)
+	stateInfo := getContainersState(r.Context(), runtime)
 	sysInfo := sysinfo.New(true)
 
 	// FIXME: Need to expose if runtime supports Checkpointing
@@ -256,9 +257,9 @@ func getFdCount() (count int) {
 }
 
 // Just ignoring Container errors here...
-func getContainersState(r *libpod.Runtime) map[define.ContainerStatus]int {
+func getContainersState(ctx context.Context, r *libpod.Runtime) map[define.ContainerStatus]int {
 	states := map[define.ContainerStatus]int{}
-	ctnrs, err := r.GetAllContainers()
+	ctnrs, err := r.GetAllContainers(ctx)
 	if err == nil {
 		for _, ctnr := range ctnrs {
 			state, err := ctnr.State()

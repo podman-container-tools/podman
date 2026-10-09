@@ -13,7 +13,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/ocipull"
 )
 
-func pullOCITestDisk(finalDir string, vmType define.VMType) error {
+func pullOCITestDisk(ctx context.Context, finalDir string, vmType define.VMType) error {
 	imageCacheDir, err := define.NewMachineFile(finalDir, nil)
 	if err != nil {
 		return err
@@ -25,7 +25,7 @@ func pullOCITestDisk(finalDir string, vmType define.VMType) error {
 	dirs := define.MachineDirs{ImageCacheDir: imageCacheDir}
 
 	var skipTlsVerify types.OptionalBool
-	ociArtPull, err := ocipull.NewOCIArtifactPull(context.Background(), &dirs, "docker://quay.io/podman/machine-os", "e2emachine", vmType, unusedFinalPath, skipTlsVerify)
+	ociArtPull, err := ocipull.NewOCIArtifactPull(ctx, &dirs, "docker://quay.io/podman/machine-os", "e2emachine", vmType, unusedFinalPath, skipTlsVerify)
 	if err != nil {
 		return err
 	}

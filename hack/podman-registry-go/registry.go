@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -43,7 +44,7 @@ type Options struct {
 }
 
 // StartWithOptions a new registry and return it along with its image, user, password, and port.
-func StartWithOptions(options *Options) (*Registry, error) {
+func StartWithOptions(ctx context.Context, options *Options) (*Registry, error) {
 	if options == nil {
 		options = &Options{}
 	}
@@ -64,7 +65,7 @@ func StartWithOptions(options *Options) (*Registry, error) {
 
 	// Start a registry.
 	os.Setenv("PODMAN", strings.Join(podmanCmd, " "))
-	out, err := utils.ExecCmd(binary, args...)
+	out, err := utils.ExecCmd(ctx, binary, args...)
 	os.Unsetenv("PODMAN")
 	if err != nil {
 		return nil, fmt.Errorf("running %q: %s: %w", binary, out, err)
@@ -116,12 +117,12 @@ func StartWithOptions(options *Options) (*Registry, error) {
 }
 
 // Stop the registry.
-func (r *Registry) Stop() error {
+func (r *Registry) Stop(ctx context.Context) error {
 	// Stop a registry.
 	if !r.running {
 		return nil
 	}
-	if _, err := utils.ExecCmd(binary, "-P", r.Port, "stop"); err != nil {
+	if _, err := utils.ExecCmd(ctx, binary, "-P", r.Port, "stop"); err != nil {
 		return fmt.Errorf("stopping registry (%v) with %q: %w", *r, binary, err)
 	}
 	r.running = false

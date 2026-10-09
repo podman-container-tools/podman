@@ -26,7 +26,7 @@ func VersionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := runtime.Info()
+	info, err := runtime.Info(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to obtain system memory info: %w", err))
 		return

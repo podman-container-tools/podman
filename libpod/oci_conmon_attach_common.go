@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ const (
 // Does not check if state is appropriate.
 // started is only required if startContainer is true.
 // It does not wait for the container to be healthy, it is the caller responsibility to do so.
-func (r *ConmonOCIRuntime) Attach(c *Container, params *AttachOptions) error {
+func (r *ConmonOCIRuntime) Attach(ctx context.Context, c *Container, params *AttachOptions) error {
 	passthrough := c.LogDriver() == define.PassthroughLogging || c.LogDriver() == define.PassthroughTTYLogging
 
 	if params == nil || params.Streams == nil {
@@ -62,7 +63,7 @@ func (r *ConmonOCIRuntime) Attach(c *Container, params *AttachOptions) error {
 
 		// If we have a resize, do it.
 		if params.InitialSize != nil {
-			if err := r.AttachResize(c, *params.InitialSize); err != nil {
+			if err := r.AttachResize(ctx, c, *params.InitialSize); err != nil {
 				return err
 			}
 		}
@@ -86,7 +87,7 @@ func (r *ConmonOCIRuntime) Attach(c *Container, params *AttachOptions) error {
 	// If starting was requested, start the container and notify when that's
 	// done.
 	if params.Start {
-		if err := c.start(); err != nil {
+		if err := c.start(ctx); err != nil {
 			return err
 		}
 		params.Started <- true
@@ -133,7 +134,7 @@ func (r *ConmonOCIRuntime) Attach(c *Container, params *AttachOptions) error {
 // 4. attachToExec sends on startFd, signalling it has attached to the socket and child is ready to go
 // 5. child receives on startFd, runs the runtime exec command
 // attachToExec is responsible for closing startFd and attachFd
-func (c *Container) attachToExec(streams *define.AttachStreams, keys *string, sessionID string, startFd, attachFd *os.File, newSize *resize.TerminalSize) error {
+func (c *Container) attachToExec(ctx context.Context, streams *define.AttachStreams, keys *string, sessionID string, startFd, attachFd *os.File, newSize *resize.TerminalSize) error {
 	if !streams.AttachOutput && !streams.AttachError && !streams.AttachInput {
 		return fmt.Errorf("must provide at least one stream to attach to: %w", define.ErrInvalidArg)
 	}
@@ -168,7 +169,7 @@ func (c *Container) attachToExec(streams *define.AttachStreams, keys *string, se
 
 	// resize before we start the container process
 	if newSize != nil {
-		err = c.ociRuntime.ExecAttachResize(c, sessionID, *newSize)
+		err = c.ociRuntime.ExecAttachResize(ctx, c, sessionID, *newSize)
 		if err != nil {
 			logrus.Warnf("Resize failed: %v", err)
 		}

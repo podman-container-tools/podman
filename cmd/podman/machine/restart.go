@@ -57,7 +57,7 @@ func restart(cmd *cobra.Command, args []string) error {
 	}
 
 	updateConnection := false
-	if err := shim.StopThenStart(mc, vmProvider, false, restartOpts, &updateConnection); err != nil {
+	if err := shim.StopThenStart(cmd.Context(), mc, vmProvider, false, restartOpts, &updateConnection); err != nil {
 		return err
 	}
 	fmt.Printf("Machine %q restarted successfully\n", vmName)

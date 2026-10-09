@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -2157,13 +2158,13 @@ func WithInfraContainer() PodCreateOption {
 }
 
 // WithServiceContainer associates the specified service container ID with the pod.
-func WithServiceContainer(id string) PodCreateOption {
+func WithServiceContainer(ctx context.Context, id string) PodCreateOption {
 	return func(pod *Pod) error {
 		if pod.valid {
 			return define.ErrPodFinalized
 		}
 
-		ctr, err := pod.runtime.LookupContainer(id)
+		ctr, err := pod.runtime.LookupContainer(ctx, id)
 		if err != nil {
 			return fmt.Errorf("looking up service container: %w", err)
 		}

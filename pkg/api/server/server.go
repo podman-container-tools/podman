@@ -62,11 +62,11 @@ const (
 var shutdownOnce sync.Once
 
 // NewServerWithSettings will create and configure a new API server using provided settings
-func NewServerWithSettings(runtime *libpod.Runtime, listener net.Listener, opts entities.ServiceOptions) (*APIServer, error) {
-	return newServer(runtime, listener, opts)
+func NewServerWithSettings(ctx context.Context, runtime *libpod.Runtime, listener net.Listener, opts entities.ServiceOptions) (*APIServer, error) {
+	return newServer(ctx, runtime, listener, opts)
 }
 
-func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.ServiceOptions) (*APIServer, error) {
+func newServer(ctx context.Context, runtime *libpod.Runtime, listener net.Listener, opts entities.ServiceOptions) (*APIServer, error) {
 	logrus.Infof("API service listening on %q. URI: %q", listener.Addr(), runtime.RemoteURI())
 	if opts.CorsHeaders == "" {
 		logrus.Debug("CORS Headers were not set")
@@ -106,7 +106,7 @@ func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.Ser
 	reflection.Register(server.grpc)
 
 	server.BaseContext = func(_ net.Listener) context.Context {
-		ctx := context.WithValue(context.Background(), types.DecoderKey, handlers.NewAPIDecoder())
+		ctx := context.WithValue(ctx, types.DecoderKey, handlers.NewAPIDecoder())
 		ctx = context.WithValue(ctx, types.CompatDecoderKey, handlers.NewCompatAPIDecoder())
 		ctx = context.WithValue(ctx, types.RuntimeKey, runtime)
 		ctx = context.WithValue(ctx, types.IdleTrackerKey, tracker)
@@ -230,7 +230,7 @@ func (s *APIServer) Serve() error {
 
 	if err := shutdown.Register("service", func(_ os.Signal) error {
 		s.grpc.GracefulStop()
-		err := s.Shutdown(true)
+		err := s.Shutdown(s, true)
 		if err == nil {
 			// For `systemctl stop podman.service` support, exit code should be 0
 			// but only if we did indeed gracefully shutdown
@@ -248,7 +248,7 @@ func (s *APIServer) Serve() error {
 	go func() {
 		<-s.idleTracker.Done()
 		logrus.Debugf("API service(s) shutting down, idle for %ds", int(s.idleTracker.Duration.Seconds()))
-		_ = s.Shutdown(false)
+		_ = s.Shutdown(s, false)
 	}()
 
 	// Before we start serving, ensure umask is properly set for container creation.
@@ -308,7 +308,7 @@ func (s *APIServer) setupPprof() {
 }
 
 // Shutdown is a clean shutdown waiting on existing clients
-func (s *APIServer) Shutdown(halt bool) error {
+func (s *APIServer) Shutdown(ctx context.Context, halt bool) error {
 	switch {
 	case halt:
 		logrus.Debug("API service forced shutdown, ignoring timeout Duration")
@@ -326,7 +326,7 @@ func (s *APIServer) Shutdown(halt bool) error {
 		if s.idleTracker.Duration > 0 {
 			deadline = s.idleTracker.Duration
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), deadline)
+		ctx, cancel := context.WithTimeout(ctx, deadline)
 		go func() {
 			defer cancel()
 

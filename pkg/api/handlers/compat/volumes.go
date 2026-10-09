@@ -44,14 +44,14 @@ func ListVolumes(w http.ResponseWriter, r *http.Request) {
 
 	volumeFilters := []libpod.VolumeFilter{}
 	for filter, filterValues := range *filtersMap {
-		filterFunc, err := filters.GenerateVolumeFilters(filter, filterValues, runtime)
+		filterFunc, err := filters.GenerateVolumeFilters(r.Context(), filter, filterValues, runtime)
 		if err != nil {
 			utils.InternalServerError(w, err)
 		}
 		volumeFilters = append(volumeFilters, filterFunc)
 	}
 
-	vols, err := runtime.Volumes(volumeFilters...)
+	vols, err := runtime.Volumes(r.Context(), volumeFilters...)
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -118,7 +118,7 @@ func CreateVolume(w http.ResponseWriter, r *http.Request) {
 	)
 	if len(input.Name) != 0 {
 		// See if the volume already exists
-		existingVolume, err = runtime.GetVolume(input.Name)
+		existingVolume, err = runtime.GetVolume(r.Context(), input.Name)
 		if err != nil && !errors.Is(err, define.ErrNoSuchVolume) {
 			utils.InternalServerError(w, err)
 			return
@@ -200,7 +200,7 @@ func CreateVolume(w http.ResponseWriter, r *http.Request) {
 func InspectVolume(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
-	vol, err := runtime.GetVolume(name)
+	vol, err := runtime.GetVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return
@@ -253,7 +253,7 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 	 * respectively.
 	 */
 	name := utils.GetName(r)
-	vol, err := runtime.LookupVolume(name)
+	vol, err := runtime.LookupVolume(r.Context(), name)
 	if err == nil {
 		// As above, we do not pass `force` from the query parameters here
 		if err := runtime.RemoveVolume(r.Context(), vol, false, query.Timeout); err != nil {
@@ -289,7 +289,7 @@ func PruneVolumes(w http.ResponseWriter, r *http.Request) {
 	f := util.NormalizeVolumePruneFilters(url.Values(*filterMap))
 	filterFuncs := []libpod.VolumeFilter{}
 	for filter, filterValues := range f {
-		filterFunc, err := filters.GeneratePruneVolumeFilters(filter, filterValues, runtime)
+		filterFunc, err := filters.GeneratePruneVolumeFilters(r.Context(), filter, filterValues, runtime)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to parse filters for %s: %w", f.Encode(), err))
 			return

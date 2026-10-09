@@ -98,7 +98,7 @@ func reset(cmd *cobra.Command, _ []string) {
 	}
 
 	// Shutdown podman-machine and delete all machine files
-	if err := resetMachine(); err != nil {
+	if err := resetMachine(cmd.Context()); err != nil {
 		logrus.Error(err)
 	}
 

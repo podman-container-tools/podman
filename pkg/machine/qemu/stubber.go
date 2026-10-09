@@ -5,6 +5,7 @@ package qemu
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -88,7 +89,7 @@ func (q *QEMUStubber) setQEMUCommandLine(mc *vmconfigs.MachineConfig) error {
 	return nil
 }
 
-func (q *QEMUStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, ignBuilder *ignition.IgnitionBuilder) error {
+func (q *QEMUStubber) CreateVM(ctx context.Context, opts define.CreateVMOpts, mc *vmconfigs.MachineConfig, ignBuilder *ignition.IgnitionBuilder) error {
 	monitor, err := command.NewQMPMonitor(opts.Name, opts.Dirs.RuntimeDir)
 	if err != nil {
 		return err
@@ -120,10 +121,10 @@ func (q *QEMUStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineCo
 	}
 	ignBuilder.WithUnit(virtIOIgnitionMounts...)
 
-	return q.resizeDisk(mc.Resources.DiskSize, mc.ImagePath)
+	return q.resizeDisk(ctx, mc.Resources.DiskSize, mc.ImagePath)
 }
 
-func runStartVMCommand(cmd *exec.Cmd) error {
+func runStartVMCommand(_ context.Context, cmd *exec.Cmd) error {
 	err := cmd.Start()
 	if err != nil {
 		// check if qemu was not found
@@ -145,7 +146,7 @@ func runStartVMCommand(cmd *exec.Cmd) error {
 	return nil
 }
 
-func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
+func (q *QEMUStubber) StartVM(ctx context.Context, mc *vmconfigs.MachineConfig) (func(context.Context) error, func() error, error) {
 	if err := q.setQEMUCommandLine(mc); err != nil {
 		return nil, nil, fmt.Errorf("unable to generate qemu command line: %w", err)
 	}
@@ -186,7 +187,7 @@ func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func()
 	}
 
 	for _, hostmnt := range mc.Mounts {
-		qemuArgs, virtiofsdHelper, err := spawner.spawnForMount(hostmnt)
+		qemuArgs, virtiofsdHelper, err := spawner.spawnForMount(ctx, hostmnt)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to init virtiofsd for mount %s: %w", hostmnt.Source, err)
 		}
@@ -207,15 +208,10 @@ func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func()
 	stderrBuf := &bytes.Buffer{}
 
 	// actually run the command that starts the virtual machine
-	cmd := &exec.Cmd{
-		Args:   cmdLine,
-		Path:   cmdLine[0],
-		Stdin:  dnr,
-		Stdout: dnw,
-		Stderr: stderrBuf,
-	}
+	cmd := exec.CommandContext(ctx, cmdLine[0], cmdLine[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = dnr, dnw, stderrBuf
 
-	if err := runStartVMCommand(cmd); err != nil {
+	if err := runStartVMCommand(ctx, cmd); err != nil {
 		return nil, nil, err
 	}
 	logrus.Debugf("Started qemu pid %d", cmd.Process.Pid)
@@ -224,7 +220,7 @@ func (q *QEMUStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func()
 		return waitForReady(readySocket, cmd.Process.Pid, stderrBuf)
 	}
 
-	releaseFunc := func() error {
+	releaseFunc := func(context.Context) error {
 		if err := cmd.Process.Release(); err != nil {
 			return err
 		}
@@ -253,7 +249,7 @@ func waitForReady(readySocket *define.VMFile, pid int, stdErrBuffer *bytes.Buffe
 	return err
 }
 
-func (q *QEMUStubber) Exists(_ string) (bool, error) {
+func (q *QEMUStubber) Exists(context.Context, string) (bool, error) {
 	return false, nil
 }
 
@@ -265,11 +261,11 @@ func (q *QEMUStubber) PrepareIgnition(_ *vmconfigs.MachineConfig, _ *ignition.Ig
 	return nil, nil
 }
 
-func (q *QEMUStubber) StopHostNetworking(_ *vmconfigs.MachineConfig, _ define.VMType) error {
+func (q *QEMUStubber) StopHostNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ define.VMType) error {
 	return define.ErrNotImplemented
 }
 
-func (q *QEMUStubber) resizeDisk(newSize strongunits.GiB, diskPath *define.VMFile) error {
+func (q *QEMUStubber) resizeDisk(ctx context.Context, newSize strongunits.GiB, diskPath *define.VMFile) error {
 	// Find the qemu executable
 	cfg, err := config.Default()
 	if err != nil {
@@ -279,7 +275,7 @@ func (q *QEMUStubber) resizeDisk(newSize strongunits.GiB, diskPath *define.VMFil
 	if err != nil {
 		return err
 	}
-	resize := exec.Command(resizePath, []string{"resize", diskPath.GetPath(), strconv.Itoa(int(newSize)) + "G"}...)
+	resize := exec.CommandContext(ctx, resizePath, []string{"resize", diskPath.GetPath(), strconv.Itoa(int(newSize)) + "G"}...)
 	resize.Stdout = os.Stdout
 	resize.Stderr = os.Stderr
 	if err := resize.Run(); err != nil {
@@ -289,8 +285,8 @@ func (q *QEMUStubber) resizeDisk(newSize strongunits.GiB, diskPath *define.VMFil
 	return nil
 }
 
-func (q *QEMUStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
-	state, err := q.State(mc, false)
+func (q *QEMUStubber) SetProviderAttrs(ctx context.Context, mc *vmconfigs.MachineConfig, opts define.SetOptions) error {
+	state, err := q.State(ctx, mc, false)
 	if err != nil {
 		return err
 	}
@@ -299,7 +295,7 @@ func (q *QEMUStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.
 	}
 
 	if opts.DiskSize != nil {
-		if err := q.resizeDisk(*opts.DiskSize, mc.ImagePath); err != nil {
+		if err := q.resizeDisk(ctx, *opts.DiskSize, mc.ImagePath); err != nil {
 			return err
 		}
 	}
@@ -322,7 +318,7 @@ func (q *QEMUStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.
 	return nil
 }
 
-func (q *QEMUStubber) StartNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
+func (q *QEMUStubber) StartNetworking(ctx context.Context, mc *vmconfigs.MachineConfig, cmd *gvproxy.GvproxyCommand) error {
 	gvProxySock, err := mc.GVProxySocket()
 	if err != nil {
 		return err
@@ -332,7 +328,7 @@ func (q *QEMUStubber) StartNetworking(mc *vmconfigs.MachineConfig, cmd *gvproxy.
 		return err
 	}
 	// make sure it does not exist before gvproxy is called
-	if err := gvProxySock.Delete(); err != nil {
+	if err := gvProxySock.Delete(ctx); err != nil {
 		logrus.Error(err)
 	}
 	cmd.AddQemuSocket(socketURL.String())
@@ -344,7 +340,7 @@ func (q *QEMUStubber) RemoveAndCleanMachines(_ *define.MachineDirs) error {
 	return nil
 }
 
-func (q *QEMUStubber) MountVolumesToVM(_ *vmconfigs.MachineConfig, _ bool) error {
+func (q *QEMUStubber) MountVolumesToVM(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	// virtiofs: mounts are handled by systemd units baked into ignition at init time
 	return nil
 }
@@ -353,11 +349,11 @@ func (q *QEMUStubber) MountType() vmconfigs.VolumeMountType {
 	return vmconfigs.VirtIOFS
 }
 
-func (q *QEMUStubber) PostStartNetworking(_ *vmconfigs.MachineConfig, _ bool) error {
+func (q *QEMUStubber) PostStartNetworking(_ context.Context, _ *vmconfigs.MachineConfig, _ bool) error {
 	return nil
 }
 
-func (q *QEMUStubber) UpdateSSHPort(_ *vmconfigs.MachineConfig, _ int) error {
+func (q *QEMUStubber) UpdateSSHPort(_ context.Context, _ *vmconfigs.MachineConfig, _ int) error {
 	// managed by gvproxy on this backend, so nothing to do
 	return nil
 }

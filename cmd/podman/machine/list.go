@@ -68,7 +68,7 @@ func list(cmd *cobra.Command, _ []string) error {
 		err  error
 	)
 	providers := provider2.GetAll()
-	listResponse, err := shim.List(providers, opts)
+	listResponse, err := shim.List(cmd.Context(), providers, opts)
 	if err != nil {
 		return err
 	}

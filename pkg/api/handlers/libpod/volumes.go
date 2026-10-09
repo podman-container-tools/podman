@@ -85,7 +85,7 @@ func CreateVolume(w http.ResponseWriter, r *http.Request) {
 		utils.InternalServerError(w, err)
 		return
 	}
-	inspectOut, err := vol.Inspect()
+	inspectOut, err := vol.Inspect(r.Context())
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -99,12 +99,12 @@ func CreateVolume(w http.ResponseWriter, r *http.Request) {
 func InspectVolume(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
-	vol, err := runtime.GetVolume(name)
+	vol, err := runtime.GetVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return
 	}
-	inspectOut, err := vol.Inspect()
+	inspectOut, err := vol.Inspect(r.Context())
 	if err != nil {
 		utils.InternalServerError(w, err)
 		return
@@ -162,7 +162,7 @@ func pruneVolumesHelper(r *http.Request) ([]*reports.PruneReport, error) {
 	f := util.NormalizeVolumePruneFilters(url.Values(*filterMap))
 	filterFuncs := []libpod.VolumeFilter{}
 	for filter, filterValues := range f {
-		filterFunc, err := filters.GeneratePruneVolumeFilters(filter, filterValues, runtime)
+		filterFunc, err := filters.GeneratePruneVolumeFilters(r.Context(), filter, filterValues, runtime)
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +194,7 @@ func RemoveVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := utils.GetName(r)
-	vol, err := runtime.LookupVolume(name)
+	vol, err := runtime.LookupVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return
@@ -233,13 +233,13 @@ func ExportVolume(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
 
-	vol, err := runtime.GetVolume(name)
+	vol, err := runtime.GetVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return
 	}
 
-	contents, err := vol.Export()
+	contents, err := vol.Export(r.Context())
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, err)
 		return
@@ -252,7 +252,7 @@ func ImportVolume(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
 
-	vol, err := runtime.GetVolume(name)
+	vol, err := runtime.GetVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return
@@ -264,7 +264,7 @@ func ImportVolume(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	if err := vol.Import(r.Body); err != nil {
+	if err := vol.Import(r.Context(), r.Body); err != nil {
 		utils.Error(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -291,7 +291,7 @@ func RenameVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vol, err := runtime.LookupVolume(name)
+	vol, err := runtime.LookupVolume(r.Context(), name)
 	if err != nil {
 		utils.VolumeNotFound(w, name, err)
 		return

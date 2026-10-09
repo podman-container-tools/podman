@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,15 +15,15 @@ import (
 )
 
 var _ = Describe("podman machine compose", func() {
-	It("compose test environment variable setup", func() {
+	It("compose test environment variable setup", func(ctx context.Context) {
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath).withNow()).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
 		inspectJSON := new(inspectMachine)
-		inspectSession, err := mb.setName(name).setCmd(inspectJSON).run()
+		inspectSession, err := mb.setName(name).setCmd(ctx, inspectJSON).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(inspectSession).To(Exit(0))
 
@@ -31,7 +32,7 @@ var _ = Describe("podman machine compose", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		compose := new(fakeCompose)
-		composeSession, err := mb.setName(name).setCmd(compose).run()
+		composeSession, err := mb.setName(name).setCmd(ctx, compose).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(composeSession).To(Exit(0))
 

@@ -50,7 +50,7 @@ func StopContainer(w http.ResponseWriter, r *http.Request) {
 			options.Timeout = &timeout
 		}
 	}
-	con, err := runtime.LookupContainer(name)
+	con, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return

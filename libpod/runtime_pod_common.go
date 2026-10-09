@@ -15,7 +15,7 @@ import (
 )
 
 // NewPod makes a new, empty pod
-func (r *Runtime) NewPod(_ context.Context, p specgen.PodSpecGenerator, options ...PodCreateOption) (_ *Pod, deferredErr error) {
+func (r *Runtime) NewPod(ctx context.Context, p specgen.PodSpecGenerator, options ...PodCreateOption) (_ *Pod, deferredErr error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
@@ -73,7 +73,7 @@ func (r *Runtime) NewPod(_ context.Context, p specgen.PodSpecGenerator, options 
 	var addPodErr error
 	for {
 		if generateName {
-			name, err := r.generateName()
+			name, err := r.generateName(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -195,7 +195,7 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 		return nil, err
 	}
 
-	ctrs, err := r.state.PodContainers(p)
+	ctrs, err := r.state.PodContainers(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 	}
 
 	for volName := range ctrNamedVolumes {
-		volume, err := r.state.Volume(volName)
+		volume, err := r.state.Volume(ctx, volName)
 		if err != nil && !errors.Is(err, define.ErrNoSuchVolume) {
 			logrus.Errorf("Retrieving volume %s: %v", volName, err)
 			continue
@@ -281,7 +281,7 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 		}
 	}
 
-	if err := p.maybeRemoveServiceContainer(); err != nil {
+	if err := p.maybeRemoveServiceContainer(ctx); err != nil {
 		return removedCtrs, err
 	}
 

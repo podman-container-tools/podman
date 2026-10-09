@@ -48,7 +48,7 @@ func policyPathFromConfigfile(sys *types.SystemContext, overridePath string) (st
 	return "", fmt.Errorf("internal error: empty result from configfile.Read while resolving policy path")
 }
 
-func (ir *ImageEngine) ShowTrust(_ context.Context, _ []string, options entities.ShowTrustOptions) (*entities.ShowTrustReport, error) {
+func (ir *ImageEngine) ShowTrust(ctx context.Context, _ []string, options entities.ShowTrustOptions) (*entities.ShowTrustReport, error) {
 	var (
 		err    error
 		report entities.ShowTrustReport
@@ -68,7 +68,7 @@ func (ir *ImageEngine) ShowTrust(_ context.Context, _ []string, options entities
 	if len(options.RegistryPath) > 0 {
 		report.SystemRegistriesDirPath = options.RegistryPath
 	}
-	report.Policies, err = trust.PolicyDescription(policyPath, report.SystemRegistriesDirPath)
+	report.Policies, err = trust.PolicyDescription(ctx, policyPath, report.SystemRegistriesDirPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not show trust policies: %w", err)
 	}

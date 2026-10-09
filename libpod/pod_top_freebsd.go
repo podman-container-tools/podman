@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -17,14 +18,14 @@ import (
 // is a tab-separated string.
 //
 // For more details, please refer to github.com/containers/psgo.
-func (p *Pod) GetPodPidInformation(descriptors []string) ([]string, error) {
+func (p *Pod) GetPodPidInformation(ctx context.Context, descriptors []string) ([]string, error) {
 	// Default to 'ps -ef' compatible descriptors
 	if len(strings.Join(descriptors, "")) == 0 {
 		descriptors = []string{"user", "pid", "ppid", "pcpu", "etime", "tty", "time", "args"}
 	}
 
 	jailNames := make([]string, 0)
-	ctrsInPod, err := p.AllContainers()
+	ctrsInPod, err := p.AllContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func (p *Pod) GetPodPidInformation(descriptors []string) ([]string, error) {
 		}
 
 		if c.state.State == define.ContainerStateRunning {
-			jailName, err := c.jailName()
+			jailName, err := c.jailName(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("getting jail name: %w", err)
 			}
@@ -69,7 +70,7 @@ func (p *Pod) GetPodPidInformation(descriptors []string) ([]string, error) {
 		strings.Join(psDescriptors, ","),
 	}
 
-	output, err := execPS(args)
+	output, err := execPS(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("executing ps(1): %w", err)
 	}

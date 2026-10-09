@@ -3,6 +3,7 @@
 package wsl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -58,8 +59,8 @@ ip route add $ROUTE
 rm -rf /mnt/wsl/podman-usermodenet
 `
 
-func verifyWSLUserModeCompat() error {
-	if wutil.IsWSLStoreVersionInstalled() {
+func verifyWSLUserModeCompat(ctx context.Context) error {
+	if wutil.IsWSLStoreVersionInstalled(ctx) {
 		return nil
 	}
 
@@ -73,7 +74,7 @@ func verifyWSLUserModeCompat() error {
 		prefix)
 }
 
-func startUserModeNetworking(mc *vmconfigs.MachineConfig) error {
+func startUserModeNetworking(ctx context.Context, mc *vmconfigs.MachineConfig) error {
 	if !mc.WSLHypervisor.UserModeNetworking {
 		return nil
 	}
@@ -95,20 +96,20 @@ func startUserModeNetworking(mc *vmconfigs.MachineConfig) error {
 		_ = flock.unlock()
 	}()
 
-	running, err := isWSLRunning(userModeDist)
+	running, err := isWSLRunning(ctx, userModeDist)
 	if err != nil {
 		return err
 	}
-	running = running && isGvProxyVMRunning()
+	running = running && isGvProxyVMRunning(ctx)
 
 	// Start or reuse
 	if !running {
-		if err := launchUserModeNetDist(exe); err != nil {
+		if err := launchUserModeNetDist(ctx, exe); err != nil {
 			return err
 		}
 	}
 
-	if err := createUserModeResolvConf(env.WithPodmanPrefix(mc.Name)); err != nil {
+	if err := createUserModeResolvConf(ctx, env.WithPodmanPrefix(mc.Name)); err != nil {
 		return err
 	}
 
@@ -121,7 +122,7 @@ func startUserModeNetworking(mc *vmconfigs.MachineConfig) error {
 	return nil
 }
 
-func stopUserModeNetworking(mc *vmconfigs.MachineConfig) error {
+func stopUserModeNetworking(ctx context.Context, mc *vmconfigs.MachineConfig) error {
 	if !mc.WSLHypervisor.UserModeNetworking {
 		return nil
 	}
@@ -139,7 +140,7 @@ func stopUserModeNetworking(mc *vmconfigs.MachineConfig) error {
 		return err
 	}
 
-	count, err := cleanupAndCountNetEntries()
+	count, err := cleanupAndCountNetEntries(ctx)
 	if err != nil {
 		return err
 	}
@@ -151,7 +152,7 @@ func stopUserModeNetworking(mc *vmconfigs.MachineConfig) error {
 
 	fmt.Println("Stopping user-mode networking...")
 
-	err = wslPipe(stopUserModeNet, userModeDist, "bash")
+	err = wslPipe(ctx, stopUserModeNet, userModeDist, "bash")
 	if err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			switch exitErr.ExitCode() {
@@ -164,15 +165,15 @@ func stopUserModeNetworking(mc *vmconfigs.MachineConfig) error {
 		logrus.Warnf("problem tearing down user-mode networking cleanly, forcing: %v", err)
 	}
 
-	return terminateDist(userModeDist)
+	return terminateDist(ctx, userModeDist)
 }
 
-func isGvProxyVMRunning() bool {
+func isGvProxyVMRunning(ctx context.Context) bool {
 	cmd := fmt.Sprintf("ps -eo args | grep -q -m1 ^%s || exit 42", gvForwarderPath)
-	return wslInvoke(userModeDist, "bash", "-c", cmd) == nil
+	return wslInvoke(ctx, userModeDist, "bash", "-c", cmd) == nil
 }
 
-func launchUserModeNetDist(exeFile string) error {
+func launchUserModeNetDist(ctx context.Context, exeFile string) error {
 	fmt.Println("Starting user-mode networking...")
 
 	exe, err := specgen.ConvertWinMountPath(exeFile)
@@ -181,8 +182,8 @@ func launchUserModeNetDist(exeFile string) error {
 	}
 
 	cmdStr := fmt.Sprintf("GVPROXY=%q\nGVFORWARDER=%q\n%s", exe, gvForwarderPath, startUserModeNet)
-	if err := wslPipe(cmdStr, userModeDist, "bash"); err != nil {
-		_ = terminateDist(userModeDist)
+	if err := wslPipe(ctx, cmdStr, userModeDist, "bash"); err != nil {
+		_ = terminateDist(ctx, userModeDist)
 
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			switch exitErr.ExitCode() {
@@ -199,21 +200,21 @@ func launchUserModeNetDist(exeFile string) error {
 	return nil
 }
 
-func installUserModeDist(dist string, imagePath string) error {
-	if err := verifyWSLUserModeCompat(); err != nil {
+func installUserModeDist(ctx context.Context, dist string, imagePath string) error {
+	if err := verifyWSLUserModeCompat(ctx); err != nil {
 		return err
 	}
 
-	exists, err := isWSLExist(userModeDist)
+	exists, err := isWSLExist(ctx, userModeDist)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		if err := wslInvoke(userModeDist, "test", "-f", gvForwarderPath); err != nil {
+		if err := wslInvoke(ctx, userModeDist, "test", "-f", gvForwarderPath); err != nil {
 			fmt.Println("Replacing old user-mode distribution...")
-			_ = terminateDist(userModeDist)
-			if err := unregisterDist(userModeDist); err != nil {
+			_ = terminateDist(ctx, userModeDist)
+			if err := unregisterDist(ctx, userModeDist); err != nil {
 				return err
 			}
 			exists = false
@@ -221,23 +222,23 @@ func installUserModeDist(dist string, imagePath string) error {
 	}
 
 	if !exists {
-		if err := wslInvoke(dist, "test", "-f", gvForwarderPath); err != nil {
+		if err := wslInvoke(ctx, dist, "test", "-f", gvForwarderPath); err != nil {
 			return fmt.Errorf("existing machine is too old, can't install user-mode networking dist until machine is reinstalled (using podman machine rm, then podman machine init)")
 		}
 
 		const prompt = "Installing user-mode networking distribution..."
-		if _, err := provisionWSLDist(userModeDist, imagePath, prompt); err != nil {
+		if _, err := provisionWSLDist(ctx, userModeDist, imagePath, prompt); err != nil {
 			return err
 		}
 
-		_ = terminateDist(userModeDist)
+		_ = terminateDist(ctx, userModeDist)
 	}
 
 	return nil
 }
 
-func createUserModeResolvConf(dist string) error {
-	err := wslPipe(resolvConfUserNet, dist, "bash", "-c", "(rm -f /etc/resolv.conf; cat > /etc/resolv.conf)")
+func createUserModeResolvConf(ctx context.Context, dist string) error {
+	err := wslPipe(ctx, resolvConfUserNet, dist, "bash", "-c", "(rm -f /etc/resolv.conf; cat > /etc/resolv.conf)")
 	if err != nil {
 		return fmt.Errorf("could not create resolv.conf: %w", err)
 	}
@@ -297,13 +298,13 @@ func removeUserModeNetEntry(name string) error {
 	return os.Remove(path)
 }
 
-func cleanupAndCountNetEntries() (uint, error) {
+func cleanupAndCountNetEntries(ctx context.Context) (uint, error) {
 	entriesDir, err := getUserModeNetEntriesDir()
 	if err != nil {
 		return 0, err
 	}
 
-	allDists, err := getAllWSLDistros(true)
+	allDists, err := getAllWSLDistros(ctx, true)
 	if err != nil {
 		return 0, err
 	}
@@ -341,30 +342,30 @@ func obtainUserModeNetLock() (*fileLock, error) {
 	return flock, nil
 }
 
-func changeDistUserModeNetworking(dist string, user string, image string, enable bool) error {
+func changeDistUserModeNetworking(ctx context.Context, dist string, user string, image string, enable bool) error {
 	// Only install if user-mode is being enabled and there was an image path passed
 	if enable {
 		if len(image) == 0 {
 			return errors.New("existing machine configuration is corrupt, no image is defined")
 		}
-		if err := installUserModeDist(dist, image); err != nil {
+		if err := installUserModeDist(ctx, dist, image); err != nil {
 			return err
 		}
 	}
 
-	if err := writeWslConf(dist, user); err != nil {
+	if err := writeWslConf(ctx, dist, user); err != nil {
 		return err
 	}
 
 	if enable {
-		return appendDisableAutoResolve(dist)
+		return appendDisableAutoResolve(ctx, dist)
 	}
 
 	return nil
 }
 
-func appendDisableAutoResolve(dist string) error {
-	if err := wslPipe(wslConfUserNet, dist, "sh", "-c", "cat >> /etc/wsl.conf"); err != nil {
+func appendDisableAutoResolve(ctx context.Context, dist string) error {
+	if err := wslPipe(ctx, wslConfUserNet, dist, "sh", "-c", "cat >> /etc/wsl.conf"); err != nil {
 		return fmt.Errorf("could not append resolv config to wsl.conf: %w", err)
 	}
 

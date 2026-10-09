@@ -279,7 +279,7 @@ func (c *Container) handleRestartPolicy(ctx context.Context) (_ bool, retErr err
 	logrus.Debugf("Restarting container %s due to restart policy %s", c.ID(), c.config.RestartPolicy)
 
 	// Need to check if dependencies are alive.
-	if err := c.checkDependenciesAndHandleError(); err != nil {
+	if err := c.checkDependenciesAndHandleError(ctx); err != nil {
 		return false, err
 	}
 
@@ -299,7 +299,7 @@ func (c *Container) handleRestartPolicy(ctx context.Context) (_ bool, retErr err
 		return false, fmt.Errorf("invalid container state encountered in restart attempt: %w", define.ErrInternal)
 	}
 
-	c.newContainerEvent(events.Restart)
+	c.newContainerEvent(ctx, events.Restart)
 
 	// Increment restart count
 	c.state.RestartCount++
@@ -325,7 +325,7 @@ func (c *Container) handleRestartPolicy(ctx context.Context) (_ bool, retErr err
 	// reconfigure the netns as it is likely that the container exited due
 	// some broken network state in which case reusing would just cause more
 	// harm than good.
-	if err := c.cleanupNetwork(); err != nil {
+	if err := c.cleanupNetwork(ctx); err != nil {
 		return false, err
 	}
 
@@ -344,7 +344,7 @@ func (c *Container) handleRestartPolicy(ctx context.Context) (_ bool, retErr err
 			return false, err
 		}
 	}
-	if err := c.start(); err != nil {
+	if err := c.start(ctx); err != nil {
 		return false, err
 	}
 	return true, c.waitForHealthy(ctx)
@@ -512,7 +512,7 @@ func (c *Container) setupStorage(ctx context.Context) error {
 	var containerInfoErr error
 	for {
 		if generateName {
-			name, err := c.runtime.generateName()
+			name, err := c.runtime.generateName(ctx)
 			if err != nil {
 				return err
 			}
@@ -526,7 +526,7 @@ func (c *Container) setupStorage(ctx context.Context) error {
 	}
 	if containerInfoErr != nil {
 		if errors.Is(containerInfoErr, storage.ErrDuplicateName) {
-			if _, err := c.runtime.LookupContainer(c.config.Name); errors.Is(err, define.ErrNoSuchCtr) {
+			if _, err := c.runtime.LookupContainer(ctx, c.config.Name); errors.Is(err, define.ErrNoSuchCtr) {
 				return fmt.Errorf("creating container storage: %w by an external entity", containerInfoErr)
 			}
 		}
@@ -585,7 +585,7 @@ func (c *Container) processLabel(processLabel string) (string, error) {
 }
 
 // Tear down a container's storage prior to removal
-func (c *Container) teardownStorage() error {
+func (c *Container) teardownStorage(ctx context.Context) error {
 	if c.ensureState(define.ContainerStateRunning, define.ContainerStatePaused) {
 		return fmt.Errorf("cannot remove storage for container %s as it is running or paused: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
@@ -595,7 +595,7 @@ func (c *Container) teardownStorage() error {
 		return fmt.Errorf("removing container %s artifacts %q: %w", c.ID(), artifacts, err)
 	}
 
-	if err := c.cleanupStorage(); err != nil {
+	if err := c.cleanupStorage(ctx); err != nil {
 		return fmt.Errorf("failed to clean up container %s storage: %w", c.ID(), err)
 	}
 
@@ -832,7 +832,7 @@ func (c *Container) prepareToStart(ctx context.Context, recursive bool) (retErr 
 	}
 
 	if !recursive {
-		if err := c.checkDependenciesAndHandleError(); err != nil {
+		if err := c.checkDependenciesAndHandleError(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -868,8 +868,8 @@ func (c *Container) prepareToStart(ctx context.Context, recursive bool) (retErr 
 }
 
 // checks dependencies are running and prints a helpful message
-func (c *Container) checkDependenciesAndHandleError() error {
-	notRunning, err := c.checkDependenciesRunning()
+func (c *Container) checkDependenciesAndHandleError(ctx context.Context) error {
+	notRunning, err := c.checkDependenciesRunning(ctx)
 	if err != nil {
 		return fmt.Errorf("checking dependencies for container %s: %w", c.ID(), err)
 	}
@@ -889,7 +889,7 @@ func (c *Container) startDependencies(ctx context.Context) error {
 	}
 
 	depVisitedCtrs := make(map[string]*Container)
-	if err := c.getAllDependencies(depVisitedCtrs); err != nil {
+	if err := c.getAllDependencies(ctx, depVisitedCtrs); err != nil {
 		return fmt.Errorf("starting dependency for container %s: %w", c.ID(), err)
 	}
 
@@ -944,19 +944,19 @@ func (c *Container) startDependencies(ctx context.Context) error {
 // Note: this function is currently meant as a robust solution to a narrow problem: start an infra-container when
 // a container in the pod is run. It has not been tested for performance past one level, so expansion of recursive start
 // must be tested first.
-func (c *Container) getAllDependencies(visited map[string]*Container) error {
+func (c *Container) getAllDependencies(ctx context.Context, visited map[string]*Container) error {
 	depIDs := c.Dependencies()
 	if len(depIDs) == 0 {
 		return nil
 	}
 	for _, depID := range depIDs {
 		if _, ok := visited[depID]; !ok {
-			dep, err := c.runtime.state.Container(depID)
+			dep, err := c.runtime.state.Container(ctx, depID)
 			if err != nil {
 				return err
 			}
 			visited[depID] = dep
-			if err := dep.getAllDependencies(visited); err != nil {
+			if err := dep.getAllDependencies(ctx, visited); err != nil {
 				return err
 			}
 		}
@@ -966,7 +966,7 @@ func (c *Container) getAllDependencies(visited map[string]*Container) error {
 
 // Check if a container's dependencies are running
 // Returns a []string containing the IDs of dependencies that are not running
-func (c *Container) checkDependenciesRunning() ([]string, error) {
+func (c *Container) checkDependenciesRunning(ctx context.Context) ([]string, error) {
 	deps := c.Dependencies()
 	notRunning := []string{}
 
@@ -975,7 +975,7 @@ func (c *Container) checkDependenciesRunning() ([]string, error) {
 	depCtrs := make(map[string]*Container, len(deps))
 	for _, dep := range deps {
 		// Get the dependency container
-		depCtr, err := c.runtime.state.Container(dep)
+		depCtr, err := c.runtime.state.Container(ctx, dep)
 		if err != nil {
 			return nil, fmt.Errorf("retrieving dependency %s of container %s from state: %w", dep, c.ID(), err)
 		}
@@ -994,14 +994,14 @@ func (c *Container) checkDependenciesRunning() ([]string, error) {
 	return notRunning, nil
 }
 
-func (c *Container) completeNetworkSetup() error {
-	netDisabled, err := c.NetworkDisabled()
+func (c *Container) completeNetworkSetup(ctx context.Context) error {
+	netDisabled, err := c.NetworkDisabled(ctx)
 	if err != nil {
 		return err
 	}
 	if netDisabled {
 		// with net=none we still want to set up /etc/hosts
-		return c.addHosts()
+		return c.addHosts(ctx)
 	}
 	if c.config.NetNsCtr != "" {
 		return nil
@@ -1010,7 +1010,7 @@ func (c *Container) completeNetworkSetup() error {
 		if err := c.syncContainer(); err != nil {
 			return err
 		}
-		if err := c.runtime.setupNetNS(c); err != nil {
+		if err := c.runtime.setupNetNS(ctx, c); err != nil {
 			return err
 		}
 		if err := c.save(); err != nil {
@@ -1018,7 +1018,7 @@ func (c *Container) completeNetworkSetup() error {
 		}
 	}
 	// add /etc/hosts entries
-	if err := c.addHosts(); err != nil {
+	if err := c.addHosts(ctx); err != nil {
 		return err
 	}
 
@@ -1051,7 +1051,7 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 	}
 
 	for _, v := range c.config.NamedVolumes {
-		if err := c.fixVolumePermissions(v); err != nil {
+		if err := c.fixVolumePermissions(ctx, v); err != nil {
 			return err
 		}
 	}
@@ -1077,7 +1077,7 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 	}
 
 	// With the spec complete, do an OCI create
-	if _, err = c.ociRuntime.CreateContainer(c, nil); err != nil {
+	if _, err = c.ociRuntime.CreateContainer(ctx, c, nil); err != nil {
 		return err
 	}
 
@@ -1131,13 +1131,13 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 		if c.config.StartupHealthCheckConfig != nil {
 			timer = c.config.StartupHealthCheckConfig.Interval.String()
 		}
-		if err := c.createTimer(timer, c.config.StartupHealthCheckConfig != nil); err != nil {
+		if err := c.createTimer(ctx, timer, c.config.StartupHealthCheckConfig != nil); err != nil {
 			return fmt.Errorf("create healthcheck: %w", err)
 		}
 	}
 
-	defer c.newContainerEvent(events.Init)
-	return c.completeNetworkSetup()
+	defer c.newContainerEvent(ctx, events.Init)
+	return c.completeNetworkSetup(ctx)
 }
 
 // Clean up a container in the OCI runtime.
@@ -1250,7 +1250,7 @@ func (c *Container) initAndStart(ctx context.Context) (retErr error) {
 	}
 
 	// Now start the container
-	if err := c.start(); err != nil {
+	if err := c.start(ctx); err != nil {
 		return err
 	}
 	return c.waitForHealthy(ctx)
@@ -1284,19 +1284,19 @@ func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (finalEr
 	}
 
 	// Start the container
-	if err := c.start(); err != nil {
+	if err := c.start(ctx); err != nil {
 		return err
 	}
 	return c.waitForHealthy(ctx)
 }
 
 // Internal, non-locking function to start a container
-func (c *Container) start() error {
+func (c *Container) start(ctx context.Context) error {
 	if c.config.Spec.Process != nil {
 		logrus.Debugf("Starting container %s with command %v", c.ID(), c.config.Spec.Process.Args)
 	}
 
-	if err := c.ociRuntime.StartContainer(c); err != nil {
+	if err := c.ociRuntime.StartContainer(ctx, c); err != nil {
 		return err
 	}
 	logrus.Debugf("Started container %s", c.ID())
@@ -1322,12 +1322,12 @@ func (c *Container) start() error {
 		if err := c.updateHealthStatus(define.HealthCheckStarting); err != nil {
 			return fmt.Errorf("update healthcheck status: %w", err)
 		}
-		if err := c.startTimer(c.config.StartupHealthCheckConfig != nil); err != nil {
+		if err := c.startTimer(ctx, c.config.StartupHealthCheckConfig != nil); err != nil {
 			return fmt.Errorf("start healthcheck: %w", err)
 		}
 	}
 
-	c.newContainerEvent(events.Start)
+	c.newContainerEvent(ctx, events.Start)
 
 	return c.save()
 }
@@ -1431,13 +1431,13 @@ func (c *Container) stopWithAll() bool {
 }
 
 // Internal, non-locking function to stop container
-func (c *Container) stop(timeout uint) error {
-	return c.stopInternal(timeout, true)
+func (c *Container) stop(ctx context.Context, timeout uint) error {
+	return c.stopInternal(ctx, timeout, true)
 }
 
 // Internal, non-locking function to stop container
 // stoppedByUser controls whether to set the StoppedByUser state field.
-func (c *Container) stopInternal(timeout uint, stoppedByUser bool) error {
+func (c *Container) stopInternal(ctx context.Context, timeout uint, stoppedByUser bool) error {
 	// This is explicit container stop that flows pass through Running -> Stopping -> Stopped/Exited states.
 	// As a result, this does not satisfy the Running/Paused -> Stopped/Exited
 	// transition that is required to trigger restart policy during cleanup.
@@ -1490,7 +1490,7 @@ func (c *Container) stopInternal(timeout uint, stoppedByUser bool) error {
 		c.lock.Unlock()
 	}
 
-	stopErr := c.ociRuntime.StopContainer(c, timeout, all)
+	stopErr := c.ociRuntime.StopContainer(ctx, c, timeout, all)
 
 	if !c.batched {
 		c.lock.Lock()
@@ -1528,11 +1528,11 @@ func (c *Container) stopInternal(timeout uint, stoppedByUser bool) error {
 		return nil
 	}
 
-	c.newContainerEvent(events.Stop)
-	return c.waitForConmonToExitAndSave()
+	c.newContainerEvent(ctx, events.Stop)
+	return c.waitForConmonToExitAndSave(ctx)
 }
 
-func (c *Container) waitForConmonToExitAndSave() error {
+func (c *Container) waitForConmonToExitAndSave(ctx context.Context) error {
 	conmonAlive, err := c.ociRuntime.CheckConmonRunning(c)
 	if err != nil {
 		return err
@@ -1559,7 +1559,7 @@ func (c *Container) waitForConmonToExitAndSave() error {
 				// this to get the real exit code... But I'm not
 				// that dedicated.
 				all := c.stopWithAll()
-				if err := c.ociRuntime.StopContainer(c, 0, all); err != nil {
+				if err := c.ociRuntime.StopContainer(ctx, c, 0, all); err != nil {
 					logrus.Errorf("Error stopping container %s after Conmon exited prematurely: %v", c.ID(), err)
 				}
 			}
@@ -1587,7 +1587,7 @@ func (c *Container) waitForConmonToExitAndSave() error {
 			// No Conmon alive to trigger cleanup, and the calls in
 			// regular Podman are conditional on no errors.
 			// Need to clean up manually.
-			if err := c.cleanup(context.Background()); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				logrus.Errorf("Error cleaning up container %s after Conmon exited prematurely: %v", c.ID(), err)
 			}
 
@@ -1610,20 +1610,20 @@ func (c *Container) waitForConmonToExitAndSave() error {
 }
 
 // Internal, non-locking function to pause a container
-func (c *Container) pause() error {
+func (c *Container) pause(ctx context.Context) error {
 	if c.config.NoCgroups {
 		return fmt.Errorf("cannot pause without using Cgroups: %w", define.ErrNoCgroups)
 	}
 
 	if c.state.HCUnitName != "" {
-		if err := c.removeTransientFiles(context.Background(),
+		if err := c.removeTransientFiles(ctx,
 			c.config.StartupHealthCheckConfig != nil && !c.state.StartupHCPassed,
 			c.state.HCUnitName); err != nil {
 			return fmt.Errorf("failed to remove HealthCheck timer: %w", err)
 		}
 	}
 
-	if err := c.ociRuntime.PauseContainer(c); err != nil {
+	if err := c.ociRuntime.PauseContainer(ctx, c); err != nil {
 		// TODO when using docker-py there is some sort of race/incompatibility here
 		return err
 	}
@@ -1637,12 +1637,12 @@ func (c *Container) pause() error {
 }
 
 // Internal, non-locking function to unpause a container
-func (c *Container) unpause() error {
+func (c *Container) unpause(ctx context.Context) error {
 	if c.config.NoCgroups {
 		return fmt.Errorf("cannot unpause without using Cgroups: %w", define.ErrNoCgroups)
 	}
 
-	if err := c.ociRuntime.UnpauseContainer(c); err != nil {
+	if err := c.ociRuntime.UnpauseContainer(ctx, c); err != nil {
 		// TODO when using docker-py there is some sort of race/incompatibility here
 		return err
 	}
@@ -1655,7 +1655,7 @@ func (c *Container) unpause() error {
 		if isStartupHealthCheck {
 			timer = c.config.StartupHealthCheckConfig.Interval.String()
 		}
-		if err := c.createTimer(timer, isStartupHealthCheck); err != nil {
+		if err := c.createTimer(ctx, timer, isStartupHealthCheck); err != nil {
 			return fmt.Errorf("create healthcheck: %w", err)
 		}
 	}
@@ -1664,7 +1664,7 @@ func (c *Container) unpause() error {
 		if err := c.updateHealthStatus(define.HealthCheckReset); err != nil {
 			return err
 		}
-		if err := c.startTimer(isStartupHealthCheck); err != nil {
+		if err := c.startTimer(ctx, isStartupHealthCheck); err != nil {
 			return err
 		}
 	}
@@ -1691,15 +1691,15 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 		logrus.Debugf("restartWithTimeout: No EnvSecrets for %s", c.ID())
 	}
 
-	c.newContainerEvent(events.Restart)
+	c.newContainerEvent(ctx, events.Restart)
 
 	if c.state.State == define.ContainerStateRunning {
-		if err := c.stop(timeout); err != nil {
+		if err := c.stop(ctx, timeout); err != nil {
 			return err
 		}
 
 		if c.config.HealthCheckConfig != nil {
-			if err := c.removeTransientFiles(context.Background(),
+			if err := c.removeTransientFiles(ctx,
 				c.config.StartupHealthCheckConfig != nil && !c.state.StartupHCPassed,
 				c.state.HCUnitName); err != nil {
 				logrus.Error(err.Error())
@@ -1708,7 +1708,7 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 		// Ensure we tear down the container network so it will be
 		// recreated - otherwise, behavior of restart differs from stop
 		// and start
-		if err := c.cleanupNetwork(); err != nil {
+		if err := c.cleanupNetwork(ctx); err != nil {
 			return err
 		}
 	}
@@ -1735,7 +1735,7 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 			return err
 		}
 	}
-	if err := c.start(); err != nil {
+	if err := c.start(ctx); err != nil {
 		return err
 	}
 	return c.waitForHealthy(ctx)
@@ -1934,7 +1934,7 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 				return
 			}
 			vol.lock.Lock()
-			if err := vol.unmount(false); err != nil {
+			if err := vol.unmount(ctx, false); err != nil {
 				logrus.Errorf("Unmounting volume %s after error mounting container %s: %v", vol.Name(), c.ID(), err)
 			}
 			vol.lock.Unlock()
@@ -1951,7 +1951,7 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 // Returns the volume that was mounted.
 func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolume, mountpoint string) (*Volume, error) {
 	logrus.Debugf("Going to mount named volume %s", v.Name)
-	vol, err := c.runtime.state.Volume(v.Name)
+	vol, err := c.runtime.state.Volume(ctx, v.Name)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving named volume %s for container %s: %w", v.Name, c.ID(), err)
 	}
@@ -1962,7 +1962,7 @@ func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolum
 	vol.lock.Lock()
 	defer vol.lock.Unlock()
 	if vol.needsMount() {
-		if err := vol.mount(); err != nil {
+		if err := vol.mount(ctx); err != nil {
 			return nil, fmt.Errorf("mounting volume %s for container %s: %w", vol.Name(), c.ID(), err)
 		}
 	}
@@ -2070,7 +2070,7 @@ func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolum
 }
 
 // cleanupStorage unmounts and cleans up the container's root filesystem
-func (c *Container) cleanupStorage() error {
+func (c *Container) cleanupStorage(ctx context.Context) error {
 	if !c.state.Mounted {
 		// Already unmounted, do nothing
 		logrus.Debugf("Container %s storage is already unmounted, skipping...", c.ID())
@@ -2144,7 +2144,7 @@ func (c *Container) cleanupStorage() error {
 
 	// Request an unmount of all named volumes
 	for _, v := range c.config.NamedVolumes {
-		vol, err := c.runtime.state.Volume(v.Name)
+		vol, err := c.runtime.state.Volume(ctx, v.Name)
 		if err != nil {
 			reportErrorf("retrieving named volume %s for container %s: %w", v.Name, c.ID(), err)
 
@@ -2155,7 +2155,7 @@ func (c *Container) cleanupStorage() error {
 
 		if vol.needsMount() {
 			vol.lock.Lock()
-			if err := vol.unmount(false); err != nil {
+			if err := vol.unmount(ctx, false); err != nil {
 				reportErrorf("unmounting volume %s for container %s: %w", vol.Name(), c.ID(), err)
 			}
 			vol.lock.Unlock()
@@ -2206,7 +2206,7 @@ func (c *Container) fullCleanup(ctx context.Context, onlyStopped bool) error {
 	}
 	if !hasPidNs {
 		// do not fail on errors
-		_ = c.ociRuntime.KillContainer(c, uint(unix.SIGKILL), true)
+		_ = c.ociRuntime.KillContainer(ctx, c, uint(unix.SIGKILL), true)
 	}
 
 	// Check for running exec sessions
@@ -2218,7 +2218,7 @@ func (c *Container) fullCleanup(ctx context.Context, onlyStopped bool) error {
 		return fmt.Errorf("container %s has active exec sessions, refusing to clean up: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
 
-	defer c.newContainerEvent(events.Cleanup)
+	defer c.newContainerEvent(ctx, events.Cleanup)
 	return c.cleanup(ctx)
 }
 
@@ -2243,7 +2243,7 @@ func (c *Container) cleanup(ctx context.Context) error {
 	}
 
 	// Clean up network namespace, if present
-	if err := c.cleanupNetwork(); err != nil {
+	if err := c.cleanupNetwork(ctx); err != nil {
 		lastError = fmt.Errorf("removing container %s network: %w", c.ID(), err)
 	}
 
@@ -2278,7 +2278,7 @@ func (c *Container) cleanup(ctx context.Context) error {
 	}
 
 	// Unmount storage
-	if err := c.cleanupStorage(); err != nil {
+	if err := c.cleanupStorage(ctx); err != nil {
 		if lastError != nil {
 			logrus.Errorf("Unmounting container %s storage: %v", c.ID(), err)
 		} else {
@@ -2305,7 +2305,7 @@ func (c *Container) cleanup(ctx context.Context) error {
 		}
 	}
 
-	if err := c.stopPodIfNeeded(context.Background()); err != nil {
+	if err := c.stopPodIfNeeded(ctx); err != nil {
 		if lastError == nil {
 			lastError = err
 		} else {
@@ -2370,7 +2370,7 @@ func (c *Container) stopPodIfNeeded(ctx context.Context) error {
 // delete deletes the container and runs any configured poststop
 // hooks.
 func (c *Container) delete(ctx context.Context) error {
-	if err := c.ociRuntime.DeleteContainer(c); err != nil {
+	if err := c.ociRuntime.DeleteContainer(ctx, c); err != nil {
 		return fmt.Errorf("removing container %s from runtime: %w", c.ID(), err)
 	}
 
@@ -2837,7 +2837,7 @@ func (c *Container) extractSecretToCtrStorage(secr *ContainerSecret) error {
 
 // Update a container's resources or restart policy after creation.
 // At least one of resources or restartPolicy must not be nil.
-func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error {
+func (c *Container) update(ctx context.Context, updateOptions *entities.ContainerUpdateOptions) error {
 	if updateOptions.Resources == nil && updateOptions.RestartPolicy == nil {
 		return fmt.Errorf("must provide at least one of resources and restartPolicy to update a container: %w", define.ErrInvalidArg)
 	}
@@ -2938,7 +2938,7 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 			logrus.Errorf("Unable to update container %s OCI spec - `podman inspect` may not be accurate until container is restarted: %v", c.ID(), err)
 		}
 
-		if err := c.ociRuntime.UpdateContainer(c, updateOptions.Resources); err != nil {
+		if err := c.ociRuntime.UpdateContainer(ctx, c, updateOptions.Resources); err != nil {
 			return err
 		}
 	}
@@ -2947,12 +2947,12 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 	return nil
 }
 
-func (c *Container) resetHealthCheckTimers(noHealthCheck bool, changedTimer bool, wasEnabledHealthCheck bool, isStartup bool) error {
+func (c *Container) resetHealthCheckTimers(ctx context.Context, noHealthCheck bool, changedTimer bool, wasEnabledHealthCheck bool, isStartup bool) error {
 	if !c.ensureState(define.ContainerStateCreated, define.ContainerStateRunning, define.ContainerStatePaused) {
 		return nil
 	}
 	if noHealthCheck {
-		if err := c.removeTransientFiles(context.Background(),
+		if err := c.removeTransientFiles(ctx,
 			c.config.StartupHealthCheckConfig != nil && !c.state.StartupHCPassed,
 			c.state.HCUnitName); err != nil {
 			return err
@@ -2966,7 +2966,7 @@ func (c *Container) resetHealthCheckTimers(noHealthCheck bool, changedTimer bool
 
 	if !isStartup {
 		if c.state.StartupHCPassed || c.config.StartupHealthCheckConfig == nil {
-			if err := c.recreateHealthCheckTimer(context.Background(), false, false); err != nil {
+			if err := c.recreateHealthCheckTimer(ctx, false, false); err != nil {
 				return err
 			}
 		}
@@ -2981,7 +2981,7 @@ func (c *Container) resetHealthCheckTimers(noHealthCheck bool, changedTimer bool
 			return err
 		}
 		if wasEnabledHealthCheck {
-			if err := c.recreateHealthCheckTimer(context.Background(), true, true); err != nil {
+			if err := c.recreateHealthCheckTimer(ctx, true, true); err != nil {
 				return err
 			}
 		}
@@ -2990,7 +2990,7 @@ func (c *Container) resetHealthCheckTimers(noHealthCheck bool, changedTimer bool
 	return nil
 }
 
-func (c *Container) updateHealthCheck(newHealthCheckConfig IHealthCheckConfig, currentHealthCheckConfig IHealthCheckConfig) error {
+func (c *Container) updateHealthCheck(ctx context.Context, newHealthCheckConfig IHealthCheckConfig, currentHealthCheckConfig IHealthCheckConfig) error {
 	oldHealthCheckConfig := currentHealthCheckConfig
 	if !oldHealthCheckConfig.IsNil() {
 		if err := JSONDeepCopy(currentHealthCheckConfig, oldHealthCheckConfig); err != nil {
@@ -3018,7 +3018,7 @@ func (c *Container) updateHealthCheck(newHealthCheckConfig IHealthCheckConfig, c
 
 	noHealthCheck := c.config.HealthCheckConfig != nil && slices.Contains(c.config.HealthCheckConfig.Test, "NONE")
 
-	if err := c.resetHealthCheckTimers(noHealthCheck, changedTimer, !oldHealthCheckConfig.IsNil(), newHealthCheckConfig.IsStartup()); err != nil {
+	if err := c.resetHealthCheckTimers(ctx, noHealthCheck, changedTimer, !oldHealthCheckConfig.IsNil(), newHealthCheckConfig.IsStartup()); err != nil {
 		return err
 	}
 

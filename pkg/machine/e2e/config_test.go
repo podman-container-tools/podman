@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,12 +31,12 @@ const (
 )
 
 type machineCommand interface {
-	buildCmd(m *machineTestBuilder) []string
+	buildCmd(ctx context.Context, m *machineTestBuilder) []string
 }
 
 type MachineTestBuilder interface {
 	setName(name string) *MachineTestBuilder
-	setCmd(mc machineCommand) *MachineTestBuilder
+	setCmd(ctx context.Context, mc machineCommand) *MachineTestBuilder
 	setTimeout(duration time.Duration) *MachineTestBuilder
 	run() (*machineSession, error)
 }
@@ -132,7 +133,7 @@ func (m *machineTestBuilder) setName(name string) *machineTestBuilder {
 
 // setCmd takes a machineCommand struct and assembles a cmd line
 // representation of the podman machine command
-func (m *machineTestBuilder) setCmd(mc machineCommand) *machineTestBuilder {
+func (m *machineTestBuilder) setCmd(ctx context.Context, mc machineCommand) *machineTestBuilder {
 	// If no name for the machine exists, we set a random name.
 	if !slices.Contains(m.names, m.name) {
 		if len(m.name) < 1 {
@@ -140,7 +141,7 @@ func (m *machineTestBuilder) setCmd(mc machineCommand) *machineTestBuilder {
 		}
 		m.names = append(m.names, m.name)
 	}
-	m.cmd = mc.buildCmd(m)
+	m.cmd = mc.buildCmd(ctx, m)
 	m.stdin = nil
 	return m
 }
@@ -153,10 +154,10 @@ func (m *machineTestBuilder) setStdin(data io.Reader) *machineTestBuilder {
 
 // toInspectInfo is only for inspecting qemu machines.  Other providers will need
 // to make their own.
-func (m *machineTestBuilder) toInspectInfo() ([]machine.InspectInfo, int, error) {
+func (m *machineTestBuilder) toInspectInfo(ctx context.Context) ([]machine.InspectInfo, int, error) {
 	args := []string{"machine", "inspect"}
 	args = append(args, m.names...)
-	session, err := runWrapper(m.podmanBinary, args, nil, defaultTimeout, true)
+	session, err := runWrapper(ctx, m.podmanBinary, args, nil, defaultTimeout, true)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -165,21 +166,21 @@ func (m *machineTestBuilder) toInspectInfo() ([]machine.InspectInfo, int, error)
 	return mii, session.ExitCode(), err
 }
 
-func (m *machineTestBuilder) runWithoutWait() (*machineSession, error) {
-	return runWrapper(m.podmanBinary, m.cmd, m.stdin, m.timeout, false)
+func (m *machineTestBuilder) runWithoutWait(ctx context.Context) (*machineSession, error) {
+	return runWrapper(ctx, m.podmanBinary, m.cmd, m.stdin, m.timeout, false)
 }
 
-func (m *machineTestBuilder) run() (*machineSession, error) {
-	s, err := runWrapper(m.podmanBinary, m.cmd, m.stdin, m.timeout, true)
+func (m *machineTestBuilder) run(ctx context.Context) (*machineSession, error) {
+	s, err := runWrapper(ctx, m.podmanBinary, m.cmd, m.stdin, m.timeout, true)
 	return s, err
 }
 
-func runWrapper(podmanBinary string, cmdArgs []string, stdinData io.Reader, timeout time.Duration, wait bool) (*machineSession, error) {
+func runWrapper(ctx context.Context, podmanBinary string, cmdArgs []string, stdinData io.Reader, timeout time.Duration, wait bool) (*machineSession, error) {
 	if len(os.Getenv("DEBUG")) > 0 {
 		cmdArgs = append([]string{"--log-level=debug"}, cmdArgs...)
 	}
 	GinkgoWriter.Println(podmanBinary + " " + strings.Join(cmdArgs, " "))
-	c := exec.Command(podmanBinary, cmdArgs...)
+	c := exec.CommandContext(ctx, podmanBinary, cmdArgs...)
 	if stdinData != nil {
 		c.Stdin = stdinData
 	}

@@ -42,7 +42,7 @@ func TestCleanupStaleGVProxyFailsWithoutPIDFile(t *testing.T) {
 	defer func() { _ = closePipe() }()
 
 	pidFile := define.VMFile{Path: filepath.Join(t.TempDir(), "missing.pid")}
-	err := CleanupStaleGVProxy(pipeName, pidFile)
+	err := CleanupStaleGVProxy(t.Context(), pipeName, pidFile)
 	require.ErrorContains(t, err, "reading gvproxy PID file")
 }
 
@@ -68,7 +68,7 @@ func CreateNewItemWithPowerShell(t *testing.T, path string, itemType string, tar
 	if target != "" {
 		pwshCmd += " -Target " + target
 	}
-	cmd := exec.Command(pwshPath, "-Command", pwshCmd)
+	cmd := exec.CommandContext(t.Context(), pwshPath, "-Command", pwshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()

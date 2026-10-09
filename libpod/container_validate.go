@@ -16,7 +16,7 @@ import (
 )
 
 // Validate that the configuration of a container is valid.
-func (c *Container) validate() error {
+func (c *Container) validate(ctx context.Context) error {
 	imageIDSet := c.config.RootfsImageID != ""
 	imageNameSet := c.config.RootfsImageName != ""
 	rootfsSet := c.config.Rootfs != ""
@@ -193,7 +193,7 @@ func (c *Container) validate() error {
 			if err != nil {
 				return err
 			}
-			_, err = artStore.Inspect(context.Background(), asr)
+			_, err = artStore.Inspect(ctx, asr)
 			if err != nil {
 				return err
 			}

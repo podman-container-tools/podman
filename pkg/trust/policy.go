@@ -3,6 +3,7 @@ package trust
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -52,7 +53,7 @@ type genericRepoMap map[string]json.RawMessage
 
 // gpgIDReader returns GPG key IDs of keys stored at the provided path.
 // It exists only for tests, production code should always use getGPGIdFromKeyPath.
-type gpgIDReader func(string) []string
+type gpgIDReader func(context.Context, string) []string
 
 // createTmpFile creates a temp file under dir and writes the content into it
 func createTmpFile(dir, pattern string, content []byte) (string, error) {
@@ -69,8 +70,8 @@ func createTmpFile(dir, pattern string, content []byte) (string, error) {
 }
 
 // getGPGIdFromKeyPath returns GPG key IDs of keys stored at the provided path.
-func getGPGIdFromKeyPath(path string) []string {
-	cmd := exec.Command("gpg2", "--with-colons", path)
+func getGPGIdFromKeyPath(ctx context.Context, path string) []string {
+	cmd := exec.CommandContext(ctx, "gpg2", "--with-colons", path)
 	results, err := cmd.Output()
 	if err != nil {
 		logrus.Errorf("Getting key identity: %s", err)
@@ -80,7 +81,7 @@ func getGPGIdFromKeyPath(path string) []string {
 }
 
 // getGPGIdFromKeyData returns GPG key IDs of keys in the provided keyring.
-func getGPGIdFromKeyData(idReader gpgIDReader, key string) []string {
+func getGPGIdFromKeyData(ctx context.Context, idReader gpgIDReader, key string) []string {
 	decodeKey, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
 		logrus.Errorf("%s, error decoding key data", err)
@@ -91,7 +92,7 @@ func getGPGIdFromKeyData(idReader gpgIDReader, key string) []string {
 		logrus.Errorf("Creating key date temp file %s", err)
 	}
 	defer os.Remove(tmpfileName)
-	return idReader(tmpfileName)
+	return idReader(ctx, tmpfileName)
 }
 
 func parseUids(colonDelimitKeys []byte) []string {

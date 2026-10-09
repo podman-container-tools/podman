@@ -3,6 +3,7 @@
 package qemu
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,11 +92,11 @@ func (q *QEMUStubber) checkStatus(monitor *qmp.SocketMonitor) (define.Status, er
 }
 
 // waitForMachineToStop waits for the machine to stop running
-func (q *QEMUStubber) waitForMachineToStop(mc *vmconfigs.MachineConfig) error {
+func (q *QEMUStubber) waitForMachineToStop(ctx context.Context, mc *vmconfigs.MachineConfig) error {
 	fmt.Println("Waiting for VM to stop running...")
 	waitInternal := 250 * time.Millisecond
 	for range 5 {
-		state, err := q.State(mc, false)
+		state, err := q.State(ctx, mc, false)
 		if err != nil {
 			return err
 		}
@@ -112,12 +113,12 @@ func (q *QEMUStubber) waitForMachineToStop(mc *vmconfigs.MachineConfig) error {
 }
 
 // Stop uses the qmp monitor to call a system_powerdown
-func (q *QEMUStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
+func (q *QEMUStubber) StopVM(ctx context.Context, mc *vmconfigs.MachineConfig, _ bool) error {
 	if err := mc.Refresh(); err != nil {
 		return err
 	}
 
-	stopErr := q.stopLocked(mc)
+	stopErr := q.stopLocked(ctx, mc)
 
 	// Make sure that the associated QEMU process gets killed in case it's
 	// still running (#16054).
@@ -144,7 +145,7 @@ func (q *QEMUStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 }
 
 // stopLocked stops the machine and expects the caller to hold the machine's lock.
-func (q *QEMUStubber) stopLocked(mc *vmconfigs.MachineConfig) error {
+func (q *QEMUStubber) stopLocked(ctx context.Context, mc *vmconfigs.MachineConfig) error {
 	// check if the qmp socket is there. if not, qemu instance is gone
 	if err := fileutils.Exists(mc.QEMUHypervisor.QMPMonitor.Address.GetPath()); errors.Is(err, fs.ErrNotExist) {
 		// Right now it is NOT an error to stop a stopped machine
@@ -193,7 +194,7 @@ func (q *QEMUStubber) stopLocked(mc *vmconfigs.MachineConfig) error {
 	}
 
 	// Remove socket
-	if err := mc.QEMUHypervisor.QMPMonitor.Address.Delete(); err != nil {
+	if err := mc.QEMUHypervisor.QMPMonitor.Address.Delete(ctx); err != nil {
 		return err
 	}
 
@@ -207,7 +208,7 @@ func (q *QEMUStubber) stopLocked(mc *vmconfigs.MachineConfig) error {
 		// no vm pid file path means it's probably a machine created before we
 		// started using it, so we revert to the old way of waiting for the
 		// machine to stop
-		return q.waitForMachineToStop(mc)
+		return q.waitForMachineToStop(ctx, mc)
 	}
 
 	vmPid, err := mc.QEMUHypervisor.QEMUPidPath.ReadPIDFrom()
@@ -224,26 +225,26 @@ func (q *QEMUStubber) stopLocked(mc *vmconfigs.MachineConfig) error {
 }
 
 // Remove deletes all the files associated with a machine including the image itself
-func (q *QEMUStubber) Remove(mc *vmconfigs.MachineConfig) ([]string, func() error, error) {
+func (q *QEMUStubber) Remove(_ context.Context, mc *vmconfigs.MachineConfig) ([]string, func(context.Context) error, error) {
 	qemuRmFiles := []string{
 		mc.QEMUHypervisor.QEMUPidPath.GetPath(),
 		mc.QEMUHypervisor.QMPMonitor.Address.GetPath(),
 	}
 
-	return qemuRmFiles, func() error {
+	return qemuRmFiles, func(ctx context.Context) error {
 		var errs []error
-		if err := mc.QEMUHypervisor.QEMUPidPath.Delete(); err != nil {
+		if err := mc.QEMUHypervisor.QEMUPidPath.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
 
-		if err := mc.QEMUHypervisor.QMPMonitor.Address.Delete(); err != nil {
+		if err := mc.QEMUHypervisor.QMPMonitor.Address.Delete(ctx); err != nil {
 			errs = append(errs, err)
 		}
 		return errorhandling.JoinErrors(errs)
 	}, nil
 }
 
-func (q *QEMUStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
+func (q *QEMUStubber) State(_ context.Context, mc *vmconfigs.MachineConfig, _ bool) (define.Status, error) {
 	// Check if qmp socket path exists
 	if err := fileutils.Exists(mc.QEMUHypervisor.QMPMonitor.Address.GetPath()); errors.Is(err, fs.ErrNotExist) {
 		return define.Stopped, nil

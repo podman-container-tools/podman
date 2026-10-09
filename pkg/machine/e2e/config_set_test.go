@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"strconv"
 )
 
@@ -15,7 +16,7 @@ type setMachine struct {
 	cmd []string
 }
 
-func (i *setMachine) buildCmd(m *machineTestBuilder) []string {
+func (i *setMachine) buildCmd(_ context.Context, m *machineTestBuilder) []string {
 	cmd := []string{"machine", "set"}
 	if i.cpus != nil {
 		cmd = append(cmd, "--cpus", strconv.Itoa(int(*i.cpus)))

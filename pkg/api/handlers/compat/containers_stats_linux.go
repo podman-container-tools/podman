@@ -4,6 +4,7 @@ package compat
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -82,8 +83,8 @@ func getPreCPUStats(stats *define.ContainerStats) (CPUStats, error) {
 	}, nil
 }
 
-func statsContainerJSON(ctnr *libpod.Container, stats *define.ContainerStats, preCPUStats CPUStats, onlineCPUs int) (StatsJSON, error) {
-	inspect, err := ctnr.Inspect(false)
+func statsContainerJSON(ctx context.Context, ctnr *libpod.Container, stats *define.ContainerStats, preCPUStats CPUStats, onlineCPUs int) (StatsJSON, error) {
+	inspect, err := ctnr.Inspect(ctx, false)
 	if err != nil {
 		return StatsJSON{}, fmt.Errorf("unable to inspect container: %w", err)
 	}

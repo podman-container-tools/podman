@@ -54,7 +54,7 @@ func (c *Container) prepare(ctx context.Context) error {
 			if createNetNSErr != nil {
 				return
 			}
-			ctrNS, networkStatus, createNetNSErr = c.runtime.createNetNS(c)
+			ctrNS, networkStatus, createNetNSErr = c.runtime.createNetNS(ctx, c)
 			if createNetNSErr != nil {
 				return
 			}
@@ -103,7 +103,7 @@ func (c *Container) prepare(ctx context.Context) error {
 	// Otherwise, we may mess up mount counters.
 	if createErr != nil {
 		if mountStorageErr == nil {
-			if err := c.cleanupStorage(); err != nil {
+			if err := c.cleanupStorage(ctx); err != nil {
 				// createErr is guaranteed non-nil, so print
 				// unconditionally
 				logrus.Errorf("Preparing container %s: %v", c.ID(), createErr)
@@ -112,7 +112,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		}
 		// It's OK to unconditionally trigger network cleanup. If the network
 		// isn't ready it will do nothing.
-		if err := c.cleanupNetwork(); err != nil {
+		if err := c.cleanupNetwork(ctx); err != nil {
 			logrus.Errorf("Preparing container %s: %v", c.ID(), createErr)
 			createErr = fmt.Errorf("cleaning up container %s network after setup failure: %w", c.ID(), err)
 		}
@@ -133,11 +133,11 @@ func (c *Container) prepare(ctx context.Context) error {
 }
 
 // cleanupNetwork unmounts and cleans up the container's network
-func (c *Container) cleanupNetwork() error {
+func (c *Container) cleanupNetwork(ctx context.Context) error {
 	if c.config.NetNsCtr != "" {
 		return nil
 	}
-	netDisabled, err := c.NetworkDisabled()
+	netDisabled, err := c.NetworkDisabled(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (c *Container) cleanupNetwork() error {
 	}
 
 	// Stop the container's network namespace (if it has one)
-	neterr := c.runtime.teardownNetNS(c)
+	neterr := c.runtime.teardownNetNS(ctx, c)
 
 	// always save even when there was an error
 	err = c.save()
@@ -162,8 +162,8 @@ func (c *Container) cleanupNetwork() error {
 
 // reloadNetwork reloads the network for the given container, recreating
 // firewall rules.
-func (c *Container) reloadNetwork() error {
-	result, err := c.runtime.reloadContainerNetwork(c)
+func (c *Container) reloadNetwork(ctx context.Context) error {
+	result, err := c.runtime.reloadContainerNetwork(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -174,8 +174,8 @@ func (c *Container) reloadNetwork() error {
 }
 
 // Add an existing container's network jail
-func (c *Container) addNetworkContainer(g *generate.Generator, ctr string) error {
-	nsCtr, err := c.runtime.state.Container(ctr)
+func (c *Container) addNetworkContainer(ctx context.Context, g *generate.Generator, ctr string) error {
+	nsCtr, err := c.runtime.state.Container(ctx, ctr)
 	if err != nil {
 		return fmt.Errorf("retrieving dependency %s of container %s from state: %w", ctr, c.ID(), err)
 	}
@@ -227,9 +227,9 @@ func (c *Container) addSystemdMounts(_ *generate.Generator) error {
 	return nil
 }
 
-func (c *Container) addSharedNamespaces(g *generate.Generator) error {
+func (c *Container) addSharedNamespaces(ctx context.Context, g *generate.Generator) error {
 	if c.config.NetNsCtr != "" {
-		if err := c.addNetworkContainer(g, c.config.NetNsCtr); err != nil {
+		if err := c.addNetworkContainer(ctx, g, c.config.NetNsCtr); err != nil {
 			return err
 		}
 	}
@@ -252,7 +252,7 @@ func (c *Container) addSharedNamespaces(g *generate.Generator) error {
 	// Set the HOSTNAME environment variable unless explicitly overridden by
 	// the user (already present in OCI spec). If we don't have a UTS ns,
 	// set it to the host's hostname instead.
-	hostname := c.Hostname()
+	hostname := c.Hostname(ctx)
 
 	// TODO: make this optional, needs progress on adding FreeBSD section to the spec
 	foundUTS := true
@@ -310,7 +310,7 @@ func setVolumeAtime(mountPoint string, st os.FileInfo) error {
 	return nil
 }
 
-func (c *Container) makeHostnameBindMount() error {
+func (c *Container) makeHostnameBindMount(context.Context) error {
 	return nil
 }
 
@@ -321,7 +321,7 @@ func (c *Container) getConmonPidFd() int {
 	return -1
 }
 
-func (c *Container) jailName() (string, error) {
+func (c *Container) jailName(ctx context.Context) (string, error) {
 	// If this container is in a pod, get the vnet name from the
 	// corresponding infra container
 	var ic *Container
@@ -331,7 +331,7 @@ func (c *Container) jailName() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("cannot find infra container for pod %s: %w", c.config.Pod, err)
 		}
-		ic, err = pod.InfraContainer()
+		ic, err = pod.InfraContainer(ctx)
 		if err != nil {
 			return "", fmt.Errorf("getting infra container for pod %s: %w", pod.ID(), err)
 		}
@@ -381,7 +381,7 @@ func (c *Container) makePlatformMtabLink(_, _, _ int) error {
 	return nil
 }
 
-func (c *Container) getPlatformRunPath() (string, error) {
+func (c *Container) getPlatformRunPath(ctx context.Context) (string, error) {
 	// If we have a linux image, use "/run", otherwise use "/var/run" for
 	// consistency with FreeBSD path conventions.
 	runPath := "/var/run"
@@ -390,7 +390,7 @@ func (c *Container) getPlatformRunPath() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		inspectData, err := image.Inspect(context.TODO(), nil)
+		inspectData, err := image.Inspect(ctx, nil)
 		if err != nil {
 			return "", err
 		}

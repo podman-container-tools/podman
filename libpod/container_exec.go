@@ -271,7 +271,7 @@ func getPidData(pid int) string {
 // ExecStart starts an exec session in the container, but does not attach to it.
 // Returns immediately upon starting the exec session, unlike other ExecStart
 // functions, which will only return when the exec session exits.
-func (c *Container) ExecStart(sessionID string) error {
+func (c *Container) ExecStart(ctx context.Context, sessionID string) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -302,12 +302,12 @@ func (c *Container) ExecStart(sessionID string) error {
 		return err
 	}
 
-	pid, err := c.ociRuntime.ExecContainerDetached(c, session.ID(), opts, session.Config.AttachStdin)
+	pid, err := c.ociRuntime.ExecContainerDetached(ctx, c, session.ID(), opts, session.Config.AttachStdin)
 	if err != nil {
 		return err
 	}
 
-	c.newContainerEvent(events.Exec)
+	c.newContainerEvent(ctx, events.Exec)
 	logrus.Debugf("Successfully started exec session %s in container %s", session.ID(), c.ID())
 
 	// Update and save session to reflect PID/running
@@ -320,7 +320,7 @@ func (c *Container) ExecStart(sessionID string) error {
 
 // execStartAndAttach starts and attaches to an exec session in a container.
 // newSize resizes the tty to this size before the process is started, must be nil if the exec session has no tty
-func (c *Container) execStartAndAttach(sessionID string, streams *define.AttachStreams, newSize *resize.TerminalSize, isHealthcheck bool) error {
+func (c *Container) execStartAndAttach(ctx context.Context, sessionID string, streams *define.AttachStreams, newSize *resize.TerminalSize, isHealthcheck bool) error {
 	unlock := true
 	if !c.batched {
 		c.lock.Lock()
@@ -356,13 +356,13 @@ func (c *Container) execStartAndAttach(sessionID string, streams *define.AttachS
 		return err
 	}
 
-	pid, attachChan, err := c.ociRuntime.ExecContainer(c, session.ID(), opts, streams, newSize)
+	pid, attachChan, err := c.ociRuntime.ExecContainer(ctx, c, session.ID(), opts, streams, newSize)
 	if err != nil {
 		return err
 	}
 
 	if !isHealthcheck {
-		c.newContainerEvent(events.Exec)
+		c.newContainerEvent(ctx, events.Exec)
 	}
 
 	logrus.Debugf("Successfully started exec session %s in container %s", session.ID(), c.ID())
@@ -548,7 +548,7 @@ func (c *Container) ExecHTTPStartAndAttach(sessionID string, r *http.Request, w 
 	// TODO: Investigate whether more of this can be made common with
 	// ExecStartAndAttach
 
-	c.newContainerEvent(events.Exec)
+	c.newContainerEvent(r.Context(), events.Exec)
 	logrus.Debugf("Successfully started exec session %s in container %s", session.ID(), c.ID())
 
 	var lastErr error
@@ -651,7 +651,7 @@ func (c *Container) ExecCleanup(sessionID string) error {
 
 // ExecRemove removes an exec session in the container.
 // If force is given, the session will be stopped first if it is running.
-func (c *Container) ExecRemove(sessionID string, force bool) error {
+func (c *Container) ExecRemove(ctx context.Context, sessionID string, force bool) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -688,7 +688,7 @@ func (c *Container) ExecRemove(sessionID string, force bool) error {
 		}
 
 		// Stop the session
-		if err := c.ociRuntime.ExecStopContainer(c, session.ID(), c.StopTimeout()); err != nil {
+		if err := c.ociRuntime.ExecStopContainer(ctx, c, session.ID(), c.StopTimeout()); err != nil {
 			return err
 		}
 
@@ -718,7 +718,7 @@ func (c *Container) ExecRemove(sessionID string, force bool) error {
 
 // ExecResize resizes the TTY of the given exec session. Only available if the
 // exec session created a TTY.
-func (c *Container) ExecResize(sessionID string, newSize resize.TerminalSize) error {
+func (c *Container) ExecResize(ctx context.Context, sessionID string, newSize resize.TerminalSize) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -757,7 +757,7 @@ func (c *Container) ExecResize(sessionID string, newSize resize.TerminalSize) er
 
 	// Make sure the exec session is still running.
 
-	return c.ociRuntime.ExecAttachResize(c, sessionID, newSize)
+	return c.ociRuntime.ExecAttachResize(ctx, c, sessionID, newSize)
 }
 
 // ExecKill sends a signal to the process group of a running exec session,
@@ -813,20 +813,23 @@ func (c *Container) ExecKill(sessionID string, sig uint) error {
 	return nil
 }
 
-func (c *Container) healthCheckExec(config *ExecConfig, timeout time.Duration, streams *define.AttachStreams) (int, error) {
-	return c.execLightweight(config, streams, timeout)
-}
-
-// sessionIDCallback, if not nil, fires with the session's ID right after
-// creation, before start/attach, for callers that need it early.
-func (c *Container) Exec(config *ExecConfig, streams *define.AttachStreams, resize <-chan resize.TerminalSize, sessionIDCallback func(string)) (int, error) {
-	return c.exec(config, streams, resize, false, sessionIDCallback)
+func (c *Container) healthCheckExec(ctx context.Context, config *ExecConfig, timeout time.Duration, streams *define.AttachStreams) (int, error) {
+	return c.execLightweight(ctx, config, streams, timeout)
 }
 
 // Exec emulates the old Libpod exec API, providing a single call to create,
 // run, and remove an exec session. Returns exit code and error. Exit code is
 // not guaranteed to be set sanely if error is not nil.
-func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resizeChan <-chan resize.TerminalSize, isHealthcheck bool, sessionIDCallback func(string)) (exitCode int, retErr error) {
+// sessionIDCallback, if not nil, fires with the session's ID right after
+// creation, before start/attach, for callers that need it early.
+func (c *Container) Exec(ctx context.Context, config *ExecConfig, streams *define.AttachStreams, resize <-chan resize.TerminalSize, sessionIDCallback func(string)) (int, error) {
+	return c.exec(ctx, config, streams, resize, false, sessionIDCallback)
+}
+
+// exec emulates the old Libpod exec API, providing a single call to create,
+// run, and remove an exec session. Returns exit code and error. Exit code is
+// not guaranteed to be set sanely if error is not nil.
+func (c *Container) exec(ctx context.Context, config *ExecConfig, streams *define.AttachStreams, resizeChan <-chan resize.TerminalSize, isHealthcheck bool, sessionIDCallback func(string)) (exitCode int, retErr error) {
 	sessionID, err := c.ExecCreate(config)
 	if err != nil {
 		return -1, err
@@ -837,7 +840,7 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 	cleanup := true
 	defer func() {
 		if cleanup {
-			if err := c.ExecRemove(sessionID, false); err != nil {
+			if err := c.ExecRemove(ctx, sessionID, false); err != nil {
 				if retErr == nil && !errors.Is(err, define.ErrNoSuchExecSession) {
 					exitCode = -1
 					retErr = err
@@ -860,7 +863,7 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 		go func() {
 			logrus.Debugf("Sending resize events to exec session %s", sessionID)
 			for resizeRequest := range resizeChan {
-				if err := c.ExecResize(sessionID, resizeRequest); err != nil {
+				if err := c.ExecResize(ctx, sessionID, resizeRequest); err != nil {
 					if errors.Is(err, define.ErrExecSessionStateInvalid) {
 						// The exec session stopped
 						// before we could resize.
@@ -874,7 +877,7 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 		}()
 	}
 
-	if err := c.execStartAndAttach(sessionID, streams, size, isHealthcheck); err != nil {
+	if err := c.execStartAndAttach(ctx, sessionID, streams, size, isHealthcheck); err != nil {
 		// user detached, there will be no exit just exit without reporting an error
 		if errors.Is(err, define.ErrDetach) {
 			cleanup = false
@@ -891,7 +894,7 @@ func (c *Container) exec(config *ExecConfig, streams *define.AttachStreams, resi
 			// As things stand, though, it's not worth it - this
 			// should always terminate quickly since it's not
 			// streaming.
-			diedEvent, err := c.runtime.GetExecDiedEvent(context.Background(), c.ID(), sessionID)
+			diedEvent, err := c.runtime.GetExecDiedEvent(ctx, c.ID(), sessionID)
 			if err != nil {
 				return -1, fmt.Errorf("retrieving exec session %s exit code: %w", sessionID, err)
 			}
@@ -1091,14 +1094,14 @@ func (c *Container) getActiveExecSessions() ([]string, error) {
 }
 
 // removeAllExecSessions stops and removes all the container's exec sessions
-func (c *Container) removeAllExecSessions() error {
+func (c *Container) removeAllExecSessions(ctx context.Context) error {
 	knownSessions := c.getKnownExecSessions()
 
 	logrus.Debugf("Removing all exec sessions for container %s", c.ID())
 
 	var lastErr error
 	for _, id := range knownSessions {
-		if err := c.ociRuntime.ExecStopContainer(c, id, c.StopTimeout()); err != nil {
+		if err := c.ociRuntime.ExecStopContainer(ctx, c, id, c.StopTimeout()); err != nil {
 			if lastErr != nil {
 				logrus.Errorf("Stopping container %s exec sessions: %v", c.ID(), lastErr)
 			}
@@ -1204,7 +1207,7 @@ func justWriteExecExitCode(c *Container, sessionID string, exitCode int, emitEve
 
 // execLightweight executes a command in a container without creating a persistent exec session.
 // It is used by both ExecNoSession and healthCheckExec to avoid code duplication.
-func (c *Container) execLightweight(config *ExecConfig, streams *define.AttachStreams, timeout time.Duration) (int, error) {
+func (c *Container) execLightweight(ctx context.Context, config *ExecConfig, streams *define.AttachStreams, timeout time.Duration) (int, error) {
 	if err := c.verifyExecConfig(config); err != nil {
 		return -1, err
 	}
@@ -1248,7 +1251,7 @@ func (c *Container) execLightweight(config *ExecConfig, streams *define.AttachSt
 		}
 	}()
 
-	pid, attachErrChan, err := c.ociRuntime.ExecContainer(c, session.ID(), opts, streams, nil)
+	pid, attachErrChan, err := c.ociRuntime.ExecContainer(ctx, c, session.ID(), opts, streams, nil)
 	if err != nil {
 		// Check if the error is command not found before returning
 		if exitCode := define.ExitCode(err); exitCode == define.ExecErrorCodeNotFound {
@@ -1272,7 +1275,7 @@ func (c *Container) execLightweight(config *ExecConfig, streams *define.AttachSt
 				return -1, fmt.Errorf("container %s light exec session with pid: %d error: %w", c.ID(), pid, err)
 			}
 		case <-time.After(timeout):
-			if err := c.ociRuntime.ExecStopContainer(c, session.ID(), 0); err != nil {
+			if err := c.ociRuntime.ExecStopContainer(ctx, c, session.ID(), 0); err != nil {
 				return -1, err
 			}
 			return -1, fmt.Errorf("%w of %s", define.ErrHealthCheckTimeout, timeout.String())
@@ -1294,6 +1297,6 @@ func (c *Container) execLightweight(config *ExecConfig, streams *define.AttachSt
 
 // ExecNoSession executes a command in a container without creating a persistent exec session.
 // It skips database operations and minimizes container locking for performance.
-func (c *Container) ExecNoSession(config *ExecConfig, streams *define.AttachStreams, _ <-chan resize.TerminalSize) (int, error) {
-	return c.execLightweight(config, streams, 0)
+func (c *Container) ExecNoSession(ctx context.Context, config *ExecConfig, streams *define.AttachStreams, _ <-chan resize.TerminalSize) (int, error) {
+	return c.execLightweight(ctx, config, streams, 0)
 }

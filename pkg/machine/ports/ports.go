@@ -102,14 +102,14 @@ func ReleaseMachinePort(port int) error {
 	return storePortAllocations(ports)
 }
 
-func IsLocalPortAvailable(port int) bool {
+func IsLocalPortAvailable(ctx context.Context, port int) bool {
 	// Used to mark invalid / unassigned port
 	if port <= 0 {
 		return false
 	}
 
 	lc := getPortCheckListenConfig()
-	l, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	l, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return false
 	}

@@ -583,7 +583,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			// No container needs sdnotify, so we can mark the
 			// service container's conmon as the main PID and
 			// return early.
-			data, err := serviceContainer.Inspect(false)
+			data, err := serviceContainer.Inspect(ctx, false)
 			if err != nil {
 				return nil, err
 			}
@@ -613,7 +613,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 	} else if serviceContainer != nil {
 		// No containers started, make sure to stop the service container.
 		// Note because the pods still do exists and are not removed by default we cannot remove it.
-		if err := serviceContainer.StopWithTimeout(0); err != nil {
+		if err := serviceContainer.StopWithTimeout(ctx, 0); err != nil {
 			logrus.Errorf("Failed to stop service container: %v", err)
 		}
 	}
@@ -908,7 +908,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 				if errors.Is(err, define.ErrVolumeExists) {
 					// Volume for this configmap already exists do not
 					// error out instead reuse the current volume.
-					vol, err = ic.Libpod.GetVolume(v.Source)
+					vol, err = ic.Libpod.GetVolume(ctx, v.Source)
 					if err != nil {
 						return nil, nil, fmt.Errorf("cannot reuse local volume for volume from configmap %q: %w", v.Source, err)
 					}
@@ -1021,7 +1021,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 	}
 	// Create the Pod
-	pod, err := generate.MakePod(&podSpec, ic.Libpod)
+	pod, err := generate.MakePod(ctx, &podSpec, ic.Libpod)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1299,7 +1299,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		for i := range sdNotifyProxies {
 			wg.Add(1)
 			go func(i int) {
-				err := sdNotifyProxies[i].Wait()
+				err := sdNotifyProxies[i].Wait(ctx)
 				if err != nil {
 					err = fmt.Errorf("waiting for sd-notify proxy: %w", err)
 				}
@@ -1938,7 +1938,7 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 			}
 			return nil, err
 		}
-		ctr, err := pod.ServiceContainer()
+		ctr, err := pod.ServiceContainer(ctx)
 		if errors.Is(err, define.ErrNoSuchCtr) {
 			continue
 		}

@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -9,7 +10,7 @@ import (
 )
 
 var _ = Describe("podman machine proxy settings propagation", func() {
-	It("ssh to running machine and check proxy settings", func() {
+	It("ssh to running machine and check proxy settings", func(ctx context.Context) {
 		defer func() {
 			os.Unsetenv("HTTP_PROXY")
 			os.Unsetenv("HTTPS_PROXY")
@@ -17,7 +18,7 @@ var _ = Describe("podman machine proxy settings propagation", func() {
 
 		name := randomString()
 		i := new(initMachine)
-		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath)).run()
+		session, err := mb.setName(name).setCmd(ctx, i.withImage(mb.imagePath)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
 
@@ -26,23 +27,23 @@ var _ = Describe("podman machine proxy settings propagation", func() {
 		os.Setenv("HTTPS_PROXY", proxyURL)
 
 		s := new(startMachine)
-		startSession, err := mb.setName(name).setCmd(s).run()
+		startSession, err := mb.setName(name).setCmd(ctx, s).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
 		sshProxy := sshMachine{}
-		sshSession, err := mb.setName(name).setCmd(sshProxy.withSSHCommand([]string{"printenv", "HTTP_PROXY"})).run()
+		sshSession, err := mb.setName(name).setCmd(ctx, sshProxy.withSSHCommand([]string{"printenv", "HTTP_PROXY"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession).To(Exit(0))
 		Expect(sshSession.outputToString()).To(ContainSubstring(proxyURL))
 
-		sshSession, err = mb.setName(name).setCmd(sshProxy.withSSHCommand([]string{"printenv", "HTTPS_PROXY"})).run()
+		sshSession, err = mb.setName(name).setCmd(ctx, sshProxy.withSSHCommand([]string{"printenv", "HTTPS_PROXY"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession).To(Exit(0))
 		Expect(sshSession.outputToString()).To(ContainSubstring(proxyURL))
 
 		stop := new(stopMachine)
-		stopSession, err := mb.setName(name).setCmd(stop).run()
+		stopSession, err := mb.setName(name).setCmd(ctx, stop).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stopSession).To(Exit(0))
 
@@ -55,11 +56,11 @@ var _ = Describe("podman machine proxy settings propagation", func() {
 		os.Setenv("NO_PROXY", noproxy)
 
 		// start it again should update the proxies
-		startSession, err = mb.setName(name).setCmd(s).run()
+		startSession, err = mb.setName(name).setCmd(ctx, s).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
 
-		sshSession, err = mb.setName(name).setCmd(sshProxy.withSSHCommand([]string{"printenv", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"})).run()
+		sshSession, err = mb.setName(name).setCmd(ctx, sshProxy.withSSHCommand([]string{"printenv", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"})).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sshSession).To(Exit(0))
 		Expect(string(sshSession.Out.Contents())).To(Equal(proxy1 + "\n" + proxy2 + "\n" + noproxy + "\n"))

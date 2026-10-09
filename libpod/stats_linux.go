@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,7 +20,7 @@ import (
 // for a given container.  The previousStats is used to correctly
 // calculate cpu percentages. You should pass nil if there is no
 // previous stat for this container.
-func (c *Container) getPlatformContainerStats(stats *define.ContainerStats, previousStats *define.ContainerStats) error {
+func (c *Container) getPlatformContainerStats(_ context.Context, stats *define.ContainerStats, previousStats *define.ContainerStats) error {
 	if c.config.NoCgroups {
 		return fmt.Errorf("cannot run top on container %s as it did not create a cgroup: %w", c.ID(), define.ErrNoCgroups)
 	}

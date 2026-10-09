@@ -1,6 +1,7 @@
 package trust
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -18,7 +19,7 @@ func TestPolicyDescription(t *testing.T) {
 
 	// Override getGPGIdFromKeyPath because we don't want to bother with (and spend the unit-test time on) generating valid GPG keys, and running the real GPG binary.
 	// Instead of reading the files at all, just expect file names like /id1,id2,...,idN.pub
-	idReader := func(keyPath string) []string {
+	idReader := func(_ context.Context, keyPath string) []string {
 		require.True(t, strings.HasPrefix(keyPath, "/"))
 		require.True(t, strings.HasSuffix(keyPath, ".pub"))
 		return strings.Split(keyPath[1:len(keyPath)-4], ",")
@@ -150,7 +151,7 @@ func TestPolicyDescription(t *testing.T) {
 		err = os.WriteFile(policyPath, policyJSON, 0o600)
 		require.NoError(t, err)
 
-		res, err := policyDescriptionWithGPGIDReader(policyPath, "./testdata", idReader)
+		res, err := policyDescriptionWithGPGIDReader(t.Context(), policyPath, "./testdata", idReader)
 		require.NoError(t, err)
 		assert.Equal(t, c.expected, res)
 	}
@@ -159,7 +160,7 @@ func TestPolicyDescription(t *testing.T) {
 func TestDescriptionsOfPolicyRequirements(t *testing.T) {
 	// Override getGPGIdFromKeyPath because we don't want to bother with (and spend the unit-test time on) generating valid GPG keys, and running the real GPG binary.
 	// Instead of reading the files at all, just expect file names like /id1,id2,...,idN.pub
-	idReader := func(keyPath string) []string {
+	idReader := func(_ context.Context, keyPath string) []string {
 		require.True(t, strings.HasPrefix(keyPath, "/"))
 		require.True(t, strings.HasSuffix(keyPath, ".pub"))
 		return strings.Split(keyPath[1:len(keyPath)-4], ",")
@@ -372,7 +373,7 @@ func TestDescriptionsOfPolicyRequirements(t *testing.T) {
 		err = json.Unmarshal(reqsJSON, &parsedRegs)
 		require.NoError(t, err)
 
-		res := descriptionsOfPolicyRequirements(parsedRegs, template, registryConfigs, c.scope, idReader)
+		res := descriptionsOfPolicyRequirements(t.Context(), parsedRegs, template, registryConfigs, c.scope, idReader)
 		assert.Equal(t, c.expected, res)
 	}
 }

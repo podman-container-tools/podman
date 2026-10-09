@@ -152,7 +152,7 @@ const (
 	DockerGlobal
 )
 
-func dialSocket(socket string, timeout time.Duration) (net.Conn, error) {
+func dialSocket(ctx context.Context, socket string, timeout time.Duration) (net.Conn, error) {
 	scheme := "unix"
 	if strings.Contains(socket, "://") {
 		url, err := url.Parse(socket)
@@ -163,7 +163,7 @@ func dialSocket(socket string, timeout time.Duration) (net.Conn, error) {
 		socket = url.Path
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var dial func() (net.Conn, error)
 	switch scheme {
@@ -199,8 +199,8 @@ func dialSocket(socket string, timeout time.Duration) (net.Conn, error) {
 func WaitAndPingAPI(sock string) {
 	client := http.Client{
 		Transport: &http.Transport{
-			DialContext: func(context.Context, string, string) (net.Conn, error) {
-				con, err := dialSocket(sock, apiUpTimeout)
+			DialContext: func(ctx context.Context, _ string, _ string) (net.Conn, error) {
+				con, err := dialSocket(ctx, sock, apiUpTimeout)
 				if err != nil {
 					return nil, err
 				}

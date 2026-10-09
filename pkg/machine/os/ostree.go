@@ -28,7 +28,7 @@ type OSTree struct{}
 // defined by bootc.  Omission of a transport assumes the image
 // is pulled from an OCI registry.  We simply pass the user
 // input to bootc without any manipulation.
-func (dist *OSTree) Apply(image string, _ ApplyOptions) error {
+func (dist *OSTree) Apply(ctx context.Context, image string, _ ApplyOptions) error {
 	t, pathOrImageRef, err := parseApplyInput(image)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (dist *OSTree) Apply(image string, _ ApplyOptions) error {
 		cli = append(cli, "--transport", t)
 	}
 	cli = append(cli, pathOrImageRef)
-	cmd := exec.Command("sudo", cli...)
+	cmd := exec.CommandContext(ctx, "sudo", cli...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -59,7 +59,7 @@ func (dist *OSTree) Upgrade(ctx context.Context, opts UpgradeOptions) error {
 		Version: opts.MachineVersion,
 	}
 
-	bootcStatus, err := newBootcHost()
+	bootcStatus, err := newBootcHost(ctx)
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (dist *OSTree) Upgrade(ctx context.Context, opts UpgradeOptions) error {
 			return fmt.Errorf("version mismatch between podman version (%s) and host os (%s)", originVersion.String(), opts.ClientVersion.String())
 		}
 
-		localDigest, err := bootcStatus.getLocalOsImageDigest()
+		localDigest, err := bootcStatus.getLocalOsImageDigest(ctx)
 		if err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func (dist *OSTree) Upgrade(ctx context.Context, opts UpgradeOptions) error {
 		return nil
 	}
 
-	cmd := exec.Command("sudo", args...)
+	cmd := exec.CommandContext(ctx, "sudo", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

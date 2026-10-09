@@ -34,12 +34,12 @@ func (r *Runtime) RemoveVolume(ctx context.Context, v *Volume, force bool, timeo
 }
 
 // GetVolume retrieves a volume given its full name.
-func (r *Runtime) GetVolume(name string) (*Volume, error) {
+func (r *Runtime) GetVolume(ctx context.Context, name string) (*Volume, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	vol, err := r.state.Volume(name)
+	vol, err := r.state.Volume(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -48,12 +48,12 @@ func (r *Runtime) GetVolume(name string) (*Volume, error) {
 }
 
 // LookupVolume retrieves a volume by unambiguous partial name.
-func (r *Runtime) LookupVolume(name string) (*Volume, error) {
+func (r *Runtime) LookupVolume(ctx context.Context, name string) (*Volume, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	vol, err := r.state.LookupVolume(name)
+	vol, err := r.state.LookupVolume(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +74,12 @@ func (r *Runtime) HasVolume(name string) (bool, error) {
 // Filters can be provided which will determine which volumes are included in the
 // output. If multiple filters are used, a volume will be returned if
 // all of the filters are matched
-func (r *Runtime) Volumes(filters ...VolumeFilter) ([]*Volume, error) {
+func (r *Runtime) Volumes(ctx context.Context, filters ...VolumeFilter) ([]*Volume, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	vols, err := r.state.AllVolumes()
+	vols, err := r.state.AllVolumes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -104,12 +104,12 @@ func (r *Runtime) Volumes(filters ...VolumeFilter) ([]*Volume, error) {
 }
 
 // GetAllVolumes retrieves all the volumes
-func (r *Runtime) GetAllVolumes() ([]*Volume, error) {
+func (r *Runtime) GetAllVolumes(ctx context.Context) ([]*Volume, error) {
 	if !r.valid {
 		return nil, define.ErrRuntimeStopped
 	}
 
-	return r.state.AllVolumes()
+	return r.state.AllVolumes(ctx)
 }
 
 // RenameVolume renames the given volume to a new name.
@@ -173,7 +173,7 @@ func (r *Runtime) RenameVolume(_ context.Context, vol *Volume, newName string) (
 // PruneVolumes removes unused volumes from the system
 func (r *Runtime) PruneVolumes(ctx context.Context, filterFuncs []VolumeFilter, dryRun bool) ([]*reports.PruneReport, error) {
 	preports := make([]*reports.PruneReport, 0)
-	vols, err := r.Volumes(filterFuncs...)
+	vols, err := r.Volumes(ctx, filterFuncs...)
 	if err != nil {
 		return nil, err
 	}

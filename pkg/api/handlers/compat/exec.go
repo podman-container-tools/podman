@@ -34,7 +34,7 @@ func ExecCreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctrName := utils.GetName(r)
-	ctr, err := runtime.LookupContainer(ctrName)
+	ctr, err := runtime.LookupContainer(r.Context(), ctrName)
 	if err != nil {
 		utils.ContainerNotFound(w, ctrName, err)
 		return
@@ -119,7 +119,7 @@ func ExecInspectHandler(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 
 	sessionID := mux.Vars(r)["id"]
-	sessionCtr, err := runtime.GetExecSessionContainer(sessionID)
+	sessionCtr, err := runtime.GetExecSessionContainer(r.Context(), sessionID)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return
@@ -157,7 +157,7 @@ func ExecStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Verify TTY setting against what inspect session was made with
 
-	sessionCtr, err := runtime.GetExecSessionContainer(sessionID)
+	sessionCtr, err := runtime.GetExecSessionContainer(r.Context(), sessionID)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return
@@ -192,7 +192,7 @@ func ExecStartHandler(w http.ResponseWriter, r *http.Request) {
 		// If we are detaching, we do NOT want to hijack.
 		// Instead, we perform a detached start, and return 200 if
 		// successful.
-		if err := sessionCtr.ExecStart(sessionID); err != nil {
+		if err := sessionCtr.ExecStart(r.Context(), sessionID); err != nil {
 			utils.InternalServerError(w, err)
 			return
 		}
@@ -254,7 +254,7 @@ func ExecKillHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionCtr, err := runtime.GetExecSessionContainer(sessionID)
+	sessionCtr, err := runtime.GetExecSessionContainer(r.Context(), sessionID)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return
@@ -288,14 +288,14 @@ func ExecRemoveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionCtr, err := runtime.GetExecSessionContainer(sessionID)
+	sessionCtr, err := runtime.GetExecSessionContainer(r.Context(), sessionID)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, err)
 		return
 	}
 
 	logrus.Debugf("Removing exec session %s of container %s", sessionID, sessionCtr.ID())
-	if err := sessionCtr.ExecRemove(sessionID, bodyParams.Force); err != nil {
+	if err := sessionCtr.ExecRemove(r.Context(), sessionID, bodyParams.Force); err != nil {
 		utils.InternalServerError(w, err)
 		return
 	}

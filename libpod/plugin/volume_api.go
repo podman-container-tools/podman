@@ -73,10 +73,10 @@ type activateResponse struct {
 
 // Validate that the given plugin is good to use.
 // Add it to available plugins if so.
-func validatePlugin(newPlugin *VolumePlugin) error {
+func validatePlugin(ctx context.Context, newPlugin *VolumePlugin) error {
 	// It's a socket. Is it a plugin?
 	// Hit the Activate endpoint to find out if it is, and if so what kind
-	req, err := http.NewRequest(http.MethodPost, "http://plugin"+activatePath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://plugin"+activatePath, nil)
 	if err != nil {
 		return fmt.Errorf("making request to volume plugin %s activation endpoint: %w", newPlugin.Name, err)
 	}
@@ -122,7 +122,7 @@ func validatePlugin(newPlugin *VolumePlugin) error {
 
 // GetVolumePlugin gets a single volume plugin, with the given name, at the
 // given path.
-func GetVolumePlugin(name string, path string, timeout *uint, cfg *config.Config) (*VolumePlugin, error) {
+func GetVolumePlugin(ctx context.Context, name string, path string, timeout *uint, cfg *config.Config) (*VolumePlugin, error) {
 	pluginsLock.Lock()
 	defer pluginsLock.Unlock()
 
@@ -168,7 +168,7 @@ func GetVolumePlugin(name string, path string, timeout *uint, cfg *config.Config
 		return nil, fmt.Errorf("volume %s path %q is not a unix socket: %w", name, newPlugin.SocketPath, ErrNotPlugin)
 	}
 
-	if err := validatePlugin(newPlugin); err != nil {
+	if err := validatePlugin(ctx, newPlugin); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +197,7 @@ func (p *VolumePlugin) verifyReachable() error {
 
 // Send a request to the volume plugin for handling.
 // Callers *MUST* close the response when they are done.
-func (p *VolumePlugin) sendRequest(toJSON any, endpoint string) (*http.Response, error) {
+func (p *VolumePlugin) sendRequest(ctx context.Context, toJSON any, endpoint string) (*http.Response, error) {
 	var (
 		reqJSON []byte
 		err     error
@@ -210,7 +210,7 @@ func (p *VolumePlugin) sendRequest(toJSON any, endpoint string) (*http.Response,
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "http://plugin"+endpoint, bytes.NewReader(reqJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://plugin"+endpoint, bytes.NewReader(reqJSON))
 	if err != nil {
 		return nil, fmt.Errorf("making request to volume plugin %s endpoint %s: %w", p.Name, endpoint, err)
 	}
@@ -263,7 +263,7 @@ func (p *VolumePlugin) handleErrorResponse(resp *http.Response, endpoint, volNam
 }
 
 // CreateVolume creates a volume in the plugin.
-func (p *VolumePlugin) CreateVolume(req *volume.CreateRequest) error {
+func (p *VolumePlugin) CreateVolume(ctx context.Context, req *volume.CreateRequest) error {
 	if req == nil {
 		return fmt.Errorf("must provide non-nil request to CreateVolume: %w", define.ErrInvalidArg)
 	}
@@ -274,7 +274,7 @@ func (p *VolumePlugin) CreateVolume(req *volume.CreateRequest) error {
 
 	logrus.Infof("Creating volume %s using plugin %s", req.Name, p.Name)
 
-	resp, err := p.sendRequest(req, createPath)
+	resp, err := p.sendRequest(ctx, req, createPath)
 	if err != nil {
 		return err
 	}
@@ -284,14 +284,14 @@ func (p *VolumePlugin) CreateVolume(req *volume.CreateRequest) error {
 }
 
 // ListVolumes lists volumes available in the plugin.
-func (p *VolumePlugin) ListVolumes() ([]*volume.Volume, error) {
+func (p *VolumePlugin) ListVolumes(ctx context.Context) ([]*volume.Volume, error) {
 	if err := p.verifyReachable(); err != nil {
 		return nil, err
 	}
 
 	logrus.Infof("Listing volumes using plugin %s", p.Name)
 
-	resp, err := p.sendRequest(nil, listPath)
+	resp, err := p.sendRequest(ctx, nil, listPath)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (p *VolumePlugin) ListVolumes() ([]*volume.Volume, error) {
 }
 
 // GetVolume gets a single volume from the plugin.
-func (p *VolumePlugin) GetVolume(req *volume.GetRequest) (*volume.Volume, error) {
+func (p *VolumePlugin) GetVolume(ctx context.Context, req *volume.GetRequest) (*volume.Volume, error) {
 	if req == nil {
 		return nil, fmt.Errorf("must provide non-nil request to GetVolume: %w", define.ErrInvalidArg)
 	}
@@ -326,7 +326,7 @@ func (p *VolumePlugin) GetVolume(req *volume.GetRequest) (*volume.Volume, error)
 
 	logrus.Infof("Getting volume %s using plugin %s", req.Name, p.Name)
 
-	resp, err := p.sendRequest(req, getPath)
+	resp, err := p.sendRequest(ctx, req, getPath)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (p *VolumePlugin) GetVolume(req *volume.GetRequest) (*volume.Volume, error)
 }
 
 // RemoveVolume removes a single volume from the plugin.
-func (p *VolumePlugin) RemoveVolume(req *volume.RemoveRequest) error {
+func (p *VolumePlugin) RemoveVolume(ctx context.Context, req *volume.RemoveRequest) error {
 	if req == nil {
 		return fmt.Errorf("must provide non-nil request to RemoveVolume: %w", define.ErrInvalidArg)
 	}
@@ -361,7 +361,7 @@ func (p *VolumePlugin) RemoveVolume(req *volume.RemoveRequest) error {
 
 	logrus.Infof("Removing volume %s using plugin %s", req.Name, p.Name)
 
-	resp, err := p.sendRequest(req, removePath)
+	resp, err := p.sendRequest(ctx, req, removePath)
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func (p *VolumePlugin) RemoveVolume(req *volume.RemoveRequest) error {
 }
 
 // GetVolumePath gets the path the given volume is mounted at.
-func (p *VolumePlugin) GetVolumePath(req *volume.PathRequest) (string, error) {
+func (p *VolumePlugin) GetVolumePath(ctx context.Context, req *volume.PathRequest) (string, error) {
 	if req == nil {
 		return "", fmt.Errorf("must provide non-nil request to GetVolumePath: %w", define.ErrInvalidArg)
 	}
@@ -382,7 +382,7 @@ func (p *VolumePlugin) GetVolumePath(req *volume.PathRequest) (string, error) {
 
 	logrus.Infof("Getting volume %s path using plugin %s", req.Name, p.Name)
 
-	resp, err := p.sendRequest(req, hostVirtualPath)
+	resp, err := p.sendRequest(ctx, req, hostVirtualPath)
 	if err != nil {
 		return "", err
 	}
@@ -408,7 +408,7 @@ func (p *VolumePlugin) GetVolumePath(req *volume.PathRequest) (string, error) {
 // MountVolume mounts the given volume. The ID argument is the ID of the
 // mounting container, used for internal record-keeping by the plugin. Returns
 // the path the volume has been mounted at.
-func (p *VolumePlugin) MountVolume(req *volume.MountRequest) (string, error) {
+func (p *VolumePlugin) MountVolume(ctx context.Context, req *volume.MountRequest) (string, error) {
 	if req == nil {
 		return "", fmt.Errorf("must provide non-nil request to MountVolume: %w", define.ErrInvalidArg)
 	}
@@ -419,7 +419,7 @@ func (p *VolumePlugin) MountVolume(req *volume.MountRequest) (string, error) {
 
 	logrus.Infof("Mounting volume %s using plugin %s for container %s", req.Name, p.Name, req.ID)
 
-	resp, err := p.sendRequest(req, mountPath)
+	resp, err := p.sendRequest(ctx, req, mountPath)
 	if err != nil {
 		return "", err
 	}
@@ -444,7 +444,7 @@ func (p *VolumePlugin) MountVolume(req *volume.MountRequest) (string, error) {
 
 // UnmountVolume unmounts the given volume. The ID argument is the ID of the
 // container that is unmounting, used for internal record-keeping by the plugin.
-func (p *VolumePlugin) UnmountVolume(req *volume.UnmountRequest) error {
+func (p *VolumePlugin) UnmountVolume(ctx context.Context, req *volume.UnmountRequest) error {
 	if req == nil {
 		return fmt.Errorf("must provide non-nil request to UnmountVolume: %w", define.ErrInvalidArg)
 	}
@@ -455,7 +455,7 @@ func (p *VolumePlugin) UnmountVolume(req *volume.UnmountRequest) error {
 
 	logrus.Infof("Unmounting volume %s using plugin %s for container %s", req.Name, p.Name, req.ID)
 
-	resp, err := p.sendRequest(req, unmountPath)
+	resp, err := p.sendRequest(ctx, req, unmountPath)
 	if err != nil {
 		return err
 	}

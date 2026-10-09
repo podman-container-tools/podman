@@ -9,7 +9,7 @@ import (
 )
 
 func (ic *ContainerEngine) ContainerStat(ctx context.Context, nameOrID string, containerPath string) (*entities.ContainerStatReport, error) {
-	container, err := ic.Libpod.LookupContainer(nameOrID)
+	container, err := ic.Libpod.LookupContainer(ctx, nameOrID)
 	if err != nil {
 		return nil, err
 	}

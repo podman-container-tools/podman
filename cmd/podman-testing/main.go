@@ -24,8 +24,8 @@ var (
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-			return before()
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			return before(cmd.Context())
 		},
 		PersistentPostRunE: func(_ *cobra.Command, _ []string) error {
 			return after()
@@ -46,7 +46,7 @@ func init() {
 	fl.StringVar(&podmanConfig.RegistriesConf, "registries-conf", os.Getenv("REGISTRIES_CONF"), "path to registries.conf (REGISTRIES_CONF)")
 }
 
-func before() error {
+func before(ctx context.Context) error {
 	if globalLogLevel != "" {
 		parsedLogLevel, err := logrus.ParseLevel(globalLogLevel)
 		if err != nil {
@@ -72,7 +72,7 @@ func before() error {
 	}
 	podmanConfig.ContainersConf = containersConf
 
-	if err := testingEngineBefore(&podmanConfig); err != nil {
+	if err := testingEngineBefore(ctx, &podmanConfig); err != nil {
 		return fmt.Errorf("setting up testing engine: %w", err)
 	}
 	return nil

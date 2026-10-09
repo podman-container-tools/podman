@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"strconv"
 
 	jsoniter "github.com/json-iterator/go"
@@ -11,15 +12,15 @@ import (
 )
 
 var _ = Describe("podman machine info", func() {
-	It("machine info", func() {
+	It("machine info", func(ctx context.Context) {
 		info := new(infoMachine)
-		infoSession, err := mb.setCmd(info).run()
+		infoSession, err := mb.setCmd(ctx, info).run(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infoSession).Should(Exit(0))
 
 		// Verify go template works and check for number of machines
 		info = new(infoMachine)
-		infoSession, err = mb.setCmd(info.withFormat("{{.Host.NumberOfMachines}}")).run()
+		infoSession, err = mb.setCmd(ctx, info.withFormat("{{.Host.NumberOfMachines}}")).run(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infoSession).Should(Exit(0))
 		numMachines, err := strconv.Atoi(infoSession.outputToString())
@@ -27,18 +28,18 @@ var _ = Describe("podman machine info", func() {
 
 		// Create a machine and check if info has been updated
 		i := new(initMachine)
-		initSession, err := mb.setCmd(i.withFakeImage(mb)).run()
+		initSession, err := mb.setCmd(ctx, i.withFakeImage(mb)).run(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(initSession).To(Exit(0))
 
 		info = new(infoMachine)
-		infoSession, err = mb.setCmd(info.withFormat("{{.Host.NumberOfMachines}}")).run()
+		infoSession, err = mb.setCmd(ctx, info.withFormat("{{.Host.NumberOfMachines}}")).run(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infoSession).Should(Exit(0))
 		Expect(infoSession.outputToString()).To(Equal(strconv.Itoa(numMachines + 1)))
 
 		// Check if json is in correct format
-		infoSession, err = mb.setCmd(info.withFormat("json")).run()
+		infoSession, err = mb.setCmd(ctx, info.withFormat("json")).run(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infoSession).Should(Exit(0))
 

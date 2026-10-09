@@ -14,7 +14,7 @@ import (
 func ExportContainer(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	name := utils.GetName(r)
-	con, err := runtime.LookupContainer(name)
+	con, err := runtime.LookupContainer(r.Context(), name)
 	if err != nil {
 		utils.ContainerNotFound(w, name, err)
 		return
@@ -25,7 +25,7 @@ func ExportContainer(w http.ResponseWriter, r *http.Request) {
 	// NOTE: As described in w.Write() it automatically sets the http code to
 	// 200 on first write if no other code was set.
 
-	if err := con.Export(w); err != nil {
+	if err := con.Export(r.Context(), w); err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to export container: %w", err))
 		return
 	}

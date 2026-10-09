@@ -99,7 +99,7 @@ func CRImportCheckpoint(ctx context.Context, runtime *libpod.Runtime, restoreOpt
 			return nil, fmt.Errorf("restoring containers into pod: %w", err)
 		}
 		// The runtime also has to support it
-		if !crutils.CRRuntimeSupportsPodCheckpointRestore(runtime.GetOCIRuntimePath()) {
+		if !crutils.CRRuntimeSupportsPodCheckpointRestore(ctx, runtime.GetOCIRuntimePath()) {
 			return nil, fmt.Errorf("runtime %s does not support pod restore", runtime.GetOCIRuntimePath())
 		}
 
@@ -114,7 +114,7 @@ func CRImportCheckpoint(ctx context.Context, runtime *libpod.Runtime, restoreOpt
 		// Restoring into an existing Pod
 		ctrConfig.Pod = pod.ID()
 
-		infraContainer, err := pod.InfraContainer()
+		infraContainer, err := pod.InfraContainer(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("cannot retrieve infra container from pod %q: %w", ctrConfig.Pod, err)
 		}

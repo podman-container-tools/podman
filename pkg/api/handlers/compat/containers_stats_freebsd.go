@@ -3,6 +3,7 @@
 package compat
 
 import (
+	"context"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -21,7 +22,7 @@ func getPreCPUStats(stats *define.ContainerStats) (CPUStats, error) {
 	}, nil
 }
 
-func statsContainerJSON(_ *libpod.Container, stats *define.ContainerStats, preCPUStats CPUStats, onlineCPUs int) (StatsJSON, error) {
+func statsContainerJSON(_ context.Context, _ *libpod.Container, stats *define.ContainerStats, preCPUStats CPUStats, onlineCPUs int) (StatsJSON, error) {
 	return StatsJSON{
 		Stats: Stats{
 			Read: time.Now(),

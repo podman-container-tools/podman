@@ -3,12 +3,13 @@
 package libpod
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 )
 
-func (r *ConmonOCIRuntime) createRootlessContainer(_ *Container, _ *ContainerCheckpointOptions, _ bool) (int64, error) {
+func (r *ConmonOCIRuntime) createRootlessContainer(_ context.Context, _ *Container, _ *ContainerCheckpointOptions, _ bool) (int64, error) {
 	return -1, errors.New("unsupported (*ConmonOCIRuntime) createRootlessContainer")
 }
 
