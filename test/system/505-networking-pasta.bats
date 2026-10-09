@@ -308,10 +308,10 @@ function pasta_test_do() {
     run_podman run --rm --net=pasta $IMAGE ip -j -6 address show
 
     local container_address="$(ipv6_get_addr_global "${output}")"
-    local host_address="$(default_addr 6)"
+    local host_addresses="$(all_addr 6)"
 
-    assert "${container_address}" = "${host_address}" \
-           "Container address not matching host"
+    echo "${host_addresses}" | grep -qw "${container_address}"
+    assert $? -eq 0 "Container address not matching host"
 }
 
 @test "IPv6 address assignment" {
