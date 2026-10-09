@@ -2347,10 +2347,23 @@ func translateUnitDependencies(serviceUnitFile *parser.UnitFile, unitsInfoMap ma
 			if _, ok := SupportedExtensions[ext]; ok {
 				unitInfo, ok := unitsInfoMap[dep]
 				if !ok {
-					return fmt.Errorf("unable to translate dependency for %s", dep)
+					// For template units not in unitsInfoMap (e.g., rootful templates
+					// referenced by rootless units), compute the service name from the filename.
+					// Template units only need the service name for dependency translation.
+					if strings.Contains(dep, "@") {
+						serviceName, err := GetUnitServiceName(&parser.UnitFile{Filename: dep})
+						if err != nil {
+							return fmt.Errorf("unable to translate dependency for %s: %w", dep, err)
+						}
+						translatedDep = fmt.Sprintf("%s.service", serviceName)
+						translated = true
+					} else {
+						return fmt.Errorf("unable to translate dependency for %s", dep)
+					}
+				} else {
+					translatedDep = unitInfo.ServiceFileName()
+					translated = true
 				}
-				translatedDep = unitInfo.ServiceFileName()
-				translated = true
 			} else {
 				translatedDep = dep
 			}
