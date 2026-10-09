@@ -1716,7 +1716,8 @@ func AutocompleteImageScpCompressionFormat(_ *cobra.Command, _ []string, _ strin
 func AutocompleteWaitCondition(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	states := []string{
 		"unknown", "configured", "created", "exited",
-		"healthy", "initialized", "paused", "removing", "running",
+		"healthy", "initialized", "next-exit", "not-running",
+		"paused", "removed", "removing", "running",
 		"stopped", "stopping", "unhealthy",
 	}
 	return states, cobra.ShellCompDirectiveNoFileComp
