@@ -40,6 +40,16 @@ Hyper-V Administrators group. Prompts for confirmation before each action unless
 Show the list of VSock registry entries and the current user's Hyper-V
 Administrators group membership status.
 
+#### **--format**=*format*
+
+Format the status output to JSON or a Go template. Valid only when used with **--status**.
+
+| **Placeholder**                 | **Description**                                                         |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| .CurrentUserIsHyperVAdmin       | Whether the current user is a member of the Hyper-V Administrators group|
+| .HasRequiredRegistryEntries     | Whether all required Hyper-V vsock registry entries exist               |
+| .Status                         | Overall status (`applied`, `notApplied`, `partiallyApplied`)            |
+
 ## EXAMPLE
 
 Create the required registry entries and add the current user to the Hyper-V
@@ -51,6 +61,16 @@ PS> podman system hyperv-prep
 Show existing registry entries and group membership status:
 ```powershell
 PS> podman system hyperv-prep --status
+```
+
+Show status in JSON format:
+```
+podman system hyperv-prep --status --format=json
+```
+
+Format status output using a Go template:
+```
+podman system hyperv-prep --status --format="{{.Status}}"
 ```
 
 Remove all Podman VSock registry entries and the current user from the Hyper-V
