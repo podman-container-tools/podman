@@ -26,6 +26,10 @@ func TestSplitVolume(t *testing.T) {
 		{"no options uses defaults", 3, "/host:/guest", "vol3", "/host", "/guest", false, "none"},
 		{"source only targets itself", 0, "/host", "vol0", "/host", "/host", false, "none"},
 		{"unknown option is ignored", 0, "/host:/guest:bogus", "vol0", "/host", "/guest", false, "none"},
+		{"rw then ro resolves to ro", 0, "/host:/guest:rw,ro", "vol0", "/host", "/guest", true, "none"},
+		{"ro then rw resolves to rw", 0, "/host:/guest:ro,rw", "vol0", "/host", "/guest", false, "none"},
+		{"security model then ro", 0, "/host:/guest:security_model=passthrough,ro", "vol0", "/host", "/guest", true, "passthrough"},
+		{"explicit ro option with empty element", 0, "/host:/guest:ro,", "vol0", "/host", "/guest", true, "none"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

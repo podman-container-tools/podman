@@ -36,13 +36,25 @@ func init() {
 	})
 }
 
+func client9pMountOptions(readOnly bool) string {
+	opts := "trans=fd,rfdno=3,wfdno=3,version=9p2000.L"
+	if readOnly {
+		opts += ",ro"
+	}
+	return opts
+}
+
 func remoteDirClient(cmd *cobra.Command, args []string) error {
 	port, err := strconv.Atoi(args[0])
 	if err != nil {
 		return fmt.Errorf("error parsing port number: %w", err)
 	}
 
-	if err := client9p(cmd.Context(), uint32(port), args[1]); err != nil {
+	readOnly, _ := strconv.ParseBool(os.Getenv("CONTAINERS_MACHINE_9P_READ_ONLY"))
+	if !readOnly {
+		readOnly, _ = strconv.ParseBool(os.Getenv("PODMAN_9P_READ_ONLY"))
+	}
+	if err := client9p(cmd.Context(), uint32(port), args[1], readOnly); err != nil {
 		return err
 	}
 
@@ -51,7 +63,7 @@ func remoteDirClient(cmd *cobra.Command, args []string) error {
 
 // This is Linux-only as we only intend for this function to be used inside the
 // `podman machine` VM, which is guaranteed to be Linux.
-func client9p(ctx context.Context, portNum uint32, mountPath string) error {
+func client9p(ctx context.Context, portNum uint32, mountPath string, readOnly bool) error {
 	cleanPath, err := filepath.Abs(mountPath)
 	if err != nil {
 		return fmt.Errorf("absolute path for %s: %w", mountPath, err)
@@ -115,7 +127,7 @@ func client9p(ctx context.Context, portNum uint32, mountPath string) error {
 
 		// This is ugly, but it lets us use real kernel mount code,
 		// instead of maintaining our own FUSE 9p implementation.
-		cmd := exec.CommandContext(ctx, "mount", "-t", "9p", "-o", "trans=fd,rfdno=3,wfdno=3,version=9p2000.L", "9p", mountPath)
+		cmd := exec.CommandContext(ctx, "mount", "-t", "9p", "-o", client9pMountOptions(readOnly), "9p", mountPath)
 		cmd.ExtraFiles = []*os.File{vsock}
 
 		output, err := cmd.CombinedOutput()
