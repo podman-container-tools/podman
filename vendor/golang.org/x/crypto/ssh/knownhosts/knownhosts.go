@@ -554,9 +554,7 @@ func (h *hashedHost) match(a addr) bool {
 	return bytes.Equal(hashHost(Normalize(a.String()), h.salt), h.hash)
 }
 
-// trimSpace removes leading and trailing ASCII whitespace (space and tab). It
-// is used instead of bytes.TrimSpace to match OpenSSH behavior, which strictly
-// parses only ASCII space (0x20) and tab (0x09) as whitespace.
+// trimSpace removes leading and trailing ASCII space and tab.
 func trimSpace(in []byte) []byte {
 	return bytes.Trim(in, " \t")
 }

@@ -878,6 +878,9 @@ var certKeyAlgoNames = map[string]string{
 	ssh.CertAlgoSKECDSA256v01:  ssh.KeyAlgoSKECDSA256,
 	ssh.CertAlgoED25519v01:     ssh.KeyAlgoED25519,
 	ssh.CertAlgoSKED25519v01:   ssh.KeyAlgoSKED25519,
+	ssh.CertAlgoMLDSA44v01Go:   ssh.KeyAlgoMLDSA44,
+	ssh.CertAlgoMLDSA65v01Go:   ssh.KeyAlgoMLDSA65,
+	ssh.CertAlgoMLDSA87v01Go:   ssh.KeyAlgoMLDSA87,
 }
 
 // underlyingAlgo returns the signature algorithm associated with algo (which is
