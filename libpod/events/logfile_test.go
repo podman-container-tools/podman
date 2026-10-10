@@ -3,9 +3,12 @@
 package events
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -171,4 +174,55 @@ func TestRenameLog(t *testing.T) {
 	require.Error(t, os.Remove(source.Name()))
 	require.NoError(t, os.Remove(target.Name()))
 	require.Equal(t, beforeRename, afterRename)
+}
+
+// TestReadLogFileUntilInPast is a regression test for #29579: reading events
+// from the file backend with an --until time already in the past must still
+// return the historical events (and terminate) rather than immediately stopping
+// the tail and dropping them.
+func TestReadLogFileUntilInPast(t *testing.T) {
+	eventer, err := newLogFileEventer(EventerOptions{
+		LogFilePath: filepath.Join(t.TempDir(), "events.log"),
+	})
+	require.NoError(t, err)
+
+	// Write a container event that happened before the --until boundary below.
+	err = eventer.Write(Event{
+		Type:   Container,
+		Status: Start,
+		Name:   "test-container",
+		ID:     "1234567890ab",
+		Time:   time.Now().Add(-2 * time.Minute),
+	})
+	require.NoError(t, err)
+
+	// Mirror `podman events --until <past-timestamp>`: the CLI reads from the
+	// start and streams, with an absolute until time that is already in the
+	// past (one minute ago, i.e. after the event written above).
+	eventChannel := make(chan ReadResult)
+	options := ReadOptions{
+		EventChannel: eventChannel,
+		Until:        time.Now().Add(-1 * time.Minute).Format(time.RFC3339),
+		Stream:       true,
+		FromStart:    true,
+	}
+	require.NoError(t, eventer.Read(context.Background(), options))
+
+	var got []*Event
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case result, ok := <-eventChannel:
+			if !ok {
+				// Channel closed: the read terminated as expected.
+				require.Len(t, got, 1, "historical event before a past --until must be returned")
+				require.Equal(t, "test-container", got[0].Name)
+				return
+			}
+			require.NoError(t, result.Error)
+			got = append(got, result.Event)
+		case <-timeout:
+			t.Fatal("Read did not terminate; a past --until must not follow the log file")
+		}
+	}
 }
