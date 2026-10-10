@@ -1075,6 +1075,9 @@ BOGUS=foo
 		Entry("NetworkAlias", "network-alias.container"),
 		Entry("CgroupMode", "cgroups-mode.container"),
 		Entry("Container - No Default Dependencies", "no_deps.container"),
+		Entry("Container - Wants Mount Dependency", "mounts-dependency-wants.container"),
+		Entry("Container - Requires Mount Dependency", "mounts-dependency-requires.container"),
+		Entry("Container - No Mount Dependency", "mounts-dependency-none.container"),
 		Entry("retry.container", "retry.container"),
 		Entry("reloadcmd.container", "reloadcmd.container"),
 		Entry("reloadsignal.container", "reloadsignal.container"),
@@ -1240,6 +1243,7 @@ BOGUS=foo
 
 	DescribeTable("Running expected error quadlet test case",
 		runErrorQuadletTestCase,
+		Entry("SetMountsDependency - invalid value", "mounts-dependency-invalid.container", "converting \"mounts-dependency-invalid.container\": unsupported value for SetMountsDependency: invalid"),
 		Entry("idmapping-with-remap.container", "idmapping-with-remap.container", "converting \"idmapping-with-remap.container\": deprecated Remap keys are set along with explicit mapping keys"),
 		Entry("noimage.container", "noimage.container", "converting \"noimage.container\": no Image or Rootfs key specified"),
 		Entry("pod.non-quadlet.container", "pod.non-quadlet.container", "converting \"pod.non-quadlet.container\": pod test-pod is not Quadlet based"),

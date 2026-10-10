@@ -2378,6 +2378,7 @@ Valid options for `[Quadlet]` are listed below:
 | **[Quadlet] options**      | **Description**                                   |
 |----------------------------|---------------------------------------------------|
 | DefaultDependencies=false  | Disable implicit network dependencies to the unit |
+| SetMountsDependency=       | Configure dependencies for mount source paths     |
 
 ### `DefaultDependencies=`
 
@@ -2388,6 +2389,28 @@ When set to false, Quadlet will **not** add a dependency (After=, Wants=) to
 
 Note, this option is set in the `[Quadlet]` section. The _systemd_ `[Unit]` section
 has an option with the same name but a different meaning.
+
+### `SetMountsDependency=`
+
+Configure the systemd mount dependency generated for mount source paths. This option applies
+to all mount source paths in the Quadlet file.
+
+Valid values are:
+
+- `Requires` (default): add `RequiresMountsFor=`. The service is stopped if the mount becomes
+  inactive.
+- `Wants` (systemd 256 or later): add `WantsMountsFor=`. The mount is started when the service
+  starts, but the service is not stopped if the mount becomes inactive.
+- `None`: do not add a mount dependency.
+
+This setting does not change Quadlet's dependency on its container storage directory.
+
+For example, to use a weaker dependency for an automount share:
+
+```
+[Quadlet]
+SetMountsDependency=Wants
+```
 
 ## EXAMPLES
 

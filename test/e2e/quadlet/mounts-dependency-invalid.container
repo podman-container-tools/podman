@@ -1,0 +1,7 @@
+## assert-failed
+
+[Quadlet]
+SetMountsDependency=invalid
+
+[Container]
+Image=localhost/imagename
