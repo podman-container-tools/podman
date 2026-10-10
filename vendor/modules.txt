@@ -7,8 +7,8 @@ cyphar.com/go-pathrs/procfs
 # dario.cat/mergo v1.0.2
 ## explicit; go 1.13
 dario.cat/mergo
-# github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c
-## explicit; go 1.16
+# github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4
+## explicit; go 1.17
 github.com/Azure/go-ansiterm
 github.com/Azure/go-ansiterm/winterm
 # github.com/BurntSushi/toml v1.6.0
@@ -450,7 +450,7 @@ github.com/moby/moby/api/types/storage
 github.com/moby/moby/api/types/swarm
 github.com/moby/moby/api/types/system
 github.com/moby/moby/api/types/volume
-# github.com/moby/moby/client v0.6.1
+# github.com/moby/moby/client v0.6.2
 ## explicit; go 1.24
 github.com/moby/moby/client
 github.com/moby/moby/client/internal
