@@ -11,6 +11,7 @@ import (
 	pluginapi "github.com/docker/go-plugins-helpers/volume"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/storage/pkg/mount"
 	"golang.org/x/sys/unix"
 )
 
@@ -37,9 +38,18 @@ func (v *Volume) mount() error {
 		return err
 	}
 
-	// If the count is non-zero, the volume is already mounted.
-	// Nothing to do.
 	if v.state.MountCount > 0 {
+		if !v.UsesVolumeDriver() && v.config.Driver != define.VolumeDriverImage {
+			mounted, err := mount.Mounted(v.config.MountPoint)
+			if err != nil {
+				return fmt.Errorf("checking if volume %s is mounted: %w", v.Name(), err)
+			}
+			if !mounted {
+				return fmt.Errorf("volume %s is expected to be mounted, but mountpoint %s is not mounted (mount count: %d)",
+					v.Name(), v.config.MountPoint, v.state.MountCount)
+			}
+		}
+
 		v.state.MountCount++
 		logrus.Debugf("Volume %s mount count now at %d", v.Name(), v.state.MountCount)
 		return v.save()
