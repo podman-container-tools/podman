@@ -1,7 +1,9 @@
 ## assert-key-is Unit RequiresMountsFor "%t/containers"
 ## assert-key-is Service Type oneshot
-## !assert-key-is Service RemainAfterExit yes
-## assert-key-is-regex Service ExecStart ".*/podman volume create --ignore systemd-basic"
+## assert-key-is Service RemainAfterExit yes
+## assert-key-is-regex Service ExecStartPre ".*/podman volume create --ignore systemd-basic"
+## assert-key-is-regex Service ExecStart ".*/podman volume mount systemd-basic"
+## assert-key-is-regex Service ExecStop ".*/podman volume unmount systemd-basic"
 ## assert-key-is Service SyslogIdentifier "%N"
 
 [Volume]
