@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"net/http"
 	"os"
@@ -437,7 +438,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 	reporter = os.Stderr
 
 	if logfile != nil {
-		logrus.SetOutput(logfile)
+		log.SetOutput(logfile)
 		stdout = logfile
 		stderr = logfile
 		reporter = logfile
