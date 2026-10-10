@@ -111,8 +111,7 @@ function Win-SSHProxy {
 
     New-Item -ItemType Directory -Force -Path './bin/windows'
     if (-Not $Version) {
-        $match = Select-String -Path "$PSScriptRoot\go.mod" -Pattern 'github.com/containers/gvisor-tap-vsock\s+(v[\d\.]+)'
-        $Version = $match.Matches.Groups[1].Value
+        $Version = 'v0.9.0'
     }
     Write-Host "Downloading gvproxy version $version"
     if ($architecture -eq 'amd64') {

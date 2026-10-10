@@ -441,7 +441,7 @@ jobs:
           cache: false
       - name: "Install gvproxy"
         run: |
-          VERSION=$(go list -m -f '{{.Version}}' github.com/containers/gvisor-tap-vsock)
+          VERSION=v0.9.0
           echo "Installing gvproxy $VERSION"
           sudo mkdir -p /usr/local/libexec/podman/
           sudo curl --fail -L -o /usr/local/libexec/podman/gvproxy https://github.com/containers/gvisor-tap-vsock/releases/download/$VERSION/gvproxy-linux-${{ matrix.os.arch }}

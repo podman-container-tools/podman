@@ -5,6 +5,7 @@ package machine
 import (
 	"errors"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 
@@ -42,10 +43,10 @@ func backoffForProcess(p *psutil.Process) error {
 		// double the time
 		sleepInterval += sleepInterval
 	}
-	return fmt.Errorf("process %d has not ended", p.Pid)
+	return fmt.Errorf("process has not ended (PID %d)", p.Pid)
 }
 
-// / waitOnProcess takes a pid and sends a sigterm to it. it then waits for the
+// waitOnProcess takes a pid and sends a sigterm to it. it then waits for the
 // process to not exist.  if the sigterm does not end the process after an interval,
 // then sigkill is sent.  it also waits for the process to exit after the sigkill too.
 func waitOnProcess(processID int) error {
@@ -64,7 +65,35 @@ func waitOnProcess(processID int) error {
 		return nil
 	}
 
-	if err := p.Kill(); err != nil {
+	// Start a goroutine that waits until the gvproxy process completes.
+	// This is necessary to reaps the process and so that Process.IsRunning()
+	// in backoffForProcess() returns false. Otherwise the process will
+	// be defunct and backoffForProcess fails because Process.IsRunning()
+	// returns true
+	go func() {
+		gv, err := os.FindProcess(processID)
+		if err != nil {
+			logrus.Errorf("failed to find process %d: %v", processID, err)
+			return
+		}
+		if _, err = gv.Wait(); err != nil {
+			logrus.Debugf("gvproxy exited: %v", err)
+		}
+	}()
+
+	if err = p.Terminate(); err != nil {
+		if errors.Is(err, syscall.ESRCH) {
+			logrus.Debugf("Gvproxy already dead, exiting cleanly")
+			return nil
+		}
+		return err
+	}
+
+	if err = backoffForProcess(p); err == nil {
+		return nil
+	}
+
+	if err = p.Kill(); err != nil {
 		if errors.Is(err, syscall.ESRCH) {
 			logrus.Debugf("Gvproxy already dead, exiting cleanly")
 			return nil
