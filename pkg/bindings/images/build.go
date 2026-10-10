@@ -961,7 +961,14 @@ func processBuildResponse(response *bindings.APIResponse, stdout io.Writer, save
 // prepareLocalRequestBody prepares HTTP request parameters for local build API calls.
 // It sets up local context directory and additional build contexts using already translated paths.
 func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *BuildFilePaths, options types.BuildOptions) (*RequestParts, error) {
-	requestParts.Params.Set("localcontextdir", options.ContextDirectory)
+	// ContextDirectory is the client's path (build() creates secret and stdin files under it); the
+	// server's path is in RemoteContextDirectory when localapi translated it, and empty when the
+	// caller already passed a server path as ContextDirectory.
+	remoteContextDir := options.ContextDirectory
+	if options.RemoteContextDirectory != "" {
+		remoteContextDir = options.RemoteContextDirectory
+	}
+	requestParts.Params.Set("localcontextdir", remoteContextDir)
 
 	for name, context := range options.AdditionalBuildContexts {
 		switch {
@@ -982,6 +989,9 @@ func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *B
 // rather than uploading build contexts. The containerFiles and options parameters should contain
 // already translated paths pointing to files on the remote server, making it suitable for scenarios
 // where build contexts already exist on the server (e.g., shared filesystems, mounted volumes).
+// options.ContextDirectory stays the client's path to the shared context directory, where secret
+// and stdin files are written; options.RemoteContextDirectory, when set, is the path the request
+// sends for it.
 //
 // The context directory and containerFiles paths must be accessible on the remote server.
 // Missing paths will result in build errors.
