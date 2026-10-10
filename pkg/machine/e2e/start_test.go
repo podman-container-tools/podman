@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -397,6 +399,84 @@ var _ = Describe("podman machine start", func() {
 		startSession, err = mb.setCmd(s).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(startSession).To(Exit(0))
+	})
+
+	It("start recovers from stale Starting state", func() {
+		name := randomString()
+		i := new(initMachine)
+		initSession, err := mb.setName(name).setCmd(i.withImage(mb.imagePath)).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(initSession).To(Exit(0))
+
+		// Verify machine state is Stopped (init does not start the machine)
+		inspect := new(inspectMachine)
+		inspectSession, err := mb.setName(name).setCmd(inspect.withFormat("{{.State}}")).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inspectSession).To(Exit(0))
+		Expect(inspectSession.outputToString()).To(Equal(define.Stopped))
+
+		// Get the machine config file path
+		inspect2 := new(inspectMachine)
+		inspectSession2, err := mb.setName(name).setCmd(inspect2.withFormat("{{.ConfigDir.Path}}")).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inspectSession2).To(Exit(0))
+		configDir := inspectSession2.outputToString()
+		configPath := filepath.Join(configDir, name+".json")
+
+		// Read the config file
+		configContent, err := os.ReadFile(configPath)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Parse the JSON config
+		var config map[string]any
+		err = jsoniter.Unmarshal(configContent, &config)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify Starting is false in the persisted config
+		Expect(config["Starting"]).To(BeFalse())
+
+		// Set Starting=true to simulate stale persisted state
+		config["Starting"] = true
+
+		// Write the modified config back
+		modifiedConfig, err := jsoniter.Marshal(config)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.WriteFile(configPath, modifiedConfig, 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify machine is still Stopped (actual provider state hasn't changed)
+		inspect3 := new(inspectMachine)
+		inspectSession3, err := mb.setName(name).setCmd(inspect3.withFormat("{{.State}}")).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inspectSession3).To(Exit(0))
+		Expect(inspectSession3.outputToString()).To(Equal(define.Stopped))
+
+		// Now attempt to start the machine - the stale Starting state should be recovered
+		s := new(startMachine)
+		startSession, err := mb.setName(name).setCmd(s).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(startSession).To(Exit(0))
+
+		// Verify the machine is now running
+		inspect4 := new(inspectMachine)
+		inspectSession4, err := mb.setName(name).setCmd(inspect4.withFormat("{{.State}}")).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inspectSession4).To(Exit(0))
+		Expect(inspectSession4.outputToString()).To(Equal(define.Running))
+
+		// Read the config file again to verify Starting was cleared
+		configContent2, err := os.ReadFile(configPath)
+		Expect(err).ToNot(HaveOccurred())
+		var config2 map[string]any
+		err = jsoniter.Unmarshal(configContent2, &config2)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(config2["Starting"]).To(BeFalse())
+
+		// Clean up
+		stop := new(stopMachine)
+		stopSession, err := mb.setName(name).setCmd(stop).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stopSession).To(Exit(0))
 	})
 })
 

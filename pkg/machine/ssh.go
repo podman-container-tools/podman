@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +37,13 @@ func LocalhostSSHWithStdin(username, identityPath, name string, sshPort int, inp
 	return localhostBuiltinSSH(username, identityPath, name, sshPort, inputArgs, true, stdin)
 }
 
+// LocalhostSSHWithCtx is like LocalhostSSHSilent but accepts a context for cancellation.
+// It is intended for operations that need to be cancellable (e.g., readiness checks)
+// and should not be used for long-running commands where cancellation is not desired.
+func LocalhostSSHWithCtx(ctx context.Context, username, identityPath, name string, sshPort int, inputArgs []string) error {
+	return localhostBuiltinSSHWithCtx(ctx, username, identityPath, name, sshPort, inputArgs, false, nil)
+}
+
 // LocalhostSSHCopy uses scp to copy files from/to a localhost machine using ssh.
 func LocalhostSSHCopy(username, identityPath string, sshPort int, srcPath, destPath string, isSrcFromGuest, quiet bool) error {
 	var src, dest string
@@ -68,6 +76,10 @@ func (w *sshDebugLogger) Write(p []byte) (int, error) {
 }
 
 func localhostBuiltinSSH(username, identityPath, name string, sshPort int, inputArgs []string, passOutput bool, stdin io.Reader) error {
+	return localhostBuiltinSSHWithCtx(context.Background(), username, identityPath, name, sshPort, inputArgs, passOutput, stdin)
+}
+
+func localhostBuiltinSSHWithCtx(ctx context.Context, username, identityPath, name string, sshPort int, inputArgs []string, passOutput bool, stdin io.Reader) error {
 	config, err := createLocalhostConfig(username, identityPath) // WARNING: This MUST NOT be generalized to allow communication over untrusted networks.
 	if err != nil {
 		return err
@@ -97,6 +109,24 @@ func localhostBuiltinSSH(username, identityPath, name string, sshPort int, input
 		session.Stderr = logger
 	}
 
+	// If context has a deadline, wrap session.Run to respect it
+	if _, ok := ctx.Deadline(); ok {
+		resultChan := make(chan error, 1)
+
+		go func() {
+			resultChan <- session.Run(cmd)
+		}()
+
+		select {
+		case err := <-resultChan:
+			return err
+		case <-ctx.Done():
+			// Context cancelled - close session to unblock the goroutine
+			session.Close()
+			return fmt.Errorf("ssh command %q on machine %q cancelled: %w", cmd, name, ctx.Err())
+		}
+	}
+
 	return session.Run(cmd)
 }
 
@@ -116,13 +146,13 @@ func createLocalhostConfig(user string, identityPath string) (*ssh.ClientConfig,
 
 	return &ssh.ClientConfig{
 		// Not specifying ciphers / MACs seems to allow fairly weak ciphers. This config is restricted
-		// to connecting to localhost: where we rely on the kernel’s process isolation, not primarily on cryptography.
-		User: user,
-		Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		// This config is restricted to connecting to localhost (and to a VM we manage),
-		// we rely on the kernel’s process isolation, not on cryptography,
-		// This would be UNACCEPTABLE for most other uses.
+		// to connecting to localhost: where we rely on the kernel's process isolation, not primarily on cryptography.
+		User:            user,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		// This config is restricted to connecting to localhost (and to a VM we manage),
+		// we rely on the kernel's process isolation, not on cryptography,
+		// This would be UNACCEPTABLE for most other uses.
 	}, nil
 }
 
@@ -131,7 +161,7 @@ func localhostNativeSSH(username, identityPath, name string, sshPort int, inputA
 	port := strconv.Itoa(sshPort)
 	interactive := true
 
-	args := append(LocalhostSSHArgs(), // WARNING: This MUST NOT be generalized to allow communication over untrusted networks.
+	args := append(LocalhostSSHArgs(), // Warning: This MUST NOT be generalized to allow communication over untrusted networks.
 		"-i", identityPath,
 		"-p", port,
 		sshDestination)
@@ -164,7 +194,7 @@ func localhostNativeSSH(username, identityPath, name string, sshPort int, inputA
 // WARNING: This MUST NOT be used to communicate over untrusted networks.
 func LocalhostSSHArgs() []string {
 	// This config is restricted to connecting to localhost (and to a VM we manage),
-	// we rely on the kernel’s process isolation, not on cryptography,
+	// we rely on the kernel's process isolation, not on cryptography,
 	// This would be UNACCEPTABLE for most other uses.
 	return []string{
 		"-o", "IdentitiesOnly=yes",

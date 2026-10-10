@@ -1,6 +1,7 @@
 package shim
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -23,6 +24,7 @@ const (
 	dockerSock           = "/var/run/docker.sock"
 	defaultGuestSock     = "/run/user/%d/podman/podman.sock"
 	dockerConnectTimeout = 5 * time.Second
+	sshReadinessTimeout  = 30 * time.Second
 )
 
 var (
@@ -173,13 +175,21 @@ func conductVMReadinessCheck(mc *vmconfigs.MachineConfig, maxBackoffs int, backo
 		// CoreOS users have reported the same observation but
 		// the underlying source of the issue remains unknown.
 
-		if sshError = machine.LocalhostSSHSilent(mc.SSH.RemoteUsername, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, []string{"true"}); sshError != nil {
-			logrus.Debugf("SSH readiness check for machine failed: %v", sshError)
-			continue
+		// Use a timeout context for the SSH readiness check to prevent indefinite blocking
+		// when the SSH server hangs (e.g., due to interoperability issues like OpenSSH 10.2p1)
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), sshReadinessTimeout)
+			defer cancel()
+			if sshError = machine.LocalhostSSHWithCtx(ctx, mc.SSH.RemoteUsername, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, []string{"true"}); sshError != nil {
+				logrus.Debugf("SSH readiness check for machine failed: %v", sshError)
+				return
+			}
+			connected = true
+			sshError = nil
+		}()
+		if connected {
+			break
 		}
-		connected = true
-		sshError = nil
-		break
 	}
 	return connected, sshError, err
 }
