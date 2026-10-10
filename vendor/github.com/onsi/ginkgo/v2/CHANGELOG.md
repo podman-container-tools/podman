@@ -6,6 +6,11 @@
 
 ### Maintenance
 
+## 2.33.1
+
+### Fixes
+- Add several missing fields to spec report JSON output.
+
 ## 2.33.0
 
 ### Features

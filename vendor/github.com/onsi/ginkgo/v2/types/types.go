@@ -282,12 +282,17 @@ func (report SpecReport) MarshalJSON() ([]byte, error) {
 		LeafNodeLocation                             CodeLocation
 		LeafNodeLabels                               []string
 		LeafNodeSemVerConstraints                    []string
+		LeafNodeComponentSemVerConstraints           map[string][]string
 		LeafNodeText                                 string
+		SpecPriority                                 int
+		IsSerial                                     bool
+		IsInOrderedContainer                         bool
 		State                                        SpecState
 		StartTime                                    time.Time
 		EndTime                                      time.Time
 		RunTime                                      time.Duration
 		ParallelProcess                              int
+		RunningInParallel                            bool
 		Failure                                      *Failure `json:",omitempty"`
 		NumAttempts                                  int
 		MaxFlakeAttempts                             int
@@ -308,12 +313,17 @@ func (report SpecReport) MarshalJSON() ([]byte, error) {
 		LeafNodeLocation:                             report.LeafNodeLocation,
 		LeafNodeLabels:                               report.LeafNodeLabels,
 		LeafNodeSemVerConstraints:                    report.LeafNodeSemVerConstraints,
+		LeafNodeComponentSemVerConstraints:           report.LeafNodeComponentSemVerConstraints,
 		LeafNodeText:                                 report.LeafNodeText,
+		SpecPriority:                                 report.SpecPriority,
 		State:                                        report.State,
+		IsSerial:                                     report.IsSerial,
+		IsInOrderedContainer:                         report.IsInOrderedContainer,
 		StartTime:                                    report.StartTime,
 		EndTime:                                      report.EndTime,
 		RunTime:                                      report.RunTime,
 		ParallelProcess:                              report.ParallelProcess,
+		RunningInParallel:                            report.RunningInParallel,
 		Failure:                                      nil,
 		ReportEntries:                                nil,
 		NumAttempts:                                  report.NumAttempts,
