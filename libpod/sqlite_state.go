@@ -42,14 +42,20 @@ const (
 	sqliteOptionTXLock = "&_txlock=exclusive"
 	// Enforce case sensitivity for LIKE
 	sqliteOptionCaseSensitiveLike = "&_cslike=TRUE"
+	// Enable WAL (Write-Ahead Logging) mode to prevent freelist corruption under high concurrency
+	// and enable SQLite's broken-lock defenses (#29721).
+	// If WAL mode is not supported by the underlying filesystem (e.g. network filesystems
+	// lacking POSIX mmap), SQLite automatically falls back to standard journal mode.
+	sqliteOptionJournalMode = "&_journal_mode=WAL"
 
-	// Assembled sqlite options used when opening the database.
-	sqliteOptions = "?" +
+	// sqliteOptionsBase is the set of connection options that are always applied.
+	sqliteOptionsBase = "?" +
 		sqliteOptionLocation +
 		sqliteOptionSynchronous +
 		sqliteOptionForeignKeys +
 		sqliteOptionTXLock +
-		sqliteOptionCaseSensitiveLike
+		sqliteOptionCaseSensitiveLike +
+		sqliteOptionJournalMode
 )
 
 // NewSqliteState creates a new SQLite-backed state database.
@@ -58,11 +64,12 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 	state := new(SQLiteState)
 
 	dbPath := sqliteStatePath(runtime)
+	dbDir := filepath.Dir(dbPath)
 
 	// c/storage is set up *after* the DB - so even though we use the c/s
 	// root (or, for transient, runroot) dir, we need to make the dir
 	// ourselves.
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+	if err := os.MkdirAll(dbDir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating root directory: %w", err)
 	}
 
@@ -77,7 +84,9 @@ func NewSqliteState(runtime *Runtime) (_ State, defErr error) {
 	}
 	sqliteOptionBusyTimeout := "&_busy_timeout=" + busyTimeout
 
-	conn, err := sql.Open("sqlite3", dbPath+sqliteOptions+sqliteOptionBusyTimeout)
+	dsn := dbPath + sqliteOptionsBase + sqliteOptionBusyTimeout
+
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("initializing sqlite database: %w", err)
 	}
