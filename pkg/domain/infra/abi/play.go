@@ -239,6 +239,12 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		return nil, fmt.Errorf("running a service container requires starting the pod(s)")
 	}
 
+	if options.Platform != "" {
+		if _, _, _, err := bparse.Platform(options.Platform); err != nil {
+			return nil, fmt.Errorf("parsing platform: %w", err)
+		}
+	}
+
 	report := &entities.PlayKubeReport{}
 	validKinds := 0
 
@@ -1359,6 +1365,17 @@ func (ic *ContainerEngine) buildImageFromContainerfile(ctx context.Context, cwd 
 		buildOpts.Output = image
 		buildOpts.ContextDirectory = filepath.Dir(buildFile)
 		buildOpts.ReportWriter = writer
+		if options.Platform != "" {
+			os, arch, variant, err := bparse.Platform(options.Platform)
+			if err != nil {
+				return nil, fmt.Errorf("parsing platform: %w", err)
+			}
+			buildOpts.Platforms = append(buildOpts.Platforms, struct{ OS, Arch, Variant string }{
+				OS:      os,
+				Arch:    arch,
+				Variant: variant,
+			})
+		}
 		if _, _, err := ic.Libpod.Build(ctx, *buildOpts, []string{buildFile}...); err != nil {
 			return nil, err
 		}
@@ -1404,6 +1421,15 @@ func (ic *ContainerEngine) pullImageWithPolicy(ctx context.Context, writer io.Wr
 	pullOptions.Username = options.Username
 	pullOptions.Password = options.Password
 	pullOptions.InsecureSkipTLSVerify = options.SkipTLSVerify
+	if options.Platform != "" {
+		os, arch, variant, err := bparse.Platform(options.Platform)
+		if err != nil {
+			return nil, fmt.Errorf("parsing platform: %w", err)
+		}
+		pullOptions.OS = os
+		pullOptions.Architecture = arch
+		pullOptions.Variant = variant
+	}
 
 	pulledImages, err := ic.Libpod.LibimageRuntime().Pull(ctx, image, pullPolicy, pullOptions)
 	if err != nil {

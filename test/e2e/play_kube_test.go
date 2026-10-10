@@ -1548,6 +1548,18 @@ spec:
         - "60"
 `
 
+var platformPodYaml = `
+apiVersion: v1
+kind: Pod
+metadata:
+ name: platform-test
+spec:
+ containers:
+  - name: testctr
+    image: "alpine:latest"
+    command: ['sleep', '3600']
+`
+
 var (
 	defaultCtrName        = "testCtr"
 	defaultCtrCmd         = []string{"top"}
@@ -7024,5 +7036,23 @@ RUN echo "nested-build-marker" > /nested-marker`), 0o644)).To(Succeed())
 		session := podmanTest.Podman([]string{"kube", "play", "--multiple-pods", "--publish", fmt.Sprintf("%d:%d", GetPort(), 80), kubeYaml})
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithError(125, `number of Pod replicas aren't equal to the number of published ports: 2 replicas, 1 published ports`))
+	})
+
+	It("selects image platform", func() {
+		kubeYaml := filepath.Join(podmanTest.TempDir, "platform.yaml")
+
+		err := os.WriteFile(kubeYaml, []byte(platformPodYaml), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		cmd := podmanTest.Podman([]string{"kube", "play", "--platform=linux/arm64", kubeYaml})
+		cmd.WaitWithDefaultTimeout()
+		Expect(cmd).Should(Exit(0), cmd.ErrorToString())
+
+		inspect := podmanTest.PodmanExitCleanly("inspect", "alpine:latest")
+		image := inspect.InspectImageJSON()
+
+		Expect(image).To(HaveLen(1))
+		Expect(image[0].Os).To(Equal("linux"))
+		Expect(image[0].Architecture).To(Equal("arm64"))
 	})
 })
