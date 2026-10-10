@@ -958,10 +958,14 @@ func execTransferPodman(execUser *user.User, command []string, needToTag bool) (
 		_ = cmdLogin.Wait()
 	}()
 
-	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TERM=" + os.Getenv("TERM")}
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	// Use the physical path; $PWD may contain symlinks inaccessible to execUser.
+	cwd, err := syscall.Getwd()
+	if errors.Is(err, syscall.ENOENT) {
+		// The working directory was deleted, so start from an accessible directory.
+		cwd = "/"
+	} else if err != nil {
+		return nil, err
+	}
 	uid, err := strconv.ParseInt(execUser.Uid, 10, 32)
 	if err != nil {
 		return nil, err
@@ -970,7 +974,7 @@ func execTransferPodman(execUser *user.User, command []string, needToTag bool) (
 	if err != nil {
 		return nil, err
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+	sysProcAttr := &syscall.SysProcAttr{
 		Credential: &syscall.Credential{
 			Uid:         uint32(uid),
 			Gid:         uint32(gid),
@@ -978,11 +982,28 @@ func execTransferPodman(execUser *user.User, command []string, needToTag bool) (
 			NoSetGroups: false,
 		},
 	}
-	if needToTag {
-		cmd.Stdout = nil
-		return cmd.Output()
+	run := func(dir string) ([]byte, error) {
+		cmd := exec.Command(command[0], command[1:]...)
+		// An explicit directory makes exec check access after changing credentials.
+		cmd.Dir = dir
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TERM=" + os.Getenv("TERM")}
+		cmd.Stderr = os.Stderr
+		cmd.SysProcAttr = sysProcAttr
+		if needToTag {
+			return cmd.Output()
+		}
+		cmd.Stdout = os.Stdout
+		return nil, cmd.Run()
 	}
-	return nil, cmd.Run()
+
+	out, err := run(cwd)
+	// Preserve relative paths when possible. Only retry a failure to start;
+	// a command that has already run must not be executed a second time.
+	var pathErr *os.PathError
+	if cwd != "/" && errors.As(err, &pathErr) && pathErr.Op == "fork/exec" && errors.Is(err, fs.ErrPermission) {
+		return run("/")
+	}
+	return out, err
 }
 
 func getSigFilename(sigStoreDirPath string) (string, error) {

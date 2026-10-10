@@ -113,11 +113,23 @@ verify_iid_and_name() {
         if [[ -z "$notme" ]]; then
             skip "To run this test, set PODMAN_ROOTLESS_USER to a safe username"
         fi
-        _sudo() { command sudo -n -u "$notme" "$@"; }
+        _sudo() (
+            cd /
+            command sudo -n -u "$notme" "$@"
+        )
     fi
 
     # If we can't sudo, we can't test.
     _sudo true || skip "cannot sudo to $notme"
+
+    # Verify that save, load, and tag work when the destination user cannot access the caller's working directory.
+    if ! is_rootless; then
+        local private_dir=$PODMAN_TMPDIR/scp-cwd
+        mkdir -m 0700 "$private_dir"
+        run _sudo test -x "$private_dir"
+        assert "$status" -eq 1 "destination user cannot access the working directory"
+        cd "$private_dir"
+    fi
 
     # Preserve digest of original image; we will compare against it later
     run_podman image inspect --format '{{.RepoDigests}}' $IMAGE
@@ -176,6 +188,53 @@ verify_iid_and_name() {
     assert "$output" =~ "Error:.*$nope.*image not known" "Pushing nonexistent image"
 
     run_podman rmi foobar:123
+}
+
+
+@test "podman image scp transfer with relative paths" {
+    skip_if_remote "only applicable under local podman"
+    skip_if_rootless "tests local transfers between root-owned stores"
+
+    cd "$PODMAN_TMPDIR"
+    local conf=registries-$(random_string).conf
+    printf 'unqualified-search-registries = ["example.com"]\n' > "$conf"
+
+    # Both forms must resolve paths relative to the caller's directory.
+    run_podman --registries-conf "./$conf" image scp root@localhost::$IMAGE root@localhost::
+    run_podman --registries-conf="./$conf" image scp root@localhost::$IMAGE root@localhost::
+    run_podman --registries-conf "$PODMAN_TMPDIR/$conf" image scp root@localhost::$IMAGE root@localhost::
+
+    # A command failure must be returned without retrying from another directory.
+    run_podman 125 --registries-conf "./$conf" image scp root@localhost::example.com/no-such-image:missing root@localhost::
+    assert "$output" =~ "image not known" "missing image error is preserved"
+}
+
+
+@test "podman image scp transfer from a deleted directory" {
+    skip_if_remote "only applicable under local podman"
+    skip_if_rootless "tests local transfers between root-owned stores"
+
+    run_podman image inspect --format '{{.ID}}' $IMAGE
+    local expected_id=$output
+    local newname=localhost/scp-deleted-cwd:$(random_string)
+    local missing=localhost/scp-deleted-cwd-missing:$(random_string)
+    local deleted_dir=$PODMAN_TMPDIR/scp-deleted-cwd
+    mkdir "$deleted_dir"
+
+    # Keep the deleted working directory confined to a subshell for cleanup.
+    (
+        cd "$deleted_dir"
+        rmdir "$deleted_dir"
+
+        run_podman image scp root@localhost::$IMAGE root@localhost::$newname
+
+        run_podman 125 image scp root@localhost::$missing root@localhost::
+        assert "$output" =~ "image not known" "missing image error is preserved with a deleted working directory"
+    )
+
+    run_podman image inspect --format '{{.ID}}' $newname
+    assert "$output" == "$expected_id" "transfer from a deleted working directory preserves the image ID"
+    run_podman untag $IMAGE $newname
 }
 
 
