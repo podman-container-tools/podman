@@ -5,6 +5,8 @@ package integration
 import (
 	"cmp"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -426,6 +428,42 @@ var _ = Describe("Podman ps", func() {
 		Expect(psFilter).Should(ExitCleanly())
 
 		Expect(psAll.OutputToString()).To(Equal(psFilter.OutputToString()))
+	})
+
+	It("podman ps negated status filter does not need all", func() {
+		stoppedCtr := podmanTest.PodmanExitCleanly("create", "--name", "ps-negated-status-stopped", ALPINE, "ls", "/")
+
+		runningCtr := podmanTest.PodmanExitCleanly("run", "-d", "--name", "ps-negated-status-running", ALPINE, "sleep", "600")
+
+		psFilter := podmanTest.PodmanExitCleanly("ps", "--no-trunc", "--quiet", "--filter", "status!=running")
+
+		Expect(psFilter.OutputToStringArray()).To(HaveLen(1))
+		Expect(psFilter.OutputToString()).To(Equal(stoppedCtr.OutputToString()))
+		Expect(psFilter.OutputToString()).ToNot(ContainSubstring(runningCtr.OutputToString()))
+
+		psFilter = podmanTest.PodmanExitCleanly("ps", "--no-trunc", "--quiet", "--filter", "status!=stopped")
+		Expect(psFilter.OutputToStringArray()).To(ConsistOf(stoppedCtr.OutputToString(), runningCtr.OutputToString()))
+	})
+
+	It("podman ps multiple negated status filters", func() {
+		podmanTest.PodmanExitCleanly("create", "--name", "ps-negated-status-created", ALPINE, "ls", "/")
+
+		runningCtr := podmanTest.PodmanExitCleanly("run", "-d", "--name", "ps-negated-status-running", ALPINE, "sleep", "600")
+
+		// Excluding only "created" leaves the running container.
+		psFilter := podmanTest.PodmanExitCleanly("ps", "--no-trunc", "--quiet", "--filter", "status!=created")
+		Expect(psFilter.OutputToStringArray()).To(HaveLen(1))
+		Expect(psFilter.OutputToString()).To(Equal(runningCtr.OutputToString()))
+
+		// Excluding both states leaves nothing.
+		psFilter = podmanTest.PodmanExitCleanly("ps", "--no-trunc", "--quiet", "--filter", "status!=created", "--filter", "status!=running")
+		Expect(psFilter.OutputToString()).To(BeEmpty())
+	})
+
+	It("podman ps negated status filter with invalid value", func() {
+		session := podmanTest.Podman([]string{"ps", "--filter", "status!=bogus"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "bogus"))
 	})
 
 	It("podman filter without status does not find non-running", func() {
@@ -998,6 +1036,22 @@ var _ = Describe("Podman ps", func() {
 
 		output := session.OutputToStringArray()
 		Expect(output).To(HaveLen(1))
+	})
+
+	It("podman container list filter external by negated status", func() {
+		containerFilePath := filepath.Join(podmanTest.TempDir, "Containerfile-ps-external-status")
+		err := os.WriteFile(containerFilePath, []byte(fmt.Sprintf("FROM %s\nRUN echo hello > /hello\nRUN false\n", ALPINE)), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		build := podmanTest.Podman([]string{"build", "--network=none", "--force-rm=false", "--rm=false", "-f", containerFilePath, "-t", "ps-external-status"})
+		build.WaitWithDefaultTimeout()
+		Expect(build).To(Exit(1))
+
+		external := podmanTest.PodmanExitCleanly("container", "list", "--external=1", "--filter=status!=running", "--no-trunc=1", "--quiet=1")
+		Expect(external.OutputToStringArray()).ToNot(BeEmpty())
+
+		running := podmanTest.PodmanExitCleanly("container", "list", "--external", "--noheading", "--quiet", "--filter", "status=running")
+		Expect(running.OutputToStringArray()).To(BeEmpty())
 	})
 
 	// This test checks ps filtering of external container by container name

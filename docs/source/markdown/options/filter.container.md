@@ -21,6 +21,7 @@ Valid filters are listed below:
 | label!               | [Key] or [Key=Value] Label NOT assigned to a container                                          |
 | exited               | [Int] Container's exit code                                                                     |
 | status               | [Status] Container's status: 'created', 'initialized', 'running', 'stopped', 'paused', 'exited', 'removing', 'stopping', 'unknown' |
+| status!              | [Status] Container's status is NOT the specified status |
 | ancestor             | [ImageName] Image or descendant used to create container (accepts regex)                        |
 | before               | [ID] or [Name] Containers created before this container                                         |
 | since                | [ID] or [Name] Containers created since this container                                          |
