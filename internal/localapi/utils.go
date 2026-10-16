@@ -161,6 +161,8 @@ func CheckPathOnRunningMachine(ctx context.Context, path string) (*LocalAPIMap, 
 // CheckIfImageBuildPathsOnRunningMachine checks if the build context directory and all specified
 // Containerfiles are available on the running machine. If they are, it translates their paths
 // to the corresponding remote paths and returns them along with a flag indicating success.
+// The context directory keeps its client path in options.ContextDirectory, which the bindings
+// still need for files they create under it; its remote path goes to options.RemoteContextDirectory.
 func CheckIfImageBuildPathsOnRunningMachine(ctx context.Context, containerFiles []string, options entities.BuildOptions) ([]string, entities.BuildOptions, bool) {
 	if machineMode := bindings.GetMachineMode(ctx); !machineMode {
 		logrus.Debug("Machine mode is not enabled, skipping machine check")
@@ -189,7 +191,7 @@ func CheckIfImageBuildPathsOnRunningMachine(ctx context.Context, containerFiles 
 		logrus.Debugf("Path %q is not available on the running machine", options.ContextDirectory)
 		return nil, options, false
 	}
-	options.ContextDirectory = mapping.RemotePath
+	options.RemoteContextDirectory = mapping.RemotePath
 
 	// Containerfiles
 	translatedContainerFiles := []string{}
