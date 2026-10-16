@@ -578,6 +578,22 @@ NeedsChown    | true
     fi
 }
 
+@test "podman volume mount detects stale mount state" {
+    skip_if_remote "podman --remote volume mount not supported"
+    skip_if_rootless "mounting tmpfs volumes requires root"
+
+    myvolume=myvol$(random_string)
+    run_podman volume create -o type=tmpfs -o o=size=2M -o device=tmpfs $myvolume
+
+    run_podman volume mount $myvolume
+    mountpoint=$output
+    umount "$mountpoint"
+
+    run_podman 125 volume mount $myvolume
+    is "$output" "Error: volume $myvolume is expected to be mounted, but mountpoint $mountpoint is not mounted (mount count: 1)" \
+        "mounting a volume whose mountpoint disappeared should fail"
+}
+
 @test "podman --image-volume" {
     tmpdir=$PODMAN_TMPDIR/volume-test
     mkdir -p $tmpdir
