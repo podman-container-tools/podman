@@ -1,4 +1,4 @@
-## assert-last-key-contains Service ExecStart " --opt o=uid=0,gid=11,rw,compress=zstd "
+## assert-last-key-contains Service ExecStartPre " --opt o=uid=0,gid=11,rw,compress=zstd "
 
 [Volume]
 # Test usernames too
