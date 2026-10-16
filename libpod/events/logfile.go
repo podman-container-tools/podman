@@ -76,12 +76,15 @@ func writeToFile(s string, f *os.File) error {
 	return err
 }
 
-func (e EventLogFile) getTail(options ReadOptions) (*tail.Tail, error) {
+func (e EventLogFile) getTail(options ReadOptions, untilInPast bool) (*tail.Tail, error) {
 	seek := tail.SeekInfo{Offset: 0, Whence: io.SeekEnd}
-	if options.FromStart || !options.Stream {
+	// When the until boundary is already in the past, no future event can fall
+	// before it, so there is nothing to follow: read the existing events from
+	// the start of the file and stop at EOF.
+	if options.FromStart || !options.Stream || untilInPast {
 		seek.Whence = 0
 	}
-	stream := options.Stream
+	stream := options.Stream && !untilInPast
 	return tail.TailFile(e.options.LogFilePath, tail.Config{ReOpen: stream, Follow: stream, Location: &seek, Logger: tail.DiscardingLogger, Poll: true})
 }
 
@@ -112,15 +115,26 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse event filters: %w", err)
 	}
-	t, err := e.getTail(options)
-	if err != nil {
-		return err
-	}
+	var untilTime time.Time
 	if len(options.Until) > 0 {
-		untilTime, err := util.ParseInputTime(options.Until, false)
+		untilTime, err = util.ParseInputTime(options.Until, false)
 		if err != nil {
 			return err
 		}
+	}
+	// Classify the until boundary relative to now:
+	//   - untilInPast:   getTail returns a non-following tail that reads the
+	//     existing events and stops at EOF.
+	//   - untilInFuture: stop tailing once untilTime is reached (below).
+	// Both are false when no --until was given (untilTime is the zero value),
+	// which is why neither path can be driven by a single !untilInPast check.
+	untilInPast := !untilTime.IsZero() && time.Until(untilTime) <= 0
+	untilInFuture := !untilTime.IsZero() && !untilInPast
+	t, err := e.getTail(options, untilInPast)
+	if err != nil {
+		return err
+	}
+	if untilInFuture {
 		go func() {
 			timer := time.NewTimer(time.Until(untilTime))
 			defer timer.Stop()

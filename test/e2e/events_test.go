@@ -5,6 +5,8 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -117,6 +119,38 @@ var _ = Describe("Podman events", func() {
 		result := podmanTest.Podman([]string{"events", "--stream=false", "--until", "1h"})
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
+	})
+
+	It("podman events --until in the past", func() {
+		// Regression test for #29579: with the file events backend a --until
+		// time already in the past must still return the events that happened
+		// before it, instead of stopping the reader immediately and dropping
+		// them.  Force the file logger via containers.conf (the --events-backend
+		// flag is local-only, so it cannot be passed on the remote client).
+		confPath := filepath.Join(podmanTest.TempDir, "events.conf")
+		err := os.WriteFile(confPath, []byte("[engine]\nevents_logger=\"file\"\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF", confPath)
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+		}
+
+		before := stringid.GenerateRandomID()
+		podmanTest.PodmanExitCleanly("create", "--name", before, ALPINE)
+
+		after := stringid.GenerateRandomID()
+		podmanTest.PodmanExitCleanly("create", "--name", after, ALPINE)
+
+		// Use the second container's creation time as the --until boundary: it
+		// is already in the past, the first event precedes it, and the second
+		// event is at/after it, so no wall-clock sleep is needed.
+		until := podmanTest.PodmanExitCleanly("container", "inspect", after,
+			"--format", "{{.Created.Format \"2006-01-02T15:04:05.999999999Z07:00\"}}").OutputToString()
+
+		result := podmanTest.PodmanExitCleanly("events", "--since", "1m", "--until", until)
+		output := result.OutputToString()
+		Expect(output).To(ContainSubstring(before), "event before a past --until must be shown")
+		Expect(output).ToNot(ContainSubstring(after), "event at/after --until must be excluded")
 	})
 
 	It("podman events format", func() {
