@@ -20,15 +20,74 @@ import (
 // to the host's root.  Note that the paths may resolved outside the
 // container's mount point (e.g., to a volume or bind mount).
 func (c *Container) statOnHost(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, pathResolution, error) {
+	return c.statOnHostWithDepth(ctx, mountPoint, containerPath, 0)
+}
+
+func (c *Container) statOnHostWithDepth(ctx context.Context, mountPoint string, containerPath string, depth int) (*copier.StatForItem, pathResolution, error) {
+	if depth > 255 {
+		return nil, pathResolution{}, fmt.Errorf("too many symlinks resolving %q", containerPath)
+	}
+
 	// Now resolve the container's path.  It may hit a volume, it may hit a
 	// bind mount, it may be relative.
-	resolved, err := c.resolvePath(mountPoint, containerPath)
+	resolved, err := c.resolvePath(ctx, mountPoint, containerPath)
 	if err != nil {
 		return nil, pathResolution{}, err
+	}
+	if resolved.imageVolume != nil {
+		target, err := imageMountLinkTarget(resolved.root, resolved.imageVolume.Dest, c.pathAbs(containerPath))
+		if err != nil {
+			return nil, resolved, err
+		}
+		if target != "" {
+			statInfo, targetResolution, err := c.statOnHostWithDepth(ctx, mountPoint, target, depth+1)
+			targetResolution.close()
+			if err != nil {
+				return nil, resolved, err
+			}
+			statInfo.IsSymlink = true
+			statInfo.ImmediateTarget = target
+			return statInfo, resolved, nil
+		}
 	}
 
 	statInfo, err := secureStat(ctx, resolved.root, resolved.path)
 	return statInfo, resolved, err
+}
+
+// imageMountLinkTarget resolves a link in an image mount using container paths.
+// Absolute links in the mount refer to the container root, while relative links
+// are based at the link's location in the container.
+func imageMountLinkTarget(root, destination, containerPath string) (string, error) {
+	relative, err := filepath.Rel(destination, containerPath)
+	if err != nil || relative == "." {
+		return "", err
+	}
+	parts := strings.Split(relative, string(os.PathSeparator))
+	current := root
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		link, err := os.Readlink(current)
+		if err != nil {
+			return "", err
+		}
+		linkPath := filepath.Join(destination, filepath.Join(parts[:index+1]...))
+		if !filepath.IsAbs(link) {
+			link = filepath.Join(filepath.Dir(linkPath), link)
+		}
+		return filepath.Join(append([]string{link}, parts[index+1:]...)...), nil
+	}
+	return "", nil
 }
 
 func (c *Container) stat(ctx context.Context, containerMountPoint string, containerPath string) (*define.FileInfo, pathResolution, error) {

@@ -687,6 +687,130 @@ load helpers
     run_podman volume rm "$volume"
 }
 
+@test "podman cp from image mount subpath" {
+    skip_if_rootless "image mounts require rootful storage in this test"
+
+    local source="cp-image-source-$(safename)"
+    local image="cp-image-$(safename)"
+    local container="cp-image-container-$(safename)"
+    local outputdir="$PODMAN_TMPDIR/cp-image-output"
+    mkdir -p "$outputdir"
+
+    run_podman run --name "$source" --network=none $IMAGE sh -c \
+               'mkdir -p /image-data/sub; echo IMAGE_SUBPATH_MARKER >/image-data/sub/probe; echo IMAGE_ONLY >/etc/os-release; ln -s probe /image-data/sub/relative-link; ln -s /etc/os-release /image-data/sub/absolute-link'
+    run_podman commit -q "$source" "$image"
+    run_podman rm "$source"
+
+    run_podman create --name "$container" --network=none \
+               --mount "type=image,source=$image,target=/data,subpath=/image-data/sub" \
+               $IMAGE sleep 120
+
+    run_podman cp "$container:/data/probe" "$outputdir/created"
+    is "$(< "$outputdir/created")" "IMAGE_SUBPATH_MARKER"
+    run_podman cp "$container:/data/relative-link" "$outputdir/relative-link"
+    is "$(< "$outputdir/relative-link")" "IMAGE_SUBPATH_MARKER"
+    run_podman cp "$container:/etc/os-release" "$outputdir/rootfs-os-release"
+    run_podman cp "$container:/data/absolute-link" "$outputdir/absolute-link"
+    cmp "$outputdir/rootfs-os-release" "$outputdir/absolute-link"
+
+    echo HOST_FILE >"$outputdir/hostfile"
+    run_podman 125 cp "$outputdir/hostfile" "$container:/data/hostfile"
+
+    run_podman start "$container"
+    run_podman cp "$container:/data/probe" "$outputdir/running"
+    is "$(< "$outputdir/running")" "IMAGE_SUBPATH_MARKER"
+    run_podman exec "$container" test ! -e /data/hostfile
+
+    run_podman stop -t 0 "$container"
+    run_podman cp "$container:/data/probe" "$outputdir/stopped"
+    is "$(< "$outputdir/stopped")" "IMAGE_SUBPATH_MARKER"
+
+    run_podman rm "$container"
+    run_podman rmi "$image"
+}
+
+@test "podman cp with writable image mount on non-running containers" {
+    skip_if_rootless "image mounts require rootful storage in this test"
+
+    local container="cp-rw-image-$(safename)"
+    local exited="cp-rw-image-exited-$(safename)"
+    local outputdir="$PODMAN_TMPDIR/cp-rw-image-output"
+    mkdir -p "$outputdir"
+    echo HOST_FILE >"$outputdir/hostfile"
+
+    run_podman create --name "$container" --network=none \
+               --mount "type=image,source=$IMAGE,target=/data,subpath=/etc,rw=true" \
+               $IMAGE sleep 120
+    run_podman cp "$container:/data/passwd" "$outputdir/created"
+    test -s "$outputdir/created"
+    run_podman 125 cp "$outputdir/hostfile" "$container:/data/hostfile"
+
+    run_podman start "$container"
+    run_podman stop -t 0 "$container"
+    run_podman cp "$container:/data/passwd" "$outputdir/stopped"
+    cmp "$outputdir/created" "$outputdir/stopped"
+    run_podman 125 cp "$outputdir/hostfile" "$container:/data/hostfile"
+
+    run_podman create --name "$exited" --network=none \
+               --mount "type=image,source=$IMAGE,target=/data,subpath=/etc,rw=true" \
+               $IMAGE true
+    run_podman start -a "$exited"
+    run_podman cp "$exited:/data/passwd" "$outputdir/exited"
+    cmp "$outputdir/created" "$outputdir/exited"
+    run_podman 125 cp "$outputdir/hostfile" "$exited:/data/hostfile"
+
+    run_podman rm "$container" "$exited"
+}
+
+@test "podman cp respects read-only volume and bind mounts on non-running containers" {
+    local volume="cp-ro-volume-$(safename)"
+    local binddir="$PODMAN_TMPDIR/cp-ro-bind"
+    local hostfile="$PODMAN_TMPDIR/hostfile"
+    mkdir -p "$binddir"
+    echo MOUNT_FILE >"$binddir/existing"
+    echo HOST_FILE >"$hostfile"
+
+    run_podman volume create "$volume"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE sh -c \
+               'echo MOUNT_FILE >/data/existing'
+
+    local kind state source container copied
+    for kind in volume bind; do
+        source="$volume"
+        if [[ "$kind" == bind ]]; then
+            source="$binddir"
+        fi
+        for state in created stopped exited; do
+            container="cp-ro-$kind-$state-$(safename)"
+            copied="$PODMAN_TMPDIR/$kind-$state-existing"
+            if [[ "$state" == exited ]]; then
+                run_podman create --name "$container" --network=none \
+                           --mount "type=$kind,source=$source,target=/data,ro" $IMAGE true
+                run_podman start -a "$container"
+            else
+                run_podman create --name "$container" --network=none \
+                           --mount "type=$kind,source=$source,target=/data,ro" $IMAGE sleep 120
+                if [[ "$state" == stopped ]]; then
+                    run_podman start "$container"
+                    run_podman stop -t 0 "$container"
+                fi
+            fi
+
+            run_podman cp "$container:/data/existing" "$copied"
+            is "$(< "$copied")" "MOUNT_FILE" "$kind mount on $state container is readable"
+            run_podman 125 cp "$hostfile" "$container:/data/newfile"
+            if ! is_remote; then # remote just returns a 500
+                is "$output" '.*cannot copy into a read-only mount' \
+                   "$kind mount on $state container rejects writes"
+            fi
+            run_podman rm "$container"
+        done
+    done
+
+    test ! -e "$binddir/newfile"
+    run_podman run --rm --network=none -v "$volume:/data" $IMAGE test ! -e /data/newfile
+    run_podman volume rm "$volume"
+}
 
 @test "podman cp file from host to container mount" {
     srcdir=$PODMAN_TMPDIR/cp-test-mount-src
