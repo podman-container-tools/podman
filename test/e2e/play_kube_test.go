@@ -7025,4 +7025,52 @@ RUN echo "nested-build-marker" > /nested-marker`), 0o644)).To(Succeed())
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithError(125, `number of Pod replicas aren't equal to the number of published ports: 2 replicas, 1 published ports`))
 	})
+
+	It("selects image platform", func() {
+		// --platform selects the requested platform.
+		pod := getPod(withCtr(getCtr(withImage(ALPINELISTTAG))))
+		err := generateKubeYaml("pod", pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		cmd := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform=linux/arm64", kubeYaml})
+		cmd.WaitWithDefaultTimeout()
+		Expect(cmd).Should(Exit(0), cmd.ErrorToString())
+
+		inspect := podmanTest.PodmanExitCleanly("inspect", ALPINELISTTAG)
+		image := inspect.InspectImageJSON()
+
+		Expect(image).To(HaveLen(1))
+		Expect(image[0].Os).To(Equal("linux"))
+		Expect(image[0].Architecture).To(Equal("arm64"))
+
+		podmanTest.PodmanExitCleanly("kube", "down", kubeYaml)
+
+		// Reuse the local image if it matches the requested platform.
+		cmd2 := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform=linux/arm64", kubeYaml})
+		cmd2.WaitWithDefaultTimeout()
+		Expect(cmd2).Should(Exit(0), cmd2.ErrorToString())
+		Expect(cmd2.ErrorToString()).ToNot(ContainSubstring("Trying to pull"))
+
+		inspect2 := podmanTest.PodmanExitCleanly("inspect", ALPINELISTTAG)
+		image2 := inspect2.InspectImageJSON()
+
+		Expect(image2).To(HaveLen(1))
+		Expect(image2[0].Os).To(Equal("linux"))
+		Expect(image2[0].Architecture).To(Equal("arm64"))
+
+		podmanTest.PodmanExitCleanly("kube", "down", kubeYaml)
+
+		// Pull the requested image if the local image does not match the requested platform.
+		cmd3 := podmanTest.Podman([]string{"kube", "play", "--start=false", "--platform=linux/amd64", kubeYaml})
+		cmd3.WaitWithDefaultTimeout()
+		Expect(cmd3).Should(Exit(0), cmd3.ErrorToString())
+		Expect(cmd3.ErrorToString()).To(ContainSubstring("Trying to pull"))
+
+		inspect3 := podmanTest.PodmanExitCleanly("inspect", ALPINELISTTAG)
+		image3 := inspect3.InspectImageJSON()
+
+		Expect(image3).To(HaveLen(1))
+		Expect(image3[0].Os).To(Equal("linux"))
+		Expect(image3[0].Architecture).To(Equal("amd64"))
+	})
 })
