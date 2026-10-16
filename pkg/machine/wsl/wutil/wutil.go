@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -96,6 +97,47 @@ func IsWSLStoreVersionInstalled() bool {
 	}
 
 	return true
+}
+
+// WSLVersion returns the WSL version as [major, minor, patch].
+// Returns [0,0,0] if the version cannot be determined.
+func WSLVersion() [3]int {
+	cmd := SilentExecCmd("--version")
+	out, err := cmd.Output()
+	if err != nil {
+		return [3]int{}
+	}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if !strings.HasPrefix(lower, "wsl version") {
+			continue
+		}
+		_, vstr, ok := strings.Cut(lower, ":")
+		if !ok {
+			continue
+		}
+		return parseVersion(strings.TrimSpace(vstr))
+	}
+	return [3]int{}
+}
+
+func parseVersion(s string) [3]int {
+	var v [3]int
+	for i, part := range strings.SplitN(s, ".", 4) {
+		if i >= 3 {
+			break
+		}
+		v[i], _ = strconv.Atoi(part)
+	}
+	return v
+}
+
+// WSLVersionAtLeast returns true if the installed WSL version is >= major.minor.patch.
+func WSLVersionAtLeast(major, minor, patch int) bool {
+	v := WSLVersion()
+	return v[0] > major ||
+		(v[0] == major && v[1] > minor) ||
+		(v[0] == major && v[1] == minor && v[2] >= patch)
 }
 
 func matchOutputLine(output io.ReadCloser) (wslStatus, error) {
