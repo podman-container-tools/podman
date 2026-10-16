@@ -88,10 +88,12 @@ func Restore(ctx context.Context, nameOrID string, options *RestoreOptions) (*ty
 	}
 	if i != "" {
 		params.Set("import", "true")
-		r, err = os.Open(i)
+		f, err := os.Open(i)
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
+		r = f
 		// Hard-code the name since it will be ignored in any case.
 		nameOrID = "import"
 	}
