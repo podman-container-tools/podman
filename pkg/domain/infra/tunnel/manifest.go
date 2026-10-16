@@ -133,6 +133,7 @@ func (ir *ImageEngine) ManifestAddArtifact(_ context.Context, name string, files
 func (ir *ImageEngine) ManifestAnnotate(_ context.Context, name, images string, opts entities.ManifestAnnotateOptions) (string, error) {
 	options := new(manifests.ModifyOptions).WithArch(opts.Arch).WithVariant(opts.Variant)
 	options.WithFeatures(opts.Features).WithOS(opts.OS).WithOSVersion(opts.OSVersion)
+	options.WithOSFeatures(opts.OSFeatures)
 	if opts.IndexSubject != "" {
 		options.WithIndexSubject(opts.IndexSubject)
 	}
