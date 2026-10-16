@@ -3,6 +3,7 @@
 package quadlet
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -165,6 +166,9 @@ func TestUnitDirs(t *testing.T) {
 		}
 		c.Env = append(os.Environ(), "_UNSHARED=true")
 		err = c.Run()
+		if errors.Is(err, syscall.EPERM) {
+			t.Skipf("user namespaces are not permitted in this environment: %v", err)
+		}
 		assert.NoError(t, err)
 	} else {
 		fmt.Println(os.Args)
