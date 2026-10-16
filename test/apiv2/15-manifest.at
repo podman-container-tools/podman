@@ -91,6 +91,15 @@ t PUT /v4.0.0/libpod/manifests/$id_xyz operation='annotate' images="[\"$xyz_dige
 t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
     .manifests[0].annotations.hoge2="fuga2"
 
+# os_features must be applied by both update and annotate
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='update' images="[\"containers-storage:$id_xyz_image\"]" os_features="[\"feat1\"]" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    '.manifests[0].platform."os.features"[0]'="feat1"
+
+t PUT /v4.0.0/libpod/manifests/$id_xyz operation='annotate' images="[\"$xyz_digest\"]" os_features="[\"feat2\"]" 200
+t GET /v4.0.0/libpod/manifests/$id_xyz/json 200 \
+    '.manifests[0].platform."os.features"[0]'="feat2"
+
 # registry-related tests
 t POST "/v3.4.0/libpod/manifests/abc:latest/push?destination=localhost:$REGISTRY_PORT%2Fabc:latest&tlsVerify=false&all=true" 200
 t POST "/v4.0.0/libpod/manifests/xyz:latest/registry/localhost:$REGISTRY_PORT%2Fxyz:latest?all=true" 400 \

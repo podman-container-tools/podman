@@ -371,6 +371,27 @@ add_compression = ["zstd"]`), 0o644)
 		Expect(session.OutputToString()).To(ContainSubstring(`"os": "bar"`))
 	})
 
+	It("annotate --os-features", func() {
+		session := podmanTest.Podman([]string{"manifest", "create", "foo"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		session = podmanTest.Podman([]string{"manifest", "add", "foo", imageListInstance})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		session = podmanTest.Podman([]string{"manifest", "annotate", "--os-features", "feat1,feat2", "foo", imageListARM64InstanceDigest})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		session = podmanTest.Podman([]string{"manifest", "inspect", "foo"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		var inspect define.ManifestListData
+		err := json.Unmarshal(session.Out.Contents(), &inspect)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inspect.Manifests).To(HaveLen(1))
+		Expect(inspect.Manifests[0].Platform.OSFeatures).To(Equal([]string{"feat1", "feat2"}))
+	})
+
 	It("annotate", func() {
 		session := podmanTest.Podman([]string{"manifest", "create", "--annotation", "up=down", "foo"})
 		session.WaitWithDefaultTimeout()
