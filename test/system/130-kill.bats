@@ -136,12 +136,44 @@ load helpers
     run_podman create --name=$cname $IMAGE /no/such/command
     run_podman container inspect  --format "{{.State.StoppedByUser}}" $cname
     is "$output" "false" "container not marked to be stopped by a user"
-    # Container never ran -> exit code == 0
+    # Container never ran -> default condition (=stopped) returns 0 immediately.
+    # This matches Docker's "not-running" semantic: a container that has never
+    # run is, by definition, not running. Callers that want to block until the
+    # container has actually run and exited must use --condition=next-exit.
     run_podman wait $cname
+    is "$output" "0" "wait on never-started container returns 0 (documented semantic)"
     # Container did not start successfully -> exit code != 0
     run_podman 125 start $cname
-    # FIXME(#14873): while older Podmans return 0 on wait, Docker does not.
+    # The container that failed to start has no recorded exit code, so wait
+    # still returns 0 for the default condition.
     run_podman wait $cname
+    is "$output" "0" "wait still returns 0 after a failed start"
+    run_podman rm $cname
+}
+
+# bats test_tags=ci:parallel
+@test "podman wait --condition=next-exit blocks until actual exit" {
+    cname=c-$(safename)
+    run_podman create --name=$cname $IMAGE sh -c "exit 7"
+
+    # Launch wait in the background; it must NOT return immediately for a
+    # never-started container when --condition=next-exit is used.
+    timeout --foreground -v --kill=10 30 \
+        "${PODMAN_CMD[@]}" wait --condition=next-exit $cname > $PODMAN_TMPDIR/wait-output 2>&1 &
+    wait_pid=$!
+
+    # Give the wait command time to subscribe to events.
+    sleep 1
+
+    # Trigger the exit.
+    run_podman start $cname
+    run_podman 0 wait $cname
+
+    # Now the backgrounded wait should return with the actual exit code.
+    wait $wait_pid
+    assert "$(< $PODMAN_TMPDIR/wait-output)" = "7" \
+        "--condition=next-exit returned the container's actual exit code"
+
     run_podman rm $cname
 }
 
