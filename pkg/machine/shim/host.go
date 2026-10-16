@@ -570,6 +570,18 @@ func startLocked(mc *vmconfigs.MachineConfig, mp vmconfigs.VMProvider, dirs *mac
 		return err
 	}
 
+	// Fix incorrect starting state in case of crash during start
+	// (e.g., hard process termination where deferred cleanup cannot execute)
+	if mc.Starting {
+		state, err := mp.State(mc, false)
+		if err == nil && (state == machineDefine.Stopped || state == machineDefine.Running) {
+			mc.Starting = false
+			if writeErr := mc.Write(); writeErr != nil {
+				logrus.Warnf("Failed to clear stale Starting state: %v", writeErr)
+			}
+		}
+	}
+
 	// Don't check if provider supports parallel running machines
 	if mp.RequireExclusiveActive() {
 		startLock, err := lock.GetMachineStartLock()
