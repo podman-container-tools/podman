@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -29,6 +30,56 @@ type ociError struct {
 	Level string `json:"level,omitempty"`
 	Time  string `json:"time,omitempty"`
 	Msg   string `json:"msg,omitempty"`
+}
+
+// parseOCIErrors decodes the JSON error log written by the OCI runtime.
+func parseOCIErrors(log []byte) ([]ociError, error) {
+	var errs []ociError
+	for line := range bytes.SplitSeq(log, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var e ociError
+		if err := json.Unmarshal(line, &e); err != nil {
+			return nil, err
+		}
+		errs = append(errs, e)
+	}
+	return errs, nil
+}
+
+// joinOCIErrors combines the messages of the given errors into a single
+// newline-separated string, skipping empty messages.
+func joinOCIErrors(errs []ociError) string {
+	var b strings.Builder
+	for _, e := range errs {
+		if e.Msg == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(e.Msg)
+	}
+	return b.String()
+}
+
+// getOCIRuntimeErrorMultiline turns the errors parsed from the OCI runtime log
+// into a single error.
+func getOCIRuntimeErrorMultiline(name string, errs []ociError) error {
+	switch len(errs) {
+	// Fallback.
+	case 0:
+		return fmt.Errorf("%s: %w", name, define.ErrOCIRuntime)
+	// Single error is pattern matched by getOCIRuntimeError.
+	case 1:
+		return getOCIRuntimeError(name, errs[0].Msg)
+	// Forward multiple (multi-line) errors as-is to provide full context
+	// (e.g. CRIU restore with a TCP connection established).
+	default:
+		return fmt.Errorf("%s: %s: %w", name, joinOCIErrors(errs), define.ErrOCIRuntime)
+	}
 }
 
 // Bind ports to keep them closed on the host
