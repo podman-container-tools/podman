@@ -1065,6 +1065,34 @@ func WithLogLabels(logLabels map[string]string) CtrCreateOption {
 	}
 }
 
+// WithLogRotate sets whether the container's log file should be rotated
+// instead of truncated when the maximum size is reached.
+func WithLogRotate(rotate bool) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		ctr.config.LogRotate = rotate
+
+		return nil
+	}
+}
+
+// WithLogMaxFiles sets the maximum number of rotated log files to keep.
+// This is only meaningful when log rotation is enabled.
+func WithLogMaxFiles(maxFiles uint) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		ctr.config.LogMaxFiles = maxFiles
+
+		return nil
+	}
+}
+
 // WithCgroupsMode disables the creation of Cgroups for the conmon process.
 func WithCgroupsMode(mode string) CtrCreateOption {
 	return func(ctr *Container) error {
