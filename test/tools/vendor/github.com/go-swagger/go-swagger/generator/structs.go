@@ -104,6 +104,7 @@ type GenSchema struct {
 	Default                    any
 	WantsMarshalBinary         bool // do we generate MarshalBinary interface?
 	WantsStringer              bool // do we generate the fmt.Stringer String() method?
+	WantsGetters               bool // do we generate a Get<Field> method for each field?
 	StructTags                 []string
 	ExtraImports               map[string]string // non-standard imports detected when using external types
 	ExternalDocs               *spec.ExternalDocumentation
@@ -639,6 +640,7 @@ type GenOperation struct {
 	DefaultResponse  *GenResponse
 
 	Params               GenParameters
+	ServerParams         GenParameters
 	QueryParams          GenParameters
 	PathParams           GenParameters
 	HeaderParams         GenParameters
@@ -650,7 +652,9 @@ type GenOperation struct {
 	HasFormValueParams   bool
 	HasFileParams        bool
 	HasBodyParams        bool
+	HasStreamingForm     bool
 	HasStreamingResponse bool
+	MultipartFormName    string
 
 	Schemes              []string
 	ExtraSchemes         []string

@@ -144,7 +144,7 @@ type ClientService interface {
 // If you need to pass a specific context, use [Client.{{ pascalize .Name }}Context] instead.
 func (a *Client) {{ pascalize .Name }}(params *{{ pascalize .Name }}Params{{ if .Authorized }}, authInfo runtime.ClientAuthInfoWriter{{end}}{{ if .HasStreamingResponse }}, writer io.Writer{{ end }}, opts ...ClientOption) {{ if .SuccessResponse }}({{ range .SuccessResponses }}*{{ pascalize .Name }}, {{ end }}{{ end }}error{{ if .SuccessResponse }}){{ end }} {
   var ctx context.Context
-  if params.inner.ctx != nil {
+  if params != nil && params.inner.ctx != nil {
     ctx = params.inner.ctx
   } else {
     ctx = context.Background()

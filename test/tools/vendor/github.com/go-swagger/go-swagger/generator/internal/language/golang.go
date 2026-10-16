@@ -15,11 +15,15 @@ import (
 	goruntime "runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/imports"
 )
 
-var moduleRe = regexp.MustCompile(`module[ \t]+([^\s]+)`)
+var (
+	moduleRe  = regexp.MustCompile(`module[ \t]+([^\s]+)`)
+	importsMx sync.Mutex
+)
 
 // GolangOpts returns [Options] for rendering items as golang code.
 func GolangOpts(extraInitialisms ...string) *Options {
@@ -37,7 +41,7 @@ func GolangOpts(extraInitialisms ...string) *Options {
 	opts.dirNameFunc = defaultGoDirnameFunc()
 	opts.ImportsFunc = defaultGoImportsFunc()
 	opts.ArrayInitializerFunc = defaultGoArrayInitializerFunc()
-	opts.BaseImportFunc = defaultGoBaseImportFunc()
+	opts.BaseImportFunc = defaultGoBaseImportErr
 
 	opts.Init()
 
@@ -47,6 +51,12 @@ func GolangOpts(extraInitialisms ...string) *Options {
 func defaultGoFormatFunc() FormatterFunc {
 	return func(ffn string, content []byte, fmtOpts ...FormatOption) ([]byte, error) {
 		o := FormatOptsWithDefault(fmtOpts)
+
+		// package imports is governed by a global variables. During race tests this
+		// may arouse the race detector. Not significant during an execution from CLI.
+		importsMx.Lock()
+		defer importsMx.Unlock()
+
 		imports.LocalPrefix = strings.Join(o.LocalPrefixes, ",") // regroup these packages
 		return imports.Process(ffn, content, &o.Options)
 	}
@@ -98,19 +108,6 @@ func defaultGoArrayInitializerFunc() func(any) (string, error) {
 			return "", err
 		}
 		return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(b), "}", ",}"), "[", "{"), "]", ",}"), "{,}", "{}"), nil
-	}
-}
-
-func defaultGoBaseImportFunc() MangleFunc {
-	return func(target string) string {
-		base, err := defaultGoBaseImportErr(target)
-		if err != nil {
-			// NOTE: historically this called log.Fatalln. We now panic to avoid
-			// pulling in generator-specific logging, while preserving the "fail hard" semantics.
-			panic(fmt.Sprintf("base import resolution failed: %v", err))
-		}
-
-		return base
 	}
 }
 

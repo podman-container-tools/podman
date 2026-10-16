@@ -20,9 +20,8 @@ import "go/token"
 //   - OPAQUE_YAML → TokenOpaqueYaml
 //   - TITLE / DESC / BLANK / EOF → TokenTitle / TokenDesc / TokenBlank / TokenEOF
 //
-// The lexer also emits a few internal kinds (tokenYAMLFence, tokenText, tokenKeywordPre,
-// tokenRawLine, tokenDirective) that are consumed by intermediate stages and never appear in the
-// final stream the parser consumes.
+// The lexer also emits a few internal kinds (tokenYAMLFence, tokenText, tokenKeywordPre, tokenRawLine, tokenDirective)
+// that are consumed by intermediate stages and never appear in the final stream the parser consumes.
 type TokenKind int
 
 const (

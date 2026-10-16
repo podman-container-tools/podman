@@ -42,40 +42,40 @@ type Block interface {
 	Contact() (Contact, error)
 	License() (License, bool)
 
-	// IsDeprecated reports whether the block marks its subject deprecated — via the explicit
-	// `deprecated: true` keyword or a godoc-style "Deprecated:" paragraph.
+	// IsDeprecated reports whether the block marks its subject deprecated — via the explicit `deprecated: true` keyword
+	// or a godoc-style "Deprecated:" paragraph.
 	//
 	// See deprecated.go.
 	IsDeprecated() bool
 
-	// Walk dispatches properties / prose / extensions / diagnostics through the callbacks set on w.
-	// See walker.go for the contract.
+	// Walk dispatches properties / prose / extensions / diagnostics through the callbacks set on w. See walker.go for the
+	// contract.
 	Walk(w Walker)
 
-	// ProseLines returns the cleaned prose lines (TITLE + DESC) in source order, with blank lines
-	// preserved as empty strings.
+	// ProseLines returns the cleaned prose lines (TITLE + DESC) in source order, with blank lines preserved as empty
+	// strings.
 	ProseLines() []string
 
 	// PreambleLines returns prose lines that appear BEFORE the block's annotation.
 	//
 	// For UnboundBlock (no annotation), returns the same as ProseLines.
-	// Schema and meta builders consume only pre-annotation prose for title/description;
-	// routes/operations consult ProseLines() and observe post-annotation text too.
+	// Schema and meta builders consume only pre-annotation prose for title/description; routes/operations consult
+	// ProseLines() and observe post-annotation text too.
 	PreambleLines() []string
 
-	// PreambleTitle / PreambleDescription return the title/description computed from PreambleLines
-	// (pre-annotation prose only).
+	// PreambleTitle / PreambleDescription return the title/description computed from PreambleLines (pre-annotation prose
+	// only).
 	//
-	// Schema's top-level model builder uses these so post-annotation prose reads as body content
-	// rather than title/description.
+	// Schema's top-level model builder uses these so post-annotation prose reads as body content rather than
+	// title/description.
 	PreambleTitle() string
 	PreambleDescription() string
 
-	// Prose returns the entire prose surface (TITLE + DESC tokens in source order) joined with "\n",
-	// with internal blanks preserved as paragraph breaks and a single trailing blank dropped.
+	// Prose returns the entire prose surface (TITLE + DESC tokens in source order) joined with "\n", with internal blanks
+	// preserved as paragraph breaks and a single trailing blank dropped.
 	//
-	// Used by field-level callers (struct field / interface method docs) where the entire prose is the
-	// description and there's no separate title concept.
+	// Used by field-level callers (struct field / interface method docs) where the entire prose is the description and
+	// there's no separate title concept.
 	Prose() string
 
 	Has(name string) bool
@@ -85,18 +85,16 @@ type Block interface {
 	GetString(name string) (string, bool)
 	GetList(name string) ([]string, bool)
 
-	// AnnotationArg returns the first positional identifier argument of the block's primary annotation
-	// (e.g. "Pet" for `swagger:model Pet`, "date-time" for `swagger:strfmt date-time`, the IDENT_NAME
-	// for `swagger:name fooBar`).
+	// AnnotationArg returns the first positional identifier argument of the block's primary annotation (e.g. "Pet" for
+	// `swagger:model Pet`, "date-time" for `swagger:strfmt date-time`, the IDENT_NAME for `swagger:name fooBar`).
 	//
 	// Returns ("", false) when the annotation has no arg or carries only an empty/whitespace one.
-	// Bare annotations (e.g. `swagger:model` without a name) return ("", false); callers distinguish
-	// "annotation present" via AnnotationKind().
+	// Bare annotations (e.g. `swagger:model` without a name) return ("", false); callers distinguish "annotation present"
+	// via AnnotationKind().
 	//
-	// Convergence accessor — replaces type-asserting on each typed Block kind to read its Name /
-	// Args[0] field.
-	// Used by Walker callbacks that don't care which classifier flavour they're looking at, only what
-	// its IDENT_NAME-style argument is.
+	// Convergence accessor — replaces type-asserting on each typed Block kind to read its Name / Args[0] field.
+	// Used by Walker callbacks that don't care which classifier flavour they're looking at, only what its IDENT_NAME-style
+	// argument is.
 	//
 	// See README §block-shapes.
 	AnnotationArg() (string, bool)
@@ -104,11 +102,11 @@ type Block interface {
 
 // Property is one keyword:value (or keyword body) attached to a Block.
 //
-// For inline-value keywords (Number / Integer / Bool / String / EnumOption / CommaList shapes),
-// Value is the raw string and Typed carries the lexically-typed form.
+// For inline-value keywords (Number / Integer / Bool / String / EnumOption / CommaList shapes), Value is the raw string
+// and Typed carries the lexically-typed form.
 //
-// For body keywords (ShapeRawBlock / ShapeRawValue), Body holds the accumulated body content, Raw
-// holds the verbatim source content, and Typed.Type indicates the body shape.
+// For body keywords (ShapeRawBlock / ShapeRawValue), Body holds the accumulated body content, Raw holds the verbatim
+// source content, and Typed.Type indicates the body shape.
 //
 // ItemsDepth records the leading items.* depth from the keyword head.
 //
@@ -125,11 +123,11 @@ type Property struct {
 	ItemsDepth int
 }
 
-// IsTyped reports whether the property carries a primitive-typed value the caller can consume
-// directly without further coercion.
+// IsTyped reports whether the property carries a primitive-typed value the caller can consume directly without further
+// coercion.
 //
-// True when Typed.Type is one of the primitive shapes — Number, Integer, Bool, EnumOption —
-// meaning the matching Typed.* field is populated and authoritative.
+// True when Typed.Type is one of the primitive shapes — Number, Integer, Bool, EnumOption — meaning the matching
+// Typed.* field is populated and authoritative.
 // False otherwise:
 //
 //   - ShapeNone — typing was not applied (ShapeString keywords like
@@ -148,8 +146,7 @@ type Property struct {
 //	    // coerce p.Value against the resolved schema type
 //	}
 //
-// Replaces the explicit `switch p.Typed.Type` boilerplate consumers would otherwise need at every
-// call site.
+// Replaces the explicit `switch p.Typed.Type` boilerplate consumers would otherwise need at every call site.
 func (p Property) IsTyped() bool {
 	switch p.Typed.Type {
 	case ShapeNumber, ShapeInt, ShapeBool, ShapeEnumOption:
@@ -165,8 +162,7 @@ func (p Property) IsTyped() bool {
 //
 // Op is the leading comparison operator stripped from a NumberValue ("<", "<=", ">", ">=", "=").
 // Empty for non-Number values or when no operator was present.
-// Accepts e.g. `maximum: <5`; the analyzer interprets Op + Number to decide inclusive vs exclusive
-// semantics.
+// Accepts e.g. `maximum: <5`; the analyzer interprets Op + Number to decide inclusive vs exclusive semantics.
 type TypedValue struct {
 	Type    ValueShape
 	Op      string
@@ -178,8 +174,7 @@ type TypedValue struct {
 
 // RawYAML is one captured `--- … ---` body.
 //
-// The parser does not parse the YAML — it isolates the body so the analyzer can hand it to
-// internal/parsers/yaml/.
+// The parser does not parse the YAML — it isolates the body so the analyzer can hand it to internal/parsers/yaml/.
 type RawYAML struct {
 	Pos       token.Position
 	Text      string
@@ -188,18 +183,15 @@ type RawYAML struct {
 
 // Extension is one x-* vendor entry under an extensions: block.
 //
-// Value carries the YAML-typed nested value (`bool` / `float64` / `string` / `[]any` /
-// `map[string]any`).
-// The parser pipes the body through `internal/parsers/yaml.TypedExtensions`, so consumers can rely
-// on JSON-normalised types — never `map[any]any`.
+// Value carries the YAML-typed nested value (`bool` / `float64` / `string` / `[]any` / `map[string]any`).
+// The parser pipes the body through `internal/parsers/yaml.TypedExtensions`, so consumers can rely on JSON-normalised
+// types — never `map[any]any`.
 //
-// Source carries the keyword that produced the entry: KwExtensions for `extensions:` blocks
-// (top-level vendor extensions) or KwInfoExtensions for `infoExtensions:` blocks (Info-scoped
-// vendor extensions, meta-only).
+// Source carries the keyword that produced the entry: KwExtensions for `extensions:` blocks (top-level vendor
+// extensions) or KwInfoExtensions for `infoExtensions:` blocks (Info-scoped vendor extensions, meta-only).
 //
-// Consumers that need to route entries to different targets — meta's swspec.Extensions vs
-// swspec.Info.Extensions — switch on this field; consumers that treat extensions uniformly
-// (routes / operations) can ignore it.
+// Consumers that need to route entries to different targets — meta's swspec.Extensions vs swspec.Info.Extensions —
+// switch on this field; consumers that treat extensions uniformly (routes / operations) can ignore it.
 type Extension struct {
 	Name   string
 	Source string
@@ -235,8 +227,8 @@ func (b *baseBlock) PreambleLines() []string     { return b.preambleLines }
 func (b *baseBlock) PreambleTitle() string       { return b.preambleTitle }
 func (b *baseBlock) PreambleDescription() string { return b.preambleDescription }
 
-// Prose joins the cached proseLines (TITLE + DESC + internal blanks, in source order) with "\n" and
-// drops a single whitespace-only trailing line.
+// Prose joins the cached proseLines (TITLE + DESC + internal blanks, in source order) with "\n" and drops a single
+// whitespace-only trailing line.
 //
 // The trim and join happen on the cached slice; no extra parse work.
 func (b *baseBlock) Prose() string {
@@ -249,9 +241,9 @@ func (b *baseBlock) Prose() string {
 func (b *baseBlock) Diagnostics() []Diagnostic      { return b.diagnostics }
 func (b *baseBlock) AnnotationKind() AnnotationKind { return b.kind }
 
-// AnnotationArg default — Block kinds whose annotation takes no identifier argument
-// (UnboundBlock, MetaBlock, RouteBlock, InlineOperationBlock, ParametersBlock — the latter has
-// multiple args but conceptually it's a list, not a single IDENT_NAME).
+// AnnotationArg default — Block kinds whose annotation takes no identifier argument (UnboundBlock, MetaBlock,
+// RouteBlock, InlineOperationBlock, ParametersBlock — the latter has multiple args but conceptually it's a list, not
+// a single IDENT_NAME).
 //
 // Typed kinds with a single IDENT_NAME override this method.
 func (b *baseBlock) AnnotationArg() (string, bool) { return "", false }
@@ -286,11 +278,11 @@ func (b *baseBlock) Extensions() iter.Seq[Extension] {
 	}
 }
 
-// SecurityRequirements returns the typed list of `Security:` requirements parsed at lex time from
-// the block's `security:` raw body, or nil when no `security:` keyword appeared.
+// SecurityRequirements returns the typed list of `Security:` requirements parsed at lex time from the block's
+// `security:` raw body, or nil when no `security:` keyword appeared.
 //
-// Each entry is a single-key map from scheme name → scope list, mirroring the shape OAS v2
-// expects on `spec.Operation.Security`.
+// Each entry is a single-key map from scheme name → scope list, mirroring the shape OAS v2 expects on
+// `spec.Operation.Security`.
 func (b *baseBlock) SecurityRequirements() []security.Requirement {
 	return b.security
 }
@@ -298,8 +290,7 @@ func (b *baseBlock) SecurityRequirements() []security.Requirement {
 // Contact returns the typed Contact value parsed from the block's `contact:` inline keyword.
 //
 // Returns (Contact{}, nil) when no `contact:` appeared, or when its value is empty.
-// A non-nil error signals a malformed `Name <email>` head — the caller decides whether to fail or
-// warn.
+// A non-nil error signals a malformed `Name <email>` head — the caller decides whether to fail or warn.
 // Parses on call.
 func (b *baseBlock) Contact() (Contact, error) {
 	for _, p := range b.properties {
@@ -310,8 +301,8 @@ func (b *baseBlock) Contact() (Contact, error) {
 	return Contact{}, nil
 }
 
-// License returns the typed License value parsed from the block's `license:` inline keyword, or
-// (License{}, false) when no `license:` keyword appeared.
+// License returns the typed License value parsed from the block's `license:` inline keyword, or (License{}, false) when
+// no `license:` keyword appeared.
 //
 // Parses on call.
 func (b *baseBlock) License() (License, bool) {
@@ -363,14 +354,14 @@ func (b *baseBlock) GetString(name string) (string, bool) {
 	return p.Value, true
 }
 
-// GetList returns the token list represented by the named keyword, unifying every list-shaped
-// surface form the grammar accepts.
+// GetList returns the token list represented by the named keyword, unifying every list-shaped surface form the grammar
+// accepts.
 //
 // Delegates to Property.AsList; see that method for the algorithm and accepted surface forms.
 //
 // Returns (nil, false) when the keyword is absent.
-// Returns (nil, true) when the keyword is present but every line trims to empty — the bool
-// reports presence, not non-emptiness.
+// Returns (nil, true) when the keyword is present but every line trims to empty — the bool reports presence, not
+// non-emptiness.
 func (b *baseBlock) GetList(name string) ([]string, bool) {
 	p, ok := b.findProperty(name)
 	if !ok {
@@ -379,14 +370,13 @@ func (b *baseBlock) GetList(name string) ([]string, bool) {
 	return p.AsList(), true
 }
 
-// AsList returns the token list represented by p, unifying every list-shaped surface form the
-// grammar accepts (inline comma list, multi-line indented, YAML `- ` markers, or any combination).
+// AsList returns the token list represented by p, unifying every list-shaped surface form the grammar accepts (inline
+// comma list, multi-line indented, YAML `- ` markers, or any combination).
 //
 // # Details
 //
-// See README §property-shape (`AsList — unified list extraction`) for the surface forms, the
-// algorithm, and the explicit non-targets (enum values, routebody Parameters chunks, raw YAML
-// bodies).
+// See README §property-shape (`AsList — unified list extraction`) for the surface forms, the algorithm, and the
+// explicit non-targets (enum values, routebody Parameters chunks, raw YAML bodies).
 func (p Property) AsList() []string {
 	var lines []string
 	if p.Value != "" {
@@ -435,8 +425,7 @@ type ModelBlock struct {
 	Name string
 }
 
-// AnnotationArg returns the IDENT_NAME arg (`Pet` for `swagger:model Pet`) or ("", false) for a
-// bare `swagger:model`.
+// AnnotationArg returns the IDENT_NAME arg (`Pet` for `swagger:model Pet`) or ("", false) for a bare `swagger:model`.
 func (b *ModelBlock) AnnotationArg() (string, bool) {
 	if b.Name == "" {
 		return "", false
@@ -461,8 +450,8 @@ func (b *ResponseBlock) AnnotationArg() (string, bool) {
 
 // NameBlock is produced by `swagger:name <member-name>`.
 //
-// The annotation overrides a struct field's / interface method's JSON property name (or schema
-// member name) without mutating the surrounding Go identifier.
+// The annotation overrides a struct field's / interface method's JSON property name (or schema member name) without
+// mutating the surrounding Go identifier.
 // Name carries the IDENT_NAME argument.
 type NameBlock struct {
 	*baseBlock
@@ -472,8 +461,8 @@ type NameBlock struct {
 
 // AnnotationArg returns the IDENT_NAME arg.
 //
-// Bare `swagger:name` is rejected at parse time (CodeMissingRequiredArg); ("", false) only appears
-// on the diagnostic path.
+// Bare `swagger:name` is rejected at parse time (CodeMissingRequiredArg); ("", false) only appears on the diagnostic
+// path.
 func (b *NameBlock) AnnotationArg() (string, bool) {
 	if b.Name == "" {
 		return "", false
@@ -487,9 +476,9 @@ type ParametersTarget int
 const (
 	// ParamTargetOperations: the first token is an operation id.
 	//
-	// Covers the historical inline form (`swagger:parameters listPets …`) and the standalone
-	// reference form (`swagger:parameters listPets X-Name …`); the two are disambiguated by the
-	// builder using the host declaration (struct ⇒ definition/inline, otherwise reference).
+	// Covers the historical inline form (`swagger:parameters listPets …`) and the standalone reference form
+	// (`swagger:parameters listPets X-Name …`); the two are disambiguated by the builder using the host declaration
+	// (struct ⇒ definition/inline, otherwise reference).
 	ParamTargetOperations ParametersTarget = iota
 	// ParamTargetShared: the first token is the `*` shared-namespace marker (register the fields at
 	// `#/parameters/{name}`).
@@ -500,10 +489,9 @@ const (
 
 // ParametersBlock is produced by `swagger:parameters <target> [args…]`.
 //
-// The target is the shared-namespace wildcard `*`, a `/path`, or an operation id (see
-// [ParametersTarget]).
-// Args carries the remaining argument tokens, de-duplicated; the definition-vs-reference reading of
-// those tokens is the builder's, since it depends on whether the marker is attached to a struct.
+// The target is the shared-namespace wildcard `*`, a `/path`, or an operation id (see [ParametersTarget]).
+// Args carries the remaining argument tokens, de-duplicated; the definition-vs-reference reading of those tokens is the
+// builder's, since it depends on whether the marker is attached to a struct.
 //
 // §1.
 type ParametersBlock struct {
@@ -518,13 +506,13 @@ type ParametersBlock struct {
 	//   - ParamTargetShared:     the operation ids to reference into
 	//   - ParamTargetPath:       the shared-parameter names to reference
 	Args []string
-	// Dups are argument tokens dropped as exact duplicates of an earlier one (the basis for a
-	// duplicate-target / duplicate-ref warning).
+	// Dups are argument tokens dropped as exact duplicates of an earlier one (the basis for a duplicate-target /
+	// duplicate-ref warning).
 	Dups []string
 }
 
-// OperationIDs returns the operation ids this block targets for inline application: Args when
-// Target == ParamTargetOperations, else nil.
+// OperationIDs returns the operation ids this block targets for inline application: Args when Target ==
+// ParamTargetOperations, else nil.
 //
 // The shared (`*`) and path (`/path`) targets are not operation ids.
 func (b *ParametersBlock) OperationIDs() []string {
@@ -534,8 +522,8 @@ func (b *ParametersBlock) OperationIDs() []string {
 	return b.Args
 }
 
-// RouteBlock is produced by `swagger:route METHOD /path [tags] opID`. swagger:route's body is
-// inline keyword raw-blocks and **never** an OPAQUE_YAML.
+// RouteBlock is produced by `swagger:route METHOD /path [tags] opID`. swagger:route's body is inline keyword raw-blocks
+// and **never** an OPAQUE_YAML.
 type RouteBlock struct {
 	*baseBlock
 
@@ -562,13 +550,11 @@ type MetaBlock struct {
 	*baseBlock
 }
 
-// ClassifierBlock covers single-line classifier annotations: strfmt / allOf / ignore / alias / file
-// / type / default.
+// ClassifierBlock covers single-line classifier annotations: strfmt / allOf / ignore / alias / file / type / default.
 //
-// It also carries the schema-family override annotations swagger:title / swagger:description, whose
-// free-text arg lives in Args[0] while any co-located validation keywords ride the embedded
-// baseBlock.properties (those dispatch through the schema parser, not the classifier parser — see
-// annotationFamily).
+// It also carries the schema-family override annotations swagger:title / swagger:description, whose free-text arg lives
+// in Args[0] while any co-located validation keywords ride the embedded baseBlock.properties (those dispatch through
+// the schema parser, not the classifier parser — see annotationFamily).
 //
 // The Args slice carries the lexer-tokenised positional arguments.
 type ClassifierBlock struct {
@@ -592,8 +578,8 @@ func (b *ClassifierBlock) AnnotationArg() (string, bool) {
 
 // EnumDeclBlock is produced by `swagger:enum [name] [values…]`.
 //
-// The optional multi-line value-list is carried in BodyValues when present (lexer accumulates the
-// body as RAW_VALUE_ENUM).
+// The optional multi-line value-list is carried in BodyValues when present (lexer accumulates the body as
+// RAW_VALUE_ENUM).
 type EnumDeclBlock struct {
 	*baseBlock
 
@@ -603,8 +589,8 @@ type EnumDeclBlock struct {
 	BodyValues string  // populated when a multi-line RAW_VALUE_ENUM body was present
 }
 
-// AnnotationArg returns the IDENT_NAME arg (`status` for `swagger:enum status`) or ("", false) when
-// the enum was declared inline-only (`swagger:enum red green blue`) or as a pure body block.
+// AnnotationArg returns the IDENT_NAME arg (`status` for `swagger:enum status`) or ("", false) when the enum was
+// declared inline-only (`swagger:enum red green blue`) or as a pure body block.
 func (b *EnumDeclBlock) AnnotationArg() (string, bool) {
 	if b.Name == "" {
 		return "", false
@@ -612,8 +598,7 @@ func (b *EnumDeclBlock) AnnotationArg() (string, bool) {
 	return b.Name, true
 }
 
-// UnboundBlock represents a comment group with no annotation line — e.g. a struct field's
-// docstring.
+// UnboundBlock represents a comment group with no annotation line — e.g. a struct field's docstring.
 type UnboundBlock struct {
 	*baseBlock
 }

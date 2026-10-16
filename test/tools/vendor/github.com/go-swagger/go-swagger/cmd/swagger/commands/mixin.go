@@ -39,6 +39,13 @@ type MixinSpec struct {
 	IgnoreConflicts        bool           `description:"Ignore conflict"                                                                                            long:"ignore-conflicts"`
 }
 
+// Usage documents the spec arguments in the help message.
+//
+// It replaces the "[mixin-OPTIONS]" placeholder the flags parser renders by default.
+func (c MixinSpec) Usage() string {
+	return "[mixin-OPTIONS] {primary spec} {mixin spec}..."
+}
+
 // Execute runs the mixin command which merges Swagger 2.0 specs into
 // one spec
 //

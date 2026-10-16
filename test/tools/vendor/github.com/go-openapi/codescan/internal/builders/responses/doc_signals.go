@@ -11,16 +11,14 @@ import (
 	"github.com/go-openapi/codescan/internal/parsers/grammar"
 )
 
-// fieldDocSignals carries the per-field doc-comment signals the response dispatcher reads upstream
-// of the schema build.
+// fieldDocSignals carries the per-field doc-comment signals the response dispatcher reads upstream of the schema build.
 //
-// Shape parallels parameters/doc_signals.go's; the two will fold into a shared resolvers helper in
-// M6.
+// Shape parallels parameters/doc_signals.go's; the two will fold into a shared resolvers helper.
 //
 // # Details
 //
-// See [§in-discriminator](./README.md#in-discriminator) — the `in:` vocabulary,
-// default-to-header behaviour, and the invalid-`in:` diagnostic path.
+// See [§in-discriminator](./README.md#in-discriminator) — the `in:` vocabulary, default-to-header behaviour,
+// and the invalid-`in:` diagnostic path.
 type fieldDocSignals struct {
 	in        string
 	inSet     bool
@@ -31,8 +29,8 @@ type fieldDocSignals struct {
 	strfmtSet bool
 }
 
-// scanFieldDocSignals reads every signal the response dispatcher needs out of a pre-parsed block
-// slice and the raw doc text.
+// scanFieldDocSignals reads every signal the response dispatcher needs out of a pre-parsed block slice and the raw doc
+// text.
 //
 // Callers should pass `r.ParseBlocks(afld.Doc)` so the common.Builder cache absorbs the parse cost.
 //
@@ -40,8 +38,8 @@ type fieldDocSignals struct {
 //
 // # Details
 //
-// See [§in-discriminator](./README.md#in-discriminator) — why `in:` is line-scanned rather than
-// read as a grammar Property.
+// See [§in-discriminator](./README.md#in-discriminator) — why `in:` is line-scanned rather than read as a grammar
+// Property.
 func scanFieldDocSignals(blocks []grammar.Block, doc *ast.CommentGroup) fieldDocSignals {
 	var pd fieldDocSignals
 	if doc == nil {
@@ -49,7 +47,7 @@ func scanFieldDocSignals(blocks []grammar.Block, doc *ast.CommentGroup) fieldDoc
 	}
 
 	for _, b := range blocks {
-		switch b.AnnotationKind() { //nolint:exhaustive // only ignore/file/strfmt are relevant here
+		switch b.AnnotationKind() { //nolint:exhaustive // only ignore/file/strfmt/type are relevant here
 		case grammar.AnnIgnore:
 			pd.ignored = true
 		case grammar.AnnFile:
@@ -58,6 +56,14 @@ func scanFieldDocSignals(blocks []grammar.Block, doc *ast.CommentGroup) fieldDoc
 			if arg, ok := b.AnnotationArg(); ok && !strings.ContainsAny(arg, " \t") {
 				pd.strfmt = arg
 				pd.strfmtSet = true
+			}
+		case grammar.AnnType:
+			// `swagger:type file` is a synonym for `swagger:file`, and the preferred spelling.
+			// Raising the same signal reuses the body-only gate that already governs swagger:file on a response, rather than
+			// adding a second one.
+			// Other swagger:type arguments are handled by the schema builder, not here.
+			if arg, ok := b.AnnotationArg(); ok && arg == fileTypeName {
+				pd.file = true
 			}
 		}
 	}

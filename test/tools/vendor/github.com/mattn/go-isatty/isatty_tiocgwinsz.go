@@ -8,8 +8,12 @@ package isatty
 import "golang.org/x/sys/unix"
 
 // IsTerminal return true if the file descriptor is terminal.
+// TIOCGWINSZ is used instead of TCGETS because TCGETS shares its ioctl
+// number with SNDCTL_TMR_TIMEBASE of the OSS sound API, so it may succeed
+// (and even change the device mode) on non-tty devices. musl's isatty does
+// the same.
 func IsTerminal(fd uintptr) bool {
-	_, err := unix.IoctlGetTermios(int(fd), unix.TCGETS)
+	_, err := unix.IoctlGetWinsize(int(fd), unix.TIOCGWINSZ)
 	return err == nil
 }
 

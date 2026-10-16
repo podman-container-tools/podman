@@ -18,9 +18,21 @@ func (s *Builder) resolveRefOr(tio *types.TypeName, tgt ifaces.SwaggerTypable, o
 	if decl, ok := s.Ctx.GetModel(tio.Pkg().Path(), tio.Name()); ok {
 		return s.MakeRef(decl, tgt)
 	}
+
+	// A miss with nothing to fall back on is the whole definition going missing — the property comes out
+	// bare, carrying its name and nothing else. Worth more than a Hint when the cause is a package the
+	// load did not read: under an ordinary scan this same type is discovered and $ref'd, so unlike the
+	// thinner-schema cases the difference here is a definition that exists or does not.
+	//
+	// Only the no-fallback arm asks. Where orElse renders the type structurally the definition is not
+	// lost, and the miss is the ordinary "this type is not a model, inline it" outcome that fires on
+	// every scan.
 	if orElse == nil {
+		s.SourcelessFallback(tio)
+
 		return nil
 	}
+
 	return orElse()
 }
 
@@ -32,5 +44,12 @@ func (s *Builder) resolveRefOrErr(tio *types.TypeName, tgt ifaces.SwaggerTypable
 	if decl, ok := s.Ctx.GetModel(tio.Pkg().Path(), tio.Name()); ok {
 		return s.MakeRef(decl, tgt)
 	}
+	// An interface with no declaration to read renders as the open schema, which is what its structural
+	// form says on its own: any object satisfies it. Strictly less than the $ref a readable declaration
+	// would have produced, and strictly more useful than losing the document.
+	if s.SourcelessFallback(tio) {
+		return nil
+	}
+
 	return missingSource(errTpe)
 }

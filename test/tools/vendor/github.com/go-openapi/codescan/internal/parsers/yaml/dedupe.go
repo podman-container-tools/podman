@@ -9,20 +9,19 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// dropDuplicateMappingKeys walks the YAML AST rooted at node and drops earlier-occurrence duplicate
-// keys from every MappingNode it encounters (last-wins semantics).
+// dropDuplicateMappingKeys walks the YAML AST rooted at node and drops earlier-occurrence duplicate keys from every
+// MappingNode it encounters (last-wins semantics).
 //
-// It mutates Content in place; re-decoding the cleaned node through go.yaml.in/yaml/v3 then
-// succeeds even under the library's strict uniqueKeys check.
+// It mutates Content in place; re-decoding the cleaned node through go.yaml.in/yaml/v3 then succeeds even under the
+// library's strict uniqueKeys check.
 //
-// Two keys are considered duplicates when they share both Kind and Value — matching the library's
-// own duplicate-detection rule (decode.go: mapping(), uniqueKeys branch).
+// Two keys are considered duplicates when they share both Kind and Value — matching the library's own
+// duplicate-detection rule (decode.go: mapping(), uniqueKeys branch).
 // Tag differences therefore separate "1" and 1 as distinct keys.
 //
 // Last-wins matches the v1 gopkg.in/yaml.v2 behaviour codescan callers historically relied on.
-// Diagnostic emission on duplicates is intentionally NOT done here; it is tracked as a future
-// enhancement alongside the position-tracking yaml library swap (see the forthcoming-features
-// roadmap).
+// Diagnostic emission on duplicates is intentionally NOT done here; it is tracked as a future enhancement alongside the
+// position-tracking yaml library swap (see the forthcoming-features roadmap).
 func dropDuplicateMappingKeys(node *yaml.Node) {
 	if node == nil {
 		return
@@ -41,12 +40,12 @@ func dropDuplicateMappingKeys(node *yaml.Node) {
 	}
 }
 
-// pairStride is the (key, value) stride of yaml.MappingNode.Content — the library packs each
-// mapping as a flat slice of alternating key and value nodes.
+// pairStride is the (key, value) stride of yaml.MappingNode.Content — the library packs each mapping as a flat slice
+// of alternating key and value nodes.
 const pairStride = 2
 
-// dedupePairs returns content with earlier occurrences of duplicate keys removed, preserving the
-// order of the surviving (last-wins) pairs.
+// dedupePairs returns content with earlier occurrences of duplicate keys removed, preserving the order of the surviving
+// (last-wins) pairs.
 //
 // Keys are matched by (Kind, Value), matching yaml.v3's own uniqueKeys comparison.
 func dedupePairs(content []*yaml.Node) []*yaml.Node {
@@ -77,12 +76,11 @@ func dedupePairs(content []*yaml.Node) []*yaml.Node {
 	return out
 }
 
-// decodeYAMLBody parses body as YAML into an intermediate *yaml.Node, drops earlier-occurrence
-// duplicate mapping keys (last-wins), then decodes the cleaned tree into dst. dst may be a typed
-// struct, a generic map, or *any.
+// decodeYAMLBody parses body as YAML into an intermediate *yaml.Node, drops earlier-occurrence duplicate mapping keys
+// (last-wins), then decodes the cleaned tree into dst. dst may be a typed struct, a generic map, or *any.
 //
-// This is the single helper the package's public surface calls instead of yaml.Unmarshal directly,
-// so duplicate keys never abort the decode under strict uniqueKeys.
+// This is the single helper the package's public surface calls instead of yaml.Unmarshal directly, so duplicate keys
+// never abort the decode under strict uniqueKeys.
 // Empty body is a no-op (dst untouched, nil error).
 func decodeYAMLBody(body []byte, dst any) error {
 	if len(body) == 0 {

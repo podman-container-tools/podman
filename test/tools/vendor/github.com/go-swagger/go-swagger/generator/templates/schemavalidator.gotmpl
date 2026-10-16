@@ -144,7 +144,7 @@
       }
     {{- end }}
   {{- else }}
-    {{- if and (or .IsAliased (ne .ValueExpression .ReceiverName) (not .SkipExternalValidation)) }}{{/* prevents generated code to call itself: this is reserved for aliased types */}}
+    {{- if and (or .IsAliased (ne .ValueExpression .ReceiverName)) (not .SkipExternalValidation) }}{{/* prevents generated code to call itself: this is reserved for aliased types */}}
       {{- if and .IsNullable (not .IsMapNullOverride) }}
     if {{ .ValueExpression }} != nil {
       {{- end }}
@@ -828,9 +828,11 @@ func ({{.ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else i
       {{ $gotype := .GoType }}
 const (
       {{ range .Enum }}
+      {{- if ne . nil }}
       {{- $variant := print $gotype (pascalize (cleanupEnumVariant .)) }}
   // {{ $variant }} captures enum value {{ printf "%q" . }}
 	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+      {{- end }}
       {{ end }}
 )
     {{ end }}
@@ -855,6 +857,17 @@ func ({{ .ReceiverName }} {{ if not .IsPrimitive }}*{{ end }}{{ if .IsExported }
 }
   {{ end }}
   {{ if .ItemsEnum }}
+    {{ if (eq .Items.SwaggerType "string") }}
+      {{ $gotype := .Items.GoType }}
+      {{ $modelname := .GoName }}
+const (
+      {{ range .ItemsEnum }}
+      {{- $variant := print $modelname "Items" (pascalize (cleanupEnumVariant .)) }}
+  // {{ $variant }} captures enum value {{ printf "%q" . }}
+	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+      {{ end }}
+)
+    {{ end }}
 var {{ camelize .Name }}ItemsEnum []any
 
 func init() {
@@ -978,9 +991,11 @@ func init() {
           {{ $propname := .Name }}
 const (
           {{ range .Enum }}
+          {{- if ne . nil }}
           {{- $variant := print ($.GoName) (pascalize $propname) (pascalize (cleanupEnumVariant .)) }}
   // {{ $variant }} captures enum value {{ printf "%q" . }}
 	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+          {{- end }}
           {{ end }}
 )
         {{ end }}
@@ -994,6 +1009,17 @@ func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else 
 }
       {{ end }}
       {{ if .ItemsEnum }}
+        {{ if (eq .Items.SwaggerType "string") }}
+          {{ $gotype := .Items.GoType }}
+          {{ $propname := .GoName }}
+const (
+          {{ range .ItemsEnum }}
+          {{- $variant := print ($.GoName) $propname "Items" (pascalize (cleanupEnumVariant .)) }}
+  // {{ $variant }} captures enum value {{ printf "%q" . }}
+	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+          {{ end }}
+)
+        {{ end }}
 var {{ camelize $.Name }}{{ .GoName }}ItemsEnum []any
 func init() {
   var res []{{ template "dereffedSchemaType" .Items }}
@@ -1116,6 +1142,17 @@ func ({{ .ReceiverName }} *{{ if $.Discriminates }}{{ camelize $.Name }}{{ else 
 }
         {{ end }}
         {{ if .ItemsEnum }}
+          {{ if (eq .Items.SwaggerType "string") }}
+            {{ $gotype := .Items.GoType }}
+            {{ $propname := .GoName }}
+const (
+            {{ range .ItemsEnum }}
+            {{- $variant := print ($.GoName) $propname "Items" (pascalize (cleanupEnumVariant .)) }}
+  // {{ $variant }} captures enum value {{ printf "%q" . }}
+	{{ $variant }} {{ $gotype }} = {{ printf "%q" . }}
+            {{ end }}
+)
+          {{ end }}
 var {{ camelize $.Name }}{{ .GoName }}ItemsEnum []any
 
 func init() {

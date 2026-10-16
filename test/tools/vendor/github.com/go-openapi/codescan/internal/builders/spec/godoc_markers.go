@@ -10,13 +10,13 @@ import (
 	oaispec "github.com/go-openapi/spec"
 )
 
-// substituteGodocMarkers is the post-reduce half of CleanGoDoc idiom recomposition: it walks every
-// godoc-derived title / description in the finished document and rewrites each godoclink marker to
-// the exposed name of the schema it references. renames maps a pre-reduce definition key to its
-// final user-facing name; a marker whose key is not an emitted definition (pruned / unresolved)
-// collapses to its humanized fallback.
+// substituteGodocMarkers is the post-reduce half of CleanGoDoc idiom recomposition.
 //
-// §3.
+// It walks every godoc-derived title or description in the finished document and rewrites each godoclink marker
+// to the exposed name of the schema it references.
+//
+// renames maps a pre-reduce definition key to its final user-facing name; a marker whose key is not an
+// emitted definition (pruned / unresolved) collapses to its humanized fallback.
 func (s *Builder) substituteGodocMarkers(renames map[string]string) {
 	finalName := func(defKey string) (string, bool) {
 		if n, ok := renames[defKey]; ok {
@@ -36,9 +36,8 @@ func (s *Builder) substituteGodocMarkers(renames map[string]string) {
 	walkSpecProse(s.input, subst)
 }
 
-// walkSpecProse applies subst to every prose field (title / description / summary) reachable in sw
-// — the info block, definitions, shared parameters and responses, and every operation under
-// paths.
+// walkSpecProse applies subst to every prose field (title / description / summary) reachable in sw — the info block,
+// definitions, shared parameters and responses, and every operation under paths.
 //
 // It mirrors reduce.go's rewriteAllRefs traversal.
 func walkSpecProse(sw *oaispec.Swagger, subst func(string) string) {
@@ -70,18 +69,17 @@ func walkSpecProse(sw *oaispec.Swagger, subst func(string) string) {
 	}
 }
 
-// walkPathItemProse applies subst to a path item's shared parameters and every operation's summary
-// / description, parameters and responses.
+// walkPathItemProse applies subst to a path item's shared parameters and every operation's summary / description,
+// parameters and responses.
 func walkPathItemProse(pi *oaispec.PathItem, subst func(string) string) {
 	for i := range pi.Parameters {
 		pi.Parameters[i].Description = subst(pi.Parameters[i].Description)
 		walkSchemaProse(pi.Parameters[i].Schema, subst)
 	}
 
+	// operationsByMethod yields only the methods the path item actually defines, so there is no nil
+	// operation to guard against here.
 	for _, op := range operationsByMethod(pi) {
-		if op == nil {
-			continue
-		}
 		op.Summary = subst(op.Summary)
 		op.Description = subst(op.Description)
 		for i := range op.Parameters {
@@ -111,8 +109,12 @@ func walkResponseProse(r *oaispec.Response, subst func(string) string) {
 	walkSchemaProse(r.Schema, subst)
 }
 
-// walkSchemaProse applies subst to a schema's title / description and recurses through every nested
-// schema (properties, composition arms, items, maps).
+// walkSchemaProse applies subst to a schema's title / description and recurses through every nested schema
+// (properties, composition arms, items, maps).
+//
+// The anyOf / oneOf arms and the tuple form of items (Items.Schemas) are unreachable while the
+// output is Swagger 2.0, which has none of those constructs: they are kept because this walk must
+// stay total over the schema type, and they become live the day the emitter targets OAS 3.x.
 func walkSchemaProse(sch *oaispec.Schema, subst func(string) string) {
 	if sch == nil {
 		return

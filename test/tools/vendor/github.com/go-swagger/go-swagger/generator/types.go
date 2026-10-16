@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/kr/pretty"
 
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/spec"
@@ -36,17 +35,18 @@ const (
 
 // Extensions supported by go-swagger.
 const (
-	xClass        = "x-class"         // class name used by discriminator
-	xGoCustomTag  = "x-go-custom-tag" // additional tag for serializers on struct fields
-	xGoName       = "x-go-name"       // name of the generated go variable
-	xGoType       = "x-go-type"       // reuse existing type (do not generate)
-	xIsNullable   = "x-isnullable"
-	xNullable     = "x-nullable" // turns the schema into a pointer
-	xOmitEmpty    = "x-omitempty"
-	xSchemes      = "x-schemes" // additional schemes supported for operations (server generation)
-	xOrder        = "x-order"   // sort order for properties (or any schema)
-	xGoJSONString = "x-go-json-string"
-	xGoEnumCI     = "x-go-enum-ci" // make string enumeration case-insensitive
+	xClass             = "x-class"         // class name used by discriminator
+	xGoCustomTag       = "x-go-custom-tag" // additional tag for serializers on struct fields
+	xGoName            = "x-go-name"       // name of the generated go variable
+	xGoType            = "x-go-type"       // reuse existing type (do not generate)
+	xIsNullable        = "x-isnullable"
+	xNullable          = "x-nullable" // turns the schema into a pointer
+	xOmitEmpty         = "x-omitempty"
+	xSchemes           = "x-schemes" // additional schemes supported for operations (server generation)
+	xOrder             = "x-order"   // sort order for properties (or any schema)
+	xGoJSONString      = "x-go-json-string"
+	xGoEnumCI          = "x-go-enum-ci"          // make string enumeration case-insensitive
+	xGoServerStreaming = "x-go-server-streaming" // stream multipart form payloads directly to server handlers
 
 	xGoOperationTag = "x-go-operation-tag" // additional tag to override generation in operation groups
 )
@@ -64,15 +64,17 @@ type typeResolver struct {
 	definitionPkg      string // pkg alias to fill in GenSchema.Pkg
 	mangler            mangling.NameMangler
 	pkgMangler         func(string, string) string
+	noDefaultOmitEmpty bool
 }
 
 func newTypeResolver(pkg string, doc *loads.Document, opts *GenOpts) *typeResolver {
 	resolver := typeResolver{
-		ModelsPackage: pkg,
-		Doc:           doc,
-		KnownDefs:     make(map[string]struct{}, len(doc.Spec().Definitions)),
-		mangler:       opts.LanguageOpts.Mangler,
-		pkgMangler:    opts.LanguageOpts.ManglePackageName,
+		ModelsPackage:      pkg,
+		Doc:                doc,
+		KnownDefs:          make(map[string]struct{}, len(doc.Spec().Definitions)),
+		mangler:            opts.LanguageOpts.Mangler,
+		pkgMangler:         opts.LanguageOpts.ManglePackageName,
+		noDefaultOmitEmpty: opts.NoDefaultOmitEmpty,
 	}
 
 	resolver.setDefs()
@@ -97,15 +99,14 @@ func (t *typeResolver) NewWithModelName(name string) *typeResolver {
 	tt.keepDefinitionsPkg = t.keepDefinitionsPkg
 	tt.knownDefsKept = t.knownDefsKept
 	tt.definitionPkg = t.definitionPkg
+	tt.noDefaultOmitEmpty = t.noDefaultOmitEmpty
 
 	return tt
 }
 
 //nolint:gocognit // TODO(fredbi): refactor
 func (t *typeResolver) ResolveSchema(schema *spec.Schema, isAnonymous, isRequired bool) (result resolvedType, err error) {
-	debugLogf("resolving schema (anon: %t, req: %t) %s", isAnonymous, isRequired, t.ModelName)
 	defer func() {
-		debugLogf("returning after resolve schema: %s", pretty.Sprint(result))
 	}()
 
 	if schema == nil {
@@ -117,19 +118,14 @@ func (t *typeResolver) ResolveSchema(schema *spec.Schema, isAnonymous, isRequire
 	extType, isExternalType := t.resolveExternalType(schema.Extensions)
 	if isExternalType {
 		tpe, pkg, alias := t.knownDefGoType(t.ModelName, *schema, t.goTypeName)
-		debugLogf("found type %s declared as external, imported from %s as %s. Has type hints? %t, rendered has embedded? %t",
-			t.ModelName, pkg, tpe, extType.Hints.Kind != "", extType.Embedded)
-
 		if extType.Hints.Kind != "" && !extType.Embedded {
 			// use hint to qualify type
-			debugLogf("short circuits external type resolution with hint for %s", tpe)
 			result = t.shortCircuitResolveExternal(tpe, pkg, alias, extType, schema, isRequired)
 			result.IsExternal = isAnonymous // mark anonymous external types only, not definitions
 			return result, nil
 		}
 
 		// use spec to qualify type
-		debugLogf("marking type %s as external embedded: %t", tpe, extType.Embedded)
 		defer func() { // enforce bubbling up decisions taken about being an external type
 			// mark this type as an embedded external definition if requested
 			result.IsEmbedded = extType.Embedded
@@ -203,7 +199,7 @@ func (t *typeResolver) ResolveSchema(schema *spec.Schema, isAnonymous, isRequire
 	}
 
 	defer func() {
-		result.setExtensions(schema, tpe)
+		result.setExtensions(schema, tpe, t.noDefaultOmitEmpty)
 	}()
 
 	// special case of swagger type "file", rendered as io.ReadCloser interface
@@ -325,14 +321,11 @@ func (t typeResolver) resolveExternalType(ext spec.Extensions) (*externalTypeDef
 		}
 	}
 
-	debugLogAsJSONf("known def external %s type", xGoType, extType)
-
 	return extType, true
 }
 
 // knownDefGoType returns go type, package and package alias for definition.
 func (t typeResolver) knownDefGoType(def string, schema spec.Schema, clearFunc func(string) string) (string, string, string) {
-	debugLogf("known def type: %q", def)
 	ext := schema.Extensions
 	nm, hasGoName := ext.GetString(xGoName)
 
@@ -340,26 +333,21 @@ func (t typeResolver) knownDefGoType(def string, schema spec.Schema, clearFunc f
 	// a plain identifier so it cannot break out and inject unwanted declarations downstream.
 	if hasGoName {
 		if nm = sanitizeGoNameOverride(nm); nm != "" {
-			debugLogf("known def type %s named from %s as %q", def, xGoName, nm)
 			def = nm
 		}
 	}
 	extType, isExternalType := t.resolveExternalType(ext)
 	if !isExternalType || extType.Embedded {
 		if clearFunc == nil {
-			debugLogf("known def type no clear: %q", def)
 			return def, t.definitionPkg, ""
 		}
-		debugLogf("known def type clear: %q -> %q", def, clearFunc(def))
 		return clearFunc(def), t.definitionPkg, ""
 	}
 
 	// external type definition trumps regular type resolution
 	if extType.Import.Alias == "" {
-		debugLogf("type %s imported as external type %s, assumed in current package", def, extType.Type)
 		return extType.Type, extType.Import.Package, extType.Import.Alias
 	}
-	debugLogf("type %s imported as external type from %s as %s.%s", def, extType.Import.Package, extType.Import.Alias, extType.Type)
 	return extType.Import.Alias + "." + extType.Type, extType.Import.Package, extType.Import.Alias
 }
 
@@ -388,7 +376,6 @@ func (t *typeResolver) resolveSchemaRef(schema *spec.Schema, isRequired bool) (r
 	if schema.Ref.String() == "" {
 		return false, result, nil
 	}
-	debugLogf("resolving ref (anon: %t, req: %t) %s", false, isRequired, schema.Ref.String())
 
 	returns = true
 	var ref *spec.Schema
@@ -396,7 +383,6 @@ func (t *typeResolver) resolveSchemaRef(schema *spec.Schema, isRequired bool) (r
 
 	ref, er = spec.ResolveRef(t.Doc.Spec(), &schema.Ref)
 	if er != nil {
-		debugLogf("error resolving ref %s: %v", schema.Ref.String(), er)
 		err = er
 		return returns, result, err
 	}
@@ -416,7 +402,6 @@ func (t *typeResolver) resolveSchemaRef(schema *spec.Schema, isRequired bool) (r
 
 	tn := filepath.Base(schema.Ref.GetURL().Fragment)
 	tpe, pkg, alias := t.knownDefGoType(tn, *ref, t.goTypeName)
-	debugLogf("type name %s, package %s, alias %s", tpe, pkg, alias)
 	if tpe != "" {
 		result.GoType = tpe
 		result.Pkg = pkg
@@ -447,7 +432,6 @@ func (t *typeResolver) resolveFormat(schema *spec.Schema, isAnonymous bool, isRe
 			result.SwaggerType = schema.Type[0]
 		}
 
-		debugLogf("resolving format (anon: %t, req: %t)", isAnonymous, isRequired)
 		schFmt := strings.ReplaceAll(schema.Format, "-", "")
 		if fmm, ok := formatMapping[result.SwaggerType]; ok {
 			if tpe, ok := fmm[schFmt]; ok {
@@ -535,8 +519,6 @@ func (t *typeResolver) firstType(schema *spec.Schema) string {
 }
 
 func (t *typeResolver) resolveArray(schema *spec.Schema, isAnonymous, isRequired bool) (result resolvedType, err error) {
-	debugLogf("resolving array (anon: %t, req: %t)", isAnonymous, isRequired)
-
 	result.IsArray = true
 	result.IsNullable = false
 
@@ -564,9 +546,8 @@ func (t *typeResolver) resolveArray(schema *spec.Schema, isAnonymous, isRequired
 	}
 
 	// resolve anonymous items
-	rt, er := t.ResolveSchema(schema.Items.Schema, true, false)
-	if er != nil {
-		err = er
+	rt, err := t.ResolveSchema(schema.Items.Schema, true, false)
+	if err != nil {
 		return result, err
 	}
 
@@ -578,18 +559,15 @@ func (t *typeResolver) resolveArray(schema *spec.Schema, isAnonymous, isRequired
 		// drill into $ref to figure out whether we want the element type to nullable or not
 		resolved, erf := spec.ResolveRef(t.Doc.Spec(), &elem.Ref)
 		if erf != nil {
-			debugLogf("error resolving ref %s: %v", schema.Ref.String(), erf)
+			return result, erf
 		}
 		elem = resolved
 	}
 
-	debugLogAsJSONf("resolved item for %s", rt.GoType, elem)
 	if nullable, ok := t.isNullableOverride(elem); ok {
-		debugLogf("found nullable override in element %s: %t", rt.GoType, nullable)
 		rt.IsNullable = nullable
 	} else {
 		// this differs from isNullable for elements with AllOf
-		debugLogf("no nullable override in element %s: Properties: %t, HasDiscriminator: %t", rt.GoType, len(elem.Properties) > 0, rt.HasDiscriminator)
 		rt.IsNullable = len(elem.Properties) > 0 && !rt.HasDiscriminator
 	}
 
@@ -630,8 +608,6 @@ func (t *typeResolver) goTypeName(nm string) string {
 
 //nolint:gocognit // TODO(fredbi): refactor
 func (t *typeResolver) resolveObject(schema *spec.Schema, isAnonymous bool) (result resolvedType, err error) {
-	debugLogf("resolving object %s (anon: %t, req: %t)", t.ModelName, isAnonymous, false)
-
 	result.IsAnonymous = isAnonymous
 
 	result.IsBaseType = schema.Discriminator != ""
@@ -803,8 +779,6 @@ func nullableNumber(schema *spec.Schema, isRequired bool) bool {
 
 func (t *typeResolver) shortCircuitResolveExternal(tpe, pkg, alias string, extType *externalTypeDefinition, schema *spec.Schema, isRequired bool) resolvedType {
 	// short circuit type resolution for external types
-	debugLogAsJSONf("shortCircuitResolveExternal", extType)
-
 	var result resolvedType
 	result.Extensions = schema.Extensions
 	result.GoType = tpe
@@ -833,7 +807,7 @@ func (t *typeResolver) shortCircuitResolveExternal(tpe, pkg, alias string, extTy
 		tpe = "array"
 	}
 
-	result.setExtensions(schema, tpe)
+	result.setExtensions(schema, tpe, t.noDefaultOmitEmpty)
 	return result
 }
 
@@ -1153,9 +1127,9 @@ func (rt resolvedType) ToString(value string) string {
 	return fmt.Sprintf("string(%s%s)", deref, value)
 }
 
-func (rt *resolvedType) setExtensions(schema *spec.Schema, origType string) {
+func (rt *resolvedType) setExtensions(schema *spec.Schema, origType string, noDefaultOmitEmpty bool) {
 	rt.IsEnumCI = hasEnumCI(schema.Extensions)
-	rt.setIsEmptyOmitted(schema, origType)
+	rt.setIsEmptyOmitted(schema, origType, noDefaultOmitEmpty)
 	rt.setIsJSONString(schema, origType)
 
 	if customTag, found := schema.Extensions[xGoCustomTag]; found {
@@ -1166,10 +1140,17 @@ func (rt *resolvedType) setExtensions(schema *spec.Schema, origType string) {
 	}
 }
 
-func (rt *resolvedType) setIsEmptyOmitted(schema *spec.Schema, tpe string) {
+func (rt *resolvedType) setIsEmptyOmitted(schema *spec.Schema, tpe string, noDefaultOmitEmpty bool) {
 	if v, found := schema.Extensions[xOmitEmpty]; found {
 		omitted, cast := v.(bool)
 		rt.IsEmptyOmitted = omitted && cast
+		return
+	}
+	if noDefaultOmitEmpty {
+		// --no-default-omit-empty: do not add omitempty unless explicitly requested
+		// with x-omitempty (handled above) - required properties never get omitempty
+		// regardless, that is enforced separately where struct tags are rendered.
+		rt.IsEmptyOmitted = false
 		return
 	}
 	// array of primitives are by default not empty-omitted, but arrays of aliased type are
@@ -1186,9 +1167,6 @@ func (rt *resolvedType) setIsJSONString(schema *spec.Schema, _ string) {
 }
 
 func (rt *resolvedType) setKind(kind string) {
-	if kind != "" {
-		debugLogf("overriding kind for %s as %s", rt.GoType, kind)
-	}
 	switch kind {
 	case "map":
 		rt.IsMap = true
