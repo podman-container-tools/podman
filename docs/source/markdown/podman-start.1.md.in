@@ -33,6 +33,8 @@ starting multiple containers.
 
 @@option latest
 
+@@option pidfile
+
 @@option sig-proxy
 
 The default is **true** when attaching, **false** otherwise.

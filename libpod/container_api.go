@@ -90,7 +90,12 @@ func (c *Container) initUnlocked(ctx context.Context, recursive bool) (retErr er
 // Start requires that all dependency containers (e.g. pod infra containers) are
 // running before starting the container. The recursive parameter, if set, will start all
 // dependencies before starting this container.
-func (c *Container) Start(ctx context.Context, recursive bool) error {
+// Start returns the PID of the container's main process, read while the
+// container lock is held right after the OCI runtime started it. If the
+// container was already running, it returns that process's PID along with
+// an error wrapping define.ErrCtrStateRunning. On any other error, the
+// returned PID is 0.
+func (c *Container) Start(ctx context.Context, recursive bool) (int, error) {
 	// Have to lock the pod the container is a part of.
 	// This prevents running `podman start` at the same time a
 	// `podman pod stop` is running, which could lead to weird races.
