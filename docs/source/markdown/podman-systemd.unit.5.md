@@ -140,7 +140,14 @@ in order for them to become automatically enabled on the next boot.
 To compensate for this, the generator manually applies the `[Install]` section of the container definition
 unit files during generation, in the same way `systemctl enable` does when run later.
 
-For example, to start a container on boot, add something like this to the file:
+For example, to start a rootful container on boot, add something like this to the file:
+
+```
+[Install]
+WantedBy=multi-user.target
+```
+
+To start a rootless container on boot, add the following instead:
 
 ```
 [Install]
