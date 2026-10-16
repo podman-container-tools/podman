@@ -35,6 +35,7 @@ extern int reexec_in_user_namespace(int ready, char *state_dir);
 extern int reexec_in_user_namespace_wait(int pid, int options);
 extern int reexec_userns_join(int pid, char *state_dir);
 extern int is_fd_inherited(int fd);
+extern void close_systemd_activation_fds(void);
 */
 import "C"
 
@@ -373,6 +374,7 @@ func becomeRootInUserNS(stateDir string) (_ bool, _ int, retErr error) {
 		return false, -1, errors.New("setting up the process")
 	}
 
+	C.close_systemd_activation_fds()
 	return waitAndProxySignalsToChild(pidC)
 }
 

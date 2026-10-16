@@ -1284,6 +1284,25 @@ check_proc_sys_userns_file (const char *path)
     }
 }
 
+void
+close_systemd_activation_fds (void)
+{
+  if (do_socket_activation)
+    {
+      long num_fds;
+
+      num_fds = strtol (saved_systemd_listen_fds, NULL, 10);
+      if (num_fds != LONG_MIN && num_fds != LONG_MAX)
+        {
+          int f;
+
+          for (f = 3; f < num_fds + 3; f++)
+            if (is_fd_inherited (f))
+              close (f);
+        }
+    }
+}
+
 int
 reexec_in_user_namespace (int ready, char *state_dir)
 {
@@ -1318,17 +1337,6 @@ reexec_in_user_namespace (int ready, char *state_dir)
     {
       if (do_socket_activation)
         {
-          long num_fds;
-
-          num_fds = strtol (saved_systemd_listen_fds, NULL, 10);
-          if (num_fds != LONG_MIN && num_fds != LONG_MAX)
-            {
-              int f;
-
-              for (f = 3; f < num_fds + 3; f++)
-                if (is_fd_inherited (f))
-                  close (f);
-            }
           unsetenv ("LISTEN_PID");
           unsetenv ("LISTEN_FDS");
           unsetenv ("LISTEN_FDNAMES");
