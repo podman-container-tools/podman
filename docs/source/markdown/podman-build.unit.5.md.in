@@ -63,6 +63,7 @@ Valid options for `[Build]` section are listed below:
 | Retry=5                             | --retry=5                                   |
 | RetryDelay=10s                      | --retry-delay=10s                           |
 | Secret=secret                       | --secret=id=mysecret,src=path               |
+| ServiceName=name                    | Name the systemd unit `name.service`        |
 | SetWorkingDirectory=unit            | Set `WorkingDirectory` of systemd unit file |
 | Target=my-app                       | --target=my-app                             |
 | TLSVerify=false                     | --tls-verify=false                          |
@@ -108,6 +109,13 @@ Valid options for `[Build]` section are listed below:
 @@option quadlet:retry-delay
 
 @@option quadlet:secret.image
+
+### `ServiceName=name`
+
+By default, Quadlet will name the systemd service unit by appending `-build` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 ### `SetWorkingDirectory=path`
 
