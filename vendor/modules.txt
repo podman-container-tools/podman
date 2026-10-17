@@ -62,7 +62,7 @@ github.com/acarl005/stripansi
 # github.com/aead/serpent v0.0.0-20160714141033-fba169763ea6
 ## explicit
 github.com/aead/serpent
-# github.com/aperturerobotics/protobuf-go-lite v0.15.0
+# github.com/aperturerobotics/protobuf-go-lite v0.19.0
 ## explicit; go 1.23
 github.com/aperturerobotics/protobuf-go-lite
 # github.com/blang/semver/v4 v4.0.0
@@ -74,8 +74,8 @@ github.com/cespare/xxhash/v2
 # github.com/checkpoint-restore/checkpointctl v1.6.0
 ## explicit; go 1.25.0
 github.com/checkpoint-restore/checkpointctl/lib
-# github.com/checkpoint-restore/go-criu/v8 v8.4.0
-## explicit; go 1.25.0
+# github.com/checkpoint-restore/go-criu/v8 v8.5.0
+## explicit; go 1.26.0
 github.com/checkpoint-restore/go-criu/v8
 github.com/checkpoint-restore/go-criu/v8/internal/proto
 github.com/checkpoint-restore/go-criu/v8/rpc

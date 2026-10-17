@@ -13,6 +13,7 @@ build: rpc/rpc.pb.go stats/stats.pb.go
 	$(MAKE) -C crit bin/crit
 
 test: build
+	$(GO) test -v .
 	$(MAKE) -C test
 
 coverage:

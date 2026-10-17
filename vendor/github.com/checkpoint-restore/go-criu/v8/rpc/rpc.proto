@@ -151,6 +151,25 @@ message criu_opts {
 	optional bool			display_stats		= 70;
 	optional bool			log_to_stderr		= 71;
 	optional criu_image_io_mode	image_io_mode		= 72 [default = IMAGE_IO_WRITEBACK];
+	/*
+	 * Memory page compression mode (enum compress_mode):
+	 *   0 = off, 1 = block. Default 0.
+	 */
+	optional uint32			compress		= 73;
+	optional uint32			compress_acceleration	= 74;
+	optional uint32			compress_block_size	= 75;
+	/*
+	 * Worker concurrency for LZ4 decoding and eligible large zero fills.
+	 * 0 selects automatic concurrency; 1, the default, keeps LZ4 decoding
+	 * serial and disables zero-fill workers; values above 1 limit aggregate
+	 * worker concurrency. Active concurrency also depends on available CPUs,
+	 * useful batch work, and the restore-wide CPU budget. Valid range: 0
+	 * through 1024. Restore-time only.
+	 */
+	optional uint32			decompress_threads	= 76 [default = 1];
+	/* Plugin-owned namespaced options in PLUGIN.NAME[=VALUE] form. */
+	repeated string			plugin_options		= 77;
+	optional bool			stream			= 78;
 /*	optional bool			check_mounts		= 128;	*/
 }
 
@@ -198,6 +217,8 @@ message criu_features {
 	optional bool			mem_track	= 1;
 	optional bool			lazy_pages	= 2;
 	optional bool			pidfd_store	= 3;
+	/* Memory page compression support is available in this CRIU build. */
+	optional bool			mem_compression	= 4;
 }
 
 /*

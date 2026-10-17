@@ -1,11 +1,9 @@
 # protobuf-go-lite
 
-[![GoDoc Widget]][GoDoc] [![Go Report Card Widget]][Go Report Card] [![DeepWiki Widget]][DeepWiki]
+[![GoDoc Widget]][GoDoc] [![DeepWiki Widget]][DeepWiki]
 
 [GoDoc]: https://godoc.org/github.com/aperturerobotics/protobuf-go-lite
 [GoDoc Widget]: https://godoc.org/github.com/aperturerobotics/protobuf-go-lite?status.svg
-[Go Report Card Widget]: https://goreportcard.com/badge/github.com/aperturerobotics/protobuf-go-lite
-[Go Report Card]: https://goreportcard.com/report/github.com/aperturerobotics/protobuf-go-lite
 [DeepWiki Widget]: https://img.shields.io/badge/DeepWiki-aperturerobotics%2Fprotobuf--go--lite-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==
 [DeepWiki]: https://deepwiki.com/aperturerobotics/protobuf-go-lite
 
@@ -88,6 +86,9 @@ Summary of the packages provided by this module:
 *   [`cmd/protoc-gen-go-lite`](https://pkg.go.dev/github.com/aperturerobotics/protobuf-go-lite/cmd/protoc-gen-go-lite):
     The `protoc-gen-go-lite` binary is a protoc plugin to generate a Go protocol
     buffer package.
+*   [`registry`](https://pkg.go.dev/github.com/aperturerobotics/protobuf-go-lite/registry):
+    Package `registry` indexes generated message constructors and custom
+    message options without runtime reflection.
 
 ## Usage
 
@@ -127,6 +128,37 @@ Check out the [template](https://github.com/aperturerobotics/template) for a qui
 Both modes are selected at generation time and produce normal Go packages for
 callers. They do not add a reflection registry, descriptor builder, struct tag
 interpreter, or runtime type-metadata dependency to generated fast paths.
+
+### Opt-in message registry
+
+Generated packages do not register message types by default. Add `registry=true`
+to `--go-lite_opt` when an application must discover linked message types at
+runtime:
+
+```
+protoc --go-lite_out=. --go-lite_opt=features=all,registry=true example.proto
+```
+
+The registry requires the `size`, `marshal`, and `unmarshal` features. Each
+generated package registers constructors by fully qualified protobuf name and
+`google.protobuf.Any` type URL during package initialization. The generator
+also flattens custom message options into fully qualified scalar paths:
+
+```go
+registry.Range(func(entry registry.Entry) bool {
+	tenant, tenantOK := entry.Option("annotations.msg_opts.tenant")
+	table, tableOK := entry.Option("annotations.msg_opts.table")
+	if tenantOK && tableOK {
+		messagesByKey[tenant+"."+table] = entry
+	}
+	return true
+})
+```
+
+Repeated option values retain declaration order. Message-valued options use
+dot-separated field paths, and enum values use their protobuf names. The
+registry copies option metadata on registration and returns sorted snapshots to
+callers.
 
 ### Generated output
 

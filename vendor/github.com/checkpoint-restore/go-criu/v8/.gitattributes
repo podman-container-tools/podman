@@ -1,0 +1,2 @@
+vendor/github.com/pierrec/lz4/v4/LICENSE whitespace=-blank-at-eof
+vendor/github.com/pierrec/lz4/v4/compressing_reader.go whitespace=-blank-at-eol

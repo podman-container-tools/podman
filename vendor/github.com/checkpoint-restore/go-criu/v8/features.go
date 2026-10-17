@@ -41,5 +41,10 @@ func (c *Criu) FeatureCheck(features *rpc.CriuFeatures) (*rpc.CriuFeatures, erro
 		return nil, errors.New("unexpected CRIU RPC response")
 	}
 
-	return features, nil
+	checkedFeatures := resp.GetFeatures()
+	if checkedFeatures == nil {
+		return nil, errors.New("CRIU RPC response does not contain features")
+	}
+
+	return checkedFeatures, nil
 }

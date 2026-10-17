@@ -3,6 +3,8 @@ test/test.coverage
 test/piggie/piggie
 test/phaul/phaul
 test/phaul/phaul.coverage
+test/inheritfd/inheritfd
+test/inheritfd/inheritfd.coverage
 test/loop/loop
 test/mmapper/mmapper
 test/crit/crit-test
