@@ -19,6 +19,7 @@ import (
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
+	"go.podman.io/buildah/copier"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/pkg/ssh"
 	"go.podman.io/image/v5/manifest"
@@ -43,6 +44,7 @@ import (
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chrootarchive"
 	"go.podman.io/storage/pkg/idtools"
+	"go.podman.io/storage/pkg/unshare"
 )
 
 // Commit
@@ -251,6 +253,76 @@ func ExportImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rdr.Close()
 	utils.WriteResponse(w, http.StatusOK, rdr)
+}
+
+func ExportImageRootfs(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	name := utils.GetName(r)
+
+	image, _, err := runtime.LibimageRuntime().LookupImage(name, nil)
+	if err != nil {
+		utils.ImageNotFound(w, name, err)
+		return
+	}
+
+	ctx := r.Context()
+	mountPoint, err := image.Mount(ctx, nil, "")
+
+	cleanup := func() {
+		if err := image.Unmount(false); err != nil {
+			logrus.Errorf("failed to unmount image %s: %v", image.ID(), err)
+		}
+	}
+
+	// If the image is located in an additional read-only store, image.Mount()
+	// will fail with storage.ErrLayerUnknown because the storage driver expects
+	// a Read/Write layer to exist in order to mount it successfully.
+	// We fall back to creating a short-lived working container (exactly as Buildah does),
+	// which allocates a fresh, empty R/W layer in the primary store, allowing the mount to succeed.
+	if err != nil && errors.Is(err, storage.ErrLayerUnknown) {
+		store, storeErr := storage.GetStore(runtime.StorageConfig())
+		if storeErr == nil {
+			if b, err2 := buildah.NewBuilder(ctx, store, buildah.BuilderOptions{
+				FromImage:       image.ID(),
+				PullPolicy:      buildah.PullNever,
+				ContainerSuffix: "tmp",
+			}); err2 == nil {
+				mountPoint, err = b.Mount("")
+
+				cleanup = func() {
+					if err := b.Delete(); err != nil {
+						logrus.Errorf("failed to delete temporary container %q for image %q: %v", b.ContainerID, image.ID(), err)
+					}
+				}
+			}
+		}
+	}
+
+	if err != nil {
+		utils.InternalServerError(w, fmt.Errorf("mounting image to stream rootfs: %w", err))
+		return
+	}
+
+	defer cleanup()
+
+	w.Header().Set("Content-Type", "application/x-tar")
+
+	getOptions := copier.GetOptions{}
+	if unshare.IsRootless() {
+		// In order to maintain parity with buildah's native --output behavior,
+		// we strip setuid, setgid, and extended attributes. This avoids
+		// unsafe invocation of exported executables on the client side.
+		// Matches logic in vendor/go.podman.io/buildah/imagebuildah/stage_executor.go
+		getOptions.StripSetuidBit = true
+		getOptions.StripSetgidBit = true
+		getOptions.StripXattrs = true
+	}
+
+	err = copier.Get(mountPoint, mountPoint, getOptions, []string{"."}, w)
+	if err != nil {
+		utils.InternalServerError(w, fmt.Errorf("failed to stream image rootfs to client: %w", err))
+		return
+	}
 }
 
 func ExportImages(w http.ResponseWriter, r *http.Request) {

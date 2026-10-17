@@ -1430,16 +1430,26 @@ COPY --from=img2 /etc/alpine-release /prefix-test/container-prefix.txt`
 	})
 
 	It("podman build --output type=local,dest=./folder outputs to ./folder", func() {
-		SkipIfRemote("--output is not supported in remote mode")
 		podmanTest.PodmanExitCleanly("build", "-f", "build/basicalpine/Containerfile", "--output", fmt.Sprintf("type=local,dest=%v", podmanTest.TempDir))
 		files, err := os.ReadDir(podmanTest.TempDir)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(files)).To(BeNumerically(">", 1))
 	})
 
+	It("podman build --output type=tar outputs a tar file", func() {
+		outfile := filepath.Join(podmanTest.TempDir, "output.tar")
+		podmanTest.PodmanExitCleanly("build", "-f", "build/basicalpine/Containerfile", "--output", fmt.Sprintf("type=tar,dest=%v", outfile))
+		_, err := os.Stat(outfile)
+		Expect(err).ToNot(HaveOccurred())
+		// Verify the tar contains rootfs contents (e.g., /etc)
+		session := podmanTest.Podman([]string{"run", "--rm", "-v", fmt.Sprintf("%s:/test.tar:z", outfile), ALPINE, "tar", "tf", "/test.tar"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(ContainSubstring("etc/"))
+	})
+
 	// Should error because no type
 	It("podman build --output dest=./folder must fail", func() {
-		SkipIfRemote("--output is not supported in remote mode")
 		session := podmanTest.Podman([]string{"build", "-f", "build/basicalpine/Containerfile", "--output", fmt.Sprintf("dest=%v", podmanTest.TempDir)})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitWithError(125, `missing required key "type"`))
