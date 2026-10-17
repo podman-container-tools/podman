@@ -2444,3 +2444,19 @@ func TestRemoveVolumeNotInDB(t *testing.T) {
 		require.ErrorIs(t, err, define.ErrNoSuchVolume)
 	})
 }
+
+func TestSqliteJournalModeWAL(t *testing.T) {
+	// Regression test: on a local filesystem (tmpfs in t.TempDir()), WAL mode
+	// must be successfully applied when opening a SQLite database via NewSqliteState.
+	state, _ := getEmptySqliteState(t)
+	sqliteState, ok := state.(*SQLiteState)
+	require.True(t, ok)
+
+	var journalMode string
+	err := sqliteState.conn.QueryRow("PRAGMA journal_mode;").Scan(&journalMode)
+	require.NoError(t, err)
+	assert.Equal(t, "wal", strings.ToLower(journalMode))
+
+	err = sqliteState.Close()
+	assert.NoError(t, err)
+}
