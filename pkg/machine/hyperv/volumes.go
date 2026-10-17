@@ -18,32 +18,55 @@ import (
 
 func startShares(mc *vmconfigs.MachineConfig) error {
 	for _, mount := range mc.Mounts {
-		var args []string
-		cleanTarget := path.Clean(mount.Target)
-		requiresChattr := !strings.HasPrefix(cleanTarget, "/home") && !strings.HasPrefix(cleanTarget, "/mnt")
-		if requiresChattr {
-			args = append(args, "sudo", "chattr", "-i", "/", "; ")
+		args, err := startShareMountArgs(mount, logrus.IsLevelEnabled(logrus.DebugLevel))
+		if err != nil {
+			return err
 		}
-		args = append(args, "sudo", "mkdir", "-p", strconv.Quote(cleanTarget), "; ")
-		if requiresChattr {
-			args = append(args, "sudo", "chattr", "+i", "/", "; ")
-		}
-
-		args = append(args, "sudo", "podman")
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			args = append(args, "--log-level=debug")
-		}
-		// just being protective here; in a perfect world, this cannot happen
-		if mount.VSockNumber == nil {
-			return errors.New("cannot start 9p shares with undefined vsock number")
-		}
-		args = append(args, "machine", "client9p", fmt.Sprintf("%d", *mount.VSockNumber), strconv.Quote(mount.Target))
 
 		if err := machine.LocalhostSSH(mc.SSH.RemoteUsername, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, args); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func startShareMountArgs(mount *vmconfigs.Mount, debug bool) ([]string, error) {
+	cleanTarget := path.Clean(mount.Target)
+	var args []string
+	requiresChattr := !strings.HasPrefix(cleanTarget, "/home") && !strings.HasPrefix(cleanTarget, "/mnt")
+	if requiresChattr {
+		args = append(args, "sudo", "chattr", "-i", "/", "; ")
+	}
+	args = append(args, "sudo", "mkdir", "-p", strconv.Quote(cleanTarget), "; ")
+	if requiresChattr {
+		args = append(args, "sudo", "chattr", "+i", "/", "; ")
+	}
+
+	args = append(args, "sudo")
+	if mount.ReadOnly {
+		// Pass read-only preference via environment variable rather than a CLI flag.
+		// Older guest podman versions ignore the env var, while newer versions
+		// read it to mount the filesystem read-only.
+		args = append(args, "CONTAINERS_MACHINE_9P_READ_ONLY=1")
+	}
+	args = append(args, "podman")
+	if debug {
+		args = append(args, "--log-level=debug")
+	}
+	clientArgs, err := client9pArgs(mount)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, clientArgs...)
+	return args, nil
+}
+
+// client9pArgs returns the podman command arguments to mount a 9p share over vsock.
+func client9pArgs(mount *vmconfigs.Mount) ([]string, error) {
+	if mount.VSockNumber == nil {
+		return nil, errors.New("cannot start 9p shares with undefined vsock number")
+	}
+	return []string{"machine", "client9p", fmt.Sprintf("%d", *mount.VSockNumber), strconv.Quote(mount.Target)}, nil
 }
 
 func createShares(mc *vmconfigs.MachineConfig) (err error) {
