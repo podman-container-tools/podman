@@ -91,6 +91,10 @@ func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvid
 }
 
 func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, error) {
+	if err := removeStaleAPISocket(mc, provider); err != nil {
+		return "", 0, err
+	}
+
 	// Check if SSH port is in use, and reassign if necessary
 	if !ports.IsLocalPortAvailable(mc.SSH.Port) {
 		logrus.Warnf("detected port conflict on machine ssh port [%d], reassigning", mc.SSH.Port)
@@ -119,6 +123,26 @@ func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider)
 	}
 
 	return forwardSock, forwardingState, nil
+}
+
+// removeStaleAPISocket deletes the API socket left behind by a host proxy
+// that did not exit cleanly (e.g. when the host shuts down). The new proxy
+// fails to listen on it otherwise.
+func removeStaleAPISocket(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
+	sock, err := mc.APISocket()
+	if err != nil {
+		return err
+	}
+	if err := sock.Delete(); err != nil {
+		// On WSL the socket belongs to win-sshproxy, which only serves the API
+		// (SSH does not go through it), so the machine is usable without it.
+		if provider.UseProviderNetworkSetup() { // WSL
+			logrus.Warnf("unable to remove stale API socket %q: %v", sock.GetPath(), err)
+			return nil
+		}
+		return fmt.Errorf("removing stale API socket %q: %w", sock.GetPath(), err)
+	}
+	return nil
 }
 
 // conductVMReadinessCheck checks to make sure the machine is in the proper state

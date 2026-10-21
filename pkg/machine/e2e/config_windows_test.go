@@ -2,12 +2,16 @@ package e2e_test
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gexec"
 
+	"github.com/containers/podman/v5/pkg/machine"
 	"github.com/containers/podman/v5/pkg/machine/define"
 )
 
@@ -36,6 +40,28 @@ func getOtherProvider() string {
 		return "wsl"
 	}
 	return ""
+}
+
+// apiProxyPID returns the PID of the host proxy serving the machine API:
+// win-sshproxy on WSL (from its tid file), gvproxy otherwise.
+func apiProxyPID(name, runtimeDir string) int {
+	if testProvider.VMType() != define.WSLVirt {
+		return gvproxyPID(runtimeDir)
+	}
+	stateDir, err := machine.GetWinProxyStateDir(name, define.WSLVirt)
+	Expect(err).ToNot(HaveOccurred())
+	contents, err := os.ReadFile(filepath.Join(stateDir, "win-sshproxy.tid"))
+	Expect(err).ToNot(HaveOccurred())
+	var pid, tid int
+	_, err = fmt.Sscanf(string(contents), "%d:%d", &pid, &tid)
+	Expect(err).ToNot(HaveOccurred())
+	return pid
+}
+
+// processExists reports whether pid is running.
+func processExists(pid int) bool {
+	active, _ := machine.GetProcessState(pid)
+	return active
 }
 
 func runWslCommand(cmdArgs []string) *machineSession {
