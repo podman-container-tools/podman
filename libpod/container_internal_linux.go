@@ -746,6 +746,53 @@ var hasCapSysResource = sync.OnceValues(func() (bool, error) {
 	return currentCaps.Get(capability.EFFECTIVE, capability.CAP_SYS_RESOURCE), nil
 })
 
+// triggerAutofsMount performs a Statx without AT_NO_AUTOMOUNT so the kernel
+// mounts an autofs share at path (if one exists) before we bind-mount it into
+// the container. Plain stat(2)/fstatat(2)/os.Stat imply AT_NO_AUTOMOUNT and will
+// not trigger the mount; we only need that side effect. Errors are logged but
+// not returned so a failed trigger does not block container setup; later mount
+// steps still report real failures.
+func triggerAutofsMount(path string) {
+	if path == "" {
+		return
+	}
+	logrus.Debugf("Triggering autofs mount (if any) on volume source %q", path)
+	var st unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, path, 0, unix.STATX_TYPE, &st); err != nil {
+		logrus.Debugf("Statx on volume source %q (autofs trigger): %v", path, err)
+	}
+}
+
+// triggerAutofsMountInRoot wakes an automount at root/subpath.
+// It opens the parent under root with pathrs.OpenInRoot, then
+// Statx's the final component from that dirfd without AT_NO_AUTOMOUNT (so the
+// kernel may mount) and with AT_SYMLINK_NOFOLLOW (so a raced symlink cannot
+// escape the volume).
+func triggerAutofsMountInRoot(root, subpath string) {
+	if root == "" || subpath == "" {
+		return
+	}
+	// Clean as a rooted path so ".." cannot leave a leading "../" in the result.
+	subpath = path.Clean("/" + subpath)[1:]
+	dir, base := path.Dir(subpath), path.Base(subpath)
+	if base == "." || base == "/" || base == ".." || base == "" {
+		return
+	}
+
+	parent, err := pathrs.OpenInRoot(root, dir)
+	if err != nil {
+		logrus.Debugf("Open parent %q under %q (autofs trigger): %v", dir, root, err)
+		return
+	}
+	defer parent.Close()
+
+	logrus.Debugf("Triggering autofs mount (if any) on %q under %q", base, root)
+	var st unix.Statx_t
+	if err := unix.Statx(int(parent.Fd()), base, unix.AT_SYMLINK_NOFOLLOW, unix.STATX_TYPE, &st); err != nil {
+		logrus.Debugf("Statx %q under %q (autofs trigger): %v", base, root, err)
+	}
+}
+
 // containerPathIsFile returns true if the given containerPath is a file
 func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
 	f, err := pathrs.OpenInRoot(unsafeRoot, containerPath)
