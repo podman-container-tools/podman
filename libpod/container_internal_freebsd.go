@@ -417,6 +417,9 @@ func hasCapSysResource() (bool, error) {
 	return true, nil
 }
 
+// triggerAutofsMount is a no-op on FreeBSD (no autofs / Statx equivalent needed).
+func triggerAutofsMount(_ string) {}
+
 // containerPathIsFile returns true if the given containerPath is a file
 func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
 	// Note freebsd does not have support for OpenInRoot() so us the less safe way
