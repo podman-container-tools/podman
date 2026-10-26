@@ -5,8 +5,63 @@ package compat
 import (
 	"testing"
 
+	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/assert"
 )
+
+const (
+	defaultTarget = "/dest"
+)
+
+func TestConvertMountToCliString(t *testing.T) {
+	tests := []struct {
+		name     string
+		mount    mount.Mount
+		expected string
+	}{
+		{
+			name: "bind mount, ro",
+			mount: mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   "/src",
+				Target:   defaultTarget,
+				ReadOnly: true,
+			},
+			expected: "type=bind,source=/src,target=/dest,ro=true",
+		},
+		{
+			name: "image volume mount",
+			mount: mount.Mount{
+				Type:   mount.TypeImage,
+				Source: "localhost/myimage:latest",
+				Target: defaultTarget,
+				ImageOptions: &mount.ImageOptions{
+					Subpath: "/img",
+				},
+			},
+			expected: "type=image,source=localhost/myimage:latest,target=/dest,subpath=/img",
+		},
+		{
+			name: "volume mount",
+			mount: mount.Mount{
+				Type:   mount.TypeVolume,
+				Source: "vol",
+				Target: defaultTarget,
+				VolumeOptions: &mount.VolumeOptions{
+					Subpath: "/vol",
+				},
+			},
+			expected: "type=volume,source=vol,target=/dest,subpath=/vol",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mountString, err := convertMountToCliString(test.mount)
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, mountString)
+		})
+	}
+}
 
 func TestExtractInlineSeccompProfile(t *testing.T) {
 	inlineProfile := `{"defaultAction":"SCMP_ACT_ALLOW"}`
