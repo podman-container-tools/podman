@@ -1891,7 +1891,9 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	// tags:
 	//   - containers
 	// summary: Updates the configuration of an existing container, allowing changes to resource limits and healthchecks
-	// description: Updates the configuration of an existing container, allowing changes to resource limits and healthchecks.
+	// description: |
+	//   Updates the configuration of an existing container, allowing changes to resource limits and healthchecks.
+	//   Set host_rlimits to true to use the engine host's resource limits instead of r_limits.
 	// parameters:
 	//  - in: path
 	//    name: name

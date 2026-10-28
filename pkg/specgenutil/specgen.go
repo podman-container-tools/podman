@@ -278,12 +278,12 @@ func setNamespaces(rtc *config.Config, s *specgen.SpecGenerator, c *entities.Con
 	return nil
 }
 
-func GenRlimits(ulimits []string) ([]specs.POSIXRlimit, error) {
+func GenRlimits(ulimits []string) ([]specs.POSIXRlimit, bool, error) {
 	rlimits := make([]specs.POSIXRlimit, 0, len(ulimits))
 	// Rlimits/Ulimits
 	for _, ulimit := range ulimits {
 		if ulimit == "host" {
-			return []specs.POSIXRlimit{}, nil
+			return []specs.POSIXRlimit{}, true, nil
 		}
 		// `ulimitNameMapping` from go-units uses lowercase and names
 		// without prefixes, e.g. `RLIMIT_NOFILE` should be converted to `nofile`.
@@ -291,7 +291,7 @@ func GenRlimits(ulimits []string) ([]specs.POSIXRlimit, error) {
 		u := strings.TrimPrefix(strings.ToLower(ulimit), rlimitPrefix)
 		ul, err := units.ParseUlimit(u)
 		if err != nil {
-			return nil, fmt.Errorf("ulimit option %q requires name=SOFT:HARD, failed to be parsed: %w", u, err)
+			return nil, false, fmt.Errorf("ulimit option %q requires name=SOFT:HARD, failed to be parsed: %w", u, err)
 		}
 		rl := specs.POSIXRlimit{
 			Type: ul.Name,
@@ -300,7 +300,7 @@ func GenRlimits(ulimits []string) ([]specs.POSIXRlimit, error) {
 		}
 		rlimits = append(rlimits, rl)
 	}
-	return rlimits, nil
+	return rlimits, false, nil
 }
 
 func currentLabelOpts() ([]string, error) {
@@ -873,7 +873,7 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	// DeviceCgroupRules: c.StringSlice("device-cgroup-rule"),
 
 	// Rlimits/Ulimits
-	s.Rlimits, err = GenRlimits(c.Ulimit)
+	s.Rlimits, s.HostRlimits, err = GenRlimits(c.Ulimit)
 	if err != nil {
 		return err
 	}

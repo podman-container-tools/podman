@@ -8,12 +8,7 @@ import (
 	"go.podman.io/common/pkg/capabilities"
 )
 
-func (c *Container) setProcessCapabilitiesExec(options *ExecOptions, user string, execUser *user.ExecUser, pspec *spec.Process) error {
-	ctrSpec, err := c.specFromState()
-	if err != nil {
-		return err
-	}
-
+func (c *Container) setProcessCapabilitiesExec(options *ExecOptions, user string, execUser *user.ExecUser, pspec *spec.Process, ctrSpec *spec.Spec) error {
 	allCaps, err := capabilities.BoundingSet()
 	if err != nil {
 		return err

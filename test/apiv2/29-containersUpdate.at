@@ -31,4 +31,44 @@ t GET libpod/containers/$cid/json 200 \
 
 t DELETE containers/$cid 204
 
+# Compat updates must copy host limits when requested instead of ignoring host.
+t POST containers/create \
+  Image=$IMAGE \
+  HostConfig='{"Ulimits":[{"Name":"nofile","Soft":128,"Hard":256}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST containers/$cid/update \
+  Ulimits='[{"Name":"host"}]' \
+  200
+
+t GET containers/$cid/json 200
+is "$(jq -r '.HostConfig.Ulimits[] | select(.Name == "RLIMIT_NOFILE") | .Soft' <<<"$output")" \
+  "$(ulimit -Sn)" "compat update copies host nofile soft limit"
+is "$(jq -r '.HostConfig.Ulimits[] | select(.Name == "RLIMIT_NOFILE") | .Hard' <<<"$output")" \
+  "$(ulimit -Hn)" "compat update copies host nofile hard limit"
+
+t DELETE containers/$cid 204
+
+# Libpod host-only updates must work without linux_resources and survive restart.
+t POST libpod/containers/create \
+  Image=$IMAGE \
+  command='["/home/podman/pause"]' \
+  r_limits='[{"type":"nofile","soft":128,"hard":256}]' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST libpod/containers/$cid/start 204
+t POST libpod/containers/$cid/update host_rlimits=true 201
+t POST libpod/containers/$cid/restart?t=0 204
+t GET libpod/containers/$cid/json 200
+is "$(jq -r '.HostConfig.Ulimits[] | select(.Name == "RLIMIT_NOFILE") | .Soft' <<<"$output")" \
+  "$(ulimit -Sn)" "libpod host-only update preserves soft limit after restart"
+is "$(jq -r '.HostConfig.Ulimits[] | select(.Name == "RLIMIT_NOFILE") | .Hard' <<<"$output")" \
+  "$(ulimit -Hn)" "libpod host-only update preserves hard limit after restart"
+
+t DELETE containers/$cid?force=true 204
+
 podman container rm -fa

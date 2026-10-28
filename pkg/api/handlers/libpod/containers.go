@@ -522,6 +522,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		Env:                             options.Env,
 		UnsetEnv:                        options.UnsetEnv,
 		Rlimits:                         rlimits,
+		HostRlimits:                     options.HostRlimits,
 	}
 
 	err = ctr.Update(updateOptions)

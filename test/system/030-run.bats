@@ -1347,6 +1347,70 @@ EOF
 }
 
 # bats test_tags=ci:parallel
+@test "podman run and create --ulimit host preserve host limits" {
+    skip_if_remote "host limits belong to the engine process"
+
+    local hard=$(ulimit -Hn)
+    [[ $hard -gt 1024 ]] || skip "requires a hard nofile limit greater than 1024"
+    local containersconf=$PODMAN_TMPDIR/containers.conf
+    cat >"$containersconf" <<EOF
+[containers]
+default_ulimits = ["nofile=128:256"]
+EOF
+    local ctr=host-limits-$(random_string)
+    local limits='ulimit -Sn; ulimit -Hn'
+    (
+        ulimit -Sn 1024
+        CONTAINERS_CONF_OVERRIDE="$containersconf" run_podman run --rm --ulimit host $IMAGE sh -c "$limits"
+        is "$output" "1024
+$hard" "run inherits host soft and hard limits instead of configured defaults"
+
+        CONTAINERS_CONF_OVERRIDE="$containersconf" run_podman create --name "$ctr" --ulimit host $IMAGE sh -c "$limits"
+        run_podman start -a "$ctr"
+        is "$output" "1024
+$hard" "create and start inherit the same host limits"
+        run_podman rm "$ctr"
+
+        CONTAINERS_CONF_OVERRIDE="$containersconf" run_podman create --name "$ctr" --ulimit host $IMAGE /home/podman/pause
+        run_podman start "$ctr"
+    )
+
+    # Invoke exec from the original shell to check that the container's limits
+    # are preserved even when the caller's limits change.
+    run_podman exec "$ctr" sh -c "$limits"
+    is "$output" "1024
+$hard" "exec preserves the limits selected at creation"
+    run_podman rm -f -t 0 "$ctr"
+}
+
+# bats test_tags=ci:parallel
+@test "podman exec preserves default limits applied at start" {
+    skip_if_remote "host limits belong to the engine process"
+    skip_if_not_rootless "requires default limits to be clamped to the host hard limit"
+
+    local hard=$(ulimit -Hn)
+    local limit=$((hard > 65536 ? 65536 : hard / 2))
+    [[ $limit -gt 1024 ]] || skip "requires a hard nofile limit greater than 2049"
+    local containersconf=$PODMAN_TMPDIR/containers.conf
+    cat >"$containersconf" <<EOF
+[containers]
+default_ulimits = []
+EOF
+    local ctr=default-limits-$(random_string)
+    (
+        ulimit -Sn 1024
+        ulimit -Hn "$limit"
+        CONTAINERS_CONF_OVERRIDE="$containersconf" run_podman create --name "$ctr" $IMAGE /home/podman/pause
+        run_podman start "$ctr"
+    )
+
+    run_podman exec "$ctr" sh -c 'ulimit -Sn; ulimit -Hn'
+    is "$output" "$limit
+$limit" "exec uses the default limits applied at start instead of the caller's limits"
+    run_podman rm -f -t 0 "$ctr"
+}
+
+# bats test_tags=ci:parallel
 @test "podman run ulimit with -1" {
     max=unlimited
     if is_rootless; then

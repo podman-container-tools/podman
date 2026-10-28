@@ -19,6 +19,7 @@ import (
 	"github.com/moby/sys/capability"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/pkg/errorhandling"
+	_ "go.podman.io/podman/v6/pkg/rlimit"
 	"go.podman.io/storage/pkg/idtools"
 	pmount "go.podman.io/storage/pkg/mount"
 	"go.podman.io/storage/pkg/unshare"

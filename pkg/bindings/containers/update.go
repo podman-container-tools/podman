@@ -28,8 +28,9 @@ func Update(ctx context.Context, options *types.ContainerUpdateOptions) (string,
 	}
 
 	updateEntities := &handlers.UpdateEntities{
-		Env:      options.Env,
-		UnsetEnv: options.UnsetEnv,
+		Env:         options.Env,
+		UnsetEnv:    options.UnsetEnv,
+		HostRlimits: options.HostRlimits,
 	}
 	if options.Resources != nil {
 		updateEntities.LinuxResources = *options.Resources
