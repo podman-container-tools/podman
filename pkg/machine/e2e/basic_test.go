@@ -279,9 +279,23 @@ var _ = Describe("run basic podman commands", func() {
 		err = os.WriteFile(filepath.Join(dir, testFile), []byte(testString), 0o644)
 		Expect(err).ToNot(HaveOccurred())
 
+		roDir, err := os.MkdirTemp("", "machine-volume-ro")
+		Expect(err).ToNot(HaveOccurred())
+		defer os.RemoveAll(roDir)
+
+		roTestString := "readonly-volume-content"
+		roTestFile := "ro-testfile"
+		err = os.WriteFile(filepath.Join(roDir, roTestFile), []byte(roTestString), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
 		name := randomString()
 		machinePath := "/does/not/exist"
-		init := new(initMachine).withVolume(fmt.Sprintf("%s:%s", dir, machinePath)).withImage(mb.imagePath).withNow()
+		roMachinePath := "/mnt/ro-test"
+		init := new(initMachine).
+			withVolume(fmt.Sprintf("%s:%s", dir, machinePath)).
+			withVolume(fmt.Sprintf("%s:%s:ro", roDir, roMachinePath)).
+			withImage(mb.imagePath).
+			withNow()
 		session, err := mb.setName(name).setCmd(init).run()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(session).To(Exit(0))
@@ -292,6 +306,24 @@ var _ = Describe("run basic podman commands", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ls).To(Exit(0))
 		Expect(ls.outputToString()).To(ContainSubstring(testString))
+
+		sshRead := new(sshMachine).withSSHCommand([]string{"cat", path.Join(roMachinePath, roTestFile)})
+		readSess, err := mb.setName(name).setCmd(sshRead).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(readSess).To(Exit(0))
+		Expect(readSess.outputToString()).To(ContainSubstring(roTestString))
+
+		sshWrite := new(sshMachine).withSSHCommand([]string{"touch", path.Join(roMachinePath, "fail-write")})
+		writeSess, err := mb.setName(name).setCmd(sshWrite).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(writeSess).To(Not(Exit(0)))
+		Expect(writeSess.errorToString()).To(ContainSubstring("Read-only file system"))
+
+		sshFindmnt := new(sshMachine).withSSHCommand([]string{"findmnt", "-no", "OPTIONS", "--target", roMachinePath})
+		findmntSess, err := mb.setName(name).setCmd(sshFindmnt).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(findmntSess).To(Exit(0))
+		Expect(strings.Split(strings.TrimSpace(findmntSess.outputToString()), ",")).To(ContainElement("ro"))
 	})
 
 	It("CVE-2025-6032 regression test - HTTP", func() {

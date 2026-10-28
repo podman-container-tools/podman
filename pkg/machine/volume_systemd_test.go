@@ -70,3 +70,53 @@ func TestGenerateSystemDFilesForVirtiofsmountsCanonicalPath(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateSystemDFilesForVirtiofsMountsReadOnly(t *testing.T) {
+	tests := []struct {
+		name         string
+		mounts       []VirtIoFs
+		wantReadOnly []bool
+	}{
+		{
+			name: "read-only volume mount specifies ro option",
+			mounts: []VirtIoFs{
+				NewVirtIoFsMount("/host/ro-dir", "/guest/ro-dir", true),
+			},
+			wantReadOnly: []bool{true},
+		},
+		{
+			name: "read-write volume mount omits ro option",
+			mounts: []VirtIoFs{
+				NewVirtIoFsMount("/host/rw-dir", "/guest/rw-dir", false),
+			},
+			wantReadOnly: []bool{false},
+		},
+		{
+			name: "mixed read-only and read-write mounts correctly reflect options",
+			mounts: []VirtIoFs{
+				NewVirtIoFsMount("/host/ro-dir", "/guest/ro-dir", true),
+				NewVirtIoFsMount("/host/rw-dir", "/guest/rw-dir", false),
+			},
+			wantReadOnly: []bool{true, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			units, err := GenerateSystemDFilesForVirtiofsMounts(tt.mounts)
+			assert.NoError(t, err)
+
+			mountUnits := units[:len(tt.mounts)]
+			for i, isReadOnly := range tt.wantReadOnly {
+				u := mountUnits[i]
+				assert.NotNil(t, u.Contents)
+				if isReadOnly {
+					assert.Contains(t, *u.Contents, "Options=context=\"system_u:object_r:nfs_t:s0\",ro")
+				} else {
+					assert.Contains(t, *u.Contents, "Options=context=\"system_u:object_r:nfs_t:s0\"")
+					assert.NotContains(t, *u.Contents, ",ro")
+				}
+			}
+		})
+	}
+}
