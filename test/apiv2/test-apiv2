@@ -314,7 +314,7 @@ function t() {
         case "$path" in
         /*) url="$url$path" ;;
         libpod/*) url="$url/v6.0.0/$path" ;;
-        *)  url="$url/v1.44/$path" ;;
+        *)  url="$url/v1.48/$path" ;;
         esac
     fi
 

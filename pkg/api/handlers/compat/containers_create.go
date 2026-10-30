@@ -210,6 +210,60 @@ func extractInlineSeccompProfile(securityOpts []string) (string, []string) {
 	return lastVal, rest
 }
 
+// Convert mount type into a cli compatible string. Split out for ease of testing..
+// mounts type=tmpfs/bind,source=...,target=...=,opt=val
+func convertMountToCliString(m mount.Mount) (string, error) {
+	var builder strings.Builder
+	addField(&builder, "type", string(m.Type))
+	addField(&builder, "source", m.Source)
+	addField(&builder, "target", m.Target)
+
+	if m.ReadOnly {
+		addField(&builder, "ro", "true")
+	}
+	addField(&builder, "consistency", string(m.Consistency))
+	// Map any specialized mount options that intersect between *Options and cli options
+	switch m.Type {
+	case mount.TypeBind:
+		if m.BindOptions != nil {
+			addField(&builder, "bind-propagation", string(m.BindOptions.Propagation))
+			addField(&builder, "bind-nonrecursive", strconv.FormatBool(m.BindOptions.NonRecursive))
+		}
+	case mount.TypeTmpfs:
+		if m.TmpfsOptions != nil {
+			if m.TmpfsOptions.SizeBytes != 0 {
+				addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
+			}
+			if m.TmpfsOptions.Mode != 0 {
+				addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
+			}
+			for _, opt := range m.TmpfsOptions.Options {
+				switch len(opt) {
+				case 1:
+					if builder.Len() > 0 {
+						builder.WriteRune(',')
+					}
+					builder.WriteString(opt[0])
+				case 2:
+					addField(&builder, opt[0], opt[1])
+				default:
+					return "", fmt.Errorf("invalid tmpfs format %q,", opt)
+				}
+			}
+		}
+	case mount.TypeVolume:
+		if m.VolumeOptions != nil {
+			addField(&builder, "subpath", m.VolumeOptions.Subpath)
+		}
+	case mount.TypeImage:
+		if m.ImageOptions != nil {
+			addField(&builder, "subpath", m.ImageOptions.Subpath)
+		}
+	}
+	// See vendor/github.com/containers/common/pkg/parse/parse.go:ValidateVolumeOpts()
+	return builder.String(), nil
+}
+
 // cliOpts converts a compat input struct to cliopts
 func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.ContainerCreateOptions, []string, error) {
 	var (
@@ -285,64 +339,20 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 		expose = append(expose, p.String())
 	}
 
-	// mounts type=tmpfs/bind,source=...,target=...=,opt=val
 	volSources := make(map[string]bool)
 	volDestinations := make(map[string]bool)
 	mounts := make([]string, 0, len(cc.HostConfig.Mounts))
-	var builder strings.Builder
 	for _, m := range cc.HostConfig.Mounts {
-		addField(&builder, "type", string(m.Type))
-		addField(&builder, "source", m.Source)
-		addField(&builder, "target", m.Target)
-
 		// Store source/dest so we don't add duplicates if a volume is
 		// also mentioned in cc.Volumes.
 		// Which Docker Compose v2.0 does, for unclear reasons...
 		volSources[m.Source] = true
 		volDestinations[m.Target] = true
-
-		if m.ReadOnly {
-			addField(&builder, "ro", "true")
+		mString, err := convertMountToCliString(m)
+		if err != nil {
+			return nil, nil, err
 		}
-		addField(&builder, "consistency", string(m.Consistency))
-		// Map any specialized mount options that intersect between *Options and cli options
-		switch m.Type {
-		case mount.TypeBind:
-			if m.BindOptions != nil {
-				addField(&builder, "bind-propagation", string(m.BindOptions.Propagation))
-				addField(&builder, "bind-nonrecursive", strconv.FormatBool(m.BindOptions.NonRecursive))
-			}
-		case mount.TypeTmpfs:
-			if m.TmpfsOptions != nil {
-				if m.TmpfsOptions.SizeBytes != 0 {
-					addField(&builder, "tmpfs-size", strconv.FormatInt(m.TmpfsOptions.SizeBytes, 10))
-				}
-				if m.TmpfsOptions.Mode != 0 {
-					addField(&builder, "tmpfs-mode", strconv.FormatUint(uint64(m.TmpfsOptions.Mode), 8))
-				}
-				for _, opt := range m.TmpfsOptions.Options {
-					switch len(opt) {
-					case 1:
-						if builder.Len() > 0 {
-							builder.WriteRune(',')
-						}
-						builder.WriteString(opt[0])
-					case 2:
-						addField(&builder, opt[0], opt[1])
-					default:
-						return nil, nil, fmt.Errorf("invalid tmpfs format %q,", opt)
-					}
-				}
-			}
-		case mount.TypeVolume:
-			if m.VolumeOptions != nil {
-				addField(&builder, "subpath", m.VolumeOptions.Subpath)
-			}
-			// All current VolumeOpts are handled above
-			// See vendor/github.com/containers/common/pkg/parse/parse.go:ValidateVolumeOpts()
-		}
-		mounts = append(mounts, builder.String())
-		builder.Reset()
+		mounts = append(mounts, mString)
 	}
 
 	// dns

@@ -4,7 +4,7 @@
 #
 
 # NOTE: paths with a leading slash will be interpreted as-is;
-#       paths without will have '/v1.44/' prepended.
+#       paths without will have '/v1.48/' prepended.
 t GET  /_ping        200 OK
 t HEAD /_ping        200
 t GET  /libpod/_ping 200 OK
@@ -22,7 +22,7 @@ for i in /version version; do
       .Components[0].Details.APIVersion~6[0-9.-]\\+  \
       .Components[0].Details.MinAPIVersion=4.0.0     \
       .Components[0].Details.Os=linux                \
-      .ApiVersion=1.44                               \
+      .ApiVersion=1.48                               \
       .MinAPIVersion=1.24                            \
       .Os=linux
 done
