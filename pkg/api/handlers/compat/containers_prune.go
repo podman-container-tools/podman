@@ -7,18 +7,54 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/pkg/api/handlers"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
 	api "go.podman.io/podman/v6/pkg/api/types"
+	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/domain/entities/reports"
 	"go.podman.io/podman/v6/pkg/domain/filters"
+	"go.podman.io/podman/v6/pkg/domain/infra/abi"
 	"go.podman.io/podman/v6/pkg/util"
 )
 
 func PruneContainers(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	external := false
+	if value := r.URL.Query().Get("external"); value != "" {
+		var err error
+		external, err = strconv.ParseBool(value)
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("invalid external value: %w", err))
+			return
+		}
+	}
+	if external {
+		if !utils.IsLibpodRequest(r) {
+			utils.Error(w, http.StatusBadRequest, errors.New("external prune is only supported on libpod endpoints"))
+			return
+		}
+		filtersMap, err := util.PrepareFilters(r)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+			return
+		}
+		engine := abi.ContainerEngine{Libpod: runtime}
+		reports, err := engine.ContainerPrune(r.Context(), entities.ContainerPruneOptions{
+			Filters:  url.Values(*filtersMap),
+			External: true,
+		})
+		if err != nil {
+			utils.InternalServerError(w, err)
+			return
+		}
+		utils.WriteResponse(w, http.StatusOK, reports)
+		return
+	}
+
 	filtersMap, err := util.PrepareFilters(r)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))

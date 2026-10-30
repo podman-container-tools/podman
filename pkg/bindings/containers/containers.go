@@ -62,7 +62,11 @@ func Prune(ctx context.Context, options *PruneOptions) ([]*reports.PruneReport, 
 	if err != nil {
 		return nil, err
 	}
-	response, err := conn.DoRequest(ctx, nil, http.MethodPost, "/containers/prune", params, nil)
+	path := "/containers/prune"
+	if options.GetExternal() {
+		path = "/libpod/containers/prune"
+	}
+	response, err := conn.DoRequest(ctx, nil, http.MethodPost, path, params, nil)
 	if err != nil {
 		return nil, err
 	}
