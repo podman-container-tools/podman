@@ -329,6 +329,17 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 		}
 	}
 
+	// Resolve the runtime before validating its namespace and cgroup capabilities.
+	if ctr.config.OCIRuntime == "" {
+		ctr.ociRuntime = r.defaultOCIRuntime
+	} else {
+		ociRuntime, ok := r.ociRuntimes[ctr.config.OCIRuntime]
+		if !ok {
+			return nil, fmt.Errorf("requested OCI runtime %s is not available: %w", ctr.config.OCIRuntime, define.ErrInvalidArg)
+		}
+		ctr.ociRuntime = ociRuntime
+	}
+
 	// Validate the container
 	if err := ctr.validate(); err != nil {
 		return nil, err
@@ -360,22 +371,6 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 
 	ctr.valid = true
 	ctr.state.State = define.ContainerStateConfigured
-	if ctr.config.OCIRuntime == "" {
-		ctr.ociRuntime = r.defaultOCIRuntime
-	} else {
-		ociRuntime, ok := r.ociRuntimes[ctr.config.OCIRuntime]
-		if !ok {
-			return nil, fmt.Errorf("requested OCI runtime %s is not available: %w", ctr.config.OCIRuntime, define.ErrInvalidArg)
-		}
-		ctr.ociRuntime = ociRuntime
-	}
-
-	// Check NoCgroups support
-	if ctr.config.NoCgroups {
-		if !ctr.ociRuntime.SupportsNoCgroups() {
-			return nil, fmt.Errorf("requested OCI runtime %s is not compatible with NoCgroups: %w", ctr.ociRuntime.Name(), define.ErrInvalidArg)
-		}
-	}
 
 	var pod *Pod
 	if ctr.config.Pod != "" {

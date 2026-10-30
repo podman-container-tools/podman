@@ -37,6 +37,87 @@ load helpers
 }
 
 # bats test_tags=ci:parallel
+@test "podman run rootless cgroupfs creates a cgroup for the container" {
+    skip_if_remote "podman-remote does not support --cgroup-manager"
+    skip_if_not_rootless "rootful cgroupfs always sets a cgroup parent"
+
+    ctrname="c-$(safename)"
+    run_podman --cgroup-manager=cgroupfs run -d --name $ctrname $IMAGE top
+    cid="$output"
+
+    run_podman inspect --format '{{.State.Pid}}' $ctrname
+    cgroup=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/$output/cgroup)
+    assert "$cgroup" =~ "/libpod-$cid\$" "container runs in the cgroup created for it"
+
+    # The cgroup is deleted with the container, and created again on start
+    run_podman stop -t 0 $ctrname
+    test ! -e $cgroup || die "$cgroup still exists after stop"
+
+    run_podman start $ctrname
+    run_podman inspect --format '{{.State.Pid}}' $ctrname
+    cgroup=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/$output/cgroup)
+    assert "$cgroup" =~ "/libpod-$cid\$" "restarted container runs in the cgroup created for it"
+
+    run_podman rm -f -t 0 $ctrname
+    test ! -e $cgroup || die "$cgroup still exists after rm"
+}
+
+# bats test_tags=ci:parallel
+@test "podman run rootless cgroupfs fails if the container cgroup cannot be created" {
+    skip_if_remote "podman-remote does not support --cgroup-manager"
+    skip_if_not_rootless "rootful cgroupfs always sets a cgroup parent"
+
+    ctrname="c-$(safename)"
+    # Make cgroupfs read-only in a private mount namespace, so that the
+    # container cgroup cannot be created.  The container must not run without it.
+    run_podman 126 unshare unshare --mount sh -c "
+        mount --bind /sys/fs/cgroup /sys/fs/cgroup &&
+        mount -o remount,bind,ro /sys/fs/cgroup &&
+        $PODMAN $_PODMAN_TEST_OPTS --cgroup-manager=cgroupfs run --rm --name $ctrname $IMAGE echo $ctrname-started"
+    assert "$output" =~ "creating cgroup" "error mentions the cgroup"
+    assert "$output" !~ "$ctrname-started" "container did not run"
+
+    run_podman 1 container exists $ctrname
+}
+
+# bats test_tags=ci:parallel
+@test "podman run rootless cgroupfs removes the cgroup if the container cannot be created" {
+    skip_if_remote "podman-remote does not support --runtime"
+    skip_if_not_rootless "rootful cgroupfs always sets a cgroup parent"
+
+    run_podman info --format '{{.Host.OCIRuntime.Path}}'
+    runtime="$output"
+
+    # OCI runtime that fails to create the container, after recording
+    # the cgroup that podman created for it.
+    marker=$PODMAN_TMPDIR/cgroup
+    fake_runtime=$PODMAN_TMPDIR/fake-runtime
+    cat >$fake_runtime <<EOF
+#!/bin/sh
+for arg; do id=\$arg; done
+for arg; do
+    if [ "\$arg" = create ]; then
+        find /sys/fs/cgroup -type d -name "libpod-\$id" >$marker 2>/dev/null
+        echo "fake runtime cannot create the container" >&2
+        exit 1
+    fi
+done
+exec $runtime "\$@"
+EOF
+    chmod +x $fake_runtime
+
+    ctrname="c-$(safename)"
+    run_podman 126 --cgroup-manager=cgroupfs run --runtime $fake_runtime --name $ctrname $IMAGE true
+    assert "$output" =~ "fake runtime cannot create the container"
+
+    cgroup=$(< $marker)
+    assert "$cgroup" =~ "/libpod-" "the cgroup exists when the OCI runtime creates the container"
+    test ! -e $cgroup || die "$cgroup was not removed"
+
+    run_podman rm $ctrname
+}
+
+# bats test_tags=ci:parallel
 @test "podman run --cgroups=disabled keeps the current cgroup" {
     skip_if_remote "podman-remote does not support --cgroups=disabled"
     runtime=$(podman_runtime)

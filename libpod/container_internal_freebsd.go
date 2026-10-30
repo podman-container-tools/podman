@@ -292,6 +292,10 @@ func (c *Container) setCgroupsPath(_ *generate.Generator) error {
 	return nil
 }
 
+func (c *Container) createCgroup(_ *spec.Spec) (func() error, error) {
+	return nil, nil
+}
+
 func (c *Container) addSpecialDNS(nameservers []string) []string {
 	return nameservers
 }

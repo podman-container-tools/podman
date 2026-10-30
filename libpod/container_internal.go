@@ -1045,6 +1045,19 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 		return err
 	}
 
+	removeCgroup, err := c.createCgroup(newSpec)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// Set to nil once the OCI runtime owns the cgroup.
+		if removeCgroup != nil {
+			if err := removeCgroup(); err != nil {
+				logrus.Errorf("Removing cgroup for container %s: %v", c.ID(), err)
+			}
+		}
+	}()
+
 	// Save the OCI newSpec to disk
 	if err := c.saveSpec(newSpec); err != nil {
 		return err
@@ -1080,6 +1093,8 @@ func (c *Container) init(ctx context.Context, retainRetries bool) error {
 	if _, err = c.ociRuntime.CreateContainer(c, nil); err != nil {
 		return err
 	}
+	// The OCI runtime deletes the cgroup with the container.
+	removeCgroup = nil
 
 	logrus.Debugf("Created container %s in OCI runtime", c.ID())
 

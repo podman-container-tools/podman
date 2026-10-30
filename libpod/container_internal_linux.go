@@ -558,6 +558,38 @@ func (c *Container) setCgroupsPath(g *generate.Generator) error {
 	return nil
 }
 
+// createCgroup creates the cgroup of a rootless container using cgroupfs
+// without a cgroup parent and sets its path in the spec.  Without a path, the
+// OCI runtime runs the container without a cgroup when it cannot create one.
+// The cgroup is created at the root of the hierarchy, or next to the current
+// cgroup if that is not possible.
+// The returned function, if not nil, removes the cgroup created here.
+func (c *Container) createCgroup(s *spec.Spec) (func() error, error) {
+	if c.config.NoCgroups || !rootless.IsRootless() || c.CgroupManager() != config.CgroupfsCgroupsManager || s.Linux.CgroupsPath != "" {
+		return nil, nil
+	}
+	ownCgroup, err := cgroups.GetOwnCgroup()
+	if err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("libpod-%s", c.ID())
+	paths := []string{"/" + name}
+	if sibling := filepath.Join(filepath.Dir(ownCgroup), name); sibling != paths[0] {
+		paths = append(paths, sibling)
+	}
+	resources, err := GetLimits(s.Linux.Resources)
+	if err != nil {
+		return nil, err
+	}
+	cgroupPath, cleanup, err := cgroups.CreateFirst(paths, &resources)
+	if err != nil {
+		return nil, fmt.Errorf("creating cgroup for container %s: %w", c.ID(), err)
+	}
+	logrus.Debugf("Setting Cgroup path for container %s to %s", c.ID(), cgroupPath)
+	s.Linux.CgroupsPath = cgroupPath
+	return cleanup, nil
+}
+
 // addSpecialDNS adds special dns servers for pasta
 func (c *Container) addSpecialDNS(nameservers []string) []string {
 	switch {

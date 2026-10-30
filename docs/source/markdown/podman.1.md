@@ -41,7 +41,7 @@ The CGroup manager to use for container cgroups. Supported values are __cgroupfs
 
 Note: Setting this flag can cause certain commands to break when called on containers previously created by the other CGroup manager type.
 
-__cgroupfs__ doesn't work in Rootless mode and containers cgroups aren't used.
+In rootless mode, when no cgroup parent is set, __cgroupfs__ creates the container cgroup at the root of the cgroup hierarchy or, if that is not possible, next to the cgroup of the Podman process, whose parent cgroup must then be delegated to the user. If the cgroup cannot be created, the container fails to start. **--cgroups=disabled** runs a container without cgroups.
 
 #### **--config**
 Location of config file. Mainly for docker compatibility, only the authentication parts of the config are supported.

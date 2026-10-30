@@ -20,7 +20,8 @@ If the container joins a pod (i.e. `Pod=` is specified), you may want to change 
 Default is **enabled**.
 << endif >>
 
-The **enabled** option creates a new cgroup under the cgroup-parent.
+The **enabled** option creates a new cgroup under the cgroup-parent. Podman does not automatically disable cgroups if their creation fails.
 The **disabled** option forces the container to not create cgroups, and thus conflicts with cgroup options (**--cgroupns** and **--cgroup-parent**).
+Disabling cgroups requires a private PID namespace. Runtimes listed in `runtime_supports_kvm` may instead use the host PID namespace when cgroups are explicitly **disabled**; they must also support disabling cgroups. Joining another container's PID namespace or a PID namespace path remains unsupported.
 The **no-conmon** option disables a new cgroup only for the **conmon** process.
 The **split** option splits the current cgroup in two sub-cgroups: one for conmon and one for the container payload. It is not possible to set **--cgroup-parent** with **split**.

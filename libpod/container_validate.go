@@ -77,8 +77,14 @@ func (c *Container) validate() error {
 				break
 			}
 		}
-		if !foundPid {
+		// A VM runtime runs the workload in a guest, so it may use the host
+		// PID namespace, but only when cgroups were explicitly disabled.
+		vmWithoutCgroups := c.config.CgroupsMode == "disabled" && c.ociRuntime.SupportsKVM()
+		if !foundPid && !vmWithoutCgroups {
 			return fmt.Errorf("containers not creating Cgroups must create a private PID namespace: %w", define.ErrInvalidArg)
+		}
+		if c.config.NoCgroups && !c.ociRuntime.SupportsNoCgroups() {
+			return fmt.Errorf("requested OCI runtime %s is not compatible with NoCgroups: %w", c.ociRuntime.Name(), define.ErrInvalidArg)
 		}
 	}
 
