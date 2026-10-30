@@ -126,6 +126,10 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
+	if createParams.SecretCreateRequest == nil {
+		utils.Error(w, http.StatusBadRequest, errors.New("missing secret name and data"))
+		return
+	}
 
 	decoded, _ := base64.StdEncoding.DecodeString(createParams.Data)
 	reader := bytes.NewReader(decoded)
