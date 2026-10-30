@@ -247,10 +247,22 @@ var _ = Describe("Podman healthcheck run", func() {
 		It("podman healthcheck single healthy result changes failed to healthy "+testName, func() {
 			if !hcEvent {
 				path := filepath.Join(podmanTest.TempDir, "containers.conf")
-				err := os.WriteFile(path, []byte("[engine]\nhealthcheck_events=false\n"), 0o644)
+				err := os.WriteFile(path, []byte("[engine]\nhealthcheck_events=false\nhealthcheck_events_on_change=true\n"), 0o644)
 				Expect(err).ToNot(HaveOccurred())
+				oldConfig, hadConfig := os.LookupEnv("CONTAINERS_CONF_OVERRIDE")
 				err = os.Setenv("CONTAINERS_CONF_OVERRIDE", path)
 				Expect(err).ToNot(HaveOccurred())
+				DeferCleanup(func() {
+					if hadConfig {
+						_ = os.Setenv("CONTAINERS_CONF_OVERRIDE", oldConfig)
+					} else {
+						_ = os.Unsetenv("CONTAINERS_CONF_OVERRIDE")
+					}
+					if IsRemote() {
+						podmanTest.StopRemoteService()
+						podmanTest.StartRemoteService()
+					}
+				})
 				if IsRemote() {
 					podmanTest.StopRemoteService()
 					podmanTest.StartRemoteService()
@@ -275,6 +287,11 @@ var _ = Describe("Podman healthcheck run", func() {
 			inspect = podmanTest.InspectContainer("hc")
 			Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckUnhealthy))
 
+			// A repeated failed check keeps the unhealthy status.
+			hc = podmanTest.Podman([]string{"healthcheck", "run", "hc"})
+			hc.WaitWithDefaultTimeout()
+			Expect(hc).Should(ExitWithError(1, ""))
+
 			foo := podmanTest.Podman([]string{"exec", "hc", "touch", "/foo"})
 			foo.WaitWithDefaultTimeout()
 			Expect(foo).Should(ExitCleanly())
@@ -282,20 +299,28 @@ var _ = Describe("Podman healthcheck run", func() {
 			hc = podmanTest.Podman([]string{"healthcheck", "run", "hc"})
 			hc.WaitWithDefaultTimeout()
 			Expect(hc).Should(ExitCleanly())
+			for range 2 {
+				hc = podmanTest.Podman([]string{"healthcheck", "run", "hc"})
+				hc.WaitWithDefaultTimeout()
+				Expect(hc).Should(ExitCleanly())
+			}
 
 			inspect = podmanTest.InspectContainer("hc")
 			Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckHealthy))
 
 			// Test that events generated have correct status (#19237)
-			events := podmanTest.Podman([]string{"events", "--stream=false", "--filter", "event=health_status", "--since", "1m"})
+			events := podmanTest.Podman([]string{"events", "--stream=false", "--filter", "container=hc", "--filter", "event=health_status", "--since", "1m"})
 			events.WaitWithDefaultTimeout()
 			Expect(events).Should(ExitCleanly())
 			if hcEvent {
 				eventsOut := events.OutputToStringArray()
-				Expect(eventsOut).To(HaveLen(3))
+				Expect(eventsOut).To(HaveLen(6))
 				Expect(eventsOut[0]).To(ContainSubstring("health_status=starting"))
 				Expect(eventsOut[1]).To(ContainSubstring("health_status=unhealthy"))
-				Expect(eventsOut[2]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[2]).To(ContainSubstring("health_status=unhealthy"))
+				Expect(eventsOut[3]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[4]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[5]).To(ContainSubstring("health_status=healthy"))
 			} else {
 				Expect(events.OutputToString()).To(BeEmpty())
 			}
@@ -308,6 +333,60 @@ var _ = Describe("Podman healthcheck run", func() {
 			Expect(ps.OutputToString()).To(ContainSubstring("hc"))
 		})
 	}
+
+	It("healthcheck_events_on_change emits only initial and changed statuses", func() {
+		path := filepath.Join(podmanTest.TempDir, "containers.conf")
+		err := os.WriteFile(path, []byte("[engine]\nhealthcheck_events_on_change=true\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		oldConfig, hadConfig := os.LookupEnv("CONTAINERS_CONF_OVERRIDE")
+		err = os.Setenv("CONTAINERS_CONF_OVERRIDE", path)
+		Expect(err).ToNot(HaveOccurred())
+		DeferCleanup(func() {
+			if hadConfig {
+				_ = os.Setenv("CONTAINERS_CONF_OVERRIDE", oldConfig)
+			} else {
+				_ = os.Unsetenv("CONTAINERS_CONF_OVERRIDE")
+			}
+			if IsRemote() {
+				podmanTest.StopRemoteService()
+				podmanTest.StartRemoteService()
+			}
+		})
+		if IsRemote() {
+			podmanTest.StopRemoteService()
+			podmanTest.StartRemoteService()
+		}
+
+		session := podmanTest.Podman([]string{"run", "-dt", "--name", "hc-on-change", "--health-retries", "2", "--health-cmd", "ls /foo || exit 1", ALPINE, "top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		for range 3 {
+			hc := podmanTest.Podman([]string{"healthcheck", "run", "hc-on-change"})
+			hc.WaitWithDefaultTimeout()
+			Expect(hc).Should(ExitWithError(1, ""))
+		}
+		foo := podmanTest.Podman([]string{"exec", "hc-on-change", "touch", "/foo"})
+		foo.WaitWithDefaultTimeout()
+		Expect(foo).Should(ExitCleanly())
+		for range 3 {
+			hc := podmanTest.Podman([]string{"healthcheck", "run", "hc-on-change"})
+			hc.WaitWithDefaultTimeout()
+			Expect(hc).Should(ExitCleanly())
+		}
+
+		inspect := podmanTest.InspectContainer("hc-on-change")
+		Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckHealthy))
+
+		events := podmanTest.Podman([]string{"events", "--stream=false", "--filter", "container=hc-on-change", "--filter", "event=health_status", "--since", "1m"})
+		events.WaitWithDefaultTimeout()
+		Expect(events).Should(ExitCleanly())
+		eventLines := events.OutputToStringArray()
+		Expect(eventLines).To(HaveLen(3))
+		Expect(eventLines[0]).To(ContainSubstring("health_status=starting"))
+		Expect(eventLines[1]).To(ContainSubstring("health_status=unhealthy"))
+		Expect(eventLines[2]).To(ContainSubstring("health_status=healthy"))
+	})
 
 	It("hc logs do not include exec events", func() {
 		session := podmanTest.Podman([]string{"run", "-dt", "--name", "hc", "--health-cmd", "true", "--health-interval", "5s", "alpine", "sleep", "60"})
