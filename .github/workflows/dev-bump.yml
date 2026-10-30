@@ -172,3 +172,71 @@ jobs:
             --head "podmanbot:$bumpbranch" \
             --base "main" \
             --repo "${GITHUB_REPOSITORY}"
+  release-notes:
+    if: github.repository == 'podman-container-tools/podman'
+    name: Update release notes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create and push to a branch
+      pull-requests: write # to read and create pull requests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          token: ${{ secrets.PODMANBOT_TOKEN }}
+          persist-credentials: true
+      - name: Install dependencies
+        run: pip install packaging
+      - name: Regenerate release notes
+        id: notes
+        run: |
+          rm -f RELEASE_NOTES.md
+          python3 hack/podman_release_notes_to_markdown.py
+          if git diff --quiet -- RELEASE_NOTES.md; then
+            echo "::notice:: RELEASE_NOTES.md unchanged, nothing to do"
+            echo "havediff=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "havediff=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push
+        if: steps.notes.outputs.havediff == 'true'
+        run: |
+          # Make committer the user who triggered the action, either through cutting a release or manual trigger
+          # GitHub gives everyone a noreply email associated with their account, use that email for the sign-off
+          git config --local user.name "${GITHUB_ACTOR}"
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          branch="update-release-notes"
+          git checkout -b "$branch"
+          git add RELEASE_NOTES.md
+          git commit --signoff -m "Update release notes"
+          git remote add podmanbot https://github.com/podmanbot/podman
+          git push -f podmanbot "$branch"
+      - name: Check open PRs
+        id: checkpr
+        if: steps.notes.outputs.havediff == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          prs=$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --head "update-release-notes" \
+            --state open \
+            --json title \
+            --jq 'length')
+          if ((prs > 0)); then
+            echo "SKIPPING: PR already exists to update release notes."
+          else
+            echo "prexists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open PR
+        if: steps.notes.outputs.havediff == 'true' && steps.checkpr.outputs.prexists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PODMANBOT_TOKEN }}
+        run: |
+          body=$'```release-note\nNone\n```'
+          gh pr create \
+            --title "Update release notes" \
+            --body  "$body" \
+            --head "podmanbot:update-release-notes" \
+            --base "main" \
+            --repo "${GITHUB_REPOSITORY}"
