@@ -3,14 +3,16 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/pkg/api/types"
 )
 
@@ -20,8 +22,8 @@ func referenceIDHandler() mux.MiddlewareFunc {
 	return func(h http.Handler) http.Handler {
 		// Only log Apache access_log-like entries at Info level or below
 		out := io.Discard
-		if logrus.IsLevelEnabled(logrus.InfoLevel) {
-			out = logrus.StandardLogger().Out
+		if slog.Default().Enabled(context.Background(), slog.LevelInfo) {
+			out = log.Writer()
 		}
 
 		return handlers.CombinedLoggingHandler(out,
