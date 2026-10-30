@@ -566,7 +566,7 @@ entrypoint ["/fromimage"]
 		status1 := podmanTest.Podman([]string{"pod", "inspect", "--format", "{{ .State }}", podName})
 		status1.WaitWithDefaultTimeout()
 		Expect(status1).Should(ExitCleanly())
-		Expect(status1.OutputToString()).To(ContainSubstring("Created"))
+		Expect(status1.OutputToString()).To(ContainSubstring("created"))
 
 		ctr1 := podmanTest.Podman([]string{"run", "--pod", podName, "-d", ALPINE, "top"})
 		ctr1.WaitWithDefaultTimeout()
@@ -575,7 +575,7 @@ entrypoint ["/fromimage"]
 		status2 := podmanTest.Podman([]string{"pod", "inspect", "--format", "{{ .State }}", podName})
 		status2.WaitWithDefaultTimeout()
 		Expect(status2).Should(ExitCleanly())
-		Expect(status2.OutputToString()).To(ContainSubstring("Running"))
+		Expect(status2.OutputToString()).To(ContainSubstring("running"))
 
 		ctr2 := podmanTest.Podman([]string{"create", "--pod", podName, ALPINE, "top"})
 		ctr2.WaitWithDefaultTimeout()
@@ -584,7 +584,7 @@ entrypoint ["/fromimage"]
 		status3 := podmanTest.Podman([]string{"pod", "inspect", "--format", "{{ .State }}", podName})
 		status3.WaitWithDefaultTimeout()
 		Expect(status3).Should(ExitCleanly())
-		Expect(status3.OutputToString()).To(ContainSubstring("Degraded"))
+		Expect(status3.OutputToString()).To(ContainSubstring("degraded"))
 	})
 
 	It("podman create with unsupported network options", func() {
