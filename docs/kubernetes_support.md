@@ -140,6 +140,13 @@ Note: **N/A** means that the option cannot be supported in a single-node Podman 
 | stdinOnce                                           | no      |
 | tty                                                 | no      |
 
+## EmptyDir Fields
+
+| Field     | Support |
+|-----------|---------|
+| medium    | ✅      |
+| sizeLimit | ✅      |
+
 ## PersistentVolumeClaim Fields
 
 | Field               | Support |
