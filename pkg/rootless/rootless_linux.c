@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include <sched.h>
 #include <stdio.h>
+#include "../rlimit/rlimit.h"
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <stdlib.h>
@@ -1259,6 +1260,11 @@ reexec_userns_join (int pid_to_join, char *state_dir)
       _exit (EXIT_FAILURE);
     }
 
+  if (podman_restore_original_nofile () < 0)
+    {
+      fprintf (stderr, "cannot restore original RLIMIT_NOFILE: %m\n");
+      _exit (EXIT_FAILURE);
+    }
   execvp ("/proc/self/exe", argv);
   fprintf (stderr, "failed to reexec: %m\n");
 
@@ -1457,6 +1463,11 @@ reexec_in_user_namespace (int ready, char *state_dir)
       _exit (EXIT_FAILURE);
     }
 
+  if (podman_restore_original_nofile () < 0)
+    {
+      fprintf (stderr, "cannot restore original RLIMIT_NOFILE: %m\n");
+      _exit (EXIT_FAILURE);
+    }
   execvp ("/proc/self/exe", argv);
   fprintf (stderr, "failed to reexec: %m\n");
 

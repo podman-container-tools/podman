@@ -64,6 +64,7 @@ type ContainerUpdateOptions struct {
 	UnsetEnv                        []string
 	Latest                          bool
 	Rlimits                         []specs.POSIXRlimit
+	HostRlimits                     bool
 }
 
 func (u *ContainerUpdateOptions) ProcessSpecgen() {

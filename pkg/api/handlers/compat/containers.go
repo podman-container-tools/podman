@@ -913,7 +913,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		for i, u := range options.Ulimits {
 			ulimits[i] = u.String()
 		}
-		rlimits, err = specgenutil.GenRlimits(ulimits)
+		rlimits, _, err = specgenutil.GenRlimits(ulimits)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("generating rlimits: %w", err))
 			return

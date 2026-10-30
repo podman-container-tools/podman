@@ -184,7 +184,7 @@ func TestGenRlimits(t *testing.T) {
 		upperCaseLimitsWithPrefix = append(upperCaseLimitsWithPrefix, strings.ToUpper(fmt.Sprintf("%s%s=%s", rlimitPrefix, name, limit)))
 	}
 
-	parsedLimits, err := GenRlimits(lowerCaseLimits)
+	parsedLimits, _, err := GenRlimits(lowerCaseLimits)
 	assert.NoError(t, err, "err is nil")
 
 	for _, limit := range parsedLimits {
@@ -193,7 +193,7 @@ func TestGenRlimits(t *testing.T) {
 		assert.Equal(t, val, fmt.Sprintf("%d:%d", limit.Soft, limit.Hard), "soft and hard limits are equal")
 	}
 
-	parsedLimits, err = GenRlimits(upperCaseLimitsWithPrefix)
+	parsedLimits, _, err = GenRlimits(upperCaseLimitsWithPrefix)
 	assert.NoError(t, err, "err is nil")
 
 	for _, limit := range parsedLimits {
@@ -203,19 +203,19 @@ func TestGenRlimits(t *testing.T) {
 	}
 
 	// go-utils module has no tests for the parser.
-	_, err = GenRlimits([]string{"foo=1:1"})
+	_, _, err = GenRlimits([]string{"foo=1:1"})
 	assert.Error(t, err, "err is not nil")
 
-	_, err = GenRlimits([]string{"RLIMIT_FOO=1:1"})
+	_, _, err = GenRlimits([]string{"RLIMIT_FOO=1:1"})
 	assert.Error(t, err, "err is not nil")
 
-	_, err = GenRlimits([]string{"nofile"})
+	_, _, err = GenRlimits([]string{"nofile"})
 	assert.Error(t, err, "err is not nil")
 
-	_, err = GenRlimits([]string{"nofile=bar"})
+	_, _, err = GenRlimits([]string{"nofile=bar"})
 	assert.Error(t, err, "err is not nil")
 
-	_, err = GenRlimits([]string{"nofile=bar:buzz"})
+	_, _, err = GenRlimits([]string{"nofile=bar:buzz"})
 	assert.Error(t, err, "err is not nil")
 }
 

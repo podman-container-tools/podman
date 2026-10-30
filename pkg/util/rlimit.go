@@ -4,14 +4,38 @@ package util
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
-	"github.com/docker/go-units"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/podman/v6/pkg/rlimit"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
+
+// GetHostRlimits snapshots all supported host limits.
+func GetHostRlimits() ([]specs.POSIXRlimit, error) {
+	names := slices.Sorted(maps.Keys(hostRlimitResources))
+	limits := make([]specs.POSIXRlimit, 0, len(names))
+	for _, name := range names {
+		var limit unix.Rlimit
+		if err := unix.Getrlimit(hostRlimitResources[name], &limit); err != nil {
+			return nil, fmt.Errorf("getting host %s limit: %w", name, err)
+		}
+		u := specs.POSIXRlimit{Type: strings.TrimPrefix(strings.ToLower(name), "rlimit_"), Soft: rlimitMaxToUint64(limit.Cur), Hard: rlimitMaxToUint64(limit.Max)}
+		if name == "RLIMIT_NOFILE" {
+			var err error
+			u.Soft, u.Hard, err = rlimit.GetOriginalNofile()
+			if err != nil {
+				return nil, fmt.Errorf("getting original host nofile limit: %w", err)
+			}
+		}
+		limits = append(limits, u)
+	}
+	return limits, nil
+}
 
 // FormatRlimits formats the rlimits to the runtime spec format
 func FormatRlimits(rlimits []specs.POSIXRlimit) []specs.POSIXRlimit {
@@ -34,20 +58,15 @@ func ClampRlimitToHost(u specs.POSIXRlimit) specs.POSIXRlimit {
 		return u
 	}
 
-	rlimitName := strings.TrimPrefix(strings.ToLower(u.Type), "rlimit_")
-	ul, err := units.ParseUlimit(fmt.Sprintf("%s=%d:%d", rlimitName, int64(u.Soft), int64(u.Hard)))
-	if err != nil {
-		logrus.Warnf("Failed to check %s ulimit %q", u.Type, err)
-		return u
-	}
-	rl, err := ul.GetRlimit()
-	if err != nil {
-		logrus.Warnf("Failed to check %s ulimit %q", u.Type, err)
+	rlimitName := strings.TrimPrefix(strings.ToUpper(u.Type), "RLIMIT_")
+	resource, ok := hostRlimitResources["RLIMIT_"+rlimitName]
+	if !ok {
+		logrus.Warnf("Failed to check %s ulimit: unknown resource", u.Type)
 		return u
 	}
 
 	var rlimit unix.Rlimit
-	if err := unix.Getrlimit(rl.Type, &rlimit); err != nil {
+	if err := unix.Getrlimit(resource, &rlimit); err != nil {
 		logrus.Warnf("Failed to return %s ulimit %q", u.Type, err)
 		return u
 	}

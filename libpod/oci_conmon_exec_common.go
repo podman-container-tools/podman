@@ -687,6 +687,12 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 	if err := JSONDeepCopy(c.config.Spec.Process, pspec); err != nil {
 		return nil, err
 	}
+	ctrSpec, err := c.specFromState()
+	if err != nil {
+		return nil, err
+	}
+	// Include default limits added when the container was started.
+	pspec.Rlimits = ctrSpec.Process.Rlimits
 	pspec.SelinuxLabel = c.config.ProcessLabel
 	pspec.Args = options.Cmd
 
