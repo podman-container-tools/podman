@@ -6798,6 +6798,23 @@ spec:
 		Expect(exec.OutputToString()).To(Equal("0"))
 	})
 
+	It("test device-cgroup-rule annotation", func() {
+		SkipIfRootless("device cgroup rules require root access")
+		ctrAnnotation := "io.podman.annotations.device-cgroup-rule/" + defaultCtrName
+		pod := getPod(withAnnotation(ctrAnnotation, "c 42:* rwm"), withPodInitCtr(getCtr(withImage(CITEST_IMAGE), withCmd([]string{"printenv", "container"}), withInitCtr(), withName("init-test"))), withCtr(getCtr(withCapAdd([]string{"CAP_MKNOD"}), withImage(CITEST_IMAGE), withCmd([]string{"top"}))))
+		err := generateKubeYaml("pod", pod, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		kube := podmanTest.Podman([]string{"kube", "play", kubeYaml})
+		kube.WaitWithDefaultTimeout()
+		Expect(kube).Should(ExitCleanly())
+
+		// Verify the device cgroup rule allows mknod for the specified device type
+		exec := podmanTest.Podman([]string{"exec", "testPod-" + defaultCtrName, "mknod", "newDev", "c", "42", "1"})
+		exec.WaitWithDefaultTimeout()
+		Expect(exec).Should(ExitCleanly())
+	})
+
 	It("test Lifecycle stopSignal", func() {
 		// Default StopSignal SIGTERM
 		err = writeYaml(simplePodYaml, kubeYaml)

@@ -206,6 +206,27 @@ type CtrSpecGenOptions struct {
 	NoPodPrefix bool
 }
 
+// parseDeviceCgroupRules parses a comma-separated list of device cgroup rules
+// from the annotation value and returns a slice of LinuxDeviceCgroup rules.
+// Empty tokens (e.g., from trailing commas) are skipped. Whitespace around
+// individual rules is trimmed before parsing.
+func parseDeviceCgroupRules(rulesStr string) ([]spec.LinuxDeviceCgroup, error) {
+	var rules []spec.LinuxDeviceCgroup
+	for rule := range strings.SplitSeq(rulesStr, ",") {
+		// Trim whitespace and skip empty strings from trailing commas
+		rule = strings.TrimSpace(rule)
+		if rule == "" {
+			continue
+		}
+		parsed, err := specgenutil.ParseLinuxResourcesDeviceAccess(rule)
+		if err != nil {
+			return nil, fmt.Errorf("invalid device cgroup rule %q: %w", rule, err)
+		}
+		rules = append(rules, parsed)
+	}
+	return rules, nil
+}
+
 func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGenerator, error) {
 	localTrue := true
 
@@ -440,6 +461,14 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 			s.ResourceLimits.CPU = &spec.LinuxCPU{}
 		}
 		s.ResourceLimits.CPU.Mems = memNodes
+	}
+
+	if deviceCgroupRules, ok := annotations[define.DeviceCgroupRuleAnnotation+"/"+opts.Container.Name]; ok {
+		rules, err := parseDeviceCgroupRules(deviceCgroupRules)
+		if err != nil {
+			return nil, err
+		}
+		s.DeviceCgroupRule = append(s.DeviceCgroupRule, rules...)
 	}
 
 	if label, ok := opts.Annotations[define.InspectAnnotationLabel+"/"+opts.Container.Name]; ok {
