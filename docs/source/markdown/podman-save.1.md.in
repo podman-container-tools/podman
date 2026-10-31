@@ -18,6 +18,27 @@ Note: `:` is a restricted character and cannot be part of the file name.
 
 **podman save** operates on *images*: the resulting archive (OCI or docker-archive) preserves the image's layers, history and tags, and is restored as the same image with **podman load**. This is different from **podman export**, which flattens a *container's* filesystem into a single-layer tarball with no image history. To capture a container's filesystem instead, see **podman-export(1)**.
 
+### Image References and Transports
+
+**podman save** only works with images already present in local storage. The command expects an image name or ID, not a transport-prefixed reference.
+
+**Incorrect usage** (will fail with "unsupported transport" error):
+```
+$ podman save docker://alpine > alpine.tar
+Error: unsupported transport "docker" for looking up local images
+```
+
+**Correct usage**:
+```
+# First pull the image into local storage
+$ podman pull alpine
+
+# Then save it without the transport prefix
+$ podman save alpine > alpine.tar
+```
+
+The `docker://` transport prefix refers to images on a container registry, not local storage. To save an image from a registry, use **podman pull** first to download it to local storage, then reference it by name (without the transport prefix) in **podman save**. See **[podman-pull(1)](podman-pull.1.md)** for more information about image transports.
+
 ## OPTIONS
 
 @@option dir-compress
