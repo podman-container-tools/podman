@@ -740,6 +740,22 @@ var hasCapSysResource = sync.OnceValues(func() (bool, error) {
 	return currentCaps.Get(capability.EFFECTIVE, capability.CAP_SYS_RESOURCE), nil
 })
 
+// triggerAutofsMount performs a Statx without AT_NO_AUTOMOUNT so the kernel
+// mounts an autofs share at path (if one exists) before we bind-mount it into
+// the container. Plain stat(2)/fstatat(2)/os.Stat imply AT_NO_AUTOMOUNT and will
+// not trigger the mount; we only need that side effect. Errors are logged but
+// not returned so a failed trigger does not block container setup; later mount
+// steps still report real failures.
+func triggerAutofsMount(path string) {
+	if path == "" {
+		return
+	}
+	var st unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, path, 0, unix.STATX_TYPE, &st); err != nil {
+		logrus.Debugf("statx on volume source %q (autofs trigger): %v", path, err)
+	}
+}
+
 // containerPathIsFile returns true if the given containerPath is a file
 func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
 	f, err := pathrs.OpenInRoot(unsafeRoot, containerPath)

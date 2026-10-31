@@ -412,9 +412,18 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 	// If they have idmap, then calculate the mappings to use in the OCI config file.
 	for i := range g.Config.Mounts {
 		m := &g.Config.Mounts[i]
+		// Trigger autofs before labeling/chown/bind-mount so dormant shares are mounted.
+		if m.Type == define.TypeBind {
+			triggerAutofsMount(m.Source)
+		}
 		var options []string
 		for _, o := range m.Options {
 			if subpath, ok := strings.CutPrefix(o, "subpath="); ok {
+				// Final bind source is Source/subpath; trigger that path too in case
+				// the automount point is the subpath rather than the parent.
+				if m.Type == define.TypeBind {
+					triggerAutofsMount(filepath.Join(m.Source, subpath))
+				}
 				safeMount, err := c.safeMountSubPath(m.Source, subpath)
 				if err != nil {
 					return nil, nil, err
@@ -526,6 +535,7 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			overlayOpts.MountLabel = c.MountLabel()
 		}
 
+		triggerAutofsMount(overlayVol.Source)
 		overlayMount, err := overlay.MountWithOptions(contentDir, overlayVol.Source, overlayVol.Dest, overlayOpts)
 		if err != nil {
 			return nil, nil, fmt.Errorf("mounting overlay failed %q: %w", overlayVol.Source, err)
@@ -1842,6 +1852,17 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 
 	if err := c.makeBindMounts(); err != nil {
 		return nil, 0, err
+	}
+
+	// Restore does not call generateSpec; trigger autofs on bind/overlay sources
+	// so a share that went dormant after checkpoint is mounted again.
+	for _, m := range g.Config.Mounts {
+		if m.Type == define.TypeBind {
+			triggerAutofsMount(m.Source)
+		}
+	}
+	for _, overlayVol := range c.config.OverlayVolumes {
+		triggerAutofsMount(overlayVol.Source)
 	}
 
 	if options.TargetFile != "" || options.CheckpointImageID != "" {
