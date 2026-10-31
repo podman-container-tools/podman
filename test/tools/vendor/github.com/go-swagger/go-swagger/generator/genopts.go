@@ -98,8 +98,9 @@ type GenOpts struct {
 	// default render plan during Prepare.
 	Viper *viper.Viper
 
-	templates *templatesrepo.Repository
-	funcMap   template.FuncMap
+	templates  *templatesrepo.Repository
+	funcMap    template.FuncMap
+	novalidate bool
 }
 
 // loadTemplates loads the optional template plugin, the selected contrib

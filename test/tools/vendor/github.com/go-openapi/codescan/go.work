@@ -1,4 +1,4 @@
-go 1.25.0
+go 1.26.0
 
 // Workspace for the codescan monorepo: the main library module (.) and the
 // genspec-tui front-end module (./cmd/genspec-tui), kept in separate go.mod

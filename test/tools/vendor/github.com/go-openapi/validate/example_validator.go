@@ -214,10 +214,7 @@ func (ex *exampleValidator) validateExampleInResponse(
 				exampleAt := responsePath(path, method, responseCodeAsStr).
 					child(swaggerExamples).
 					structuralChild(jsonMimeApplicationJSON)
-				res.MergeAsWarnings(
-					newSchemaValidator(response.Schema, s.spec.Spec(),
-						exampleAt, s.KnownFormats, s.schemaOptions).Validate(example),
-				)
+				res.MergeAsWarnings(s.validateValueAgainstSchema(response.Schema, exampleAt, example, s.schemaOptions))
 			} else {
 				// Proposal for enhancement: validate other media types too
 				res.addWarningsAt(responsePath(path, method, responseCodeAsStr).child(swaggerExamples), examplesMimeNotSupportedMsg(operationID, responseName))
@@ -239,9 +236,7 @@ func (ex *exampleValidator) validateExampleValueSchemaAgainstSchema(path pathSeg
 	res := validatorPools.results.Borrow()
 
 	if schema.Example != nil {
-		res.MergeAsWarnings(
-			newSchemaValidator(schema, s.spec.Spec(), path.child(swaggerExample), s.KnownFormats, ex.schemaOptions).Validate(schema.Example),
-		)
+		res.MergeAsWarnings(s.validateValueAgainstSchema(schema, path.child(swaggerExample), schema.Example, ex.schemaOptions))
 	}
 	if schema.Items != nil {
 		if schema.Items.Schema != nil {

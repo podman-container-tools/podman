@@ -94,6 +94,15 @@ func rootPathFromString(root string) pathSegments {
 }
 
 func newSchemaValidator(schema *spec.Schema, rootSchema any, root pathSegments, formats strfmt.Registry, opts *SchemaValidatorOptions) *SchemaValidator {
+	return newSchemaValidatorWithBudget(schema, rootSchema, root, formats, opts, nil)
+}
+
+// newSchemaValidatorWithBudget builds a schema validator, drawing the validators built for
+// allOf, anyOf, oneOf and not from budget. A nil budget starts a new one if needed.
+func newSchemaValidatorWithBudget(
+	schema *spec.Schema, rootSchema any, root pathSegments, formats strfmt.Registry, opts *SchemaValidatorOptions,
+	budget *compositionBudget,
+) *SchemaValidator {
 	if schema == nil {
 		return nil
 	}
@@ -131,7 +140,7 @@ func newSchemaValidator(schema *spec.Schema, rootSchema any, root pathSegments, 
 
 	s.validators = [8]valueValidator{
 		s.typeValidator(),
-		s.schemaPropsValidator(),
+		s.schemaPropsValidator(budget),
 		s.stringValidator(),
 		s.formatValidator(),
 		s.numberValidator(),
@@ -265,10 +274,12 @@ func (s *SchemaValidator) Validate(data any) *Result {
 			continue
 		}
 
-		result.Merge(v.Validate(d))
 		if s.Options.recycleValidators {
-			s.validators[idx] = nil // prevents further (unsafe) usage
+			// prevents further (unsafe) usage. Validate redeems it, even if it panics:
+			// redeemChildren must not redeem it again
+			s.validators[idx] = nil
 		}
+		result.Merge(v.Validate(d))
 		result.Inc()
 	}
 	result.Inc()
@@ -352,11 +363,11 @@ func (s *SchemaValidator) formatValidator() valueValidator {
 	)
 }
 
-func (s *SchemaValidator) schemaPropsValidator() valueValidator {
+func (s *SchemaValidator) schemaPropsValidator(budget *compositionBudget) valueValidator {
 	sch := s.Schema
 	return newSchemaPropsValidator(
 		s.path, s.in, sch.AllOf, sch.OneOf, sch.AnyOf, sch.Not, sch.Dependencies, s.Root, s.KnownFormats,
-		s.Options,
+		s.Options, budget,
 	)
 }
 

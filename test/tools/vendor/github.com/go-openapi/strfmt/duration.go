@@ -240,6 +240,12 @@ func ParseDuration(s string) (time.Duration, error) {
 			}
 		}
 
+		// The sum is a uint64. 1<<63 ns plus 1<<63 ns wraps to 0, and 0 is not
+		// greater than maxUint64, so the range check below misses it.
+		if d > ^uint64(0)-v {
+			return 0, parseDurationError(orig, "numerical overflow")
+		}
+
 		d += v
 		if d > maxUint64 {
 			return 0, parseDurationError(orig, "numerical overflow")

@@ -311,14 +311,17 @@ func (a *appGenerator) makeCodegenApp() (GenApp, error) {
 
 	log.Printf("planning definitions (found: %d)", len(a.Models))
 
+	sharedAnalysis := newModelAnalysis(a.SpecDoc, a.Analyzed, a.GenOpts)
+
 	genModels := make(GenDefinitions, 0, len(a.Models))
 	for mn, m := range a.Models {
-		model, errDef := makeGenDefinition(
+		model, errDef := makeGenDefinitionWithAnalysis(
 			mn,
 			a.ModelsPackage,
 			m,
 			a.SpecDoc,
 			a.GenOpts,
+			sharedAnalysis,
 		)
 		if errDef != nil {
 			return GenApp{}, fmt.Errorf("error in model %s while planning definitions: %w", mn, errDef)

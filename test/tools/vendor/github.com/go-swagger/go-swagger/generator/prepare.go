@@ -67,6 +67,13 @@ func (g *GenOpts) Prepare() error {
 	return nil
 }
 
+// Seed [GenOpts] without enforcing validation (ignore spec).
+func (g *GenOpts) Seed() error {
+	g.novalidate = true
+
+	return g.Prepare()
+}
+
 // validate carries out the pure consistency checks on the options.
 //
 // It performs no mutation, so a failure here never leaves the options in a
@@ -74,6 +81,9 @@ func (g *GenOpts) Prepare() error {
 func (g *GenOpts) validate() error {
 	if g == nil {
 		return errors.New("gen opts are required")
+	}
+	if g.novalidate {
+		return nil
 	}
 
 	if !filepath.IsAbs(g.Target) {
@@ -197,6 +207,9 @@ func (g *GenOpts) normalize() error {
 	if g.specNormalized {
 		return nil
 	}
+	if g.novalidate {
+		return nil
+	}
 
 	if strings.HasPrefix(g.Spec, "http://") || strings.HasPrefix(g.Spec, "https://") {
 		g.specNormalized = true
@@ -236,6 +249,10 @@ func (g *GenOpts) ensureTarget() error {
 
 	if g.Target == "" {
 		g.Target = "."
+	}
+
+	if g.novalidate {
+		return nil
 	}
 
 	if g.DumpData {

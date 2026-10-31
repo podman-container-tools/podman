@@ -319,7 +319,7 @@ func init() {
 	}
 
 	for _, pkg := range stdlibs {
-		autoImports[importPathToAssumedName((pkg))] = pkg
+		autoImports[importPathToAssumedName(pkg)] = pkg
 	}
 
 	goOpenAPIs := []string{
@@ -330,7 +330,7 @@ func init() {
 		"github.com/go-openapi/strfmt",
 	}
 	for _, pkg := range goOpenAPIs {
-		autoImports[importPathToAssumedName((pkg))] = pkg
+		autoImports[importPathToAssumedName(pkg)] = pkg
 	}
 }
 

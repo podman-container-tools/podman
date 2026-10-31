@@ -230,9 +230,7 @@ func (d *defaultValidator) validateDefaultValueSchemaAgainstSchema(path pathSegm
 	s := d.SpecValidator
 
 	if schema.Default != nil {
-		res.Merge(
-			newSchemaValidator(schema, s.spec.Spec(), path.child(jsonDefault), s.KnownFormats, d.schemaOptions).Validate(schema.Default),
-		)
+		res.Merge(s.validateValueAgainstSchema(schema, path.child(jsonDefault), schema.Default, d.schemaOptions))
 	}
 	if schema.Items != nil {
 		if schema.Items.Schema != nil {

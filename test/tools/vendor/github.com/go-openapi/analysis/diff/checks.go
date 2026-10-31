@@ -225,7 +225,7 @@ func CheckStringTypeChanges(diffs []TypeDiff, type1, type2 *spec.SchemaProps) []
 		type2.Type[0] == StringType {
 		minLengthDiffs := CompareIntValues("MinLength", type1.MinLength, type2.MinLength, NarrowedType, WidenedType)
 		diffs = append(diffs, minLengthDiffs...)
-		maxLengthDiffs := CompareIntValues("MaxLength", type1.MinLength, type2.MinLength, WidenedType, NarrowedType)
+		maxLengthDiffs := CompareIntValues("MaxLength", type1.MaxLength, type2.MaxLength, WidenedType, NarrowedType)
 		diffs = append(diffs, maxLengthDiffs...)
 		if type1.Pattern != type2.Pattern {
 			diffs = addTypeDiff(diffs, TypeDiff{Change: ChangedType, Description: fmt.Sprintf("Pattern Changed:%s->%s", type1.Pattern, type2.Pattern)})

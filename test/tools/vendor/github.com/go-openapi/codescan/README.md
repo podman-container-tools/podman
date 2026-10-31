@@ -5,10 +5,10 @@
 <!-- Badges: release & docker images  -->
 <!-- Badges: code quality  -->
 <!-- Badges: license & compliance -->
-[![Release][release-badge]][release-url] [![Go Report Card][gocard-badge]][gocard-url] [![CodeFactor Grade][codefactor-badge]][codefactor-url] [![License][license-badge]][license-url]
+[![Release][release-badge]][release-url] [![CodeFactor Grade][codefactor-badge]][codefactor-url] [![License][license-badge]][license-url]
 <!-- Badges: documentation & support -->
 <!-- Badges: others & stats -->
-[![GoDoc][godoc-badge]][godoc-url] [![Discord Channel][discord-badge]][discord-url] [![go version][goversion-badge]][goversion-url] ![Top language][top-badge] ![Commits since latest release][commits-badge]
+[![Doc][doc-badge]][doc-url] [![GoDoc][godoc-badge]][godoc-url] [![Discord Channel][discord-badge]][discord-url] [![go version][goversion-badge]][goversion-url] ![Top language][top-badge] ![Commits since latest release][commits-badge]
 
 ---
 
@@ -17,6 +17,8 @@ A Go source code scanner that produces Swagger 2.0 (OpenAPI 2.0) specifications 
 Supports Go modules (since go1.11).
 
 ## Announcements
+
+* **2026-08-21** : landed a new spec generation CLI tool
 
 * **2026-07-31** : landed a new spec generation TUI tool
 
@@ -27,6 +29,8 @@ Supports Go modules (since go1.11).
 ## Status
 
 API is stable.
+
+[**Complete documentation as github pages**][doc-url]
 
 ## Import this library in your project
 
@@ -168,6 +172,8 @@ Maintainers can cut a new release by either:
 [codefactor-badge]: https://img.shields.io/codefactor/grade/github/go-openapi/codescan
 [codefactor-url]: https://www.codefactor.io/repository/github/go-openapi/codescan
 <!-- Badges: documentation & support -->
+[doc-badge]: https://img.shields.io/badge/doc-site-blue?link=https%3A%2F%2Fgo-openapi.github.io%2Fcodescan%2F
+[doc-url]: https://go-openapi.github.io/codescan
 [godoc-badge]: https://pkg.go.dev/badge/github.com/go-openapi/codescan
 [godoc-url]: http://pkg.go.dev/github.com/go-openapi/codescan
 [discord-badge]: https://img.shields.io/discord/1446918742398341256?logo=discord&label=discord&color=blue

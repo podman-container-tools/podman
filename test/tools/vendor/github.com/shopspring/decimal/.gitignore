@@ -7,3 +7,6 @@
 
 # VS code
 *.code-workspace
+.vscode/
+
+mise.toml

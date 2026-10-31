@@ -54,21 +54,43 @@ func lowercaseHost(u *url.URL) {
 // shortened host is parsed before being kept. url.Parse reads "https://:a:443" as the host ":a"
 // on port 443, and ":a" on its own is an invalid port, so "https://:a" no longer parses.
 //
-// A degenerate authority can spell a default port twice - url.Parse reads "http://:80:80" as the
-// host ":80" on port 80 - so removal repeats until nothing more comes off. Each pass shortens the
-// host, so the loop ends, and normalizing the result again changes nothing.
+// A degenerate authority can spell a default port more than once - with GODEBUG urlstrictcolons=0,
+// url.Parse reads "http://:80:80" as the host ":80" on port 80 - so every trailing repetition comes
+// off, and normalizing the result again changes nothing.
+//
+// The repetitions are counted in one scan and the shortened host is parsed at most twice, so the
+// cost stays linear in the length of the host: stripping and re-parsing one repetition at a time
+// was quadratic, and a $ref spelling ":80" a few ten thousand times took seconds to normalize.
+//
+// Every shortened host but the last still ends with the default port, which url.Parse accepted
+// on the original host already, so only the last one may fail to parse. When it does, a single
+// repetition stays: that is where removing them one by one would have stopped.
 func removeDefaultPort(u *url.URL) {
-	for {
-		port := u.Port()
-		if port == "" || port != defaultPortForScheme(strings.ToLower(u.Scheme)) {
-			return
-		}
+	port := u.Port()
+	if port == "" || port != defaultPortForScheme(strings.ToLower(u.Scheme)) {
+		return
+	}
 
-		host := strings.TrimSuffix(u.Host, ":"+port)
-		if _, err := url.Parse("//" + host); err != nil {
-			return
-		}
+	suffix := ":" + port
+	host := u.Host
+	repeats := 0
+	for strings.HasSuffix(host, suffix) {
+		host = host[:len(host)-len(suffix)]
+		repeats++
+	}
 
+	if _, err := url.Parse("//" + host); err == nil {
+		u.Host = host
+
+		return
+	}
+
+	if repeats == 1 { // the host as it came is the only one to keep
+		return
+	}
+
+	host += suffix
+	if _, err := url.Parse("//" + host); err == nil {
 		u.Host = host
 	}
 }

@@ -110,7 +110,7 @@ It aims to represent the contract of your API with a language agnostic descripti
 			cmd.ShortDescription = "generate one or more models from the swagger spec"
 			cmd.LongDescription = cmd.ShortDescription
 		case "support":
-			cmd.ShortDescription = "generate supporting files like the main function and the api builder"
+			cmd.ShortDescription = "generate supporting files like the http server and the api builder"
 			cmd.LongDescription = cmd.ShortDescription
 		case "operation":
 			cmd.ShortDescription = "generate one or more server operations from the swagger spec"

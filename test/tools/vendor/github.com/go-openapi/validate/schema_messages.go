@@ -4,6 +4,8 @@
 package validate
 
 import (
+	"strings"
+
 	"github.com/go-openapi/errors"
 )
 
@@ -34,15 +36,27 @@ const (
 	// NOTE: punctuation in message.
 	MustValidateAllSchemasError = "%q must validate all the schemas (allOf)%s"
 
+	// TooManyCompositionValidatorsError indicates that allOf, anyOf, oneOf and not, followed through
+	// their $ref, nest too deep or need too many validators. A circular $ref through these
+	// keywords is the usual cause.
+	TooManyCompositionValidatorsError = "%q nests allOf, anyOf, oneOf and not deeper than %d levels or into more than %d validators: look for a circular $ref"
+
 	// MustNotValidateSchemaError indicates that in a Not construct, the schema constraint specified was verified.
 	MustNotValidateSchemaError = "%q must not validate the schema (not)"
 )
+
+// invalidSchemaProvidedPrefix starts the panic message of a schema validator that cannot be built.
+var invalidSchemaProvidedPrefix = strings.TrimSuffix(InvalidSchemaProvidedError, "%v")
 
 // Warning messages related to schema validation and returned as results.
 const ()
 
 func invalidSchemaProvidedMsg(err error) errors.Error {
 	return errors.New(InternalErrorCode, InvalidSchemaProvidedError, err)
+}
+
+func tooManyCompositionValidatorsMsg(path string, maxDepth, maxValidators int) errors.Error {
+	return errors.New(InternalErrorCode, TooManyCompositionValidatorsError, path, maxDepth, maxValidators)
 }
 
 func invalidTypeConversionMsg(path string, err error) errors.Error {

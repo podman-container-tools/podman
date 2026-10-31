@@ -92,6 +92,9 @@ type (
 
 		// AssetsURL points to the js asset that generates the documentation page.
 		AssetsURL string
+
+		// redocV2 selects the Redoc v2 template and assets.
+		redocV2 bool
 	}
 
 	specOptions struct {
@@ -138,7 +141,8 @@ func WithUITitle(title string) Option {
 //
 // Defaults:
 //
-//   - for Redoc: https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js
+//   - for Redoc: https://cdn.jsdelivr.net/npm/redoc@3/bundles/redoc.standalone.js
+//     (https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js with [WithRedocV2])
 //   - for RapiDoc, this defaults to: https://unpkg.com/rapidoc/dist/rapidoc-min.js
 //   - for SwaggerUI: https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js
 func WithUIAssetsURL(assets string) Option {
@@ -181,6 +185,28 @@ func WithSpecURL(u string) Option {
 func WithSwaggerUIOptions(opts SwaggerUIOptions) Option {
 	return func(o *options) {
 		o.SwaggerUIOptions = opts
+	}
+}
+
+////////////////////////////////////////////////////////////
+// Redoc UI options
+////////////////////////////////////////////////////////////
+
+// WithRedocV2 makes [Redoc] and [UseRedoc] serve Redoc v2 instead of v3.
+//
+// The default template loads the Redoc v3 bundle as an ES module (<script type="module">).
+// The Redoc v2 bundle does not load as a module.
+//
+// With this option, the default template loads the bundle as a classic script and
+// the default assets URL points to Redoc v2. Use this option if you set
+// [WithUIAssetsURL] to a Redoc v2 bundle.
+//
+// [WithUITemplate] and [WithUIAssetsURL] still override these defaults.
+//
+// Other UIs ignore this option.
+func WithRedocV2() Option {
+	return func(o *options) {
+		o.redocV2 = true
 	}
 }
 
