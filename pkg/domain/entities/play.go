@@ -124,6 +124,8 @@ type PlayKubeOptions struct {
 	Validate KubeValidateMode
 	// MultiplePods allows creating of multiple Pods
 	MultiplePods bool
+	// ConfigFiles contains the paths of the Kubernetes YAML files.
+	ConfigFiles []string
 }
 
 // PlayKubePod represents a single pod and associated containers created by play kube
