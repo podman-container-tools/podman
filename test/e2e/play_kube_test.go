@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	. "github.com/onsi/gomega/gexec"
+	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/selinux/go-selinux"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/bindings"
@@ -35,6 +36,7 @@ import (
 	"go.podman.io/podman/v6/pkg/util"
 	. "go.podman.io/podman/v6/test/utils"
 	"go.podman.io/podman/v6/utils"
+	"go.podman.io/podman/v6/version"
 	"go.podman.io/storage/pkg/stringid"
 	"sigs.k8s.io/yaml"
 )
@@ -7042,5 +7044,110 @@ RUN echo "nested-build-marker" > /nested-marker`), 0o644)).To(Succeed())
 		session := podmanTest.Podman([]string{"kube", "play", "--multiple-pods", "--publish", fmt.Sprintf("%d:%d", GetPort(), 80), kubeYaml})
 		session.WaitWithDefaultTimeout()
 		Expect(session).To(ExitWithError(125, `number of Pod replicas aren't equal to the number of published ports: 2 replicas, 1 published ports`))
+	})
+
+	It("kube play labels", func() {
+		firstYaml := filepath.Join(podmanTest.TempDir, "test.yaml1")
+		secondYaml := filepath.Join(podmanTest.TempDir, "test.yaml2")
+		yamlContent1 := `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-a
+spec:
+  containers:
+    - name: testctr-a
+      image: quay.io/libpod/alpine:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-b
+spec:
+  containers:
+    - name: testctr-b
+      image: quay.io/libpod/alpine:latest
+`
+		yamlContent2 := `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-deployment
+  template:
+    metadata:
+      labels:
+        app: test-deployment
+    spec:
+      containers:
+        - name: testctr
+          image: quay.io/libpod/alpine:latest
+`
+
+		err1 := os.WriteFile(firstYaml, []byte(yamlContent1), 0o644)
+		Expect(err1).ToNot(HaveOccurred())
+
+		err2 := os.WriteFile(secondYaml, []byte(yamlContent2), 0o644)
+		Expect(err2).ToNot(HaveOccurred())
+
+		play := podmanTest.Podman([]string{"kube", "play", firstYaml, secondYaml})
+		play.WaitWithDefaultTimeout()
+		Expect(play).Should(Exit(0), play.ErrorToString())
+
+		firstConfigFile, err := filepath.Abs(firstYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		secondConfigFile, err := filepath.Abs(secondYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		expectedWorkingDir, err := os.Getwd()
+		Expect(err).ToNot(HaveOccurred())
+
+		firstBytes, err := os.ReadFile(firstYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		secondBytes, err := os.ReadFile(secondYaml)
+		Expect(err).ToNot(HaveOccurred())
+
+		firstHash := digest.FromBytes(firstBytes).Encoded()
+		secondHash := digest.FromBytes(secondBytes).Encoded()
+
+		for _, podName := range []string{
+			"test-pod-a",
+			"test-pod-b",
+			"test-deployment-pod",
+		} {
+			expectedConfigFile := firstConfigFile
+			expectedHash := firstHash
+
+			if podName == "test-deployment-pod" {
+				expectedConfigFile = secondConfigFile
+				expectedHash = secondHash
+			}
+
+			inspect := podmanTest.Podman([]string{"inspect", podName})
+			inspect.WaitWithDefaultTimeout()
+			Expect(inspect).Should(ExitCleanly())
+
+			var podInspect []struct {
+				Labels map[string]string `json:"Labels"`
+			}
+
+			err := json.Unmarshal([]byte(inspect.OutputToString()), &podInspect)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podInspect).To(HaveLen(1))
+
+			labels := podInspect[0].Labels
+
+			Expect(labels).To(HaveKeyWithValue("io.podman.kube.play", "true"))
+			Expect(labels).To(HaveKeyWithValue("io.podman.kube.play.config_hash", expectedHash))
+			Expect(labels).To(HaveKeyWithValue("io.podman.kube.play.config_files", expectedConfigFile))
+			Expect(labels).To(HaveKeyWithValue("io.podman.kube.play.working_dir", expectedWorkingDir))
+			Expect(labels).To(HaveKeyWithValue("io.podman.kube.play.version", version.Version.String()))
+		}
 	})
 })

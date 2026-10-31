@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -47,7 +48,7 @@ type playKubeOptionsWrapper struct {
 	labels         []string
 }
 
-const yamlFileSeparator = "\n---\n"
+const yamlFileSeparator = "\n===\n"
 
 var (
 	// https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
@@ -315,6 +316,12 @@ func play(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	configFiles, err := configFilePaths(args)
+	if err != nil {
+		return err
+	}
+	playOptions.ConfigFiles = configFiles
+
 	if playOptions.Down {
 		return teardown(cmd.Context(), reader, entities.PlayKubeDownOptions{Force: playOptions.Force})
 	}
@@ -446,6 +453,26 @@ func readerFromArg(fileOrURL string) (io.ReadCloser, error) {
 	default:
 		return os.Open(fileOrURL)
 	}
+}
+
+func configFilePaths(args []string) ([]string, error) {
+	paths := make([]string, 0, len(args))
+
+	for _, arg := range args {
+		if arg == "-" || parse.ValidWebURL(arg) == nil {
+			paths = append(paths, "")
+			continue
+		}
+
+		path, err := filepath.Abs(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		paths = append(paths, path)
+	}
+
+	return paths, nil
 }
 
 func teardown(ctx context.Context, body io.Reader, options entities.PlayKubeDownOptions) error {
