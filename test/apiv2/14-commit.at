@@ -22,7 +22,15 @@ t POST 'commit?container=myctr&repo=compatimage&tag=1' $config 201
 # Check some things
 t GET images/compatimage:1/json 200 ".Config.Cmd=$(jq .Cmd $config)" ".Config.Entrypoint=$(jq .Entrypoint $config)"
 
+# includeVolumes must record the container volumes in the image
+podman create --name volctr -v /tmp:/foo $IMAGE true
+t POST 'libpod/commit?container=volctr&repo=volimage&includeVolumes=true' 200
+t GET libpod/images/volimage/json 200 \
+  '.Config.Volumes | has("/foo")=true'
+
 # Clean up
+t DELETE containers/volctr 204
+t DELETE images/volimage 200
 t DELETE containers/myctr 204
 t DELETE images/nativeimage:1 200
 t DELETE images/compatimage:1 200

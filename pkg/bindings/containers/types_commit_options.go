@@ -93,6 +93,21 @@ func (o *CommitOptions) GetFormat() string {
 	return *o.Format
 }
 
+// WithIncludeVolumes set field IncludeVolumes to given value
+func (o *CommitOptions) WithIncludeVolumes(value bool) *CommitOptions {
+	o.IncludeVolumes = &value
+	return o
+}
+
+// GetIncludeVolumes returns value of field IncludeVolumes
+func (o *CommitOptions) GetIncludeVolumes() bool {
+	if o.IncludeVolumes == nil {
+		var z bool
+		return z
+	}
+	return *o.IncludeVolumes
+}
+
 // WithPause set field Pause to given value
 func (o *CommitOptions) WithPause(value bool) *CommitOptions {
 	o.Pause = &value

@@ -1476,6 +1476,10 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    type: string
 	//    description: format of the image manifest and metadata (default "oci")
 	//  - in: query
+	//    name: includeVolumes
+	//    type: boolean
+	//    description: include container volumes as image volumes
+	//  - in: query
 	//    name: pause
 	//    type: boolean
 	//    description: pause the container before committing it

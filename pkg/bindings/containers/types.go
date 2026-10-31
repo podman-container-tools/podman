@@ -27,16 +27,17 @@ type LogOptions struct {
 //
 //go:generate go run ../generator/generator.go CommitOptions
 type CommitOptions struct {
-	Author  *string
-	Changes []string
-	Config  *io.Reader `schema:"-"`
-	Comment *string
-	Format  *string
-	Pause   *bool
-	Stream  *bool
-	Squash  *bool
-	Repo    *string
-	Tag     *string
+	Author         *string
+	Changes        []string
+	Config         *io.Reader `schema:"-"`
+	Comment        *string
+	Format         *string
+	IncludeVolumes *bool
+	Pause          *bool
+	Stream         *bool
+	Squash         *bool
+	Repo           *string
+	Tag            *string
 }
 
 // AttachOptions are optional options for attaching to containers
