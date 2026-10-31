@@ -848,7 +848,10 @@ static void __attribute__((constructor)) init()
         }
 
       if (set_ns_handles (path) == 0)
-        goto joined;
+        {
+          setenv ("_PODMAN_JOIN_SOURCE", "ns_handles", 1);
+          goto joined;
+        }
 
       /* If the handle is stale, give up with the shortcut.  */
       if (errno == ESTALE)
@@ -911,6 +914,9 @@ static void __attribute__((constructor)) init()
 
       /* This is a fatal error we can't recover from since we have already joined the userns.  */
       join_namespace_or_die ("mnt", mntns_fd);
+
+      setenv ("_PODMAN_JOIN_SOURCE", "pause.pid", 1);
+      setenv ("_PODMAN_PAUSE_PID", buf, 1);
 
 joined:
       sprintf (uid_fmt, "%d", uid);

@@ -1,11 +1,14 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -144,7 +147,7 @@ func newPodmanConfig() {
 		Modules:    modules,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to obtain podman configuration: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to obtain podman configuration: %v\n", enrichConfigError(err))
 		os.Exit(1)
 	}
 
@@ -233,3 +236,78 @@ func RetryDelayDefault() string {
 
 	return PodmanConfig().ContainersConfDefaultsRO.Engine.RetryDelay
 }
+
+func isFilesystemError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrNotExist) ||
+		errors.Is(err, os.ErrPermission) ||
+		errors.Is(err, syscall.EIO) ||
+		errors.Is(err, syscall.ENOENT) ||
+		errors.Is(err, syscall.ENOTDIR) ||
+		errors.Is(err, syscall.EACCES) ||
+		errors.Is(err, syscall.EROFS) ||
+		errors.Is(err, syscall.ENODEV) ||
+		errors.Is(err, syscall.ENXIO) ||
+		errors.Is(err, syscall.EBUSY) ||
+		errors.Is(err, syscall.ESTALE) {
+		return true
+	}
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return true
+	}
+	var fsErr *os.SyscallError
+	if errors.As(err, &fsErr) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, term := range []string{
+		"input/output error",
+		"no such file or directory",
+		"stale file handle",
+		"permission denied",
+		"device or resource busy",
+		"no such device",
+		"read-only file system",
+		"bad file descriptor",
+	} {
+		if strings.Contains(msg, term) {
+			return true
+		}
+	}
+	return false
+}
+
+// enrichConfigError enriches a configuration load error with rootless namespace
+// context when running in rootless mode.
+func enrichConfigError(err error) error {
+	stateDir, _ := util.GetRootlessStateDir()
+	return enrichConfigErrorWithStateDir(err, stateDir)
+}
+
+// enrichConfigErrorWithStateDir enriches err using namespace info discovered from stateDir.
+func enrichConfigErrorWithStateDir(err error, stateDir string) error {
+	if err == nil {
+		return nil
+	}
+	info := rootless.GetRootlessNamespaceInfo(stateDir)
+	return enrichConfigErrorWithInfo(err, info)
+}
+
+// enrichConfigErrorWithInfo enriches err using the provided RootlessNamespaceInfo.
+func enrichConfigErrorWithInfo(err error, info *rootless.RootlessNamespaceInfo) error {
+	if err == nil || info == nil || !info.IsRootless {
+		return err
+	}
+
+	isFSErr := isFilesystemError(err)
+	ctxStr := info.ContextString(isFSErr)
+	if ctxStr == "" {
+		return err
+	}
+
+	return fmt.Errorf("%w (%s)", err, ctxStr)
+}
+
