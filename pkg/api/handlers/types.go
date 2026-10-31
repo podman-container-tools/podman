@@ -99,6 +99,39 @@ type UpdateEntities struct {
 	Rlimits  []specs.POSIXRlimit `json:"r_limits,omitempty"`
 }
 
+// ContainerCloneEntities are the options to override when cloning a container.
+// Unset fields keep the value of the original container.
+// swagger:model
+type ContainerCloneEntities struct {
+	// Name of the new container
+	Name *string `json:"name,omitempty"`
+	// Image used by the new container instead of the original image
+	Image *string `json:"image,omitempty"`
+	// Pod to create the new container in
+	Pod *string `json:"pod,omitempty"`
+	// Destroy removes the original container after cloning it
+	Destroy *bool `json:"destroy,omitempty"`
+	// Force removes the original container even if it is running, requires destroy
+	Force *bool `json:"force,omitempty"`
+	// Run starts the new container
+	Run *bool `json:"run,omitempty"`
+
+	BlkIOWeight       *string  `json:"blkio_weight,omitempty"`
+	BlkIOWeightDevice []string `json:"blkio_weight_device,omitempty"`
+	CPUPeriod         *uint64  `json:"cpu_period,omitempty"`
+	CPUQuota          *int64   `json:"cpu_quota,omitempty"`
+	CPUShares         *uint64  `json:"cpu_shares,omitempty"`
+	CPUs              *float64 `json:"cpus,omitempty"`
+	CPUSetCPUs        *string  `json:"cpuset_cpus,omitempty"`
+	CPUSetMems        *string  `json:"cpuset_mems,omitempty"`
+	DeviceReadBPs     []string `json:"device_read_bps,omitempty"`
+	DeviceWriteBPs    []string `json:"device_write_bps,omitempty"`
+	Memory            *string  `json:"memory,omitempty"`
+	MemoryReservation *string  `json:"memory_reservation,omitempty"`
+	MemorySwap        *string  `json:"memory_swap,omitempty"`
+	MemorySwappiness  *int64   `json:"memory_swappiness,omitempty"`
+}
+
 type Info struct {
 	dockerSystem.Info
 	BuildahVersion     string

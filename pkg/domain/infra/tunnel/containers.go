@@ -1079,8 +1079,21 @@ func (ic *ContainerEngine) ContainerRename(_ context.Context, nameOrID string, o
 	return containers.Rename(ic.ClientCtx, nameOrID, new(containers.RenameOptions).WithName(opts.NewName))
 }
 
-func (ic *ContainerEngine) ContainerClone(_ context.Context, _ entities.ContainerCloneOptions) (*entities.ContainerCreateReport, error) {
-	return nil, errors.New("cloning a container is not supported on the remote client")
+func (ic *ContainerEngine) ContainerClone(_ context.Context, ctrCloneOpts entities.ContainerCloneOptions) (*entities.ContainerCreateReport, error) {
+	c := ctrCloneOpts.CreateOpts
+	options := new(containers.CloneOptions).WithName(c.Name).WithImage(ctrCloneOpts.Image).WithPod(c.Pod)
+	options.WithDestroy(ctrCloneOpts.Destroy).WithForce(ctrCloneOpts.Force).WithRun(ctrCloneOpts.Run)
+	options.WithBlkIOWeight(c.BlkIOWeight).WithBlkIOWeightDevice(c.BlkIOWeightDevice)
+	options.WithCPUPeriod(c.CPUPeriod).WithCPUQuota(c.CPUQuota).WithCPUShares(c.CPUShares).WithCPUs(c.CPUS)
+	options.WithCPUSetCPUs(c.CPUSetCPUs).WithCPUSetMems(c.CPUSetMems)
+	options.WithDeviceReadBPs(c.DeviceReadBPs).WithDeviceWriteBPs(c.DeviceWriteBPs)
+	options.WithMemory(c.Memory).WithMemoryReservation(c.MemoryReservation).WithMemorySwap(c.MemorySwap)
+	options.WithMemorySwappiness(c.MemorySwappiness)
+	response, err := containers.Clone(ic.ClientCtx, ctrCloneOpts.ID, options)
+	if err != nil {
+		return nil, err
+	}
+	return &entities.ContainerCreateReport{Id: response.ID}, nil
 }
 
 // ContainerUpdate finds and updates the given container's cgroup config with the specified options

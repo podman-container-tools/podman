@@ -552,3 +552,85 @@ func parseRLimits(rLimits []WirePOSIXRlimit) ([]specs.POSIXRlimit, error) {
 	}
 	return rl, nil
 }
+
+func CloneContainer(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	var body handlers.ContainerCloneEntities
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("decode(): %w", err))
+		return
+	}
+
+	createOpts, err := newCloneCreateOptions(runtime)
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+	options := entities.ContainerCloneOptions{
+		ID:         utils.GetName(r),
+		CreateOpts: createOpts,
+	}
+	setIfNotNil(&options.Image, body.Image)
+	setIfNotNil(&options.Destroy, body.Destroy)
+	setIfNotNil(&options.Force, body.Force)
+	setIfNotNil(&options.Run, body.Run)
+
+	c := &options.CreateOpts
+	setIfNotNil(&c.Name, body.Name)
+	setIfNotNil(&c.Pod, body.Pod)
+	setIfNotNil(&c.BlkIOWeight, body.BlkIOWeight)
+	c.BlkIOWeightDevice = body.BlkIOWeightDevice
+	setIfNotNil(&c.CPUPeriod, body.CPUPeriod)
+	setIfNotNil(&c.CPUQuota, body.CPUQuota)
+	setIfNotNil(&c.CPUShares, body.CPUShares)
+	setIfNotNil(&c.CPUS, body.CPUs)
+	setIfNotNil(&c.CPUSetCPUs, body.CPUSetCPUs)
+	setIfNotNil(&c.CPUSetMems, body.CPUSetMems)
+	c.DeviceReadBPs = body.DeviceReadBPs
+	c.DeviceWriteBPs = body.DeviceWriteBPs
+	setIfNotNil(&c.Memory, body.Memory)
+	setIfNotNil(&c.MemoryReservation, body.MemoryReservation)
+	setIfNotNil(&c.MemorySwap, body.MemorySwap)
+	setIfNotNil(&c.MemorySwappiness, body.MemorySwappiness)
+
+	if options.Force && !options.Destroy {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("cannot set force without destroy: %w", define.ErrInvalidArg))
+		return
+	}
+
+	containerEngine := abi.ContainerEngine{Libpod: runtime}
+	report, err := containerEngine.ContainerClone(r.Context(), options)
+	if err != nil {
+		if errors.Is(err, define.ErrNoSuchCtr) {
+			utils.ContainerNotFound(w, options.ID, err)
+			return
+		}
+		utils.InternalServerError(w, err)
+		return
+	}
+	utils.WriteResponse(w, http.StatusCreated, entities.ContainerCreateResponse{ID: report.Id})
+}
+
+// newCloneCreateOptions returns the create options a clone starts from.
+// Empty values keep the configuration of the original container.
+func newCloneCreateOptions(runtime *libpod.Runtime) (entities.ContainerCreateOptions, error) {
+	rtc, err := runtime.GetConfigNoCopy()
+	if err != nil {
+		return entities.ContainerCreateOptions{}, err
+	}
+	return entities.ContainerCreateOptions{
+		IsClone:              true,
+		MemorySwappiness:     -1,
+		StopTimeout:          rtc.Engine.StopTimeout,
+		HealthLogDestination: define.DefaultHealthCheckLocalDestination,
+		HealthMaxLogCount:    define.DefaultHealthMaxLogCount,
+		HealthMaxLogSize:     define.DefaultHealthMaxLogSize,
+	}, nil
+}
+
+// setIfNotNil sets dst to the value of src when src is set.
+func setIfNotNil[T any](dst *T, src *T) {
+	if src != nil {
+		*dst = *src
+	}
+}
