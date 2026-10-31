@@ -757,7 +757,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 
 		subgidnameFlagName := "subgidname"
 		createFlags.StringVar(
-			&cf.SubUIDName,
+			&cf.SubGIDName,
 			subgidnameFlagName, "",
 			"Name of range listed in /etc/subgid for use in user namespace",
 		)
@@ -765,7 +765,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 
 		subuidnameFlagName := "subuidname"
 		createFlags.StringVar(
-			&cf.SubGIDName,
+			&cf.SubUIDName,
 			subuidnameFlagName, "",
 			"Name of range listed in /etc/subuid for use in user namespace",
 		)
