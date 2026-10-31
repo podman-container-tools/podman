@@ -341,7 +341,7 @@ func obtainUserModeNetLock() (*fileLock, error) {
 	return flock, nil
 }
 
-func changeDistUserModeNetworking(dist string, user string, image string, enable bool) error {
+func changeDistUserModeNetworking(dist string, image string, enable bool) error {
 	// Only install if user-mode is being enabled and there was an image path passed
 	if enable {
 		if len(image) == 0 {
@@ -352,20 +352,14 @@ func changeDistUserModeNetworking(dist string, user string, image string, enable
 		}
 	}
 
-	if err := writeWslConf(dist, user); err != nil {
-		return err
-	}
-
+	// Remove or add `generateResolvConf = false` in the `[networking]`
+	// section of the /etc/wsl.conf (in the guest).
+	script := disableUserNetResolvConf
 	if enable {
-		return appendDisableAutoResolve(dist)
+		script = enableUserNetResolvConf
 	}
-
-	return nil
-}
-
-func appendDisableAutoResolve(dist string) error {
-	if err := wslPipe(wslConfUserNet, dist, "sh", "-c", "cat >> /etc/wsl.conf"); err != nil {
-		return fmt.Errorf("could not append resolv config to wsl.conf: %w", err)
+	if err := wslPipe(script, dist, "sh"); err != nil {
+		return fmt.Errorf("could not update the resolv config in wsl.conf: %w", err)
 	}
 
 	return nil

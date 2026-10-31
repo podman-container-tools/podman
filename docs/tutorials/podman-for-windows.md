@@ -53,6 +53,8 @@ later. Internally, WSL and Hyper-V use virtualization, so your system must
 support and have hardware virtualization enabled. If you are running Windows on
 a VM, you must have a VM that supports nested virtualization.
 
+WSL v2.5.1 or later is required.
+
 Hyper-V is only available on Windows Enterprise, Pro, or Education editions (not
 Home). The command to initialize the first Hyper-V Podman machine, and the command
 to remove the last one, both require administrator privileges because they create

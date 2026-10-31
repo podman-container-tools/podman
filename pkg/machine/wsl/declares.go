@@ -8,10 +8,6 @@ const (
 	currentMachineVersion       = 3
 )
 
-const cgroupManager = `[engine]
-cgroup_manager="cgroupfs"
-`
-
 const appendPort = `grep -q Port\ %d /etc/ssh/sshd_config || echo Port %d >> /etc/ssh/sshd_config`
 
 const changePort = `sed -E -i 's/^Port[[:space:]]+[0-9]+/Port %d/' /etc/ssh/sshd_config`
@@ -39,55 +35,99 @@ const sudoers = `%wheel        ALL=(ALL)       NOPASSWD: ALL
 `
 
 const bootstrap = `#!/bin/bash
-ps -ef | grep -v grep | grep -q systemd && exit 0
-nohup unshare --kill-child --fork --pid --mount --mount-proc --propagation shared /lib/systemd/systemd >/dev/null 2>&1 &
+# Wait for systemd to be up. It's ok if the command
+# "systemctl is-system-running" returns non-zero.
+timeout 60 systemctl is-system-running --wait >/dev/null 2>&1 || true
+
+# Trick to keep the WSL distribution alive or WSL idles it.
+nohup sleep infinity </dev/null >/dev/null 2>&1 &
+
+# Sleep to avoid a nohup/SIGHUP race
 sleep 0.1
 `
 
-const wslmotd = `
-You will be automatically entered into a nested process namespace where
-systemd is running. If you need to access the parent namespace, hit ctrl-d
-or type exit. This also means to log out you need to exit twice.
+// Machines created by Podman v6.1 and earlier don't use the WSL systemd
+// support: their /root/bootstrap script starts systemd in a separate PID and
+// mount namespace. These machines are still supported and are identified by
+// the script used to enter that namespace, that newer machines don't have.
+const legacyEnterns = "/usr/local/bin/enterns"
 
+// isLegacy exits with 0 if the machine uses the legacy bootstrap script. It
+// exits with 1 otherwise.
+const isLegacy = `[ -e ` + legacyEnterns + ` ]`
+
+// setLegacy sets LEGACY to true for machines created by Podman v6.1 or
+// earlier, and to false otherwise.
+const setLegacy = `if ` + isLegacy + `; then LEGACY=true; else LEGACY=false; fi
 `
 
-const sysdpid = "SYSDPID=`ps -eo cmd,pid | grep -m 1 ^/lib/systemd/systemd | awk '{print $2}'`"
-
-const profile = sysdpid + `
-if [ ! -z "$SYSDPID" ] && [ "$SYSDPID" != "1" ]; then
-    cat /etc/wslmotd
-	/usr/local/bin/enterns
+// setMainPID sets LEGACY, and MAINPID to the PID of the process that keeps
+// the machine running: systemd in its namespace for legacy machines, the
+// keepalive started by the bootstrap script otherwise. MAINPID is empty if
+// the process isn't running.
+const setMainPID = setLegacy + `if $LEGACY; then
+	MAINPID=$(ps -eo cmd,pid | grep -m 1 '^/lib/systemd/systemd' | awk '{print $NF}')
+else
+	MAINPID=$(ps -eo cmd,pid | grep -m 1 '^sleep infinity' | awk '{print $NF}')
 fi
 `
 
-const enterns = "#!/bin/bash\n" + sysdpid + `
-if [ ! -z "$SYSDPID" ] && [ "$SYSDPID" != "1" ]; then
-        NSENTER=("nsenter" "-m" "-p" "-t" "$SYSDPID" "--wd=$PWD")
-
-        if [ "$UID" != "0" ]; then
-                NSENTER=("sudo" "${NSENTER[@]}")
-                if [ "$#" != "0" ]; then
-                        NSENTER+=("sudo" "-u" "$USER")
-                else
-                        NSENTER+=("su" "-l" "$USER")
-                fi
-        fi
-        "${NSENTER[@]}" "$@"
-fi`
-
-const waitTerm = sysdpid + `
-if [ ! -z "$SYSDPID" ]; then
-	timeout 60 tail -f /dev/null --pid $SYSDPID
+// isSystemRunning prints "running" if the machine is running and "offline"
+// otherwise. Can be used for both legacy and native machines.
+const isSystemRunning = setMainPID + `if $LEGACY; then
+	if [ -n "$MAINPID" ] && [ "$MAINPID" != "1" ]; then echo running; else echo offline; fi
+else
+	systemctl is-system-running
 fi
 `
 
-const wslConf = `[user]
+// termTimeoutSeconds is the maximum number of seconds to wait for a clean
+// systemd shutdown.
+const termTimeoutSeconds = "60"
+
+// waitTermLegacy waits termTimeoutSeconds for the namespaced systemd to exit.
+// It should be used on legacy machines only, machines that don't use the
+// WSL-native systemd.
+const waitTermLegacy = setMainPID + `
+if [ -n "$MAINPID" ]; then timeout ` + termTimeoutSeconds + ` tail -f /dev/null --pid $MAINPID; fi
+`
+
+// termNative stops systemd, which stops the services and containers first.
+const termNative = `systemctl poweroff`
+
+// termLegacy stops systemd on legacy machines that used the systemd trick.
+const termLegacy = legacyEnterns + ` systemctl exit 0`
+
+// restartSSHD restarts sshd if it's running. Skipped on legacy machines, where
+// systemd can't be reached from outside its namespace.
+const restartSSHD = setLegacy + `
+if ! $LEGACY; then systemctl try-restart sshd.service; fi
+`
+
+const wslConf = `[boot]
+systemd=true
+
+[user]
 default=[USER]
 `
 
-const wslConfUserNet = `
-[network]
-generateResolvConf = false
+// The scripts below only change the generateResolvConf line of
+// /etc/wsl.conf, to keep any other configuration.
+
+// disableUserNetResolvConf removes generateResolvConf from /etc/wsl.conf,
+// so WSL generates /etc/resolv.conf again.
+const disableUserNetResolvConf = `set -e
+sed -i '/^generateResolvConf/d' /etc/wsl.conf
+`
+
+// enableUserNetResolvConf sets "generateResolvConf = false" in the [network]
+// section of /etc/wsl.conf, adding the section if it doesn't exist.
+const enableUserNetResolvConf = disableUserNetResolvConf + `
+if grep -q '^\[network\]' /etc/wsl.conf; then
+	sed -i '/^\[network\]/a generateResolvConf = false' /etc/wsl.conf
+else
+	printf '\n[network]\ngenerateResolvConf = false\n' >> /etc/wsl.conf
+fi
 `
 
 const resolvConfUserNet = `

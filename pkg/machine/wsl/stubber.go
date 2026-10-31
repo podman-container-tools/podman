@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
+	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 
 	"go.podman.io/podman/v6/pkg/machine/env"
 	"go.podman.io/podman/v6/pkg/machine/wsl/wutil"
@@ -34,6 +36,12 @@ func (w WSLStubber) CreateVM(opts define.CreateVMOpts, mc *vmconfigs.MachineConf
 	mc.WSLHypervisor = new(vmconfigs.WSLConfig)
 
 	_ = setupWslProxyEnv()
+
+	// WSL v2.5.1 or later is required. Earlier versions will fail to
+	// start Podman machines because they supported cgroupv1.
+	if !wutil.WSLVersionAtLeast(2, 5, 1) {
+		return fmt.Errorf("WSL version 2.5.1 or later is required to run Podman. Please upgrade WSL with: wsl --update")
+	}
 
 	if opts.UserModeNetworking {
 		if err = verifyWSLUserModeCompat(); err != nil {
@@ -156,13 +164,16 @@ func (w WSLStubber) SetProviderAttrs(mc *vmconfigs.MachineConfig, opts define.Se
 	}
 
 	if opts.UserModeNetworking != nil && mc.WSLHypervisor.UserModeNetworking != *opts.UserModeNetworking {
-		if running, _ := isRunning(mc.Name); running {
-			return errors.New("user-mode networking can only be changed when the machine is not running")
+		dist := env.WithPodmanPrefix(mc.Name)
+		if err := changeDistUserModeNetworking(dist, mc.ImagePath.GetPath(), *opts.UserModeNetworking); err != nil {
+			return fmt.Errorf("failure changing state of user-mode networking setting: %w", err)
 		}
 
-		dist := env.WithPodmanPrefix(mc.Name)
-		if err := changeDistUserModeNetworking(dist, mc.SSH.RemoteUsername, mc.ImagePath.GetPath(), *opts.UserModeNetworking); err != nil {
-			return fmt.Errorf("failure changing state of user-mode networking setting: %w", err)
+		// Changing the setting runs commands in the distribution, which boots
+		// it with systemd. Stop it so that the machine is still reported as
+		// stopped and the new wsl.conf is used at the next start.
+		if err := terminateDist(dist); err != nil {
+			return fmt.Errorf("could not stop the WSL distribution: %w", err)
 		}
 
 		mc.WSLHypervisor.UserModeNetworking = *opts.UserModeNetworking
@@ -213,20 +224,11 @@ func (w WSLStubber) PostStartNetworking(mc *vmconfigs.MachineConfig, noInfo bool
 func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() error, error) {
 	dist := env.WithPodmanPrefix(mc.Name)
 
+	// On legacy machines, created by Podman v6.1 and earlier, the bootstrap
+	// script starts systemd in a separate namespace.
 	err := wslInvoke(dist, "/root/bootstrap")
 	if err != nil {
 		return nil, nil, fmt.Errorf("the WSL bootstrap script failed: %w", err)
-	}
-
-	// We need to set cgroup_manager="cgroupfs" in the [engine] section
-	// of containers.conf until we use the WSL supported systemd.
-	// The details are in this GitHub issue:
-	// https://github.com/podman-container-tools/podman/issues/29749
-	// The issue about using the WSL supported systemd:
-	// https://github.com/podman-container-tools/podman/issues/15967
-	err = wslPipe(cgroupManager, dist, "sh", "-c", "cat > /usr/share/containers/containers.conf.d/999-podman-machine-wsl-cgroupfs.conf")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed creating the cgroupfs config file: %w", err)
 	}
 
 	readyFunc := func() error {
@@ -248,8 +250,6 @@ func (w WSLStubber) State(mc *vmconfigs.MachineConfig, _ bool) (define.Status, e
 }
 
 func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
-	var err error
-
 	if running, err := isRunning(mc.Name); !running {
 		return err
 	}
@@ -258,33 +258,83 @@ func (w WSLStubber) StopVM(mc *vmconfigs.MachineConfig, _ bool) error {
 
 	// Stop user-mode networking if enabled
 	if err := stopUserModeNetworking(mc); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not cleanly stop user-mode networking: %v\n", err)
+		logrus.Warnf("Could not cleanly stop user-mode networking: %v", err)
 	}
 
 	if err := machine.StopWinProxy(mc.Name, vmtype); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not stop API forwarding service (win-sshproxy.exe): %v\n", err)
+		logrus.Warnf("Could not stop API forwarding service (win-sshproxy.exe): %v", err)
 	}
 
+	if err := stopAndWaitSystemd(dist); err != nil {
+		return err
+	}
+
+	return terminateDist(dist)
+}
+
+func stopAndWaitSystemd(dist string) error {
+	legacySystemd, err := usesLegacySystemd(dist)
+	if err != nil {
+		logrus.Warnf("Could not check if %q used the legacy systemd trick: %v", dist, err)
+	}
+	if legacySystemd {
+		return stopAndWaitLegacySystemd(dist)
+	}
+	return stopAndWaitNativeSystemd(dist)
+}
+
+func stopAndWaitNativeSystemd(dist string) error {
+	if err := wslPipe(termNative, dist, "sh"); err != nil {
+		return fmt.Errorf("terminating systemd: %w", err)
+	}
+	timeout, _ := strconv.Atoi(termTimeoutSeconds)
+	for deadline := time.Now().Add(time.Duration(timeout) * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		running, err := isWSLRunning(dist)
+		if err != nil || !running {
+			return err
+		}
+	}
+	logrus.Warnf("Timed out waiting for a systemd clean shutdown after %d seconds", timeout)
+	return nil
+}
+
+func stopAndWaitLegacySystemd(dist string) error {
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
-	cmd.Stdin = strings.NewReader(waitTerm)
+	logrus.Debugf("Running command: %s %v", cmd.Path, cmd.Args)
+	cmd.Stdin = strings.NewReader(waitTermLegacy)
 	out := &bytes.Buffer{}
 	cmd.Stderr = out
 	cmd.Stdout = out
 
-	if err = cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("executing wait command: %w", err)
 	}
 
-	exitCmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "/usr/local/bin/enterns", "systemctl", "exit", "0")
-	if err = exitCmd.Run(); err != nil {
-		return fmt.Errorf("stopping systemd: %w", err)
+	if err := wslPipe(termLegacy, dist, "sh"); err != nil {
+		return fmt.Errorf("terminating main process: %w", err)
 	}
 
-	if err = cmd.Wait(); err != nil {
-		logrus.Warnf("Failed to wait for systemd to exit: (%s)", strings.TrimSpace(out.String()))
+	if err := cmd.Wait(); err != nil {
+		logrus.Warnf("Failed to wait for systemd to shutdown cleanly: %v (%s)", err, strings.TrimSpace(out.String()))
 	}
+	return nil
+}
 
-	return terminateDist(dist)
+// usesLegacySystemd checks if the file /usr/local/bin/enterns
+// exists in the machine. If it does, the machine started a namespaced systemd
+// at boot (a trick required by older versions of WSL), and doesn't use the
+// native WSL systemd.
+// Note: this function should be used carefully: if the WSL distribution
+// is stopped it has the side effect to start it.
+func usesLegacySystemd(dist string) (bool, error) {
+	err := wslPipe(isLegacy, dist, "sh")
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (w WSLStubber) StopHostNetworking(mc *vmconfigs.MachineConfig, _ define.VMType) error {
@@ -296,6 +346,12 @@ func (w WSLStubber) UpdateSSHPort(mc *vmconfigs.MachineConfig, port int) error {
 
 	if err := wslInvoke(dist, "sh", "-c", fmt.Sprintf(changePort, port)); err != nil {
 		return fmt.Errorf("could not change SSH port for guest OS: %w", err)
+	}
+
+	// Try restarting sshd with the new port. This is in case it was already started at
+	// the WSL distribution boot.
+	if err := wslPipe(restartSSHD, dist, "sh"); err != nil {
+		return fmt.Errorf("could not restart sshd after SSH port change: %w", err)
 	}
 
 	return nil

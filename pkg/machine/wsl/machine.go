@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -122,10 +121,6 @@ func provisionWSLDist(name string, imagePath string, prompt string) (string, err
 func createKeys(mc *vmconfigs.MachineConfig, dist string) error {
 	user := mc.SSH.RemoteUsername
 
-	if err := terminateDist(dist); err != nil {
-		return fmt.Errorf("could not cycle WSL dist: %w", err)
-	}
-
 	identityPath := mc.SSH.IdentityPath + ".pub"
 
 	// TODO We could audit vmfile reads and see if a 'ReadToString'
@@ -193,7 +188,15 @@ func configureSystem(mc *vmconfigs.MachineConfig, dist string, ansibleConfig *vm
 		return err
 	}
 
-	return changeDistUserModeNetworking(dist, user, mc.ImagePath.GetPath(), mc.WSLHypervisor.UserModeNetworking)
+	if err := writeWslConf(dist, user); err != nil {
+		return err
+	}
+
+	if mc.WSLHypervisor.UserModeNetworking {
+		return changeDistUserModeNetworking(dist, mc.ImagePath.GetPath(), true)
+	}
+
+	return nil
 }
 
 func configureBindMounts(dist string, user string) error {
@@ -273,20 +276,6 @@ func enableUserLinger(mc *vmconfigs.MachineConfig, dist string) error {
 }
 
 func installScripts(dist string) error {
-	if err := wslPipe(enterns, dist, "sh", "-c",
-		"cat > /usr/local/bin/enterns; chmod 755 /usr/local/bin/enterns"); err != nil {
-		return fmt.Errorf("could not create enterns script for guest OS: %w", err)
-	}
-
-	if err := wslPipe(profile, dist, "sh", "-c",
-		"cat > /etc/profile.d/enterns.sh"); err != nil {
-		return fmt.Errorf("could not create motd profile script for guest OS: %w", err)
-	}
-
-	if err := wslPipe(wslmotd, dist, "sh", "-c", "cat > /etc/wslmotd"); err != nil {
-		return fmt.Errorf("could not create a WSL MOTD for guest OS: %w", err)
-	}
-
 	if err := wslPipe(bootstrap, dist, "sh", "-c",
 		"cat > /root/bootstrap; chmod 755 /root/bootstrap"); err != nil {
 		return fmt.Errorf("could not create bootstrap script for guest OS: %w", err)
@@ -521,34 +510,26 @@ func getAllWSLDistros(running bool) (map[string]struct{}, error) {
 	return all, nil
 }
 
+// isSystemdRunning checks the WSL distribution systemd status. It returns true
+// if it's running or degraded.
+// Note: this function should be used carefully: if the WSL distribution
+// is stopped it has the side effect to start it.
 func isSystemdRunning(dist string) (bool, error) {
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
-	cmd.Stdin = strings.NewReader(sysdpid + "\necho $SYSDPID\n")
-	out, err := cmd.StdoutPipe()
+	cmd.Stdin = strings.NewReader(isSystemRunning)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return false, err
-	}
-	stderr := &bytes.Buffer{}
-	cmd.Stderr = stderr
-	if err = cmd.Start(); err != nil {
-		return false, err
-	}
-	scanner := bufio.NewScanner(out)
-	result := false
-	if scanner.Scan() {
-		text := scanner.Text()
-		i, err := strconv.Atoi(text)
-		if err == nil && i > 0 {
-			result = true
+		// `systemctl is-system-running` exits non-zero for states other than
+		// "running" (e.g., "degraded", "starting"), but from a WSL point of view,
+		// systemd is considered running if the state is "running" or "degraded":
+		// https://github.com/microsoft/WSL/blob/master/doc/docs/technical-documentation/systemd.md
+		// Therefore we ignore `exitError` and parse the `out` content instead.
+		if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+			return false, err
 		}
 	}
-
-	err = cmd.Wait()
-	if err != nil {
-		return false, fmt.Errorf("command %s %v failed: %w (%s)", cmd.Path, cmd.Args[1:], err, strings.TrimSpace(stderr.String()))
-	}
-
-	return result, nil
+	state := strings.TrimSpace(string(out))
+	return state == "running" || state == "degraded", nil
 }
 
 func terminateDist(dist string) error {
@@ -569,6 +550,9 @@ func unregisterDist(dist string) error {
 	return nil
 }
 
+// isRunning checks if the WSL distribution is running and, if it is, if
+// systemd is running too. It returns true if both conditions are true.
+// False otherwise.
 func isRunning(name string) (bool, error) {
 	dist := env.WithPodmanPrefix(name)
 	wsl, err := isWSLRunning(dist)
