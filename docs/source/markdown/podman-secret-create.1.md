@@ -65,7 +65,7 @@ Secret resides in a read-protected file.
 #### pass
 
 Secret resides in a GPG-encrypted file. 
-This driver requires an external password store, such as `pass` on Linux.
+This driver requires an external initialized password store, such as `pass` utility on Linux.
 
 #### shell
 
