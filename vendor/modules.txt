@@ -558,7 +558,7 @@ github.com/opencontainers/runc/libcontainer/apparmor
 # github.com/opencontainers/runtime-spec v1.3.0
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
-# github.com/opencontainers/runtime-tools v0.9.1-0.20260316125833-8a4db579f5c8
+# github.com/opencontainers/runtime-tools v0.9.1-0.20261017090856-bd3b0bd00f44
 ## explicit; go 1.21
 github.com/opencontainers/runtime-tools/generate
 github.com/opencontainers/runtime-tools/generate/seccomp
