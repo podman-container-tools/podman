@@ -48,10 +48,10 @@ func getTerminalMap() (map[uint64]string, error) {
 	ptsPath := filepath.Join(devPath, "pts")
 	ptsd, err := os.Open(ptsPath)
 	if err != nil {
+		// FreeBSD only materialises /dev/pts while a pty is open. Fall back to
+		// legacy /dev/ttyp* when present, but do not discard the /dev/tty*
+		// entries already collected — those cover console terminals.
 		ptsnames, _ = filepath.Glob(filepath.Join(devPath, "ttyp*"))
-		if ptsnames == nil {
-			return nil, err
-		}
 		termfiles = append(termfiles, ptsnames...)
 	} else {
 		defer ptsd.Close()
