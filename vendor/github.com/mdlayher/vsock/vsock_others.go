@@ -4,6 +4,7 @@
 package vsock
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -26,7 +27,7 @@ func (*listener) Addr() net.Addr                { return nil }
 func (*listener) Close() error                  { return errUnimplemented }
 func (*listener) SetDeadline(_ time.Time) error { return errUnimplemented }
 
-func dial(_, _ uint32, _ *Config) (*Conn, error) { return nil, errUnimplemented }
+func dial(_ context.Context, _, _ uint32, _ *Config) (*Conn, error) { return nil, errUnimplemented }
 
 type conn struct{}
 

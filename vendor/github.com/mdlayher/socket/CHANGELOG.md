@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## v0.8.0
+
+- [New API]: add `Conn.ReadFunc` and `Conn.WriteFunc` to execute an arbitrary
+  system call against the underlying file descriptor with runtime network
+  poller integration, context cancelation, and deadline support. These are the
+  building blocks used by the other `Conn` read and write methods, exported for
+  system calls which have no wrapper in this package or in `x/sys/unix`.
+- [New API]: add `Conn.Ioctl` to wrap `ioctl(2)` for arbitrary requests with a
+  pointer argument.
+- [Improvement]: update dependencies.
+
+## v0.7.0
+
+**This is the first release of package socket that only supports Go 1.26+.**
+
+- [New API] [PR](https://github.com/mdlayher/socket/pull/18):
+  add `Conn.SendmsgBuffers` to wrap `sendmsg(2)` with scatter-gather I/O
+  support for multiple input buffers.
+- [New API]: add `Conn.SetsockoptBytes` and `Conn.GetsockoptBytes` for
+  binary-safe byte-slice socket options on Linux.
+- [Bug Fix]: context cancelation is now honored immediately for blocking
+  operations when the context also carries a deadline; previously cancelation
+  was not noticed until the deadline expired.
+- [Improvement]: bump build to Go 1.26.0. Package socket now supports Go 1.26
+  and Go 1.27, mirroring Go's own release policy.
+
+## v0.6.1
+
+- [Improvement]: update dependencies.
+
+## v0.6.0
+
+**This is the first release of package socket that only supports Go 1.25+.**
+
+- [Bug Fix] [PR](https://github.com/mdlayher/socket/pull/16):
+  `socket.Socket` with `Config.NetNS` set now returns the error from socket
+  creation inside the target network namespace, rather than silently discarding
+  it and returning a nil `Conn`.
+- [Improvement]: bump build to Go 1.25.0.
+- [Improvement]: enable `golangci-lint` in CI.
+
 ## v0.5.2
 
 - [Improvement]: Bump build to Go 1.23.0. Note this is required for the latest

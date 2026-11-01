@@ -1,6 +1,7 @@
 package vsock
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -175,7 +176,21 @@ func (l *Listener) opError(op string, err error) error {
 // When the connection is no longer needed, Close must be called to free
 // resources.
 func Dial(contextID, port uint32, cfg *Config) (*Conn, error) {
-	c, err := dial(contextID, port, cfg)
+	return DialContext(context.Background(), contextID, port, cfg)
+}
+
+// DialContext connects to the address on the named network using
+// the provided context.
+//
+// The provided Context must be non-nil. If the context expires before
+// the connection is complete, an error is returned. Once successfully
+// connected, any expiration of the context will not affect the
+// connection.
+//
+// See func Dial for a description of the contextID and port
+// parameters.
+func DialContext(ctx context.Context, contextID, port uint32, cfg *Config) (*Conn, error) {
+	c, err := dial(ctx, contextID, port, cfg)
 	if err != nil {
 		// No local address, but we have a remote address we can return.
 		return nil, opError(opDial, err, nil, &Addr{
