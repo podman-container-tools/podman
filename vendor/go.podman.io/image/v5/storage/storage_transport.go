@@ -47,8 +47,9 @@ type StoreTransport interface {
 	GetStoreIfSet() storage.Store
 	// GetImage retrieves the image from the transport's store that's named
 	// by the reference.
+	//
 	// Deprecated: Surprisingly, with a StoreTransport reference which contains an ID,
-	// this ignores that ID; and repeated calls of GetStoreImage with the same named reference
+	// this ignores that ID; and repeated calls of GetImage with the same named reference
 	// can return different images, with no way for the caller to "freeze" the storage.Image identity
 	// without discarding the name entirely.
 	//
@@ -338,7 +339,7 @@ func (s storageTransport) GetStoreImage(store storage.Store, ref types.ImageRefe
 }
 
 // Deprecated: Surprisingly, with a StoreTransport reference which contains an ID,
-// this ignores that ID; and repeated calls of GetStoreImage with the same named reference
+// this ignores that ID; and repeated calls of GetImage with the same named reference
 // can return different images, with no way for the caller to "freeze" the storage.Image identity
 // without discarding the name entirely.
 //

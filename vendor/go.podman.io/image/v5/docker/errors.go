@@ -12,6 +12,7 @@ import (
 var (
 	// ErrV1NotSupported is returned when we're trying to talk to a
 	// docker V1 registry.
+	//
 	// Deprecated: The V1 container registry detection is no longer performed, so this error is never returned.
 	ErrV1NotSupported = errors.New("can't talk to a V1 container registry")
 	// ErrTooManyRequests is returned when the status code returned is 429

@@ -211,7 +211,7 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 			}
 
 			logrus.Infof("Running conmon under slice %s and unitName %s", realCgroupParent, unitName)
-			if err := systemd.RunUnderSystemdScope(cmd.Process.Pid, realCgroupParent, unitName); err != nil {
+			if err := systemd.RunUnderSystemdScope([]int{cmd.Process.Pid}, realCgroupParent, unitName); err != nil {
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to systemd sandbox cgroup: %v", err)
 			}
 		} else {

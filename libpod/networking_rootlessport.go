@@ -27,13 +27,14 @@ func (r *Runtime) setupRootlessPortMappingViaRLK(ctr *Container, netnsPath strin
 	if !ctr.config.PostConfigureNetNS {
 		defer errorhandling.CloseQuiet(ctr.rootlessPortSyncR)
 	}
-	return slirp4netns.SetupRootlessPortMappingViaRLK(&slirp4netns.SetupOptions{
+	_, err := slirp4netns.SetupRootlessPortMappingViaRLK(&slirp4netns.SetupOptions{
 		Config:                r.config,
 		ContainerID:           ctr.ID(),
 		Netns:                 netnsPath,
 		Ports:                 ctr.convertPortMappings(),
 		RootlessPortExitPipeR: ctr.rootlessPortSyncR,
 	}, nil, netStatus)
+	return err
 }
 
 // reloadRootlessRLKPortMapping will trigger a reload for the port mappings in the rootlessport process.

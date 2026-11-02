@@ -103,9 +103,13 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 	if useHardLinks {
 		err := doHardLink(dirfd, srcFd, destFile)
 		if err == nil {
+			dstFile, err := openFileUnderRoot(dirfd, destFile, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+			if err != nil {
+				return nil, -1, fmt.Errorf("open file %q under rootfs after hard link: %w", destFile, err)
+			}
 			// if the file was deduplicated with a hard link, skip overriding file metadata.
 			fileMetadata.skipSetAttrs = true
-			return nil, st.Size(), nil
+			return dstFile, st.Size(), nil
 		}
 	}
 

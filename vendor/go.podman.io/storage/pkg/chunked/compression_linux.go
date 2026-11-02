@@ -388,7 +388,7 @@ func tarSizeFromTarSplit(tarSplit io.Reader) (int64, error) {
 
 // ensureTimePointersMatch ensures that a and b are equal
 func ensureTimePointersMatch(a, b *time.Time) error {
-	// We didn’t always use “timeIfNotZero” when creating the TOC, so treat time.IsZero the same as nil.
+	// We didn’t always use “normalizeTime” when creating the TOC, so treat time.IsZero the same as nil.
 	// The archive/tar code turns time.IsZero() timestamps into an Unix timestamp of 0 when writing, but turns an Unix timestamp of 0
 	// when writing into a (local-timezone) Jan 1 1970, which is not IsZero(). So, treat that the same as IsZero as well.
 	unixZero := time.Unix(0, 0)

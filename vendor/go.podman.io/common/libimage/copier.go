@@ -18,7 +18,7 @@ import (
 	"go.podman.io/common/libimage/platform"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/retry"
-	"go.podman.io/image/v5/copy"
+	cp "go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/signature"
@@ -66,7 +66,7 @@ type CopyOptions struct {
 	// copy.Image() copies only an image which matches the current runtime
 	// environment, or all images which match the supplied reference, or only
 	// specific images from the source reference.
-	ImageListSelection copy.ImageListSelection
+	ImageListSelection cp.ImageListSelection
 	// Allow contacting registries over HTTP, or HTTPS with failed TLS
 	// verification. Note that this does not affect other TLS connections.
 	InsecureSkipTLSVerify types.OptionalBool
@@ -163,7 +163,7 @@ type CopyOptions struct {
 // Copier is a helper to conveniently copy images.
 type Copier struct {
 	extendTimeoutSocket string
-	imageCopyOptions    copy.Options
+	imageCopyOptions    cp.Options
 	retryOptions        retry.Options
 	systemContext       *types.SystemContext
 	policyContext       *signature.PolicyContext
@@ -473,7 +473,7 @@ func (c *Copier) copyInternal(ctx context.Context, source, destination types.Ima
 			opts.DestinationCtx.DockerInsecureSkipTLSVerify = value
 		}
 
-		copiedManifest, err := copy.Image(ctx, c.policyContext, destination, source, &opts)
+		copiedManifest, err := cp.Image(ctx, c.policyContext, destination, source, &opts)
 		if err == nil {
 			returnManifest = copiedManifest
 		}

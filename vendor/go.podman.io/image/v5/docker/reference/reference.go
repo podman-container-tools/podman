@@ -175,6 +175,7 @@ func splitDomain(name string) (string, string) {
 // hostname and name string. If no valid hostname is
 // found, the hostname is empty and the full value
 // is returned as name
+//
 // Deprecated: Use Domain or Path
 func SplitHostname(named Named) (string, string) {
 	if r, ok := named.(namedRepository); ok {
