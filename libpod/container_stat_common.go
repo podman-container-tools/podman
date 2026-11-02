@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"go.podman.io/buildah/copier"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/copy"
 )
@@ -19,11 +20,11 @@ import (
 // along with the resolved root and the resolved path.  Both paths are absolute
 // to the host's root.  Note that the paths may resolved outside the
 // container's mount point (e.g., to a volume or bind mount).
-func (c *Container) statOnHost(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, pathResolution, error) {
+func (c *Container) statOnHost(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string) (*copier.StatForItem, pathResolution, error) {
 	return c.statOnHostWithDepth(ctx, mountPoint, containerPath, 0)
 }
 
-func (c *Container) statOnHostWithDepth(ctx context.Context, mountPoint string, containerPath string, depth int) (*copier.StatForItem, pathResolution, error) {
+func (c *Container) statOnHostWithDepth(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string, depth int) (*copier.StatForItem, pathResolution, error) {
 	if depth > 255 {
 		return nil, pathResolution{}, fmt.Errorf("too many symlinks resolving %q", containerPath)
 	}
@@ -90,7 +91,7 @@ func imageMountLinkTarget(root, destination, containerPath string) (string, erro
 	return "", nil
 }
 
-func (c *Container) stat(ctx context.Context, containerMountPoint string, containerPath string) (*define.FileInfo, pathResolution, error) {
+func (c *Container) stat(ctx context.Context, containerMountPoint protectedroot.PathRoot, containerPath string) (*define.FileInfo, pathResolution, error) {
 	var (
 		resolved         pathResolution
 		absContainerPath string
@@ -129,7 +130,7 @@ func (c *Container) stat(ctx context.Context, containerMountPoint string, contai
 		// Symlinks are already evaluated and always relative to the
 		// container's mount point.
 		absContainerPath = statInfo.ImmediateTarget
-	} else if relContainerPath, ok := strings.CutPrefix(resolved.path, containerMountPoint); ok {
+	} else if relContainerPath, ok := strings.CutPrefix(resolved.path, containerMountPoint.PathWithoutProtection()); ok {
 		// If the path is on the container's mount point, strip it off.
 		absContainerPath = filepath.Join("/", relContainerPath)
 	} else {

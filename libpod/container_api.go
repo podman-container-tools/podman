@@ -13,6 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/resize"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/pkg/domain/entities"
@@ -489,18 +490,22 @@ func (c *Container) AttachResize(newSize resize.TerminalSize) error {
 
 // Mount mounts a container's filesystem on the host
 // The path where the container has been mounted is returned
-func (c *Container) Mount() (string, error) {
+func (c *Container) Mount() (protectedroot.PathRoot, error) {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
 
 		if err := c.syncContainer(); err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 	}
 
 	defer c.newContainerEvent(events.Mount)
-	return c.mount()
+	mountPoint, err := c.mount()
+	if err != nil {
+		return protectedroot.PathRoot{}, err
+	}
+	return mountPoint, nil
 }
 
 // Unmount unmounts a container's filesystem on the host
@@ -1287,10 +1292,10 @@ func (c *Container) Stat(ctx context.Context, containerPath string) (*define.Fil
 		}
 	}
 
-	var mountPoint string
+	var mountPoint protectedroot.PathRoot
 	var err error
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = *c.state.Mountpoint
 	} else {
 		mountPoint, err = c.mount()
 		if err != nil {
