@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
@@ -50,4 +52,27 @@ func TestPodOptions(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestSubuidSubgidNameMappings(t *testing.T) {
+	// Regression test for issue #29885
+	// Ensure that --subuidname populates SubUIDName and --subgidname populates SubGIDName
+	cf := entities.ContainerCreateOptions{}
+	cmd := &cobra.Command{}
+	common.DefineCreateFlags(cmd, &cf, entities.CreateMode)
+
+	// Parse --subuidname
+	err := cmd.ParseFlags([]string{"--subuidname", "testsubuid"})
+	require.NoError(t, err)
+	assert.Equal(t, "testsubuid", cf.SubUIDName, "subuidname should populate SubUIDName")
+	assert.Empty(t, cf.SubGIDName, "subuidname should not populate SubGIDName")
+
+	// Parse --subgidname
+	cf = entities.ContainerCreateOptions{}
+	cmd = &cobra.Command{}
+	common.DefineCreateFlags(cmd, &cf, entities.CreateMode)
+	err = cmd.ParseFlags([]string{"--subgidname", "testsubgid"})
+	require.NoError(t, err)
+	assert.Equal(t, "testsubgid", cf.SubGIDName, "subgidname should populate SubGIDName")
+	assert.Empty(t, cf.SubUIDName, "subgidname should not populate SubUIDName")
 }
