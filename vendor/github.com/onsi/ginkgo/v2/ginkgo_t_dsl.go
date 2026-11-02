@@ -34,6 +34,7 @@ func GinkgoT(optionalOffset ...int) FullGinkgoTInterface {
 		Fail,
 		Skip,
 		DeferCleanup,
+		DeferOnFailure,
 		CurrentSpecReport,
 		AddReportEntry,
 		GinkgoRecover,
@@ -100,6 +101,7 @@ type FullGinkgoTInterface interface {
 
 	GinkgoRecover()
 	DeferCleanup(args ...any)
+	DeferOnFailure(args ...any)
 
 	RandomSeed() int64
 	ParallelProcess() int

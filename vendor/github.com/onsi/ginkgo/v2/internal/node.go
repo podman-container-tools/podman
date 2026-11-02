@@ -647,8 +647,22 @@ func extractSynchronizedBeforeSuiteAllProcsBody(arg any) (func(SpecContext, []by
 var errInterface = reflect.TypeOf((*error)(nil)).Elem()
 
 func NewCleanupNode(deprecationTracker *types.DeprecationTracker, fail func(string, types.CodeLocation), args ...any) (Node, []error) {
+	return newDeferredNode(deprecationTracker, fail, types.NodeTypeCleanupInvalid, "DeferCleanup", types.GinkgoErrors.DeferCleanupInvalidFunction, args...)
+}
+
+/*
+NewOnFailureNode constructs the node registered by DeferOnFailure.  DeferOnFailure accepts exactly what DeferCleanup accepts.
+Like a cleanup node it is generated dynamically during the run phase - the suite assigns its final node type (and therefore
+its scope) when it is pushed, based on the node that registered it.
+*/
+func NewOnFailureNode(deprecationTracker *types.DeprecationTracker, fail func(string, types.CodeLocation), args ...any) (Node, []error) {
+	return newDeferredNode(deprecationTracker, fail, types.NodeTypeOnFailureInvalid, "DeferOnFailure", types.GinkgoErrors.DeferOnFailureInvalidFunction, args...)
+}
+
+// newDeferredNode implements the shared argument handling of DeferCleanup and DeferOnFailure
+func newDeferredNode(deprecationTracker *types.DeprecationTracker, fail func(string, types.CodeLocation), nodeType types.NodeType, name string, invalidFunctionError func(types.CodeLocation) error, args ...any) (Node, []error) {
 	decorations, remainingArgs := PartitionDecorations(args...)
-	baseOffset := 2
+	baseOffset := 3 // newDeferredNode -> NewCleanupNode/NewOnFailureNode -> DeferCleanup/DeferOnFailure -> user code
 	cl := types.NewCodeLocation(baseOffset)
 	finalArgs := []any{}
 	for _, arg := range decorations {
@@ -664,12 +678,12 @@ func NewCleanupNode(deprecationTracker *types.DeprecationTracker, fail func(stri
 	finalArgs = append(finalArgs, cl)
 
 	if len(remainingArgs) == 0 {
-		return Node{}, []error{types.GinkgoErrors.DeferCleanupInvalidFunction(cl)}
+		return Node{}, []error{invalidFunctionError(cl)}
 	}
 
 	callback := reflect.ValueOf(remainingArgs[0])
 	if !(callback.Kind() == reflect.Func) {
-		return Node{}, []error{types.GinkgoErrors.DeferCleanupInvalidFunction(cl)}
+		return Node{}, []error{invalidFunctionError(cl)}
 	}
 
 	callArgs := []reflect.Value{}
@@ -693,7 +707,7 @@ func NewCleanupNode(deprecationTracker *types.DeprecationTracker, fail func(stri
 		}
 		last := out[len(out)-1]
 		if last.Type().Implements(errInterface) && !last.IsNil() {
-			fail(fmt.Sprintf("DeferCleanup callback returned error: %v", last), cl)
+			fail(fmt.Sprintf("%s callback returned error: %v", name, last), cl)
 		}
 	}
 
@@ -709,7 +723,7 @@ func NewCleanupNode(deprecationTracker *types.DeprecationTracker, fail func(stri
 		})
 	}
 
-	return NewNode(deprecationTracker, types.NodeTypeCleanupInvalid, "", finalArgs)
+	return NewNode(deprecationTracker, nodeType, "", finalArgs)
 }
 
 func (n Node) IsZero() bool {
