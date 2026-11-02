@@ -8,6 +8,9 @@ import (
 	"unicode/utf8"
 )
 
+// noRune marks a missing pattern rune without colliding with a valid Unicode rune.
+const noRune rune = -1
+
 type runeRangeMap struct {
 	FromLo rune // Lower bound of range map.
 	FromHi rune // An inclusive higher bound of range map.
@@ -17,6 +20,7 @@ type runeRangeMap struct {
 
 type runeDict struct {
 	Dict [unicode.MaxASCII + 1]rune
+	Set  [unicode.MaxASCII + 1]bool
 }
 
 type runeMap map[rune]rune
@@ -29,7 +33,8 @@ type Translator struct {
 	runeMap    runeMap         // Rune map for translation.
 	ranges     []*runeRangeMap // Ranges of runes.
 	mappedRune rune            // If mappedRune >= 0, all matched runes are translated to the mappedRune.
-	reverted   bool            // If to pattern is empty, all matched characters will be deleted.
+	reverted   bool            // If from pattern starts with '^', only unmatched characters will be translated.
+	deletion   bool            // If to pattern is empty, all matched characters will be deleted.
 	hasPattern bool
 }
 
@@ -56,7 +61,7 @@ func NewTranslator(from, to string) *Translator {
 	// Update the to rune range.
 	updateRange := func() {
 		// No more rune to read in the to rune pattern.
-		if toEnd == utf8.RuneError {
+		if toEnd == noRune {
 			return
 		}
 
@@ -73,17 +78,17 @@ func NewTranslator(from, to string) *Translator {
 
 		// No more rune. Repeat the last rune.
 		if to == "" {
-			toEnd = utf8.RuneError
+			toEnd = noRune
 			return
 		}
 
 		// Both start and end are used. Read two more runes from the to pattern.
-		to, toStart, toEnd, toRangeStep = nextRuneRange(to, utf8.RuneError)
+		to, toStart, toEnd, toRangeStep = nextRuneRange(to, noRune)
 	}
 
 	if deletion {
 		toStart = utf8.RuneError
-		toEnd = utf8.RuneError
+		toEnd = noRune
 	} else {
 		// If from pattern is reverted, only the last rune in the to pattern will be used.
 		if reverted {
@@ -94,13 +99,13 @@ func NewTranslator(from, to string) *Translator {
 				to = to[size:]
 			}
 
-			toEnd = utf8.RuneError
+			toEnd = noRune
 		} else {
-			to, toStart, toEnd, toRangeStep = nextRuneRange(to, utf8.RuneError)
+			to, toStart, toEnd, toRangeStep = nextRuneRange(to, noRune)
 		}
 	}
 
-	fromEnd = utf8.RuneError
+	fromEnd = noRune
 
 	for len(from) > 0 {
 		from, fromStart, fromEnd, fromRangeStep = nextRuneRange(from, fromEnd)
@@ -112,13 +117,18 @@ func NewTranslator(from, to string) *Translator {
 			continue
 		}
 
-		for toEnd != utf8.RuneError && fromStart != fromEnd {
+		for toEnd != noRune && fromStart != fromEnd {
 			// If mapped rune is a single character instead of a range, simply shift first
 			// rune in the range.
 			if toRangeStep == 0 {
 				singleRunes = tr.addRune(fromStart, toStart, singleRunes)
 				updateRange()
 				fromStart += fromRangeStep
+				// The last source rune still needs its own mapping.
+				if fromStart == fromEnd {
+					singleRunes = tr.addRune(fromStart, toStart, singleRunes)
+					updateRange()
+				}
 				continue
 			}
 
@@ -147,19 +157,20 @@ func NewTranslator(from, to string) *Translator {
 		}
 
 		if fromStart == fromEnd {
-			fromEnd = utf8.RuneError
+			fromEnd = noRune
 			continue
 		}
 
 		_, toStart = tr.addRuneRange(fromStart, fromEnd, toStart, toStart, singleRunes)
-		fromEnd = utf8.RuneError
+		fromEnd = noRune
 	}
 
-	if fromEnd != utf8.RuneError {
+	if fromEnd != noRune {
 		tr.addRune(fromEnd, toStart, singleRunes)
 	}
 
 	tr.reverted = reverted
+	tr.deletion = deletion
 	tr.mappedRune = -1
 	tr.hasPattern = true
 
@@ -178,6 +189,7 @@ func (tr *Translator) addRune(from, to rune, singleRunes []rune) []rune {
 		}
 
 		tr.quickDict.Dict[from] = to
+		tr.quickDict.Set[from] = true
 	} else {
 		if tr.runeMap == nil {
 			tr.runeMap = make(runeMap)
@@ -215,6 +227,7 @@ func (tr *Translator) addRuneRange(fromLo, fromHi, toLo, toHi rune, singleRunes 
 		if rrm.FromLo <= r && r <= rrm.FromHi {
 			if r <= unicode.MaxASCII {
 				tr.quickDict.Dict[r] = 0
+				tr.quickDict.Set[r] = false
 			} else {
 				delete(tr.runeMap, r)
 			}
@@ -246,7 +259,7 @@ func nextRuneRange(str string, last rune) (remaining string, start, end rune, ra
 
 			if r == '-' {
 				// Ignore slash at beginning of string.
-				if last == utf8.RuneError {
+				if last == noRune {
 					continue
 				}
 
@@ -258,7 +271,7 @@ func nextRuneRange(str string, last rune) (remaining string, start, end rune, ra
 
 		escaping = false
 
-		if last != utf8.RuneError {
+		if last != noRune {
 			// This is a range which start and end are the same.
 			// Considier it as a normal character.
 			if isRange && last == r {
@@ -284,7 +297,11 @@ func nextRuneRange(str string, last rune) (remaining string, start, end rune, ra
 	}
 
 	start = last
-	end = utf8.RuneError
+	if start == noRune {
+		// Keep the existing fallback for patterns containing only ignored characters.
+		start = utf8.RuneError
+	}
+	end = noRune
 	return
 }
 
@@ -298,7 +315,7 @@ func (tr *Translator) Translate(str string) string {
 
 	var r rune
 	var size int
-	var needTr bool
+	var matched, deleted bool
 
 	orig := str
 
@@ -306,14 +323,21 @@ func (tr *Translator) Translate(str string) string {
 
 	for len(str) > 0 {
 		r, size = utf8.DecodeRuneInString(str)
-		r, needTr = tr.TranslateRune(r)
+		r, matched, deleted = tr.translateRune(r)
 
-		if needTr && output == nil {
+		if matched && output == nil {
 			output = allocBuffer(orig, str)
 		}
 
-		if r != utf8.RuneError && output != nil {
-			output.WriteRune(r)
+		if output != nil && !deleted {
+			if matched {
+				output.WriteRune(r)
+			} else {
+				// An unmatched rune must be kept as is. Its original bytes are
+				// copied instead of the decoded rune, so that an invalid byte
+				// is not rewritten as utf8.RuneError.
+				output.WriteString(str[:size])
+			}
 		}
 
 		str = str[size:]
@@ -330,13 +354,26 @@ func (tr *Translator) Translate(str string) string {
 // TranslateRune return translated rune and true if r matches the from pattern.
 // If r doesn't match the pattern, original r is returned and translated is false.
 func (tr *Translator) TranslateRune(r rune) (result rune, translated bool) {
+	result, translated, _ = tr.translateRune(r)
+	return
+}
+
+// translateRune is the internal implementation of TranslateRune.
+//
+// It reports whether r matches the from pattern (matched) and whether the rune
+// must be dropped from the translation result (deleted). deleted is true only
+// when r matches a from pattern which has an empty to pattern, i.e. the rune is
+// removed by Delete or by Translate with an empty to pattern.
+//
+// The two flags can't be folded into the returned rune: utf8.RuneError is a
+// valid rune value which can be a translation result as well.
+func (tr *Translator) translateRune(r rune) (result rune, matched, deleted bool) {
 	switch {
 	case tr.quickDict != nil:
 		if r <= unicode.MaxASCII {
-			result = tr.quickDict.Dict[r]
-
-			if result != 0 {
-				translated = true
+			if tr.quickDict.Set[r] {
+				result = tr.quickDict.Dict[r]
+				matched = true
 
 				if tr.mappedRune >= 0 {
 					result = tr.mappedRune
@@ -352,7 +389,7 @@ func (tr *Translator) TranslateRune(r rune) (result rune, translated bool) {
 		var ok bool
 
 		if result, ok = tr.runeMap[r]; ok {
-			translated = true
+			matched = true
 
 			if tr.mappedRune >= 0 {
 				result = tr.mappedRune
@@ -371,7 +408,7 @@ func (tr *Translator) TranslateRune(r rune) (result rune, translated bool) {
 			rrm = ranges[i]
 
 			if rrm.FromLo <= r && r <= rrm.FromHi {
-				translated = true
+				matched = true
 
 				if tr.mappedRune >= 0 {
 					result = tr.mappedRune
@@ -393,16 +430,18 @@ func (tr *Translator) TranslateRune(r rune) (result rune, translated bool) {
 	}
 
 	if tr.reverted {
-		if !translated {
+		if !matched {
 			result = tr.mappedRune
 		}
 
-		translated = !translated
+		matched = !matched
 	}
 
-	if !translated {
+	if !matched {
 		result = r
 	}
+
+	deleted = matched && tr.deletion
 
 	return
 }
@@ -501,14 +540,14 @@ func Count(str, pattern string) int {
 //	Squeeze("hello", "m-z")          => "hello"
 //	Squeeze("hello   world", " ")    => "hello world"
 func Squeeze(str, pattern string) string {
-	var last, r rune
+	var r rune
+	var lastBytes string
 	var size int
 	var skipSqueeze, matched bool
 	var tr *Translator
 	var output *stringBuilder
 
 	orig := str
-	last = -1
 
 	if len(pattern) > 0 {
 		tr = NewTranslator(pattern, "")
@@ -517,8 +556,10 @@ func Squeeze(str, pattern string) string {
 	for len(str) > 0 {
 		r, size = utf8.DecodeRuneInString(str)
 
-		// Need to squeeze the str.
-		if last == r && !skipSqueeze {
+		// Compare the original bytes instead of decoded runes: distinct
+		// invalid bytes all decode to utf8.RuneError, but they are not
+		// repeated runes and must not be squeezed.
+		if lastBytes != "" && str[:size] == lastBytes && !skipSqueeze {
 			if tr != nil {
 				if _, matched = tr.TranslateRune(r); !matched {
 					skipSqueeze = true
@@ -530,14 +571,14 @@ func Squeeze(str, pattern string) string {
 			}
 
 			if skipSqueeze {
-				output.WriteRune(r)
+				output.WriteString(str[:size])
 			}
 		} else {
 			if output != nil {
-				output.WriteRune(r)
+				output.WriteString(str[:size])
 			}
 
-			last = r
+			lastBytes = str[:size]
 			skipSqueeze = false
 		}
 

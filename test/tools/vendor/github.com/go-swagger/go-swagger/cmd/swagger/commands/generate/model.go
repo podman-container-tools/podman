@@ -36,6 +36,7 @@ type modelCodegenOptions struct {
 	WithStringer               bool     `description:"generate a fmt.Stringer String() method on models, rendering field values as JSON (see issue #872)"           long:"with-stringer"`
 	GenerateGetters            bool     `description:"generate a Get<Field> method for each field on models and each parameter on operations"                       long:"generate-getters"`
 	NoDefaultOmitEmpty         bool     `description:"do not default to omitempty struct tags unless x-omitempty is explicitly set on a property (see issue #2386)" long:"no-default-omit-empty"`
+	WithModelEnumCI            bool     `description:"allow case-insensitive enumerations"                                                                          long:"with-model-enum-ci"`
 }
 
 func (mo modelCodegenOptions) apply(opts *generator.GenOpts) {
@@ -47,6 +48,7 @@ func (mo modelCodegenOptions) apply(opts *generator.GenOpts) {
 	opts.WantsStringer = mo.WithStringer
 	opts.WantsGetters = mo.GenerateGetters
 	opts.NoDefaultOmitEmpty = mo.NoDefaultOmitEmpty
+	opts.AllowEnumCI = mo.WithModelEnumCI
 }
 
 type modelOptions struct {

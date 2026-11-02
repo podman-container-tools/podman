@@ -11,6 +11,48 @@ import (
 	"github.com/go-openapi/strfmt"
 )
 
+const (
+	// maxCompositionDepth caps the nesting of allOf, anyOf, oneOf and not, followed through
+	// their $ref, below one schema validator.
+	maxCompositionDepth = 128
+
+	// maxCompositionValidators caps the validators built for allOf, anyOf, oneOf and not, followed
+	// through their $ref, below one schema validator.
+	maxCompositionValidators = 10_000
+)
+
+// compositionBudget bounds the validators built for allOf, anyOf, oneOf and not.
+//
+// These validators are built with their parent, not when Validate walks the data, and each one
+// expands its own $ref. go-openapi/spec bounds a single expansion, but a circular $ref stays in
+// place and is expanded again one level down: A: {allOf: [{$ref: A}]} would build validators
+// until the goroutine stack overflows, and A: {allOf: [{$ref: A}, {$ref: A}]} would build
+// 2^depth of them.
+//
+// Validators built for properties, items and the like are built as Validate walks the data, so
+// the depth of the data bounds them. They start their own budget.
+type compositionBudget struct {
+	left  int // validators left to build
+	depth int // current nesting of allOf, anyOf, oneOf and not
+}
+
+// enter draws n validators one level deeper, and panics when either cap is exceeded,
+// like other schemas that cannot be expanded.
+func (b *compositionBudget) enter(n int, path pathSegments) {
+	b.left -= n
+	b.depth++
+
+	if b.left < 0 || b.depth > maxCompositionDepth {
+		panic(invalidSchemaProvidedMsg(
+			tooManyCompositionValidatorsMsg(path.dotted(), maxCompositionDepth, maxCompositionValidators),
+		).Error())
+	}
+}
+
+func (b *compositionBudget) leave() {
+	b.depth--
+}
+
 type schemaPropsValidator struct {
 	Path            pathSegments
 	In              string
@@ -30,28 +72,42 @@ type schemaPropsValidator struct {
 
 func newSchemaPropsValidator(
 	path pathSegments, in string, allOf, oneOf, anyOf []spec.Schema, not *spec.Schema, deps spec.Dependencies, root any, formats strfmt.Registry,
-	opts *SchemaValidatorOptions,
+	opts *SchemaValidatorOptions, budget *compositionBudget,
 ) *schemaPropsValidator {
 	if opts == nil {
 		opts = new(SchemaValidatorOptions)
 	}
 
+	children := len(anyOf) + len(allOf) + len(oneOf)
+	if not != nil {
+		children++
+	}
+
+	if children > 0 {
+		if budget == nil {
+			budget = &compositionBudget{left: maxCompositionValidators}
+		}
+
+		budget.enter(children, path)
+		defer budget.leave()
+	}
+
 	anyValidators := make([]*SchemaValidator, 0, len(anyOf))
 	for i := range anyOf {
-		anyValidators = append(anyValidators, newSchemaValidator(&anyOf[i], root, path, formats, opts))
+		anyValidators = append(anyValidators, newSchemaValidatorWithBudget(&anyOf[i], root, path, formats, opts, budget))
 	}
 	allValidators := make([]*SchemaValidator, 0, len(allOf))
 	for i := range allOf {
-		allValidators = append(allValidators, newSchemaValidator(&allOf[i], root, path, formats, opts))
+		allValidators = append(allValidators, newSchemaValidatorWithBudget(&allOf[i], root, path, formats, opts, budget))
 	}
 	oneValidators := make([]*SchemaValidator, 0, len(oneOf))
 	for i := range oneOf {
-		oneValidators = append(oneValidators, newSchemaValidator(&oneOf[i], root, path, formats, opts))
+		oneValidators = append(oneValidators, newSchemaValidatorWithBudget(&oneOf[i], root, path, formats, opts, budget))
 	}
 
 	var notValidator *SchemaValidator
 	if not != nil {
-		notValidator = newSchemaValidator(not, root, path, formats, opts)
+		notValidator = newSchemaValidatorWithBudget(not, root, path, formats, opts, budget)
 	}
 
 	var s *schemaPropsValidator
@@ -141,10 +197,10 @@ func (s *schemaPropsValidator) validateAnyOf(data any, mainResult, keepResultAny
 	var bestFailures *Result
 
 	for i, anyOfSchema := range s.anyOfValidators {
-		result := anyOfSchema.Validate(data)
 		if s.Options.recycleValidators {
-			s.anyOfValidators[i] = nil
+			s.anyOfValidators[i] = nil // Validate redeems it, even if it panics
 		}
+		result := anyOfSchema.Validate(data)
 		// We keep inner IMPORTANT! errors no matter what MatchCount tells us
 		keepResultAnyOf.Merge(result.keepRelevantErrors()) // merges (and redeems) a new instance of Result
 
@@ -186,10 +242,10 @@ func (s *schemaPropsValidator) validateOneOf(data any, mainResult, keepResultOne
 	)
 
 	for i, oneOfSchema := range s.oneOfValidators {
-		result := oneOfSchema.Validate(data)
 		if s.Options.recycleValidators {
-			s.oneOfValidators[i] = nil
+			s.oneOfValidators[i] = nil // Validate redeems it, even if it panics
 		}
+		result := oneOfSchema.Validate(data)
 
 		// We keep inner IMPORTANT! errors no matter what MatchCount tells us
 		keepResultOneOf.Merge(result.keepRelevantErrors()) // merges (and redeems) a new instance of Result
@@ -242,10 +298,10 @@ func (s *schemaPropsValidator) validateAllOf(data any, mainResult, keepResultAll
 	var validated int
 
 	for i, allOfSchema := range s.allOfValidators {
-		result := allOfSchema.Validate(data)
 		if s.Options.recycleValidators {
-			s.allOfValidators[i] = nil
+			s.allOfValidators[i] = nil // Validate redeems it, even if it panics
 		}
+		result := allOfSchema.Validate(data)
 		// We keep inner IMPORTANT! errors no matter what MatchCount tells us
 		keepResultAllOf.Merge(result.keepRelevantErrors())
 		if result.IsValid() {
@@ -264,10 +320,11 @@ func (s *schemaPropsValidator) validateAllOf(data any, mainResult, keepResultAll
 }
 
 func (s *schemaPropsValidator) validateNot(data any, mainResult *Result) {
-	result := s.notValidator.Validate(data)
+	notValidator := s.notValidator
 	if s.Options.recycleValidators {
-		s.notValidator = nil
+		s.notValidator = nil // Validate redeems it, even if it panics
 	}
+	result := notValidator.Validate(data)
 	// We keep inner IMPORTANT! errors no matter what MatchCount tells us
 	if result.IsValid() {
 		mainResult.addErrorsAt(s.Path, mustNotValidatechemaMsg(s.Path.dotted()))

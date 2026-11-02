@@ -13,6 +13,8 @@ import (
 
 // UseRedoc creates a middleware to serve a documentation site for a swagger spec using [Redoc].
 //
+// By default, the page loads Redoc v3. Use [WithRedocV2] to keep Redoc v2.
+//
 // [Redoc]: https://redocly.com/docs/redoc
 func UseRedoc(opts ...Option) func(next http.Handler) http.Handler {
 	pth, assets := redocSetup(opts)
@@ -28,6 +30,8 @@ func UseRedoc(opts ...Option) func(next http.Handler) http.Handler {
 //
 // This allows for altering the spec before starting the [http] listener.
 //
+// By default, the page loads Redoc v3. Use [WithRedocV2] to keep Redoc v2.
+//
 // [Redoc]: https://redocly.com/docs/redoc
 func Redoc(next http.Handler, opts ...Option) http.Handler {
 	pth, assets := redocSetup(opts)
@@ -36,11 +40,21 @@ func Redoc(next http.Handler, opts ...Option) http.Handler {
 }
 
 func redocSetup(opts []Option) (pth string, assets []byte) {
-	o := optionsWithDefaults(opts,
-		// defaults for redoc
-		WithUITemplate(redocTemplate),
-		WithUIAssetsURL(redocLatest),
-	)
+	o := optionsWithDefaults(opts)
+
+	// defaults for redoc, resolved after all options so that WithRedocV2 applies in any order
+	if o.Template == "" {
+		o.Template = redocTemplate
+		if o.redocV2 {
+			o.Template = redocV2Template
+		}
+	}
+	if o.AssetsURL == "" {
+		o.AssetsURL = redocV3URL
+		if o.redocV2 {
+			o.AssetsURL = redocV2URL
+		}
+	}
 
 	pth = path.Join(o.BasePath, o.Path)
 	tmpl := template.Must(template.New("redoc").Parse(o.Template))
@@ -53,8 +67,41 @@ func redocSetup(opts []Option) (pth string, assets []byte) {
 }
 
 const (
-	redocLatest   = "https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js" // "https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js"
+	redocV3URL = "https://cdn.jsdelivr.net/npm/redoc@3/bundles/redoc.standalone.js"
+	redocV2URL = "https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"
+
+	// redocTemplate loads the Redoc v3 bundle, which is an ES module.
 	redocTemplate = `<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{ .Title }}</title>
+		<!-- needed for adaptive design -->
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+
+    <!--
+    ReDoc doesn't change outer page styles
+    -->
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <redoc spec-url='{{ .SpecURL }}'></redoc>
+    <script type="module" src="{{ .AssetsURL }}"> </script>
+  </body>
+</html>
+`
+
+	// redocV2Template loads the Redoc v2 bundle, which is a classic UMD script.
+	//
+	// The v2 bundle fails when loaded as a module: its wrapper reads properties of the
+	// top-level "this", which is undefined in a module.
+	redocV2Template = `<!DOCTYPE html>
 <html>
   <head>
     <title>{{ .Title }}</title>

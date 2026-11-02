@@ -5,10 +5,10 @@ package initcmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 
@@ -19,7 +19,7 @@ import (
 
 // Spec represents a command for initializing a new swagger application.
 type Spec struct {
-	Format      string   `choice:"yaml"                            choice:"json"                                                                   default:"yaml"  description:"the format for the spec document" long:"format"` //nolint:staticcheck // false positive detecting duplicate tags (it works fine on other files with the same pattern)
+	Format      string   `choice:"yaml"                            choice:"yml"                                                                    choice:"json"   default:"yaml" description:"the format for the spec document" long:"format"` //nolint:staticcheck // false positive detecting duplicate tags (it works fine on other files with the same pattern)
 	Title       string   `description:"the title of the API"       long:"title"`
 	Description string   `description:"the description of the API" long:"description"`
 	Version     string   `default:"0.1.0"                          description:"the version of the API"                                            long:"version"`
@@ -36,35 +36,20 @@ type Spec struct {
 		Name string `description:"name of the license for the API" long:"license.name"`
 		URL  string `description:"url of the license for the API"  long:"license.url"`
 	}
+	Destination string `default:"./swagger.json" description:"Output destination file or - for stdout" long:"dest" short:"d"`
+}
+
+func (s Spec) Usage() string {
+	return "[init-OPTIONS] [spec]"
 }
 
 // Execute this command.
 func (s *Spec) Execute(args []string) error {
-	targetPath := "."
-	if len(args) > 0 {
-		targetPath = args[0]
-	}
-	realPath, err := filepath.Abs(targetPath)
+	log.Printf("%#v", s)
+	dest, err := resolveDest(s.Destination, args, s.Format, filepath.Join(".", "swagger"))
 	if err != nil {
 		return err
 	}
-	var file *os.File
-	switch s.Format {
-	case "json":
-		file, err = os.Create(filepath.Join(realPath, "swagger.json"))
-		if err != nil {
-			return err
-		}
-	case "yaml", "yml":
-		file, err = os.Create(filepath.Join(realPath, "swagger.yml"))
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("invalid format: %s", s.Format)
-	}
-	defer file.Close()
-	log.Println("creating specification document in", filepath.Join(targetPath, file.Name()))
 
 	var doc spec.Swagger
 	info := new(spec.Info)
@@ -76,7 +61,7 @@ func (s *Spec) Execute(args []string) error {
 
 	info.Title = s.Title
 	if info.Title == "" {
-		info.Title = mangling.NewNameMangler().ToHumanNameTitle(filepath.Base(realPath))
+		info.Title = mangling.NewNameMangler().ToHumanNameTitle(filepath.Base(dest))
 	}
 	info.Description = s.Description
 	info.Version = s.Version
@@ -99,11 +84,26 @@ func (s *Spec) Execute(args []string) error {
 	doc.Produces = append(doc.Produces, s.Produces...)
 	doc.Schemes = append(doc.Schemes, s.Schemes...)
 
+	var file *os.File
+	if dest == "-" {
+		file = os.Stdout
+	} else {
+		file, err = os.Create(dest)
+		if err != nil {
+			return err
+		}
+
+		defer file.Close()
+	}
+
+	log.Println("creating specification document in", dest)
+
 	if s.Format == "json" {
 		enc := json.NewEncoder(file)
 		return enc.Encode(doc)
 	}
 
+	// yaml
 	var dynamicDoc any
 	err = jsonutils.FromDynamicJSON(doc, &dynamicDoc)
 	if err != nil {
@@ -116,5 +116,33 @@ func (s *Spec) Execute(args []string) error {
 	if _, err := file.Write(b); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+func resolveDest(pth string, args []string, format, defaultPth string) (string, error) {
+	if pth == "" && (len(args) == 0 || args[0] == "") {
+		pth = defaultPth
+	} else if len(args) > 0 && args[0] != "" {
+		pth = args[0]
+	}
+
+	if pth == "-" {
+		return pth, nil
+	}
+
+	pth = stem(pth) + "." + format
+
+	realPath, err := filepath.Abs(pth)
+	if err != nil {
+		return "", err
+	}
+
+	return realPath, nil
+}
+
+func stem(pth string) string {
+	ext := filepath.Ext(pth)
+
+	return strings.TrimSuffix(pth, ext)
 }

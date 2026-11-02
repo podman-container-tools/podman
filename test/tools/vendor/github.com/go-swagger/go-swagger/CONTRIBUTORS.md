@@ -4,12 +4,12 @@
 
 | Total Contributors | Total Contributions |
 | --- | --- |
-| 307  | 3203  |
+| 308  | 3214  |
 
 | Username | All Time Contribution Count | All Commits |
 | --- | --- | --- |
 | @casualjim | 1937 | <https://github.com/go-swagger/go-swagger/commits?author=casualjim> |
-| @fredbi | 443 | <https://github.com/go-swagger/go-swagger/commits?author=fredbi> |
+| @fredbi | 451 | <https://github.com/go-swagger/go-swagger/commits?author=fredbi> |
 | @key-amb | 35 | <https://github.com/go-swagger/go-swagger/commits?author=key-amb> |
 | @youyuanwu | 33 | <https://github.com/go-swagger/go-swagger/commits?author=youyuanwu> |
 | @GlenDC | 31 | <https://github.com/go-swagger/go-swagger/commits?author=GlenDC> |
@@ -73,28 +73,29 @@
 | @sambhav | 3 | <https://github.com/go-swagger/go-swagger/commits?author=sambhav> |
 | @robertacosta | 3 | <https://github.com/go-swagger/go-swagger/commits?author=robertacosta> |
 | @thetorpedodog | 3 | <https://github.com/go-swagger/go-swagger/commits?author=thetorpedodog> |
+| @diego-fu-hs | 3 | <https://github.com/go-swagger/go-swagger/commits?author=diego-fu-hs> |
+| @ethantkoenig | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ethantkoenig> |
+| @easeway | 3 | <https://github.com/go-swagger/go-swagger/commits?author=easeway> |
+| @ericzsplk | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ericzsplk> |
+| @faguirre1 | 3 | <https://github.com/go-swagger/go-swagger/commits?author=faguirre1> |
+| @ilyakaznacheev | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ilyakaznacheev> |
 | @mkleina | 3 | <https://github.com/go-swagger/go-swagger/commits?author=mkleina> |
 | @mfranczy | 3 | <https://github.com/go-swagger/go-swagger/commits?author=mfranczy> |
 | @josephspurrier | 3 | <https://github.com/go-swagger/go-swagger/commits?author=josephspurrier> |
+| @pyrohedgehog | 3 | <https://github.com/go-swagger/go-swagger/commits?author=pyrohedgehog> |
 | @JoakimSoderberg | 3 | <https://github.com/go-swagger/go-swagger/commits?author=JoakimSoderberg> |
 | @ivan1993spb | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ivan1993spb> |
-| @ilyakaznacheev | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ilyakaznacheev> |
-| @faguirre1 | 3 | <https://github.com/go-swagger/go-swagger/commits?author=faguirre1> |
-| @ericzsplk | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ericzsplk> |
-| @diego-fu-hs | 3 | <https://github.com/go-swagger/go-swagger/commits?author=diego-fu-hs> |
-| @easeway | 3 | <https://github.com/go-swagger/go-swagger/commits?author=easeway> |
-| @ethantkoenig | 3 | <https://github.com/go-swagger/go-swagger/commits?author=ethantkoenig> |
-| @h0mjam | 2 | <https://github.com/go-swagger/go-swagger/commits?author=h0mjam> |
-| @MrLuje | 2 | <https://github.com/go-swagger/go-swagger/commits?author=MrLuje> |
-| @schafle | 2 | <https://github.com/go-swagger/go-swagger/commits?author=schafle> |
-| @steve-gray | 2 | <https://github.com/go-swagger/go-swagger/commits?author=steve-gray> |
-| @seanbrant | 2 | <https://github.com/go-swagger/go-swagger/commits?author=seanbrant> |
-| @sanmaxdev | 2 | <https://github.com/go-swagger/go-swagger/commits?author=sanmaxdev> |
-| @caglar10ur | 2 | <https://github.com/go-swagger/go-swagger/commits?author=caglar10ur> |
-| @rcousineau-xandr | 2 | <https://github.com/go-swagger/go-swagger/commits?author=rcousineau-xandr> |
-| @romainbou | 2 | <https://github.com/go-swagger/go-swagger/commits?author=romainbou> |
 | @rokf | 2 | <https://github.com/go-swagger/go-swagger/commits?author=rokf> |
-| @petar-dochev-f3 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=petar-dochev-f3> |
+| @romainbou | 2 | <https://github.com/go-swagger/go-swagger/commits?author=romainbou> |
+| @rcousineau-xandr | 2 | <https://github.com/go-swagger/go-swagger/commits?author=rcousineau-xandr> |
+| @caglar10ur | 2 | <https://github.com/go-swagger/go-swagger/commits?author=caglar10ur> |
+| @sanmaxdev | 2 | <https://github.com/go-swagger/go-swagger/commits?author=sanmaxdev> |
+| @seanbrant | 2 | <https://github.com/go-swagger/go-swagger/commits?author=seanbrant> |
+| @fiorix | 2 | <https://github.com/go-swagger/go-swagger/commits?author=fiorix> |
+| @steve-gray | 2 | <https://github.com/go-swagger/go-swagger/commits?author=steve-gray> |
+| @schafle | 2 | <https://github.com/go-swagger/go-swagger/commits?author=schafle> |
+| @MrLuje | 2 | <https://github.com/go-swagger/go-swagger/commits?author=MrLuje> |
+| @h0mjam | 2 | <https://github.com/go-swagger/go-swagger/commits?author=h0mjam> |
 | @cce | 2 | <https://github.com/go-swagger/go-swagger/commits?author=cce> |
 | @gmidorii | 2 | <https://github.com/go-swagger/go-swagger/commits?author=gmidorii> |
 | @dreamlover | 2 | <https://github.com/go-swagger/go-swagger/commits?author=dreamlover> |
@@ -105,13 +106,12 @@
 | @stevecookform3 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=stevecookform3> |
 | @benpye | 2 | <https://github.com/go-swagger/go-swagger/commits?author=benpye> |
 | @bobcallaway | 2 | <https://github.com/go-swagger/go-swagger/commits?author=bobcallaway> |
-| @McSwitch | 2 | <https://github.com/go-swagger/go-swagger/commits?author=McSwitch> |
-| @JrCs | 2 | <https://github.com/go-swagger/go-swagger/commits?author=JrCs> |
 | @tikhonfedulov | 2 | <https://github.com/go-swagger/go-swagger/commits?author=tikhonfedulov> |
-| @elakito | 2 | <https://github.com/go-swagger/go-swagger/commits?author=elakito> |
+| @JrCs | 2 | <https://github.com/go-swagger/go-swagger/commits?author=JrCs> |
+| @McSwitch | 2 | <https://github.com/go-swagger/go-swagger/commits?author=McSwitch> |
 | @ashishtiwari1993 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=ashishtiwari1993> |
 | @arielt | 2 | <https://github.com/go-swagger/go-swagger/commits?author=arielt> |
-| @fiorix | 2 | <https://github.com/go-swagger/go-swagger/commits?author=fiorix> |
+| @elakito | 2 | <https://github.com/go-swagger/go-swagger/commits?author=elakito> |
 | @meatproxy | 2 | <https://github.com/go-swagger/go-swagger/commits?author=meatproxy> |
 | @bfirsh | 2 | <https://github.com/go-swagger/go-swagger/commits?author=bfirsh> |
 | @veleek | 2 | <https://github.com/go-swagger/go-swagger/commits?author=veleek> |
@@ -121,8 +121,10 @@
 | @e-nikolov | 2 | <https://github.com/go-swagger/go-swagger/commits?author=e-nikolov> |
 | @zasran | 2 | <https://github.com/go-swagger/go-swagger/commits?author=zasran> |
 | @fsouza | 2 | <https://github.com/go-swagger/go-swagger/commits?author=fsouza> |
-| @nikhilm | 2 | <https://github.com/go-swagger/go-swagger/commits?author=nikhilm> |
+| @Huckletoon | 2 | <https://github.com/go-swagger/go-swagger/commits?author=Huckletoon> |
 | @alexandear | 2 | <https://github.com/go-swagger/go-swagger/commits?author=alexandear> |
+| @petar-dochev-f3 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=petar-dochev-f3> |
+| @nikhilm | 2 | <https://github.com/go-swagger/go-swagger/commits?author=nikhilm> |
 | @nelz9999 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=nelz9999> |
 | @nathanwilk7 | 2 | <https://github.com/go-swagger/go-swagger/commits?author=nathanwilk7> |
 | @orisano | 2 | <https://github.com/go-swagger/go-swagger/commits?author=orisano> |
@@ -134,7 +136,6 @@
 | @co3k | 2 | <https://github.com/go-swagger/go-swagger/commits?author=co3k> |
 | @JonKohler | 2 | <https://github.com/go-swagger/go-swagger/commits?author=JonKohler> |
 | @jbowes | 2 | <https://github.com/go-swagger/go-swagger/commits?author=jbowes> |
-| @Huckletoon | 2 | <https://github.com/go-swagger/go-swagger/commits?author=Huckletoon> |
 | @seblegall | 1 | <https://github.com/go-swagger/go-swagger/commits?author=seblegall> |
 | @darkowlzz | 1 | <https://github.com/go-swagger/go-swagger/commits?author=darkowlzz> |
 | @stijndehaes | 1 | <https://github.com/go-swagger/go-swagger/commits?author=stijndehaes> |
@@ -142,8 +143,8 @@
 | @minitauros | 1 | <https://github.com/go-swagger/go-swagger/commits?author=minitauros> |
 | @svyotov | 1 | <https://github.com/go-swagger/go-swagger/commits?author=svyotov> |
 | @somersbmatthews | 1 | <https://github.com/go-swagger/go-swagger/commits?author=somersbmatthews> |
-| @slawekzachcial | 1 | <https://github.com/go-swagger/go-swagger/commits?author=slawekzachcial> |
-| @ChandanChainani | 1 | <https://github.com/go-swagger/go-swagger/commits?author=ChandanChainani> |
+| @soupglasses-work | 1 | <https://github.com/go-swagger/go-swagger/commits?author=soupglasses-work> |
+| @morlay | 1 | <https://github.com/go-swagger/go-swagger/commits?author=morlay> |
 | @tejash-jl | 1 | <https://github.com/go-swagger/go-swagger/commits?author=tejash-jl> |
 | @gitter-badger | 1 | <https://github.com/go-swagger/go-swagger/commits?author=gitter-badger> |
 | @tmatias | 1 | <https://github.com/go-swagger/go-swagger/commits?author=tmatias> |
@@ -157,7 +158,6 @@
 | @Waley-Z | 1 | <https://github.com/go-swagger/go-swagger/commits?author=Waley-Z> |
 | @steambap | 1 | <https://github.com/go-swagger/go-swagger/commits?author=steambap> |
 | @jwmaag | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jwmaag> |
-| @morlay | 1 | <https://github.com/go-swagger/go-swagger/commits?author=morlay> |
 | @MAAF72 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=MAAF72> |
 | @nathany | 1 | <https://github.com/go-swagger/go-swagger/commits?author=nathany> |
 | @neilgarb | 1 | <https://github.com/go-swagger/go-swagger/commits?author=neilgarb> |
@@ -179,7 +179,7 @@
 | @saromanov | 1 | <https://github.com/go-swagger/go-swagger/commits?author=saromanov> |
 | @Shimizu1111 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=Shimizu1111> |
 | @sbstp | 1 | <https://github.com/go-swagger/go-swagger/commits?author=sbstp> |
-| @jzt | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jzt> |
+| @slawekzachcial | 1 | <https://github.com/go-swagger/go-swagger/commits?author=slawekzachcial> |
 | @johnnadratowski | 1 | <https://github.com/go-swagger/go-swagger/commits?author=johnnadratowski> |
 | @kperry-godaddy | 1 | <https://github.com/go-swagger/go-swagger/commits?author=kperry-godaddy> |
 | @kobayashi | 1 | <https://github.com/go-swagger/go-swagger/commits?author=kobayashi> |
@@ -203,6 +203,7 @@
 | @zmay2030 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=zmay2030> |
 | @yuzp1996 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=yuzp1996> |
 | @014-code | 1 | <https://github.com/go-swagger/go-swagger/commits?author=014-code> |
+| @jzt | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jzt> |
 | @ZachEddy | 1 | <https://github.com/go-swagger/go-swagger/commits?author=ZachEddy> |
 | @shaxbee | 1 | <https://github.com/go-swagger/go-swagger/commits?author=shaxbee> |
 | @ladrift | 1 | <https://github.com/go-swagger/go-swagger/commits?author=ladrift> |
@@ -224,6 +225,7 @@
 | @j2gg0s | 1 | <https://github.com/go-swagger/go-swagger/commits?author=j2gg0s> |
 | @mail2fish | 1 | <https://github.com/go-swagger/go-swagger/commits?author=mail2fish> |
 | @jcabmora | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jcabmora> |
+| @ChandanChainani | 1 | <https://github.com/go-swagger/go-swagger/commits?author=ChandanChainani> |
 | @CJTozer | 1 | <https://github.com/go-swagger/go-swagger/commits?author=CJTozer> |
 | @grim-luminal | 1 | <https://github.com/go-swagger/go-swagger/commits?author=grim-luminal> |
 | @jgirtakovskis | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jgirtakovskis> |
@@ -245,7 +247,7 @@
 | @EliCDavis | 1 | <https://github.com/go-swagger/go-swagger/commits?author=EliCDavis> |
 | @emmanuel-ferdman | 1 | <https://github.com/go-swagger/go-swagger/commits?author=emmanuel-ferdman> |
 | @posener | 1 | <https://github.com/go-swagger/go-swagger/commits?author=posener> |
-| @fabaguirre | 1 | <https://github.com/go-swagger/go-swagger/commits?author=fabaguirre> |
+| @jharshman | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jharshman> |
 | @Abzaek | 1 | <https://github.com/go-swagger/go-swagger/commits?author=Abzaek> |
 | @houjunchen | 1 | <https://github.com/go-swagger/go-swagger/commits?author=houjunchen> |
 | @armsnyder | 1 | <https://github.com/go-swagger/go-swagger/commits?author=armsnyder> |
@@ -269,7 +271,6 @@
 | @bobvanluijt | 1 | <https://github.com/go-swagger/go-swagger/commits?author=bobvanluijt> |
 | @bg451 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=bg451> |
 | @chancez | 1 | <https://github.com/go-swagger/go-swagger/commits?author=chancez> |
-| @jharshman | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jharshman> |
 | @jhernand | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jhernand> |
 | @youdie006 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=youdie006> |
 | @kars7e | 1 | <https://github.com/go-swagger/go-swagger/commits?author=kars7e> |
@@ -292,6 +293,7 @@
 | @eicca | 1 | <https://github.com/go-swagger/go-swagger/commits?author=eicca> |
 | @misha-ridge | 1 | <https://github.com/go-swagger/go-swagger/commits?author=misha-ridge> |
 | @miskolee002 | 1 | <https://github.com/go-swagger/go-swagger/commits?author=miskolee002> |
+| @fabaguirre | 1 | <https://github.com/go-swagger/go-swagger/commits?author=fabaguirre> |
 | @frapposelli | 1 | <https://github.com/go-swagger/go-swagger/commits?author=frapposelli> |
 | @fdelayen | 1 | <https://github.com/go-swagger/go-swagger/commits?author=fdelayen> |
 | @fmauNeko | 1 | <https://github.com/go-swagger/go-swagger/commits?author=fmauNeko> |
@@ -312,7 +314,6 @@
 | @frg | 1 | <https://github.com/go-swagger/go-swagger/commits?author=frg> |
 | @Phlamethrower | 1 | <https://github.com/go-swagger/go-swagger/commits?author=Phlamethrower> |
 | @jtopjian | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jtopjian> |
-| @pyrohedgehog | 1 | <https://github.com/go-swagger/go-swagger/commits?author=pyrohedgehog> |
 | @flimzy | 1 | <https://github.com/go-swagger/go-swagger/commits?author=flimzy> |
 | @jonathaningram | 1 | <https://github.com/go-swagger/go-swagger/commits?author=jonathaningram> |
 

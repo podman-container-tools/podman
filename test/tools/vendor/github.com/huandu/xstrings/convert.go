@@ -69,7 +69,8 @@ func toCamelCase(str string, isBig bool) string {
 
 	if len(str) == 0 {
 		// A special case for a string contains only 1 rune.
-		if size != 0 {
+		// A connector is already written by the loop above.
+		if size != 0 && !isConnector(r0) {
 			buf.WriteRune(r0)
 		}
 
@@ -100,10 +101,6 @@ func toCamelCase(str string, isBig bool) string {
 
 			buf.WriteRune(r1)
 		}
-	}
-
-	if isFirstRuneUpper && !isBig {
-		r0 = unicode.ToLower(r0)
 	}
 
 	buf.WriteRune(r0)
@@ -472,12 +469,13 @@ func FirstRuneToUpper(str string) string {
 
 	r, size := utf8.DecodeRuneInString(str)
 
-	if !unicode.IsLower(r) {
+	upper := unicode.ToUpper(r)
+	if upper == r {
 		return str
 	}
 
 	buf := &stringBuilder{}
-	buf.WriteRune(unicode.ToUpper(r))
+	buf.WriteRune(upper)
 	buf.WriteString(str[size:])
 	return buf.String()
 }
@@ -490,12 +488,13 @@ func FirstRuneToLower(str string) string {
 
 	r, size := utf8.DecodeRuneInString(str)
 
-	if !unicode.IsUpper(r) {
+	lower := unicode.ToLower(r)
+	if lower == r {
 		return str
 	}
 
 	buf := &stringBuilder{}
-	buf.WriteRune(unicode.ToLower(r))
+	buf.WriteRune(lower)
 	buf.WriteString(str[size:])
 	return buf.String()
 }
@@ -548,6 +547,12 @@ func ShuffleSource(str string, src rand.Source) string {
 // If increment generates a "carry", the rune to the left of it is incremented.
 // This process repeats until there is no carry, adding an additional rune if necessary.
 //
+// Letters and digits are different kinds of rune. A carry is not passed over a
+// rune of another kind when at least one non-alphanumeric rune is skipped on the
+// way; the carry rune is inserted in front of the rune which generated it
+// instead. For example, the carry of "8a_9" is inserted in front of the "9", so
+// the result is "8a_10".
+//
 // If there is no alphanumeric rune, the rightmost rune will be increased by 1
 // regardless whether the result is a valid rune or not.
 //
@@ -564,20 +569,31 @@ func ShuffleSource(str string, src rand.Source) string {
 //	"1999zzz"   => "2000aaa"
 //	"ZZZ9999"   => "AAAA0000"
 //	"***"       => "**+"
+//	"8a_9"      => "8a_10"
 func Successor(str string) string {
 	if str == "" {
 		return str
 	}
 
 	var r rune
-	var i int
 	carry := ' '
 	runes := []rune(str)
 	l := len(runes)
 	lastAlphanumeric := l
+	lastKind := invalidRuneKind
+	skippedRune := false
 
-	for i = l - 1; i >= 0; i-- {
+	for i := l - 1; i >= 0; i-- {
 		r = runes[i]
+
+		// A carry is not passed over a rune of another kind (letter vs. number)
+		// once at least one non-alphanumeric rune is skipped on the way.
+		// The carry rune is inserted in front of the rune which generated it.
+		if skippedRune && lastKind != invalidRuneKind {
+			if kind := runeKindOf(r); kind != invalidRuneKind && kind != lastKind {
+				break
+			}
+		}
 
 		if ('a' <= r && r <= 'y') ||
 			('A' <= r && r <= 'Y') ||
@@ -593,26 +609,35 @@ func Successor(str string) string {
 			runes[i] = 'a'
 			carry = 'a'
 			lastAlphanumeric = i
+			lastKind = letterRuneKind
+			skippedRune = false
 
 		case 'Z':
 			runes[i] = 'A'
 			carry = 'A'
 			lastAlphanumeric = i
+			lastKind = letterRuneKind
+			skippedRune = false
 
 		case '9':
 			runes[i] = '0'
-			carry = '0'
+			carry = '1'
 			lastAlphanumeric = i
+			lastKind = numberRuneKind
+			skippedRune = false
+
+		default:
+			skippedRune = true
 		}
 	}
 
 	// Needs to add one character for carry.
-	if i < 0 && carry != ' ' {
+	if carry != ' ' {
 		buf := &stringBuilder{}
 		buf.Grow(l + 4) // Reserve enough space for write.
 
 		if lastAlphanumeric != 0 {
-			buf.WriteString(str[:lastAlphanumeric])
+			buf.WriteString(string(runes[:lastAlphanumeric]))
 		}
 
 		buf.WriteRune(carry)
@@ -630,4 +655,27 @@ func Successor(str string) string {
 	}
 
 	return string(runes)
+}
+
+// runeKind is the kind of a rune which Successor can increase.
+type runeKind int
+
+const (
+	invalidRuneKind runeKind = iota
+	letterRuneKind
+	numberRuneKind
+)
+
+// runeKindOf returns the Successor kind of r.
+// Only a-z, A-Z and 0-9 are alphanumeric runes for Successor.
+func runeKindOf(r rune) runeKind {
+	switch {
+	case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z':
+		return letterRuneKind
+
+	case '0' <= r && r <= '9':
+		return numberRuneKind
+	}
+
+	return invalidRuneKind
 }

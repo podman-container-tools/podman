@@ -1,0 +1,64 @@
+version: "2"
+
+# golangci-lint takes the Go version from go.mod (1.10), so linters that only suggest newer
+# language features or APIs stay off: modernize, intrange, copyloopvar, and errorlint
+# (errors.Is and %w need Go 1.13).
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bidichk
+    - dupword
+    - gocritic
+    - makezero
+    - misspell
+    - nilerr
+    - nolintlint
+    - predeclared
+    - revive
+    - unconvert
+    - unparam
+    - wastedassign
+  # Off on purpose:
+  # - mnd: a math library is full of meaningful numeric constants.
+  # - gosec: its findings here are G115 integer conversions, which are deliberate and range checked.
+  # - funlen, gocyclo, gocognit, cyclop: numeric algorithms are long by nature.
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # field order follows readability, not padding
+        - shadow # shadowing err and loop variables is common and harmless here
+    staticcheck:
+      checks:
+        # golangci-lint's defaults
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -QF1004 # suggests strings.ReplaceAll, which needs Go 1.12
+    gocritic:
+      # Bug and performance checks only. The style checks are opinionated, and the experimental
+      # commentedOutCode check reads formula comments like "v * 10^(f-q) = e^s * 10^f" as code.
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-tags:
+        - style
+        - experimental
+        - opinionated
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: false # gofmt -s would rewrite many test tables that open pull requests also change

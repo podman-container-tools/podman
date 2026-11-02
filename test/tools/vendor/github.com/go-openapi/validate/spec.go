@@ -624,6 +624,35 @@ func (s *SpecValidator) validateReferencedDefinitions() *Result {
 	return result
 }
 
+// validateValueAgainstSchema validates a default or an example against a schema declared by the spec.
+//
+// newSchemaValidator panics on a schema it cannot build: a $ref it cannot expand, or a circular $ref
+// through allOf that exceeds maxCompositionDepth or maxCompositionValidators. Here the schema comes
+// from the spec under validation, so the panic is returned as an error at the location of the value.
+// Other panics are not recovered.
+func (s *SpecValidator) validateValueAgainstSchema(
+	schema *spec.Schema, at pathSegments, value any, opts *SchemaValidatorOptions,
+) (res *Result) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+
+		msg, ok := r.(string)
+		if !ok || !strings.HasPrefix(msg, invalidSchemaProvidedPrefix) {
+			panic(r)
+		}
+
+		// the validators and results borrowed before the panic are not redeemed: the garbage
+		// collector reclaims them
+		res = validatorPools.results.Borrow()
+		res.addErrorsAt(at, errors.New(InternalErrorCode, "%s", msg))
+	}()
+
+	return newSchemaValidator(schema, s.spec.Spec(), at, s.KnownFormats, opts).Validate(value)
+}
+
 func (s *SpecValidator) validateRequiredDefinitions() *Result {
 	// Each property listed in the required array must be defined in the properties of the model
 	res := validatorPools.results.Borrow()
