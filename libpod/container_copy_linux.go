@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"golang.org/x/sys/unix"
 )
@@ -80,7 +81,7 @@ func (c *Container) joinMountAndExec(f func() error) error {
 	return <-errChan
 }
 
-func (c *Container) resolveCopyTarget(ctx context.Context, mountPoint string, containerPath string) (pathResolution, error) {
+func (c *Container) resolveCopyTarget(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string) (pathResolution, error) {
 	// If the container is running, we will execute the copy
 	// inside the container's mount namespace so we return a path
 	// relative to the container's root.

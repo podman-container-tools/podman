@@ -20,7 +20,6 @@ import (
 
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/coreos/go-systemd/v22/daemon"
-	securejoin "github.com/cyphar/filepath-securejoin"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/opencontainers/selinux/go-selinux"
@@ -36,6 +35,7 @@ import (
 	"go.podman.io/common/pkg/hooks/exec"
 	"go.podman.io/common/pkg/timezone"
 	cutil "go.podman.io/common/pkg/util"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/libpod/shutdown"
@@ -620,7 +620,7 @@ func (c *Container) teardownStorage() error {
 func resetContainerState(state *ContainerState) {
 	state.PID = 0
 	state.ConmonPID = 0
-	state.Mountpoint = ""
+	state.Mountpoint = nil
 	state.Mounted = false
 	// Reset state.
 	// Almost all states are reset to either Configured or Exited,
@@ -777,13 +777,18 @@ func (c *Container) removeConmonFiles() error {
 }
 
 func (c *Container) export(out io.Writer) error {
-	mountPoint := c.state.Mountpoint
-	if !c.state.Mounted {
+	var mountPoint protectedroot.PathRoot
+	if c.state.Mounted {
+		mountPoint = *c.state.Mountpoint
+	} else {
 		containerMount, err := c.runtime.store.Mount(c.ID(), c.config.MountLabel)
 		if err != nil {
 			return fmt.Errorf("mounting container %q: %w", c.ID(), err)
 		}
-		mountPoint = containerMount
+		mountPoint, err = protectedroot.NewPathRootDeferred(containerMount)
+		if err != nil {
+			return fmt.Errorf("invalid mount point for container %q: %w", c.ID(), err)
+		}
 		defer func() {
 			if _, err := c.runtime.store.Unmount(c.ID(), false); err != nil {
 				logrus.Errorf("Unmounting container %q: %v", c.ID(), err)
@@ -791,10 +796,10 @@ func (c *Container) export(out io.Writer) error {
 		}()
 	}
 
-	input, err := chrootarchive.Tar(mountPoint, &archive.TarOptions{
+	input, err := chrootarchive.Tar(mountPoint.PathWithoutProtectionDeferred(), &archive.TarOptions{
 		UIDMaps: c.config.IDMappings.UIDMap,
 		GIDMaps: c.config.IDMappings.GIDMap,
-	}, mountPoint)
+	}, mountPoint.PathWithoutProtectionDeferred())
 	if err != nil {
 		return fmt.Errorf("reading container directory %q: %w", c.ID(), err)
 	}
@@ -1754,32 +1759,32 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 // TODO: Add ability to override mount label so we can use this for Mount() too
 // TODO: Can we use this for export? Copying SHM into the export might not be
 // good
-func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr error) {
+func (c *Container) mountStorage(ctx context.Context) (_ protectedroot.PathRoot, deferredErr error) {
 	var err error
 	// Container already mounted, nothing to do
 	if c.state.Mounted {
 		mounted := true
 		if c.ensureState(define.ContainerStateExited) {
-			mounted, _ = mount.Mounted(c.state.Mountpoint)
+			mounted, _ = mount.Mounted(c.state.Mountpoint.PathWithoutProtectionDeferred())
 		}
 		if mounted {
-			return c.state.Mountpoint, nil
+			return *c.state.Mountpoint, nil
 		}
 	}
 
 	if !c.config.NoShm {
 		mounted, err := mount.Mounted(c.config.ShmDir)
 		if err != nil {
-			return "", fmt.Errorf("unable to determine if %q is mounted: %w", c.config.ShmDir, err)
+			return protectedroot.PathRoot{}, fmt.Errorf("unable to determine if %q is mounted: %w", c.config.ShmDir, err)
 		}
 
 		if !mounted && !MountExists(c.config.Spec.Mounts, "/dev/shm") {
 			shmOptions := fmt.Sprintf("mode=1777,size=%d", c.config.ShmSize)
 			if err := c.mountSHM(shmOptions); err != nil {
-				return "", err
+				return protectedroot.PathRoot{}, err
 			}
 			if err := idtools.SafeChown(c.config.ShmDir, c.RootUID(), c.RootGID()); err != nil {
-				return "", fmt.Errorf("failed to chown %s: %w", c.config.ShmDir, err)
+				return protectedroot.PathRoot{}, fmt.Errorf("failed to chown %s: %w", c.config.ShmDir, err)
 			}
 			defer func() {
 				if deferredErr != nil {
@@ -1793,22 +1798,25 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 
 	// We need to mount the container before volumes - to ensure the copyup
 	// works properly.
-	mountPoint := c.config.Rootfs
+	mountPointOptional, err := protectedroot.NewOptionalPathRootDeferred(c.config.Rootfs)
+	if err != nil {
+		return protectedroot.PathRoot{}, err
+	}
 
 	if c.config.RootfsMapping != nil {
 		uidMappings, gidMappings, err := parseIDMapMountOption(c.config.IDMappings, *c.config.RootfsMapping)
 		if err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 
 		pid, cleanupFunc, err := idmap.CreateUsernsProcess(util.RuntimeSpecToIDtools(uidMappings), util.RuntimeSpecToIDtools(gidMappings)) //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
 		if err != nil {                                                                                                                    //nolint:staticcheck,nolintlint
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 		defer cleanupFunc()
 
 		if err := idmap.CreateIDMappedMount(c.config.Rootfs, c.config.Rootfs, pid); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
-			return "", fmt.Errorf("failed to create idmapped mount: %w", err)
+			return protectedroot.PathRoot{}, fmt.Errorf("failed to create idmapped mount: %w", err)
 		}
 		defer func() {
 			if deferredErr != nil {
@@ -1824,20 +1832,20 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 		overlayDest := c.runtime.GraphRoot()
 		contentDir, err := overlay.GenerateStructure(overlayDest, c.ID(), "rootfs", c.RootUID(), c.RootGID())
 		if err != nil {
-			return "", fmt.Errorf("rootfs-overlay: failed to create TempDir in the %s directory: %w", overlayDest, err)
+			return protectedroot.PathRoot{}, fmt.Errorf("rootfs-overlay: failed to create TempDir in the %s directory: %w", overlayDest, err)
 		}
 
 		// Recreate the rootfs for infra container. It can be missing after system reboot if it's stored on tmpfs.
 		if c.IsDefaultInfra() || c.IsService() {
 			err := c.createInitRootfs()
 			if err != nil {
-				return "", err
+				return protectedroot.PathRoot{}, err
 			}
 		}
 
 		overlayMount, err := overlay.Mount(contentDir, c.config.Rootfs, overlayDest, c.RootUID(), c.RootGID(), c.runtime.store.GraphOptions())
 		if err != nil {
-			return "", fmt.Errorf("rootfs-overlay: creating overlay failed %q: %w", c.config.Rootfs, err)
+			return protectedroot.PathRoot{}, fmt.Errorf("rootfs-overlay: creating overlay failed %q: %w", c.config.Rootfs, err)
 		}
 
 		// Seems fuse-overlayfs is not present
@@ -1847,30 +1855,39 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 			mountOpts := label.FormatMountLabel(strings.Join(overlayMount.Options, ","), c.MountLabel())
 			err = mount.Mount("overlay", overlayMount.Source, overlayMount.Type, mountOpts)
 			if err != nil {
-				return "", fmt.Errorf("rootfs-overlay: creating overlay failed %q from native overlay: %w", c.config.Rootfs, err)
+				return protectedroot.PathRoot{}, fmt.Errorf("rootfs-overlay: creating overlay failed %q from native overlay: %w", c.config.Rootfs, err)
 			}
 		}
 
-		mountPoint = overlayMount.Source
+		var mountPoint protectedroot.PathRoot
+		mountPoint, err = protectedroot.NewPathRootDeferred(overlayMount.Source)
+		if err != nil {
+			return protectedroot.PathRoot{}, err
+		}
+		mountPointOptional = &mountPoint
+
 		execUser, err := lookup.GetUserGroupInfo(mountPoint, c.config.User, nil)
 		if err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 		hostUID, hostGID, err := butil.GetHostIDs(util.IDtoolsToRuntimeSpec(c.config.IDMappings.UIDMap), util.IDtoolsToRuntimeSpec(c.config.IDMappings.GIDMap), uint32(execUser.Uid), uint32(execUser.Gid))
 		if err != nil {
-			return "", fmt.Errorf("unable to get host UID and host GID: %w", err)
+			return protectedroot.PathRoot{}, fmt.Errorf("unable to get host UID and host GID: %w", err)
 		}
 
 		// note: this should not be recursive, if using external rootfs users should be responsible on configuring ownership.
-		if err := chown.ChangeHostPathOwnership(mountPoint, false, int(hostUID), int(hostGID)); err != nil {
-			return "", err
+		if err := chown.ChangeHostPathOwnership(mountPoint.PathWithoutProtectionDeferred(), false, int(hostUID), int(hostGID)); err != nil {
+			return protectedroot.PathRoot{}, err
 		}
 	}
 
-	if mountPoint == "" {
+	var mountPoint protectedroot.PathRoot
+	if mountPointOptional != nil {
+		mountPoint = *mountPointOptional
+	} else {
 		mountPoint, err = c.mount()
 		if err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 		defer func() {
 			if deferredErr != nil {
@@ -1883,47 +1900,47 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 
 	rootUID, rootGID := c.RootUID(), c.RootGID()
 
-	dirfd, err := openDirectory(mountPoint)
+	dirfd, err := openDirectory(mountPoint.PathWithoutProtection()) // TODO replace once `PathRoot` provides opening the directory
 	if err != nil {
-		return "", fmt.Errorf("open mount point: %w", err)
+		return protectedroot.PathRoot{}, fmt.Errorf("open mount point: %w", err)
 	}
 	defer unix.Close(dirfd)
 
 	err = unix.Mkdirat(dirfd, "etc", 0o755)
 	if err != nil && !errors.Is(err, os.ErrExist) {
-		return "", fmt.Errorf("create /etc: %w", err)
+		return protectedroot.PathRoot{}, fmt.Errorf("create /etc: %w", err)
 	}
 	// If the etc directory was created, chown it to root in the container
 	if err == nil && (rootUID != 0 || rootGID != 0) {
 		err = unix.Fchownat(dirfd, "etc", rootUID, rootGID, unix.AT_SYMLINK_NOFOLLOW)
 		if err != nil {
-			return "", fmt.Errorf("chown /etc: %w", err)
+			return protectedroot.PathRoot{}, fmt.Errorf("chown /etc: %w", err)
 		}
 	}
 
-	etcInTheContainerPath, err := securejoin.SecureJoin(mountPoint, "etc")
+	etcInTheContainerPath, err := mountPoint.Join("etc")
 	if err != nil {
-		return "", fmt.Errorf("resolve /etc in the container: %w", err)
+		return protectedroot.PathRoot{}, fmt.Errorf("resolve /etc in the container: %w", err)
 	}
 
 	etcInTheContainerFd, err := openDirectory(etcInTheContainerPath)
 	if err != nil {
-		return "", fmt.Errorf("open /etc in the container: %w", err)
+		return protectedroot.PathRoot{}, fmt.Errorf("open /etc in the container: %w", err)
 	}
 	defer unix.Close(etcInTheContainerFd)
 
 	if err := c.makePlatformMtabLink(etcInTheContainerFd, rootUID, rootGID); err != nil {
-		return "", err
+		return protectedroot.PathRoot{}, err
 	}
 
 	tz := c.Timezone()
-	localTimePath, err := timezone.ConfigureContainerTimeZone(tz, c.state.RunDir, mountPoint, etcInTheContainerPath, c.ID())
+	localTimePath, err := timezone.ConfigureContainerTimeZone(tz, c.state.RunDir, mountPoint.PathWithoutProtectionDeferred(), etcInTheContainerPath, c.ID())
 	if err != nil {
-		return "", fmt.Errorf("configuring timezone for container %s: %w", c.ID(), err)
+		return protectedroot.PathRoot{}, fmt.Errorf("configuring timezone for container %s: %w", c.ID(), err)
 	}
 	if localTimePath != "" {
 		if err := c.relabel(localTimePath, c.config.MountLabel, false); err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 		if c.state.BindMounts == nil {
 			c.state.BindMounts = make(map[string]string)
@@ -1935,7 +1952,7 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 	for _, v := range c.config.NamedVolumes {
 		vol, err := c.mountNamedVolume(ctx, v, mountPoint)
 		if err != nil {
-			return "", err
+			return protectedroot.PathRoot{}, err
 		}
 		defer func() {
 			if deferredErr == nil {
@@ -1957,7 +1974,7 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 // Does not verify that the name volume given is actually present in container
 // config.
 // Returns the volume that was mounted.
-func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolume, mountpoint string) (*Volume, error) {
+func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolume, mountpoint protectedroot.PathRoot) (*Volume, error) {
 	logrus.Debugf("Going to mount named volume %s", v.Name)
 	vol, err := c.runtime.state.Volume(v.Name)
 	if err != nil {
@@ -1982,7 +1999,7 @@ func (c *Container) mountNamedVolume(ctx context.Context, v *ContainerNamedVolum
 	if vol.state.NeedsCopyUp && !slices.Contains(v.Options, "nocopy") && !hasNoCopy {
 		logrus.Debugf("Copying up contents from container %s to volume %s", c.ID(), vol.Name())
 
-		srcDir, err := securejoin.SecureJoin(mountpoint, v.Dest)
+		srcDir, err := mountpoint.Join(v.Dest)
 		if err != nil {
 			return nil, fmt.Errorf("calculating destination path to copy up container %s volume %s: %w", c.ID(), vol.Name(), err)
 		}
@@ -2096,7 +2113,7 @@ func (c *Container) cleanupStorage() error {
 	}
 
 	markUnmounted := func() {
-		c.state.Mountpoint = ""
+		c.state.Mountpoint = nil
 		c.state.Mounted = false
 
 		if c.valid {
@@ -2108,7 +2125,7 @@ func (c *Container) cleanupStorage() error {
 
 	// umount rootfs overlay if it was created
 	if c.config.RootfsOverlay {
-		overlayBasePath := filepath.Dir(c.state.Mountpoint)
+		overlayBasePath := filepath.Dir(c.state.Mountpoint.PathWithoutProtection())
 		if err := overlay.Unmount(overlayBasePath); err != nil {
 			reportErrorf("failed to clean up overlay mounts for %s: %w", c.ID(), err)
 		}
@@ -2570,9 +2587,9 @@ func (c *Container) setupOCIHooks(ctx context.Context, config *spec.Spec) (map[s
 // If the current user is mapped in the container user namespace, then it returns
 // the container's mountpoint directly from the storage.
 // Otherwise, it returns an intermediate mountpoint that is accessible to anyone.
-func (c *Container) getRootPathForOCI() (string, error) {
+func (c *Container) getRootPathForOCI() (protectedroot.PathRoot, error) {
 	if hasCurrentUserMapped(c) || c.config.RootfsMapping != nil {
-		return c.state.Mountpoint, nil
+		return *c.state.Mountpoint, nil
 	}
 	return c.getIntermediateMountpointUser()
 }
@@ -2581,7 +2598,7 @@ func (c *Container) getRootPathForOCI() (string, error) {
 // the runroot/tmpdir used by libpod are accessible only to the owner.
 // To avoid TOCTOU issues, the path must be owned by the current user's UID and GID.
 // The path can be used by different containers, so a mount must be created only in a private mount namespace.
-func (c *Container) recreateIntermediateMountpointUser() (string, error) {
+func (c *Container) recreateIntermediateMountpointUser() (protectedroot.PathRoot, error) {
 	uid := os.Geteuid()
 	gid := os.Getegid()
 	for i := 0; ; i++ {
@@ -2593,54 +2610,58 @@ func (c *Container) recreateIntermediateMountpointUser() (string, error) {
 		err := os.Mkdir(dir, 0o755)
 		if err != nil {
 			if !errors.Is(err, os.ErrExist) {
-				return "", err
+				return protectedroot.PathRoot{}, err
 			}
 			st, err2 := os.Stat(dir)
 			if err2 != nil {
-				return "", err
+				return protectedroot.PathRoot{}, err
 			}
 			sys := st.Sys().(*syscall.Stat_t)
 			if !st.IsDir() || sys.Uid != uint32(uid) || sys.Gid != uint32(gid) {
 				continue
 			}
 		}
-		return dir, nil
+		return protectedroot.NewPathRoot(dir)
 	}
 }
 
 // getIntermediateMountpointUser returns a path that is accessible to everyone.
 // To avoid TOCTOU issues, the path must be owned by the current user's UID and GID.
 // The path can be used by different containers, so a mount must be created only in a private mount namespace.
-func (c *Container) getIntermediateMountpointUser() (string, error) {
+func (c *Container) getIntermediateMountpointUser() (protectedroot.PathRoot, error) {
 	intermediateMountPoint, err := c.recreateIntermediateMountpointUser()
 	if err != nil {
-		return "", err
+		return protectedroot.PathRoot{}, err
 	}
 
 	// update the timestamp to prevent systemd-tmpfiles from removing it
 	now := time.Now()
-	if err := os.Chtimes(intermediateMountPoint, now, now); err != nil {
-		return "", err
+	if err := os.Chtimes(intermediateMountPoint.PathWithoutProtection(), now, now); err != nil {
+		return protectedroot.PathRoot{}, err
 	}
 	return intermediateMountPoint, nil
 }
 
 // mount mounts the container's root filesystem
-func (c *Container) mount() (string, error) {
+func (c *Container) mount() (protectedroot.PathRoot, error) {
 	if c.state.State == define.ContainerStateRemoving {
-		return "", fmt.Errorf("cannot mount container %s as it is being removed: %w", c.ID(), define.ErrCtrStateInvalid)
+		return protectedroot.PathRoot{}, fmt.Errorf("cannot mount container %s as it is being removed: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
 
-	mountPoint, err := c.runtime.storageService.MountContainerImage(c.ID())
+	mountPointPath, err := c.runtime.storageService.MountContainerImage(c.ID())
 	if err != nil {
-		return "", fmt.Errorf("mounting storage for container %s: %w", c.ID(), err)
+		return protectedroot.PathRoot{}, fmt.Errorf("mounting storage for container %s: %w", c.ID(), err)
 	}
-	mountPoint, err = filepath.EvalSymlinks(mountPoint)
+	mountPointPath, err = filepath.EvalSymlinks(mountPointPath)
 	if err != nil {
-		return "", fmt.Errorf("resolving storage path for container %s: %w", c.ID(), err)
+		return protectedroot.PathRoot{}, fmt.Errorf("resolving storage path for container %s: %w", c.ID(), err)
 	}
-	if err := idtools.SafeChown(mountPoint, c.RootUID(), c.RootGID()); err != nil {
-		return "", fmt.Errorf("cannot chown %s to %d:%d: %w", mountPoint, c.RootUID(), c.RootGID(), err)
+	mountPoint, err := protectedroot.NewPathRoot(mountPointPath)
+	if err != nil {
+		return protectedroot.PathRoot{}, fmt.Errorf("failed to create mountpoint %s for container %s: %w", mountPointPath, c.ID(), err)
+	}
+	if err := idtools.SafeChown(mountPoint.PathWithoutProtectionDeferred(), c.RootUID(), c.RootGID()); err != nil {
+		return protectedroot.PathRoot{}, fmt.Errorf("cannot chown %s to %d:%d: %w", mountPoint, c.RootUID(), c.RootGID(), err)
 	}
 	return mountPoint, nil
 }

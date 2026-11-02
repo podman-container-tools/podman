@@ -17,6 +17,7 @@ import (
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
@@ -39,7 +40,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		ctrNS                           string
 		networkStatus                   map[string]types.StatusBlock
 		createNetNSErr, mountStorageErr error
-		mountPoint                      string
+		mountPoint                      protectedroot.PathRoot
 		tmpStateLock                    sync.Mutex
 	)
 
@@ -81,7 +82,7 @@ func (c *Container) prepare(ctx context.Context) error {
 
 		// Finish up mountStorage
 		c.state.Mounted = true
-		c.state.Mountpoint = mountPoint
+		c.state.Mountpoint = &mountPoint
 
 		logrus.Debugf("Created root filesystem for container %s at %s", c.ID(), c.state.Mountpoint)
 	}()
@@ -414,11 +415,11 @@ func hasCapSysResource() (bool, error) {
 }
 
 // containerPathIsFile returns true if the given containerPath is a file
-func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
+func containerPathIsFile(root protectedroot.PathRoot, containerPath string) (bool, error) {
 	// Note freebsd does not have support for OpenInRoot() so us the less safe way
 	// with the old SecureJoin(), but given this is only called before the container
 	// is started it is not subject to race conditions with the container process.
-	path, err := securejoin.SecureJoin(unsafeRoot, containerPath)
+	path, err := root.Join(containerPath)
 	if err != nil {
 		return false, err
 	}

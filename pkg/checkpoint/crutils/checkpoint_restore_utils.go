@@ -11,8 +11,8 @@ import (
 
 	metadata "github.com/checkpoint-restore/checkpointctl/lib"
 	"github.com/checkpoint-restore/go-criu/v8/stats"
-	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/opencontainers/selinux/go-selinux/label"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/chrootarchive"
 )
@@ -75,7 +75,7 @@ func CRImportCheckpointConfigOnly(destination, input string) error {
 
 // CRRemoveDeletedFiles loads the list of deleted files and if
 // it exists deletes all files listed.
-func CRRemoveDeletedFiles(id, baseDirectory, containerRootDirectory string) error {
+func CRRemoveDeletedFiles(id, baseDirectory string, containerRootDirectory protectedroot.PathRoot) error {
 	deletedFiles, _, err := metadata.ReadContainerCheckpointDeletedFiles(baseDirectory)
 	if errors.Is(err, os.ErrNotExist) {
 		// No files to delete. Just return
@@ -89,7 +89,7 @@ func CRRemoveDeletedFiles(id, baseDirectory, containerRootDirectory string) erro
 	for _, deleteFile := range deletedFiles {
 		// Using RemoveAll as deletedFiles, which is generated from 'podman diff'
 		// lists completely deleted directories as a single entry: 'D /root'.
-		path, err := securejoin.SecureJoin(containerRootDirectory, deleteFile)
+		path, err := containerRootDirectory.Join(deleteFile)
 		if err != nil {
 			return fmt.Errorf("failed to resolve path %q in container %s: %w", deleteFile, id, err)
 		}
@@ -103,7 +103,7 @@ func CRRemoveDeletedFiles(id, baseDirectory, containerRootDirectory string) erro
 
 // CRApplyRootFsDiffTar applies the tar archive found in baseDirectory with the
 // root file system changes on top of containerRootDirectory
-func CRApplyRootFsDiffTar(baseDirectory, containerRootDirectory string) error {
+func CRApplyRootFsDiffTar(baseDirectory string, containerRootDirectory protectedroot.PathRoot) error {
 	rootfsDiffPath := filepath.Join(baseDirectory, metadata.RootFsDiffTar)
 	// Only do this if a rootfs-diff.tar actually exists
 	rootfsDiffFile, err := os.Open(rootfsDiffPath)
@@ -115,7 +115,7 @@ func CRApplyRootFsDiffTar(baseDirectory, containerRootDirectory string) error {
 	}
 	defer rootfsDiffFile.Close()
 
-	if err := chrootarchive.Untar(rootfsDiffFile, containerRootDirectory, nil); err != nil {
+	if err := chrootarchive.Untar(rootfsDiffFile, containerRootDirectory.PathWithoutProtectionDeferred(), nil); err != nil {
 		return fmt.Errorf("failed to apply root file-system diff file %s: %w", rootfsDiffPath, err)
 	}
 
@@ -128,7 +128,7 @@ func CRApplyRootFsDiffTar(baseDirectory, containerRootDirectory string) error {
 // With these two files it is possible to restore the container file system to the same
 // state it was during checkpointing.
 // Changes to directories (owner, mode) are not handled.
-func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, destination string) (includeFiles []string, err error) {
+func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint protectedroot.PathRoot, destination string) (includeFiles []string, err error) {
 	if len(*changes) == 0 {
 		return includeFiles, nil
 	}
@@ -158,11 +158,11 @@ func CRCreateRootFsDiffTar(changes *[]archive.Change, mountPoint, destination st
 	}
 
 	if len(rootfsIncludeFiles) > 0 {
-		rootfsTar, err := chrootarchive.Tar(mountPoint, &archive.TarOptions{
+		rootfsTar, err := chrootarchive.Tar(mountPoint.PathWithoutProtectionDeferred(), &archive.TarOptions{
 			Compression:      archive.Uncompressed,
 			IncludeSourceDir: true,
 			IncludeFiles:     rootfsIncludeFiles,
-		}, mountPoint)
+		}, mountPoint.PathWithoutProtectionDeferred())
 		if err != nil {
 			return includeFiles, fmt.Errorf("exporting root file-system diff to %q: %w", rootfsDiffPath, err)
 		}
