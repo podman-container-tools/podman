@@ -7,9 +7,14 @@ import (
 
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"go.podman.io/podman/v6/internal/protectedroot"
 )
 
 func TestGenerateUserPasswdEntry(t *testing.T) {
+	mountpoint, err := protectedroot.NewPathRoot("/does/not/exist/tmp/")
+	if err != nil {
+		t.Fatalf("creating mountpoint: %v", err)
+	}
 	c := Container{
 		config: &ContainerConfig{
 			Spec: &spec.Spec{},
@@ -18,7 +23,7 @@ func TestGenerateUserPasswdEntry(t *testing.T) {
 			},
 		},
 		state: &ContainerState{
-			Mountpoint: "/does/not/exist/tmp/",
+			Mountpoint: &mountpoint,
 		},
 	}
 	user, err := c.generateUserPasswdEntry(0)
@@ -36,6 +41,10 @@ func TestGenerateUserPasswdEntry(t *testing.T) {
 }
 
 func TestGenerateUserGroupEntry(t *testing.T) {
+	mountpoint, err := protectedroot.NewPathRoot("/does/not/exist/tmp/")
+	if err != nil {
+		t.Fatalf("creating mountpoint: %v", err)
+	}
 	c := Container{
 		config: &ContainerConfig{
 			Spec: &spec.Spec{},
@@ -44,7 +53,7 @@ func TestGenerateUserGroupEntry(t *testing.T) {
 			},
 		},
 		state: &ContainerState{
-			Mountpoint: "/does/not/exist/tmp/",
+			Mountpoint: &mountpoint,
 		},
 	}
 	group, err := c.generateUserGroupEntry(-1)

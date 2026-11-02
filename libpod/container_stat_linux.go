@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"go.podman.io/buildah/copier"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 )
 
@@ -30,7 +31,7 @@ func (c *Container) statInsideMount(ctx context.Context, containerPath string) (
 
 // Calls either statOnHost or statInsideMount depending on whether the
 // container is running
-func (c *Container) statInContainer(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, pathResolution, error) {
+func (c *Container) statInContainer(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string) (*copier.StatForItem, pathResolution, error) {
 	if c.state.State == define.ContainerStateRunning {
 		// If the container is running, we need to join it's mount namespace
 		// and stat there.
