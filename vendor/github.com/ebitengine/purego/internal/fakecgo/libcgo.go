@@ -23,12 +23,6 @@ type (
 
 type sighow int32
 
-const (
-	SIG_BLOCK   sighow = 0
-	SIG_UNBLOCK sighow = 1
-	SIG_SETMASK sighow = 2
-)
-
 type G struct {
 	_       structs.HostLayout
 	stacklo uintptr

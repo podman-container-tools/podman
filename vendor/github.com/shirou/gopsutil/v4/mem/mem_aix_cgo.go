@@ -34,7 +34,7 @@ func SwapMemoryWithContext(ctx context.Context) (*SwapMemoryStat, error) {
 		return nil, err
 	}
 	pagesize := uint64(4096)
-	swapUsed := uint64(m.PgSpTotal-m.PgSpFree-m.PgSpRsvd) * pagesize
+	swapUsed := uint64(m.PgSpTotal-m.PgSpFree) * pagesize
 	swapTotal := uint64(m.PgSpTotal) * pagesize
 	ret := SwapMemoryStat{
 		Total:       swapTotal,
