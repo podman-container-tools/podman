@@ -6,12 +6,13 @@ import (
 	"context"
 
 	"go.podman.io/buildah/copier"
+	"go.podman.io/podman/v6/internal/protectedroot"
 )
 
 // On FreeBSD, jails use the global mount namespace, filtered to only
 // the mounts the jail should see. This means that we can use
 // statOnHost whether the container is running or not.
 // container is running
-func (c *Container) statInContainer(ctx context.Context, mountPoint string, containerPath string) (*copier.StatForItem, pathResolution, error) {
+func (c *Container) statInContainer(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string) (*copier.StatForItem, pathResolution, error) {
 	return c.statOnHost(ctx, mountPoint, containerPath)
 }
