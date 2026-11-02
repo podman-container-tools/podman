@@ -113,6 +113,7 @@ It("should work correctly", func() {
 - **Formatter**: `gofumpt` (via `golangci-lint`, configured in `.golangci.yml`)
 - **Validation**: All PRs must pass `make validatepr`
 - **Commits**: Must be signed (`git commit -s`) and follow [DCO](https://github.com/podman-container-tools/community/blob/main/CONTRIBUTING.md#DCO-Sign-off)
+- **No agent trailers**: Never add trailers or attribution lines for coding agents to commit messages or PR descriptions (for example `Co-authored-by:`, `Assisted-by:`, `Generated-by:`, or "Generated with ..." lines). Only the human contributor's `Signed-off-by:` is allowed.
 - **Reviews**: Two approvals required for merge
 
 ## Key Libraries
