@@ -2409,7 +2409,7 @@ func (c *Container) postDeleteHooks(ctx context.Context) error {
 			for i, hook := range extensionHooks {
 				logrus.Debugf("container %s: invoke poststop hook %d, path %s", c.ID(), i, hook.Path)
 				var stderr, stdout bytes.Buffer
-				hookErr, err := exec.RunWithOptions(
+				err := exec.RunWithOptions(
 					ctx,
 					exec.RunOptions{
 						Hook:            &hook,
@@ -2422,9 +2422,6 @@ func (c *Container) postDeleteHooks(ctx context.Context) error {
 				)
 				if err != nil {
 					logrus.Warnf("Container %s: poststop hook %d: %v", c.ID(), i, err)
-					if !errors.Is(hookErr, err) {
-						logrus.Debugf("container %s: poststop hook %d (hook error): %v", c.ID(), i, hookErr)
-					}
 					stdoutString := stdout.String()
 					if stdoutString != "" {
 						logrus.Debugf("container %s: poststop hook %d: stdout:\n%s", c.ID(), i, stdoutString)
@@ -2546,7 +2543,7 @@ func (c *Container) setupOCIHooks(ctx context.Context, config *spec.Spec) (map[s
 		}
 	}
 
-	hookErr, err := exec.RuntimeConfigFilterWithOptions(
+	err := exec.RuntimeConfigFilterWithOptions(
 		ctx,
 		exec.RuntimeConfigFilterOptions{
 			Hooks:           allHooks["precreate"],
@@ -2556,10 +2553,6 @@ func (c *Container) setupOCIHooks(ctx context.Context, config *spec.Spec) (map[s
 		},
 	)
 	if err != nil {
-		logrus.Warnf("Container %s: precreate hook: %v", c.ID(), err)
-		if hookErr != nil && !errors.Is(hookErr, err) {
-			logrus.Debugf("container %s: precreate hook (hook error): %v", c.ID(), hookErr)
-		}
 		return nil, err
 	}
 

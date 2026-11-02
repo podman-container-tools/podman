@@ -3,7 +3,6 @@
 
 # [Buildah](https://www.youtube.com/embed/YVk5NgSiUw8) - a tool that facilitates building [Open Container Initiative (OCI)](https://www.opencontainers.org/) container images
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/containers/buildah)](https://goreportcard.com/report/github.com/containers/buildah)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10579/badge)](https://www.bestpractices.dev/projects/10579)
 
 

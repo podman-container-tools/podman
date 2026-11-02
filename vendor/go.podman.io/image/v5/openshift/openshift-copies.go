@@ -23,7 +23,7 @@ import (
 	"go.podman.io/image/v5/internal/multierr"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/homedir"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // restTLSClientConfig is a modified copy of k8s.io/kubernetes/pkg/client/restclient.TLSClientConfig.
@@ -645,7 +645,7 @@ func load(data []byte) (*clientcmdConfig, error) {
 		return config, nil
 	}
 	// Note: This does absolutely no kind/version checking or conversions.
-	if err := yaml.Unmarshal(data, config); err != nil {
+	if err := yaml.Load(data, config); err != nil {
 		return nil, err
 	}
 	return config, nil

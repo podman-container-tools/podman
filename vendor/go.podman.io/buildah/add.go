@@ -33,6 +33,7 @@ import (
 	"go.podman.io/buildah/pkg/chrootuser"
 	tmpdirpkg "go.podman.io/buildah/pkg/tmpdir"
 	"go.podman.io/common/pkg/retry"
+	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/fileutils"
 	"go.podman.io/storage/pkg/idtools"
@@ -138,10 +139,15 @@ type AddAndCopyOptions struct {
 	// RequiredPaths is a list of required paths that must be copied. It must be used with
 	// the Includes flag.
 	RequiredPaths []string
+	// Unpack controls archive extraction for local and remote source
+	// default behavior means local gets extracted while remote will not. When set to true
+	// remote will be able to extract tar contents like local does but set it to false
+	// both sources will not be extracted.
+	Unpack types.OptionalBool
 }
 
 // getURL writes a tar archive containing the named content
-func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, timestamp *time.Time, client *http.Client) error {
+func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, renameTarget string, writer io.Writer, chmod string, srcDigest digest.Digest, timestamp *time.Time, client *http.Client, expand bool) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -189,7 +195,13 @@ func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, 
 	// Figure out the size of the content.
 	size := response.ContentLength
 	responseBody := io.Reader(response.Body)
-	if size < 0 {
+	var digester digest.Digester
+	if srcDigest != "" {
+		digester = srcDigest.Algorithm().Digester()
+		responseBody = io.TeeReader(responseBody, digester.Hash())
+	}
+	var archiveFile *os.File
+	if size < 0 || expand {
 		// Create a temporary file and copy the content to it, so that
 		// we can figure out how much content there is.
 		f, err := os.CreateTemp(mountpoint, "download")
@@ -198,7 +210,7 @@ func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, 
 		}
 		defer os.Remove(f.Name())
 		defer f.Close()
-		size, err = io.Copy(f, response.Body)
+		size, err = io.Copy(f, responseBody)
 		if err != nil {
 			return fmt.Errorf("writing %q to temporary file %q: %w", src, f.Name(), err)
 		}
@@ -207,11 +219,73 @@ func getURL(ctx context.Context, src string, chown *idtools.IDPair, mountpoint, 
 			return fmt.Errorf("setting up to read %q from temporary file %q: %w", src, f.Name(), err)
 		}
 		responseBody = f
+		archiveFile = f
 	}
-	var digester digest.Digester
-	if srcDigest != "" {
-		digester = srcDigest.Algorithm().Digester()
-		responseBody = io.TeeReader(responseBody, digester.Hash())
+
+	if expand && archiveFile != nil && copier.IsArchivePath(archiveFile.Name()) {
+		rc, _, err := compression.AutoDecompress(archiveFile)
+		if err != nil {
+			return fmt.Errorf("decompressing %q: %w", src, err)
+		}
+		defer rc.Close()
+
+		var mod *mode.Set
+		if chmod != "" {
+			p, err := mode.Parse(chmod)
+			if err != nil {
+				return fmt.Errorf("parsing chmod %q: %w", chmod, err)
+			}
+			mod = &p
+		}
+
+		tr := tar.NewReader(rc)
+		tw := tar.NewWriter(writer)
+		defer tw.Close()
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("reading archive entry from %q: %w", src, err)
+			}
+			if chown != nil {
+				hdr.Uid = chown.UID
+				hdr.Gid = chown.GID
+			}
+			if mod != nil {
+				hdr.Mode = int64(mod.Apply(os.FileMode(hdr.Mode)))
+			}
+			if timestamp != nil {
+				ts := timestamp.UTC()
+				hdr.ModTime = ts
+				if !hdr.AccessTime.IsZero() {
+					hdr.AccessTime = ts
+				}
+				if !hdr.ChangeTime.IsZero() {
+					hdr.ChangeTime = ts
+				}
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				return fmt.Errorf("writing header for %q from %q: %w", hdr.Name, src, err)
+			}
+			if hdr.Size != 0 {
+				n, err := io.Copy(tw, tr)
+				if err != nil {
+					return fmt.Errorf("writing content for %q from %q: %w", hdr.Name, src, err)
+				}
+				if n != hdr.Size {
+					return fmt.Errorf("writing content for %q from %q: incorrect length (%d != %d)", hdr.Name, src, n, hdr.Size)
+				}
+				tw.Flush()
+			}
+		}
+		if digester != nil {
+			if responseDigest := digester.Digest(); responseDigest != srcDigest {
+				return fmt.Errorf("unexpected response digest for %q: %s, want %s", src, responseDigest, srcDigest)
+			}
+		}
+		return nil
 	}
 	// Write the output archive.  Set permissions for compatibility.
 	tw := tar.NewWriter(writer)
@@ -322,6 +396,9 @@ func (b *Builder) Add(destination string, extract bool, options AddAndCopyOption
 // filesystem, optionally extracting contents of local files that look like
 // non-empty archives.
 func (b *Builder) AddContext(ctx context.Context, destination string, extract bool, options AddAndCopyOptions, sources ...string) error {
+	if options.Unpack != types.OptionalBoolUndefined {
+		extract = options.Unpack == types.OptionalBoolTrue
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -681,7 +758,7 @@ func (b *Builder) AddContext(ctx context.Context, destination string, extract bo
 			} else {
 				go func() {
 					getErr = retry.IfNecessary(ctx, func() error {
-						return getURL(ctx, src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.Timestamp, httpClient)
+						return getURL(ctx, src, chownFiles, mountPoint, renameTarget, pipeWriter, options.Chmod, srcDigest, options.Timestamp, httpClient, options.Unpack == types.OptionalBoolTrue)
 					}, &retry.Options{
 						MaxRetry: options.MaxRetries,
 						Delay:    options.RetryDelay,

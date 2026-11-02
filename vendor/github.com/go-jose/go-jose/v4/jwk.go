@@ -30,6 +30,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"net/url"
 	"reflect"
@@ -249,7 +250,7 @@ func (k *JSONWebKey) unmarshalJSON(data []byte, allowPrivate bool) (err error) {
 			keyPub = key
 		}
 	case "oct":
-		if certPub != nil {
+		if len(certs) > 0 {
 			return errors.New("go-jose/go-jose: invalid JWK, found 'oct' (symmetric) key with cert chain")
 		}
 		key, err = raw.symmetricKey()
@@ -288,10 +289,8 @@ func (k *JSONWebKey) unmarshalJSON(data []byte, allowPrivate bool) (err error) {
 		return ErrUnsupportedKeyType
 	}
 
-	if certPub != nil && keyPub != nil {
-		if !reflect.DeepEqual(certPub, keyPub) {
-			return errors.New("go-jose/go-jose: invalid JWK, public keys in key and x5c fields do not match")
-		}
+	if len(certs) > 0 && (certPub == nil || !reflect.DeepEqual(certPub, keyPub)) {
+		return errors.New("go-jose/go-jose: invalid JWK, public keys in key and x5c fields do not match")
 	}
 
 	*k = JSONWebKey{Key: key, KeyID: raw.Kid, Algorithm: raw.Alg, Use: raw.Use, Certificates: certs}
@@ -408,6 +407,9 @@ func ecThumbprintInput(curve elliptic.Curve, x, y *big.Int) (string, error) {
 }
 
 func rsaThumbprintInput(n *big.Int, e int) (string, error) {
+	if n == nil || e <= 0 {
+		return "", errors.New("go-jose/go-jose: invalid RSA key")
+	}
 	return fmt.Sprintf(rsaThumbprintTemplate,
 		newBufferFromInt(uint64(e)).base64(),
 		newBuffer(n.Bytes()).base64()), nil
@@ -522,25 +524,40 @@ func (k *JSONWebKey) Valid() bool {
 }
 
 // MaxRSAModulusBits is the largest RSA modulus size, in bits, that will be
-// accepted when parsing a JWK. Applications that need larger keys can raise
-// this limit.
+// accepted when parsing a JWK or verifying an x5c certificate chain with
+// [Header.Certificates]. Applications that need larger keys can raise this
+// limit.
 //
 // If modifying MaxRSAModulusBits, do it before any parsing occurs.
 var MaxRSAModulusBits = 4096
 
 func (key rawJSONWebKey) rsaPublicKey() (*rsa.PublicKey, error) {
-	if key.N == nil || key.E == nil {
+	return rsaPublicKey(key.N, key.E)
+}
+
+func rsaPublicKey(N, E *byteBuffer) (*rsa.PublicKey, error) {
+	if N == nil || E == nil {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, missing n/e values")
 	}
 
-	n := key.N.bigInt()
+	n := N.bigInt()
 	if n.BitLen() > MaxRSAModulusBits {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, modulus too large")
 	}
 
+	e := new(big.Int).SetBytes(E.bytes())
+	if !e.IsInt64() {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, bad e value")
+	}
+
+	eInt64 := e.Int64()
+	if eInt64 < 2 || eInt64 > math.MaxInt {
+		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, bad e value")
+	}
+
 	return &rsa.PublicKey{
 		N: n,
-		E: key.E.toInt(),
+		E: int(eInt64),
 	}, nil
 }
 
@@ -584,11 +601,11 @@ func (key rawJSONWebKey) ecPublicKey() (*ecdsa.PublicKey, error) {
 	// The length of this octet string MUST be the full size of a coordinate for
 	// the curve specified in the "crv" parameter.
 	// https://tools.ietf.org/html/rfc7518#section-6.2.1.2
-	if curveSize(curve) != len(key.X.data) {
+	if curveSize(curve) != len(key.X.bytes()) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid EC public key, wrong length for x")
 	}
 
-	if curveSize(curve) != len(key.Y.data) {
+	if curveSize(curve) != len(key.Y.bytes()) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid EC public key, wrong length for y")
 	}
 
@@ -701,23 +718,21 @@ func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA private key, missing %s value(s)", strings.Join(missing, ", "))
 	}
 
-	n := key.N.bigInt()
-	if n.BitLen() > MaxRSAModulusBits {
-		return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key, modulus too large")
+	pubKey, err := rsaPublicKey(key.N, key.E)
+	if err != nil {
+		return nil, err
 	}
 
+	n := pubKey.N
 	p, q := key.P.bigInt(), key.Q.bigInt()
 	if p.BitLen()+q.BitLen() > n.BitLen()+1 || new(big.Int).Mul(p, q).Cmp(n) != 0 {
 		return nil, errors.New("go-jose/go-jose: invalid RSA private key, p * q != n")
 	}
 
 	rv := &rsa.PrivateKey{
-		PublicKey: rsa.PublicKey{
-			N: n,
-			E: key.E.toInt(),
-		},
-		D:      key.D.bigInt(),
-		Primes: []*big.Int{p, q},
+		PublicKey: *pubKey,
+		D:         key.D.bigInt(),
+		Primes:    []*big.Int{p, q},
 	}
 
 	if key.Dp != nil {
@@ -730,7 +745,7 @@ func (key rawJSONWebKey) rsaPrivateKey() (*rsa.PrivateKey, error) {
 		rv.Precomputed.Qinv = key.Qi.bigInt()
 	}
 
-	err := rv.Validate()
+	err = rv.Validate()
 	return rv, err
 }
 
@@ -804,16 +819,16 @@ func (key rawJSONWebKey) ecPrivateKey() (*ecdsa.PrivateKey, error) {
 	// The length of this octet string MUST be the full size of a coordinate for
 	// the curve specified in the "crv" parameter.
 	// https://tools.ietf.org/html/rfc7518#section-6.2.1.2
-	if curveSize(curve) != len(key.X.data) {
+	if curveSize(curve) != len(key.X.bytes()) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid EC private key, wrong length for x")
 	}
 
-	if curveSize(curve) != len(key.Y.data) {
+	if curveSize(curve) != len(key.Y.bytes()) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid EC private key, wrong length for y")
 	}
 
 	// https://tools.ietf.org/html/rfc7518#section-6.2.2.1
-	if dSize(curve) != len(key.D.data) {
+	if dSize(curve) != len(key.D.bytes()) {
 		return nil, fmt.Errorf("go-jose/go-jose: invalid EC private key, wrong length for d")
 	}
 
