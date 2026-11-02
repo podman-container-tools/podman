@@ -15,7 +15,7 @@ import (
 type conn = socket.Conn
 
 // dial is the entry point for Dial on Linux.
-func dial(cid, port uint32, _ *Config) (*Conn, error) {
+func dial(ctx context.Context, cid, port uint32, _ *Config) (*Conn, error) {
 	// TODO(mdlayher): Config default nil check and initialize. Pass options to
 	// socket.Config where necessary.
 
@@ -25,7 +25,7 @@ func dial(cid, port uint32, _ *Config) (*Conn, error) {
 	}
 
 	sa := &unix.SockaddrVM{CID: cid, Port: port}
-	rsa, err := c.Connect(context.Background(), sa)
+	rsa, err := c.Connect(ctx, sa)
 	if err != nil {
 		_ = c.Close()
 		return nil, err
