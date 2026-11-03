@@ -946,11 +946,17 @@ const (
 	NodeTypeCleanupAfterEach
 	NodeTypeCleanupAfterAll
 	NodeTypeCleanupAfterSuite
+
+	NodeTypeOnFailureInvalid
+	NodeTypeOnFailureEach
+	NodeTypeOnFailureAll
+	NodeTypeOnFailureSuite
 )
 
 var NodeTypesForContainerAndIt = NodeTypeContainer | NodeTypeIt
 var NodeTypesForSuiteLevelNodes = NodeTypeBeforeSuite | NodeTypeSynchronizedBeforeSuite | NodeTypeAfterSuite | NodeTypeSynchronizedAfterSuite | NodeTypeReportBeforeSuite | NodeTypeReportAfterSuite | NodeTypeCleanupAfterSuite
-var NodeTypesAllowedDuringCleanupInterrupt = NodeTypeAfterEach | NodeTypeJustAfterEach | NodeTypeAfterAll | NodeTypeAfterSuite | NodeTypeSynchronizedAfterSuite | NodeTypeCleanupAfterEach | NodeTypeCleanupAfterAll | NodeTypeCleanupAfterSuite
+var NodeTypesForOnFailure = NodeTypeOnFailureInvalid | NodeTypeOnFailureEach | NodeTypeOnFailureAll | NodeTypeOnFailureSuite
+var NodeTypesAllowedDuringCleanupInterrupt = NodeTypeAfterEach | NodeTypeJustAfterEach | NodeTypeAfterAll | NodeTypeAfterSuite | NodeTypeSynchronizedAfterSuite | NodeTypeCleanupAfterEach | NodeTypeCleanupAfterAll | NodeTypeCleanupAfterSuite | NodeTypeOnFailureEach | NodeTypeOnFailureAll | NodeTypeOnFailureSuite
 var NodeTypesAllowedDuringReportInterrupt = NodeTypeReportBeforeEach | NodeTypeReportAfterEach | NodeTypeReportBeforeSuite | NodeTypeReportAfterSuite
 
 var ntEnumSupport = NewEnumSupport(map[uint]string{
@@ -975,6 +981,10 @@ var ntEnumSupport = NewEnumSupport(map[uint]string{
 	uint(NodeTypeCleanupAfterEach):        "DeferCleanup (Each)",
 	uint(NodeTypeCleanupAfterAll):         "DeferCleanup (All)",
 	uint(NodeTypeCleanupAfterSuite):       "DeferCleanup (Suite)",
+	uint(NodeTypeOnFailureInvalid):        "DeferOnFailure",
+	uint(NodeTypeOnFailureEach):           "DeferOnFailure (Each)",
+	uint(NodeTypeOnFailureAll):            "DeferOnFailure (All)",
+	uint(NodeTypeOnFailureSuite):          "DeferOnFailure (Suite)",
 })
 
 func (nt NodeType) String() string {

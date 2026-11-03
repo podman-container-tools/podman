@@ -884,6 +884,50 @@ func DeferCleanup(args ...any) {
 }
 
 /*
+DeferOnFailure registers a callback that Ginkgo runs if - and only if - the spec fails.  The callback runs as soon as the
+failure is recorded and before any of the spec's teardown (JustAfterEach, AfterEach, AfterAll, DeferCleanup) runs, so it
+sees the system in the state it was in when the spec failed.  This makes it the right place to capture failure artifacts:
+screenshots, logs, dumps of cluster state, etc.
+
+	BeforeEach(func(ctx SpecContext) {
+		browser := StartBrowser(ctx)
+		DeferOnFailure(func(ctx SpecContext) {
+			AddReportEntry("screenshot", browser.Screenshot(ctx), ReportEntryVisibilityFailureOrVerbose)
+		}, NodeTimeout(10*time.Second))
+		DeferCleanup(browser.Close)
+	})
+
+DeferOnFailure accepts exactly what DeferCleanup accepts: any function, along with arguments to pass to it.  If the function's
+last return value is a non-nil error the callback fails.  If the function's first parameter is a SpecContext (or a
+context.Context that you don't provide yourself) the callback is interruptible: Ginkgo cancels its context when the callback's
+NodeTimeout elapses or when the suite is interrupted.  By default a callback gets one GracePeriod to run - pass NodeTimeout to
+change that.  The spec's own SpecTimeout does not apply to the callback.  DeferOnFailure also accepts the GracePeriod,
+PollProgressAfter, PollProgressInterval, and Offset decorators.
+
+DeferOnFailure callbacks share the lifetime of DeferCleanup:
+
+When DeferOnFailure is called in BeforeEach, JustBeforeEach, or It the callback covers the current spec.
+When DeferOnFailure is called in BeforeAll (or in a BeforeEach marked OncePerOrdered) the callback covers every spec in the ordered container.
+When DeferOnFailure is called in BeforeSuite or in the all-processes function of SynchronizedBeforeSuite the callback covers every spec in the suite, as well as the suite-level setup and teardown nodes.
+
+The callbacks run at most once per spec attempt, on the first failure: a failed assertion, a panic, a timeout, an AbortSuite,
+or the first interrupt.  If the first failure occurs during teardown the callbacks run right after the failing node and
+before the rest of the teardown.  When several callbacks are registered they run in reverse order of registration, just
+like DeferCleanup.  A callback that fails is recorded as an additional failure on the spec, and the remaining callbacks
+and teardown still run.
+
+When --sleep-on-failure is set, Ginkgo pauses after all DeferOnFailure callbacks have run.
+
+You can learn more about DeferOnFailure here: https://onsi.github.io/ginkgo/#capturing-failure-state-deferonfailure
+*/
+func DeferOnFailure(args ...any) {
+	fail := func(message string, cl types.CodeLocation) {
+		global.Failer.Fail(message, cl)
+	}
+	pushNode(internal.NewOnFailureNode(deprecationTracker, fail, args...))
+}
+
+/*
 AttachProgressReporter allows you to register a function that will be called whenever Ginkgo generates a Progress Report.  The contents returned by the function will be included in the report.
 
 **This is an experimental feature and the public-facing interface may change in a future minor version of Ginkgo**

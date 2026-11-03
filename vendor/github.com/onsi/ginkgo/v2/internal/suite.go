@@ -34,6 +34,17 @@ type Suite struct {
 	cleanupNodes Nodes
 	aroundNodes  types.AroundNodes
 
+	// onFailureNodes holds the callbacks registered with DeferOnFailure, in registration order.
+	// Suite-scoped nodes live for the whole suite; Each- and All-scoped nodes are dropped by the group
+	// when the scope of the node that registered them ends (see group.attemptSpec).
+	onFailureNodes Nodes
+	// sleepOnFailureNodeID identifies the internal DeferOnFailure node that implements --sleep-on-failure
+	sleepOnFailureNodeID uint
+	// onFailureTriggerNodeType is the type of the node whose failure triggered the DeferOnFailure callbacks that are running
+	onFailureTriggerNodeType types.NodeType
+	// runningSynchronizedBeforeSuiteProc1Body is true while the proc-1-only function of SynchronizedBeforeSuite runs
+	runningSynchronizedBeforeSuiteProc1Body bool
+
 	failer            *Failer
 	reporter          reporters.Reporter
 	writer            WriterInterface
@@ -131,6 +142,10 @@ func (suite *Suite) Run(description string, suiteLabels Labels, suiteSemVerConst
 		suite.deadline = time.Now().Add(suite.config.Timeout)
 	}
 
+	if suite.config.SleepOnFailure > 0 {
+		suite.registerSleepOnFailureNode()
+	}
+
 	cancelProgressHandler := progressSignalRegistrar(suite.handleProgressSignal)
 
 	success := suite.runSpecs(description, suiteLabels, suiteSemVerConstraints, suiteComponentSemVerConstraints, suitePath, hasProgrammaticFocus, specs)
@@ -153,6 +168,10 @@ func (suite *Suite) InRunPhase() bool {
 func (suite *Suite) PushNode(node Node) error {
 	if node.NodeType.Is(types.NodeTypeCleanupInvalid | types.NodeTypeCleanupAfterEach | types.NodeTypeCleanupAfterAll | types.NodeTypeCleanupAfterSuite) {
 		return suite.pushCleanupNode(node)
+	}
+
+	if node.NodeType.Is(types.NodeTypesForOnFailure) {
+		return suite.pushOnFailureNode(node)
 	}
 
 	if node.NodeType.Is(types.NodeTypeBeforeSuite | types.NodeTypeAfterSuite | types.NodeTypeSynchronizedBeforeSuite | types.NodeTypeSynchronizedAfterSuite | types.NodeTypeBeforeSuite | types.NodeTypeReportBeforeSuite | types.NodeTypeReportAfterSuite) {
@@ -270,6 +289,8 @@ func (suite *Suite) pushCleanupNode(node Node) error {
 		return types.GinkgoErrors.PushingCleanupInReportingNode(node.CodeLocation, suite.currentNode.NodeType)
 	case types.NodeTypeCleanupInvalid, types.NodeTypeCleanupAfterEach, types.NodeTypeCleanupAfterAll, types.NodeTypeCleanupAfterSuite:
 		return types.GinkgoErrors.PushingCleanupInCleanupNode(node.CodeLocation)
+	case types.NodeTypeOnFailureInvalid, types.NodeTypeOnFailureEach, types.NodeTypeOnFailureAll, types.NodeTypeOnFailureSuite:
+		return types.GinkgoErrors.PushingCleanupInOnFailureNode(node.CodeLocation)
 	default:
 		node.NodeType = types.NodeTypeCleanupAfterEach
 	}
@@ -282,6 +303,151 @@ func (suite *Suite) pushCleanupNode(node Node) error {
 	suite.selectiveLock.Unlock()
 
 	return nil
+}
+
+func (suite *Suite) pushOnFailureNode(node Node) error {
+	// hold the lock for the whole registration: DeferOnFailure may be called from a goroutine spawned by the
+	// current node, and runNode updates currentNode under this lock
+	suite.selectiveLock.Lock()
+	defer suite.selectiveLock.Unlock()
+
+	currentNode := suite.currentNode
+	if suite.phase != PhaseRun || currentNode.IsZero() {
+		return types.GinkgoErrors.PushingOnFailureNodeDuringTreeConstruction(node.CodeLocation)
+	}
+
+	switch currentNode.NodeType {
+	case types.NodeTypeBeforeSuite:
+		node.NodeType = types.NodeTypeOnFailureSuite
+	case types.NodeTypeSynchronizedBeforeSuite:
+		if suite.runningSynchronizedBeforeSuiteProc1Body {
+			return types.GinkgoErrors.PushingOnFailureNodeInSynchronizedBeforeSuiteProc1(node.CodeLocation)
+		}
+		node.NodeType = types.NodeTypeOnFailureSuite
+	case types.NodeTypeBeforeAll:
+		node.NodeType = types.NodeTypeOnFailureAll
+	case types.NodeTypeBeforeEach, types.NodeTypeJustBeforeEach, types.NodeTypeIt:
+		// BeforeEach/JustBeforeEach nodes marked OncePerOrdered are governed by their run-once pair, just like DeferCleanup
+		node.NodeType = types.NodeTypeOnFailureEach
+	default:
+		return types.GinkgoErrors.PushingOnFailureNodeInInvalidNode(node.CodeLocation, currentNode.NodeType)
+	}
+
+	node.NodeIDWhereCleanupWasGenerated = currentNode.ID
+	node.NestingLevel = currentNode.NestingLevel
+	node.AroundNodes = types.AroundNodes{}.Append(currentNode.AroundNodes...).Append(node.AroundNodes...)
+	if node.NodeTimeout == 0 {
+		// on-failure callbacks are diagnostic and must not hang the suite: bound them by one GracePeriod unless told otherwise
+		node.NodeTimeout = suite.config.GracePeriod
+	}
+	suite.onFailureNodes = append(suite.onFailureNodes, node)
+
+	return nil
+}
+
+/*
+registerSleepOnFailureNode implements --sleep-on-failure as an internal, suite-scoped DeferOnFailure callback.
+
+It is registered before anything else, so it is the oldest registration and - because on-failure callbacks run
+newest-first - it always runs last: every user and library callback captures the failed state first, and
+then Ginkgo pauses with the system still live for inspection.
+*/
+func (suite *Suite) registerSleepOnFailureNode() {
+	node := Node{
+		ID:                   UniqueNodeID(),
+		NodeType:             types.NodeTypeOnFailureSuite,
+		Text:                 "--sleep-on-failure",
+		CodeLocation:         types.NewCustomCodeLocation("--sleep-on-failure"),
+		NestingLevel:         -1,
+		HasContext:           true,
+		PollProgressAfter:    0, // don't poll for progress while paused
+		PollProgressInterval: -1,
+		GracePeriod:          -1,
+		Body:                 suite.sleepOnFailure,
+	}
+	suite.sleepOnFailureNodeID = node.ID
+	suite.onFailureNodes = append(Nodes{node}, suite.onFailureNodes...)
+}
+
+func (suite *Suite) sleepOnFailure(ctx SpecContext) {
+	// only pause for failures in setup and subject nodes (It, Before*, BeforeSuite...).  Pausing on a failure
+	// in a teardown, cleanup, or reporting node would be pointless: the system is already being torn down.
+	// (we look at the failure that triggered the callbacks: an earlier callback may since have replaced it, e.g. by calling AbortSuite)
+	suite.selectiveLock.Lock()
+	failureNodeType := suite.onFailureTriggerNodeType
+	suite.selectiveLock.Unlock()
+	if failureNodeType.Is(types.NodeTypesAllowedDuringCleanupInterrupt | types.NodeTypesAllowedDuringReportInterrupt) {
+		return
+	}
+	// once the user has interrupted the suite (whether to trigger these callbacks or while they ran) they want Ginkgo to
+	// move on: pausing now would ask them to interrupt again, and a second interrupt skips cleanup
+	if suite.interruptHandler.Status().Interrupted() {
+		return
+	}
+
+	duration := suite.config.SleepOnFailure
+	report := suite.generateProgressReport(false)
+	report.Message = fmt.Sprintf("{{bold}}{{orange}}Paused on failure for up to %s.{{/}}\nThe spec failed and Ginkgo has paused before running any teardown so you can inspect the live system.\nPress {{bold}}^C{{/}} to end the pause and proceed to cleanup.", duration)
+	suite.emitProgressReport(report)
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	// wait for the pause to elapse, or for the context to be cancelled (e.g. by the user interrupting
+	// the suite) - in which case we end the pause early so cleanup can proceed
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+}
+
+/*
+shouldFireOnFailure decides whether the outcome of a node should trigger the DeferOnFailure callbacks.
+
+Failures, panics, timeouts (spec, node, and suite) and aborts all fire.  Interrupts only fire when they come from the
+user's first signal: that is the level at which Ginkgo still runs cleanup.  Subsequent signals (which skip cleanup) and
+interrupts caused by another process aborting (this spec did not fail - it's collateral) do not fire.
+*/
+func (suite *Suite) shouldFireOnFailure(state types.SpecState) bool {
+	if state.Is(types.SpecStateFailed | types.SpecStatePanicked | types.SpecStateTimedout | types.SpecStateAborted) {
+		return true
+	}
+	if state.Is(types.SpecStateInterrupted) {
+		status := suite.interruptHandler.Status()
+		return status.Cause == interrupt_handler.InterruptCauseSignal && status.Level == interrupt_handler.InterruptLevelCleanupAndReport
+	}
+	return false
+}
+
+/*
+runOnFailureNodes runs every registered DeferOnFailure callback, newest first, and folds their outcomes into the
+current spec report.  A failing callback is recorded as an additional failure - it never replaces the failure that
+triggered it - though an AbortSuite in a callback is honored.
+
+This is called by the group (and by runSuiteNode) between nodes, so no Ginkgo lock is held while the callbacks run.
+*/
+func (suite *Suite) runOnFailureNodes(textFor func(Node) string) {
+	suite.selectiveLock.Lock()
+	nodes := suite.onFailureNodes.Reverse()
+	suite.onFailureTriggerNodeType = suite.currentSpecReport.Failure.FailureNodeType
+	suite.selectiveLock.Unlock()
+
+	for _, node := range nodes {
+		state, failure := suite.runNode(node, time.Time{}, textFor(node))
+		if node.ID == suite.sleepOnFailureNodeID {
+			// the pause's own outcome (e.g. the user interrupting it) never affects the spec
+			continue
+		}
+		// a callback can call AbortSuite directly, or after it has timed out (in which case the abort is recorded as the timeout's additional failure)
+		aborted := state == types.SpecStateAborted || (failure.AdditionalFailure != nil && failure.AdditionalFailure.State == types.SpecStateAborted)
+		if aborted && suite.currentSpecReport.State != types.SpecStateAborted {
+			// honor the abort, but keep the failure that triggered the callbacks rather than replacing it
+			suite.currentSpecReport.AdditionalFailures = append(suite.currentSpecReport.AdditionalFailures, types.AdditionalFailure{State: suite.currentSpecReport.State, Failure: suite.currentSpecReport.Failure})
+			suite.currentSpecReport.State = types.SpecStateAborted
+			suite.currentSpecReport.Failure = failure
+		} else if state.Is(types.SpecStateFailureStates) {
+			suite.currentSpecReport.AdditionalFailures = append(suite.currentSpecReport.AdditionalFailures, types.AdditionalFailure{State: state, Failure: failure})
+		}
+	}
 }
 
 func (suite *Suite) generateTimelineLocation() types.TimelineLocation {
@@ -395,18 +561,28 @@ func (suite *Suite) AddReportEntry(entry ReportEntry) error {
 
 func (suite *Suite) generateProgressReport(fullReport bool) types.ProgressReport {
 	timelineLocation := suite.generateTimelineLocation()
-	suite.selectiveLock.Lock()
-	defer suite.selectiveLock.Unlock()
 
+	// snapshot the state we need under the lock...
+	suite.selectiveLock.Lock()
+	currentSpecContext := suite.currentSpecContext
+	currentSpecReport := suite.currentSpecReport
+	currentNode := suite.currentNode
+	currentNodeStartTime := suite.currentNodeStartTime
+	currentByStep := suite.currentByStep
+	gwOutput := suite.currentSpecReport.CapturedGinkgoWriterOutput + string(suite.writer.Bytes())
+	suite.selectiveLock.Unlock()
+
+	// ...and query the progress reporters *without* holding it.  Reporters are user code and
+	// are free to call back into Ginkgo (e.g. CurrentSpecReport() or AddReportEntry()), both of
+	// which take selectiveLock.  Holding the lock here would deadlock them until the deadline.
 	deadline, cancel := context.WithTimeout(context.Background(), ProgressReporterDeadline)
 	defer cancel()
 	var additionalReports []string
-	if suite.currentSpecContext != nil {
-		additionalReports = append(additionalReports, suite.currentSpecContext.QueryProgressReporters(deadline, suite.failer)...)
+	if currentSpecContext != nil {
+		additionalReports = append(additionalReports, currentSpecContext.QueryProgressReporters(deadline, suite.failer)...)
 	}
 	additionalReports = append(additionalReports, suite.QueryProgressReporters(deadline, suite.failer)...)
-	gwOutput := suite.currentSpecReport.CapturedGinkgoWriterOutput + string(suite.writer.Bytes())
-	pr, err := NewProgressReport(suite.isRunningInParallel(), suite.currentSpecReport, suite.currentNode, suite.currentNodeStartTime, suite.currentByStep, gwOutput, timelineLocation, additionalReports, suite.config.SourceRoots, fullReport)
+	pr, err := NewProgressReport(suite.isRunningInParallel(), currentSpecReport, currentNode, currentNodeStartTime, currentByStep, gwOutput, timelineLocation, additionalReports, suite.config.SourceRoots, fullReport)
 
 	if err != nil {
 		fmt.Printf("{{red}}Failed to generate progress report:{{/}}\n%s\n", err.Error())
@@ -655,6 +831,16 @@ func (suite *Suite) runSuiteNode(node Node) {
 	suite.outputInterceptor.StartInterceptingOutput()
 	suite.currentSpecReport.StartTime = time.Now()
 
+	// if this suite-level node fails, run any (suite-scoped) DeferOnFailure callbacks - once, and before any further teardown
+	firedOnFailure := false
+	fireOnFailureIfNeeded := func() {
+		if firedOnFailure || !suite.shouldFireOnFailure(suite.currentSpecReport.State) {
+			return
+		}
+		firedOnFailure = true
+		suite.runOnFailureNodes(func(Node) string { return "" })
+	}
+
 	var err error
 	switch node.NodeType {
 	case types.NodeTypeBeforeSuite, types.NodeTypeAfterSuite:
@@ -676,7 +862,13 @@ func (suite *Suite) runSuiteNode(node Node) {
 			}
 			node.Body = func(c SpecContext) { data = node.SynchronizedBeforeSuiteProc1Body(c) }
 			node.HasContext = node.SynchronizedBeforeSuiteProc1BodyHasContext
+			suite.selectiveLock.Lock()
+			suite.runningSynchronizedBeforeSuiteProc1Body = true
+			suite.selectiveLock.Unlock()
 			suite.currentSpecReport.State, suite.currentSpecReport.Failure = suite.runNode(node, time.Time{}, "")
+			suite.selectiveLock.Lock()
+			suite.runningSynchronizedBeforeSuiteProc1Body = false
+			suite.selectiveLock.Unlock()
 			if suite.config.ParallelTotal > 1 {
 				suite.currentSpecReport.CapturedStdOutErr += suite.outputInterceptor.StopInterceptingAndReturnOutput()
 				suite.outputInterceptor.StartInterceptingOutput()
@@ -708,6 +900,8 @@ func (suite *Suite) runSuiteNode(node Node) {
 		node.Body = node.SynchronizedAfterSuiteAllProcsBody
 		node.HasContext = node.SynchronizedAfterSuiteAllProcsBodyHasContext
 		suite.currentSpecReport.State, suite.currentSpecReport.Failure = suite.runNode(node, time.Time{}, "")
+		// run the callbacks before process #1 waits for the other processes and runs its own teardown
+		fireOnFailureIfNeeded()
 		if suite.config.ParallelProcess == 1 {
 			if suite.config.ParallelTotal > 1 {
 				err = suite.client.BlockUntilNonprimaryProcsHaveFinished()
@@ -732,6 +926,8 @@ func (suite *Suite) runSuiteNode(node Node) {
 		suite.currentSpecReport.State, suite.currentSpecReport.Failure = types.SpecStateFailed, suite.failureForLeafNodeWithMessage(node, err.Error())
 		suite.reporter.EmitFailure(suite.currentSpecReport.State, suite.currentSpecReport.Failure)
 	}
+
+	fireOnFailureIfNeeded()
 
 	suite.currentSpecReport.EndTime = time.Now()
 	suite.currentSpecReport.RunTime = suite.currentSpecReport.EndTime.Sub(suite.currentSpecReport.StartTime)
@@ -885,6 +1081,11 @@ func (suite *Suite) runNode(node Node, specDeadline time.Time, text string) (typ
 		}
 	}
 
+	if suite.sleepOnFailureNodeID != 0 && node.ID == suite.sleepOnFailureNodeID {
+		// --sleep-on-failure pauses for the requested duration (or until the user interrupts) regardless of any suite deadline
+		deadline = time.Time{}
+	}
+
 	if !node.HasContext {
 		// this maps onto the pre-context behavior:
 		// - an interrupted node exits immediately.  with this, context-less nodes that are in a spec with a SpecTimeout and/or are interrupted by other means will simply exit immediately after the timeout/interrupt
@@ -996,7 +1197,6 @@ func (suite *Suite) runNode(node Node, specDeadline time.Time, text string) (typ
 			} else {
 				failure.Message, failure.Location, failure.ForwardedPanic, failure.TimelineLocation = failureFromRun.Message, failureFromRun.Location, failureFromRun.ForwardedPanic, failureFromRun.TimelineLocation
 				suite.reporter.EmitFailure(outcomeFromRun, failure)
-				suite.pauseOnFailureIfRequested(node)
 				return outcomeFromRun, failure
 			}
 		case <-gracePeriodChannel:
@@ -1077,42 +1277,6 @@ func (suite *Suite) runNode(node Node, specDeadline time.Time, text string) (typ
 				progressPoller.Reset(pollProgressInterval)
 			}
 		}
-	}
-}
-
-// pauseOnFailureIfRequested pauses the suite at the moment a failure is identified,
-// when the user has set --sleep-on-failure.  This hooks directly into runNode's failure
-// path so the pause happens immediately at the point of failure - before any teardown
-// or cleanup runs - leaving the system live for inspection.
-//
-// We only pause for failures in setup and subject nodes (It, Before*, BeforeSuite...),
-// i.e. nodes that run before teardown.  Pausing on a failure in a teardown/cleanup or
-// reporting node would be pointless (the system is already being torn down) and could
-// interfere with interrupt handling, so those are skipped.
-//
-// The pause is interruptible: pressing ^C (or any interrupt) ends the pause early and
-// the suite proceeds to run cleanup as usual.  It is a no-op if the feature is disabled.
-func (suite *Suite) pauseOnFailureIfRequested(node Node) {
-	if suite.config.SleepOnFailure <= 0 {
-		return
-	}
-	// only pause before teardown - skip teardown/cleanup/reporting nodes
-	if node.NodeType.Is(types.NodeTypesAllowedDuringCleanupInterrupt | types.NodeTypesAllowedDuringReportInterrupt) {
-		return
-	}
-
-	duration := suite.config.SleepOnFailure
-	report := suite.generateProgressReport(false)
-	report.Message = fmt.Sprintf("{{bold}}{{orange}}Paused on failure for up to %s.{{/}}\nThe spec failed and Ginkgo has paused before running any teardown so you can inspect the live system.\nPress {{bold}}^C{{/}} to end the pause and proceed to cleanup.", duration)
-	suite.emitProgressReport(report)
-
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	// wait for the pause to elapse, or for the user to interrupt - in which case we end
-	// the pause early and let runNode return so cleanup can proceed
-	select {
-	case <-timer.C:
-	case <-suite.interruptHandler.Status().Channel:
 	}
 }
 

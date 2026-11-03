@@ -6,6 +6,15 @@
 
 ### Maintenance
 
+## 2.34.0
+
+### Features
+- `DeferOnFailure` registers a callback that runs only when a spec fails - as soon as the failing node returns and before any teardown (`JustAfterEach`, `AfterEach`, `AfterAll`, `DeferCleanup`) - so it can capture the state teardown is about to destroy.  It takes exactly what `DeferCleanup` takes and shares its scoping: called in `BeforeEach`/`JustBeforeEach`/`It` it covers the spec, in `BeforeAll` the ordered container, and in `BeforeSuite` the whole suite.  It is also available on `GinkgoT()`; note that this adds a method to `FullGinkgoTInterface`, so hand-written implementations of that interface need to add it.  See https://onsi.github.io/ginkgo/#capturing-failure-state-deferonfailure
+
+### Fixes
+- Progress reporters (`AttachProgressReporter`) are no longer called while Ginkgo holds an internal lock, so a reporter that calls `CurrentSpecReport()` or `AddReportEntry()` no longer stalls for 5 seconds and has its output dropped.
+- `--sleep-on-failure` now runs after any `DeferOnFailure` callbacks, also pauses when a spec times out, and no longer pauses if the suite has already been interrupted.
+
 ## 2.33.1
 
 ### Fixes
