@@ -100,6 +100,10 @@ func (c *Container) Start(ctx context.Context, recursive bool) (int, error) {
 	// This prevents running `podman start` at the same time a
 	// `podman pod stop` is running, which could lead to weird races.
 	// Pod locks come before container locks, so do this first.
+	//
+	// releasePodLock unlocks only once, so it can be called early (before the
+	// health wait) and again from the defer.
+	releasePodLock := func() {}
 	if c.config.Pod != "" {
 		// If we get an error, the pod was probably removed.
 		// So we get an expected ErrCtrRemoved instead of ErrPodRemoved,
@@ -107,11 +111,18 @@ func (c *Container) Start(ctx context.Context, recursive bool) (int, error) {
 		pod, _ := c.runtime.state.Pod(c.config.Pod)
 		if pod != nil {
 			pod.lock.Lock()
-			defer pod.lock.Unlock()
+			locked := true
+			releasePodLock = func() {
+				if locked {
+					locked = false
+					pod.lock.Unlock()
+				}
+			}
+			defer releasePodLock()
 		}
 	}
 
-	return c.startNoPodLock(ctx, recursive)
+	return c.startNoPodLockWithCallback(ctx, recursive, releasePodLock)
 }
 
 // Update updates the given container.
