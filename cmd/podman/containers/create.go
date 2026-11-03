@@ -292,6 +292,14 @@ func CreateInit(c *cobra.Command, vals entities.ContainerCreateOptions, isInfra 
 			vals.GroupAdd = groups
 		}
 
+		if c.Flags().Changed("init") {
+			value, err := c.Flags().GetBool("init")
+			if err != nil {
+				return vals, err
+			}
+			vals.Init = &value
+		}
+
 		if c.Flags().Changed("oom-score-adj") {
 			val, err := c.Flags().GetInt("oom-score-adj")
 			if err != nil {

@@ -184,7 +184,7 @@ type ContainerCreateOptions struct {
 	HTTPProxy            bool
 	HostUsers            []string
 	ImageVolume          string
-	Init                 bool
+	Init                 *bool
 	InitContainerType    string
 	InitPath             string
 	IntelRdtClosID       string

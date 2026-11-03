@@ -178,8 +178,7 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		)
 		_ = cmd.RegisterFlagCompletionFunc(imageVolumeFlagName, AutocompleteImageVolume)
 
-		createFlags.BoolVar(
-			&cf.Init,
+		createFlags.Bool(
 			"init", false,
 			"Run an init binary inside the container that forwards signals and reaps processes",
 		)

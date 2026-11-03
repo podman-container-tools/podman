@@ -861,7 +861,7 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	}
 
 	if s.Init == nil {
-		s.Init = &c.Init
+		s.Init = c.Init
 	}
 	if len(s.InitPath) == 0 || len(c.InitPath) != 0 {
 		s.InitPath = c.InitPath
