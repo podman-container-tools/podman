@@ -109,10 +109,11 @@ spelled with complete minutiae.
    1. Edit `RELEASE_NOTES.md`
 
       * Add/update the version-section of with sub-sections for *Features*
-        (new functionality), *Changes* (Altered podman behaviors),
-        *Bugfixes* (self-explanatory), *API* (All related features,
-        changes, and bugfixes), and *Misc* (include any **major**
-        library bumps, e.g. `c/buildah`, `c/storage`, `c/common`, etc).
+        (new functionality), *Changes* (altered podman behaviors),
+        *Bugfixes* (self-explanatory), *Security* (resolved security
+        vulnerabilities), *API* (all related features, changes, and bugfixes),
+        and *Misc* (include any **major** library bumps, e.g. `c/buildah`,
+        `c/storage`, `c/common`, etc).
       * Use your merge-bot reference PR-listing to examine each PR in turn,
         adding an entry for it into the appropriate section.
       * Use the list of commits to find the PR that the commit came from.
@@ -123,6 +124,10 @@ spelled with complete minutiae.
           Some PR's with a release note field may not need one, and some PR's
           without a release note field may need one.
         * Be sure to link any issue the PR fixed.
+        * For every CVE fixed by the release, add a separate entry under
+          *Security*, using the format `* Addresses CVE-XXXX-XXXXX`.
+          Each CVE must have its own line. An explanation may follow the CVE
+          identifier, separated by a comma.
         * Do not include any PRs that are only documentation or test/automation
           changes.
         * Do not include any PRs that fix bugs which we introduced due to
