@@ -2854,15 +2854,14 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		return fmt.Errorf("must provide restart policy if updating restart retries: %w", define.ErrInvalidArg)
 	}
 
-	oldResources := new(spec.LinuxResources)
-	if c.config.Spec.Linux.Resources != nil {
-		if err := JSONDeepCopy(c.config.Spec.Linux.Resources, oldResources); err != nil {
-			return err
-		}
+	oldConfig := new(ContainerConfig)
+	if err := JSONDeepCopy(c.config, oldConfig); err != nil {
+		return err
 	}
-	oldRestart := c.config.RestartPolicy
-	oldRetries := c.config.RestartRetries
-	oldRlimits := c.config.Spec.Process.Rlimits
+	oldConfig.rewrite = c.config.rewrite
+	revertConfig := func() {
+		c.config = oldConfig
+	}
 
 	if updateOptions.RestartPolicy != nil {
 		if err := define.ValidateRestartPolicy(*updateOptions.RestartPolicy); err != nil {
@@ -2895,6 +2894,16 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		if err := json.Unmarshal(resourcesToUpdate, c.config.Spec.Linux.Resources); err != nil {
 			return err
 		}
+		// Lifting a pids limit the container does not have changes nothing.
+		var oldPids *spec.LinuxPids
+		if oldConfig.Spec.Linux != nil && oldConfig.Spec.Linux.Resources != nil {
+			oldPids = oldConfig.Spec.Linux.Resources.Pids
+		}
+		if pids := c.config.Spec.Linux.Resources.Pids; pids != nil &&
+			(oldPids == nil || util.PidsLimitUnlimited(oldPids.Limit)) &&
+			util.SkipUnlimitedPids(pids.Limit, c.CgroupManager()) {
+			c.config.Spec.Linux.Resources.Pids = nil
+		}
 		updateOptions.Resources = c.config.Spec.Linux.Resources
 	}
 
@@ -2916,11 +2925,16 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 
 	if err := c.runtime.state.RewriteContainerConfig(c, c.config); err != nil {
 		// Assume DB write failed, revert to old resources block
-		c.config.Spec.Linux.Resources = oldResources
-		c.config.RestartPolicy = oldRestart
-		c.config.RestartRetries = oldRetries
-		c.config.Spec.Process.Rlimits = oldRlimits
+		revertConfig()
 		return err
+	}
+	// From here on the new config is in the database, so a failure must
+	// write the old one back, or the next start applies what failed.
+	rollbackConfig := func() {
+		revertConfig()
+		if err := c.runtime.state.RewriteContainerConfig(c, c.config); err != nil {
+			logrus.Errorf("Reverting container %s config after failed update: %v", c.ID(), err)
+		}
 	}
 
 	if c.ensureState(define.ContainerStateCreated, define.ContainerStateRunning, define.ContainerStatePaused) &&
@@ -2929,7 +2943,13 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		// To keep inspect accurate we need to update the on-disk OCI spec.
 		onDiskSpec, err := c.specFromState()
 		if err != nil {
+			rollbackConfig()
 			return fmt.Errorf("retrieving on-disk OCI spec to update: %w", err)
+		}
+		oldOnDiskSpec := new(spec.Spec)
+		if err := JSONDeepCopy(onDiskSpec, oldOnDiskSpec); err != nil {
+			rollbackConfig()
+			return err
 		}
 		if updateOptions.Resources != nil {
 			if onDiskSpec.Linux == nil {
@@ -2948,6 +2968,12 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		}
 
 		if err := c.ociRuntime.UpdateContainer(c, updateOptions.Resources); err != nil {
+			// The runtime rejected the update, so do not keep it in the
+			// config either, or the next start fails the same way.
+			rollbackConfig()
+			if rerr := c.saveSpec(oldOnDiskSpec); rerr != nil {
+				logrus.Errorf("Reverting container %s OCI spec after failed update: %v", c.ID(), rerr)
+			}
 			return err
 		}
 	}

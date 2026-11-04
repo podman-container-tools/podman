@@ -35,6 +35,18 @@ var _ = Describe("Podman update", func() {
 		podmanTest.CheckFileInContainerSubstring(ctrID, "/sys/fs/cgroup/pids.max", "max")
 	})
 
+	It("podman update rootless cgroupfs unlimited pids-limit sets no limit", func() {
+		SkipIfRemote("--cgroup-manager is a server option")
+		SkipIfNotRootless("the pids limit is only omitted rootless")
+		podmanTest.CgroupManager = "cgroupfs"
+		testCtr := "test-ctr-name"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", testCtr, ALPINE, "top")
+		for _, limit := range []string{"-1", "0"} {
+			podmanTest.PodmanExitCleanly("update", "--pids-limit", limit, testCtr)
+			podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.PidsLimit", "0")
+		}
+	})
+
 	It("podman update container all options v2", func() {
 		SkipIfRootless("many of these handlers are not enabled while rootless in CI")
 		skipWithoutDevNullb0()
@@ -163,6 +175,22 @@ var _ = Describe("Podman update", func() {
 
 		podmanTest.CheckContainerSingleField(testCtr, memoryInspect, mem512m)
 		podmanTest.CheckFileInContainer(testCtr, memoryCgroup, mem512m)
+	})
+
+	It("podman update reverts changes the runtime rejects", func() {
+		testCtr := "test-ctr-name"
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", testCtr, ALPINE, "top")
+
+		// No host has CPU 9999, so the runtime cannot apply this.
+		update := podmanTest.Podman([]string{"update", "--cpuset-cpus", "9999", testCtr})
+		update.WaitWithDefaultTimeout()
+		Expect(update).Should(ExitWithError(125, "update"))
+
+		// Running, inspect reads the on-disk spec; stopped, the stored config.
+		podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.CpusetCpus", "")
+		podmanTest.PodmanExitCleanly("stop", "-t0", testCtr)
+		podmanTest.CheckContainerSingleField(testCtr, ".HostConfig.CpusetCpus", "")
+		podmanTest.PodmanExitCleanly("start", testCtr)
 	})
 
 	It("podman update sets restart policy", func() {
