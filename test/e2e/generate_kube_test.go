@@ -2077,4 +2077,45 @@ EXPOSE 2004-2005/tcp`, CITEST_IMAGE)
 			Expect(probe.InitialDelaySeconds).To(Equal(int32(2)))
 		}
 	})
+
+	It("device cgroup rules round-trip through kube generate and play", func() {
+		SkipIfRootless("device cgroup rules require root access")
+		ctrName := "test-device-cgroup"
+		// Create container with device cgroup rules
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName,
+			"--cap-add", "mknod",
+			"--device-cgroup-rule", "c 42:* rwm",
+			"--device-cgroup-rule", "b 8:* rw",
+			CITEST_IMAGE, "top")
+
+		// Generate kube YAML
+		outputFile := filepath.Join(podmanTest.TempDir, "ctr.yaml")
+		podmanTest.PodmanExitCleanly("kube", "generate", ctrName, "-f", outputFile)
+
+		// Verify the annotation is present in generated YAML
+		b, err := os.ReadFile(outputFile)
+		Expect(err).ShouldNot(HaveOccurred())
+		yamlContent := string(b)
+		Expect(yamlContent).To(ContainSubstring("io.podman.annotations.device-cgroup-rule"))
+		Expect(yamlContent).To(ContainSubstring("c 42:* rwm"))
+		Expect(yamlContent).To(ContainSubstring("b 8:* rw"))
+
+		// Remove original container
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", ctrName)
+
+		// Play the generated YAML
+		podmanTest.PodmanExitCleanly("kube", "play", outputFile)
+
+		// Verify the recreated container has the device cgroup rules
+		inspect := podmanTest.PodmanExitCleanly("inspect", "--format", "{{.HostConfig.DeviceCgroupRules}}", ctrName+"-pod")
+		Expect(inspect.OutputToString()).To(ContainSubstring("c 42:* rwm"))
+		Expect(inspect.OutputToString()).To(ContainSubstring("b 8:* rw"))
+
+		// Verify the rules work by creating devices
+		podmanTest.PodmanExitCleanly("exec", ctrName+"-pod", "mknod", "newDev1", "c", "42", "1")
+		podmanTest.PodmanExitCleanly("exec", ctrName+"-pod", "mknod", "newDev2", "b", "8", "1")
+
+		// Cleanup
+		podmanTest.PodmanExitCleanly("kube", "down", outputFile)
+	})
 })
