@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -204,4 +205,36 @@ func TestPostDeleteHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, strings.TrimSuffix(string(content), "\n"), dir)
+}
+
+func TestGetIntermediateMountpointUserUpdatesTimestamp(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+
+	c := &Container{}
+	path, err := c.getIntermediateMountpointUser()
+	assert.NoError(t, err)
+	assert.DirExists(t, path)
+
+	old := time.Now().Add(-time.Hour)
+	assert.NoError(t, os.Chtimes(path, old, old))
+
+	secondPath, err := c.getIntermediateMountpointUser()
+	assert.NoError(t, err)
+	assert.Equal(t, path, secondPath)
+	info, err := os.Stat(path)
+	assert.NoError(t, err)
+	assert.True(t, info.ModTime().After(old))
+}
+
+func TestGetIntermediateMountpointUserRetriesAfterFailure(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+	c := &Container{}
+	_, err := c.getIntermediateMountpointUser()
+	assert.Error(t, err)
+
+	t.Setenv("TMPDIR", t.TempDir())
+	path, err := c.getIntermediateMountpointUser()
+	assert.NoError(t, err)
+	assert.DirExists(t, path)
 }

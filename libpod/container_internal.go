@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -2578,12 +2577,6 @@ func (c *Container) getRootPathForOCI() (string, error) {
 	return c.getIntermediateMountpointUser()
 }
 
-var (
-	intermediateMountPoint     string
-	intermediateMountPointErr  error
-	intermediateMountPointSync sync.Mutex
-)
-
 // getIntermediateMountpointUser returns a path that is accessible to everyone.  It must be on TMPDIR since
 // the runroot/tmpdir used by libpod are accessible only to the owner.
 // To avoid TOCTOU issues, the path must be owned by the current user's UID and GID.
@@ -2619,21 +2612,17 @@ func (c *Container) recreateIntermediateMountpointUser() (string, error) {
 // To avoid TOCTOU issues, the path must be owned by the current user's UID and GID.
 // The path can be used by different containers, so a mount must be created only in a private mount namespace.
 func (c *Container) getIntermediateMountpointUser() (string, error) {
-	intermediateMountPointSync.Lock()
-	defer intermediateMountPointSync.Unlock()
-
-	if intermediateMountPoint == "" || fileutils.Exists(intermediateMountPoint) != nil {
-		return c.recreateIntermediateMountpointUser()
+	intermediateMountPoint, err := c.recreateIntermediateMountpointUser()
+	if err != nil {
+		return "", err
 	}
 
 	// update the timestamp to prevent systemd-tmpfiles from removing it
 	now := time.Now()
 	if err := os.Chtimes(intermediateMountPoint, now, now); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return c.recreateIntermediateMountpointUser()
-		}
+		return "", err
 	}
-	return intermediateMountPoint, intermediateMountPointErr
+	return intermediateMountPoint, nil
 }
 
 // mount mounts the container's root filesystem
