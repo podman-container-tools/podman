@@ -11,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -27,8 +26,8 @@ func TestUnitDirs(t *testing.T) {
 	if os.Getenv("_UNSHARED") != "true" {
 		unitDirs := GetUnitDirs(false, true)
 
-		resolvedUnitDirAdminUser := ResolveUnitDirAdminUser()
-		userLevelFilter := GetUserLevelFilter(resolvedUnitDirAdminUser)
+		resolvedUnitDirUsers := ResolveUnitDirUsers()
+		userLevelFilter := GetUserLevelFilter(resolvedUnitDirUsers)
 		rootfulPaths := NewSearchPaths(true)
 		AppendSubPaths(rootfulPaths, UnitDirTemp, false, userLevelFilter)
 		AppendSubPaths(rootfulPaths, UnitDirAdmin, false, userLevelFilter)
@@ -40,8 +39,7 @@ func TestUnitDirs(t *testing.T) {
 
 		rootlessPaths := NewSearchPaths(true)
 
-		systemUserDirLevel := len(strings.Split(resolvedUnitDirAdminUser, string(os.PathSeparator)))
-		nonNumericFilter := GetNonNumericFilter(resolvedUnitDirAdminUser, systemUserDirLevel)
+		nonNumericFilter := GetNonNumericFilter(resolvedUnitDirUsers)
 
 		runtimeDir, found := os.LookupEnv("XDG_RUNTIME_DIR")
 		if found {
@@ -216,7 +214,9 @@ func TestUnitDirs(t *testing.T) {
 		userInternalDir := createDir(userDir, "internal")
 
 		distroSystemdDir := createDir("/", "systemd2")
-		distroUserDir := createDir("/", "users2")
+		// Keep the distro path distinct from the admin path so prefix-only
+		// filtering cannot accidentally make the test pass.
+		distroUserDir := createDir("/", "distro-users")
 		linkDir(distroSystemdDir, "users", distroUserDir)
 		linkDir(UnitDirDistro, "", distroSystemdDir)
 

@@ -46,12 +46,11 @@ func GetUnitDirs(rootless bool, recursive bool) []string {
 		return paths.sorted
 	}
 
-	resolvedUnitDirAdminUser := ResolveUnitDirAdminUser()
-	userLevelFilter := GetUserLevelFilter(resolvedUnitDirAdminUser)
+	resolvedUnitDirUsers := ResolveUnitDirUsers()
+	userLevelFilter := GetUserLevelFilter(resolvedUnitDirUsers)
 
 	if rootless {
-		systemUserDirLevel := len(strings.Split(resolvedUnitDirAdminUser, string(os.PathSeparator)))
-		nonNumericFilter := GetNonNumericFilter(resolvedUnitDirAdminUser, systemUserDirLevel)
+		nonNumericFilter := GetNonNumericFilter(resolvedUnitDirUsers)
 		getRootlessDirs(paths, nonNumericFilter, userLevelFilter)
 	} else {
 		getRootDirs(paths, userLevelFilter)
@@ -172,32 +171,58 @@ func skipPath(paths *searchPaths, path string, isUserFlag bool, filterPtr func(s
 	return !stat.IsDir()
 }
 
-func ResolveUnitDirAdminUser() string {
-	unitDirAdminUser := filepath.Join(UnitDirAdmin, "users")
+func resolveUnitDirUsers(unitDir string) string {
+	unitDirUsers := filepath.Join(unitDir, "users")
 	var err error
-	var resolvedUnitDirAdminUser string
-	if resolvedUnitDirAdminUser, err = filepath.EvalSymlinks(unitDirAdminUser); err != nil {
+	var resolvedUnitDirUsers string
+	if resolvedUnitDirUsers, err = filepath.EvalSymlinks(unitDirUsers); err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			logiface.Debugf("Error occurred resolving path %q: %s", unitDirAdminUser, err)
+			logiface.Debugf("Error occurred resolving path %q: %s", unitDirUsers, err)
 		}
-		resolvedUnitDirAdminUser = unitDirAdminUser
+		resolvedUnitDirUsers = unitDirUsers
 	}
-	return resolvedUnitDirAdminUser
+	return resolvedUnitDirUsers
 }
 
-func GetUserLevelFilter(resolvedUnitDirAdminUser string) func(string, bool) bool {
+func ResolveUnitDirUsers() []string {
+	return []string{
+		resolveUnitDirUsers(UnitDirAdmin),
+		resolveUnitDirUsers(UnitDirDistro),
+	}
+}
+
+func GetUserLevelFilter(resolvedUnitDirUsers []string) func(string, bool) bool {
 	return func(_path string, isUserFlag bool) bool {
 		// if quadlet generator is run rootless, do not recurse other user sub dirs
 		// if quadlet generator is run as root, ignore users sub dirs
-		if strings.HasPrefix(_path, resolvedUnitDirAdminUser) {
+		for _, unitDirUsers := range resolvedUnitDirUsers {
+			if _, within := pathWithin(unitDirUsers, _path); !within {
+				continue
+			}
 			if isUserFlag {
 				return true
 			}
-		} else {
-			return true
+			return false
 		}
-		return false
+		return true
 	}
+}
+
+// pathWithin reports whether path is base itself or a descendant of base.
+// filepath.Rel avoids treating sibling names such as "users2" as children of
+// "users".
+func pathWithin(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return "", false
+	}
+	if rel == "." {
+		return rel, true
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return rel, true
 }
 
 // isNumeric returns true if the string only contains digits.
@@ -212,25 +237,21 @@ func isNumeric(s string) bool {
 	return true
 }
 
-func GetNonNumericFilter(resolvedUnitDirAdminUser string, systemUserDirLevel int) func(string, bool) bool {
+func GetNonNumericFilter(resolvedUnitDirUsers []string) func(string, bool) bool {
 	return func(path string, _ bool) bool {
 		// when running in rootless, recursive walk directories that are non numeric
 		// ignore sub dirs under the `users` directory which correspond to a user id
-		if strings.HasPrefix(path, resolvedUnitDirAdminUser) {
-			listDirUserPathLevels := strings.Split(path, string(os.PathSeparator))
-			// Make sure to add the base directory
-			if len(listDirUserPathLevels) == systemUserDirLevel {
-				return true
-			}
-			if len(listDirUserPathLevels) > systemUserDirLevel {
-				if !isNumeric(listDirUserPathLevels[systemUserDirLevel]) {
+		for _, unitDirUsers := range resolvedUnitDirUsers {
+			if rel, within := pathWithin(unitDirUsers, path); within {
+				// Make sure to add the base directory.
+				if rel == "." {
 					return true
 				}
+				firstPathComponent, _, _ := strings.Cut(rel, string(os.PathSeparator))
+				return !isNumeric(firstPathComponent)
 			}
-		} else {
-			return true
 		}
-		return false
+		return true
 	}
 }
 
