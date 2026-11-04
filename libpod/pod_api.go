@@ -485,7 +485,7 @@ func (p *Pod) Restart(ctx context.Context) (map[string]error, error) {
 	}
 
 	if len(ctrErrors) > 0 {
-		return ctrErrors, fmt.Errorf("stopping some containers: %w", define.ErrPodPartialFail)
+		return ctrErrors, fmt.Errorf("restarting some containers: %w", define.ErrPodPartialFail)
 	}
 	p.newPodEvent(events.Stop)
 	p.newPodEvent(events.Start)
@@ -649,6 +649,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 	// container.
 	var infraConfig *define.InspectPodInfraConfig
 	var inspectMounts []define.InspectMount
+	// TODO: Populate
 	var devices []define.InspectDevice
 	var infraSecurity []string
 	if p.state.InfraContainerID != "" {

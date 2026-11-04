@@ -154,7 +154,7 @@ type conmonPipeData struct {
 // not attach to it.
 func (r *ConmonOCIRuntime) ExecContainerDetached(ctr *Container, sessionID string, options *ExecOptions, stdin bool) (int, error) {
 	if options == nil {
-		return -1, fmt.Errorf("must provide exec options to ExecContainerHTTP: %w", define.ErrInvalidArg)
+		return -1, fmt.Errorf("must provide exec options to ExecContainerDetached: %w", define.ErrInvalidArg)
 	}
 
 	ociLog := ctr.execOCILog(sessionID)
@@ -432,19 +432,6 @@ func (r *ConmonOCIRuntime) startExec(c *Container, sessionID string, options *Ex
 		"args": args,
 	}).Debugf("running conmon: %s", r.conmonPath)
 	execCmd := exec.Command(r.conmonPath, args...)
-
-	// TODO: This is commented because it doesn't make much sense in HTTP
-	// attach, and I'm not certain it does for non-HTTP attach as well.
-	// if streams != nil {
-	// 	// Don't add the InputStream to the execCmd. Instead, the data should be passed
-	// 	// through CopyDetachable
-	// 	if streams.AttachOutput {
-	// 		execCmd.Stdout = options.Streams.OutputStream
-	// 	}
-	// 	if streams.AttachError {
-	// 		execCmd.Stderr = options.Streams.ErrorStream
-	// 	}
-	// }
 
 	conmonEnv, err := r.configureConmonEnv()
 	if err != nil {

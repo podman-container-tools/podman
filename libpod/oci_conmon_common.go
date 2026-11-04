@@ -955,8 +955,7 @@ func (r *ConmonOCIRuntime) getLogData(ctr *Container) (string, map[string]string
 
 	data, err := ctr.inspectLocked(false)
 	if err != nil {
-		// FIXME: this error should probably be returned
-		return "", nil, nil //nolint: nilerr
+		return "", nil, fmt.Errorf("inspecting container %s: %w", ctr.ID(), err)
 	}
 
 	var parsedLogTag string
@@ -1336,7 +1335,6 @@ func validJournaldFieldName(s string) bool {
 }
 
 // sharedConmonArgs takes common arguments for exec and create/restore and formats them for the conmon CLI
-// func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, pidPath, logPath, exitDir, persistDir, ociLogPath, logDriver, logTag string, logLabels map[string]string) ([]string, error) {
 func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, pidPath, logPath, exitDir, persistDir, ociLogPath, logDriver, logTag string, logLabels map[string]string) ([]string, error) {
 	// Make the persists directory for the container after the ctr ID is appended to it in the caller
 	// This is needed as conmon writes the exit and oom file in the given persist directory path as just "exit" and "oom"

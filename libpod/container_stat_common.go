@@ -183,8 +183,8 @@ func secureStat(ctx context.Context, root string, path string) (*copier.StatForI
 	if len(globStats) != 1 {
 		return nil, fmt.Errorf("internal error: secureStat: expected 1 item but got %d", len(globStats))
 	}
-	if len(globStats) != 1 {
-		return nil, fmt.Errorf("internal error: secureStat: expected 1 result but got %d", len(globStats[0].Results))
+	if globStats[0] == nil {
+		return nil, fmt.Errorf("internal error: secureStat: expected 1 item but got nil")
 	}
 
 	// NOTE: the key in the map differ from `glob` when hitting symlink.

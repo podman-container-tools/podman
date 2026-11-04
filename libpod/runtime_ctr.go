@@ -701,7 +701,6 @@ type ctrRmOpts struct {
 // with removePod - pods have their own dependency management.
 // noLockPod is used for recursive removeContainer calls when the pod is already
 // locked.
-// TODO: At this point we should just start accepting an options struct
 func (r *Runtime) removeContainer(ctx context.Context, c *Container, opts ctrRmOpts) (removedCtrs map[string]error, removedPods map[string]error, retErr error) {
 	removedCtrs = make(map[string]error)
 	removedPods = make(map[string]error)
