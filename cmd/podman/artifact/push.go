@@ -32,7 +32,7 @@ var (
 	pushDescription = `Push an OCI artifact from local storage to an image registry`
 
 	pushCmd = &cobra.Command{
-		Use:               "push [options] ARTIFACT.",
+		Use:               "push [options] ARTIFACT",
 		Short:             "Push an OCI artifact",
 		Long:              pushDescription,
 		RunE:              artifactPush,
