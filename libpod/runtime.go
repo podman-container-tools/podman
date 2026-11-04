@@ -126,6 +126,7 @@ type Runtime struct {
 
 	// secretsManager manages secrets
 	secretsManager *secrets.SecretsManager
+	configsManager *secrets.SecretsManager
 }
 
 // SetXdgDirs ensures the XDG_RUNTIME_DIR env and XDG_CONFIG_HOME variables are set.
@@ -1206,6 +1207,21 @@ func (r *Runtime) SecretsManager() (*secrets.SecretsManager, error) {
 		r.secretsManager = manager
 	}
 	return r.secretsManager, nil
+}
+
+func (r *Runtime) GetConfigsStorageDir() string {
+	return filepath.Join(r.store.GraphRoot(), "configs")
+}
+
+func (r *Runtime) ConfigsManager() (*secrets.SecretsManager, error) {
+	if r.configsManager == nil {
+		manager, err := secrets.NewManager(r.GetConfigsStorageDir())
+		if err != nil {
+			return nil, err
+		}
+		r.configsManager = manager
+	}
+	return r.configsManager, nil
 }
 
 func graphRootMounted() bool {

@@ -137,6 +137,7 @@ const (
 	Machine Type = "machine"
 	// Secret - event is related to secrets
 	Secret Type = "secret"
+	Config Type = "config"
 
 	// Attach ...
 	Attach Status = "attach"

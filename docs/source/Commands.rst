@@ -15,6 +15,8 @@ Commands
 
 :doc:`commit <markdown/podman-commit.1>` Create new image based on the changed container
 
+:doc:`config <markdown/podman-config.1>` Manage configs
+
 :doc:`container <markdown/podman-container.1>` Manage containers
 
 :doc:`cp <markdown/podman-cp.1>` Copy files/folders between a container and the local filesystem

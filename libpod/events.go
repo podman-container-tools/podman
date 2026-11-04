@@ -204,6 +204,15 @@ func (r *Runtime) NewSecretEvent(status events.Status, secretID string) {
 	}
 }
 
+func (r *Runtime) NewConfigEvent(status events.Status, configID string) {
+	e := events.NewEvent(status)
+	e.ID = configID
+	e.Type = events.Config
+	if err := r.eventer.Write(e); err != nil {
+		logrus.Errorf("Unable to write config event: %q", err)
+	}
+}
+
 // Events is a wrapper function for everyone to begin tailing the events log
 // with options
 func (r *Runtime) Events(ctx context.Context, options events.ReadOptions) error {

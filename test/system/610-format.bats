@@ -10,6 +10,7 @@ function teardown() {
     # In case test fails: clean up all the entities we created
     run_podman '?' machine rm -f "m-$(safename)"
     run_podman '?' secret rm "s-$(safename)"
+    run_podman '?' config rm "cfg-$(safename)"
     run_podman '?' pod rm -f "p-$(safename)"
     run_podman '?' rm -f -t0 "c-$(safename)"
     run_podman '?' artifact rm "a-$(safename)"
@@ -120,12 +121,14 @@ function check_subcommand() {
     ctrname="c-$(safename)"
     podname="p-$(safename)"
     secretname="s-$(safename)"
+    configname="cfg-$(safename)"
     # Artifact strict typing requires fully qualified name
     artifactname="foo.io/myrepo/$(safename)"
     # Setup: some commands need a container, pod, secret, ...
     run_podman run -d --name $ctrname $IMAGE top
     run_podman pod create $podname
     run_podman secret create $secretname /etc/hosts
+    run_podman config create $configname /etc/hosts
     run_podman artifact add $artifactname /etc/hosts
 
     # For 'search' and 'image search': if local cache registry is available,
@@ -148,6 +151,7 @@ inspect           | $ctrname
 artifact inspect  | $artifactname
 volume inspect    | -a
 secret inspect    | $secretname
+config inspect    | $configname
 network inspect   | podman
 ps                | -a
 
@@ -191,6 +195,7 @@ machine inspect   | $machinename
     run_podman pod rm $podname
     run_podman rm -f -t0 $ctrname
     run_podman secret rm $secretname
+    run_podman config rm $configname
     run_podman '?' machine rm -f $machinename
     run_podman artifact rm $artifactname
 

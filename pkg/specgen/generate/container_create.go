@@ -18,8 +18,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/pasta"
+	"go.podman.io/common/pkg/secrets"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/namespaces"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"go.podman.io/podman/v6/pkg/specgen"
@@ -759,6 +761,35 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 			})
 		}
 		options = append(options, libpod.WithSecrets(secrs))
+	}
+
+	if len(s.Configs) != 0 {
+		manager, err := rt.ConfigsManager()
+		if err != nil {
+			return nil, err
+		}
+		var configs []*libpod.ContainerSecret
+		for _, config := range s.Configs {
+			stored, err := manager.Lookup(config.Source)
+			if err != nil {
+				if errors.Is(err, secrets.ErrNoSuchSecret) {
+					return nil, fmt.Errorf("no config with name or id %q: %w", config.Source, entities.ErrNoSuchConfig)
+				}
+				return nil, err
+			}
+			mode := config.Mode
+			if mode == 0 {
+				mode = 0o444
+			}
+			configs = append(configs, &libpod.ContainerSecret{
+				Secret: stored,
+				UID:    config.UID,
+				GID:    config.GID,
+				Mode:   mode,
+				Target: config.Target,
+			})
+		}
+		options = append(options, libpod.WithConfigs(configs))
 	}
 
 	if len(s.EnvSecrets) != 0 {

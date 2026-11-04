@@ -56,6 +56,11 @@ type ContainerEngine interface { //nolint:interfacebloat
 	ContainerUnpause(ctx context.Context, namesOrIds []string, options PauseUnPauseOptions) ([]*PauseUnpauseReport, error)
 	ContainerUpdate(ctx context.Context, options *ContainerUpdateOptions) (string, error)
 	ContainerWait(ctx context.Context, namesOrIds []string, options WaitOptions) ([]WaitReport, error)
+	ConfigCreate(ctx context.Context, name string, reader io.Reader, options ConfigCreateOptions) (*ConfigCreateReport, error)
+	ConfigInspect(ctx context.Context, namesOrIDs []string, options ConfigInspectOptions) ([]*ConfigInfoReport, []error, error)
+	ConfigList(ctx context.Context, opts ConfigListRequest) ([]*ConfigInfoReport, error)
+	ConfigRm(ctx context.Context, nameOrID []string, opts ConfigRmOptions) ([]*ConfigRmReport, error)
+	ConfigExists(ctx context.Context, nameOrID string) (*BoolReport, error)
 	Diff(ctx context.Context, namesOrIds []string, options DiffOptions) (*DiffReport, error)
 	Events(ctx context.Context, opts EventsOptions) error
 	GenerateSpec(ctx context.Context, opts *GenerateSpecOptions) (*GenerateSpecReport, error)

@@ -492,6 +492,47 @@ func (c *Container) generateSpec(ctx context.Context) (s *spec.Spec, cleanupFunc
 			logrus.Infof("User mount overriding libpod mount at %q", dstPath)
 		}
 	}
+	for _, config := range c.Configs() {
+		destination := config.Target
+		if destination == "" {
+			destination = string(filepath.Separator) + config.Name
+		}
+		if !filepath.IsAbs(destination) {
+			return nil, nil, fmt.Errorf("config target %q must be an absolute path", destination)
+		}
+		destination = filepath.Clean(destination)
+		relativeDestination := strings.TrimPrefix(destination, string(filepath.Separator))
+		if relativeDestination == "" || relativeDestination == ".." || strings.HasPrefix(relativeDestination, ".."+string(filepath.Separator)) {
+			return nil, nil, fmt.Errorf("invalid config target %q", config.Target)
+		}
+		if MountExists(g.Mounts(), destination) {
+			return nil, nil, fmt.Errorf("config target %q conflicts with another mount", destination)
+		}
+		targetPath, err := securejoin.SecureJoin(c.state.Mountpoint, relativeDestination)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolving config target %q: %w", destination, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return nil, nil, fmt.Errorf("creating config target directory: %w", err)
+		}
+		if info, err := os.Lstat(targetPath); err == nil {
+			if !info.Mode().IsRegular() {
+				return nil, nil, fmt.Errorf("config target %q exists and is not a regular file", destination)
+			}
+		} else if errors.Is(err, os.ErrNotExist) {
+			if err := os.WriteFile(targetPath, nil, 0o444); err != nil {
+				return nil, nil, fmt.Errorf("creating config target file: %w", err)
+			}
+		} else {
+			return nil, nil, err
+		}
+		g.AddMount(spec.Mount{
+			Type:        define.TypeBind,
+			Source:      filepath.Join(c.config.ConfigsPath, config.Name),
+			Destination: destination,
+			Options:     append(slices.Clone(bindOptions), "ro", "nosuid", "noexec", "nodev"),
+		})
+	}
 
 	// Add overlay volumes
 	for _, overlayVol := range c.config.OverlayVolumes {

@@ -288,6 +288,29 @@ func getManifestListMembers(cmd *cobra.Command, list, toComplete string) ([]stri
 	return suggestions, cobra.ShellCompDirectiveNoFileComp
 }
 
+func getConfigs(cmd *cobra.Command, toComplete string, cType completeType) ([]string, cobra.ShellCompDirective) {
+	suggestions := []string{}
+	engine, err := setupContainerEngine(cmd)
+	if err != nil {
+		cobra.CompErrorln(err.Error())
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	configs, err := engine.ConfigList(cmd.Context(), entities.ConfigListRequest{})
+	if err != nil {
+		cobra.CompErrorln(err.Error())
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	for _, config := range configs {
+		if ((len(toComplete) > 1 && cType == completeDefault) || cType == completeIDs) && strings.HasPrefix(config.ID, toComplete) {
+			suggestions = append(suggestions, config.ID[:12])
+		}
+		if cType != completeIDs && strings.HasPrefix(config.Spec.Name, toComplete) {
+			suggestions = append(suggestions, config.Spec.Name)
+		}
+	}
+	return suggestions, cobra.ShellCompDirectiveNoFileComp
+}
+
 func getSecrets(cmd *cobra.Command, toComplete string, cType completeType) ([]string, cobra.ShellCompDirective) {
 	suggestions := []string{}
 
@@ -736,6 +759,20 @@ func AutocompleteSecrets(cmd *cobra.Command, args []string, toComplete string) (
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return getSecrets(cmd, toComplete, completeDefault)
+}
+
+func AutocompleteConfigs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if !ValidCurrentCmdLine(cmd, args, toComplete) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return getConfigs(cmd, toComplete, completeDefault)
+}
+
+func AutocompleteConfigCreate(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 1 {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
 func AutocompleteSecretCreate(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -1960,6 +1997,14 @@ func AutocompleteVolumePruneFilters(cmd *cobra.Command, _ []string, toComplete s
 }
 
 // AutocompleteSecretFilters - Autocomplete secret ls --filter options.
+func AutocompleteConfigFilters(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	kv := keyValueCompletion{
+		"id=":   func(s string) ([]string, cobra.ShellCompDirective) { return getConfigs(cmd, s, completeIDs) },
+		"name=": func(s string) ([]string, cobra.ShellCompDirective) { return getConfigs(cmd, s, completeNames) },
+	}
+	return completeKeyValues(toComplete, kv)
+}
+
 func AutocompleteSecretFilters(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	kv := keyValueCompletion{
 		"id=":   func(s string) ([]string, cobra.ShellCompDirective) { return getSecrets(cmd, s, completeIDs) },
