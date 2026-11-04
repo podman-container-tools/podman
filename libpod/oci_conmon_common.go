@@ -58,9 +58,7 @@ type ConmonOCIRuntime struct {
 	conmonEnv         []string
 	tmpDir            string
 	exitsDir          string
-	logSizeMax        int64
 	noPivot           bool
-	reservePorts      bool
 	runtimeFlags      []string
 	supportsJSON      bool
 	supportsKVM       bool
@@ -96,9 +94,7 @@ func newConmonOCIRuntime(name string, paths []string, conmonPath string, runtime
 
 	runtime.conmonEnv = runtimeCfg.Engine.ConmonEnvVars.Get()
 	runtime.tmpDir = runtimeCfg.Engine.TmpDir
-	runtime.logSizeMax = runtimeCfg.Containers.LogSizeMax
 	runtime.noPivot = runtimeCfg.Engine.NoPivotRoot
-	runtime.reservePorts = runtimeCfg.Engine.EnablePortReservation
 	runtime.enableKeyring = runtimeCfg.Containers.EnableKeyring
 
 	// TODO: probe OCI runtime for feature and enable automatically if
