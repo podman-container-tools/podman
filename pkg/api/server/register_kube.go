@@ -170,6 +170,10 @@ func (s *APIServer) registerKubeHandlers(r *mux.Router) error {
 	//    type: boolean
 	//    default: false
 	//    description: Do not prefix container name with pod name
+	//  - in: query
+	//    name: platform
+	//    type: string
+	//    description: Platform in the format os/arch[/variant]
 	//  - in: body
 	//    name: request
 	//    description: Kubernetes YAML file.

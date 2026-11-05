@@ -467,3 +467,18 @@ func (o *PlayOptions) GetMultiplePods() bool {
 	}
 	return *o.MultiplePods
 }
+
+// WithPlatform set field Platform to given value
+func (o *PlayOptions) WithPlatform(value string) *PlayOptions {
+	o.Platform = &value
+	return o
+}
+
+// GetPlatform returns value of field Platform
+func (o *PlayOptions) GetPlatform() string {
+	if o.Platform == nil {
+		var z string
+		return z
+	}
+	return *o.Platform
+}
