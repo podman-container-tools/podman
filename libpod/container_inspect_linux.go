@@ -135,7 +135,8 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 			// We read them from there to ensure we only report rules that were explicitly set
 			ctrDeviceCgroupRuleAnnotation := define.DeviceCgroupRuleAnnotation + "/" + c.Name()
 			if deviceCgroupRules, ok := c.config.Spec.Annotations[ctrDeviceCgroupRuleAnnotation]; ok {
-				hostConfig.DeviceCgroupRules = []string{deviceCgroupRules}
+				// Split comma-separated rules into individual entries for Docker API compatibility
+				hostConfig.DeviceCgroupRules = strings.Split(deviceCgroupRules, ",")
 			}
 		}
 	}

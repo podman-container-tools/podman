@@ -1291,6 +1291,15 @@ var cgroupDeviceAccess = map[string]bool{
 	"m": true, // mknod
 }
 
+// FormatIntPtr formats an int64 pointer as a string, returning "*" if nil
+// This is used for device cgroup rule serialization
+func FormatIntPtr(p *int64) string {
+	if p == nil {
+		return "*"
+	}
+	return fmt.Sprintf("%d", *p)
+}
+
 // ParseLinuxResourcesDeviceAccess parses the raw string passed with the --device-access-add flag
 func ParseLinuxResourcesDeviceAccess(device string) (specs.LinuxDeviceCgroup, error) {
 	var devType, access string
