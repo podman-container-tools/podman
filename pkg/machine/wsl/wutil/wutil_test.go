@@ -150,3 +150,56 @@ func TestNewWSLCommand(t *testing.T) {
 	assert.Equal(t, []string{"--status"}, cmd.Args[1:])
 	assert.Contains(t, cmd.Env, "WSL_UTF8=1")
 }
+
+func TestVersionFromLocalizedOutput(t *testing.T) {
+	tests := []struct {
+		name           string
+		output         string
+		wantVersionVal [3]int
+		wantParseErr   bool
+	}{
+		{
+			"English",
+			"WSL version: 2.6.1.0\nKernel version: 6.6.87.2-1\nWSLg version: 1.0.66\nWindows version: 10.0.26100.4652\n",
+			[3]int{2, 6, 1},
+			false,
+		},
+		{
+			"German",
+			"WSL-Version: 2.5.10.0\nKernelversion: 6.6.87.2-1\nWSLg-Version: 1.0.66\nWindows-Version: 10.0.26100.4652\n",
+			[3]int{2, 5, 10},
+			false,
+		},
+		{
+			"Japanese",
+			"WSL バージョン: 3.0.3.0\nカーネル バージョン: 6.6.87.2-1\nWSLg バージョン: 1.0.66\nWindows バージョン: 10.0.26100.4652\n",
+			[3]int{3, 0, 3},
+			false,
+		},
+		{
+			"CRLF line endings",
+			"WSL version: 2.5.1.0\r\nKernel version: 6.6.87.2-1\r\n",
+			[3]int{2, 5, 1},
+			false,
+		},
+		{
+			"No version",
+			"Invalid command line option: --version\n",
+			[3]int{},
+			true,
+		},
+		{
+			"Empty",
+			"",
+			[3]int{},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := versionFromLocalizedOutput(tt.output)
+			assert.Equal(t, tt.wantVersionVal, v.val)
+			assert.Equal(t, tt.wantParseErr, v.parseErr != nil)
+		})
+	}
+}
