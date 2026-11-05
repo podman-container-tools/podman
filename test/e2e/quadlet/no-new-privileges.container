@@ -1,0 +1,5 @@
+## assert-podman-args "--security-opt" "no-new-privileges=true"
+
+[Container]
+Image=localhost/imagename
+NoNewPrivileges=yes

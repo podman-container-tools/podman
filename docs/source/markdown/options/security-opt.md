@@ -23,6 +23,7 @@ Note: Labeling can be disabled for all <<|pods/>>containers by setting label=fal
 - **mask**=_/path/1:/path/2_: The paths to mask separated by a colon. A masked path cannot be accessed inside the container<<s within the pod|>>.
 
 - **no-new-privileges**: Disable container processes from gaining additional privileges through the `execve(2)` system call (e.g. via setuid or setgid bits, or via file capabilities). Programs that rely on setuid/setgid bits set on their executable to change user id or group id are no longer able to do so, and any file capabilities added to the executable (e.g. via `setcap`) are not added to the permitted capability set. For more details, see: https://docs.kernel.org/userspace-api/no_new_privs.html.
+  Set `no_new_privileges=true` in the `[containers]` section of `containers.conf` to enable this by default. An explicit **--security-opt no-new-privileges=false** overrides that default.
 
 - **seccomp=unconfined**: Turn off seccomp confinement for the <<container|pod>>.
 - **seccomp=profile.json**: JSON file to be used as a seccomp filter. Note that the `io.podman.annotations.seccomp` annotation is set with the specified value as shown in `podman inspect`.
