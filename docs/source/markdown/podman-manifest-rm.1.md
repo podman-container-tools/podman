@@ -26,4 +26,4 @@ $ podman manifest rm --ignore listid1 listid2
 ```
 
 ## SEE ALSO
-**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**,  **[containers-storage.conf(5)](https://github.com/containers/storage/blob/main/docs/containers-storage.conf.5.md)**
+**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**, **[containers-storage.conf(5)](https://github.com/containers/storage/blob/main/docs/containers-storage.conf.5.md)**

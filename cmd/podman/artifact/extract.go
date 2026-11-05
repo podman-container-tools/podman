@@ -15,8 +15,8 @@ var extractCmd = &cobra.Command{
 	RunE:              extract,
 	Args:              cobra.ExactArgs(2),
 	ValidArgsFunction: common.AutocompleteArtifactAdd,
-	Example: `podman artifact Extract quay.io/myimage/myartifact:latest /tmp/foobar.txt
-podman artifact Extract quay.io/myimage/myartifact:latest /home/paul/mydir`,
+	Example: `podman artifact extract quay.io/myimage/myartifact:latest /tmp/foobar.txt
+podman artifact extract quay.io/myimage/myartifact:latest /home/paul/mydir`,
 }
 
 var extractOpts entities.ArtifactExtractOptions
