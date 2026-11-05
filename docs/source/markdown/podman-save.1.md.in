@@ -18,6 +18,27 @@ Note: `:` is a restricted character and cannot be part of the file name.
 
 **podman save** operates on *images*: the resulting archive (OCI or docker-archive) preserves the image's layers, history and tags, and is restored as the same image with **podman load**. This is different from **podman export**, which flattens a *container's* filesystem into a single-layer tarball with no image history. To capture a container's filesystem instead, see **podman-export(1)**.
 
+### Image References and Transports
+
+**podman save** only works with images already present in local storage. The command expects an image name or ID, not a transport-prefixed reference.
+
+**Incorrect usage** (will fail with "unsupported transport" error):
+```
+$ podman save docker://docker.io/library/alpine:latest > alpine.tar
+Error: unsupported transport "docker" for looking up local images
+```
+
+**Correct usage**:
+```
+# First pull the image into local storage
+$ podman pull docker.io/library/alpine:latest
+
+# Then save it without the transport prefix
+$ podman save docker.io/library/alpine:latest > alpine.tar
+```
+
+The `docker://` transport prefix refers to images on a container registry, not local storage. To save an image from a registry, use **podman pull** first to download it to local storage, then reference it by name (without the transport prefix) in **podman save**. See **[podman-pull(1)](podman-pull.1.md)** for more information about image transports.
+
 ## OPTIONS
 
 @@option dir-compress
@@ -87,7 +108,7 @@ Storing signatures
 ```
 
 ## SEE ALSO
-**[podman(1)](podman.1.md)**, **[podman-load(1)](podman-load.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**, **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**
+**[podman(1)](podman.1.md)**, **[podman-load(1)](podman-load.1.md)**, **[podman-pull(1)](podman-pull.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**, **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**
 
 ## HISTORY
 July 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>
