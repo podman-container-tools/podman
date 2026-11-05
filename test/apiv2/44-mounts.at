@@ -73,3 +73,69 @@ t GET containers/${cid}/json 200 \
   .HostConfig.Tmpfs.[\"$tmpfs_name2\"]="noexec,ro,size=67,rprivate,nosuid,nodev,tmpcopyup"
 
 t DELETE containers/${cid}?v=true 204
+
+# Compat API (v1.48+): the container-wide HostConfig.VolumeDriver does not apply
+# to volumes defined through Mounts, so create must warn about it.
+# NOTE: 't' defaults to /v1.44 for compat paths, so versions are explicit here.
+vd_vol1="apiv2-voldriver-vol1"
+vd_vol2="apiv2-voldriver-vol2"
+podman volume create "$vd_vol1"
+podman volume create "$vd_vol2"
+
+# Driver set + volume mount without its own driver: one warning
+t POST /v1.48/containers/create?name=voldriver_warn_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=1 \
+  .Warnings[0]~".*volume-driver configuration is ignored.*"
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+# First mount sets its own driver, second does not: the second still warns
+t POST /v1.48/containers/create?name=voldriver_warn_second_mount_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1","VolumeOptions":{"DriverConfig":{"Name":"local"}}},{"Type":"volume","Source":"'$vd_vol2'","Target":"/v2"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=1
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+# No warning: API older than 1.48 (version gate), volume mount sets its own
+# driver, or no container-wide driver. Warnings must be an empty array, not null.
+t POST /v1.47/containers/create?name=voldriver_old_api_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|type=array \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+t POST /v1.48/containers/create?name=voldriver_per_mount_driver_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1","VolumeOptions":{"DriverConfig":{"Name":"local"}}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+t POST /v1.48/containers/create?name=voldriver_no_driver_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+podman volume rm -f "$vd_vol1" "$vd_vol2"
