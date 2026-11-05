@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,22 @@ var _ = Describe("Podman container inspect", func() {
 		data := podmanTest.InspectContainer(testContainer)
 		Expect(data[0].Config.Annotations[annotations.ContainerManager]).
 			To(Equal(annotations.ContainerManagerLibpod))
+	})
+
+	It("podman inspect includes masked and readonly paths in HostConfig", func() {
+		const testContainer = "container-inspect-host-config-paths"
+		setup := podmanTest.RunTopContainer(testContainer)
+		setup.WaitWithDefaultTimeout()
+		Expect(setup).Should(ExitCleanly())
+
+		inspect := podmanTest.PodmanExitCleanly("inspect", "--format", "{{json .HostConfig}}", testContainer)
+
+		var hostConfig map[string]json.RawMessage
+		Expect(json.Unmarshal([]byte(inspect.OutputToString()), &hostConfig)).To(Succeed())
+		for _, pathField := range []string{"MaskedPaths", "ReadonlyPaths"} {
+			_, exists := hostConfig[pathField]
+			Expect(exists).To(BeTrue())
+		}
 	})
 
 	It("podman inspect shows exposed ports", func() {
