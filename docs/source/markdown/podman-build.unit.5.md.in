@@ -127,6 +127,29 @@ repository or download an archive file extracted to a temporary location by `pod
 context. Note that in this case, the `WorkingDirectory` of the Systemd service unit is left
 untouched by Quadlet.
 
+URLs are interpreted in the same way as [podman-build(1)](podman-build.1.md).
+A URL is treated as a Git repository if it starts with `git://` or its last path
+component ends with `.git`. The URL may include a fragment of the form
+`#branch-or-commit[:subdir]` to select a branch or commit and, optionally, a
+subdirectory to use as the build context.
+
+For example:
+
+```ini
+# use the main branch as the build context
+SetWorkingDirectory=https://github.com/containers/PodmanHello.git
+```
+
+```ini
+# use a specific commit as the build context
+SetWorkingDirectory=https://github.com/containers/PodmanHello.git#76b262056eae09851d0a952d0f42b5bbeedde471
+```
+
+```ini
+# use a specific subdirectory as the build context
+SetWorkingDirectory=https://github.com/containers/PodmanHello.git#:python
+```
+
 Note that providing a context directory is mandatory for a `.build` file, unless a `File=` key has
 also been provided.
 

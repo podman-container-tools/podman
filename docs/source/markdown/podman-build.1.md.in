@@ -36,9 +36,11 @@ location and extracted before execution.
 When the URL is a Containerfile, the Containerfile is downloaded to a temporary
 location.
 
-When a Git repository is set as the URL, the repository is cloned locally and
-then set as the context.  A URL is treated as a Git repository if it
-has a `git://` prefix or a `.git` suffix.
+When the URL is a Git repository, the repository is cloned locally and then set
+as the context. A URL is treated as a Git repository if it starts with `git://`
+or its last path component ends with `.git`. The URL may include a fragment
+of the form `#branch-or-commit[:subdir]` to select a branch or commit and,
+optionally, a subdirectory to use as the build context.
 
 NOTE: `podman build` uses code sourced from the `Buildah` project to build
 container images.  This `Buildah` code creates `Buildah` containers for the
@@ -47,7 +49,9 @@ container images.  This `Buildah` code creates `Buildah` containers for the
 containers can be left in container storage. Use the `podman ps --all --external`
 command to see these containers.
 
-`podman buildx build` command is an alias of `podman build`.  Not all `buildx build` features are available in Podman. The `buildx build` option is provided for scripting compatibility.
+`podman buildx build` command is an alias of `podman build`.  Not all
+`buildx build` features are available in Podman. The `buildx build` option is
+provided for scripting compatibility.
 
 ## OPTIONS
 
@@ -641,7 +645,7 @@ $ podman build --platform linux/arm64 --platform linux/amd64 --manifest myimage 
 
 ### Building an image using a URL, Git repo, or archive
 
-  The build context directory can be specified as a URL to a Containerfile, a
+The build context directory can be specified as a URL to a Containerfile, a
 Git repository, or URL to an archive. If the URL is a Containerfile, it is
 downloaded to a temporary location and used as the context. When a Git
 repository is set as the URL, the repository is cloned locally to a temporary
@@ -651,24 +655,50 @@ context.
 
 #### Building an image using a URL to a Containerfile
 
-Build image from Containerfile downloaded into temporary location used as the build context:
+Build image from Containerfile downloaded into temporary location used as the
+build context:
 ```
 $ podman build https://10.10.10.1/podman/Containerfile
 ```
 
 #### Building an image using a Git repository
 
-  Podman clones the specified GitHub repository to a temporary location and
-uses it as the context. The Containerfile at the root of the repository is used
-and it only works if the GitHub repository is a dedicated repository.
+Podman clones the specified GitHub repository to a temporary location and uses
+it as the build context. By default, the build context is the repository root
+and the Containerfile at the root of the repository is used. If the
+Containerfile is located in a repository subdirectory, use the `#:subdir` URL
+suffix to specify the repository path.
 
-Build image from specified git repository downloaded into temporary location used as the build context:
+Build image from specified git repository downloaded into temporary location
+used as the build context:
 ```
 $ podman build -t hello  https://github.com/containers/PodmanHello.git
 $ podman run hello
 ```
 
-  Note: GitHub does not support using `git://` for performing `clone` operation due to recent changes in their security guidance (https://github.blog/2021-09-01-improving-git-protocol-security-github/). Use an `https://` URL if the source repository is hosted on GitHub.
+Build image from a particular git repository revision:
+```
+$ podman build -t hello  https://github.com/containers/PodmanHello.git#76b262056eae09851d0a952d0f42b5bbeedde471
+$ podman run hello
+```
+
+Build image from a git repository, using a subdirectory as the build context:
+```
+$ podman build -t hello  https://github.com/containers/PodmanHello.git#:python
+$ podman run hello
+```
+
+Build image from a git repository, specifying both a git repository revision and
+build context subdirectory:
+```
+$ podman build -t hello  https://github.com/containers/PodmanHello.git#main:python
+$ podman run hello
+```
+
+Note: GitHub does not support using `git://` for performing `clone` operation
+due to recent changes in their security guidance
+(https://github.blog/2021-09-01-improving-git-protocol-security-github/). Use an
+`https://` URL if the source repository is hosted on GitHub.
 
 #### Building an image using a URL to an archive
 
