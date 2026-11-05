@@ -764,10 +764,10 @@ func ConvertContainer(container *parser.UnitFile, unitsInfoMap map[string]*UnitI
 		service.Set(ServiceGroup, "SyslogIdentifier", "%N")
 	}
 
-	// Default to no higher level privileges or caps
-	noNewPrivileges := container.LookupBooleanWithDefault(ContainerGroup, KeyNoNewPrivileges, false)
-	if noNewPrivileges {
-		podman.add("--security-opt=no-new-privileges")
+	// Preserve an explicit value so it can override the containers.conf default.
+	noNewPrivileges, ok := container.LookupBoolean(ContainerGroup, KeyNoNewPrivileges)
+	if ok {
+		podman.add("--security-opt", fmt.Sprintf("no-new-privileges=%t", noNewPrivileges))
 	}
 
 	securityLabelDisable := container.LookupBooleanWithDefault(ContainerGroup, KeySecurityLabelDisable, false)
