@@ -164,11 +164,11 @@ func unmarshalString(b []byte) (string, []byte) {
 }
 
 func unmarshalStringSafe(b []byte) (string, []byte, error) {
-	n, b, err := unmarshalUint32Safe(b)
+	n, b, err := unmarshalCount(b)
 	if err != nil {
 		return "", nil, err
 	}
-	if int64(n) > int64(len(b)) {
+	if n > len(b) {
 		return "", nil, errShortPacket
 	}
 	return string(b[:n]), b[n:], nil
@@ -253,12 +253,44 @@ func unmarshalFileStat(flags uint32, b []byte) (*FileStat, []byte, error) {
 	return &fs, b, nil
 }
 
-func unmarshalStatus(id uint32, data []byte) error {
-	sid, data := unmarshalUint32(data)
-	if sid != id {
-		return &unexpectedIDErr{id, sid}
+// unmarshalSID consumes the request-id echoed back in a reply and verifies it
+// matches the id we sent, returning the remaining bytes for further decoding.
+func unmarshalSID(id uint32, b []byte) ([]byte, error) {
+	sid, b, err := unmarshalUint32Safe(b)
+	if err != nil {
+		return nil, err
 	}
-	code, data := unmarshalUint32(data)
+	if sid != id {
+		return nil, &unexpectedIDErr{id, sid}
+	}
+	return b, nil
+}
+
+// unmarshalCount consumes a uint32 count and returns it as an int. A value that
+// does not fit in a non-negative int is rejected with errLongPacket: this is
+// only possible when strconv.IntSize == 32 and the count exceeds math.MaxInt32,
+// in which case it is longer than any possible slice and would otherwise drive a
+// negative length into make/slice and panic.
+func unmarshalCount(b []byte) (int, []byte, error) {
+	v, b, err := unmarshalUint32Safe(b)
+	if err != nil {
+		return 0, nil, err
+	}
+	if int(v) < 0 {
+		return 0, nil, errLongPacket
+	}
+	return int(v), b, nil
+}
+
+func unmarshalStatus(id uint32, data []byte) error {
+	data, err := unmarshalSID(id, data)
+	if err != nil {
+		return err
+	}
+	code, data, err := unmarshalUint32Safe(data)
+	if err != nil {
+		return err
+	}
 	msg, data, _ := unmarshalStringSafe(data)
 	lang, _, _ := unmarshalStringSafe(data)
 	return &StatusError{
@@ -266,6 +298,24 @@ func unmarshalStatus(id uint32, data []byte) error {
 		msg:  msg,
 		lang: lang,
 	}
+}
+
+// unmarshalDataReply parses an SSH_FXP_DATA reply, validating the id and the
+// declared data length against the bytes actually present. It returns the data
+// payload as a sub-slice of data.
+func unmarshalDataReply(id uint32, data []byte) ([]byte, error) {
+	data, err := unmarshalSID(id, data)
+	if err != nil {
+		return nil, err
+	}
+	l, data, err := unmarshalCount(data)
+	if err != nil {
+		return nil, err
+	}
+	if l > len(data) {
+		return nil, errShortPacket
+	}
+	return data[:l], nil
 }
 
 type packetMarshaler interface {
@@ -1407,7 +1457,7 @@ type sshFxpExtendedPacketHardlink struct {
 
 // https://github.com/openssh/openssh-portable/blob/master/PROTOCOL
 func (p *sshFxpExtendedPacketHardlink) id() uint32     { return p.ID }
-func (p *sshFxpExtendedPacketHardlink) readonly() bool { return true }
+func (p *sshFxpExtendedPacketHardlink) readonly() bool { return false }
 func (p *sshFxpExtendedPacketHardlink) UnmarshalBinary(b []byte) error {
 	var err error
 	if p.ID, b, err = unmarshalUint32Safe(b); err != nil {

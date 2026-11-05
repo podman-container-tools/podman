@@ -74,7 +74,9 @@ type artifactsDetails struct {
 
 type list struct {
 	manifests.List
-	instances map[digest.Digest]string // instance manifest digests ￫ image references
+	// instance manifest digests ￫ image references; the "" key, if set, holds the ID of the
+	// local image the list was last saved to or loaded from.
+	instances map[digest.Digest]string
 	artifacts artifactsDetails
 }
 
@@ -227,6 +229,7 @@ func (l *list) SaveToImage(store storage.Store, imageID string, names []string, 
 					return "", fmt.Errorf("saving manifest list to image %q: %w", imageID, err)
 				}
 			}
+			l.instances[""] = imageID
 			return imageID, nil
 		}
 		return "", err
@@ -264,12 +267,13 @@ func (l *list) InstanceByFile(file string) (digest.Digest, error) {
 // Reference returns an image reference for the composite image being built
 // in the list, or an error if the list has never been saved to a local image.
 func (l *list) Reference(store storage.Store, multiple cp.ImageListSelection, instances []digest.Digest) (types.ImageReference, error) {
-	if l.instances[""] == "" {
+	listImageID := l.instances[""]
+	if listImageID == "" {
 		return nil, fmt.Errorf("building reference to list, appears to have not been saved first: %w", ErrListImageUnknown)
 	}
-	s, err := is.Transport.ParseStoreReference(store, l.instances[""])
+	s, err := is.Transport.NewStoreReference(store, nil, listImageID)
 	if err != nil {
-		return nil, fmt.Errorf("creating ImageReference from image %q: %w", l.instances[""], err)
+		return nil, fmt.Errorf("creating ImageReference from image %q: %w", listImageID, err)
 	}
 	references := make([]types.ImageReference, 0, len(l.instances))
 	whichInstances := make([]digest.Digest, 0, len(l.instances))
@@ -288,13 +292,9 @@ func (l *list) Reference(store storage.Store, multiple cp.ImageListSelection, in
 		}
 	}
 	if len(l.artifacts.Manifests) > 0 {
-		img, err := is.Transport.GetImage(s)
+		imgDirectory, err := store.ImageDirectory(listImageID)
 		if err != nil {
-			return nil, fmt.Errorf("locating image %s: %w", transports.ImageName(s), err)
-		}
-		imgDirectory, err := store.ImageDirectory(img.ID)
-		if err != nil {
-			return nil, fmt.Errorf("locating per-image directory for %s: %w", img.ID, err)
+			return nil, fmt.Errorf("locating per-image directory for %s: %w", listImageID, err)
 		}
 		tmp, err := os.MkdirTemp(imgDirectory, pushingArtifactsSubdirectory)
 		if err != nil {
