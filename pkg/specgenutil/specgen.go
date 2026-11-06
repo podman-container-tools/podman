@@ -853,7 +853,7 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	}
 
 	for _, rule := range c.DeviceCgroupRule {
-		dev, err := parseLinuxResourcesDeviceAccess(rule)
+		dev, err := ParseLinuxResourcesDeviceAccess(rule)
 		if err != nil {
 			return err
 		}
@@ -1291,8 +1291,17 @@ var cgroupDeviceAccess = map[string]bool{
 	"m": true, // mknod
 }
 
-// parseLinuxResourcesDeviceAccess parses the raw string passed with the --device-access-add flag
-func parseLinuxResourcesDeviceAccess(device string) (specs.LinuxDeviceCgroup, error) {
+// FormatIntPtr formats an int64 pointer as a string, returning "*" if nil
+// This is used for device cgroup rule serialization
+func FormatIntPtr(p *int64) string {
+	if p == nil {
+		return "*"
+	}
+	return fmt.Sprintf("%d", *p)
+}
+
+// ParseLinuxResourcesDeviceAccess parses the raw string passed with the --device-access-add flag
+func ParseLinuxResourcesDeviceAccess(device string) (specs.LinuxDeviceCgroup, error) {
 	var devType, access string
 	var major, minor *int64
 

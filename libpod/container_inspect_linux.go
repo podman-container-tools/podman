@@ -130,6 +130,14 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 				}
 				hostConfig.BlkioDeviceWriteIOps = writeIops
 			}
+			// Device cgroup rules from spec annotations
+			// Device cgroup rules are stored in the container's spec annotations by Podman
+			// We read them from there to ensure we only report rules that were explicitly set
+			ctrDeviceCgroupRuleAnnotation := define.DeviceCgroupRuleAnnotation + "/" + c.Name()
+			if deviceCgroupRules, ok := c.config.Spec.Annotations[ctrDeviceCgroupRuleAnnotation]; ok {
+				// Split comma-separated rules into individual entries for Docker API compatibility
+				hostConfig.DeviceCgroupRules = strings.Split(deviceCgroupRules, ",")
+			}
 		}
 	}
 
