@@ -140,24 +140,24 @@ See 'podman version --help'" "podman version --remote"
 
     # By default, podman should include '--remote' in its help output
     run_podman --help
-    assert "$output" =~ " --remote " "podman --help includes the --remote option"
+    assert "$output" =~ "--remote" "podman --help includes the --remote option"
 
     # When it detects CONTAINER_HOST or _CONNECTION, --remote is not an option
     CONTAINER_HOST=foobar run_podman --help
-    assert "$output" !~ " --remote " \
+    assert "$output" !~ "--remote" \
            "podman --help, with CONTAINER_HOST set, should not show --remote"
 
     CONTAINER_CONNECTION=foobar run_podman --help
-    assert "$output" !~ " --remote " \
+    assert "$output" !~ "--remote" \
            "podman --help, with CONTAINER_CONNECTION set, should not show --remote"
 
     # When it detects --url or --connection, --remote is not an option
     run_podman --url foobar --help
-    assert "$output" !~ " --remote " \
+    assert "$output" !~ "--remote" \
            "podman --help, with --url set, should not show --remote"
 
     run_podman --connection foobar --help
-    assert "$output" !~ " --remote " \
+    assert "$output" !~ "--remote" \
            "podman --help, with --connection set, should not show --remote"
 }
 

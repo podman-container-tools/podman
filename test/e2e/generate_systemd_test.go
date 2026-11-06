@@ -23,7 +23,7 @@ var _ = Describe("Podman generate systemd", func() {
 	It("podman generate systemd bad timeout value", func() {
 		session := podmanTest.Podman([]string{"generate", "systemd", "--time", "-1", "foobar"})
 		session.WaitWithDefaultTimeout()
-		Expect(session).To(ExitWithError(125, `invalid argument "-1" for "-t, --time" flag: strconv.ParseUint: parsing "-1": invalid syntax`))
+		Expect(session).To(ExitWithError(125, `invalid argument "-1" for "-t, --time" flag: must be a non-negative integer`))
 	})
 
 	It("podman generate systemd bad restart-policy value", func() {
