@@ -1908,3 +1908,160 @@ var _ = Describe("Podman checkpoint", func() {
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
 	})
 })
+
+var _ = Describe("Podman checkpoint with gVisor", func() {
+	var runsc, networkName string
+
+	BeforeEach(func() {
+		networkName = ""
+		SkipIfRootless("checkpoint not supported in rootless mode")
+		SkipIfRemote("podman-remote does not support --runtime flag")
+		if runtime.GOOS != "linux" {
+			Skip("gVisor requires Linux")
+		}
+
+		var err error
+		runsc, err = exec.LookPath("runsc")
+		if err != nil {
+			Skip("runsc not found in PATH; this test requires gVisor")
+		}
+
+		session := podmanTest.PodmanExitCleanly("network", "create")
+		networkName = session.OutputToString()
+	})
+
+	AfterEach(func() {
+		if networkName != "" {
+			podmanTest.PodmanExitCleanly("network", "rm", "-f", networkName)
+		}
+	})
+
+	It("podman checkpoint and restore container with gVisor", func() {
+		// Remove the default --runtime arg. Restoring from an archive takes
+		// the runtime from the archive and fails if --runtime is different.
+		preservedMakeOptions := podmanTest.PodmanMakeOptions
+		podmanTest.PodmanMakeOptions = func(args []string, options PodmanExecOptions) []string {
+			defaultArgs := preservedMakeOptions(args, options)
+			updatedArgs := make([]string, 0, len(defaultArgs))
+			for i := 0; i < len(defaultArgs); i++ {
+				if defaultArgs[i] == "--runtime" && !slices.Contains(args, "--runtime") {
+					i++
+				} else {
+					updatedArgs = append(updatedArgs, defaultArgs[i])
+				}
+			}
+			return updatedArgs
+		}
+
+		// runsc does not support SELinux labels.
+		localRunString := []string{
+			"--runtime", runsc, "run", "-d", "--network", networkName,
+			"--security-opt", "label=disable",
+			ALPINE, "sh", "-c", "echo gvisor > /test.output; top",
+		}
+		session := podmanTest.PodmanExitCleanly(localRunString...)
+		cid := session.OutputToString()
+
+		// Options that need CRIU are rejected before runsc is called.
+		for _, opt := range []string{"--tcp-established", "--file-locks"} {
+			result := podmanTest.Podman([]string{"container", "checkpoint", opt, cid})
+			result.WaitWithDefaultTimeout()
+			Expect(result).Should(ExitWithError(125, opt+" is not supported with gVisor (runsc)"))
+		}
+		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(1))
+
+		// runsc does not write CRIU statistics.
+		result := podmanTest.PodmanExitCleanly("container", "checkpoint", "--print-stats", cid)
+		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
+		type checkpointStatistics struct {
+			ContainerStatistics []*entities.CheckpointReport `json:"container_statistics"`
+		}
+		cS := new(checkpointStatistics)
+		Expect(json.Unmarshal([]byte(result.OutputToString()), cS)).To(Succeed())
+		Expect(cS.ContainerStatistics).To(HaveLen(1))
+		Expect(cS.ContainerStatistics[0].RuntimeDuration).To(BeNumerically(">", 0))
+		Expect(cS.ContainerStatistics[0].CRIUStatistics).To(BeNil())
+
+		podmanTest.PodmanExitCleanly("container", "restore", "--print-stats", cid)
+		Expect(podmanTest.GetContainerStatus()).To(ContainSubstring("Up"))
+		result = podmanTest.PodmanExitCleanly("exec", cid, "cat", "/test.output")
+		Expect(result.OutputToString()).To(Equal("gvisor"))
+
+		// runsc does not overwrite the image kept by --leave-running.
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "--leave-running", cid)
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "--leave-running", cid)
+		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(1))
+
+		// Export and import into a new root file system.
+		checkpointExportPath := filepath.Join(podmanTest.TempDir, "checkpoint-"+cid+".tar.gz")
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "-e", checkpointExportPath, cid)
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", cid)
+		podmanTest.PodmanExitCleanly("container", "restore", "-i", checkpointExportPath)
+		Expect(podmanTest.GetContainerStatus()).To(ContainSubstring("Up"))
+		result = podmanTest.PodmanExitCleanly("inspect", "--format", "{{.OCIRuntime}}", cid)
+		Expect(result.OutputToString()).To(Equal(runsc))
+		result = podmanTest.PodmanExitCleanly("exec", cid, "cat", "/test.output")
+		Expect(result.OutputToString()).To(Equal("gvisor"))
+
+		// A checkpoint image records the runtime of the container.
+		checkpointImage := "gvisor-checkpoint-" + cid
+		podmanTest.PodmanExitCleanly("container", "checkpoint", "--create-image", checkpointImage, cid)
+		result = podmanTest.PodmanExitCleanly("inspect", "--format", "{{index .Annotations \"io.podman.annotations.checkpoint.runtime.name\"}}", checkpointImage)
+		Expect(result.OutputToString()).To(Equal(runsc))
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", cid)
+		podmanTest.PodmanExitCleanly("--runtime", runsc, "container", "restore", checkpointImage)
+		Expect(podmanTest.GetContainerStatus()).To(ContainSubstring("Up"))
+		result = podmanTest.PodmanExitCleanly("exec", cid, "cat", "/test.output")
+		Expect(result.OutputToString()).To(Equal("gvisor"))
+
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-fa")
+		podmanTest.PodmanExitCleanly("rmi", checkpointImage)
+	})
+
+	It("podman checkpoint exports gVisor user files with the filestore prefix", func() {
+		session := podmanTest.PodmanExitCleanly(
+			"--runtime", runsc, "--runtime-flag", "overlay2=none",
+			"run", "-d", "--network", networkName, "--security-opt", "label=disable",
+			ALPINE, "sh", "-c", "echo user-data > /.gvisor.filestore.backup; echo ready; top",
+		)
+		cid := session.OutputToString()
+		Expect(WaitContainerReady(podmanTest, cid, "ready", 10, 1)).To(BeTrue())
+
+		checkpointExportPath := filepath.Join(podmanTest.TempDir, "checkpoint-"+cid+".tar")
+		podmanTest.PodmanExitCleanly("--runtime-flag", "overlay2=none",
+			"container", "checkpoint", "--compress", "none", "--export", checkpointExportPath, cid)
+		podmanTest.PodmanExitCleanly("rm", "-f", cid)
+
+		// With the runtime overlay disabled, this file must come from the rootfs
+		// archive rather than the memory checkpoint.
+		podmanTest.PodmanExitCleanly("--runtime", runsc, "--runtime-flag", "overlay2=none",
+			"container", "restore", "--import", checkpointExportPath)
+		result := podmanTest.PodmanExitCleanly("exec", cid, "cat", "/.gvisor.filestore.backup")
+		Expect(result.OutputToString()).To(Equal("user-data"))
+	})
+
+	It("podman checkpoint and restore gVisor directory mounts with self-backed overlays", func() {
+		volumeName := "gvisor-volume-" + RandomString(8)
+		session := podmanTest.PodmanExitCleanly(
+			"--runtime", runsc, "--runtime-flag", "overlay2=all:self",
+			"run", "-d", "--network", networkName, "--security-opt", "label=disable",
+			"--volume", volumeName+":/data", ALPINE,
+			"sh", "-c", "echo volume > /data/test.output; echo shm > /dev/shm/test.output; echo ready; top",
+		)
+		cid := session.OutputToString()
+		Expect(WaitContainerReady(podmanTest, cid, "ready", 10, 1)).To(BeTrue())
+
+		checkpointExportPath := filepath.Join(podmanTest.TempDir, "checkpoint-"+cid+".tar")
+		podmanTest.PodmanExitCleanly("--runtime-flag", "overlay2=all:self",
+			"container", "checkpoint", "--compress", "none", "--export", checkpointExportPath, cid)
+		podmanTest.PodmanExitCleanly("rm", "-f", cid)
+		podmanTest.PodmanExitCleanly("volume", "rm", volumeName)
+
+		// The runtime backing files must not be copied into the restored mounts:
+		// runsc creates fresh files with the same name when restoring this ID.
+		podmanTest.PodmanExitCleanly("--runtime", runsc, "--runtime-flag", "overlay2=all:self",
+			"container", "restore", "--import", checkpointExportPath)
+		result := podmanTest.PodmanExitCleanly("exec", cid, "cat", "/data/test.output", "/dev/shm/test.output")
+		Expect(result.OutputToStringArray()).To(Equal([]string{"volume", "shm"}))
+	})
+})

@@ -1062,9 +1062,11 @@ func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) e
 		return fmt.Errorf("getting host info: %w", err)
 	}
 
-	criuVersion, err := criu.GetCriuVersion()
+	// Record the container's runtime, which can differ from the default
+	// runtime in hostInfo. A restore must use the same runtime.
+	_, ociRuntimeInfo, err := c.ociRuntime.RuntimeInfo()
 	if err != nil {
-		return fmt.Errorf("getting criu version: %w", err)
+		return fmt.Errorf("getting OCI runtime info: %w", err)
 	}
 
 	rootfsImageID, rootfsImageName := c.Image()
@@ -1078,15 +1080,23 @@ func (c *Container) addCheckpointImageMetadata(importBuilder *buildah.Builder) e
 		define.CheckpointAnnotationRootfsImageID:       rootfsImageID,
 		define.CheckpointAnnotationRootfsImageName:     rootfsImageName,
 		define.CheckpointAnnotationPodmanVersion:       version.Version.String(),
-		define.CheckpointAnnotationCriuVersion:         strconv.Itoa(criuVersion),
-		define.CheckpointAnnotationRuntimeName:         hostInfo.OCIRuntime.Name,
-		define.CheckpointAnnotationRuntimeVersion:      hostInfo.OCIRuntime.Version,
+		define.CheckpointAnnotationRuntimeName:         ociRuntimeInfo.Name,
+		define.CheckpointAnnotationRuntimeVersion:      ociRuntimeInfo.Version,
 		define.CheckpointAnnotationConmonVersion:       hostInfo.Conmon.Version,
 		define.CheckpointAnnotationHostArch:            hostInfo.Arch,
 		define.CheckpointAnnotationHostKernel:          hostInfo.Kernel,
 		define.CheckpointAnnotationCgroupVersion:       hostInfo.CgroupsVersion,
 		define.CheckpointAnnotationDistributionVersion: hostInfo.Distribution.Version,
 		define.CheckpointAnnotationDistributionName:    hostInfo.Distribution.Distribution,
+	}
+
+	// gVisor does not use CRIU to create checkpoints.
+	if !c.runtimeIsGVisor() {
+		criuVersion, err := criu.GetCriuVersion()
+		if err != nil {
+			return fmt.Errorf("getting criu version: %w", err)
+		}
+		checkpointImageAnnotations[define.CheckpointAnnotationCriuVersion] = strconv.Itoa(criuVersion)
 	}
 
 	for key, value := range checkpointImageAnnotations {
@@ -1179,6 +1189,21 @@ func (c *Container) createCheckpointImage(ctx context.Context, options Container
 	return nil
 }
 
+func (c *Container) checkpointTarOptions() *archive.TarOptions {
+	options := &archive.TarOptions{
+		Compression:      archive.Uncompressed,
+		IncludeSourceDir: true,
+	}
+	if c.runtimeIsGVisor() {
+		// runsc creates a backing file in each self-backed mount. Exclude
+		// only this sandbox's file; restore creates a fresh one. Tar paths
+		// start with "./" because IncludeSourceDir is set. Use [.] to keep
+		// the pattern matcher from cleaning that prefix away.
+		options.ExcludePatterns = []string{"[.]/.gvisor.filestore." + c.ID()}
+	}
+	return options
+}
+
 func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 	if len(c.Dependencies()) == 1 {
 		// Check if the dependency is an infra container. If it is we can checkpoint
@@ -1230,6 +1255,15 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 		if err != nil {
 			return fmt.Errorf("exporting root file-system diff for %q: %w", c.ID(), err)
 		}
+		if c.runtimeIsGVisor() {
+			// runsc backs the root overlay with a filestore file at the top of
+			// the mount point. The file belongs to the running sandbox, and runsc
+			// refuses to restore into a root file system that already has one.
+			filestorePath := "/.gvisor.filestore." + c.ID()
+			rootFsChanges = slices.DeleteFunc(rootFsChanges, func(change archive.Change) bool {
+				return change.Path == filestorePath
+			})
+		}
 
 		addToTarFiles, err = crutils.CRCreateRootFsDiffTar(&rootFsChanges, c.state.Mountpoint, c.bundlePath())
 		if err != nil {
@@ -1273,10 +1307,7 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 				if mp == "" {
 					return fmt.Errorf("volume %s is not mounted, cannot export: %w", volume.Name(), define.ErrInternal)
 				}
-				input, err := chrootarchive.Tar(mp, &archive.TarOptions{
-					Compression:      archive.Uncompressed,
-					IncludeSourceDir: true,
-				}, mp)
+				input, err := chrootarchive.Tar(mp, c.checkpointTarOptions(), mp)
 				if err != nil {
 					return fmt.Errorf("reading volume directory %q: %w", v.Dest, err)
 				}
@@ -1330,11 +1361,41 @@ func (c *Container) exportCheckpoint(options ContainerCheckpointOptions) error {
 }
 
 func (c *Container) checkpointRestoreSupported(version int) error {
-	if err := criu.CheckForCriu(version); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
-		return err
+	// gVisor implements checkpoint/restore without CRIU.
+	if !c.runtimeIsGVisor() {
+		if err := criu.CheckForCriu(version); err != nil { //nolint:staticcheck,nolintlint // false-positives on freebsd because this always errors there
+			return err
+		}
 	}
 	if !c.ociRuntime.SupportsCheckpoint() {
 		return errors.New("configured runtime does not support checkpoint/restore")
+	}
+	return nil
+}
+
+// runtimeIsGVisor returns true if the container uses gVisor's runsc.
+func (c *Container) runtimeIsGVisor() bool {
+	return crutils.CRRuntimeIsGVisor(c.ociRuntime.Path())
+}
+
+// checkGVisorCheckpointOptions returns an error for options that rely on
+// CRIU. runsc rejects the corresponding runtime flags.
+func checkGVisorCheckpointOptions(options ContainerCheckpointOptions) error {
+	unsupported := []struct {
+		set  bool
+		name string
+	}{
+		{options.TCPEstablished, "--tcp-established"},
+		{options.TCPClose, "--tcp-close"},
+		{options.FileLocks, "--file-locks"},
+		{options.PreCheckPoint, "--pre-checkpoint"},
+		{options.WithPrevious, "--with-previous"},
+		{options.ImportPrevious != "", "--import-previous"},
+	}
+	for _, opt := range unsupported {
+		if opt.set {
+			return fmt.Errorf("%s is not supported with gVisor (runsc): %w", opt.name, define.ErrInvalidArg)
+		}
 	}
 	return nil
 }
@@ -1393,6 +1454,12 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 		return nil, 0, err
 	}
 
+	if c.runtimeIsGVisor() {
+		if err := checkGVisorCheckpointOptions(options); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	if c.state.State != define.ContainerStateRunning {
 		return nil, 0, fmt.Errorf("%q is not running, cannot checkpoint: %w", c.state.State, define.ErrCtrStateInvalid)
 	}
@@ -1416,6 +1483,14 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 		return nil, 0, err
 	}
 
+	// runsc does not overwrite an existing checkpoint image, for example
+	// one kept by an earlier checkpoint with --leave-running.
+	if c.runtimeIsGVisor() {
+		if err := os.RemoveAll(c.CheckpointPath()); err != nil {
+			return nil, 0, fmt.Errorf("removing previous checkpoint of container %s: %w", c.ID(), err)
+		}
+	}
+
 	// Freeze a live checkpoint so its file system is captured at the same
 	// instant as the memory image; the deferred thaw runs once the checkpoint
 	// has been written.
@@ -1436,10 +1511,7 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 		}
 		defer shmDirTarFile.Close()
 
-		input, err := chrootarchive.Tar(c.config.ShmDir, &archive.TarOptions{
-			Compression:      archive.Uncompressed,
-			IncludeSourceDir: true,
-		}, c.config.ShmDir)
+		input, err := chrootarchive.Tar(c.config.ShmDir, c.checkpointTarOptions(), c.config.ShmDir)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1494,7 +1566,8 @@ func (c *Container) checkpoint(ctx context.Context, options ContainerCheckpointO
 	}
 
 	criuStatistics, err := func() (*define.CRIUCheckpointRestoreStatistics, error) {
-		if !options.PrintStats {
+		// runsc does not write CRIU statistics.
+		if !options.PrintStats || c.runtimeIsGVisor() {
 			return nil, nil
 		}
 		statsDirectory, err := os.Open(c.bundlePath())
@@ -1635,6 +1708,12 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 		return nil, 0, fmt.Errorf("runtime %s does not support pod restore", c.ociRuntime.Path())
 	}
 
+	if c.runtimeIsGVisor() {
+		if err := checkGVisorCheckpointOptions(options); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	if !c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited) {
 		return nil, 0, fmt.Errorf("container %s is running or paused, cannot restore: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
@@ -1657,7 +1736,12 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 
 	// Let's try to stat() CRIU's inventory file. If it does not exist, it makes
 	// no sense to try a restore. This is a minimal check if a checkpoint exists.
-	if err := fileutils.Exists(filepath.Join(c.CheckpointPath(), "inventory.img")); errors.Is(err, fs.ErrNotExist) {
+	// gVisor does not use CRIU and writes its state to "checkpoint.img".
+	checkpointFile := "inventory.img"
+	if c.runtimeIsGVisor() {
+		checkpointFile = "checkpoint.img"
+	}
+	if err := fileutils.Exists(filepath.Join(c.CheckpointPath(), checkpointFile)); errors.Is(err, fs.ErrNotExist) {
 		return nil, 0, fmt.Errorf("a complete checkpoint for this container cannot be found, cannot restore: %w", err)
 	}
 
@@ -1850,7 +1934,9 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 				Type:        define.TypeBind,
 				Source:      srcPath,
 				Destination: dstPath,
-				Options:     []string{define.TypeBind, "private"},
+				// Use the options from generateSpec(). gVisor rejects a
+				// restore if the mount options differ from the checkpoint.
+				Options: bindOptions,
 			}
 			if c.IsReadOnly() && (dstPath != "/dev/shm" || !c.config.ReadWriteTmpfs) {
 				newMount.Options = append(newMount.Options, "ro", "nosuid", "noexec", "nodev")
@@ -1948,7 +2034,8 @@ func (c *Container) restore(ctx context.Context, options ContainerCheckpointOpti
 	}
 
 	criuStatistics, err = func() (*define.CRIUCheckpointRestoreStatistics, error) {
-		if !options.PrintStats {
+		// runsc does not write CRIU statistics.
+		if !options.PrintStats || c.runtimeIsGVisor() {
 			return nil, nil
 		}
 		statsDirectory, err := os.Open(c.bundlePath())

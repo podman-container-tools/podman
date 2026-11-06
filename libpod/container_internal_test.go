@@ -3,8 +3,11 @@
 package libpod
 
 import (
+	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +16,9 @@ import (
 
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/storage/pkg/archive"
 	"go.podman.io/storage/pkg/idtools"
 	stypes "go.podman.io/storage/types"
 )
@@ -237,4 +243,84 @@ func TestGetIntermediateMountpointUserRetriesAfterFailure(t *testing.T) {
 	path, err := c.getIntermediateMountpointUser()
 	assert.NoError(t, err)
 	assert.DirExists(t, path)
+}
+
+func TestCheckGVisorCheckpointOptions(t *testing.T) {
+	assert.NoError(t, checkGVisorCheckpointOptions(ContainerCheckpointOptions{
+		KeepRunning: true,
+		PrintStats:  true,
+		TargetFile:  "/tmp/checkpoint.tar",
+	}))
+
+	tests := []struct {
+		name    string
+		options ContainerCheckpointOptions
+	}{
+		{"--tcp-established", ContainerCheckpointOptions{TCPEstablished: true}},
+		{"--tcp-close", ContainerCheckpointOptions{TCPClose: true}},
+		{"--file-locks", ContainerCheckpointOptions{FileLocks: true}},
+		{"--pre-checkpoint", ContainerCheckpointOptions{PreCheckPoint: true}},
+		{"--with-previous", ContainerCheckpointOptions{WithPrevious: true}},
+		{"--import-previous", ContainerCheckpointOptions{ImportPrevious: "/tmp/pre-checkpoint.tar"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkGVisorCheckpointOptions(tt.options)
+			assert.ErrorIs(t, err, define.ErrInvalidArg)
+			assert.ErrorContains(t, err, tt.name)
+		})
+	}
+}
+
+func TestCheckpointTarOptions(t *testing.T) {
+	const id = "0123456789abcdef"
+	filestore := ".gvisor.filestore." + id
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(root, "nested"), 0o700))
+	files := []string{
+		filestore,
+		filestore + ".backup",
+		".gvisor.filestore.other",
+		filepath.Join("nested", filestore),
+		"data",
+	}
+	for _, name := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(root, name), []byte(name), 0o600))
+	}
+
+	for _, runtime := range []string{"runsc", "runc", "crun"} {
+		t.Run(runtime, func(t *testing.T) {
+			c := &Container{
+				config:     &ContainerConfig{ID: id},
+				ociRuntime: &ConmonOCIRuntime{path: "/usr/bin/" + runtime},
+			}
+			input, err := archive.TarWithOptions(root, c.checkpointTarOptions())
+			require.NoError(t, err)
+			defer input.Close()
+
+			contents := make(map[string]string)
+			reader := tar.NewReader(input)
+			for {
+				header, err := reader.Next()
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				require.NoError(t, err)
+				if header.Typeflag != tar.TypeReg {
+					continue
+				}
+				data, err := io.ReadAll(reader)
+				require.NoError(t, err)
+				contents[filepath.Clean(header.Name)] = string(data)
+			}
+
+			for _, name := range files {
+				if runtime == "runsc" && name == filestore {
+					assert.NotContains(t, contents, name)
+				} else {
+					assert.Equal(t, name, contents[name])
+				}
+			}
+		})
+	}
 }

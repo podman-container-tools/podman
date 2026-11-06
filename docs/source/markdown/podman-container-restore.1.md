@@ -16,6 +16,11 @@ Security configuration from **containers.conf** is not used, as the checkpoint m
 As such, restoring a checkpoint is a security sensitive operation and should only be done on checkpoints that are fully trusted.
 It is recommended that checkpoint integrity be ensured at each lifecycle step - creation, storage, retrieval, and restoration.
 
+gVisor (**runsc**) restores containers without CRIU and does not support
+**--file-locks**, **--import-previous**, **--pod**, **--tcp-close**, or
+**--tcp-established**. To restore a gVisor checkpoint image, set the global
+**--runtime** option to the runtime that created it.
+
 ## OPTIONS
 #### **--all**, **-a**
 
@@ -130,8 +135,9 @@ This option requires at least CRIU 3.16.
 Print out statistics about restoring the container(s). The output is
 rendered in a JSON array and contains information about how much time different
 restore operations required. Many of the restore statistics are created
-by CRIU and just passed through to Podman. The following information is provided
-in the JSON array:
+by CRIU and just passed through to Podman. gVisor (runsc) does not provide CRIU
+statistics, so only the Podman and runtime durations are provided for containers
+that use gVisor. The following information is provided in the JSON array:
 
 - **podman_restore_duration**: Overall time (in microseconds) needed to restore
   all checkpoints.
