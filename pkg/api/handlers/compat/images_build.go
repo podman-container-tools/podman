@@ -101,6 +101,7 @@ type BuildQuery struct {
 	Memory                  int64              `schema:"memory"`
 	NamespaceOptions        string             `schema:"nsoptions"`
 	NoCache                 bool               `schema:"nocache"`
+	NoCacheFilter           []string           `schema:"nocachefilter"`
 	NoHosts                 bool               `schema:"nohosts"`
 	OmitHistory             bool               `schema:"omithistory"`
 	OSFeatures              []string           `schema:"osfeature"`
@@ -833,6 +834,7 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		MaxPullPushRetries:             query.Retry,
 		NamespaceOptions:               nsoptions,
 		NoCache:                        query.NoCache,
+		NoCacheFilter:                  query.NoCacheFilter,
 		OSFeatures:                     query.OSFeatures,
 		OSVersion:                      query.OSVersion,
 		Output:                         output,

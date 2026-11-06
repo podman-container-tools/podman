@@ -90,27 +90,26 @@ func doHardLink(dirfd, srcFd int, destFile string) error {
 
 // copyFileContent copies the content of srcFd into a new file under dirfd.
 // The returned *os.File, when non-nil, is opened read-only.
-func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool, needsForkLock bool) (*os.File, int64, error) {
+func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.FileMode, useHardLinks bool, needsForkLock bool) (*os.File, error) {
 	destFile := fileMetadata.Name
-	src := procPathForFd(srcFd)
-	st, err := os.Stat(src)
-	if err != nil {
-		return nil, -1, fmt.Errorf("copy file content for %q: %w", destFile, err)
-	}
-
-	copyWithFileRange, copyWithFileClone := true, true
 
 	if useHardLinks {
 		err := doHardLink(dirfd, srcFd, destFile)
 		if err == nil {
 			dstFile, err := openFileUnderRoot(dirfd, destFile, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 			if err != nil {
-				return nil, -1, fmt.Errorf("open file %q under rootfs after hard link: %w", destFile, err)
+				return nil, fmt.Errorf("open file %q under rootfs after hard link: %w", destFile, err)
 			}
 			// if the file was deduplicated with a hard link, skip overriding file metadata.
 			fileMetadata.skipSetAttrs = true
-			return dstFile, st.Size(), nil
+			return dstFile, nil
 		}
+	}
+
+	src := procPathForFd(srcFd)
+	st, err := os.Stat(src)
+	if err != nil {
+		return nil, fmt.Errorf("copy file content for %q: %w", destFile, err)
 	}
 
 	if needsForkLock {
@@ -123,21 +122,22 @@ func copyFileContent(srcFd int, fileMetadata *fileMetadata, dirfd int, mode os.F
 	// If the destination file already exists, we shouldn't blow it away
 	dstFile, err := openFileUnderRoot(dirfd, destFile, newFileFlags, mode)
 	if err != nil {
-		return nil, -1, fmt.Errorf("open file %q under rootfs for copy: %w", destFile, err)
+		return nil, fmt.Errorf("open file %q under rootfs for copy: %w", destFile, err)
 	}
 
+	copyWithFileRange, copyWithFileClone := true, true
 	err = driversCopy.CopyRegularToFile(src, dstFile, st, &copyWithFileRange, &copyWithFileClone)
 	if err != nil {
 		dstFile.Close()
-		return nil, -1, fmt.Errorf("copy to file %q under rootfs: %w", destFile, err)
+		return nil, fmt.Errorf("copy to file %q under rootfs: %w", destFile, err)
 	}
 
 	roFile, err := reopenFileReadOnly(dstFile)
 	dstFile.Close()
 	if err != nil {
-		return nil, -1, fmt.Errorf("reopen %q as read-only: %w", destFile, err)
+		return nil, fmt.Errorf("reopen %q as read-only: %w", destFile, err)
 	}
-	return roFile, st.Size(), nil
+	return roFile, nil
 }
 
 func timeToTimespec(time *time.Time) (ts unix.Timespec) {

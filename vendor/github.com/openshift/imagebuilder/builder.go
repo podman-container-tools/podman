@@ -59,6 +59,12 @@ type Copy struct {
 	// of a directory tree being copied, or the "pivot point", a location
 	// in the source path marked by a path component named ".".
 	Excludes []string
+	// If set, overrides the default archive-extraction behavior when
+	// Download is true: true forces extraction, false forces a plain
+	// copy. If unset, local archives are extracted and remote ones
+	// aren't. Has no meaning when Download is false, since COPY does
+	// not accept this flag.
+	Unpack *bool
 }
 
 // File defines if any additional file needs to be created

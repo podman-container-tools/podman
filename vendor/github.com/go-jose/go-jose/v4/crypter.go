@@ -408,7 +408,10 @@ func (ctx *genericEncrypter) EncryptWithAuthData(plaintext, aad []byte) (*JSONWe
 		(*obj.protected)[k] = makeRawMessage(b)
 	}
 
-	authData := obj.computeAuthData()
+	authData, err := obj.computeAuthData()
+	if err != nil {
+		return nil, err
+	}
 	parts, err := ctx.cipher.encrypt(cek, authData, plaintext)
 	if err != nil {
 		return nil, err
@@ -492,7 +495,10 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey interface{}) ([]byte, error) 
 		tag:        obj.tag,
 	}
 
-	authData := obj.computeAuthData()
+	authData, err := obj.computeAuthData()
+	if err != nil {
+		return nil, err
+	}
 
 	var plaintext []byte
 	recipient := obj.recipients[0]
@@ -531,6 +537,12 @@ func (obj JSONWebEncryption) Decrypt(decryptionKey interface{}) ([]byte, error) 
 //
 // Automatically decompresses plaintext, but returns an error if the decompressed
 // data would be >250kB or >3x the size of the compressed data, whichever is larger.
+//
+// Calling DecryptMulti() with PBES2 enabled can result in excessive CPU work.
+// The PBES2 key unwrapping algorithms are intentionally expensive, and have to
+// be run for each recipient. To be safe: don't allow PBES2 algorithms in calls
+// to ParseEncrypted / ParseEncryptedJSON. If your application requires PBES2,
+// prefer Decrypt(), which will only process single-recipient messages.
 func (obj JSONWebEncryption) DecryptMulti(decryptionKey interface{}) (int, Header, []byte, error) {
 	globalHeaders := obj.mergedHeaders(nil)
 
@@ -564,7 +576,10 @@ func (obj JSONWebEncryption) DecryptMulti(decryptionKey interface{}) (int, Heade
 		tag:        obj.tag,
 	}
 
-	authData := obj.computeAuthData()
+	authData, err := obj.computeAuthData()
+	if err != nil {
+		return -1, Header{}, nil, err
+	}
 
 	index := -1
 	var plaintext []byte

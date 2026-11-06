@@ -405,6 +405,9 @@ func prepareParams(options types.BuildOptions) (url.Values, error) {
 	if options.NoCache {
 		params.Set("nocache", "1")
 	}
+	for _, stage := range options.NoCacheFilter {
+		params.Add("nocachefilter", stage)
+	}
 	if options.CommonBuildOpts.NoHosts {
 		params.Set("nohosts", "1")
 	}

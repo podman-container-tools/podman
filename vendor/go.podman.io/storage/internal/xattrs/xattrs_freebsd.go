@@ -177,6 +177,14 @@ func listxattr(syscallName string, pathInError func() string, listOperation func
 	for namespaceName, namespace := range namespaceMap {
 		namespaceAttrs, err := listxattrNS(namespace, syscallName, pathInError, listOperation)
 		if err != nil {
+			// Mirror golang.org/x/sys/unix's aggregate Listxattr: listing a
+			// non-user namespace (e.g. "system") can fail with EPERM in a
+			// FreeBSD jail, where that namespace is simply inaccessible. Those
+			// attributes were never readable here, so skip the namespace and
+			// return the ones we can read instead of failing the whole call.
+			if errors.Is(err, unix.EPERM) && namespace != unix.EXTATTR_NAMESPACE_USER {
+				continue
+			}
 			return nil, err
 		}
 

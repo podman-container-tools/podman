@@ -673,6 +673,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		MaxPullPushRetries:      flags.Retry,
 		NamespaceOptions:        nsValues,
 		NoCache:                 flags.NoCache,
+		NoCacheFilter:           flags.NoCacheFilter,
 		OSFeatures:              flags.OSFeatures,
 		OSVersion:               flags.OSVersion,
 		OciDecryptConfig:        decConfig,

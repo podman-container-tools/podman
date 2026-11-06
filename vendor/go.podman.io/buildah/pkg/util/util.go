@@ -2,10 +2,12 @@ package util //nolint:revive,nolintlint
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"go.podman.io/buildah/pkg/parse"
 )
 
@@ -41,42 +43,77 @@ func MirrorToTempFileIfPathIsDescriptor(file string) (string, bool) {
 }
 
 // DiscoverContainerfile tries to find a Containerfile or a Dockerfile within the provided `path`.
+// The path may be a directory (in which case Containerfile/Dockerfile is searched inside it)
+// or a direct path to a container file.
+//
+// When path is a directory (or a symlink to one), Containerfile/Dockerfile
+// candidates are resolved with RESOLVE_IN_ROOT semantics so that symlinks
+// escaping the context are clamped back.  When path points directly at a
+// file (or a symlink to one), it is returned as-is.
 func DiscoverContainerfile(path string) (foundCtrFile string, err error) {
-	// Test for existence of the file
-	target, err := os.Stat(path)
+	path, err = filepath.Abs(path)
 	if err != nil {
 		return "", fmt.Errorf("discovering Containerfile: %w", err)
 	}
 
-	switch mode := target.Mode(); {
-	case mode.IsDir():
-		// If the path is a real directory, we assume a Containerfile or a Dockerfile within it
-		ctrfile := filepath.Join(path, "Containerfile")
-
-		// Test for existence of the Containerfile file
-		file, err := os.Stat(ctrfile)
-		if err != nil {
-			// See if we have a Dockerfile within it
-			ctrfile = filepath.Join(path, "Dockerfile")
-
-			// Test for existence of the Dockerfile file
-			file, err = os.Stat(ctrfile)
-			if err != nil {
-				return "", fmt.Errorf("cannot find Containerfile or Dockerfile in context directory: %w", err)
-			}
-		}
-
-		// The file exists, now verify the correct mode
-		if mode := file.Mode(); mode.IsRegular() {
-			foundCtrFile = ctrfile
-		} else {
-			return "", fmt.Errorf("assumed Containerfile %q is not a file", ctrfile)
-		}
-
-	case mode.IsRegular():
-		// If the context dir is a file, we assume this as Containerfile
-		foundCtrFile = path
+	target, err := os.Lstat(path)
+	if err != nil {
+		return "", fmt.Errorf("discovering Containerfile: %w", err)
 	}
 
-	return foundCtrFile, nil
+	// If path is a symlink to a directory (e.g. the build context itself is
+	// a symlink), follow it so the IsDir() branch handles it.
+	if target.Mode()&os.ModeSymlink != 0 {
+		if realInfo, err := os.Stat(path); err == nil && realInfo.IsDir() {
+			target = realInfo
+		}
+	}
+
+	switch {
+	case target.IsDir():
+		for _, name := range []string{"Containerfile", "Dockerfile"} {
+			ctrfile := filepath.Join(path, name)
+			if resolved, ok := isRegularFileInContext(path, ctrfile); ok {
+				return resolved, nil
+			}
+		}
+		return "", fmt.Errorf("cannot find Containerfile or Dockerfile in context directory: %w", fs.ErrNotExist)
+
+	case target.Mode().IsRegular():
+		return path, nil
+
+	case target.Mode()&os.ModeSymlink != 0:
+		if fi, err := os.Stat(path); err == nil && fi.Mode().IsRegular() {
+			return path, nil
+		}
+		return "", fmt.Errorf("assumed Containerfile %q is not a file", path)
+
+	default:
+		return "", fmt.Errorf("assumed Containerfile %q is not a file", path)
+	}
+}
+
+// isRegularFileInContext checks whether path resolves to a regular file
+// inside contextDir using RESOLVE_IN_ROOT semantics (securejoin.SecureJoin):
+// ".." components are clamped to the root and absolute symlink targets are
+// re-rooted under contextDir.  This matches Docker BuildKit's behavior.
+//
+// On success it returns the resolved host path.
+func isRegularFileInContext(contextDir, path string) (string, bool) {
+	name, err := filepath.Rel(contextDir, path)
+	if err != nil {
+		return "", false
+	}
+	resolved, err := securejoin.SecureJoin(contextDir, name)
+	if err != nil {
+		return "", false
+	}
+	fi, err := os.Stat(resolved)
+	if err != nil {
+		return "", false
+	}
+	if !fi.Mode().IsRegular() {
+		return "", false
+	}
+	return resolved, true
 }

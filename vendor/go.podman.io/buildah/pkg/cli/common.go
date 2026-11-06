@@ -92,6 +92,7 @@ type BudResults struct {
 	NoHostname             bool
 	NoHosts                bool
 	NoCache                bool
+	NoCacheFilter          []string
 	Timestamp              int64
 	OmitHistory            bool
 	OCIHooksDir            []string
@@ -286,6 +287,7 @@ func GetBudFlags(flags *BudResults) pflag.FlagSet {
 	fs.StringVar(&flags.Manifest, "manifest", "", "add the image to the specified manifest list. Creates manifest list if it does not exist")
 	fs.StringVar(&flags.MetadataFile, "metadata-file", "", "`file` to write metadata about the image to")
 	fs.BoolVar(&flags.NoCache, "no-cache", false, "do not use existing cached images for the container build. Build from the start with a new set of cached layers.")
+	fs.StringArrayVar(&flags.NoCacheFilter, "no-cache-filter", []string{}, "do not use existing cached images for the specified build `stage`(s). May be used multiple times.")
 	fs.BoolVar(&flags.NoHostname, "no-hostname", false, "do not create new /etc/hostname file for RUN instructions, use the one from the base image.")
 	fs.BoolVar(&flags.NoHosts, "no-hosts", false, "do not create new /etc/hosts file for RUN instructions, use the one from the base image.")
 	fs.String("os", runtime.GOOS, "set the OS to the provided value instead of the current operating system of the host")
@@ -385,6 +387,7 @@ func GetBudFlagsCompletions() commonComp.FlagCompletions {
 	flagCompletion["os"] = commonComp.AutocompleteNone
 	flagCompletion["os-feature"] = commonComp.AutocompleteNone
 	flagCompletion["os-version"] = commonComp.AutocompleteNone
+	flagCompletion["no-cache-filter"] = commonComp.AutocompleteNone
 	flagCompletion["output"] = commonComp.AutocompleteNone
 	flagCompletion["pull"] = commonComp.AutocompleteDefault
 	flagCompletion["runtime-flag"] = commonComp.AutocompleteNone

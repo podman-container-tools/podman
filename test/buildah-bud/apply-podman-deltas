@@ -165,6 +165,22 @@ errmsg "cannot find Containerfile or Dockerfile" \
        "no such file or directory" \
        "bud-github-context-from-commit"
 
+errmsg "cannot find Containerfile or Dockerfile" \
+       "no context directory and no Containerfile specified" \
+       "bud without any arguments should fail when no Dockerfile exists"
+
+errmsg "cannot find Containerfile or Dockerfile" \
+       "no Containerfile or Dockerfile specified or found in context directory" \
+       "bud with specified context should fail if directory contains no Dockerfile" \
+       "bud with specified context should fail if Dockerfile in context directory is actually a file" \
+       "bud rejects symlinked Dockerfile to non-existent target"
+
+errmsg "cannot find Containerfile or Dockerfile" \
+       "reading multiple stages: stage 1 requires a FROM instruction (\"\")" \
+       "bud with stdin tar context rejects symlinked Dockerfile pointing outside temp dir" \
+       "bud with http tar context rejects symlinked Dockerfile pointing outside temp dir"
+
+
 ###############################################################################
 # BEGIN tests that don't make sense under podman due to fundamental differences
 
@@ -365,6 +381,14 @@ skip "bud-source-date-epoch-arg" \
      "bud-windows-with-timestamp-reproducible" \
      "bud-windows-with-source-date-epoch-reproducible" \
      "bud-source-date-epoch-arg"
+
+# 2026-11-06 FIXME: Podman seems to have its own Containerfile/Dockerfile logic which breaks the tests
+# for the new buildah behavior from: https://github.com/podman-container-tools/buildah/pull/6886
+skip "FIXME: podman/buildah logic difference" \
+     "bud with local context symlinked Containerfile outside context" \
+     "bud accepts symlinked Dockerfile with relative escape clamped to context root" \
+     "bud rejects symlinked Dockerfile whose clamped path does not exist" \
+     "bud accepts absolute symlinked Dockerfile re-rooted under context"
 
 # END   temporary workarounds that must be reevaluated periodically
 ###############################################################################
