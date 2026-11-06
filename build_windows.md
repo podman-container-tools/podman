@@ -115,7 +115,7 @@ the following command, from a PowerShell or Windows Command Prompt terminal in
 wsl --install
 ```
 
-For more information refer to
+Podman requires WSL v2.5.1 or later. For more information refer to
 [the official documentation](https://learn.microsoft.com/en-us/windows/wsl/).
 
 #### Hyper-V
