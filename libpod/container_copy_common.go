@@ -16,6 +16,7 @@ import (
 	"go.podman.io/buildah/copier"
 	"go.podman.io/buildah/pkg/chrootuser"
 	"go.podman.io/buildah/util"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/rootless"
@@ -26,7 +27,7 @@ import (
 
 func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noOverwriteDirNonDir bool, rename map[string]string, reader io.Reader) (func() error, error) {
 	var (
-		mountPoint   string
+		mountPoint   protectedroot.PathRoot
 		unmount      func()
 		cleanupFuncs []func()
 		err          error
@@ -41,7 +42,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 
 	// Optimization: only mount if the container is not already.
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = *c.state.Mountpoint
 		unmount = func() {}
 	} else {
 		// NOTE: make sure to unmount in error paths.
@@ -49,7 +50,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 		if err != nil {
 			return nil, err
 		}
-		c.state.Mountpoint = mountPoint
+		c.state.Mountpoint = &mountPoint
 		if err := c.save(); err != nil {
 			return nil, err
 		}
@@ -74,7 +75,7 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 			}
 
 			if c.ensureState(define.ContainerStateConfigured, define.ContainerStateExited) {
-				c.state.Mountpoint = ""
+				c.state.Mountpoint = nil
 				if err := c.save(); err != nil {
 					logrus.Errorf("Writing container %s state: %v", c.ID(), err)
 				}
@@ -245,14 +246,14 @@ func (c *Container) copyFromArchive(ctx context.Context, path string, chown, noO
 
 func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Writer) (func() error, error) {
 	var (
-		mountPoint string
+		mountPoint protectedroot.PathRoot
 		unmount    func()
 		err        error
 	)
 
 	// Optimization: only mount if the container is not already.
 	if c.state.Mounted {
-		mountPoint = c.state.Mountpoint
+		mountPoint = *c.state.Mountpoint
 		unmount = func() {}
 	} else {
 		// NOTE: make sure to unmount in error paths.
@@ -325,10 +326,10 @@ func (c *Container) copyToArchive(ctx context.Context, path string, writer io.Wr
 }
 
 // getContainerUser returns the specs.User and ID mappings of the container.
-func getContainerUser(container *Container, mountPoint string) (specs.User, error) {
+func getContainerUser(container *Container, mountPoint protectedroot.PathRoot) (specs.User, error) {
 	userspec := container.config.User
 
-	uid, gid, _, err := chrootuser.GetUser(mountPoint, userspec)
+	uid, gid, _, err := chrootuser.GetUser(mountPoint.PathWithoutProtectionDeferred(), userspec)
 	u := specs.User{
 		UID:      uid,
 		GID:      gid,
@@ -336,7 +337,7 @@ func getContainerUser(container *Container, mountPoint string) (specs.User, erro
 	}
 
 	if !strings.Contains(userspec, ":") {
-		groups, err2 := chrootuser.GetAdditionalGroupsForUser(mountPoint, uint64(u.UID))
+		groups, err2 := chrootuser.GetAdditionalGroupsForUser(mountPoint.PathWithoutProtectionDeferred(), uint64(u.UID))
 		if err2 != nil {
 			if !errors.Is(err2, chrootuser.ErrNoSuchUser) && err == nil {
 				err = err2

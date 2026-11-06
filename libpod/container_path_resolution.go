@@ -13,6 +13,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libimage"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 )
 
@@ -56,11 +57,14 @@ func (r pathResolution) close() {
 // specified by the user. Both may resolve outside the container's mount point
 // when the path hits a volume, image mount, or bind mount. The caller must close
 // the result.
-func (c *Container) resolvePath(ctx context.Context, mountPoint string, containerPath string) (pathResolution, error) {
+func (c *Container) resolvePath(ctx context.Context, mountPoint protectedroot.PathRoot, containerPath string) (pathResolution, error) {
 	// Let's first make sure we have a path relative to the mount point.
 	pathRelativeToContainerMountPoint := c.pathAbs(containerPath)
-	resolvedPathOnTheContainerMountPoint := filepath.Join(mountPoint, pathRelativeToContainerMountPoint)
-	pathRelativeToContainerMountPoint = strings.TrimPrefix(pathRelativeToContainerMountPoint, mountPoint)
+	resolvedPathOnTheContainerMountPoint, err := mountPoint.Join(pathRelativeToContainerMountPoint)
+	if err != nil {
+		return pathResolution{}, err
+	}
+	pathRelativeToContainerMountPoint = strings.TrimPrefix(pathRelativeToContainerMountPoint, mountPoint.PathWithoutProtection())
 	pathRelativeToContainerMountPoint = filepath.Join("/", pathRelativeToContainerMountPoint)
 
 	// Now we have an "absolute container Path" but not yet resolved on the
@@ -164,7 +168,7 @@ func (c *Container) resolvePath(ctx context.Context, mountPoint string, containe
 	}
 
 	// No volume, no bind mount but just a normal path on the container.
-	return pathResolution{root: mountPoint, path: resolvedPathOnTheContainerMountPoint}, nil
+	return pathResolution{root: mountPoint.PathWithoutProtectionDeferred(), path: resolvedPathOnTheContainerMountPoint}, nil
 }
 
 // findImageVolume checks whether containerPath matches an image mount's destination.
