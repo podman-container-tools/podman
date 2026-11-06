@@ -194,7 +194,7 @@ func (w *atomicFileWriter) commitState() error {
 	}
 
 	if w.writeErr == nil {
-		return os.Rename(w.f.Name(), w.fn)
+		return rename(w.f.Name(), w.fn)
 	}
 
 	return nil
