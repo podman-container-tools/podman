@@ -59,7 +59,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/stretchr/testify v1.12.1
 	github.com/vbauerster/mpb/v8 v8.16.3
 	github.com/vishvananda/netlink v1.3.1
