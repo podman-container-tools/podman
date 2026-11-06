@@ -2843,6 +2843,14 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		return fmt.Errorf("must provide restart policy if updating restart retries: %w", define.ErrInvalidArg)
 	}
 
+	if updateOptions.HostRlimits {
+		rlimits, err := util.GetHostRlimits()
+		if err != nil {
+			return err
+		}
+		updateOptions.Rlimits = rlimits
+	}
+
 	oldConfig := new(ContainerConfig)
 	if err := JSONDeepCopy(c.config, oldConfig); err != nil {
 		return err

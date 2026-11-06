@@ -586,6 +586,9 @@ type ContainerResourceConfig struct {
 	// Rlimits are POSIX rlimits to apply to the container.
 	// Optional.
 	Rlimits []spec.POSIXRlimit `json:"r_limits,omitempty"`
+	// HostRlimits copies the engine host's resource limits instead of applying
+	// container defaults. Explicit Rlimits override individual host limits.
+	HostRlimits bool `json:"host_rlimits,omitempty"`
 	// OOMScoreAdj adjusts the score used by the OOM killer to determine
 	// processes to kill for the container's process.
 	// Optional.

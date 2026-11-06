@@ -7,6 +7,6 @@ import (
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (c *Container) setProcessCapabilitiesExec(_ *ExecOptions, _ string, _ *user.ExecUser, _ *spec.Process) error {
+func (c *Container) setProcessCapabilitiesExec(_ *ExecOptions, _ string, _ *user.ExecUser, _ *spec.Process, _ *spec.Spec) error {
 	return nil
 }

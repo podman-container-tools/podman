@@ -97,6 +97,8 @@ type UpdateEntities struct {
 	Env      []string
 	UnsetEnv []string
 	Rlimits  []specs.POSIXRlimit `json:"r_limits,omitempty"`
+	// HostRlimits uses the engine host's resource limits.
+	HostRlimits bool `json:"host_rlimits,omitempty"`
 }
 
 type Info struct {

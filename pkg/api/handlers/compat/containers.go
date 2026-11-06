@@ -909,12 +909,17 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 
 	// Rlimits
 	var rlimits []spec.POSIXRlimit
+	var hostRlimits bool
 	if len(options.Ulimits) > 0 {
 		ulimits := make([]string, len(options.Ulimits))
 		for i, u := range options.Ulimits {
-			ulimits[i] = u.String()
+			if u.Name == "host" {
+				ulimits[i] = "host"
+			} else {
+				ulimits[i] = u.String()
+			}
 		}
-		rlimits, err = specgenutil.GenRlimits(ulimits)
+		rlimits, hostRlimits, err = specgenutil.GenRlimits(ulimits)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("generating rlimits: %w", err))
 			return
@@ -927,6 +932,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		RestartPolicy:                   restartPolicy,
 		RestartRetries:                  restartRetries,
 		Rlimits:                         rlimits,
+		HostRlimits:                     hostRlimits,
 	}
 
 	if err := ctr.Update(updateOptions); err != nil {

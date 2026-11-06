@@ -37,7 +37,12 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		return nil, nil, nil, err
 	}
 
-	rlimits, err := specgenutil.GenRlimits(rtc.Ulimits())
+	var rlimits []specs.POSIXRlimit //nolint:prealloc // Both branches below replace the slice with a function result.
+	if !s.HostRlimits {
+		rlimits, _, err = specgenutil.GenRlimits(rtc.Ulimits())
+	} else {
+		rlimits, err = util.GetHostRlimits()
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}

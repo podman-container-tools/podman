@@ -194,11 +194,12 @@ func update(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		rlimits, err := specgenutil.GenRlimits(ulimits)
+		rlimits, hostRlimits, err := specgenutil.GenRlimits(ulimits)
 		if err != nil {
 			return err
 		}
 		opts.Rlimits = rlimits
+		opts.HostRlimits = hostRlimits
 	}
 
 	rep, err := registry.ContainerEngine().ContainerUpdate(cmd.Context(), opts)
