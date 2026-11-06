@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	rkport "github.com/rootless-containers/rootlesskit/v2/pkg/port"
-	rkbuiltin "github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin"
-	rkportutil "github.com/rootless-containers/rootlesskit/v2/pkg/port/portutil"
+	rkport "github.com/rootless-containers/rootlesskit/v3/pkg/port"
+	rkbuiltin "github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin"
+	rkportutil "github.com/rootless-containers/rootlesskit/v3/pkg/port/portutil"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/netns"
