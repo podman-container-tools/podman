@@ -7,9 +7,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/rootless-containers/rootlesskit/v2/pkg/port"
-	"github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/msg"
-	"github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/parent/udp/udpproxy"
+	"github.com/rootless-containers/rootlesskit/v3/pkg/port"
+	"github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/msg"
+	"github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/parent/udp/udpproxy"
 )
 
 func Run(socketPath string, spec port.Spec, stopCh <-chan struct{}, stoppedCh chan error, logWriter io.Writer) error {
@@ -26,7 +26,7 @@ func Run(socketPath string, spec port.Spec, stopCh <-chan struct{}, stoppedCh ch
 		Listener:  c,
 		BackendDial: func() (*net.UDPConn, error) {
 			// get fd from the child as an SCM_RIGHTS cmsg
-			fd, err := msg.ConnectToChildWithRetry(socketPath, spec, 10)
+			fd, err := msg.ConnectToChildWithRetry(socketPath, spec, 10, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -45,16 +45,11 @@ func Run(socketPath string, spec port.Spec, stopCh <-chan struct{}, stoppedCh ch
 	}
 	go udpp.Run()
 	go func() {
-		for {
-			select {
-			case <-stopCh:
-				// udpp.Close closes ln as well
-				udpp.Close()
-				stoppedCh <- nil
-				close(stoppedCh)
-				return
-			}
-		}
+		<-stopCh
+		// udpp.Close closes ln as well
+		udpp.Close()
+		stoppedCh <- nil
+		close(stoppedCh)
 	}()
 	// no wait
 	return nil

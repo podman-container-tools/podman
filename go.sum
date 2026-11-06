@@ -193,8 +193,8 @@ github.com/hugelgupf/vmtest v0.0.0-20240115033909-46506b2af5ea h1:rSO4GiZ/EThUOk
 github.com/hugelgupf/vmtest v0.0.0-20240115033909-46506b2af5ea/go.mod h1:3YxP4j/kQh5BzoobzCeSIVZOlz4te/CGVRxS9/NrwGU=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
-github.com/insomniacslk/dhcp v0.0.0-20250109001534-8abf58130905 h1:q3OEI9RaN/wwcx+qgGo6ZaoJkCiDYe/gjDLfq7lQQF4=
-github.com/insomniacslk/dhcp v0.0.0-20250109001534-8abf58130905/go.mod h1:VvGYjkZoJyKqlmT1yzakUs4mfKMNB0XdODP0+rdml6k=
+github.com/insomniacslk/dhcp v0.0.0-20260901064844-234b97448fae h1:nXGg65fXsylSUTNNWwvHuQsXev7mhIzQTnZREPTbWzs=
+github.com/insomniacslk/dhcp v0.0.0-20260901064844-234b97448fae/go.mod h1:tGfUTcnFYGYvVNCaZZhwlJySU/fQQxh9TmpsFzWXnnY=
 github.com/jinzhu/copier v0.4.0 h1:w3ciUoD19shMCRargcpm0cm91ytaBhDvuRpz1ODO/U8=
 github.com/jinzhu/copier v0.4.0/go.mod h1:DfbEm0FYsaqBcKcFuvmOZb218JkPGtvSHsKg8S8hyyg=
 github.com/josharian/native v1.1.0 h1:uuaP0hAbW7Y4l0ZRQ6C9zfb7Mg1mbFKry/xzDAfmtLA=
@@ -320,8 +320,8 @@ github.com/proglottis/gpgme v0.1.6 h1:8WpQ8VWggLdxkuTnW+sZ1r1t92XBNd8GZNDhQ4Rz+9
 github.com/proglottis/gpgme v0.1.6/go.mod h1:5LoXMgpE4bttgwwdv9bLs/vwqv3qV7F4glEEZ7mRKrM=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
-github.com/rootless-containers/rootlesskit/v2 v2.3.6 h1:m/26nAx0DbHZYaM46+uoQjfpu9G77QLzWj2jz25chO8=
-github.com/rootless-containers/rootlesskit/v2 v2.3.6/go.mod h1:pv+RESmjRmeUIOsEWOT1f8560CrdaQrDW0YsF4K5kAY=
+github.com/rootless-containers/rootlesskit/v3 v3.3.0 h1:DrwwCK1W/yTpLbgBipzRXU+Y4nH8nUaFwoEfHJz3nls=
+github.com/rootless-containers/rootlesskit/v3 v3.3.0/go.mod h1:aawFAmka/iYag/KYigPt7o16mRtC2UfXawhRiMqwGQM=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28=
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.3/go.mod h1:JXeL+ps8p7/KNMjDQk3TCwPpBy0wYklyWTfbkIzdIFU=

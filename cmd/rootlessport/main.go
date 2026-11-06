@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	rkport "github.com/rootless-containers/rootlesskit/v2/pkg/port"
-	rkbuiltin "github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin"
-	rkportutil "github.com/rootless-containers/rootlesskit/v2/pkg/port/portutil"
+	rkport "github.com/rootless-containers/rootlesskit/v3/pkg/port"
+	rkbuiltin "github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin"
+	rkportutil "github.com/rootless-containers/rootlesskit/v3/pkg/port/portutil"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/netns"
@@ -95,7 +95,9 @@ func parent() error {
 		return err
 	}
 	defer os.RemoveAll(stateDir)
-	driver, err := rkbuiltin.NewParentDriver(&logrusWriter{prefix: "parent: "}, stateDir)
+	// Preserve real TCP client source IPs via IP_TRANSPARENT (nft/iptables).
+	// UDP and loopback clients still use the non-transparent fallback.
+	driver, err := rkbuiltin.NewParentDriver(&logrusWriter{prefix: "parent: "}, stateDir, true, "auto")
 	if err != nil {
 		return err
 	}
