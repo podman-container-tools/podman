@@ -189,4 +189,22 @@ var _ = Describe("Podman container inspect", func() {
 		Expect(network.DNSNames).To(ContainElement(cid[0:12]))
 		Expect(network.DNSNames).To(ContainElement("myhostname"))
 	})
+
+	It("podman inspect running container on user-defined network has NetworkSettings", func() {
+		netName := "testnet"
+		session := podmanTest.Podman([]string{"network", "create", netName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		defer podmanTest.removeNetwork(netName)
+
+		ctrName := "testrun"
+		session = podmanTest.Podman([]string{"run", "-d", "--name", ctrName, "--network", netName, ALPINE, "top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		data := podmanTest.InspectContainer(ctrName)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].NetworkSettings.Networks).To(HaveKey(netName))
+		Expect(data[0].NetworkSettings.Networks[netName].NetworkID).ToNot(BeEmpty())
+	})
 })
