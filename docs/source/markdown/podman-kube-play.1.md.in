@@ -61,6 +61,14 @@ Note: Use the **io.podman.annotations.cpuset/$ctrname** annotation to restrict a
 
 Note: Use the **io.podman.annotations.memory-nodes/$ctrname** annotation to restrict a container's memory allocations to a specific set of memory nodes on NUMA systems. This is equivalent to the `--cpuset-mems=nodes` option in podman-run(1).
 
+Note: The following labels are added to the pods created by podman kube play:
+
+- `io.podman.kube.play`: Indicates that the pod was created by `podman kube play`.
+- `io.podman.kube.play.config_hash`: Contains the hash of the YAML configuration.
+- `io.podman.kube.play.config_files`: Contains the path to the YAML configuration file.
+- `io.podman.kube.play.working_dir`: Contains the context directory specified using the `--context-dir` option, or falls back to the current working directory if `--context-dir` is not specified.
+- `io.podman.kube.play.version`: Contains the Podman version used to create the pod.
+
 `Kubernetes PersistentVolumeClaims`
 
 A Kubernetes PersistentVolumeClaim represents a Podman named volume. Only the PersistentVolumeClaim name is required by Podman to create a volume. Kubernetes annotations can be used to make use of the available options for Podman volumes.
