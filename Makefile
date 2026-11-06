@@ -1008,12 +1008,6 @@ install.systemd: $(PODMAN_GENERATED_UNIT_FILES)
 		install ${SELINUXOPT} -m 644 $$unit $(DESTDIR)${USERSYSTEMDDIR}/$$(basename $$unit); \
 		install ${SELINUXOPT} -m 644 $$unit $(DESTDIR)${SYSTEMDDIR}/$$(basename $$unit); \
 	done
-	# HACK; as rootless this unit will not work due the requires on a non existing target
-	# as the user session does not see system units. We could define two different units
-	# but this seems much more complicated then this small fixup here.
-	# https://github.com/containers/podman/issues/23790
-	sed -i '/Requires=/d' $(DESTDIR)${USERSYSTEMDDIR}/podman-clean-transient.service
-	sed -i '/After=/d' $(DESTDIR)${USERSYSTEMDDIR}/podman-clean-transient.service
 
 	# Important this unit should only be installed for the user session and is thus not added to the loop above.
 	install ${SELINUXOPT} -m 644 contrib/systemd/user/podman-user-wait-network-online.service \
