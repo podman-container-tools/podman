@@ -451,16 +451,19 @@ sub podman_help {
         elsif ($section eq 'options') {
             my $opt = '';
 
-            # Handle '--foo' or '-f, --foo'
+            # Handle '--foo', '--foo[=true|false]', '-f, --foo', or '-f, --foo[=true|false]'
             if ($line =~ /^\s{1,10}(--\S+)\s/) {
                 print "> podman @_ $1\n"                        if $debug;
                 $opt = $1;
+                $opt =~ s/\[=true\|false\]\z//;
                 $help{$opt} = 1;
             }
             elsif ($line =~ /^\s{1,10}(-\S),\s+(--\S+)\s/) {
                 print "> podman @_ $1, $2\n"                    if $debug;
+                my $short = $1;
                 $opt = $2;
-                $help{$1} = $help{$opt} = 1;
+                $opt =~ s/\[=true\|false\]\z//;
+                $help{$short} = $help{$opt} = 1;
             }
 
             # Special case for --format: run podman with autocomplete.
