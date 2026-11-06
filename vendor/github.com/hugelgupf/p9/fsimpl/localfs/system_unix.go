@@ -142,7 +142,7 @@ func (l *Local) lock(pid int, locktype p9.LockType, flags p9.LockFlags, start, l
 		}
 
 	case p9.Unlock:
-		if err := unix.Flock(int(l.file.Fd()), unix.LOCK_EX); err != nil {
+		if err := unix.Flock(int(l.file.Fd()), unix.LOCK_UN); err != nil {
 			return p9.LockStatusError, nil
 		}
 

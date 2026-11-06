@@ -983,7 +983,14 @@ func (t *txattrwalk) handle(cs *connState) message {
 				buf = []byte(strings.Join(xattrs, "\000") + "\000")
 			}
 		}
-		if err != nil || uint32(len(buf)) > maximumLength {
+		if err != nil {
+			// Propagate the backing's errno (e.g. ENODATA for a missing
+			// attribute) rather than flattening every failure to EINVAL —
+			// getxattr(2) callers distinguish ENODATA ("absent") from a hard
+			// error, and the kernel probes optional attrs on ordinary lookups.
+			return err
+		}
+		if uint32(len(buf)) > maximumLength {
 			return linux.EINVAL
 		}
 		size = len(buf)
