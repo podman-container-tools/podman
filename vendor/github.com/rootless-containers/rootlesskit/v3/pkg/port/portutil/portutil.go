@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/rootless-containers/rootlesskit/v2/pkg/port"
+	"github.com/rootless-containers/rootlesskit/v3/pkg/port"
 )
 
 // ParsePortSpec parses a Docker-like representation of PortSpec, but with
@@ -81,7 +81,7 @@ func ParsePortSpec(portSpec string) (*port.Spec, error) {
 				// End of IPv6 IP-address
 				delimiter = ':'
 				// Skip the next token, which should be a colon delimiter (:)
-				tok = s.Scan()
+				_ = s.Scan()
 			}
 			index++
 			continue
@@ -94,7 +94,7 @@ func ParsePortSpec(portSpec string) (*port.Spec, error) {
 		return nil, fmt.Errorf("unexpected ParentIP in PortSpec string: %q", portSpec)
 	}
 	if parts[childIP] != "" && net.ParseIP(parts[childIP]) == nil {
-		return nil, fmt.Errorf("unexpected ParentIP in PortSpec string: %q", portSpec)
+		return nil, fmt.Errorf("unexpected ChildIP in PortSpec string: %q", portSpec)
 	}
 
 	ps := &port.Spec{
@@ -105,12 +105,12 @@ func ParsePortSpec(portSpec string) (*port.Spec, error) {
 
 	ps.ParentPort, err = strconv.Atoi(parts[parentPort])
 	if err != nil {
-		return nil, fmt.Errorf("unexpected ChildPort in PortSpec string: %q: %w", portSpec, err)
+		return nil, fmt.Errorf("unexpected ParentPort in PortSpec string: %q: %w", portSpec, err)
 	}
 
 	ps.ChildPort, err = strconv.Atoi(parts[childPort])
 	if err != nil {
-		return nil, fmt.Errorf("unexpected ParentPort in PortSpec string: %q: %w", portSpec, err)
+		return nil, fmt.Errorf("unexpected ChildPort in PortSpec string: %q: %w", portSpec, err)
 	}
 
 	return ps, nil
@@ -133,10 +133,10 @@ func ValidatePortSpec(spec port.Spec, existingPorts map[int]*port.Status) error 
 		}
 	}
 	if spec.ParentPort <= 0 || spec.ParentPort > 65535 {
-		return fmt.Errorf("invalid ParentPort: %q", spec.ParentPort)
+		return fmt.Errorf("invalid ParentPort: %d", spec.ParentPort)
 	}
 	if spec.ChildPort <= 0 || spec.ChildPort > 65535 {
-		return fmt.Errorf("invalid ChildPort: %q", spec.ChildPort)
+		return fmt.Errorf("invalid ChildPort: %d", spec.ChildPort)
 	}
 	for id, p := range existingPorts {
 		sp := p.Spec

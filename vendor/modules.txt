@@ -596,20 +596,20 @@ github.com/power-devops/perfstat
 # github.com/proglottis/gpgme v0.1.6
 ## explicit; go 1.17
 github.com/proglottis/gpgme
-# github.com/rootless-containers/rootlesskit/v2 v2.3.6
-## explicit; go 1.24.2
-github.com/rootless-containers/rootlesskit/v2/pkg/api
-github.com/rootless-containers/rootlesskit/v2/pkg/lowlevelmsgutil
-github.com/rootless-containers/rootlesskit/v2/pkg/port
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/child
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/msg
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/opaque
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/parent
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/parent/tcp
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/parent/udp
-github.com/rootless-containers/rootlesskit/v2/pkg/port/builtin/parent/udp/udpproxy
-github.com/rootless-containers/rootlesskit/v2/pkg/port/portutil
+# github.com/rootless-containers/rootlesskit/v3 v3.3.0
+## explicit; go 1.26.0
+github.com/rootless-containers/rootlesskit/v3/pkg/api
+github.com/rootless-containers/rootlesskit/v3/pkg/lowlevelmsgutil
+github.com/rootless-containers/rootlesskit/v3/pkg/port
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/child
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/msg
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/opaque
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/parent
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/parent/tcp
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/parent/udp
+github.com/rootless-containers/rootlesskit/v3/pkg/port/builtin/parent/udp/udpproxy
+github.com/rootless-containers/rootlesskit/v3/pkg/port/portutil
 # github.com/seccomp/libseccomp-golang v0.12.0
 ## explicit; go 1.19
 github.com/seccomp/libseccomp-golang
