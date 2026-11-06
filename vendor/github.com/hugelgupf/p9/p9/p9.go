@@ -144,12 +144,20 @@ const (
 	// AllPermissions is a mask with rwx bits set for user, group and others.
 	AllPermissions FileMode = 0777
 
+	// Setuid is the set-user-ID-on-execution mode bit.
+	Setuid FileMode = 04000
+
+	// Setgid is the set-group-ID-on-execution mode bit.
+	Setgid FileMode = 02000
+
 	// Sticky is a mode bit indicating sticky directories.
 	Sticky FileMode = 01000
 
 	// permissionsMask is the mask to apply to FileModes for permissions. It
-	// includes rwx bits for user, group and others, and sticky bit.
-	permissionsMask FileMode = 01777
+	// includes the rwx bits for user, group, and others and the setuid,
+	// setgid, and sticky bits — the low 12 bits of a POSIX st_mode, which is
+	// what 9P2000.L carries in its mode/permissions fields.
+	permissionsMask FileMode = 07777
 )
 
 // QIDType is the most significant byte of the FileMode word, to be used as the
@@ -252,13 +260,24 @@ func ModeFromOS(mode os.FileMode) FileMode {
 	default:
 		m |= ModeRegular
 	}
+	if mode&os.ModeSetuid != 0 {
+		m |= Setuid
+	}
+	if mode&os.ModeSetgid != 0 {
+		m |= Setgid
+	}
+	if mode&os.ModeSticky != 0 {
+		m |= Sticky
+	}
 	return m
 }
 
 // OSMode converts a p9.FileMode to an os.FileMode.
 func (m FileMode) OSMode() os.FileMode {
 	var osMode os.FileMode
-	osMode |= os.FileMode(m.Permissions())
+	// Only the rwx bits map directly; setuid/setgid/sticky live in different
+	// bit positions in os.FileMode and are translated explicitly below.
+	osMode |= os.FileMode(m & AllPermissions)
 	switch {
 	case m.IsDir():
 		osMode |= os.ModeDir
@@ -272,6 +291,15 @@ func (m FileMode) OSMode() os.FileMode {
 		osMode |= os.ModeCharDevice | os.ModeDevice
 	case m.IsBlockDevice():
 		osMode |= os.ModeDevice
+	}
+	if m&Setuid != 0 {
+		osMode |= os.ModeSetuid
+	}
+	if m&Setgid != 0 {
+		osMode |= os.ModeSetgid
+	}
+	if m&Sticky != 0 {
+		osMode |= os.ModeSticky
 	}
 	return osMode
 }
