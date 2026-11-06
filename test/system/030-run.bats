@@ -893,9 +893,9 @@ json-file | f
 # bats test_tags=ci:parallel
 @test "podman run --timeout - basic test" {
     cname=c_$(safename)
-    t0=$SECONDS
+    t0=$(date +%s%3N)
     run_podman 255 run --name $cname --timeout 2 $IMAGE sleep 60
-    t1=$SECONDS
+    t1=$(date +%s%3N)
     # Confirm that container is stopped. Podman-remote unfortunately
     # cannot tell the difference between "stopped" and "exited", and
     # spits them out interchangeably, so we need to recognize either.
@@ -903,11 +903,11 @@ json-file | f
     is "$output" "\\(stopped\|exited\\) \-1" \
        "Status and exit code of stopped container"
 
-    # This operation should take
-    # exactly 10 seconds. Give it some leeway.
-    delta_t=$(( $t1 - $t0 ))
-    assert "$delta_t" -gt 1 "podman stop: ran too quickly!"
-    assert "$delta_t" -le 6 "podman stop: took too long"
+    # The timeout is 2 seconds; allow for command overhead while checking
+    # the elapsed time with sub-second precision.
+    delta_t=$(( t1 - t0 ))
+    assert "$delta_t" -gt 1000 "podman run --timeout: exited too quickly!"
+    assert "$delta_t" -le 6000 "podman run --timeout: took too long"
 
     run_podman rm $cname
 }
