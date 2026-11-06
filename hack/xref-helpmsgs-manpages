@@ -91,6 +91,7 @@ my %Format_Option_Is_Special = map { $_ => 1 } (
     'commit', 'container commit',               #  "  "  " "
     'diff',   'container diff', 'image diff',   # only supports "json"
     'generate systemd',                         #  "    "  "      "
+    'kube quadlet',                             #  "    "  "      "
     'mount',  'container mount', 'image mount', #  "    "  "      "
     'machine os upgrade',                       #  "    "  "      "
     'push',   'image push', 'manifest push',    # oci | v2s*
