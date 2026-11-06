@@ -1,0 +1,25 @@
+# Copyright 2025 The go-yaml Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+extends: default
+
+ignore: |
+  /.cache/
+  /repos/
+  /**/testdata/
+
+rules:
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1  # allow us to use space in brackets
+  document-start:
+    present: false
+  indentation:
+    spaces: 2
+    indent-sequences: false  # make sure there is no indentation for sequences
+  truthy:
+    check-keys: false  # there is a problem with the "on" key in GitHub Actions
+  quoted-strings:
+    check-keys: true  # by default, only values are checked
+    quote-type: single
+    required: only-when-needed

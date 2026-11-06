@@ -25,7 +25,9 @@ import (
     "fmt"
     "strconv"
     "strings"
+    "unicode"
     "unicode/utf16"
+    "unicode/utf8"
 )
 
 type nameValueType struct {
@@ -177,8 +179,15 @@ func Transform(jsonData []byte) (result []byte, e error) {
                         if nextChar() != '\\' || nextChar() != 'u' {
                             setError("Missing surrogate")
                         } else {
-                            // Output the UTF-32 code point as UTF-8
-                            rawString.WriteRune(utf16.DecodeRune(firstUTF16, getUEscape()))
+                            // A surrogate pair is a high code unit followed by a low
+                            // one. DecodeRune returns U+FFFD for any other pair.
+                            // U+FFFD is in the BMP, so a real pair never decodes to it.
+                            r := utf16.DecodeRune(firstUTF16, getUEscape())
+                            if r == unicode.ReplacementChar {
+                                setError("Invalid surrogate pair")
+                            } else {
+                                rawString.WriteRune(r)
+                            }
                         }
                     } else {
                         // Single UTF-16 code identical to UTF-32.  Output as UTF-8
@@ -197,9 +206,18 @@ func Transform(jsonData []byte) (result []byte, e error) {
                     }
                     setError("Unexpected escape: \\" + string(c))
                 }
+            } else if c >= 0x80 {
+                // Raw UTF-8 is allowed inside a string. A sequence that is not
+                // valid UTF-8 is not. The first byte was already consumed.
+                r, size := utf8.DecodeRune(jsonData[index-1:])
+                if r == utf8.RuneError && size == 1 {
+                    setError("Invalid UTF-8 in string")
+                } else {
+                    rawString.Write(jsonData[index-1 : index-1+size])
+                    index += size - 1
+                }
             } else {
-                // Just an ordinary ASCII character alternatively a UTF-8 byte
-                // outside of ASCII.
+                // Just an ordinary ASCII character.
                 // Note that properly formatted UTF-8 never clashes with ASCII
                 // making byte per byte search for ASCII break characters work
                 // as expected.

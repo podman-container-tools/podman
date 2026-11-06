@@ -140,10 +140,6 @@ errmsg "no such file or directory" \
        "Error: no context directory and no Containerfile specified" \
        "bud without any arguments should fail when no Dockerfile exists"
 
-errmsg "is not a file" \
-       "Error: no Containerfile or Dockerfile specified or found in context directory" \
-       "bud with specified context should fail if Dockerfile in context directory is actually a file"
-
 errmsg "no such file or directory" \
        "context must be a directory" \
        "bud with specified context should fail if context directory does not exist"
@@ -161,9 +157,11 @@ errmsg "credential file is not accessible: faccessat /tmp/nonexistent: no such f
        "Error: credential file is not accessible: faccessat /tmp/nonexistent: no such file or directory" \
        "bud with Containerfile should fail with nonexistent authfile"
 
+
 errmsg "cannot find Containerfile or Dockerfile" \
-       "no such file or directory" \
-       "bud-github-context-from-commit"
+       "no context directory and no Containerfile specified" \
+       "bud without any arguments should fail when no Dockerfile exists"
+
 
 ###############################################################################
 # BEGIN tests that don't make sense under podman due to fundamental differences

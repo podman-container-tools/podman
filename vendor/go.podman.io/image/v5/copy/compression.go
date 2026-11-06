@@ -34,6 +34,21 @@ var (
 	}
 )
 
+// annotationsAfterCompressionChange returns the annotations which remain valid
+// after changing a layer's compressed representation.
+func annotationsAfterCompressionChange(original map[string]string) map[string]string {
+	if original == nil {
+		return nil
+	}
+	result := make(map[string]string, len(original))
+	for key, value := range original {
+		if _, compressionSpecific := chunkedToc.ChunkedAnnotations[key]; !compressionSpecific {
+			result[key] = value
+		}
+	}
+	return result
+}
+
 // bpDetectCompressionStepData contains data that the copy pipeline needs about the “detect compression” step.
 type bpDetectCompressionStepData struct {
 	isCompressed                 bool
@@ -167,9 +182,10 @@ func (ic *imageCopier) bpcCompressUncompressed(stream *sourceStream, detected bp
 		reader, annotations := ic.compressedStream(stream.reader, *uploadedAlgorithm)
 		// Note: reader must be closed on all return paths.
 		stream.reader = reader
-		stream.info = types.BlobInfo{ // FIXME? Should we preserve more data in src.info?
-			Digest: "",
-			Size:   -1,
+		stream.info = types.BlobInfo{
+			Digest:      "",
+			Size:        -1,
+			Annotations: annotationsAfterCompressionChange(stream.info.Annotations),
 		}
 		specificVariantName := uploadedAlgorithm.Name()
 		if specificVariantName == uploadedAlgorithm.BaseVariantName() {
@@ -212,9 +228,10 @@ func (ic *imageCopier) bpcRecompressCompressed(stream *sourceStream, detected bp
 		recompressed, annotations := ic.compressedStream(decompressed, *ic.compressionFormat)
 		// Note: recompressed must be closed on all return paths.
 		stream.reader = recompressed
-		stream.info = types.BlobInfo{ // FIXME? Should we preserve more data in src.info? Notably the current approach correctly removes zstd:chunked metadata annotations.
-			Digest: "",
-			Size:   -1,
+		stream.info = types.BlobInfo{
+			Digest:      "",
+			Size:        -1,
+			Annotations: annotationsAfterCompressionChange(stream.info.Annotations),
 		}
 		specificVariantName := ic.compressionFormat.Name()
 		if specificVariantName == ic.compressionFormat.BaseVariantName() {
@@ -245,9 +262,10 @@ func (ic *imageCopier) bpcDecompressCompressed(stream *sourceStream, detected bp
 		}
 		// Note: s must be closed on all return paths.
 		stream.reader = s
-		stream.info = types.BlobInfo{ // FIXME? Should we preserve more data in src.info? Notably the current approach correctly removes zstd:chunked metadata annotations.
-			Digest: "",
-			Size:   -1,
+		stream.info = types.BlobInfo{
+			Digest:      "",
+			Size:        -1,
+			Annotations: annotationsAfterCompressionChange(stream.info.Annotations),
 		}
 		return &bpCompressionStepData{
 			operation:                             bpcOpDecompressCompressed,

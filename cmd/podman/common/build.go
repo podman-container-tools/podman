@@ -262,20 +262,11 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 		return nil, fmt.Errorf("context must be a directory: %q", contextDir)
 	}
 	if len(containerFiles) == 0 {
-		switch {
-		case utils.FileExists(filepath.Join(contextDir, "Containerfile")):
-			if utils.IsDir(filepath.Join(contextDir, "Containerfile")) {
-				return nil, fmt.Errorf("containerfile:  cannot be path or directory")
-			}
-			containerFiles = append(containerFiles, filepath.Join(contextDir, "Containerfile"))
-		case utils.FileExists(filepath.Join(contextDir, "Dockerfile")):
-			if utils.IsDir(filepath.Join(contextDir, "Dockerfile")) {
-				return nil, fmt.Errorf("dockerfile:  cannot be path or directory")
-			}
-			containerFiles = append(containerFiles, filepath.Join(contextDir, "Dockerfile"))
-		default:
-			return nil, fmt.Errorf("no Containerfile or Dockerfile specified or found in context directory, %s: %w", contextDir, syscall.ENOENT)
+		containerfile, err := buildahUtil.DiscoverContainerfile(contextDir)
+		if err != nil {
+			return nil, err
 		}
+		containerFiles = append(containerFiles, containerfile)
 	}
 
 	if err := areContainerfilesValid(contextDir, containerFiles); err != nil {
@@ -673,6 +664,7 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 		MaxPullPushRetries:      flags.Retry,
 		NamespaceOptions:        nsValues,
 		NoCache:                 flags.NoCache,
+		NoCacheFilter:           flags.NoCacheFilter,
 		OSFeatures:              flags.OSFeatures,
 		OSVersion:               flags.OSVersion,
 		OciDecryptConfig:        decConfig,

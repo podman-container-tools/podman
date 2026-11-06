@@ -717,7 +717,7 @@ EOF
     mv $tmpdir/Dockerfile $tmpdir/foofile
 
     run_podman 125 build -t $imgname $tmpdir
-    is "$output" "Error: no Containerfile or Dockerfile specified or found in context directory, $tmpdir: no such file or directory"
+    is "$output" "Error: cannot find Containerfile or Dockerfile in context directory: file does not exist"
     run_podman build -t $imgname -f $tmpdir/foofile $tmpdir
 
     # Clean up

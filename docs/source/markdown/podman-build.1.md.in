@@ -282,6 +282,8 @@ Has the same effect as:
 
 @@option no-cache
 
+@@option no-cache-filter
+
 @@option no-hostname
 
 @@option no-hosts

@@ -306,6 +306,10 @@ type BuildOptions struct {
 	// NoCache tells the builder to build the image from scratch without checking for a cache.
 	// It creates a new set of cached images for the build.
 	NoCache bool
+	// NoCacheFilter is a list of stage names or indices for which the cache should not be
+	// used, even when NoCache is false. Named stages not present in this list can still use
+	// the cache. Mirrors "docker buildx build --no-cache-filter".
+	NoCacheFilter []string
 	// RemoveIntermediateCtrs tells the builder whether to remove intermediate containers used
 	// during the build process. Default is true.
 	RemoveIntermediateCtrs bool
