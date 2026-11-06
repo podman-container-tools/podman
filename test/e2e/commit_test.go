@@ -257,9 +257,6 @@ var _ = Describe("Podman commit", func() {
 	})
 
 	It("podman commit with volume mounts and --include-volumes", func() {
-		// We need to figure out how volumes are going to work correctly with the remote
-		// client.  This does not currently work.
-		SkipIfRemote("--testing Remote Volumes")
 		s := podmanTest.Podman([]string{"run", "--name", "test1", "-v", "/tmp:/foo", "alpine", "date"})
 		s.WaitWithDefaultTimeout()
 		Expect(s).Should(ExitCleanly())
