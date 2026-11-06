@@ -39,6 +39,26 @@ var _ = Describe("Podman container clone", func() {
 		Expect(ctrStart).To(ExitCleanly())
 	})
 
+	It("podman container clone preserves disabled init", func() {
+		confFile := filepath.Join(podmanTest.TempDir, "containers.conf")
+		err := os.WriteFile(confFile, []byte("[containers]\ninit=true\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", confFile)
+
+		create := podmanTest.PodmanExitCleanly(
+			"create", "--init=false", ALPINE, "/bin/true",
+		)
+
+		clone := podmanTest.PodmanExitCleanly("container", "clone", create.OutputToString())
+
+		inspect := podmanTest.PodmanExitCleanly("inspect", clone.OutputToString())
+
+		data := inspect.InspectContainerToJSON()
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].HostConfig.Init).To(BeFalse())
+		Expect(data[0].Path).To(Equal("/bin/true"))
+	})
+
 	It("podman container clone image test", func() {
 		create := podmanTest.Podman([]string{"create", ALPINE})
 		create.WaitWithDefaultTimeout()

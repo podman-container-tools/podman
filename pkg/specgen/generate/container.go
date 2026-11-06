@@ -418,6 +418,9 @@ func ConfigToSpec(rt *libpod.Runtime, specg *specgen.SpecGenerator, containerID 
 	conf.EnvSecrets = tmpEnvSecrets
 
 	if conf.Spec != nil {
+		initEnabled := conf.Spec.Annotations[define.InspectAnnotationInit] == define.InspectResponseTrue
+		specg.Init = &initEnabled
+
 		if conf.Spec.Linux != nil && conf.Spec.Linux.Resources != nil {
 			if specg.ResourceLimits == nil {
 				specg.ResourceLimits = conf.Spec.Linux.Resources

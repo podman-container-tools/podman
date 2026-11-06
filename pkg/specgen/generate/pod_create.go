@@ -88,6 +88,12 @@ func MakePod(p *entities.PodSpec, rt *libpod.Runtime) (_ *libpod.Pod, finalErr e
 		p.PodSpecGen.InfraContainerSpec.ResourceLimits = nil
 		p.PodSpecGen.InfraContainerSpec.WeightDevice = nil
 
+		// keep infra containers from inheriting the configured init default.
+		if p.PodSpecGen.InfraContainerSpec.Init == nil {
+			value := false
+			p.PodSpecGen.InfraContainerSpec.Init = &value
+		}
+
 		rtSpec, spec, opts, err := MakeContainer(context.Background(), rt, p.PodSpecGen.InfraContainerSpec, false, nil)
 		if err != nil {
 			return nil, err

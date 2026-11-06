@@ -247,13 +247,8 @@ func extractInlineSeccompProfile(securityOpts []string) (string, []string) {
 func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.ContainerCreateOptions, []string, error) {
 	var (
 		entrypoint *string
-		init       bool
 		specPorts  []types.PortMapping
 	)
-
-	if cc.HostConfig.Init != nil {
-		init = *cc.HostConfig.Init
-	}
 
 	// Iterate devices and convert to CLI expected string
 	devices := make([]string, 0, len(cc.HostConfig.Devices))
@@ -560,7 +555,7 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 		HealthTimeout:        define.DefaultHealthCheckTimeout,
 		Hostname:             cc.Hostname,
 		ImageVolume:          "anonymous",
-		Init:                 init,
+		Init:                 cc.HostConfig.Init,
 		Interactive:          cc.OpenStdin,
 		IPC:                  string(cc.HostConfig.IpcMode),
 		Label:                stringMaptoArray(cc.Labels),

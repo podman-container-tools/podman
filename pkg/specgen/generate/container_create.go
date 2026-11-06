@@ -37,6 +37,11 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		return nil, nil, nil, err
 	}
 
+	if s.Init == nil {
+		value := rtc.Containers.Init
+		s.Init = &value
+	}
+
 	rlimits, err := specgenutil.GenRlimits(rtc.Ulimits())
 	if err != nil {
 		return nil, nil, nil, err
