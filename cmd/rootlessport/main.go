@@ -95,7 +95,9 @@ func parent() error {
 		return err
 	}
 	defer os.RemoveAll(stateDir)
-	driver, err := rkbuiltin.NewParentDriver(&logrusWriter{prefix: "parent: "}, stateDir)
+	// Preserve real TCP client source IPs via IP_TRANSPARENT (nft/iptables).
+	// UDP and loopback clients still use the non-transparent fallback.
+	driver, err := rkbuiltin.NewParentDriver(&logrusWriter{prefix: "parent: "}, stateDir, true, "auto")
 	if err != nil {
 		return err
 	}
