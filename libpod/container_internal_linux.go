@@ -740,6 +740,39 @@ var hasCapSysResource = sync.OnceValues(func() (bool, error) {
 	return currentCaps.Get(capability.EFFECTIVE, capability.CAP_SYS_RESOURCE), nil
 })
 
+// triggerAutofsMount performs a Statx without AT_NO_AUTOMOUNT so the kernel
+// mounts an autofs share at path (if one exists) before we bind-mount it into
+// the container. Plain stat(2)/fstatat(2)/os.Stat imply AT_NO_AUTOMOUNT and will
+// not trigger the mount; we only need that side effect. Errors are logged but
+// not returned so a failed trigger does not block container setup; later mount
+// steps still report real failures.
+func triggerAutofsMount(path string) {
+	if path == "" {
+		return
+	}
+	var st unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, path, 0, unix.STATX_TYPE, &st); err != nil {
+		logrus.Debugf("statx on volume source %q (autofs trigger): %v", path, err)
+	}
+}
+
+// triggerAutofsMountInRoot resolves subpath under root with pathrs.OpenInRoot and
+// triggers autofs via Statx on /proc/self/fd/N. That avoids filepath.Join races on
+// a shared volume (symlink → host path) while still waking an automount that sits
+// on the subpath itself rather than on root.
+func triggerAutofsMountInRoot(root, subpath string) {
+	if root == "" || subpath == "" {
+		return
+	}
+	f, err := pathrs.OpenInRoot(root, subpath)
+	if err != nil {
+		logrus.Debugf("open %q under %q (autofs trigger): %v", subpath, root, err)
+		return
+	}
+	defer f.Close()
+	triggerAutofsMount(fmt.Sprintf("/proc/self/fd/%d", int(f.Fd())))
+}
+
 // containerPathIsFile returns true if the given containerPath is a file
 func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
 	f, err := pathrs.OpenInRoot(unsafeRoot, containerPath)
