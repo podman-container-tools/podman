@@ -170,6 +170,12 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		return nil, err
 	}
 
+	// Apply the containers.conf default when no-new-privileges is unspecified.
+	// Resolving it here makes remote requests use the server's configuration.
+	if s.NoNewPrivileges == nil && rtc.Containers.NoNewPrivileges {
+		s.NoNewPrivileges = new(true)
+	}
+
 	// Get Default Environment from containers.conf
 	envHost := false
 	if s.EnvHost != nil {

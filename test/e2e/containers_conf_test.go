@@ -54,6 +54,30 @@ var _ = Describe("Verify podman containers.conf usage", func() {
 		}
 	})
 
+	It("no_new_privileges default and security-opt override", func() {
+		hostNoNewPrivs := SystemExec("grep", []string{"-E", "^NoNewPrivs:[[:space:]]+0$", "/proc/self/status"})
+		if hostNoNewPrivs.ExitCode() != 0 {
+			Skip("host NoNewPrivs is set or unavailable; the kernel cannot clear it")
+		}
+
+		configPath := filepath.Join(podmanTest.TempDir, "no-new-privileges.conf")
+		Expect(os.WriteFile(configPath, []byte("[containers]\nno_new_privileges=true\n"), 0o644)).To(Succeed())
+		GinkgoT().Setenv("CONTAINERS_CONF", configPath)
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+		}
+
+		session := podmanTest.Podman([]string{"run", "--rm", BB, "grep", "NoNewPrivs", "/proc/self/status"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(MatchRegexp(`NoNewPrivs:\s+1`), "containers.conf should enable no_new_privileges")
+
+		session = podmanTest.Podman([]string{"run", "--rm", "--security-opt", "no-new-privileges=false", BB, "grep", "NoNewPrivs", "/proc/self/status"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(MatchRegexp(`NoNewPrivs:\s+0`), "explicit security-opt should override containers.conf")
+	})
+
 	It("oom-score-adj", func() {
 		// containers.conf is set to "oom_score_adj=999"
 		session := podmanTest.Podman([]string{"run", "--rm", ALPINE, "cat", "/proc/self/oom_score_adj"})

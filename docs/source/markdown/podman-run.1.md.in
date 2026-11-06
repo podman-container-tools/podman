@@ -797,6 +797,15 @@ $ podman run --security-opt unmask=/proc/* fedora bash
 $ podman run --security-opt unmask=/foo/bar:/sys/firmware fedora bash
 ```
 
+### Preventing privilege escalation
+
+The **no-new-privileges** security option prevents processes in the container
+from gaining additional privileges, for example through setuid or setgid
+executables. Use **--security-opt no-new-privileges** to enable this for a
+container. To enable it by default, set **no_new_privileges=true** under the
+**[containers]** table in **containers.conf**. An explicit
+**--security-opt no-new-privileges=false** overrides that default.
+
 ### Setting device weight via **--blkio-weight-device** flag.
 
 ```
