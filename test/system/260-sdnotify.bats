@@ -311,6 +311,46 @@ READY=1" "Container log after ready signal"
     _stop_socat
 }
 
+# https://github.com/containers/podman/issues/30090
+# bats test_tags=ci:parallel
+@test "sdnotify : healthy - pod lock not held while waiting for healthy" {
+    local podname=p-$(safename)
+    local ctr=c-$(safename)
+    local wait_file="$PODMAN_TMPDIR/$(random_string).start_returned"
+
+    run_podman pod create --name $podname
+    run_podman create --pod $podname --name $ctr \
+            --health-cmd "test -f /ready"         \
+            --health-interval 2s                  \
+            --health-retries 1                    \
+            --sdnotify=healthy                    \
+            $IMAGE sleep infinity
+
+    # Start blocks until the container turns healthy, which it cannot do
+    # until /ready exists. Create wait_file once start has returned.
+    (timeout --foreground -v --kill=5 60 "${PODMAN_CMD[@]}" start $ctr && touch $wait_file) &
+
+    run_podman wait --condition=running $ctr
+    assert "$(test -e $wait_file && echo returned || echo waiting)" = "waiting" \
+           "podman start must still be waiting for the container to turn healthy"
+
+    # While start is waiting, pod operations must not block on the pod lock.
+    PODMAN_TIMEOUT=15 run_podman pod inspect --format '{{.State}}' $podname
+    is "$output" "Running" "pod state while start waits for healthy"
+
+    PODMAN_TIMEOUT=15 run_podman create --pod $podname --name ${ctr}-2 $IMAGE true
+
+    # Let the container turn healthy and make sure start returns.
+    run_podman exec $ctr touch /ready
+    for i in $(seq 1 30); do
+        test -e $wait_file && break
+        sleep 1
+    done
+    test -e $wait_file || die "podman start did not return after the container turned healthy"
+
+    run_podman pod rm -f -t0 $podname
+}
+
 # bats test_tags=ci:parallel
 @test "sdnotify : play kube - no policies" {
     # Create the YAMl file
