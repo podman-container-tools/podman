@@ -13,10 +13,6 @@ import (
 )
 
 var _ = Describe("Podman container clone", func() {
-	BeforeEach(func() {
-		SkipIfRemote("podman container clone is not supported in remote")
-	})
-
 	It("podman container clone basic test", func() {
 		create := podmanTest.Podman([]string{"create", ALPINE})
 		create.WaitWithDefaultTimeout()

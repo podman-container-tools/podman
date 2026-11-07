@@ -1925,5 +1925,34 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	//   500:
 	//     $ref: "#/responses/internalError"
 	r.HandleFunc(VersionedPath("/libpod/containers/{name}/update"), s.APIHandler(libpod.UpdateContainer)).Methods(http.MethodPost)
+	// swagger:operation POST /libpod/containers/{name}/clone libpod ContainerCloneLibpod
+	// ---
+	// tags:
+	//   - containers
+	// summary: Clone a container
+	// description: Create a copy of an existing container, optionally overriding its configuration.
+	// parameters:
+	//  - in: path
+	//    name: name
+	//    type: string
+	//    required: true
+	//    description: the name or ID of the container to clone
+	//  - in: body
+	//    name: options
+	//    description: options to override, unset options keep the value of the original container
+	//    schema:
+	//      $ref: "#/definitions/ContainerCloneEntities"
+	// produces:
+	// - application/json
+	// responses:
+	//   201:
+	//     $ref: "#/responses/containerCreateResponse"
+	//   400:
+	//     $ref: "#/responses/badParamError"
+	//   404:
+	//     $ref: "#/responses/containerNotFound"
+	//   500:
+	//     $ref: "#/responses/internalError"
+	r.HandleFunc(VersionedPath("/libpod/containers/{name}/clone"), s.APIHandler(libpod.CloneContainer)).Methods(http.MethodPost)
 	return nil
 }

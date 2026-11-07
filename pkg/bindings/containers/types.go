@@ -348,3 +348,36 @@ type CopyOptions struct {
 type ExecRemoveOptions struct {
 	Force *bool
 }
+
+// CloneOptions are optional options for cloning a container.
+//
+//go:generate go run ../generator/generator.go CloneOptions
+type CloneOptions struct {
+	// Name of the new container
+	Name *string
+	// Image used by the new container instead of the original image
+	Image *string
+	// Pod to create the new container in
+	Pod *string
+	// Destroy removes the original container after cloning it
+	Destroy *bool
+	// Force removes the original container even if it is running, requires Destroy
+	Force *bool
+	// Run starts the new container
+	Run *bool
+
+	BlkIOWeight       *string
+	BlkIOWeightDevice []string
+	CPUPeriod         *uint64
+	CPUQuota          *int64
+	CPUShares         *uint64
+	CPUs              *float64
+	CPUSetCPUs        *string
+	CPUSetMems        *string
+	DeviceReadBPs     []string
+	DeviceWriteBPs    []string
+	Memory            *string
+	MemoryReservation *string
+	MemorySwap        *string
+	MemorySwappiness  *int64
+}
