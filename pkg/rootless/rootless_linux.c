@@ -623,6 +623,7 @@ can_use_shortcut (char **argv)
           || strcmp (argv[argc], "machine") == 0
           || strcmp (argv[argc], "version") == 0
           || strcmp (argv[argc], "context") == 0
+          || strcmp (argv[argc], "connection") == 0
           || strcmp (argv[argc], "search") == 0
           || strcmp (argv[argc], "compose") == 0)
         {

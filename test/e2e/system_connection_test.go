@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -82,6 +83,49 @@ var _ = Describe("podman system connection", func() {
 			Expect(session).Should(ExitCleanly())
 			Expect(session.OutputToString()).To(Equal("QE ssh://root@podman.test:2222/run/podman/podman.sock ~/.ssh/id_rsa true true"))
 		})
+
+		DescribeTable("add with native SSH preserves the caller's user namespace", func(args []string) {
+			SkipIfRemote("requires local rootless namespace setup")
+			SkipIfNotRootless("requires a rootless user namespace")
+			if runtime.GOOS != "linux" {
+				Skip("user namespaces require Linux")
+			}
+
+			userNS, err := os.Readlink("/proc/self/ns/user")
+			Expect(err).ToNot(HaveOccurred())
+
+			// Make an existing namespace available to the early C startup shortcut.
+			podmanTest.PodmanExitCleanly("unshare", "true")
+
+			identityPath := filepath.Join(podmanTest.TempDir, "ssh-identity")
+			sshPath := filepath.Join(podmanTest.TempDir, "ssh")
+			err = os.WriteFile(sshPath, []byte(`#!/bin/sh
+			set -eu
+			{
+				id -u
+				readlink /proc/self/ns/user
+			} > "$SSH_TEST_IDENTITY"
+			printf '%s\n' '{"host":{"remoteSocket":{"path":"/run/podman/podman.sock"}}}'
+			`), 0o755)
+			Expect(err).ToNot(HaveOccurred())
+			GinkgoT().Setenv("PATH", podmanTest.TempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			GinkgoT().Setenv("SSH_TEST_IDENTITY", identityPath)
+
+			cmd := append([]string{"--ssh=native"}, args...)
+			cmd = append(cmd, "native-ssh", "ssh://test@podman.test/run/podman/podman.sock")
+			podmanTest.PodmanExitCleanly(cmd...)
+
+			identity, err := os.ReadFile(identityPath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(identity)).To(Equal(fmt.Sprintf("%d\n%s\n", os.Getuid(), userNS)),
+				"native SSH must retain the caller's UID and user namespace")
+		},
+			Entry("without intervening flags", []string{"system", "connection", "add"}),
+			Entry("with a flag after system", []string{"system", "--log-level=error", "connection", "add"}),
+			Entry("with a flag after connection", []string{"system", "connection", "--log-level=error", "add"}),
+			Entry("with a separate flag value after system", []string{"system", "--log-level", "error", "connection", "add"}),
+			Entry("with a separate flag value after connection", []string{"system", "connection", "--log-level", "error", "add"}),
+		)
 
 		It("add UDS", func() {
 			cmd := []string{
