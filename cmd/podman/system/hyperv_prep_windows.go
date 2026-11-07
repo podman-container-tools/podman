@@ -13,17 +13,32 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/completion"
+	"go.podman.io/common/pkg/report"
+	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/cmd/podman/validate"
 	"go.podman.io/podman/v6/pkg/machine/hyperv"
 	"go.podman.io/podman/v6/pkg/machine/hyperv/vsock"
 	"go.podman.io/podman/v6/pkg/machine/windows"
 )
 
+type HyperVPrepStatus string
+
 const (
+	HyperVPrepStatusApplied          HyperVPrepStatus = "applied"
+	HyperVPrepStatusNotApplied       HyperVPrepStatus = "notApplied"
+	HyperVPrepStatusPartiallyApplied HyperVPrepStatus = "partiallyApplied"
+
 	mountsFlag    = "mounts"
 	defaultMounts = 2
 )
+
+type HyperVPrepStatusReport struct {
+	CurrentUserIsHyperVAdmin   bool             `json:"currentUserIsHyperVAdmin"`
+	HasRequiredRegistryEntries bool             `json:"hasRequiredRegistryEntries"`
+	Status                     HyperVPrepStatus `json:"status"`
+}
 
 var (
 	hypervPrepDescription = `Command for Windows administrators who need to configure an host for running Hyper-V-based Podman machines.
@@ -44,9 +59,11 @@ var (
 		ValidArgsFunction: completion.AutocompleteNone,
 		Example: `podman system hyperv-prep
 podman system hyperv-prep --status
+podman system hyperv-prep --status --format=json
 podman system hyperv-prep --reset --force`,
 	}
 	showStatus   bool
+	statusFormat string
 	resetEntries bool
 	mounts       int
 )
@@ -58,17 +75,27 @@ func init() {
 	})
 	flags := hypervPrepCommand.Flags()
 	flags.BoolVar(&showStatus, "status", false, "Show vsock registry entries and Hyper-V group membership status")
+	flags.StringVar(&statusFormat, "format", "", "Format the status output to JSON or a Go template")
 	flags.BoolVar(&resetEntries, "reset", false, "Remove all Podman vsock registry entries and optionally remove user from Hyper-V Administrators group")
 	flags.BoolVarP(&force, "force", "f", false, "Don't ask for confirmation during reset. Valid only when used with --reset.")
 	flags.IntVar(&mounts, mountsFlag, defaultMounts, "Number of vsock entries to create for mount purpose")
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "reset", mountsFlag)
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "force")
 	_ = hypervPrepCommand.RegisterFlagCompletionFunc(mountsFlag, completion.AutocompleteNone)
+	_ = hypervPrepCommand.RegisterFlagCompletionFunc("format", common.AutocompleteFormat(&HyperVPrepStatusReport{}))
 }
 
 func hypervPrep(_ *cobra.Command, _ []string) error {
+	if statusFormat != "" && !showStatus {
+		return errors.New("'--format' can only be used with '--status'")
+	}
+
 	// --status can run without administrator privileges
 	if showStatus {
+		if statusFormat != "" {
+			return doFormattedStatus(statusFormat)
+		}
+
 		if err := doStatusForRegistries(); err != nil {
 			return err
 		}
@@ -177,6 +204,43 @@ func doStatusForGroupMembership() {
 		fmt.Println("  Current user is a member")
 	} else {
 		fmt.Println("  Current user is NOT a member")
+	}
+}
+
+func doFormattedStatus(format string) error {
+	currentUserIsHyperVAdmin := hyperv.IsHyperVAdminsGroupMember()
+	hasRequiredEntries := vsock.CheckIfHVSockRegistryEntriesExist(mounts)
+
+	var hyperVPrepStatus HyperVPrepStatus
+	switch {
+	case currentUserIsHyperVAdmin && hasRequiredEntries:
+		hyperVPrepStatus = HyperVPrepStatusApplied
+	case !currentUserIsHyperVAdmin && !hasRequiredEntries:
+		hyperVPrepStatus = HyperVPrepStatusNotApplied
+	default:
+		hyperVPrepStatus = HyperVPrepStatusPartiallyApplied
+	}
+
+	statusReport := HyperVPrepStatusReport{
+		CurrentUserIsHyperVAdmin:   currentUserIsHyperVAdmin,
+		HasRequiredRegistryEntries: hasRequiredEntries,
+		Status:                     hyperVPrepStatus,
+	}
+
+	switch {
+	case report.IsJSON(format):
+		return utils.PrintGenericJSON(statusReport)
+
+	default:
+		// Assume go template for any other format string
+		rpt := report.New(os.Stdout, "hyperv-prep")
+		defer rpt.Flush()
+
+		rpt, err := rpt.Parse(report.OriginUnknown, format)
+		if err != nil {
+			return err
+		}
+		return rpt.Execute(statusReport)
 	}
 }
 
