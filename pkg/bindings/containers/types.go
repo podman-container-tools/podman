@@ -158,7 +158,8 @@ type ListOptions struct {
 //
 //go:generate go run ../generator/generator.go PruneOptions
 type PruneOptions struct {
-	Filters map[string][]string
+	Filters  map[string][]string
+	External *bool
 }
 
 // RemoveOptions are optional options for removing containers

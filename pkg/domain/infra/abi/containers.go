@@ -394,6 +394,33 @@ func (ic *ContainerEngine) ContainerStopService(ctx context.Context, namesOrIds 
 }
 
 func (ic *ContainerEngine) ContainerPrune(_ context.Context, options entities.ContainerPruneOptions) ([]*reports.PruneReport, error) {
+	if options.External {
+		filterFuncs := make([]entities.ExternalContainerFilter, 0, len(options.Filters))
+		for k, v := range options.Filters {
+			generatedFunc, err := dfilters.GenerateExternalContainerFilterFuncs(k, v, ic.Libpod)
+			if err != nil {
+				return nil, err
+			}
+
+			filterFuncs = append(filterFuncs, generatedFunc)
+		}
+
+		containers, err := ps.GetExternalContainerLists(ic.Libpod, filterFuncs...)
+		if err != nil {
+			return nil, err
+		}
+
+		pruneReports := make([]*reports.PruneReport, 0, len(containers))
+		for _, ctr := range containers {
+			report := &reports.PruneReport{Id: ctr.ID}
+			if err := ic.Libpod.RemoveStorageContainer(ctr.ID, false); err != nil {
+				report.Err = err
+			}
+			pruneReports = append(pruneReports, report)
+		}
+		return pruneReports, nil
+	}
+
 	filterFuncs := make([]libpod.ContainerFilter, 0, len(options.Filters))
 	for k, v := range options.Filters {
 		generatedFunc, err := dfilters.GeneratePruneContainerFilterFuncs(k, v, ic.Libpod)
