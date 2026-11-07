@@ -14,8 +14,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -28,6 +31,8 @@ import (
 const (
 	dnsForwardOpt   = "--dns-forward"
 	mapGuestAddrOpt = "--map-guest-addr"
+	pidOpt          = "--pid"
+	pidOptShort     = "-P"
 
 	// dnsForwardIpv4 static ip used as nameserver address inside the netns,
 	// given this is a "link local" ip it should be very unlikely that it causes conflicts.
@@ -68,6 +73,10 @@ type SetupOptions struct {
 	// ExtraOptions are pasta(1) cli options, these will be appended after the
 	// pasta options from containers.conf to allow some form of overwrite.
 	ExtraOptions []string
+	// PidFile is the path pasta should write its pid to. Set this when the
+	// pid must outlive the Setup() call, e.g. to kill the process later.
+	// It conflicts with --pid/-P from ExtraOptions or containers.conf.
+	PidFile string
 }
 
 // Setup start the pasta process for the given netns.
@@ -80,15 +89,21 @@ func Setup(opts *SetupOptions) (*SetupResult, error) {
 		return nil, fmt.Errorf("could not find pasta, the network namespace can't be configured: %w", err)
 	}
 
-	cmdArgs, dnsForwardIPs, mapGuestAddrIPs, err := createPastaArgs(opts)
+	args, err := createPastaArgs(opts)
 	if err != nil {
 		return nil, err
 	}
-
-	logrus.Debugf("pasta arguments: %s", strings.Join(cmdArgs, " "))
+	if args.pidFileTmpDir != "" {
+		defer func() {
+			if err := os.RemoveAll(args.pidFileTmpDir); err != nil {
+				logrus.Debugf("Could not remove pasta pid file dir: %v", err)
+			}
+		}()
+	}
+	logrus.Debugf("pasta arguments: %s", strings.Join(args.cmdArgs, " "))
 
 	// pasta forks once ready, and quits once we delete the target namespace
-	out, err := exec.Command(path, cmdArgs...).CombinedOutput()
+	out, err := exec.Command(path, args.cmdArgs...).CombinedOutput()
 	if err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, fmt.Errorf("pasta failed with exit code %d:\n%s",
@@ -108,6 +123,12 @@ func Setup(opts *SetupOptions) (*SetupResult, error) {
 
 	var ipv4, ipv6 bool
 	result := &SetupResult{}
+
+	result.Pid, err = readPidFile(args.pidFile)
+	if err != nil {
+		return nil, fmt.Errorf("could not read pasta pid file %s: %w", args.pidFile, err)
+	}
+
 	err = netns.WithNetNSPath(opts.Netns, func(_ netns.NetNS) error {
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
@@ -145,8 +166,8 @@ func Setup(opts *SetupOptions) (*SetupResult, error) {
 	}
 
 	result.IPv6 = ipv6
-	result.DNSForwardIPs = filterIPFamily(dnsForwardIPs, ipv4, ipv6)
-	result.MapGuestAddrIPs = filterIPFamily(mapGuestAddrIPs, ipv4, ipv6)
+	result.DNSForwardIPs = filterIPFamily(args.dnsForwardIPs, ipv4, ipv6)
+	result.MapGuestAddrIPs = filterIPFamily(args.mapGuestAddrIPs, ipv4, ipv6)
 
 	return result, nil
 }
@@ -163,9 +184,31 @@ func filterIPFamily(ips []string, ipv4, ipv6 bool) []string {
 	return result
 }
 
-// createPastaArgs creates the pasta arguments, it returns the args to be passed to pasta(1)
-// and as second arg the dns forward ips used. As third arg the map guest addr ips used.
-func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
+// pastaArgs is the result of createPastaArgs.
+type pastaArgs struct {
+	// cmdArgs are the arguments to be passed to pasta(1).
+	cmdArgs []string
+	// dnsForwardIPs are the dns forward ips used.
+	dnsForwardIPs []string
+	// mapGuestAddrIPs are the map guest addr ips used.
+	mapGuestAddrIPs []string
+	// pidFile is the file pasta writes its pid to.
+	pidFile string
+	// pidFileTmpDir must be removed by the caller when not empty.
+	pidFileTmpDir string
+}
+
+// mkPidFileTmpDir creates the directory for the pid file we ask pasta(1) to
+// write.  It must be somewhere pasta may write to: the AppArmor profile from
+// contrib/apparmor includes the user-tmp abstraction, which covers /var/tmp
+// where podman points $TMPDIR.
+func mkPidFileTmpDir() (string, error) {
+	return os.MkdirTemp("", "pasta")
+}
+
+// createPastaArgs creates the pasta arguments and reports which pid file, dns
+// forward ips and map guest addr ips are in effect.
+func createPastaArgs(opts *SetupOptions) (*pastaArgs, error) {
 	noTCPInitPorts := true
 	noUDPInitPorts := true
 	noTCPNamespacePorts := true
@@ -191,6 +234,8 @@ func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
 
 	var dnsForwardIPs []string
 	var mapGuestAddrIPs []string
+	var pidFile string
+	userPidFile := false
 	for i, opt := range cmdArgs {
 		switch opt {
 		case "-t", "--tcp-ports":
@@ -212,6 +257,22 @@ func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
 			if len(cmdArgs) > i+1 {
 				mapGuestAddrIPs = append(mapGuestAddrIPs, cmdArgs[i+1])
 			}
+		case pidOpt, pidOptShort:
+			userPidFile = true
+			if len(cmdArgs) > i+1 {
+				pidFile = cmdArgs[i+1]
+			}
+		default:
+			// getopt_long(3) also accepts --pid=FILE and -PFILE, so those
+			// forms must be recognized as well to know where pasta writes
+			// its pid.
+			if after, ok := strings.CutPrefix(opt, pidOpt+"="); ok {
+				userPidFile = true
+				pidFile = after
+			} else if after, ok := strings.CutPrefix(opt, pidOptShort); ok && after != "" {
+				userPidFile = true
+				pidFile = after
+			}
 		}
 	}
 
@@ -231,7 +292,7 @@ func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
 				noUDPInitPorts = false
 				cmdArgs = append(cmdArgs, "-u")
 			default:
-				return nil, nil, nil, fmt.Errorf("can't forward protocol: %s", protocol)
+				return nil, fmt.Errorf("can't forward protocol: %s", protocol)
 			}
 
 			arg := fmt.Sprintf("%s%d-%d:%d-%d", addr,
@@ -274,7 +335,46 @@ func createPastaArgs(opts *SetupOptions) ([]string, []string, []string, error) {
 		mapGuestAddrIPs = append(mapGuestAddrIPs, mapGuestAddrIpv4)
 	}
 
+	var pidFileTmpDir string
+	switch {
+	case opts.PidFile != "" && userPidFile:
+		// Do not silently ignore the pid file the user asked for, and do not
+		// rely on pasta(1) using the last --pid it is given either.
+		return nil, fmt.Errorf("cannot use %s or %s in the pasta options, the pid file is already set to %s",
+			pidOpt, pidOptShort, opts.PidFile)
+	case opts.PidFile != "":
+		pidFile = opts.PidFile
+		cmdArgs = append(cmdArgs, pidOpt, pidFile)
+	case userPidFile:
+		// The user asked for a pid file themselves, read theirs.
+	default:
+		// Use a directory rather than a temporary file so we do not have to
+		// care whether pasta is happy to overwrite an existing pid file.
+		dir, err := mkPidFileTmpDir()
+		if err != nil {
+			return nil, fmt.Errorf("could not create pasta pid file dir: %w", err)
+		}
+		pidFileTmpDir = dir
+		pidFile = filepath.Join(dir, "pasta.pid")
+		cmdArgs = append(cmdArgs, pidOpt, pidFile)
+	}
+
 	cmdArgs = append(cmdArgs, "--netns", opts.Netns)
 
-	return cmdArgs, dnsForwardIPs, mapGuestAddrIPs, nil
+	return &pastaArgs{
+		cmdArgs:         cmdArgs,
+		dnsForwardIPs:   dnsForwardIPs,
+		mapGuestAddrIPs: mapGuestAddrIPs,
+		pidFile:         pidFile,
+		pidFileTmpDir:   pidFileTmpDir,
+	}, nil
+}
+
+// readPidFile reads a pid written by pasta(1) via --pid.
+func readPidFile(path string) (int, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(b)))
 }

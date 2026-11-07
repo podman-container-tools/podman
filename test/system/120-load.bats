@@ -113,11 +113,23 @@ verify_iid_and_name() {
         if [[ -z "$notme" ]]; then
             skip "To run this test, set PODMAN_ROOTLESS_USER to a safe username"
         fi
-        _sudo() { command sudo -n -u "$notme" "$@"; }
+        _sudo() (
+            cd /
+            command sudo -n -u "$notme" "$@"
+        )
     fi
 
     # If we can't sudo, we can't test.
     _sudo true || skip "cannot sudo to $notme"
+
+    # Verify that save, load, and tag work when the destination user cannot access the caller's working directory.
+    if ! is_rootless; then
+        local private_dir=$PODMAN_TMPDIR/scp-cwd
+        mkdir -m 0700 "$private_dir"
+        run _sudo test -x "$private_dir"
+        assert "$status" -eq 1 "destination user cannot access the working directory"
+        cd "$private_dir"
+    fi
 
     # Preserve digest of original image; we will compare against it later
     run_podman image inspect --format '{{.RepoDigests}}' $IMAGE
@@ -178,6 +190,23 @@ verify_iid_and_name() {
     run_podman rmi foobar:123
 }
 
+@test "podman image scp transfer with relative paths" {
+    skip_if_remote "only applicable under local podman"
+    skip_if_rootless "tests local transfers between root-owned stores"
+
+    cd "$PODMAN_TMPDIR"
+    local conf=registries-$(random_string).conf
+    printf 'unqualified-search-registries = ["example.com"]\n' > "$conf"
+
+    # Both forms must resolve paths relative to the caller's directory.
+    run_podman --registries-conf "./$conf" image scp root@localhost::$IMAGE root@localhost::
+    run_podman --registries-conf="./$conf" image scp root@localhost::$IMAGE root@localhost::
+    run_podman --registries-conf "$PODMAN_TMPDIR/$conf" image scp root@localhost::$IMAGE root@localhost::
+
+    # A command failure must be returned without retrying from another directory.
+    run_podman 125 --registries-conf "./$conf" image scp root@localhost::example.com/no-such-image:missing root@localhost::
+    assert "$output" =~ "image not known" "missing image error is preserved"
+}
 
 @test "podman load - by image ID" {
     # FIXME: how to build a simple archive instead?

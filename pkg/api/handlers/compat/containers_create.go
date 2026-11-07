@@ -23,6 +23,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/api/handlers"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
+	"go.podman.io/podman/v6/pkg/api/handlers/utils/apiutil"
 	api "go.podman.io/podman/v6/pkg/api/types"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/domain/infra/abi"
@@ -32,6 +33,28 @@ import (
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/fileutils"
 )
+
+// volumeDriverWarning mirrors moby's handleVolumeDriverBC: the container wide
+// VolumeDriver is ignored for volumes defined via Mounts (API >= 1.48.0)
+func volumeDriverWarning(r *http.Request, driver string, mounts []mount.Mount) string {
+	if driver == "" {
+		return ""
+	}
+	if _, err := utils.SupportedVersion(r, ">=1.48.0"); err != nil && !errors.Is(err, apiutil.ErrVersionNotGiven) {
+		return ""
+	}
+	for _, m := range mounts {
+		if m.Type != mount.TypeVolume {
+			continue
+		}
+		// A driver set on the mount itself is unambiguous
+		if m.VolumeOptions != nil && m.VolumeOptions.DriverConfig != nil && m.VolumeOptions.DriverConfig.Name != "" {
+			continue
+		}
+		return "WARNING: the container-wide volume-driver configuration is ignored for volumes specified via 'mount'. Use '--mount type=volume,volume-driver=...' instead"
+	}
+	return ""
+}
 
 func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
@@ -166,9 +189,13 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("container create: %w", err))
 		return
 	}
+	warnings := []string{}
+	if warn := volumeDriverWarning(r, body.HostConfig.VolumeDriver, body.HostConfig.Mounts); warn != "" {
+		warnings = append(warnings, warn)
+	}
 	createResponse := entities.ContainerCreateResponse{
 		ID:       report.Id,
-		Warnings: []string{},
+		Warnings: warnings,
 	}
 	utils.WriteResponse(w, http.StatusCreated, createResponse)
 }
@@ -274,13 +301,8 @@ func convertMountToCliString(m mount.Mount) (string, error) {
 func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.ContainerCreateOptions, []string, error) {
 	var (
 		entrypoint *string
-		init       bool
 		specPorts  []types.PortMapping
 	)
-
-	if cc.HostConfig.Init != nil {
-		init = *cc.HostConfig.Init
-	}
 
 	// Iterate devices and convert to CLI expected string
 	devices := make([]string, 0, len(cc.HostConfig.Devices))
@@ -543,7 +565,7 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 		HealthTimeout:        define.DefaultHealthCheckTimeout,
 		Hostname:             cc.Hostname,
 		ImageVolume:          "anonymous",
-		Init:                 init,
+		Init:                 cc.HostConfig.Init,
 		Interactive:          cc.OpenStdin,
 		IPC:                  string(cc.HostConfig.IpcMode),
 		Label:                stringMaptoArray(cc.Labels),

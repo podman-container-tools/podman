@@ -30,14 +30,14 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/schema v1.4.1
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hugelgupf/p9 v0.4.1
+	github.com/hugelgupf/p9 v0.5.1
 	github.com/jinzhu/copier v0.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/kevinburke/ssh_config v1.5.0
 	github.com/klauspost/pgzip v1.3.0
 	github.com/linuxkit/virtsock v0.0.0-20241009230534-cb6a20cc0422
 	github.com/mattn/go-shellwords v1.0.16
-	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/mdlayher/vsock v1.4.0
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/moby/api v1.56.1
@@ -65,9 +65,9 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
 	go.podman.io/buildah v1.46.0
-	go.podman.io/common v0.70.0
-	go.podman.io/image/v5 v5.42.0
-	go.podman.io/storage v1.65.0
+	go.podman.io/common v0.70.1-0.20261029192241-87857644edbb
+	go.podman.io/image/v5 v5.42.1-0.20261029192241-87857644edbb
+	go.podman.io/storage v1.65.1-0.20261029192241-87857644edbb
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
@@ -100,7 +100,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/containerd/platforms v1.0.0-rc.5 // indirect
-	github.com/containerd/stargz-snapshotter/estargz v0.19.0 // indirect
+	github.com/containerd/stargz-snapshotter/estargz v0.19.1 // indirect
 	github.com/containerd/typeurl/v2 v2.3.0 // indirect
 	github.com/containernetworking/plugins v1.9.1 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
@@ -111,7 +111,7 @@ require (
 	github.com/digitalocean/go-libvirt v0.0.0-20220804181439-8648fbde413e // indirect
 	github.com/disiqueira/gotree/v3 v3.0.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/docker-credential-helpers v0.9.10 // indirect
+	github.com/docker/docker-credential-helpers v0.9.12 // indirect
 	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
@@ -140,8 +140,8 @@ require (
 	github.com/moby/buildkit v0.34.0 // indirect
 	github.com/moby/go-archive v0.3.3 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
-	github.com/moby/sys/devices v0.1.0 // indirect
-	github.com/moby/sys/mountinfo v0.7.2 // indirect
+	github.com/moby/sys/devices v0.1.1 // indirect
+	github.com/moby/sys/mountinfo v0.7.3 // indirect
 	github.com/moby/sys/sequential v0.7.0 // indirect
 	github.com/moby/sys/userns v0.2.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -149,7 +149,7 @@ require (
 	github.com/opencontainers/runc v1.5.2 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pkg/sftp v1.13.11 // indirect
+	github.com/pkg/sftp v1.13.12 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/proglottis/gpgme v0.1.6 // indirect

@@ -546,6 +546,12 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 	hostConfig.SecurityOpt = c.GetSecurityOptions()
 
 	hostConfig.ReadonlyRootfs = ctrSpec.Root.Readonly
+	hostConfig.MaskedPaths = []string{}
+	hostConfig.ReadonlyPaths = []string{}
+	if ctrSpec.Linux != nil {
+		hostConfig.MaskedPaths = append(hostConfig.MaskedPaths, ctrSpec.Linux.MaskedPaths...)
+		hostConfig.ReadonlyPaths = append(hostConfig.ReadonlyPaths, ctrSpec.Linux.ReadonlyPaths...)
+	}
 	hostConfig.ShmSize = c.config.ShmSize
 	hostConfig.Runtime = "oci"
 

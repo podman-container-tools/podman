@@ -459,6 +459,7 @@ func (s *SQLiteState) addContainer(ctr *Container) (defErr error) {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("container dependency %s does not exist in database: %w", dep, define.ErrNoSuchCtr)
 			}
+			return fmt.Errorf("internal error querying for container dependency %s: %w", dep, err)
 		}
 		switch {
 		case ctr.config.Pod == "" && depPod.Valid:

@@ -21,6 +21,7 @@ import (
 	ruser "github.com/moby/sys/user"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/sysctl"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/libpod/define"
@@ -1085,6 +1086,18 @@ func Tmpdir() string {
 	}
 
 	return tmpdir
+}
+
+// SkipUnlimitedPids reports whether a pids limit should be left out of the
+// OCI spec: it sets no limit, and rootless with cgroupfs the pids controller
+// is often not delegated, so the runtime would fail to set it.
+func SkipUnlimitedPids(limit *int64, cgroupManager string) bool {
+	return PidsLimitUnlimited(limit) && unshare.IsRootless() && cgroupManager != config.SystemdCgroupsManager
+}
+
+// PidsLimitUnlimited reports whether a pids limit sets no limit.
+func PidsLimitUnlimited(limit *int64) bool {
+	return limit == nil || *limit <= 0
 }
 
 // ValidateSysctls validates a list of sysctl and returns it.

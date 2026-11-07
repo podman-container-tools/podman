@@ -1511,11 +1511,6 @@ func (s *SQLiteState) Pod(id string) (*Pod, error) {
 		return nil, fmt.Errorf("retrieving pod %s config from DB: %w", id, err)
 	}
 
-	ctrCfg := new(ContainerConfig)
-	if err := json.Unmarshal([]byte(rawJSON), ctrCfg); err != nil {
-		return nil, fmt.Errorf("unmarshalling container %s config: %w", id, err)
-	}
-
 	return s.createPod(rawJSON)
 }
 

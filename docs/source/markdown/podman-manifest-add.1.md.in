@@ -103,7 +103,7 @@ configuration information.
 
 @@option variant.manifest
 
-## Transport
+## TRANSPORT
 
  Multiple transports are supported:
 

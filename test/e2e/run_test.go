@@ -377,6 +377,46 @@ var _ = Describe("Podman run", func() {
 		Expect(conData[0].Config.Annotations).To(HaveKeyWithValue("io.podman.annotations.init", "TRUE"))
 	})
 
+	// https://github.com/podman-container-tools/podman/issues/30094
+	DescribeTable("podman run uses containers.conf init default", func(defaultInit bool, defaultProcess string) {
+		serverConf := filepath.Join(podmanTest.TempDir, "server.conf")
+		err := os.WriteFile(serverConf, fmt.Appendf(nil, "[containers]\ninit=%t\n", defaultInit), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", serverConf)
+
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+
+			// The server default must win when the client has the opposite default.
+			clientConf := filepath.Join(podmanTest.TempDir, "client.conf")
+			err := os.WriteFile(clientConf, fmt.Appendf(nil, "[containers]\ninit=%t\n", !defaultInit), 0o644)
+			Expect(err).ToNot(HaveOccurred())
+			GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", clientConf)
+		}
+
+		for _, test := range []struct {
+			flag string
+			want string
+		}{
+			{"", defaultProcess},
+			{"--init=true", "podman-init"},
+			{"--init=false", "cat"},
+		} {
+			By(fmt.Sprintf("server init=%t, flag=%q", defaultInit, test.flag))
+			args := []string{"run", "--rm", "--network=none"}
+			if test.flag != "" {
+				args = append(args, test.flag)
+			}
+			args = append(args, ALPINE, "cat", "/proc/1/comm")
+
+			session := podmanTest.PodmanExitCleanly(args...)
+			Expect(session.OutputToString()).To(Equal(test.want))
+		}
+	},
+		Entry("init enabled", true, "podman-init"),
+		Entry("init disabled", false, "cat"),
+	)
+
 	It("podman run a container with --init and --init-path", func() {
 		// Also bind-mount /dev (#14251).
 		session := podmanTest.Podman([]string{"run", "-v", "/dev:/dev", "--name", "test", "--init", "--init-path", "/usr/libexec/podman/catatonit", ALPINE, "ls"})

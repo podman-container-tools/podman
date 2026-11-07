@@ -23,12 +23,16 @@ adjust+:
     summary: local rootful test
     test: bash ./system.sh
     duration: 60m
+    require+:
+        - systemd-container
 
 /local-rootless:
     tag: [ local, rootless ]
     summary: rootless test
     test: bash ./system.sh rootless
     duration: 60m
+    require+:
+        - systemd-container
 
 /remote-root:
     tag: [ remote, root ]

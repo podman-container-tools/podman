@@ -58,9 +58,7 @@ type ConmonOCIRuntime struct {
 	conmonEnv         []string
 	tmpDir            string
 	exitsDir          string
-	logSizeMax        int64
 	noPivot           bool
-	reservePorts      bool
 	runtimeFlags      []string
 	supportsJSON      bool
 	supportsKVM       bool
@@ -96,9 +94,7 @@ func newConmonOCIRuntime(name string, paths []string, conmonPath string, runtime
 
 	runtime.conmonEnv = runtimeCfg.Engine.ConmonEnvVars.Get()
 	runtime.tmpDir = runtimeCfg.Engine.TmpDir
-	runtime.logSizeMax = runtimeCfg.Containers.LogSizeMax
 	runtime.noPivot = runtimeCfg.Engine.NoPivotRoot
-	runtime.reservePorts = runtimeCfg.Engine.EnablePortReservation
 	runtime.enableKeyring = runtimeCfg.Containers.EnableKeyring
 
 	// TODO: probe OCI runtime for feature and enable automatically if
@@ -959,8 +955,7 @@ func (r *ConmonOCIRuntime) getLogData(ctr *Container) (string, map[string]string
 
 	data, err := ctr.inspectLocked(false)
 	if err != nil {
-		// FIXME: this error should probably be returned
-		return "", nil, nil //nolint: nilerr
+		return "", nil, fmt.Errorf("inspecting container %s: %w", ctr.ID(), err)
 	}
 
 	var parsedLogTag string
@@ -1340,7 +1335,6 @@ func validJournaldFieldName(s string) bool {
 }
 
 // sharedConmonArgs takes common arguments for exec and create/restore and formats them for the conmon CLI
-// func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, pidPath, logPath, exitDir, persistDir, ociLogPath, logDriver, logTag string, logLabels map[string]string) ([]string, error) {
 func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, pidPath, logPath, exitDir, persistDir, ociLogPath, logDriver, logTag string, logLabels map[string]string) ([]string, error) {
 	// Make the persists directory for the container after the ctr ID is appended to it in the caller
 	// This is needed as conmon writes the exit and oom file in the given persist directory path as just "exit" and "oom"

@@ -267,6 +267,10 @@ This option conflicts with host added in the Kubernetes YAML.
 
 Do not prefix container name with pod name.
 
+#### **--platform**=*OS/ARCH[/VARIANT]*
+
+Specify the platform for selecting and building images.
+
 #### **--publish**=*[[ip:][hostPort]:]containerPort[/protocol]*
 
 Define or override a port definition in the YAML file.

@@ -15,9 +15,11 @@
 package p9
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 	"sync/atomic"
 
 	"github.com/hugelgupf/p9/linux"
@@ -79,13 +81,84 @@ func (c *clientFile) RemoveXattr(attr string) error {
 }
 
 // GetXattr implements p9.File.GetXattr.
+//
+// It walks to the named attribute (Txattrwalk), reads its value from the
+// resulting fid, and clunks it. A missing attribute surfaces the server's
+// errno (ENODATA), so callers can distinguish "absent" from a hard error.
 func (c *clientFile) GetXattr(attr string) ([]byte, error) {
-	return nil, linux.ENOSYS
+	buf, err := c.xattrWalkRead(attr)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 // ListXattrs implements p9.File.ListXattrs.
+//
+// An empty attribute name lists every attribute (Txattrwalk), returning the
+// NUL-separated, NUL-terminated name list, which is split into names.
 func (c *clientFile) ListXattrs() ([]string, error) {
-	return nil, linux.ENOSYS
+	buf, err := c.xattrWalkRead("")
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, name := range strings.Split(string(buf), "\x00") {
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}
+
+// xattrWalkRead performs the read half of the 9P2000.L xattr protocol shared by
+// GetXattr (a named attribute) and ListXattrs (the empty name): Txattrwalk binds
+// a new fid to the attribute and returns its size, the value is read from that
+// fid, and the fid is clunked.
+func (c *clientFile) xattrWalkRead(attr string) ([]byte, error) {
+	if atomic.LoadUint32(&c.closed) != 0 {
+		return nil, linux.EBADF
+	}
+
+	id, ok := c.client.fidPool.Get()
+	if !ok {
+		return nil, ErrOutOfFIDs
+	}
+
+	rxattrwalk := rxattrwalk{}
+	if err := c.client.sendRecv(&txattrwalk{fid: c.fid, newFID: fid(id), Name: attr}, &rxattrwalk); err != nil {
+		c.client.fidPool.Put(id)
+		return nil, err
+	}
+
+	// The walk bound a new fid to the attribute; newFile + Close reads from it
+	// and returns the fid to the pool.
+	xattrFile := c.client.newFile(fid(id))
+	defer xattrFile.Close()
+
+	if rxattrwalk.Size == 0 {
+		return []byte{}, nil
+	}
+
+	// Size is a uint64 taken straight off the wire and is the only thing
+	// deciding this allocation, so a server that reports a huge attribute
+	// makes the client try to allocate it. Nothing else bounds it: Size
+	// describes the attribute rather than the message carrying it, so the
+	// transport's own length check never sees it.
+	//
+	// The server refuses to serve an attribute larger than maximumLength
+	// (see txattrwalk.handle), so a conforming peer never reports one, and
+	// EINVAL is what that server answers in the same case.
+	if rxattrwalk.Size > uint64(maximumLength) {
+		return nil, linux.EINVAL
+	}
+
+	buf := make([]byte, rxattrwalk.Size)
+	n, err := xattrFile.ReadAt(buf, 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return buf[:n], nil
 }
 
 // Walk implements File.Walk.

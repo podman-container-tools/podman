@@ -99,10 +99,12 @@ func waitForSync(syncR *os.File, cmd *exec.Cmd, logFile io.ReadSeeker, timeout t
 	return nil
 }
 
-func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, netStatus map[string]types.StatusBlock) error {
+// SetupRootlessPortMappingViaRLK starts the rootlessport process and returns
+// its pid.
+func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, netStatus map[string]types.StatusBlock) (int, error) {
 	syncR, syncW, err := os.Pipe()
 	if err != nil {
-		return fmt.Errorf("failed to open pipe: %w", err)
+		return 0, fmt.Errorf("failed to open pipe: %w", err)
 	}
 	defer closeQuiet(syncR)
 	defer closeQuiet(syncW)
@@ -110,13 +112,13 @@ func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, 
 	logPath := filepath.Join(opts.Config.Engine.TmpDir, fmt.Sprintf("rootlessport-%s.log", opts.ContainerID))
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		return fmt.Errorf("failed to open rootlessport log file %s: %w", logPath, err)
+		return 0, fmt.Errorf("failed to open rootlessport log file %s: %w", logPath, err)
 	}
 	defer logFile.Close()
 	// Unlink immediately the file so we won't need to worry about cleaning it up later.
 	// It is still accessible through the open fd logFile.
 	if err := os.Remove(logPath); err != nil {
-		return fmt.Errorf("delete file %s: %w", logPath, err)
+		return 0, fmt.Errorf("delete file %s: %w", logPath, err)
 	}
 
 	childIP := GetRootlessPortChildIP(slirpSubnet, netStatus)
@@ -132,13 +134,13 @@ func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, 
 	}
 	cfgJSON, err := json.Marshal(cfg)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cfgR := bytes.NewReader(cfgJSON)
 	var stdout bytes.Buffer
 	path, err := opts.Config.FindHelperBinary(rootlessport.BinaryName, false)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cmd := exec.Command(path)
 	cmd.Args = []string{rootlessport.BinaryName}
@@ -153,7 +155,7 @@ func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, 
 		Setpgid: true,
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start rootlessport process: %w", err)
+		return 0, fmt.Errorf("failed to start rootlessport process: %w", err)
 	}
 	defer func() {
 		servicereaper.AddPID(cmd.Process.Pid)
@@ -166,12 +168,12 @@ func SetupRootlessPortMappingViaRLK(opts *SetupOptions, slirpSubnet *net.IPNet, 
 		if stdoutStr != "" {
 			// err contains full debug log and too verbose, so return stdoutStr
 			logrus.Debug(err)
-			return errors.New("rootlessport " + strings.TrimSuffix(stdoutStr, "\n"))
+			return 0, errors.New("rootlessport " + strings.TrimSuffix(stdoutStr, "\n"))
 		}
-		return err
+		return 0, err
 	}
 	logrus.Debug("rootlessport is ready")
-	return nil
+	return cmd.Process.Pid, nil
 }
 
 // GetIP returns the slirp ipv4 address based on subnet. If subnet is nil use default subnet.

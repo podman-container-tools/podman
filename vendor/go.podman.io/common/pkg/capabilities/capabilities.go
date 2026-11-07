@@ -178,19 +178,19 @@ func MergeCapabilities(base, adds, drops []string) ([]string, error) {
 
 	caps := make([]string, 0, len(base)+len(capAdd))
 	// Drop any capabilities in capDrop that are in base
-	for _, cap := range base {
-		if slices.Contains(capDrop, cap) {
+	for _, capability := range base {
+		if slices.Contains(capDrop, capability) {
 			continue
 		}
-		caps = append(caps, cap)
+		caps = append(caps, capability)
 	}
 
 	// Add any capabilities in capAdd that are not in base
-	for _, cap := range capAdd {
-		if slices.Contains(base, cap) {
+	for _, capability := range capAdd {
+		if slices.Contains(base, capability) {
 			continue
 		}
-		caps = append(caps, cap)
+		caps = append(caps, capability)
 	}
 	slices.Sort(caps)
 	return caps, nil

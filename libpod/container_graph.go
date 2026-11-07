@@ -503,7 +503,7 @@ func stopContainerGraph(ctx context.Context, graph *ContainerGraph, pod *Pod, ti
 		}
 	}
 
-	return nodeDetails.ctrErrors.Underlying(), nil
+	return nodeDetails.ctrErrors.Underlying(), parallelErr
 }
 
 // Remove all containers in the given graph

@@ -3,6 +3,7 @@ package systemd
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/pkg/cgroups"
 	"go.podman.io/storage/pkg/unshare"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -48,14 +50,37 @@ func moveProcessPIDFileToScope(pidPath, slice, scope string) error {
 }
 
 func moveProcessToScope(pid int, slice, scope string) error {
-	err := RunUnderSystemdScope(pid, slice, scope)
+	err := RunUnderSystemdScope([]int{pid}, slice, scope)
 	// If the PID is not valid anymore, do not return an error.
-	if dbusErr, ok := err.(dbus.Error); ok {
-		if dbusErr.Name == "org.freedesktop.DBus.Error.UnixProcessIdUnknown" {
-			return nil
-		}
+	if isPidGoneErr(err) {
+		return nil
 	}
 	return err
+}
+
+// isPidGoneErr returns true when err reports that one of the pids we asked
+// systemd to act on does not exist (anymore).  Such a process obviously cannot
+// be moved anywhere, which is not something callers need to care about.
+func isPidGoneErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if dbusErr, ok := err.(dbus.Error); ok {
+		if dbusErr.Name == "org.freedesktop.DBus.Error.UnixProcessIdUnknown" {
+			return true
+		}
+	}
+	return errors.Is(err, unix.ESRCH)
+}
+
+// systemdConn opens a connection to the systemd manager responsible for this
+// process: the user manager when running rootless, the system one otherwise.
+// The caller is responsible for closing the returned connection.
+func systemdConn() (*systemdDbus.Conn, error) {
+	if uid := unshare.GetRootlessUID(); uid != 0 {
+		return cgroups.UserConnection(uid)
+	}
+	return systemdDbus.NewWithContext(context.Background())
 }
 
 // MoveRootlessNetnsProcessToUserSlice moves the pasta process for the rootless netns
@@ -98,47 +123,104 @@ func MovePauseProcessToScope(pausePidPath string) {
 	}
 }
 
-// RunUnderSystemdScope adds the specified pid to a systemd scope.
-func RunUnderSystemdScope(pid int, slice string, unitName string) error {
-	var conn *systemdDbus.Conn
-	var err error
-
-	if unshare.GetRootlessUID() != 0 {
-		conn, err = cgroups.UserConnection(unshare.GetRootlessUID())
-		if err != nil {
-			return err
-		}
-	} else {
-		conn, err = systemdDbus.NewWithContext(context.Background())
-		if err != nil {
-			return err
-		}
+// RunUnderSystemdScope adds the specified pids to a systemd scope.  They must
+// all already be running, as the scope is created with all of them at once.
+func RunUnderSystemdScope(pids []int, slice string, unitName string) error {
+	conn, err := systemdConn()
+	if err != nil {
+		return err
 	}
 	defer conn.Close()
+
+	u := make([]uint32, 0, len(pids))
+	for _, p := range pids {
+		u = append(u, uint32(p))
+	}
+
 	properties := []systemdDbus.Property{
 		systemdDbus.PropSlice(slice),
-		newProp("PIDs", []uint32{uint32(pid)}),
+		newProp("PIDs", u),
 		newProp("Delegate", true),
 		newProp("DefaultDependencies", false),
 	}
 	ch := make(chan string)
 	_, err = conn.StartTransientUnitContext(context.Background(), unitName, "replace", properties, ch)
 	if err != nil {
-		// On errors check if the cgroup already exists, if it does move the process there
-		if props, err := conn.GetUnitTypePropertiesContext(context.Background(), unitName, "Scope"); err == nil {
-			if cgroup, ok := props["ControlGroup"].(string); ok && cgroup != "" {
-				if err := cgroups.MoveUnderCgroup(cgroup, "", []uint32{uint32(pid)}); err == nil {
-					return nil
-				}
-				// On errors return the original error message we got from StartTransientUnit.
-			}
+		// The unit already exists, so attach the processes to it instead.
+		if aerr := attachPidsToUnit(conn, unitName, u); aerr == nil {
+			return nil
 		}
+		// On errors return the original error message we got from StartTransientUnit.
 		return err
 	}
 
 	// Block until job is started
 	<-ch
 
+	return nil
+}
+
+// AddPidsToSystemdScope attaches already running processes to an existing
+// systemd scope.  The scope must have been created with Delegate=true, which is
+// the case for every scope RunUnderSystemdScope creates.  Unlike
+// RunUnderSystemdScope this never creates the unit; use it when the scope is
+// known to exist already.
+func AddPidsToSystemdScope(unitName string, pids ...int) error {
+	if len(pids) == 0 {
+		return nil
+	}
+	conn, err := systemdConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	u := make([]uint32, 0, len(pids))
+	for _, p := range pids {
+		u = append(u, uint32(p))
+	}
+	return attachPidsToUnit(conn, unitName, u)
+}
+
+// attachPidsToUnit asks systemd to migrate pids into an existing delegated
+// unit.  Going through systemd rather than writing cgroup.procs ourselves keeps
+// systemd's bookkeeping in sync and works rootless, where a direct write is
+// usually refused by cgroup v2 delegation containment: the common ancestor of
+// our own cgroup and the target is typically a root owned user-$UID.slice.
+func attachPidsToUnit(conn *systemdDbus.Conn, unitName string, pids []uint32) error {
+	err := conn.AttachProcessesToUnit(context.Background(), unitName, "/", pids)
+	if err == nil {
+		return nil
+	}
+	if isPidGoneErr(err) {
+		if len(pids) == 1 {
+			return nil
+		}
+		// systemd gave up on the pid that is gone and we cannot tell which one
+		// that was, so the ones after it were never attached.  Retry them one
+		// by one; a single pid that is gone is not an error.
+		for _, pid := range pids {
+			if aerr := attachPidsToUnit(conn, unitName, []uint32{pid}); aerr != nil {
+				return aerr
+			}
+		}
+		return nil
+	}
+
+	// AttachProcessesToUnit only exists since systemd v237 and is refused for
+	// units that are not delegated.  Fall back to moving the processes by hand.
+	props, perr := conn.GetUnitTypePropertiesContext(context.Background(), unitName, "Scope")
+	if perr != nil {
+		return err
+	}
+	cgroup, ok := props["ControlGroup"].(string)
+	if !ok || cgroup == "" {
+		return err
+	}
+	if merr := cgroups.MoveUnderCgroup(cgroup, "", pids); merr != nil {
+		// Return the error from the preferred code path.
+		return err
+	}
 	return nil
 }
 

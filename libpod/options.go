@@ -294,7 +294,7 @@ func WithCDISpecDirs(cdiSpecDirs []string) RuntimeOption {
 	}
 }
 
-// WithStorageOpts sets the devices to check for CDI configuration.
+// WithStorageOpts sets per-container storage options when creating rootfs.
 func WithStorageOpts(storageOpts map[string]string) CtrCreateOption {
 	return func(ctr *Container) error {
 		if ctr.valid {
@@ -466,7 +466,7 @@ func WithNoBoltError() RuntimeOption {
 func WithMaxLogSize(limit int64) CtrCreateOption {
 	return func(ctr *Container) error {
 		if ctr.valid {
-			return define.ErrRuntimeFinalized
+			return define.ErrCtrFinalized
 		}
 		ctr.config.LogSize = limit
 
@@ -1428,7 +1428,7 @@ func WithImageVolumes(volumes []*ContainerImageVolume) CtrCreateOption {
 	}
 }
 
-// WithImageVolumes adds the given image volumes to the container.
+// WithImageVolumes adds the given artifact volumes to the container.
 func WithArtifactVolumes(volumes []*ContainerArtifactVolume) CtrCreateOption {
 	return func(ctr *Container) error {
 		if ctr.valid {

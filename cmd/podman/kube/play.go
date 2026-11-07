@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	buildahParse "go.podman.io/buildah/pkg/parse"
 	"go.podman.io/common/pkg/auth"
 	"go.podman.io/common/pkg/completion"
@@ -189,6 +190,10 @@ func playFlags(cmd *cobra.Command) {
 	flags.StringArrayVar(&playOptions.ConfigMaps, configmapFlagName, []string{}, "`Pathname` of a YAML file containing a kubernetes configmap")
 	_ = cmd.RegisterFlagCompletionFunc(configmapFlagName, completion.AutocompleteDefault)
 
+	platformFlagName := "platform"
+	flags.StringVar(&playOptions.Platform, platformFlagName, "", "Specify the platform for selecting the image.")
+	_ = cmd.RegisterFlagCompletionFunc(platformFlagName, completion.AutocompleteNone)
+
 	noTruncFlagName := "no-trunc"
 	flags.BoolVar(&playOptions.UseLongAnnotations, noTruncFlagName, false, "Use annotations that are not truncated to the Kubernetes maximum length of 63 characters")
 	_ = flags.MarkHidden(noTruncFlagName)
@@ -250,7 +255,12 @@ func play(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("build") {
 		playOptions.Build = types.NewOptionalBool(playOptions.BuildCLI)
 		if playOptions.Build == types.OptionalBoolTrue {
-			systemContext, err := buildahParse.SystemContextFromOptions(cmd)
+			systemContext, err := buildahParse.SystemContextFromFlagSet(cmd.Flags(), func(name string) *pflag.Flag {
+				if name == "platform" {
+					return nil
+				}
+				return cmd.Flag(name)
+			})
 			if err != nil {
 				return err
 			}

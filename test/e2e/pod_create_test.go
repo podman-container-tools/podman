@@ -480,6 +480,35 @@ var _ = Describe("Podman pod create", func() {
 		Expect(check2.OutputToString()).To(Equal("/catatonit:[-P]"))
 	})
 
+	// https://github.com/podman-container-tools/podman/issues/30094
+	DescribeTable("podman pod create ignores containers.conf init for infra", func(pidMode string) {
+		confFile := filepath.Join(podmanTest.TempDir, "containers.conf")
+		err := os.WriteFile(confFile, []byte("[containers]\ninit=true\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", confFile)
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+		}
+
+		podCreate := podmanTest.PodmanExitCleanly(
+			"pod", "create", "--network=none", "--pid="+pidMode,
+			"--infra-image", ALPINE, "--infra-command", "/bin/true",
+		)
+
+		inspectPod := podmanTest.PodmanExitCleanly("pod", "inspect", podCreate.OutputToString())
+		podData := inspectPod.InspectPodToJSON()
+		Expect(podData.InfraContainerID).ToNot(BeEmpty())
+
+		inspectInfra := podmanTest.PodmanExitCleanly("container", "inspect", podData.InfraContainerID)
+		infraData := inspectInfra.InspectContainerToJSON()
+		Expect(infraData).To(HaveLen(1))
+		Expect(infraData[0].HostConfig.Init).To(BeFalse())
+		Expect(infraData[0].Path).To(Equal("/bin/true"))
+	},
+		Entry("private PID namespace", "private"),
+		Entry("host PID namespace", "host"),
+	)
+
 	It("podman create pod with --infra-command", func() {
 		name := "test"
 		session := podmanTest.Podman([]string{"pod", "create", "--infra-command", "/pause1", "--name", name})

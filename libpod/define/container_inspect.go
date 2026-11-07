@@ -488,7 +488,8 @@ type InspectContainerHostConfig struct {
 	// host - No PID namespace created
 	// container:<id> - Using another container's PID namespace
 	// ns:<path> - A path to a PID namespace has been specified
-	PidMode string `json:"PidMode"`
+	PidMode     string   `json:"PidMode"`
+	MaskedPaths []string `json:"MaskedPaths"`
 	// Privileged indicates whether the container is running with elevated
 	// privileges.
 	// This has a very specific meaning in the Docker sense, so it's very
@@ -499,7 +500,8 @@ type InspectContainerHostConfig struct {
 	// This is not directly stored in libpod and is saved as an annotation.
 	PublishAllPorts bool `json:"PublishAllPorts"`
 	// ReadonlyRootfs is whether the container will be mounted read-only.
-	ReadonlyRootfs bool `json:"ReadonlyRootfs"`
+	ReadonlyRootfs bool     `json:"ReadonlyRootfs"`
+	ReadonlyPaths  []string `json:"ReadonlyPaths"`
 	// SecurityOpt is a list of security-related options that are set in the
 	// container.
 	SecurityOpt []string `json:"SecurityOpt"`
