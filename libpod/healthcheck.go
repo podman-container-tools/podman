@@ -191,7 +191,8 @@ func (c *Container) runHealthCheck(ctx context.Context, isStartup bool) (define.
 	if hcResult == define.HealthCheckNotDefined || hcResult == define.HealthCheckInternalError {
 		return hcResult, healthCheckResult.Status, hcErr
 	}
-	if c.runtime.config.Engine.HealthcheckEvents {
+	if c.runtime.config.Engine.HealthcheckEvents &&
+		(!c.runtime.config.Engine.HealthcheckEventsOnChange || healthCheckResult.IsStatusChanged) {
 		c.newContainerHealthCheckEvent(healthCheckResult)
 	}
 
@@ -377,6 +378,7 @@ func (c *Container) isUnhealthy() (bool, error) {
 // NOTE: The caller must lock the container.
 func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult define.HealthCheckStatus, inStartPeriod bool) (define.HealthCheckResults, error) {
 	healthCheck, err := c.readHealthCheckLog()
+	previousHealthCheck := healthCheck
 	if err != nil {
 		// If the log is corrupted, use an empty result and eventually overwrite it.
 		if !errors.Is(err, define.ErrHealthCheckLogCorrupted) {
@@ -403,11 +405,18 @@ func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult def
 			}
 		}
 	}
+	healthCheck.IsStatusChanged = healthCheckStatusChanged(previousHealthCheck, healthCheck)
 	healthCheck.Log = append(healthCheck.Log, hcl)
 	if c.HealthCheckMaxLogCount() != 0 && len(healthCheck.Log) > int(c.HealthCheckMaxLogCount()) {
 		healthCheck.Log = healthCheck.Log[1:]
 	}
 	return healthCheck, c.writeHealthCheckLog(healthCheck)
+}
+
+// healthCheckStatusChanged reports whether the current result is the first
+// recorded healthcheck after start/reset or changes the persisted health status.
+func healthCheckStatusChanged(previous, current define.HealthCheckResults) bool {
+	return len(previous.Log) == 0 || previous.Status != current.Status
 }
 
 func (c *Container) writeToFileHealthCheckResults(path string, result define.HealthCheckResults) error {

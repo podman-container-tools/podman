@@ -348,6 +348,9 @@ type HealthCheckResults struct {
 	FailingStreak int `json:"FailingStreak"`
 	// Log describes healthcheck attempts and results
 	Log []HealthCheckLog `json:"Log"`
+	// IsStatusChanged is an internal indication that this healthcheck run
+	// changed the persisted status. It is not part of the inspect API.
+	IsStatusChanged bool `json:"-"`
 }
 
 // HealthCheckLog describes the results of a single healthcheck
