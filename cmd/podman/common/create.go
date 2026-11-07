@@ -363,6 +363,10 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		)
 		_ = cmd.RegisterFlagCompletionFunc(secretFlagName, AutocompleteSecrets)
 
+		configFlagName := "config"
+		createFlags.StringArrayVar(&cf.Configs, configFlagName, []string{}, "Add config to container")
+		_ = cmd.RegisterFlagCompletionFunc(configFlagName, AutocompleteConfigs)
+
 		stopSignalFlagName := "stop-signal"
 		createFlags.StringVar(
 			&cf.StopSignal,

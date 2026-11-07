@@ -227,6 +227,17 @@ func TestToHumanReadableFormatting(t *testing.T) {
 			wantWithoutTimeUntruncated: fmt.Sprintf("secret create %s", fullID),
 			wantWithoutTimeTruncated:   fmt.Sprintf("secret create %s", truncID),
 		},
+		{
+			name: "config create",
+			event: Event{
+				Time:   testTime,
+				Type:   Config,
+				Status: Create,
+				ID:     fullID,
+			},
+			wantWithoutTimeUntruncated: fmt.Sprintf("config create %s", fullID),
+			wantWithoutTimeTruncated:   fmt.Sprintf("config create %s", truncID),
+		},
 	}
 
 	for _, tc := range tests {

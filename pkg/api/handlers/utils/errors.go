@@ -93,6 +93,14 @@ func SecretNotFound(w http.ResponseWriter, _ string, err error) {
 	Error(w, http.StatusNotFound, err)
 }
 
+func ConfigNotFound(w http.ResponseWriter, _ string, err error) {
+	if errorhandling.Cause(err).Error() != "no such config" {
+		InternalServerError(w, err)
+		return
+	}
+	Error(w, http.StatusNotFound, err)
+}
+
 func InternalServerError(w http.ResponseWriter, err error) {
 	Error(w, http.StatusInternalServerError, err)
 }

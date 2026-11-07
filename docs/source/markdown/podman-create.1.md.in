@@ -344,6 +344,8 @@ Suppress output information when pulling images
 Automatically remove the container and any anonymous unnamed volume associated with
 the container when it exits. The default is **false**.
 
+@@option config
+
 @@option rootfs
 
 @@option sdnotify
