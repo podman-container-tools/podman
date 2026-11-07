@@ -1166,6 +1166,11 @@ RUN chmod 755 /test1 /test2 /test3`, ALPINE)
 		Expect(output).ToNot(ContainSubstring("noatime"))
 	})
 
+	It("podman run --tmpfs with uid and gid options", func() {
+		session := podmanTest.PodmanExitCleanly("run", "--rm", "--tmpfs", "/mytmpfs:uid=1000,gid=1000", ALPINE, "stat", "-c", "%u:%g", "/mytmpfs")
+		Expect(session.OutputToString()).To(Equal("1000:1000"))
+	})
+
 	It("podman run -v with nocreate option fails when volume doesn't exist", func() {
 		volName := "testvol-nocreate-nonexistent"
 		// Ensure volume doesn't exist

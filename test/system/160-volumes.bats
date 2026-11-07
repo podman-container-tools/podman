@@ -91,6 +91,10 @@ function teardown() {
 
     run_podman 125 run --rm -v $vol1:/vol1 --tmpfs /vol1 $IMAGE /bin/true
     is "$output" "Error: /vol1: duplicate mount destination"  "diff named volumes and tmpfs mounted on same dest should fail"
+
+    # tmpfs options uid and gid
+    run_podman run --rm --tmpfs /mytmpfs:uid=1000,gid=1000 $IMAGE stat -c "%u:%g" /mytmpfs
+    is "$output" "1000:1000" "tmpfs mount root directory should have specified uid and gid ownership"
 }
 
 # Filter volumes by name
