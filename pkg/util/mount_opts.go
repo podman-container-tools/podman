@@ -34,7 +34,7 @@ func ProcessOptions(options []string, isTmpfs bool, sourcePath string) ([]string
 }
 
 func processOptionsInternal(options []string, isTmpfs bool, sourcePath string, getDefaultMountOptions getDefaultMountOptionsFn) ([]string, bool, error) {
-	var foundWrite, foundSize, foundProp, foundMode, foundExec, foundSuid, foundDev, foundCopyUp, foundBind, foundZ, foundU, foundOverlay, foundIdmap, foundCopy, foundNoSwap, foundNoDereference, foundNoCreate bool
+	var foundWrite, foundSize, foundProp, foundMode, foundUID, foundGID, foundExec, foundSuid, foundDev, foundCopyUp, foundBind, foundZ, foundU, foundOverlay, foundIdmap, foundCopy, foundNoSwap, foundNoDereference, foundNoCreate bool
 
 	recursiveBind := true
 
@@ -119,6 +119,22 @@ func processOptionsInternal(options []string, isTmpfs bool, sourcePath string, g
 				return nil, false, fmt.Errorf("only one tmpfs mode can be specified: %w", ErrDupeMntOption)
 			}
 			foundMode = true
+		case "uid":
+			if !isTmpfs {
+				return nil, false, fmt.Errorf("the 'uid' option is only allowed with tmpfs mounts: %w", ErrBadMntOption)
+			}
+			if foundUID {
+				return nil, false, fmt.Errorf("only one tmpfs uid can be specified: %w", ErrDupeMntOption)
+			}
+			foundUID = true
+		case "gid":
+			if !isTmpfs {
+				return nil, false, fmt.Errorf("the 'gid' option is only allowed with tmpfs mounts: %w", ErrBadMntOption)
+			}
+			if foundGID {
+				return nil, false, fmt.Errorf("only one tmpfs gid can be specified: %w", ErrDupeMntOption)
+			}
+			foundGID = true
 		case "tmpcopyup":
 			if !isTmpfs {
 				return nil, false, fmt.Errorf("the 'tmpcopyup' option is only allowed with tmpfs mounts: %w", ErrBadMntOption)
