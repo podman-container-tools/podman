@@ -446,11 +446,15 @@ func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
 	}
 
 	c.newNetworkEvent(events.NetworkDisconnect, netName)
-	if !c.ensureState(define.ContainerStateRunning, define.ContainerStateCreated) {
+	if !c.ensureState(define.ContainerStateRunning, define.ContainerStateCreated, define.ContainerStateStopped, define.ContainerStateStopping) {
 		return nil
 	}
 
 	if c.state.NetNS == "" {
+		// Early return for stopped
+		if c.ensureState(define.ContainerStateStopped, define.ContainerStateStopping) {
+			return nil
+		}
 		addContainerNetworkToDB()
 		return fmt.Errorf("unable to disconnect %s from %s: %w", nameOrID, netName, define.ErrNoNetwork)
 	}
@@ -470,13 +474,17 @@ func (c *Container) NetworkDisconnect(nameOrID, netName string, _ bool) error {
 		return err
 	}
 
-	// update network status if container is running
+	// update network status
 	oldStatus, statusExist := networkStatus[netName]
 	delete(networkStatus, netName)
 	c.state.NetworkStatus = networkStatus
 	err = c.save()
 	if err != nil {
 		return err
+	}
+
+	if c.ensureState(define.ContainerStateStopped) {
+		return nil
 	}
 
 	// Reload ports when there are still connected networks, maybe we removed the network interface with the child ip.
