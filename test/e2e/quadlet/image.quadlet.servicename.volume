@@ -1,5 +1,5 @@
-## assert-podman-args --driver image
-## assert-podman-args --opt image=localhost/imagename
+## assert-podman-pre-args --driver image
+## assert-podman-pre-args --opt image=localhost/imagename
 ## assert-key-is "Unit" "Requires" "basic.service"
 ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
 
