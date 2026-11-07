@@ -2,12 +2,16 @@ package registry
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	lslog "github.com/sirupsen/logrus/hooks/slog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.podman.io/common/pkg/config"
@@ -15,6 +19,7 @@ import (
 	"go.podman.io/podman/v6/pkg/rootless"
 	"go.podman.io/podman/v6/pkg/util"
 	"go.podman.io/storage/pkg/fileutils"
+	"golang.org/x/term"
 )
 
 const (
@@ -108,15 +113,23 @@ func parseEarlyCLIOptions(args []string) *earlyCLIOptions {
 
 // Set the log level before containers.conf is loaded.
 func setEarlyLogLevel(options *earlyCLIOptions) {
+	logrus.SetOutput(io.Discard)
+	logrus.AddHook(lslog.NewHook(slog.Default(), nil))
+	if term.IsTerminal(int(os.Stderr.Fd())) {
+		log.SetFlags(0) // We don’t want date/time in interactive output
+	}
+
 	if options.completion {
 		return
 	}
 
 	if options.debug && options.logLevel == "" {
 		logrus.SetLevel(logrus.DebugLevel)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	} else if !options.debug && options.logLevel != "" {
 		if level, err := logrus.ParseLevel(options.logLevel); err == nil {
 			logrus.SetLevel(level)
+			slog.SetLogLoggerLevel(lslog.Level(level).Level())
 		}
 	}
 }
