@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -970,6 +971,14 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 		}
 	}
 
+	if len(c.Configs) != 0 {
+		configs, err := parseConfigs(c.Configs)
+		if err != nil {
+			return err
+		}
+		s.Configs = configs
+	}
+
 	if c.Personality != "" {
 		s.Personality = &specs.LinuxPersonality{}
 		s.Personality.Domain = specs.LinuxPersonalityDomain(c.Personality)
@@ -1277,6 +1286,70 @@ func parseSecrets(secrets []string) ([]specgen.Secret, map[string]string, error)
 		}
 	}
 	return mount, envs, nil
+}
+
+func parseConfigs(values []string) ([]specgen.Secret, error) {
+	var configs []specgen.Secret
+	for _, value := range values {
+		parts := strings.Split(value, ",")
+		config := specgen.Secret{Mode: 0o444}
+		start := 0
+		if len(parts) == 1 && !strings.Contains(parts[0], "=") {
+			config.Source = parts[0]
+		} else {
+			if !strings.Contains(parts[0], "=") {
+				config.Source = parts[0]
+				start = 1
+			}
+			for _, option := range parts[start:] {
+				key, val, hasValue := strings.Cut(option, "=")
+				if !hasValue {
+					return nil, fmt.Errorf("config option %q must be in form option=value", option)
+				}
+				switch key {
+				case "source":
+					config.Source = val
+				case "target":
+					config.Target = val
+				case "mode":
+					mode, err := strconv.ParseUint(val, 8, 32)
+					if err != nil {
+						return nil, fmt.Errorf("config mode %q is invalid: %w", val, err)
+					}
+					config.Mode = uint32(mode)
+				case "uid", "UID":
+					uid, err := strconv.ParseUint(val, 10, 32)
+					if err != nil {
+						return nil, fmt.Errorf("config UID %q is invalid: %w", val, err)
+					}
+					config.UID = uint32(uid)
+				case "gid", "GID":
+					gid, err := strconv.ParseUint(val, 10, 32)
+					if err != nil {
+						return nil, fmt.Errorf("config GID %q is invalid: %w", val, err)
+					}
+					config.GID = uint32(gid)
+				case "type":
+					if val == "env" {
+						return nil, errors.New("configs cannot be set as environment variables")
+					}
+					if val != "mount" {
+						return nil, fmt.Errorf("config type %q is invalid", val)
+					}
+				default:
+					return nil, fmt.Errorf("invalid config option %q", key)
+				}
+			}
+		}
+		if config.Source == "" {
+			return nil, errors.New("config source is required")
+		}
+		if config.Target != "" && !filepath.IsAbs(config.Target) {
+			return nil, fmt.Errorf("config target %q must be an absolute path", config.Target)
+		}
+		configs = append(configs, config)
+	}
+	return configs, nil
 }
 
 var cgroupDeviceType = map[string]bool{

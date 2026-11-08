@@ -761,6 +761,10 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		options = append(options, libpod.WithSecrets(secrs))
 	}
 
+	if len(s.Configs) != 0 {
+		options = append(options, libpod.WithConfigSources(s.Configs))
+	}
+
 	if len(s.EnvSecrets) != 0 {
 		options = append(options, libpod.WithEnvSecrets(s.EnvSecrets))
 	}

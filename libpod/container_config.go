@@ -170,8 +170,11 @@ type ContainerRootFSConfig struct {
 	CreateWorkingDir bool `json:"createWorkingDir,omitempty"`
 	// Secrets lists secrets to mount into the container
 	Secrets []*ContainerSecret `json:"secrets,omitempty"`
+	// Configs lists configs to mount into the container
+	Configs []*ContainerSecret `json:"configs,omitempty"`
 	// SecretPath is the secrets location in storage
 	SecretsPath string `json:"secretsPath"`
+	ConfigsPath string `json:"configsPath"`
 	// StorageOpts to be used when creating rootfs
 	StorageOpts map[string]string `json:"storageOpts"`
 	// Volatile specifies whether the container storage can be optimized

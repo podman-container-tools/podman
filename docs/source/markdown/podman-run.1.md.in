@@ -119,6 +119,8 @@ and specified with a _tag_.
 
 @@option cidfile.write
 
+@@option config
+
 @@option conmon-pidfile
 
 @@option cpu-period

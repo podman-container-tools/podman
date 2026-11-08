@@ -6,6 +6,7 @@ podman-attach.1.md
 podman-auto-update.1.md
 podman-build.1.md
 podman-compose.1.md
+podman-config-ls.1.md
 podman-container-clone.1.md
 podman-container-diff.1.md
 podman-container-inspect.1.md

@@ -25,6 +25,7 @@ import (
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 	"go.podman.io/podman/v6/pkg/namespaces"
+	"go.podman.io/podman/v6/pkg/specgen"
 	"go.podman.io/podman/v6/pkg/util"
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/fileutils"
@@ -1829,6 +1830,52 @@ func WithSecrets(containerSecrets []*ContainerSecret) CtrCreateOption {
 			return define.ErrCtrFinalized
 		}
 		ctr.config.Secrets = containerSecrets
+		return nil
+	}
+}
+
+func WithConfigs(containerConfigs []*ContainerSecret) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		ctr.config.Configs = containerConfigs
+		return nil
+	}
+}
+
+// WithConfigSources resolves config references and adds them to the container.
+func WithConfigSources(configSources []specgen.Secret) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		manager, err := ctr.runtime.ConfigsManager()
+		if err != nil {
+			return err
+		}
+		configs := make([]*ContainerSecret, 0, len(configSources))
+		for _, source := range configSources {
+			stored, err := manager.Lookup(source.Source)
+			if err != nil {
+				if errors.Is(err, secrets.ErrNoSuchSecret) {
+					return fmt.Errorf("no config with name or id %q: %w", source.Source, define.ErrNoSuchConfig)
+				}
+				return fmt.Errorf("looking up config %q: %w", source.Source, err)
+			}
+			mode := source.Mode
+			if mode == 0 {
+				mode = 0o444
+			}
+			configs = append(configs, &ContainerSecret{
+				Secret: stored,
+				UID:    source.UID,
+				GID:    source.GID,
+				Mode:   mode,
+				Target: source.Target,
+			})
+		}
+		ctr.config.Configs = configs
 		return nil
 	}
 }

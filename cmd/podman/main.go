@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	_ "go.podman.io/podman/v6/cmd/podman/artifact"
 	_ "go.podman.io/podman/v6/cmd/podman/completion"
+	_ "go.podman.io/podman/v6/cmd/podman/configs"
 	_ "go.podman.io/podman/v6/cmd/podman/farm"
 	_ "go.podman.io/podman/v6/cmd/podman/generate"
 	_ "go.podman.io/podman/v6/cmd/podman/healthcheck"

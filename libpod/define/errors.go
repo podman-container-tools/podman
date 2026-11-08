@@ -18,6 +18,9 @@ var (
 	// ErrNoSuchVolume indicates the requested volume does not exist
 	ErrNoSuchVolume = errors.New("no such volume")
 
+	// ErrNoSuchConfig indicates the requested config does not exist
+	ErrNoSuchConfig = errors.New("no such config")
+
 	// ErrNoSuchNetwork indicates the requested network does not exist
 	ErrNoSuchNetwork = types.ErrNoSuchNetwork
 

@@ -1431,6 +1431,10 @@ func (c *Container) Secrets() []*ContainerSecret {
 	return c.config.Secrets
 }
 
+func (c *Container) Configs() []*ContainerSecret {
+	return c.config.Configs
+}
+
 // Networks gets all the networks this container is connected to.
 // Please do NOT use ctr.config.Networks, as this can be changed from those
 // values at runtime via network connect and disconnect.

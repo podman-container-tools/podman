@@ -2844,6 +2844,32 @@ func (c *Container) extractSecretToCtrStorage(secr *ContainerSecret) error {
 	return nil
 }
 
+func (c *Container) extractConfigToCtrStorage(config *ContainerSecret) error {
+	manager, err := c.runtime.ConfigsManager()
+	if err != nil {
+		return err
+	}
+	_, data, err := manager.LookupSecretData(config.Name)
+	if err != nil {
+		return err
+	}
+	configFile := filepath.Join(c.config.ConfigsPath, config.Name)
+	uid, gid, err := butil.GetHostIDs(util.IDtoolsToRuntimeSpec(c.config.IDMappings.UIDMap), util.IDtoolsToRuntimeSpec(c.config.IDMappings.GIDMap), config.UID, config.GID)
+	if err != nil {
+		return fmt.Errorf("unable to extract config: %w", err)
+	}
+	if err := os.WriteFile(configFile, data, 0o644); err != nil {
+		return fmt.Errorf("unable to create %s: %w", configFile, err)
+	}
+	if err := idtools.SafeLchown(configFile, int(uid), int(gid)); err != nil {
+		return err
+	}
+	if err := os.Chmod(configFile, os.FileMode(config.Mode)); err != nil {
+		return err
+	}
+	return c.relabel(configFile, c.config.MountLabel, false)
+}
+
 // Update a container's resources or restart policy after creation.
 // At least one of resources or restartPolicy must not be nil.
 func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error {
