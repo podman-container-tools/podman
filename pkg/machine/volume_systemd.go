@@ -55,7 +55,11 @@ func GenerateSystemDFilesForVirtiofsMounts(mounts []VirtIoFs) ([]ignition.Unit, 
 		mountUnit.Add("Mount", "What", "%s")
 		mountUnit.Add("Mount", "Where", "%s")
 		mountUnit.Add("Mount", "Type", "virtiofs")
-		mountUnit.Add("Mount", "Options", fmt.Sprintf("context=\"%s\"", NFSSELinuxContext))
+		mountOptions := fmt.Sprintf("context=\"%s\"", NFSSELinuxContext)
+		if mnt.ReadOnly {
+			mountOptions += ",ro"
+		}
+		mountUnit.Add("Mount", "Options", mountOptions)
 		mountUnit.Add("Install", "WantedBy", "local-fs.target")
 		mountUnitFile, err := mountUnit.ToString()
 		if err != nil {
