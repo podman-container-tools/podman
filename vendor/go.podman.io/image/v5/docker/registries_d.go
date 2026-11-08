@@ -16,7 +16,7 @@ import (
 	"go.podman.io/storage/pkg/configfile"
 	"go.podman.io/storage/pkg/homedir"
 	"go.podman.io/storage/pkg/unshare"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // defaultUserDockerDir is the default lookaside directory for unprivileged user
@@ -93,7 +93,7 @@ func loadRegistryConfiguration(sys *types.SystemContext) (*registryConfiguration
 		}
 		logrus.Debugf(`Reading registries signature storage configuration from %q`, item.Name)
 		var config registryConfiguration
-		if err := yaml.Unmarshal(contents, &config); err != nil {
+		if err := yaml.Load(contents, &config); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", item.Name, err)
 		}
 

@@ -646,9 +646,19 @@ type addFileData struct {
 // tar stream. Thus, any error may be ignored without corrupting the
 // tar file. A (nil, nil) return means that the file should be
 // ignored for non-error reasons.
-func (ta *tarWriter) prepareAddFile(parentRoot *os.Root, fsBasename string, fi os.FileInfo, tarName string, rootCache *rootlookupcache.Cache) (*addFileData, error) {
+func (ta *tarWriter) prepareAddFile(parentRoot *os.Root, fsBasename string, fi os.FileInfo, tarName string, rootCache *rootlookupcache.Cache) (_ *addFileData, retErr error) {
 	// WARNING: This function is called in contexts where the contents of root may be maliciously
 	// concurrently modified.
+
+	// The source tree may be mutated concurrently (e.g. during a diff); a file
+	// disappearing between the directory walk and reading it is a benign race,
+	// so skip the entry (nil, nil) rather than failing the whole archive.
+	defer func() {
+		if retErr != nil && errors.Is(retErr, fs.ErrNotExist) {
+			logrus.Infof("archive: skipping %q in %q, it no longer exists", fsBasename, parentRoot.Name())
+			retErr = nil
+		}
+	}()
 
 	var link string
 	if fi.Mode()&os.ModeSymlink != 0 {
@@ -1196,8 +1206,9 @@ func tarWithOptionsTo(dest io.Writer, srcPath string, options *TarOptions) (resu
 			}
 			headers, err := ta.prepareAddFile(parentRoot, fsBasename, fi, relFilePath, rootCache)
 			if err != nil {
-				logrus.Errorf("Can't add file %q in %q to tar: %s; skipping", fsFilePath, root.Name(), err)
-			} else if headers != nil {
+				return fmt.Errorf("adding file %q in %q to tar: %w", fsFilePath, root.Name(), err)
+			}
+			if headers != nil {
 				if err := ta.addFile(parentRoot, headers); err != nil {
 					return err
 				}

@@ -419,7 +419,6 @@
 				"sigprocmask",
 				"sigreturn",
 				"socketcall",
-				"socketpair",
 				"splice",
 				"stat",
 				"stat64",
@@ -1073,6 +1072,40 @@
 					"CAP_AUDIT_WRITE"
 				]
 			},
+			"excludes": {}
+		},
+		{
+			"names": [
+				"socketpair"
+			],
+			"action": "SCMP_ACT_ALLOW",
+			"args": [
+				{
+					"index": 0,
+					"value": 1,
+					"valueTwo": 0,
+					"op": "SCMP_CMP_EQ"
+				}
+			],
+			"comment": "",
+			"includes": {},
+			"excludes": {}
+		},
+		{
+			"names": [
+				"socketpair"
+			],
+			"action": "SCMP_ACT_ALLOW",
+			"args": [
+				{
+					"index": 0,
+					"value": 30,
+					"valueTwo": 0,
+					"op": "SCMP_CMP_EQ"
+				}
+			],
+			"comment": "",
+			"includes": {},
 			"excludes": {}
 		},
 		{
