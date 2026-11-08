@@ -11,6 +11,8 @@ The podman pod logs command batch-retrieves whatever logs are present with all t
 
 Note: A long-running `podman pod log` command with a `-f` or `--follow` option needs to be reinvoked if a new container is added to the pod dynamically; otherwise, logs of newly added containers are not visible in the log stream.
 
+Note: When using the remote client (including macOS and Windows), **-c** or **--container** is required as retrieving logs for all containers in a pod is not supported remotely.
+
 ## OPTIONS
 
 @@option color
@@ -18,6 +20,8 @@ Note: A long-running `podman pod log` command with a `-f` or `--follow` option n
 #### **--container**, **-c**
 
 By default, `podman pod logs` retrieves logs for all the containers available within the pod, differentiated by the field `container`. However, there are use cases where the user wants to limit the log stream only to a particular container of a pod. For such cases, `-c` can be used like `podman pod logs -c ctrNameorID podname`.
+
+Note: This option is required when using the remote client (including macOS and Windows).
 
 @@option follow
 

@@ -665,6 +665,13 @@ var _ = Describe("Podman logs", func() {
 		Expect(logc).To(ExitWithError(125, "log tags can only be used with the journald log driver"))
 	})
 
+	It("podman pod logs without -c fails when remote", func() {
+		SkipIfNotRemote("podman pod logs without -c only fails on remote")
+		results := podmanTest.Podman([]string{"pod", "logs", "testPod"})
+		results.WaitWithDefaultTimeout()
+		Expect(results).To(ExitWithError(125, "-c or --container must be specified when run remotely: invalid argument"))
+	})
+
 	It("podman pod logs with container names", func() {
 		SkipIfRemote("Remote can only process one container at a time")
 		podName := "testPod"
