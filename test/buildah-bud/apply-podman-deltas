@@ -180,6 +180,11 @@ errmsg "cannot find Containerfile or Dockerfile" \
        "bud with stdin tar context rejects symlinked Dockerfile pointing outside temp dir" \
        "bud with http tar context rejects symlinked Dockerfile pointing outside temp dir"
 
+# TODO: Remove this for Buildah > 1.45
+errmsg "invalid argument .* invalid syntax" \
+       "invalid argument .* must be a non-negative integer" \
+       "bud with --cpu-shares flag, no argument" \
+       "bud with --cpu-shares short flag (-c), no argument"
 
 ###############################################################################
 # BEGIN tests that don't make sense under podman due to fundamental differences
