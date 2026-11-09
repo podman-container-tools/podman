@@ -10,6 +10,12 @@ podman\-artifact\-pull - Pulls an artifact from a registry and stores it locally
 ## DESCRIPTION
 podman artifact pull copies an artifact from a registry onto the local machine.
 
+If the source is a mutable tag that already exists locally and the remote
+digest has changed, the previous local manifest is renamed to a digest
+reference (`repository@sha256:<digest>`) so the pull tag can move to the new
+content. Both entries remain named and visible to **podman artifact ls**.
+Very old artifact stores that already contain unnamed index entries may drop
+those unnamed entries the first time the store is opened.
 
 ## SOURCE
 SOURCE is the location from which the artifact image is obtained.

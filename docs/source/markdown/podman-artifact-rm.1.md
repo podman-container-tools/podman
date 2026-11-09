@@ -30,6 +30,12 @@ $ podman artifact rm quay.io/artifact/foobar2:test
 Deleted: e7b417f49fc24fc7ead6485da0ebd5bc4419d8a3f394c169fee5a6f38faa4056
 ```
 
+Remove an artifact by digest reference (for example after a tag moved on re-pull).
+```
+$ podman artifact rm quay.io/artifact/foobar2@sha256:e7b417f49fc24fc7ead6485da0ebd5bc4419d8a3f394c169fee5a6f38faa4056
+Deleted: e7b417f49fc24fc7ead6485da0ebd5bc4419d8a3f394c169fee5a6f38faa4056
+```
+
 Remove multiple artifacts by their shortened IDs.
 ```
 $ podman artifact rm c4dfb1609ee2 93fd78260bd1 c0ed59d05ff7

@@ -255,6 +255,69 @@ var _ = Describe("Podman artifact", func() {
 		Expect(a.Name).To(Equal(artifact1Name))
 	})
 
+	It("podman artifact re-pull keeps previous digest named", func() {
+		lock, port, err := setupRegistry(nil)
+		if err == nil {
+			defer lock.Unlock()
+		}
+		Expect(err).ToNot(HaveOccurred())
+
+		repo := fmt.Sprintf("localhost:%s/test/repull", port)
+		artifactTag := repo + ":latest"
+		artifactAltTag := repo + ":v2"
+
+		artifact1File, err := createArtifactFile(1024)
+		Expect(err).ToNot(HaveOccurred())
+		add1 := podmanTest.PodmanExitCleanly("artifact", "add", artifactTag, artifact1File)
+		digest1 := add1.OutputToString()
+
+		podmanTest.PodmanExitCleanly("artifact", "push", "-q", "--tls-verify=false", artifactTag)
+
+		artifact2File, err := createArtifactFile(2048)
+		Expect(err).ToNot(HaveOccurred())
+		add2 := podmanTest.PodmanExitCleanly("artifact", "add", artifactAltTag, artifact2File)
+		digest2 := add2.OutputToString()
+		Expect(digest2).ToNot(Equal(digest1))
+
+		podmanTest.PodmanExitCleanly("artifact", "push", "-q", "--tls-verify=false", artifactAltTag)
+
+		skopeo := SystemExec("skopeo", []string{
+			"copy",
+			"--src-tls-verify=false",
+			"--dest-tls-verify=false",
+			"docker://" + artifactAltTag,
+			"docker://" + artifactTag,
+		})
+		skopeo.WaitWithDefaultTimeout()
+		Expect(skopeo).Should(ExitCleanly())
+
+		podmanTest.PodmanExitCleanly("artifact", "rm", artifactAltTag)
+
+		podmanTest.PodmanExitCleanly("artifact", "pull", "-q", "--tls-verify=false", artifactTag)
+
+		digestRef := repo + "@sha256:" + digest1
+
+		listSession := podmanTest.PodmanExitCleanly("artifact", "ls", "--noheading", "--format", "{{.Repository}}|{{.Tag}}|{{.Digest}}")
+		listLines := listSession.OutputToStringArray()
+		Expect(listLines).To(HaveLen(2), "re-pull should leave both old and new digests listable")
+		Expect(listLines).To(ContainElement(repo + "|latest|" + digest2[:12]))
+		Expect(listLines).To(ContainElement(repo + "||" + digest1[:12]))
+
+		tagged := podmanTest.InspectArtifact(artifactTag)
+		Expect(tagged.Name).To(Equal(artifactTag))
+		Expect(tagged.Digest.Encoded()).To(Equal(digest2))
+
+		previous := podmanTest.InspectArtifact(digestRef)
+		Expect(previous.Name).To(Equal(digestRef))
+		Expect(previous.Digest.Encoded()).To(Equal(digest1))
+
+		podmanTest.PodmanExitCleanly("artifact", "rm", digestRef)
+		podmanTest.PodmanExitCleanly("artifact", "rm", artifactTag)
+
+		emptyList := podmanTest.PodmanExitCleanly("artifact", "ls", "--noheading")
+		Expect(emptyList.OutputToString()).To(BeEmpty())
+	})
+
 	It("podman artifact push with authorization", func() {
 		portNo, err := utils.GetRandomPort()
 		Expect(err).ToNot(HaveOccurred())
