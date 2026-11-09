@@ -18,7 +18,9 @@ import (
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/internal/localapi"
+	"go.podman.io/podman/v6/internal/remote_build_helpers"
 	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/podman/v6/pkg/bindings"
 	"go.podman.io/podman/v6/pkg/bindings/images"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/domain/entities/reports"
@@ -425,7 +427,9 @@ func (ir *ImageEngine) Build(_ context.Context, containerFiles []string, opts en
 	// So we skip trying to use localapi in that case.
 	// We also skip localapi if BuildOutputs are requested, because localapi doesn't translate output paths,
 	// and we want our client-side extraction to handle it over the REST API instead.
-	if !isHyperV && len(opts.BuildOutputs) == 0 {
+	hasSecrets := opts.CommonBuildOpts != nil && len(opts.CommonBuildOpts.Secrets) > 0
+	canUseLocalSecrets := !hasSecrets || remote_build_helpers.SupportsLocalBuildSecrets(bindings.ServiceVersion(ir.ClientCtx))
+	if !isHyperV && len(opts.BuildOutputs) == 0 && canUseLocalSecrets {
 		if translatedContainerFiles, translatedOptions, ok := localapi.CheckIfImageBuildPathsOnRunningMachine(ir.ClientCtx, containerFiles, opts); ok {
 			report, err := images.BuildFromServerContext(ir.ClientCtx, translatedContainerFiles, translatedOptions)
 			if err == nil {
