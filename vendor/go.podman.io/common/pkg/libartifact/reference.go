@@ -1,6 +1,7 @@
 package libartifact
 
 import (
+	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/libartifact/types"
 	"go.podman.io/image/v5/docker/reference"
 )
@@ -28,6 +29,20 @@ func (ar ArtifactReference) RepoName() string {
 // String returns the full reference.
 func (ar ArtifactReference) String() string {
 	return ar.ref.String()
+}
+
+// Named returns the parsed reference for c/image docker transport and related APIs.
+func (ar ArtifactReference) Named() reference.Named {
+	return ar.ref
+}
+
+// DigestReference returns repo@digest for OCI index org.opencontainers.image.ref.name annotations.
+func (ar ArtifactReference) DigestReference(d digest.Digest) (string, error) {
+	digested, err := reference.WithDigest(reference.TrimNamed(ar.ref), d)
+	if err != nil {
+		return "", err
+	}
+	return digested.String(), nil
 }
 
 func (ar ArtifactReference) ToArtifactStoreReference() ArtifactStoreReference {
