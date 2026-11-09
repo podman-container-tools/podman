@@ -419,7 +419,7 @@ func (c *Client) getServerAPIVersionString() (version string, err error) {
 	if err := json.NewDecoder(resp.Body).Decode(&versionResponse); err != nil {
 		return "", err
 	}
-	if version, ok := (versionResponse["ApiVersion"]).(string); ok {
+	if version, ok := versionResponse["ApiVersion"].(string); ok {
 		return version, nil
 	}
 	return "", nil

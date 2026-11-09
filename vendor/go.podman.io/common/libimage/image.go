@@ -388,6 +388,16 @@ type RemoveImageReport struct {
 	// Size of the removed image.  Only set when explicitly requested in
 	// RemoveImagesOptions.
 	Size int64
+	// FreedSize estimates the number of bytes that removing the image
+	// released, which is less than Size whenever the image shares layers with
+	// an image that is not removed.  A layer shared by several removed images
+	// is released once, and accounted to the image whose removal released it,
+	// so that summing this field over all reports of a removal estimates the
+	// total number of bytes released.  Layers are measured as their
+	// uncompressed tar representation, like the sizes DiskUsage reports, so
+	// this reflects the space freed on disk without being accurate.  Only set
+	// when explicitly requested in RemoveImagesOptions.
+	FreedSize int64
 	// The untagged tags.
 	Untagged []string
 }
@@ -528,12 +538,27 @@ func (i *Image) removeRecursive(ctx context.Context, rmMap map[string]*RemoveIma
 		parent = nil
 	}
 
-	if _, err := i.runtime.store.DeleteImage(i.ID(), true); handleError(err) != nil {
-		if errors.Is(err, storage.ErrImageUsedByContainer) {
-			err = fmt.Errorf("%w: consider listing external containers and force-removing image", err)
-		}
-		return processedIDs, err
+	// The store reports what the removal released, which is the layers no
+	// remaining image references anymore along with the image's big data.
+	var freedSize int64
+	var deleteErr error
+	if options.WithSize {
+		_, freedSize, deleteErr = i.runtime.store.DeleteImageWithSize(i.ID(), true)
+	} else {
+		_, deleteErr = i.runtime.store.DeleteImage(i.ID(), true)
 	}
+	if deleteErr != nil {
+		if handleError(deleteErr) != nil {
+			if errors.Is(deleteErr, storage.ErrImageUsedByContainer) {
+				deleteErr = fmt.Errorf("%w: consider listing external containers and force-removing image", deleteErr)
+			}
+			return processedIDs, deleteErr
+		}
+		// The image or its layers were already gone, so this removal
+		// released nothing.
+		freedSize = 0
+	}
+	report.FreedSize = freedSize
 
 	report.Untagged = append(report.Untagged, i.Names()...)
 	if i.runtime.eventChannel != nil {

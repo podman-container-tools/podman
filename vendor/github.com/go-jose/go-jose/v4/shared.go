@@ -18,6 +18,7 @@ package jose
 
 import (
 	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -210,11 +211,18 @@ type Header struct {
 
 // Certificates verifies & returns the certificate chain present
 // in the x5c header field of a message, if one was present. Returns
-// an error if there was no x5c header present or the chain could
+// an error if there was no x5c header present, any certificate in the
+// chain has an RSA key larger than [MaxRSAModulusBits], or the chain could
 // not be validated with the given verify options.
 func (h Header) Certificates(opts x509.VerifyOptions) ([][]*x509.Certificate, error) {
 	if len(h.certificates) == 0 {
 		return nil, ErrMissingX5cHeader
+	}
+
+	for _, cert := range h.certificates {
+		if pub, ok := cert.PublicKey.(*rsa.PublicKey); ok && pub.N.BitLen() > MaxRSAModulusBits {
+			return nil, fmt.Errorf("go-jose/go-jose: invalid RSA key in x5c certificate, modulus too large")
+		}
 	}
 
 	leaf := h.certificates[0]
@@ -490,22 +498,8 @@ func parseCertificateChain(chain []string) ([]*x509.Certificate, error) {
 }
 
 func (parsed rawHeader) isSet(k HeaderKey) bool {
-	dvr := parsed[k]
-	if dvr == nil {
-		return false
-	}
-
-	var dv interface{}
-	err := json.Unmarshal(*dvr, &dv)
-	if err != nil {
-		return true
-	}
-
-	if dvStr, ok := dv.(string); ok {
-		return dvStr != ""
-	}
-
-	return true
+	_, ok := parsed[k]
+	return ok
 }
 
 // Merge headers from src into dst, giving precedence to headers from l.
@@ -554,4 +548,25 @@ func curveSize(crv elliptic.Curve) int {
 func makeRawMessage(b []byte) *json.RawMessage {
 	rm := json.RawMessage(b)
 	return &rm
+}
+
+// parseProtectedHeader parses a `byteBuffer` into a `*rawHeader`.
+//
+// The byteBuffer represents a base64-decoded "protected" header, which
+// is specified to contain a JSON object.
+//
+// If the input is nil or empty, returns `nil, nil`.
+//
+// `rawHeader` is a map type and so can be nil. When this function
+// returns a non-nil `*rawHeader`, the map is guaranteed to be non-nil.
+func parseProtectedHeader(in *byteBuffer) (*rawHeader, error) {
+	if in == nil || len(in.bytes()) == 0 {
+		return nil, nil
+	}
+	var header rawHeader
+	err := json.Unmarshal(in.bytes(), &header)
+	if err != nil || header == nil {
+		return nil, errors.New("go-jose/go-jose: invalid protected header")
+	}
+	return &header, nil
 }

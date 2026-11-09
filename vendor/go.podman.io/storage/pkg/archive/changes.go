@@ -583,8 +583,7 @@ func ExportChanges(dir string, changes []Change, uidMaps, gidMaps []idtools.IDMa
 				}
 				headers, err := ta.prepareAddFile(parentRoot, fsBasename, fi, relPath, rootCache)
 				if err != nil {
-					logrus.Debugf("Can't add file %q in %q to tar: %s", change.Path, root.Name(), err)
-					continue
+					return fmt.Errorf("adding file %q in %q to tar: %w", change.Path, root.Name(), err)
 				}
 				if headers != nil {
 					if err := ta.addFile(parentRoot, headers); err != nil {

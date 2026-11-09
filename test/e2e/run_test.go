@@ -1071,6 +1071,42 @@ echo -n madeit-$teststring >$tmpfile
 		Expect(string(b)).To(Equal("madeit-" + random))
 	})
 
+	It("podman hooks error", func() {
+		SkipIfRemote("--hooks-dir does not work with remote")
+		hooksDir := filepath.Join(tempdir, "hooks-fail")
+		err := os.Mkdir(hooksDir, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+		hookJSONPath := filepath.Join(hooksDir, "test.json")
+		hookScriptPath := filepath.Join(hooksDir, "test.sh")
+
+		hookJSON := fmt.Sprintf(`{
+   "version": "1.0.0",
+   "hook": {
+     "path": "%s",
+	 "args": ["test.sh"]
+   },
+   "when": {
+     "always": true
+   },
+   "stages": ["precreate"]
+}
+
+`, hookScriptPath)
+		err = os.WriteFile(hookJSONPath, []byte(hookJSON), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = os.WriteFile(hookScriptPath, []byte(`#!/bin/sh
+echo stdout-msg
+echo stderr-msg >&2
+exit 30
+`), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		session := podmanTest.Podman([]string{"--hooks-dir", hooksDir, "run", ALPINE, "ls"})
+		session.Wait(10)
+		Expect(session).Should(ExitWithError(126, `setting up OCI Hooks: executing [test.sh]: exit status 30, hook stdout: stdout-msg , stderr: stderr-msg`))
+	})
+
 	It("podman run with subscription secrets", func() {
 		SkipIfRemote("--default-mount-file option is not supported in podman-remote")
 		containersDir := filepath.Join(podmanTest.TempDir, "containers")

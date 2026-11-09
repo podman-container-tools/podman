@@ -418,7 +418,6 @@ func DefaultProfile() *Seccomp {
 				"sigprocmask",
 				"sigreturn",
 				"socketcall",
-				"socketpair",
 				"splice",
 				"stat",
 				"stat64",
@@ -915,6 +914,35 @@ func DefaultProfile() *Seccomp {
 			},
 			Includes: Filter{
 				Caps: []string{"CAP_AUDIT_WRITE"},
+			},
+		},
+		// Only AF_UNIX and AF_TIPC implement socketpair(2). Allowing other
+		// families only lets a caller trigger their module autoload. This is an
+		// allow rule, so upper bits set in the 64-bit argument don't match.
+		{
+			Names: []string{
+				"socketpair",
+			},
+			Action: ActAllow,
+			Args: []*Arg{
+				{
+					Index: 0,
+					Value: unix.AF_UNIX,
+					Op:    OpEqualTo,
+				},
+			},
+		},
+		{
+			Names: []string{
+				"socketpair",
+			},
+			Action: ActAllow,
+			Args: []*Arg{
+				{
+					Index: 0,
+					Value: unix.AF_TIPC,
+					Op:    OpEqualTo,
+				},
 			},
 		},
 		{

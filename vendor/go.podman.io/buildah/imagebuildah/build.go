@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	gotypes "go/types"
 	"io"
 	"maps"
 	"net/http"
@@ -570,9 +569,9 @@ func platformIsAcceptable(platform *v1.Platform, logger *logrus.Logger) bool {
 		logger.Trace("rejecting potential base image with no platform information")
 		return false
 	}
-	if gotypes.SizesFor("gc", platform.Architecture) == nil {
-		// the compiler's never heard of this
-		logger.Tracef("rejecting potential base image architecture %q for which Go has no knowledge of how to do unsafe code", platform.Architecture)
+	if slices.Contains([]string{"", "unknown"}, platform.Architecture) {
+		// we're hard-wired to reject images with these values
+		logger.Tracef("rejecting potential base image for which the Architecture value is always-rejected value %q", platform.Architecture)
 		return false
 	}
 	if slices.Contains([]string{"", "unknown"}, platform.OS) {

@@ -437,14 +437,14 @@ func makeCopyBuffer() []byte {
 // name is the path to the file to copy in source.
 // dirfd is an open file descriptor to the destination root directory.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
+func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, error) {
 	srcDirfd, err := unix.Open(source, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
 			// Source layer was removed; skip reuse, fetch from remote instead.
-			return false, nil, 0, nil
+			return false, nil, nil
 		}
-		return false, nil, 0, &fs.PathError{Op: "open", Path: source, Err: err}
+		return false, nil, &fs.PathError{Op: "open", Path: source, Err: err}
 	}
 	defer unix.Close(srcDirfd)
 
@@ -452,17 +452,17 @@ func copyFileFromOtherLayer(file *fileMetadata, source string, name string, dirf
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
 			// Source layer is probably being removed and the file is already gone.
-			return false, nil, 0, nil
+			return false, nil, nil
 		}
-		return false, nil, 0, err
+		return false, nil, err
 	}
 	defer srcFile.Close()
 
-	dstFile, written, err := copyFileContent(int(srcFile.Fd()), file, dirfd, 0, useHardLinks, needsForkLock)
+	dstFile, err := copyFileContent(int(srcFile.Fd()), file, dirfd, 0, useHardLinks, needsForkLock)
 	if err != nil {
-		return false, nil, 0, fmt.Errorf("copy content to %q: %w", file.Name, err)
+		return false, nil, fmt.Errorf("copy content to %q: %w", file.Name, err)
 	}
-	return true, dstFile, written, nil
+	return true, dstFile, nil
 }
 
 // canDedupMetadataWithHardLink says whether it is possible to deduplicate file with otherFile.
@@ -527,15 +527,15 @@ func canDedupFileWithHardLink(file *fileMetadata, fd int, s os.FileInfo) bool {
 // ostreeRepos is a list of OSTree repos.
 // dirfd is an open fd to the destination checkout.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
+func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, error) {
 	digest, err := digest.Parse(file.Digest)
 	if err != nil {
 		logrus.Debugf("could not parse digest: %v", err)
-		return false, nil, 0, nil
+		return false, nil, nil
 	}
 	payloadLink := digest.Encoded() + ".payload-link"
 	if len(payloadLink) < 2 {
-		return false, nil, 0, nil
+		return false, nil, nil
 	}
 
 	for _, repo := range ostreeRepos {
@@ -550,7 +550,7 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 		fd, err := unix.Open(sourceFile, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 		if err != nil {
 			logrus.Debugf("could not open sourceFile %s: %v", sourceFile, err)
-			return false, nil, 0, nil
+			return false, nil, nil
 		}
 		f := os.NewFile(uintptr(fd), "fd")
 		defer f.Close()
@@ -560,19 +560,19 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 			continue
 		}
 
-		dstFile, written, err := copyFileContent(fd, file, dirfd, 0, useHardLinks, needsForkLock)
+		dstFile, err := copyFileContent(fd, file, dirfd, 0, useHardLinks, needsForkLock)
 		if err != nil {
 			logrus.Debugf("could not copyFileContent: %v", err)
-			return false, nil, 0, nil
+			return false, nil, nil
 		}
-		return true, dstFile, written, nil
+		return true, dstFile, nil
 	}
 	// If hard links deduplication was used and it has failed, try again without hard links.
 	if useHardLinks {
 		return findFileInOSTreeRepos(file, ostreeRepos, dirfd, false, needsForkLock)
 	}
 
-	return false, nil, 0, nil
+	return false, nil, nil
 }
 
 // findFileInOtherLayers finds the specified file in other layers.
@@ -580,10 +580,10 @@ func findFileInOSTreeRepos(file *fileMetadata, ostreeRepos []string, dirfd int, 
 // file is the file to look for.
 // dirfd is an open file descriptor to the checkout root directory.
 // useHardLinks defines whether the deduplication can be performed using hard links.
-func findFileInOtherLayers(cache *layersCache, file *fileMetadata, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, int64, error) {
+func findFileInOtherLayers(cache *layersCache, file *fileMetadata, dirfd int, useHardLinks bool, needsForkLock bool) (bool, *os.File, error) {
 	target, name, err := cache.findFileInOtherLayers(file, useHardLinks)
 	if err != nil || name == "" {
-		return false, nil, 0, err
+		return false, nil, err
 	}
 	return copyFileFromOtherLayer(file, target, name, dirfd, useHardLinks, needsForkLock)
 }
@@ -1328,7 +1328,7 @@ func (c *chunkedDiffer) findAndCopyFile(dirfd int, r *fileMetadata, copyOptions 
 	}
 
 	needsForkLock := c.useFsVerity != graphdriver.DifferFsVerityDisabled
-	found, dstFile, _, err := findFileInOtherLayers(c.layersCache, r, dirfd, copyOptions.useHardLinks, needsForkLock)
+	found, dstFile, err := findFileInOtherLayers(c.layersCache, r, dirfd, copyOptions.useHardLinks, needsForkLock)
 	if err != nil {
 		return false, err
 	}
@@ -1339,7 +1339,7 @@ func (c *chunkedDiffer) findAndCopyFile(dirfd int, r *fileMetadata, copyOptions 
 		return true, nil
 	}
 
-	found, dstFile, _, err = findFileInOSTreeRepos(r, copyOptions.ostreeRepos, dirfd, copyOptions.useHardLinks, needsForkLock)
+	found, dstFile, err = findFileInOSTreeRepos(r, copyOptions.ostreeRepos, dirfd, copyOptions.useHardLinks, needsForkLock)
 	if err != nil {
 		return false, err
 	}

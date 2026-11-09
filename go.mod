@@ -54,7 +54,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/opencontainers/runtime-tools v0.9.1-0.20261017090856-bd3b0bd00f44
 	github.com/opencontainers/selinux v1.15.1
-	github.com/openshift/imagebuilder v1.2.22
+	github.com/openshift/imagebuilder v1.2.23-0.20261006193608-c8afb7645103
 	github.com/rootless-containers/rootlesskit/v2 v2.3.6
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/sirupsen/logrus v1.10.2
@@ -64,10 +64,10 @@ require (
 	github.com/vbauerster/mpb/v8 v8.16.3
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
-	go.podman.io/buildah v1.46.0
-	go.podman.io/common v0.70.1-0.20261029192241-87857644edbb
-	go.podman.io/image/v5 v5.42.1-0.20261029192241-87857644edbb
-	go.podman.io/storage v1.65.1-0.20261029192241-87857644edbb
+	go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14
+	go.podman.io/common v0.70.1-0.20261105174844-179286b8f253
+	go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253
+	go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
@@ -107,7 +107,7 @@ require (
 	github.com/containers/luksy v0.0.0-20251208191447-ca096313c38f // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
-	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
+	github.com/cyberphone/json-canonicalization v0.0.0-20261011152517-32a48195b9b2 // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20220804181439-8648fbde413e // indirect
 	github.com/disiqueira/gotree/v3 v3.0.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -115,8 +115,8 @@ require (
 	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/fsouza/go-dockerclient v1.13.2 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
+	github.com/fsouza/go-dockerclient v1.13.3 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.7 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -137,7 +137,7 @@ require (
 	github.com/mdlayher/socket v0.8.0 // indirect
 	github.com/miekg/pkcs11 v1.1.2 // indirect
 	github.com/mistifyio/go-zfs/v4 v4.0.0 // indirect
-	github.com/moby/buildkit v0.34.0 // indirect
+	github.com/moby/buildkit v0.34.2 // indirect
 	github.com/moby/go-archive v0.3.3 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/devices v0.1.1 // indirect
@@ -180,7 +180,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
+	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

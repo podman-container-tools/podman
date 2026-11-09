@@ -611,6 +611,12 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//      Do not use the cache when building the image
 	//      (As of version 1.xx)
 	//  - in: query
+	//    name: nocachefilter
+	//    description: List of stage names or indices for which the cache should not be used, even when nocache is false.
+	//    type: array
+	//    items:
+	//      type: string
+	//  - in: query
 	//    name: cachefrom
 	//    type: string
 	//    default:
@@ -1758,6 +1764,12 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//      Do not use the cache when building the image
 	//      (As of version 1.xx)
 	//  - in: query
+	//    name: nocachefilter
+	//    description: List of stage names or indices for which the cache should not be used, even when nocache is false.
+	//    type: array
+	//    items:
+	//      type: string
+	//  - in: query
 	//    name: cachefrom
 	//    type: string
 	//    default:
@@ -2118,6 +2130,12 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    description: |
 	//      Do not use the cache when building the image
 	//      (As of version 1.xx)
+	//  - in: query
+	//    name: nocachefilter
+	//    description: List of stage names or indices for which the cache should not be used, even when nocache is false.
+	//    type: array
+	//    items:
+	//      type: string
 	//  - in: query
 	//    name: cachefrom
 	//    type: string

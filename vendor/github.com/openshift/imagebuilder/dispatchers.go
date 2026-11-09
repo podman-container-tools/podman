@@ -166,6 +166,7 @@ func add(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 	var keepGitDir bool
 	var link bool
 	var excludes []string
+	var unpack *bool
 	last := len(args) - 1
 	dest := makeAbsolute(args[last], b.RunConfig.WorkingDir)
 	filteredUserArgs := make(map[string]string)
@@ -211,8 +212,14 @@ func add(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 				return fmt.Errorf("no value specified for --exclude=")
 			}
 			excludes = append(excludes, exclude)
+		case arg == "--unpack=true":
+			unpackTrue := true
+			unpack = &unpackTrue
+		case arg == "--unpack=false":
+			unpackFalse := false
+			unpack = &unpackFalse
 		default:
-			return fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, --checksum=<checksum>, --link, --keep-git-dir, and --exclude=<pattern> flags")
+			return fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, --checksum=<checksum>, --link, --keep-git-dir, --exclude=<pattern>, and --unpack=<bool> flags")
 		}
 	}
 	files, err := processHereDocs(buildkitcommand.Add, original, heredocs, userArgs)
@@ -230,6 +237,7 @@ func add(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 		KeepGitDir: keepGitDir,
 		Link:       link,
 		Excludes:   excludes,
+		Unpack:     unpack,
 	})
 	return nil
 }
