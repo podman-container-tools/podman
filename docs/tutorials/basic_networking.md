@@ -80,11 +80,13 @@ The user experience of rootless netavark is very akin to a rootful netavark, exc
 there is no default network configuration provided. You simply need to create a
 network, and the one will be created as a bridge network.
 
-By default, rootless bridge networks use `rootlessport` for port forwarding, which
-is a userspace proxy that does not preserve client source IPs. To preserve source
-IPs, set `rootless_port_forwarder="pasta"` in the `[network]` section of
-`containers.conf`. This uses `pesto` to configure pasta's kernel-level forwarding,
-so containers see the real client IP address instead of the bridge gateway.
+By default, rootless bridge networks use `rootlessport` for port forwarding.
+`rootlessport` is a userspace proxy that attempts to preserve the original
+client source IP for remote TCP clients when `nft` or `iptables` is available;
+UDP, loopback, and same-host connections typically still see a rewritten source.
+To reliably preserve source IPs for TCP and UDP (including loopback), set
+`rootless_port_forwarder="pasta"` in the `[network]` section of
+`containers.conf`. This uses `pesto` to configure pasta's kernel-level forwarding.
 This option is experimental and its behavior is subject to change.
 It requires a version of passt (`>= passt-0^20260507.g1afd4ed`) that ships the `pesto` binary.
 

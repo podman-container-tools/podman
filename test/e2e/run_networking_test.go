@@ -1152,6 +1152,9 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 				Expect(output).To(MatchRegexp(`connect to .* from`))
 
 				if forwarder == "rootlessport" {
+					// Connections via loopback still use the non-transparent path
+					// (rootlesskit skips IP_TRANSPARENT for loopback clients),
+					// so nc sees a bridge-subnet source address.
 					Expect(output).To(MatchRegexp(`connect to .* from .*` + subnetMatch))
 				} else {
 					Expect(output).ToNot(MatchRegexp(`connect to .* from .*` + subnetMatch))
