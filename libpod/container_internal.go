@@ -1260,7 +1260,14 @@ func (c *Container) initAndStart(ctx context.Context) (retErr error) {
 // Please note that this DOES take the container lock.
 // Intended to be used in pod-related functions.
 // The returned PID has the same meaning as for Start.
-func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (_ int, finalErr error) {
+func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (int, error) {
+	return c.startNoPodLockWithCallback(ctx, recursive, nil)
+}
+
+// startNoPodLockWithCallback is startNoPodLock with an optional callback that
+// runs after the container started and before the health wait (only with
+// sdnotify=healthy). Start uses it to release the pod lock.
+func (c *Container) startNoPodLockWithCallback(ctx context.Context, recursive bool, beforeHealthWait func()) (_ int, finalErr error) {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -1293,6 +1300,9 @@ func (c *Container) startNoPodLock(ctx context.Context, recursive bool) (_ int, 
 	}
 	// waitForHealthy can release the lock, so read the PID before calling it.
 	pid := c.state.PID
+	if beforeHealthWait != nil && c.config.SdNotifyMode == define.SdNotifyModeHealthy {
+		beforeHealthWait()
+	}
 	if err := c.waitForHealthy(ctx); err != nil {
 		return 0, err
 	}
