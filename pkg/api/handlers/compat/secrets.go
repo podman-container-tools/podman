@@ -114,30 +114,54 @@ func RemoveSecret(w http.ResponseWriter, r *http.Request) {
 	utils.WriteResponse(w, http.StatusNoContent, nil)
 }
 
-func CreateSecret(w http.ResponseWriter, r *http.Request) {
-	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
-	opts := entities.SecretCreateOptions{}
+// secretCreateParams is the validated result of a compat secret-create request body.
+type secretCreateParams struct {
+	Name string
+	Data []byte
+	Opts entities.SecretCreateOptions
+}
+
+// parseSecretCreateRequest reads and validates the body of a compat secret-create request.
+// The returned error is a client error (bad request).
+func parseSecretCreateRequest(r *http.Request) (*secretCreateParams, error) {
 	createParams := struct {
 		*entities.SecretCreateRequest
 		Labels map[string]string `schema:"labels"`
 	}{}
 
 	if err := utils.ReadJSONFromBody(r, &createParams); err != nil {
+		return nil, err
+	}
+	if createParams.SecretCreateRequest == nil {
+		return nil, errors.New("missing secret name and data")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(createParams.Data)
+	if err != nil {
+		return nil, fmt.Errorf("secret data must be base64 encoded: %w", err)
+	}
+
+	return &secretCreateParams{
+		Name: createParams.Name,
+		Data: decoded,
+		Opts: entities.SecretCreateOptions{
+			Driver: createParams.Driver.Name,
+			Labels: createParams.Labels,
+		},
+	}, nil
+}
+
+func CreateSecret(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+
+	createParams, err := parseSecretCreateRequest(r)
+	if err != nil {
 		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
-	if createParams.SecretCreateRequest == nil {
-		utils.Error(w, http.StatusBadRequest, errors.New("missing secret name and data"))
-		return
-	}
-
-	decoded, _ := base64.StdEncoding.DecodeString(createParams.Data)
-	reader := bytes.NewReader(decoded)
-	opts.Driver = createParams.Driver.Name
-	opts.Labels = createParams.Labels
 
 	ic := abi.ContainerEngine{Libpod: runtime}
-	report, err := ic.SecretCreate(r.Context(), createParams.Name, reader, opts)
+	report, err := ic.SecretCreate(r.Context(), createParams.Name, bytes.NewReader(createParams.Data), createParams.Opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "secret name in use") {
 			utils.Error(w, http.StatusConflict, err)
