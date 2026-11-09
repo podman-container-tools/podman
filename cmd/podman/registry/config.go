@@ -83,7 +83,7 @@ func parseEarlyCLIOptions(args []string) *earlyCLIOptions {
 	}
 
 	fs := pflag.NewFlagSet("early podman flags", pflag.ContinueOnError)
-	fs.ParseErrorsAllowlist.UnknownFlags = true
+	fs.ParseErrorsAllowlist.UnknownFlagsHandling = pflag.IgnoreUnknownFlag
 	fs.Usage = func() {}
 	fs.SetInterspersed(false)
 	fs.StringArrayVar(&options.modules, "module", nil, "")
