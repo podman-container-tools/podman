@@ -8,6 +8,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// int32Mask selects the low 32 bits of a syscall argument. Seccomp compares
+// arguments as 64-bit values, but the kernel reads an int parameter from the
+// low 32 bits only, so a rule that denies a value of an int argument must
+// ignore the upper half or a caller can step around it by setting those bits.
+const int32Mask = 0xffffffff
+
 func arches() []Architecture {
 	return []Architecture{
 		{
@@ -825,9 +831,10 @@ func DefaultProfile() *Seccomp {
 			ErrnoRet: &eperm,
 			Args: []*Arg{
 				{
-					Index: 0,
-					Value: unix.AF_VSOCK,
-					Op:    OpEqualTo,
+					Index:    0,
+					Value:    int32Mask,
+					ValueTwo: unix.AF_VSOCK,
+					Op:       OpMaskedEqual,
 				},
 			},
 		},
@@ -840,14 +847,16 @@ func DefaultProfile() *Seccomp {
 			ErrnoRet: &einval,
 			Args: []*Arg{
 				{
-					Index: 0,
-					Value: unix.AF_NETLINK,
-					Op:    OpEqualTo,
+					Index:    0,
+					Value:    int32Mask,
+					ValueTwo: unix.AF_NETLINK,
+					Op:       OpMaskedEqual,
 				},
 				{
-					Index: 2,
-					Value: unix.NETLINK_AUDIT,
-					Op:    OpEqualTo,
+					Index:    2,
+					Value:    int32Mask,
+					ValueTwo: unix.NETLINK_AUDIT,
+					Op:       OpMaskedEqual,
 				},
 			},
 			Excludes: Filter{

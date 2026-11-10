@@ -15,6 +15,7 @@ const (
 	AllowedFieldHistory
 	AllowedFieldLayers
 	AllowedFieldManifests
+	AllowedFieldSignatures
 	AllowedFieldFirstUnusedBit // Keep this at the end!
 )
 
@@ -36,11 +37,12 @@ func ValidateUnambiguousManifestFormat(manifest []byte, expectedMIMEType string,
 	// (It is expected that as manifest formats are added or extended over time, more fields will be added
 	// here.)
 	detectedFields := struct {
-		Config    any `json:"config"`
-		FSLayers  any `json:"fsLayers"`
-		History   any `json:"history"`
-		Layers    any `json:"layers"`
-		Manifests any `json:"manifests"`
+		Config     any `json:"config"`
+		FSLayers   any `json:"fsLayers"`
+		History    any `json:"history"`
+		Layers     any `json:"layers"`
+		Manifests  any `json:"manifests"`
+		Signatures any `json:"signatures"`
 	}{}
 	if err := json.Unmarshal(manifest, &detectedFields); err != nil {
 		// The caller was supposed to already validate version numbers, so this should not happen;
@@ -63,6 +65,9 @@ func ValidateUnambiguousManifestFormat(manifest []byte, expectedMIMEType string,
 	}
 	if detectedFields.Manifests != nil && (allowed&AllowedFieldManifests) == 0 {
 		unexpected = append(unexpected, "manifests")
+	}
+	if detectedFields.Signatures != nil && (allowed&AllowedFieldSignatures) == 0 {
+		unexpected = append(unexpected, "signatures")
 	}
 	if len(unexpected) != 0 {
 		return fmt.Errorf(`rejecting ambiguous manifest, unexpected fields %#v in supposedly %s`,

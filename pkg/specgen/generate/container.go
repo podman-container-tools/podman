@@ -240,6 +240,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 
 	s.Env = envLib.Join(defaultEnvs, s.Env)
 
+	var warnings []string
 	// Labels and Annotations
 	if newImage != nil {
 		labels, err := newImage.Labels(ctx)
@@ -256,7 +257,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 				switch k {
 				// These labels have a special meaning with podman auto-update, they must not be trusted from an image.
 				case systemdDefine.EnvVariable, define.AutoUpdateLabel, define.AutoUpdateAuthfileLabel:
-					logrus.Warnf("The label %s is only supported when set from the Podman command line and it will be ignored when set in the container image. They have a special purpose for podman auto-update already. Please contact the image author to remove the the labels from the image", k)
+					warnings = append(warnings, fmt.Sprintf("The label %s is only supported when set from the Podman command line and it will be ignored when set in the container image. They have a special purpose for podman auto-update already. Please contact the image author to remove the the labels from the image", k))
 				default:
 					s.Labels[k] = v
 				}
@@ -363,10 +364,11 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		}
 	}
 
-	warnings, err := verifyContainerResources(s)
+	resourceWarnings, err := verifyContainerResources(s)
 	if err != nil {
-		return warnings, err
+		return resourceWarnings, err
 	}
+	warnings = append(warnings, resourceWarnings...)
 
 	// Warn if NetNS mode is not compatible with PorMappings
 	if len(s.PortMappings) > 0 {
