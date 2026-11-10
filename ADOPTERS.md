@@ -8,6 +8,7 @@
 | ![End User](https://img.shields.io/badge/End_User-blue) | Axoflow | https://axoflow.com |
 | ![End User](https://img.shields.io/badge/End_User-blue) | IBM | https://www.ibm.com |
 | ![End User](https://img.shields.io/badge/End_User-blue) | NTT Global | https://www.global.ntt |
+| ![End User](https://img.shields.io/badge/End_User-blue) | Caliente.mx | https://www.caliente.mx |
 | ![Integration](https://img.shields.io/badge/Integration-red) | Avassa Edge Platform | https://www.avassa.io |
 | ![Integration](https://img.shields.io/badge/Integration-red) | HashiCorp Nomad | https://www.nomadproject.io |
 | ![Integration](https://img.shields.io/badge/Integration-red) | HashiCorp Terraform | https://www.terraform.io |
@@ -31,7 +32,6 @@
 | ![Distro](https://img.shields.io/badge/Distro-8A2BE2) | Rocky Linux | https://rockylinux.org |
 | ![Distro](https://img.shields.io/badge/Distro-8A2BE2) | SUSE Linux Enterprise | https://www.suse.com/products/server |
 | ![Distro](https://img.shields.io/badge/Distro-8A2BE2) | Ubuntu | https://ubuntu.com |
-
 ### Adopter Types
 
 | Type | Description |
