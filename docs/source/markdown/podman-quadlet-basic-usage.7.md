@@ -1,10 +1,10 @@
 % podman-quadlet-basic-usage 7
 
-# NAME
+## NAME
 
 podman\-quadlet\-basic\-usage - Basic usage examples and step-by-step guide for Podman Quadlet
 
-# DESCRIPTION
+## DESCRIPTION
 
 This guide introduces common usage patterns for Podman Quadlet. It provides step-by-step examples for defining
 containers, exposing ports, creating volumes, and establishing dependencies using declarative `.container`, `.volume`,
@@ -13,9 +13,9 @@ and related unit files.
 Quadlet simplifies container lifecycle management by translating these files into systemd services, making them
 manageable with `systemctl`.
 
-# EXAMPLE 1: RUNNING A SIMPLE CONTAINER
+## EXAMPLE 1: RUNNING A SIMPLE CONTAINER
 
-## Step 1: Create `hello.container`
+### Step 1: Create `hello.container`
 
 ```ini
 [Unit]
@@ -29,7 +29,7 @@ Exec=echo Hello from Quadlet!
 WantedBy=multi-user.target
 ```
 
-## Step 2: Place the file
+### Step 2: Place the file
 
 For rootless use:
 ```bash
@@ -42,7 +42,7 @@ For rootful use:
 sudo cp hello.container /etc/containers/systemd/
 ```
 
-## Step 3: Reload and start the service
+### Step 3: Reload and start the service
 
 For rootless use:
 ```bash
@@ -60,7 +60,7 @@ Note quadlet services cannot be enabled as they are a generated systemd unit,
 see [podman-systemd.unit(5)](podman-systemd.unit.5.md#enabling-unit-files) for more information.
 
 
-## Expected Output:
+### Expected Output:
 
 For rootless, check logs using:
 ```bash
@@ -76,9 +76,9 @@ You should see: `Hello from Quadlet!`
 
 That means the container started, executed the echo command, and exited.
 
-# EXAMPLE 2: CREATING A NAMED VOLUME
+## EXAMPLE 2: CREATING A NAMED VOLUME
 
-## Step 1: Create `mydata.volume`
+### Step 1: Create `mydata.volume`
 
 ```ini
 [Volume]
@@ -86,7 +86,7 @@ VolumeName=mydata
 Label=purpose=demo
 ```
 
-## Step 2: Place and reload
+### Step 2: Place and reload
 
 For rootless use:
 ```bash
@@ -101,7 +101,7 @@ sudo cp mydata.volume /etc/containers/systemd/
 sudo systemctl daemon-reload
 ```
 
-## Step 3: Create the volume
+### Step 3: Create the volume
 
 For rootless use:
 ```bash
@@ -113,9 +113,9 @@ For rootful use:
 systemctl start mydata-volume.service
 ```
 
-# EXAMPLE 3: CONTAINER USING A VOLUME
+## EXAMPLE 3: CONTAINER USING A VOLUME
 
-## Create `with-volume.container`
+### Create `with-volume.container`
 
 ```ini
 [Unit]
@@ -132,7 +132,7 @@ WantedBy=multi-user.target
 
 This container lists all files in the volume and creates `hello.txt`.
 
-## Start the container and check the status
+### Start the container and check the status
 
 For rootless use:
 ```bash
@@ -160,9 +160,9 @@ hello.txt
 
 This means the volume is used and is persistent.
 
-# EXAMPLE 4: EXPOSING A CONTAINER PORT TO THE HOST
+## EXAMPLE 4: EXPOSING A CONTAINER PORT TO THE HOST
 
-## Create `webserver.container`
+### Create `webserver.container`
 
 ```ini
 [Unit]
@@ -176,7 +176,7 @@ PublishPort=8080:80
 WantedBy=multi-user.target
 ```
 
-## Start the web server
+### Start the web server
 
 For rootless use:
 ```bash
@@ -194,7 +194,7 @@ sudo systemctl start webserver.service
 
 Visit `http://localhost:8080` in your browser.
 
-# TIPS
+## TIPS
 
 To start a container on system boot, use:
 
@@ -210,13 +210,13 @@ error in your Quadlet file. To find the details, use:
 systemd-analyze --user --generators=true verify foo.service
 ```
 
-# SEE ALSO
+## SEE ALSO
 
 [podman-systemd.unit(5)](podman-systemd.unit.5.md),
 [podman-container.unit(5)](podman-container.unit.5.md),
 [podman-volume.unit(5)](podman-volume.unit.5.md),
 [systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)
 
-# AUTHORS
+## AUTHORS
 
 Podman Team <https://podman.io>
