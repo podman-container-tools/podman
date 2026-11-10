@@ -1146,13 +1146,18 @@ FROM $IMAGE
 RUN rm /usr/bin/nsenter; \
 echo -e "#!/bin/sh\nfalse" >> /usr/bin/nsenter; \
 chmod +x /usr/bin/nsenter
+LABEL io.containers.autoupdate=registry PODMAN_SYSTEMD_UNIT=test.service io.containers.autoupdate.authfile=/tmp/test
 EOF
 
+    local ctr="c-$(safename)"
     # --layers=false needed to work around buildah#5674 parallel flake
-    test_image="cve_2022_1227_test-$(safename)"
+    test_image="localhost/cve_2022_1227_test-$(safename)"
     run_podman build -t $test_image --layers=false $tmpbuilddir
-    run_podman run -d ${keepid} $test_image top
-    ctr="$output"
+    run_podman 0+w run --name $ctr -d ${keepid} $test_image top
+    require_warning "The label (io\.containers\.autoupdate|io\.containers\.autoupdate\.authfile|PODMAN_SYSTEMD_UNIT) is only supported when set from the Podman command line and it will be ignored when set in the container image. They have a special purpose for podman auto-update already. Please contact the image author to remove the the labels from the image" \
+                    "auto-update label warning"
+    run_podman inspect --format "{{.Config.Labels}}" $ctr
+    assert "$output" !~ "(io\.containers\.autoupdate|io\.containers\.autoupdate\.authfile|PODMAN_SYSTEMD_UNIT)" "These labels should not be part of the container"
     run_podman top $ctr huser,user
     run_podman rm -f -t0 $ctr
     run_podman rmi $test_image
