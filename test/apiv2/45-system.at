@@ -135,4 +135,35 @@ t GET info 200 \
 t GET /v1.43/info 200 \
     ".Runtimes.$runtime | has(\"status\")=false"
 
+# FirewallBackend (Docker API v1.49+) reflects network.firewall_driver.
+# Use a dedicated containers.conf so the test does not depend on the
+# host's firewall setup.
+testdir=$(mktemp -d)
+cat > $testdir/containers.firewall_driver.conf <<EOF
+[network]
+firewall_driver = "nftables"
+EOF
+
+stop_service
+CONTAINERS_CONF=$testdir/containers.firewall_driver.conf start_service
+
+# API versions below v1.49 must not expose FirewallBackend. The field is
+# omitempty, so it is absent rather than null for older clients.
+t GET /v1.48/info 200 \
+    "has(\"FirewallBackend\")=false"
+
+# API v1.49 and newer expose the configured firewall driver.
+t GET /v1.49/info 200 \
+    ".FirewallBackend.Driver=nftables"
+
+# When firewall_driver is unset, the effective netavark-selected backend
+# is reported instead of omitting the field. The detected backend depends
+# on the host (nftables preferred, iptables fallback), so accept either.
+rm -rf $testdir
+stop_service
+start_service
+
+t GET /v1.49/info 200 \
+    ".FirewallBackend.Driver | test(\"^(nftables|iptables)$\")=true"
+
 # vim: filetype=sh

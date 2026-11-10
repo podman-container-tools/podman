@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"os/exec"
 	goRuntime "runtime"
 	"strings"
 	"time"
@@ -123,9 +124,10 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			Swarm: swarm.Info{
 				LocalNodeState: swarm.LocalNodeStateInactive,
 			},
-			SystemStatus: nil,
-			SystemTime:   time.Now().Format(time.RFC3339Nano),
-			Warnings:     []string{},
+			SystemStatus:    nil,
+			SystemTime:      time.Now().Format(time.RFC3339Nano),
+			FirewallBackend: getFirewallBackend(configInfo),
+			Warnings:        []string{},
 		},
 		BuildahVersion:     infoData.Host.BuildahVersion,
 		CPURealtimePeriod:  sysInfo.CPURealtimePeriod,
@@ -141,6 +143,10 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 		for k, rt := range info.Runtimes {
 			info.Runtimes[k] = dockerSystem.RuntimeWithStatus{Runtime: rt.Runtime}
 		}
+	}
+	// The FirewallBackend field was introduced in the Docker API v1.49.
+	if _, err := utils.SupportedVersion(r, "<1.49.0"); err == nil {
+		info.Info.FirewallBackend = nil
 	}
 
 	utils.WriteResponse(w, http.StatusOK, info)
@@ -305,4 +311,42 @@ func getDefaultAddressPools(configInfo *config.Config) []dockerSystem.NetworkAdd
 	}
 
 	return pools
+}
+
+// getFirewallBackend returns the firewall backend configuration for the Docker API.
+// It reports the explicitly configured network.firewall_driver when set.
+// When unset, netavark auto-selects its backend: nftables when available,
+// falling back to iptables. Mirror that selection by checking for the
+// corresponding binaries; if neither is present the backend cannot be
+// determined and nil is returned rather than fabricating a value.
+func getFirewallBackend(configInfo *config.Config) *dockerSystem.FirewallInfo {
+	driver := configInfo.Network.FirewallDriver
+	if driver == "" {
+		driver = detectNetavarkFirewallDriver()
+	}
+	if driver == "" {
+		return nil
+	}
+
+	return &dockerSystem.FirewallInfo{
+		Driver: driver,
+	}
+}
+
+// detectNetavarkFirewallDriver approximates netavark's firewall backend
+// auto-selection when network.firewall_driver is unset: nftables is
+// preferred, iptables is the fallback.
+func detectNetavarkFirewallDriver() string {
+	for _, candidate := range []struct {
+		binary string
+		driver string
+	}{
+		{"nft", "nftables"},
+		{"iptables", "iptables"},
+	} {
+		if _, err := exec.LookPath(candidate.binary); err == nil {
+			return candidate.driver
+		}
+	}
+	return ""
 }
