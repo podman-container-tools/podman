@@ -9,7 +9,7 @@ podman\-volume - Simple management tool for volumes
 ## DESCRIPTION
 podman volume is a set of subcommands that manage volumes.
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                               | Description                                                                    |
 | ------- | ------------------------------------------------------ | ------------------------------------------------------------------------------ |

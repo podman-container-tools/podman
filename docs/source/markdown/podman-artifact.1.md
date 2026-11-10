@@ -13,7 +13,7 @@ OCI artifacts are a common way to distribute files that are associated with OCI 
 containers. Podman is capable of managing (pulling, inspecting, pushing) these artifacts
 from its local "artifact store".
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                                   | Description                                                  |
 |---------|------------------------------------------------------------|--------------------------------------------------------------|
