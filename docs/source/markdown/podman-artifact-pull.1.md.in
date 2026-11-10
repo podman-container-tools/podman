@@ -37,8 +37,6 @@ $ podman artifact pull quay.io/foobar/artifact:special
 
 @@option tls-verify
 
-## FILES
-
 ## EXAMPLES
 Pull an artifact from a registry
 
