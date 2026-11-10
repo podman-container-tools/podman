@@ -17,13 +17,20 @@ Delete one or more farms.
 
 Remove all farms.
 
+#### **--ignore**, **-i**
+
+Ignore errors when a specified farm does not exist, and exit successfully.
+
 ## EXAMPLE
 
 Remove specified farm:
 ```
 $ podman farm remove farm1
 ```
-
+Remove a farm, ignoring the error if it does not exist:
+```
+$ podman farm rm --ignore farm1
+```
 Remove all farms:
 ```
 $ podman farm rm --all

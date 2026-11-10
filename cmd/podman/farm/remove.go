@@ -29,7 +29,8 @@ podman farm rm --all`,
 
 	// Temporary struct to hold cli values.
 	rmOpts = struct {
-		All bool
+		All    bool
+		Ignore bool
 	}{}
 )
 
@@ -40,6 +41,7 @@ func init() {
 	})
 	flags := rmCommand.Flags()
 	flags.BoolVarP(&rmOpts.All, "all", "a", false, "Remove all farms")
+	flags.BoolVarP(&rmOpts.Ignore, "ignore", "i", false, "Silently ignore errors")
 }
 
 func rm(_ *cobra.Command, args []string) error {
@@ -57,12 +59,17 @@ func rm(_ *cobra.Command, args []string) error {
 		}
 
 		if len(cfg.Farm.List) == 0 {
+			if rmOpts.Ignore {
+				return nil
+			}
 			return errors.New("no existing farms; nothing to remove")
 		}
 
 		for _, k := range args {
 			if _, ok := cfg.Farm.List[k]; !ok {
-				logrus.Warnf("farm %q doesn't exist; nothing to remove", k)
+				if !rmOpts.Ignore {
+					logrus.Warnf("farm %q doesn't exist; nothing to remove", k)
+				}
 				continue
 			}
 			delete(cfg.Farm.List, k)
@@ -72,7 +79,7 @@ func rm(_ *cobra.Command, args []string) error {
 			}
 		}
 		// Return error if none of the given farms were deleted
-		if len(deletedFarms) == 0 {
+		if len(deletedFarms) == 0 && !rmOpts.Ignore {
 			return fmt.Errorf("failed to delete farms %q", args)
 		}
 
