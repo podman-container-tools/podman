@@ -321,6 +321,11 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 	if err != nil {
 		return nil, err
 	}
+
+	if (c.Flag("rm").Changed || c.Flag("force-rm").Changed) && (!flags.Layers && !flags.NoCache) {
+		return nil, errors.New("'rm' and 'force-rm' can only be set with either 'layers' or 'no-cache'")
+	}
+
 	if registry.IsRemote() {
 		hasSeccompOption := slices.ContainsFunc(flags.SecurityOpt, func(opt string) bool {
 			return strings.HasPrefix(opt, "seccomp=")
