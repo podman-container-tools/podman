@@ -644,7 +644,13 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 	// Process pull policy
 	pullPolicy := buildahDefine.PullIfMissing
 	if utils.IsLibpodRequest(r) {
-		pullPolicy = buildahDefine.PolicyMap[query.PullPolicy]
+		if val := strings.ToLower(strings.TrimSpace(query.PullPolicy)); val != "" {
+			var ok bool
+			pullPolicy, ok = buildahDefine.PolicyMap[val]
+			if !ok {
+				return nil, nil, utils.GetBadRequestError("pullpolicy", query.PullPolicy, fmt.Errorf("unrecognized pull policy %q", query.PullPolicy))
+			}
+		}
 	} else {
 		if _, found := queryValues["pull"]; found {
 			if query.Pull {

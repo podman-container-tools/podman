@@ -1017,6 +1017,16 @@ EOF
     run_podman image rm --ignore $image_for_test
 }
 
+@test "podman build --pull with invalid policy should fail" {
+    echo FROM scratch > $PODMAN_TMPDIR/Dockerfile
+
+    run_podman 125 build --pull=invalid $PODMAN_TMPDIR
+    is "$output" "Error: unrecognized pull policy \"invalid\"" "expected invalid pull policy error"
+
+    # Empty string should not fail and should default to missing
+    run_podman build --pull="" $PODMAN_TMPDIR
+}
+
 @test "podman build --logfile test" {
     tmpdir=$PODMAN_TMPDIR/build-test
     mkdir -p $tmpdir
