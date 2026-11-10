@@ -38,6 +38,25 @@ func (ir *ImageEngine) ArtifactInspect(ctx context.Context, name string, _ entit
 	return &artInspectReport, nil
 }
 
+func (ir *ImageEngine) ArtifactExists(ctx context.Context, nameOrDigest string) (*entities.BoolReport, error) {
+	artStore, err := ir.Libpod.ArtifactStore()
+	if err != nil {
+		return nil, err
+	}
+	asr, err := libartifact.NewArtifactStorageReference(nameOrDigest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = artStore.Inspect(ctx, asr)
+	if err != nil {
+		if errors.Is(err, types.ErrArtifactNotExist) {
+			return &entities.BoolReport{Value: false}, nil
+		}
+		return nil, err
+	}
+	return &entities.BoolReport{Value: true}, nil
+}
+
 func (ir *ImageEngine) ArtifactList(ctx context.Context, _ entities.ArtifactListOptions) ([]*entities.ArtifactListReport, error) {
 	reports := make([]*entities.ArtifactListReport, 0)
 	artStore, err := ir.Libpod.ArtifactStore()

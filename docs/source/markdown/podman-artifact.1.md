@@ -18,6 +18,7 @@ from its local "artifact store".
 | Command | Man Page                                                   | Description                                                  |
 |---------|------------------------------------------------------------|--------------------------------------------------------------|
 | add     | [podman-artifact-add(1)](podman-artifact-add.1.md)         | Add an OCI artifact to local artifact store              |
+| exists  | [podman-artifact-exists(1)](podman-artifact-exists.1.md)   | Check if an OCI artifact exists in local storage             |
 | extract | [podman-artifact-extract(1)](podman-artifact-extract.1.md) | Extract an OCI artifact to a local path                      |
 | inspect | [podman-artifact-inspect(1)](podman-artifact-inspect.1.md) | Inspect an OCI artifact                                      |
 | ls      | [podman-artifact-ls(1)](podman-artifact-ls.1.md)           | List OCI artifacts in local store (alias list)                        |

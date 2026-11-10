@@ -453,6 +453,32 @@ class ArtifactTestCase(APITestCase):
             "artifact does not exist",
         )
 
+    def test_exists(self):
+        ARTIFACT_NAME = "quay.io/myimage/myartifact_exists:latest"
+        file = ArtifactFile()
+        parameters: dict[str, str | list[str]] = {
+            "name": ARTIFACT_NAME,
+            "fileName": file.name,
+        }
+
+        artifact = Artifact(self.uri(""), ARTIFACT_NAME, parameters, file)
+
+        add_response = artifact.add()
+        self.assertEqual(add_response.status_code, 201, add_response.text)
+        digest = cast(str, add_response.json()["ArtifactDigest"]).removeprefix("sha256:")
+
+        # Assert artifact is found by name
+        r = requests.get(self.uri("/artifacts/" + ARTIFACT_NAME + "/exists"))
+        self.assertEqual(r.status_code, 204, r.text)
+
+        # Assert artifact is found by digest
+        r = requests.get(self.uri("/artifacts/" + digest + "/exists"))
+        self.assertEqual(r.status_code, 204, r.text)
+
+        # Assert missing artifact is not found
+        r = requests.get(self.uri("/artifacts/localhost/doesnotexist:latest/exists"))
+        self.assertEqual(r.status_code, 404, r.text)
+
     def test_list(self):
         url = self.uri("/artifacts/json")
         r = requests.get(url)

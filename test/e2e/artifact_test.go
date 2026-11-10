@@ -421,6 +421,51 @@ var _ = Describe("Podman artifact", func() {
 		podmanTest.PodmanExitCleanly("artifact", "inspect", artifactDigest[:12])
 	})
 
+	It("podman artifact exists", func() {
+		artifact1File, err := createArtifactFile(4192)
+		Expect(err).ToNot(HaveOccurred())
+		artifact1Name := "localhost/test/artifact1"
+		addArtifact1 := podmanTest.PodmanExitCleanly("artifact", "add", artifact1Name, artifact1File)
+		artifact1Digest := addArtifact1.OutputToString()
+
+		artifact2File, err := createArtifactFile(10240)
+		Expect(err).ToNot(HaveOccurred())
+		artifact2Name := "localhost/test/artifact2"
+		podmanTest.PodmanExitCleanly("artifact", "add", artifact2Name, artifact2File)
+
+		// Name with and without tag, and full or partial digest should exist
+		podmanTest.PodmanExitCleanly("artifact", "exists", artifact1Name)
+		podmanTest.PodmanExitCleanly("artifact", "exists", artifact1Name+":latest")
+		podmanTest.PodmanExitCleanly("artifact", "exists", artifact1Name+"@sha256:"+artifact1Digest)
+		podmanTest.PodmanExitCleanly("artifact", "exists", artifact1Digest)
+		podmanTest.PodmanExitCleanly("artifact", "exists", artifact1Digest[:12])
+
+		// Unknown names and digests exit with 1
+		notExists := podmanTest.Podman([]string{"artifact", "exists", "localhost/test/nonexistent"})
+		notExists.WaitWithDefaultTimeout()
+		Expect(notExists).Should(ExitWithError(1, ""))
+
+		notExistsDigest := podmanTest.Podman([]string{"artifact", "exists", strings.Repeat("a", 64)})
+		notExistsDigest.WaitWithDefaultTimeout()
+		Expect(notExistsDigest).Should(ExitWithError(1, ""))
+
+		// Removed artifact no longer exists
+		podmanTest.PodmanExitCleanly("artifact", "rm", artifact1Name)
+		removed := podmanTest.Podman([]string{"artifact", "exists", artifact1Name})
+		removed.WaitWithDefaultTimeout()
+		Expect(removed).Should(ExitWithError(1, ""))
+
+		// Missing argument is a usage error (exit 125)
+		noArgs := podmanTest.Podman([]string{"artifact", "exists"})
+		noArgs.WaitWithDefaultTimeout()
+		Expect(noArgs).Should(ExitWithError(125, "accepts 1 arg(s), received 0"))
+
+		// Tagged and digested reference is invalid (exit 125)
+		taggedAndDigested := podmanTest.Podman([]string{"artifact", "exists", artifact1Name + ":latest@sha256:" + artifact1Digest})
+		taggedAndDigested.WaitWithDefaultTimeout()
+		Expect(taggedAndDigested).Should(ExitWithError(125, "reference cannot be tagged and digested"))
+	})
+
 	It("podman artifact extract single", func() {
 		podmanTest.PodmanExitCleanly("artifact", "pull", ARTIFACT_SINGLE)
 
