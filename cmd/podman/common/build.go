@@ -174,6 +174,12 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 		return nil, errors.New(`"--stage-labels" requires "--save-stages"`)
 	}
 
+	if cmd.Flag("logsplit") != nil && cmd.Flag("logsplit").Changed {
+		if cmd.Flag("logfile") == nil || !cmd.Flag("logfile").Changed {
+			return nil, errors.New("cannot use --logsplit without --logfile")
+		}
+	}
+
 	// Extract container files from the CLI (i.e., --file/-f) first.
 	var containerFiles []string
 	for _, f := range buildOpts.File {

@@ -1240,6 +1240,13 @@ EOF
     is "$output" "Error: cannot specify --squash-all with --squash" "--squash and --sqaush-all should conflict"
 }
 
+@test "podman build --logsplit without --logfile should fail" {
+    echo FROM scratch > $PODMAN_TMPDIR/Dockerfile
+
+    run_podman 125 build --logsplit $PODMAN_TMPDIR
+    is "$output" "Error: cannot use --logsplit without --logfile" "--logsplit requires --logfile"
+}
+
 @test "podman build --volumes-from conflict" {
     rand_content=$(random_string 50)
 
