@@ -59,8 +59,6 @@ import (
 )
 
 const (
-	// name of the directory holding the artifacts
-	artifactsDir      = "artifacts"
 	execDirPermission = 0o755
 	preCheckpointDir  = "pre-checkpoint"
 )
@@ -555,11 +553,6 @@ func (c *Container) setupStorage(ctx context.Context) error {
 		}
 	}
 
-	artifacts := filepath.Join(c.config.StaticDir, artifactsDir)
-	if err := os.MkdirAll(artifacts, 0o755); err != nil {
-		return fmt.Errorf("creating artifacts directory: %w", err)
-	}
-
 	return nil
 }
 
@@ -587,11 +580,6 @@ func (c *Container) processLabel(processLabel string) (string, error) {
 func (c *Container) teardownStorage() error {
 	if c.ensureState(define.ContainerStateRunning, define.ContainerStatePaused) {
 		return fmt.Errorf("cannot remove storage for container %s as it is running or paused: %w", c.ID(), define.ErrCtrStateInvalid)
-	}
-
-	artifacts := filepath.Join(c.config.StaticDir, artifactsDir)
-	if err := os.RemoveAll(artifacts); err != nil {
-		return fmt.Errorf("removing container %s artifacts %q: %w", c.ID(), artifacts, err)
 	}
 
 	if err := c.cleanupStorage(); err != nil {
@@ -801,11 +789,6 @@ func (c *Container) export(out io.Writer) error {
 
 	_, err = io.Copy(out, input)
 	return err
-}
-
-// Get path of artifact with a given name for this container
-func (c *Container) getArtifactPath(name string) string {
-	return filepath.Join(c.config.StaticDir, artifactsDir, name)
 }
 
 // save container state to the database
