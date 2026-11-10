@@ -777,11 +777,12 @@ func (s *storageImageDestination) trustedLayerIdentityDataLocked(layerIndex int,
 	return res, true
 }
 
-// computeID computes a recommended image ID based on information we have so far.  If
-// the manifest is not of a type that we recognize, we return an empty value, indicating
-// that since we don't have a recommendation, a random ID should be used if one needs
-// to be allocated.
-func (s *storageImageDestination) computeID(m manifest.Manifest) (string, error) {
+// computeMatchingDigest computes a digest which deterministically identifies the image by
+// its contents, used to decide whether a newly-pulled image is the same as an already-stored
+// one; it is equivalent to the value historically used as the image ID.  If the manifest is
+// not of a type that we recognize, the zero value is returned, indicating that no
+// recommendation is available and a random ID should be used if one needs to be allocated.
+func (s *storageImageDestination) computeMatchingDigest(m manifest.Manifest) (digest.Digest, error) {
 	// This is outside of the scope of HasThreadSafePutBlob, so we don’t need to hold s.lock.
 
 	layerInfos := m.LayerInfos()
@@ -819,7 +820,7 @@ func (s *storageImageDestination) computeID(m manifest.Manifest) (string, error)
 
 	// We want to use the same ID for “the same” images, but without risking unwanted sharing / malicious image corruption.
 	//
-	// Traditionally that means the same ~config digest, as computed by m.ImageID;
+	// Traditionally that means the same ~config digest;
 	// but if we identify a layer by TOC, we verify the layer against neither the (compressed) blob digest in the manifest,
 	// nor against the config’s RootFS.DiffIDs. We don’t really want to do either, to allow partial layer pulls where we never see
 	// most of the data.
@@ -831,15 +832,18 @@ func (s *storageImageDestination) computeID(m manifest.Manifest) (string, error)
 	//
 	// Note that it’s not 100% guaranteed that an image pulled by TOC uses an OCI manifest; consider
 	// (skopeo copy --format v2s2 docker://…/zstd-chunked-image containers-storage:… ). So this is not happening only in the OCI case above.
-	ordinaryImageID, err := m.ImageID(diffIDs)
+	ordinaryDigest, err := s.matchingDigest(diffIDs)
 	if err != nil {
 		return "", err
 	}
+	if ordinaryDigest == "" {
+		return "", nil // The manifest type provides no content identity; the caller should use a random ID.
+	}
 	var tocIDInput strings.Builder
-	// ordinaryImageID is a digest of a config, which is a JSON value.
+	// ordinaryDigest is a digest of a config, which is a JSON value.
 	// To avoid the risk of collisions, start the input with @ so that the input is not a valid JSON.
 	tocIDInput.WriteString("@With TOC:")
-	tocIDInput.WriteString(ordinaryImageID)
+	tocIDInput.WriteString(ordinaryDigest.Encoded())
 	tocIDInput.WriteByte('|') // "|" can not be present in a digest, so this is an unambiguous separator.
 	hasLayerPulledByTOC := false
 	for i, li := range layerInfos {
@@ -857,11 +861,22 @@ func (s *storageImageDestination) computeID(m manifest.Manifest) (string, error)
 	}
 
 	if !hasLayerPulledByTOC {
-		return ordinaryImageID, nil
+		return ordinaryDigest, nil
 	}
-	tocImageID := digest.FromString(tocIDInput.String()).Encoded()
-	logrus.Debugf("Ordinary storage image ID %s; a layer was looked up by TOC, so using image ID %s", ordinaryImageID, tocImageID)
+	tocImageID := digest.FromString(tocIDInput.String())
+	logrus.Debugf("Ordinary matching digest %s; a layer was looked up by TOC, so using matching digest %s", ordinaryDigest, tocImageID.Encoded())
 	return tocImageID, nil
+}
+
+// matchingDigest returns a content-based identifier for the image being committed, using
+// the internal manifest abstractions so that the result is a full digest, not just a hex string.
+func (s *storageImageDestination) matchingDigest(diffIDs []digest.Digest) (digest.Digest, error) {
+	ctx := context.Background() // All the data is already in memory; there is nothing to cancel.
+	sourced, err := image.FromUnparsedImage(ctx, nil, image.UnparsedInstance(newUncommittedImageSource(s), &s.manifestDigest))
+	if err != nil {
+		return "", fmt.Errorf("parsing image to be committed: %w", err)
+	}
+	return sourced.MatchingDigest(diffIDs)
 }
 
 // getConfigBlob exists only to let us retrieve the configuration blob so that the manifest package can dig
@@ -1555,11 +1570,18 @@ func (s *storageImageDestination) CommitWithOptions(ctx context.Context, options
 	}
 
 	// Create the image record, pointing to the most-recently added layer.
+	// The image ID is not derived from the image contents; unless the caller
+	// requested a specific ID, c/storage assigns a random one.  The deterministic
+	// value which identifies "the same image" is stored separately as MatchingDigest.
 	intendedID := s.imageRef.id
+	var matchingDigest digest.Digest
 	if intendedID == "" {
-		intendedID, err = s.computeID(man)
+		matchingDigest, err = s.computeMatchingDigest(man)
 		if err != nil {
 			return err
+		}
+		if matchingDigest != "" {
+			imgOptions.MatchingDigest = matchingDigest
 		}
 	}
 	oldNames := []string{}
@@ -1567,15 +1589,32 @@ func (s *storageImageDestination) CommitWithOptions(ctx context.Context, options
 	if err != nil {
 		if !errors.Is(err, storage.ErrDuplicateID) {
 			logrus.Debugf("error creating image: %q", err)
+			if intendedID == "" {
+				return fmt.Errorf("creating image with matching digest %q: %w", matchingDigest, err)
+			}
 			return fmt.Errorf("creating image %q: %w", intendedID, err)
 		}
-		img, err = s.imageRef.transport.store.Image(intendedID)
+		// An image with the same MatchingDigest, or with the requested ID,
+		// already exists; reuse it.
+		if matchingDigest != "" {
+			img, err = s.imageRef.transport.store.ImageByMatchingDigest(matchingDigest)
+			if err != nil {
+				// Images created by older versions have no MatchingDigest, and
+				// store the matching digest value as their ID.
+				img, err = s.imageRef.transport.store.Image(matchingDigest.Encoded())
+			}
+		} else {
+			img, err = s.imageRef.transport.store.Image(intendedID)
+		}
 		if err != nil {
+			if matchingDigest != "" {
+				return fmt.Errorf("reading image with matching digest %q: %w", matchingDigest, err)
+			}
 			return fmt.Errorf("reading image %q: %w", intendedID, err)
 		}
 		if img.TopLayer != lastLayer {
-			logrus.Debugf("error creating image: image with ID %q exists, but uses different layers", intendedID)
-			return fmt.Errorf("image with ID %q already exists, but uses a different top layer: %w", intendedID, storage.ErrDuplicateID)
+			logrus.Debugf("error creating image: image with ID %q exists, but uses different layers", img.ID)
+			return fmt.Errorf("image with ID %q already exists, but uses a different top layer: %w", img.ID, storage.ErrDuplicateID)
 		}
 		logrus.Debugf("reusing image ID %q", img.ID)
 		oldNames = append(oldNames, img.Names...)
@@ -1630,9 +1669,12 @@ func (s *storageImageDestination) CommitWithOptions(ctx context.Context, options
 		// Right now (2024-11), ReportResolvedReference is only used in c/common/libimage, where the caller only extracts the image ID,
 		// so the name does not matter; to give us options, copy.Options.ReportResolvedReference is explicitly refusing to document
 		// whether the value contains a name.
-		resolved, err := newReference(s.imageRef.transport, nil, intendedID)
+		// Use img.ID, not intendedID: when the caller did not request a specific ID,
+		// intendedID is empty and img.ID is the (possibly randomly assigned, or
+		// reused) ID of the image we just created or found.
+		resolved, err := newReference(s.imageRef.transport, nil, img.ID)
 		if err != nil {
-			return fmt.Errorf("creating a resolved reference for (%s, %s): %w", s.imageRef.StringWithinTransport(), intendedID, err)
+			return fmt.Errorf("creating a resolved reference for (%s, %s): %w", s.imageRef.StringWithinTransport(), img.ID, err)
 		}
 		*options.ReportResolvedReference = resolved
 	}

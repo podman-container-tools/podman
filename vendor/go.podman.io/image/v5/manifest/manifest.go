@@ -83,6 +83,10 @@ type Manifest interface {
 	// of which (of possibly more than one simultaneously valid) reference was used to locate the
 	// image, and unchanged by whether or how the layers are compressed.  The result takes the form
 	// of the hexadecimal portion of a digest.Digest.
+	//
+	// Deprecated: The result discards the digest algorithm, forcing callers to reconstruct it.
+	// This method exists only for c/image's internal use; c/image now uses an internal
+	// alternative which returns a digest.Digest.
 	ImageID(diffIDs []digest.Digest) (string, error)
 
 	// Inspect returns various information for (skopeo inspect) parsed from the manifest,

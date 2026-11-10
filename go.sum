@@ -22,6 +22,10 @@ github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpH
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
 github.com/aead/serpent v0.0.0-20160714141033-fba169763ea6 h1:5L8Mj9Co9sJVgW3TpYk2gxGJnDjsYuboNTcRmbtGKGs=
 github.com/aead/serpent v0.0.0-20160714141033-fba169763ea6/go.mod h1:3HgLJ9d18kXMLQlJvIY3+FszZYMxCz8WfE2MQ7hDY0w=
+github.com/alegrey91/container-libs/image/v5 v5.0.0-20261112102507-9e8eb77e80ff h1:TWK3jdLCQRCFP6f+ygqHeQxUI6yLi3kqAnjyivk/lVI=
+github.com/alegrey91/container-libs/image/v5 v5.0.0-20261112102507-9e8eb77e80ff/go.mod h1:9os2WF30u1cxYLcyc6dQsjHWLTpxeHgTFuIU4Fl3yc8=
+github.com/alegrey91/container-libs/storage v0.0.0-20261112102507-9e8eb77e80ff h1:gYsjG+c4IGQJB8twjr0zUAe09kcRj6O9gBwyerYe5a4=
+github.com/alegrey91/container-libs/storage v0.0.0-20261112102507-9e8eb77e80ff/go.mod h1:rUjWyS4xOykpWvyipYTw0tY7uUtfrXl2h8RKi0YdHH0=
 github.com/aperturerobotics/protobuf-go-lite v0.19.0 h1:7Veh1XY7pkswacItBnTR+skvPyNIFdOPg0tb3X0Yd/E=
 github.com/aperturerobotics/protobuf-go-lite v0.19.0/go.mod h1:3Ay/E7iaw2KWLirK3+dDdNJZHK0hu8Y1/kKeYeUa+8s=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
@@ -433,10 +437,6 @@ go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14 h1:6w3KywZK2v9o8mpAah
 go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14/go.mod h1:384Vz6sUdxv8+2Et6a5XXD+EQFmWyWZyuMdUy382RDY=
 go.podman.io/common v0.70.1-0.20261105174844-179286b8f253 h1:CpkLIFxdgIcCRB7Qz4d+DAByIPMKjT3ln5X8ye5m7QQ=
 go.podman.io/common v0.70.1-0.20261105174844-179286b8f253/go.mod h1:u1xIhqYMmPy7Rb0zL7uJBqEX+ruvkHyD9MDZY1pufFQ=
-go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253 h1:B2tlb9kA0ha2ITsTudthr6aEvUDPZCoCA0zyhg46SlQ=
-go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253/go.mod h1:hiQmRgaUwtM8jxFeyTabkvV/TbLP91YAieyOOb3dMjg=
-go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253 h1:BSxpVAh9kRtVP+ZUacBaNKkYutlS1GzyCwXL/yIboKU=
-go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253/go.mod h1:rUjWyS4xOykpWvyipYTw0tY7uUtfrXl2h8RKi0YdHH0=
 go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
 go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
