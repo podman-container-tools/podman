@@ -5,7 +5,7 @@ podman\-image\-trust - Manage container registry image trust policy
 
 
 ## SYNOPSIS
-**podman image trust** set|show [*options*] *registry[/repository]*
+**podman image trust** show [*options*] *registry[/repository]*
 
 ## DESCRIPTION
 Manages which registries to trust as a source of container images  based on its location. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
@@ -47,27 +47,6 @@ Trust may be updated using the command **podman image trust set** for an existin
 #### **--help**, **-h**
   Print usage statement.
 
-### set OPTIONS
-
-#### **--pubkeysfile**, **-f**=*KEY1*
-  A path to an exported public key on the local system. Key paths
-  are referenced in policy.json. Any path to a file may be used but locating the file in **/etc/pki/containers** is recommended. Options may be used multiple times to
-  require an image be signed by multiple keys.  The **--pubkeysfile** option is required for the **signedBy** and **sigstoreSigned** types.
-
-#### **--signature-policy**=*path*
-  Path to the signature policy file (**policy.json**) that Podman updates. This option is required for **set**.
-
-#### **--type**, **-t**=*value*
-  The trust type for this policy entry.
-  Accepted values:
-    **signedBy** (default): Require simple signing signatures with corresponding list of
-                        public keys
-    **sigstoreSigned**: Require sigstore signatures with corresponding list of
-                        public keys
-    **accept**: do not require any signatures for this
-            registry scope
-    **reject**: do not accept images for this registry scope
-
 ### show OPTIONS
 
 #### **--json**, **-j**
@@ -82,16 +61,6 @@ Trust may be updated using the command **podman image trust set** for an existin
   Path to the signature policy file (**policy.json**) to display. When omitted, Podman resolves the policy path from the system configuration the same way it selects a policy for image pulls.
 
 ## EXAMPLES
-
-Accept all unsigned images from a registry:
-```
-$ sudo podman image trust set --signature-policy /etc/containers/policy.json --type accept docker.io
-```
-
-Modify default trust policy:
-```
-$ sudo podman image trust set --signature-policy /etc/containers/policy.json -t reject default
-```
 
 Display system trust policy:
 ```
@@ -198,4 +167,5 @@ $ podman image trust show --json
 ```
 
 ## SEE ALSO
-**[containers-policy.json(5)](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md)**
+**[containers-policy.json(5)](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md)**, **[podman-image-trust-set(1)](podman-image-trust-set.1.md)**
+
