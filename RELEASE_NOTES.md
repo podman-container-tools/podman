@@ -1,6 +1,11 @@
 # Release Notes
 
 ## 6.2.0
+### Security
+- Addresses CVE-2026-121885, untrusted image labels could be used to trick podman auto-update into restarting incorrect systemd units [GHSA-55rm-rwr7-q2wr](https://github.com/podman-container-tools/podman/security/advisories/GHSA-55rm-rwr7-q2wr).
+- Addresses CVE-2026-111361, malicious containers images could be able to bypass Digest and Signature validation [GHSA-pggw-qqjf-6cxw](https://github.com/podman-container-tools/container-libs/security/advisories/GHSA-pggw-qqjf-6cxw).
+- Addresses CVE-2026-123876, default seccomp profile socket deny rule could be bypass by a malicious container.
+
 ### Features
 - The `podman push` command now supports a new option, `--platform`, which selects and pushes a single platform-specific manifest instead of the entire list.
 - The `podman kube play` command now supports a new option, `--validate`, which determines how unrecognized YAML fields are handled ([#18332](https://github.com/podman-container-tools/podman/issues/18332)).
@@ -23,6 +28,7 @@
 
 ### Changes
 - Podman now requires Go v1.26 or higher to build.
+- The Podman machine WSL provider now has native systemd support, existing machines continue to be supported for now with our old custom systemd setup. We require at least WSL version 2.5.1 now, although we recommend using at least 2.7.5 for proper nftables networking support.
 - The `podman kube play` command now uses the `securityContext.seccompProfile` fields in Kubernetes YAML for Seccomp configuration. Support for the existing annotation-based configuration of Seccomp is now deprecated, and will be removed with Podman 7.0.
 - The `podman inspect` command on containers now includes three new fields, `DNSNames` (containing all names the container can be accessed via), `IsInitCtr` (whether the container is an init container), and `InitContainerType` (what type of init container this is, if it is one) ([#29811](https://github.com/podman-container-tools/podman/issues/29811)).
 - The `podman inspect` command on containers now only includes user-added DNS aliases in the `Aliases` field, which previously displayed all DNS aliases, improving Docker compatibility.
@@ -106,6 +112,10 @@
 - Fixed a number of low-level resource leaks in various parts of Podman.
 - Waiting for `gvproxy` to start when starting a `podman machine` VM now uses a notification socket, instead of polling, improving reliability and startup time.
 - Updated documentation for the `--image-volume` option to `podman create` and `podman run` to remove the deprecated `bind` option and add the new default, `anonymous`, which was not shown as a valid option. Using the deprecated `bind` option now prints a warning.
+- Updated Buildah to v1.46.0
+- Updated Common to v0.70.0
+- Updated Image to v5.42.1
+- Updated Storage to v1.64.2
 
 ## 6.1.4
 ### Bugfixes
