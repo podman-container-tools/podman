@@ -14,6 +14,7 @@ import (
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/specgen"
+	"go.podman.io/podman/v6/pkg/specgenutil"
 )
 
 // SpecGenToOCI returns the base configuration for the container.
@@ -160,6 +161,20 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 
 	if s.Init != nil && *s.Init {
 		configSpec.Annotations[define.InspectAnnotationInit] = define.InspectResponseTrue
+	}
+
+	// Store device cgroup rules as an annotation so they can be preserved
+	// when generating Kubernetes YAML. The annotation lives on this
+	// container's own spec, so the base key suffices.
+	if len(s.DeviceCgroupRule) > 0 {
+		var ruleStrs []string
+		for _, dev := range s.DeviceCgroupRule {
+			ruleStr := fmt.Sprintf("%s %s:%s %s", dev.Type, specgenutil.FormatIntPtr(dev.Major), specgenutil.FormatIntPtr(dev.Minor), dev.Access)
+			ruleStrs = append(ruleStrs, ruleStr)
+		}
+		if len(ruleStrs) > 0 {
+			configSpec.Annotations[define.DeviceCgroupRuleAnnotation] = strings.Join(ruleStrs, ",")
+		}
 	}
 
 	if s.OOMScoreAdj != nil {
