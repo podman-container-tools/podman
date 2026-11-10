@@ -1241,6 +1241,29 @@ func SkipIfConmonVersionLessThan(minVersion string) {
 	}
 }
 
+// SkipIfConmonMajorLessThan skips a test when conmon's major version is below
+// major. Unlike SkipIfConmonVersionLessThan, a prerelease such as 3.0.0-dev
+// still counts as major 3.
+func SkipIfConmonMajorLessThan(major int) {
+	out, err := exec.Command(podmanTest.ConmonBinary, "--version").Output()
+	if err != nil {
+		Fail(fmt.Sprintf("[conmon]: failed to get conmon version: %v", err))
+	}
+	fields := strings.Fields(strings.TrimSpace(string(out)))
+	if len(fields) < 3 {
+		Fail(fmt.Sprintf("[conmon]: unexpected conmon --version output: %s", out))
+	}
+	ver := strings.TrimRight(fields[2], ",")
+	majorText, _, _ := strings.Cut(ver, ".")
+	got, err := strconv.Atoi(majorText)
+	if err != nil {
+		Fail(fmt.Sprintf("[conmon]: failed to parse conmon version %q: %v", ver, err))
+	}
+	if got < major {
+		Skip(fmt.Sprintf("[conmon]: need conmon major >= %d; have %s", major, ver))
+	}
+}
+
 // SkipIfNotActive skips a test if the given systemd unit is not active
 func SkipIfNotActive(unit string, reason string) {
 	checkReason(reason)

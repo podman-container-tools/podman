@@ -96,6 +96,12 @@ type Runtime struct {
 	// This bool is just needed so that we can set it for netavark interface.
 	syslog bool
 
+	// conmonVersionOnce caches `conmon --version`. The exec runs only when a
+	// caller asks (for example the syslog log driver).
+	conmonVersionOnce sync.Once
+	conmonVersion     string
+	conmonVersionErr  error
+
 	// doReset indicates that the runtime will perform a system reset.
 	// A reset will remove all containers, pods, volumes, networks, etc.
 	// A number of validation checks are relaxed, or replaced with logic to
