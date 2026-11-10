@@ -8,7 +8,7 @@
 #### **--log-driver**=*driver*
 << endif >>
 
-Logging driver for the container. Currently available options are **k8s-file**, **journald**, **none**, **passthrough** and **passthrough-tty**, with **json-file** aliased to **k8s-file** for scripting compatibility. (Default **journald**).
+Logging driver for the container. Currently available options are **k8s-file**, **journald**, **none**, **passthrough**, **passthrough-tty** and **syslog**, with **json-file** aliased to **k8s-file** for scripting compatibility. (Default **journald**).
 
 The podman info command below displays the default log-driver for the system.
 ```
@@ -20,3 +20,5 @@ container.  It is not allowed with the remote Podman client, including Mac and W
 vulnerable to attacks via TIOCSTI.
 
 The **passthrough-tty** driver is the same as **passthrough** except that it also allows it to be used on a TTY if the user really wants it.
+
+The **syslog** driver forwards container stdout and stderr to syslog. It requires conmon version 3 or newer. Omit **syslog-address** to use the local syslog service. Set it to deliver to a remote or local socket; see the logging options. `podman logs` cannot read this output back: it was forwarded and is not stored locally.

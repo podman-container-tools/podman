@@ -719,6 +719,43 @@ var _ = Describe("Podman logs", func() {
 			g.Expect(output[1]).To(MatchRegexp(`\x1b\[3[0-9a-z ]+\x1b\[0m`))
 		}).Should(Succeed())
 	})
+
+	It("podman create persists normalized syslog options", func() {
+		SkipIfConmonMajorLessThan(3)
+		ctrName := "syslogopts"
+		session := podmanTest.Podman([]string{
+			"create", "--name", ctrName, "--log-driver", "syslog",
+			"--log-opt", "Syslog-Future-Option=example",
+			"--log-opt", "SYSLOG-ADDRESS=",
+			ALPINE,
+		})
+		session.WaitWithDefaultTimeout()
+		Expect(session).To(ExitCleanly())
+
+		inspect := podmanTest.Podman([]string{"inspect", "--format", "{{json .HostConfig.LogConfig.Config}}", ctrName})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).To(ExitCleanly())
+		Expect(inspect.OutputToString()).To(ContainSubstring(`"syslog-future-option":"example"`))
+		Expect(inspect.OutputToString()).To(ContainSubstring(`"syslog-address":""`))
+	})
+
+	It("podman logs with log-driver=syslog errors", func() {
+		SkipIfConmonMajorLessThan(3)
+		ctrName := "syslogctr"
+		logc := podmanTest.Podman([]string{"run", "--name", ctrName, "--log-driver", "syslog", "--log-opt", "syslog-facility=local0", "--log-opt", "tag=harbor", ALPINE, "echo", "podman"})
+		logc.WaitWithDefaultTimeout()
+		Expect(logc).To(ExitCleanly())
+		Expect(logc.OutputToString()).To(Equal("podman"))
+
+		inspect := podmanTest.Podman([]string{"inspect", "--format", "{{.HostConfig.LogConfig.Type}} {{index .HostConfig.LogConfig.Config \"syslog-facility\"}} {{.HostConfig.LogConfig.Tag}}", ctrName})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).To(ExitCleanly())
+		Expect(inspect.OutputToString()).To(Equal("syslog local0 harbor"))
+
+		logs := podmanTest.Podman([]string{"logs", ctrName})
+		logs.WaitWithDefaultTimeout()
+		Expect(logs).To(ExitWithError(125, "this container is using the 'syslog' log driver, cannot read logs: output was forwarded to syslog and is not stored locally"))
+	})
 })
 
 func setLangEnv(lang string) func() {

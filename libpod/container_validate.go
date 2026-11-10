@@ -179,8 +179,19 @@ func (c *Container) validate() error {
 		return fmt.Errorf("default rootfs-based infra container is set for non-infra container")
 	}
 
-	if c.config.LogTag != "" && c.config.LogDriver != define.JournaldLogging {
-		return fmt.Errorf("log tags can only be used with the journald log driver but driver is %q: %w", c.config.LogDriver, define.ErrInvalidArg)
+	if c.config.LogTag != "" && c.config.LogDriver != define.JournaldLogging && c.config.LogDriver != define.SyslogLogging {
+		return fmt.Errorf("log tags can only be used with the journald log driver or the syslog log driver but driver is %q: %w", c.config.LogDriver, define.ErrInvalidArg)
+	}
+
+	// Same key canonicalization the CLI applies, so direct libpod callers
+	// cannot bypass it with mixed-case syslog option names.
+	if err := define.NormalizeSyslogOptionKeys(c.config.LogDriverOptions); err != nil {
+		return err
+	}
+	if c.config.LogDriver == define.SyslogLogging {
+		if err := c.runtime.requireConmonV3("the syslog log driver"); err != nil {
+			return err
+		}
 	}
 
 	if len(c.config.ArtifactVolumes) > 0 {

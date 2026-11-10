@@ -588,6 +588,9 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		options = append(options, libpod.WithTimeout(s.Timeout))
 	}
 	if s.LogConfiguration != nil {
+		if err := define.NormalizeSyslogOptionKeys(s.LogConfiguration.Options); err != nil {
+			return nil, err
+		}
 		if len(s.LogConfiguration.Path) > 0 {
 			options = append(options, libpod.WithLogPath(s.LogConfiguration.Path))
 		}
@@ -602,6 +605,17 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 		}
 		if len(s.LogConfiguration.Driver) > 0 {
 			options = append(options, libpod.WithLogDriver(s.LogConfiguration.Driver))
+		}
+		if s.LogConfiguration.Driver == define.SyslogLogging {
+			driverOpts := make(map[string]string)
+			for key, value := range s.LogConfiguration.Options {
+				if strings.HasPrefix(key, "syslog-") {
+					driverOpts[key] = value
+				}
+			}
+			if len(driverOpts) > 0 {
+				options = append(options, libpod.WithLogDriverOptions(driverOpts))
+			}
 		}
 		// Log rotation options: accepted as --log-opt max-file=<n> or
 		// --log-opt log-rotate=true|false from the CLI or REST API.

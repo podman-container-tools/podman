@@ -1371,6 +1371,10 @@ func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, p
 
 	var logDriverArg string
 	switch logDriver {
+	case define.SyslogLogging:
+		if err := ctr.runtime.requireConmonV3("the syslog log driver"); err != nil {
+			return nil, err
+		}
 	case define.JournaldLogging:
 		logDriverArg = define.JournaldLogging
 	case define.NoLogging:
@@ -1392,7 +1396,23 @@ func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, p
 		logDriverArg = fmt.Sprintf("%s:%s", define.KubernetesLogging, logPath)
 	}
 
-	args = append(args, "-l", logDriverArg)
+	if logDriver == define.SyslogLogging {
+		args = append(args, "--log-driver", define.SyslogLogging)
+		// Every syslog-* key is forwarded, including unknown names and
+		// explicitly empty values. conmon accepts or rejects them.
+		keys := make([]string, 0, len(ctr.config.LogDriverOptions))
+		for key := range ctr.config.LogDriverOptions {
+			if strings.HasPrefix(key, "syslog-") {
+				keys = append(keys, key)
+			}
+		}
+		slices.Sort(keys)
+		for _, key := range keys {
+			args = append(args, "--log-driver-opt", key+"="+ctr.config.LogDriverOptions[key])
+		}
+	} else {
+		args = append(args, "-l", logDriverArg)
+	}
 	logLevel := logrus.GetLevel()
 	args = append(args, "--log-level", logLevel.String())
 
@@ -1420,9 +1440,9 @@ func (r *ConmonOCIRuntime) sharedConmonArgs(ctr *Container, cuuid, bundlePath, p
 	if logTag != "" {
 		args = append(args, "--log-tag", logTag)
 	}
-	if logDriverArg == define.JournaldLogging {
+	if logDriverArg == define.JournaldLogging || logDriver == define.SyslogLogging {
 		for label, value := range logLabels {
-			if !validJournaldFieldName(label) {
+			if logDriverArg == define.JournaldLogging && !validJournaldFieldName(label) {
 				return nil, fmt.Errorf("log label %q contains invalid characters, only uppercase letters, digits, and underscores are allowed", label)
 			}
 			args = append(args, "--log-label", fmt.Sprintf("%s=%s", label, value))
