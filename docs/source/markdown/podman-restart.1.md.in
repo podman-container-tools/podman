@@ -126,6 +126,3 @@ $ podman restart --filter until=10s
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-March 2018, Originally compiled by Matt Heon <mheon@redhat.com>

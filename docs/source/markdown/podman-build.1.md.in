@@ -802,13 +802,6 @@ for solutions to common issues.
 See [podman-rootless(7)](https://github.com/containers/podman/blob/main/rootless.md)
 for rootless issues.
 
-## HISTORY
-Aug 2020, Additional options and .containerignore added by Dan Walsh `<dwalsh@redhat.com>`
-
-May 2018, Minor revisions added by Joe Doss `<joe@solidadmin.com>`
-
-December 2017, Originally compiled by Tom Sweeney `<tsweeney@redhat.com>`
-
 ## FOOTNOTES
 <a name="Footnote1">1</a>: The Podman project is committed to inclusivity, a
 core value of open source. The `master` and `slave` mount propagation

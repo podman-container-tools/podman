@@ -147,10 +147,4 @@ All commands, including commands with OPTIONS, and config-files mentioned in the
 Example:
 **[podman(1)](podman.1.md)**, **[podman-run(1)](podman-run.1.md)**, **[podman-create(1)](podman-create.1.md)**
 
-## HISTORY
-Normally, the dates of changes, the content of the changes and the person who provided them is listed here. Most manpages don't keep this record.
-
-Example:\
-December 2021, Originally compiled by Alexander Richter <example@redhat.com>
-
 `Every manpage should end with an empty line.`

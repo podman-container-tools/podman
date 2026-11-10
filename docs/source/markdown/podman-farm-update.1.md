@@ -43,6 +43,3 @@ $ podman farm update --default farm2
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-farm(1)](podman-farm.1.md)**
-
-## HISTORY
-July 2023, Originally compiled by Urvashi Mohnani (umohnani at redhat dot com)

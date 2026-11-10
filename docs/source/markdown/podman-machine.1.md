@@ -58,6 +58,3 @@ supported by platform.  The asterisk denotes the default provider for the platfo
 
 See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
 for solutions to common issues.
-
-## HISTORY
-March 2021, Originally compiled by Ashley Cui <acui@redhat.com>

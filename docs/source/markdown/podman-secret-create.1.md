@@ -119,8 +119,3 @@ $ podman secret create --env=true my_secret MYSECRET
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-secret(1)](podman-secret.1.md)**, **[podman-login(1)](podman-login.1.md)**, **[podman-run(1)](podman-run.1.md)**
-
-## HISTORY
-* January 2021, Originally compiled by Ashley Cui <acui@redhat.com>
-* February 2024, Added example showing secret creation from an environment variable by Brett Calliss <brett@obligatory.email>
-* May 2025, Added example showing secure secret generation / rotation & mounting by [Stuart Cardall](https://github.com/itoffshore)

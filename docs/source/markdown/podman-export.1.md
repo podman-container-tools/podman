@@ -48,6 +48,3 @@ $ podman export 883504668ec465463bc0fe7e63d53154ac3b696ea8d7b233748918664ea90e57
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-import(1)](podman-import.1.md)**
-
-## HISTORY
-August 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

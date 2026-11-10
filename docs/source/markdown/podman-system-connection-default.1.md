@@ -17,6 +17,3 @@ $ podman system connection default production
 ```
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**, **[podman-system-connection(1)](podman-system-connection.1.md)**
-
-## HISTORY
-July 2020, Originally compiled by Jhon Honce (jhonce at redhat dot com)

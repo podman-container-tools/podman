@@ -51,6 +51,3 @@ C /etc
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-container(1)](podman-container.1.md)**
-
-## HISTORY
-July 2021, Originally compiled by Paul Holzinger <pholzing@redhat.com>

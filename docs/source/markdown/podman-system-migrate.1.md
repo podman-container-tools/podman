@@ -70,6 +70,3 @@ $ podman container inspect test-alpine | grep OCIRuntime
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**, **usermod(8)**
-
-## HISTORY
-April 2019, Originally compiled by Giuseppe Scrivano (gscrivan at redhat dot com)

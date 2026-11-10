@@ -213,6 +213,3 @@ docker.io/library/alpine   latest   3fd9065eaf02   5 months ago    4.41 MB
 
 See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
 for solutions to common issues.
-
-## HISTORY
-March 2017, Originally compiled by Dan Walsh `<dwalsh@redhat.com>`

@@ -130,6 +130,3 @@ $ podman commit -q --change LABEL=io.containers.capabilities=setuid,setgid epic_
 
 See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
 for solutions to common issues.
-
-## HISTORY
-December 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

@@ -29,6 +29,3 @@ $ podman volume rename mydata data_backup
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-volume(1)](podman-volume.1.md)**, **[podman-volume-inspect(1)](podman-volume-inspect.1.md)**
-
-## HISTORY
-June 2026, Originally compiled by Podman Developers

@@ -91,6 +91,3 @@ $ podman machine os apply oci:/tmp/oci-image/
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**, **[podman-machine-os(1)](podman-machine-os.1.md)**
-
-## HISTORY
-February 2023, Originally compiled by Ashley Cui <acui@redhat.com>

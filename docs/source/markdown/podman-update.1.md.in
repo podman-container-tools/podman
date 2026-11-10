@@ -128,7 +128,3 @@ $ podman update --cpus 5 --cpuset-cpus 0 --cpu-shares 123 --cpuset-mems 0 \\
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-create(1)](podman-create.1.md)**, **[podman-run(1)](podman-run.1.md)**
-
-## HISTORY
-June 2025, Latest option added by Hayato Kihara <kai.21banana@gmail.com>
-August 2022, Originally written by Charlie Doern <cdoern@redhat.com>

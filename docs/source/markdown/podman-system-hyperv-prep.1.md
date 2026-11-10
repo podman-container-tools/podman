@@ -66,6 +66,3 @@ PS> podman system hyperv-prep --reset --force
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**
-
-## HISTORY
-April 2026

@@ -156,7 +156,3 @@ This starts the API service listening on the custom socket `/var/run/mypodman.so
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system-connection(1)](podman-system-connection.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**
-
-## HISTORY
-January 2020, Originally compiled by Brent Baude `<bbaude@redhat.com>`
-November 2020, Updated by Jhon Honce (jhonce at redhat dot com)

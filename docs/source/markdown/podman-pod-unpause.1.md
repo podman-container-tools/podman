@@ -33,6 +33,3 @@ $ podman pod unpause 860a4b23
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-pod-pause(1)](podman-pod-pause.1.md)**
-
-## HISTORY
-July 2018, Originally compiled by Peter Hunt <pehunt@redhat.com>

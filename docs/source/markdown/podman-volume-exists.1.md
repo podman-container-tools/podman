@@ -38,6 +38,3 @@ $
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-volume(1)](podman-volume.1.md)**
-
-## HISTORY
-January 2021, Originally compiled by Paul Holzinger `<paul.holzinger@web.de>`

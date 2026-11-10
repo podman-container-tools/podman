@@ -88,6 +88,3 @@ $ podman machine os upgrade -f json
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**, **[podman-machine-os(1)](podman-machine-os.1.md)**
-
-## HISTORY
-January 2026, Originally compiled by Brent Baude <bbaude@redhat.com>

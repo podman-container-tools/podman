@@ -242,6 +242,3 @@ d4ff818577bc193b309b355b02ebc9220427090057b54a59e73b79bdfe139b83
 
 See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
 for solutions to common issues.
-
-## HISTORY
-July 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>
