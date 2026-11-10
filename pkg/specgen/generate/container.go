@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/openshift/imagebuilder"
+	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/config"
@@ -24,6 +25,7 @@ import (
 	envLib "go.podman.io/podman/v6/pkg/env"
 	"go.podman.io/podman/v6/pkg/signal"
 	"go.podman.io/podman/v6/pkg/specgen"
+	systemdDefine "go.podman.io/podman/v6/pkg/systemd/define"
 )
 
 func getImageFromSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerator) (*libimage.Image, string, *libimage.ImageData, error) {
@@ -255,7 +257,13 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		}
 		for k, v := range labels {
 			if _, exists := s.Labels[k]; !exists {
-				s.Labels[k] = v
+				switch k {
+				// These labels have a special meaning with podman auto-update, they must not be trusted from an image.
+				case systemdDefine.EnvVariable, define.AutoUpdateLabel, define.AutoUpdateAuthfileLabel:
+					logrus.Warnf("The label %s is only supported when set from the Podman command line and it will be ignored when set in the container image. They have a special purpose for podman auto-update already. Please contact the image author to remove the the labels from the image", k)
+				default:
+					s.Labels[k] = v
+				}
 			}
 		}
 
