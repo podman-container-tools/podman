@@ -44,6 +44,13 @@ type Image struct {
 	// image.  If Digest is set, its value is also in this list.
 	Digests []digest.Digest `json:"-"`
 
+	// MatchingDigest, if set, is a deterministic value which identifies the
+	// image by its contents.  It is used to decide whether a newly-added
+	// image is "the same" as this one, independently of ID.  Unlike
+	// Digest/Digests, which are manifest digests, this is a reuse key; at
+	// most one image in the store may have a given non-empty value.
+	MatchingDigest digest.Digest `json:"matching-digest,omitempty"`
+
 	// Names is an optional set of user-defined convenience values.  The
 	// image can be referred to by its ID or any of its names.  Names are
 	// unique among images, and are often the text representation of tagged
@@ -122,6 +129,11 @@ type roImageStore interface {
 	// with ImageDigestManifestBigDataNamePrefix, which matches the
 	// specified digest.
 	ByDigest(d digest.Digest) ([]*Image, error)
+
+	// ByMatchingDigest returns the image whose MatchingDigest matches the
+	// specified digest.  It fails with ErrImageUnknown if there is no such
+	// image, or if d is empty.
+	ByMatchingDigest(d digest.Digest) (*Image, error)
 }
 
 // rwImageStore provides bookkeeping for information about Images.
@@ -170,12 +182,13 @@ type imageStore struct {
 	inProcessLock sync.RWMutex // Can _only_ be obtained with lockfile held.
 	// The following fields can only be read/written with read/write ownership of inProcessLock, respectively.
 	// Almost all users should use startReading() or startWriting().
-	lastWrite lockfile.LastWrite
-	images    []*Image
-	idindex   *truncindex.TruncIndex
-	byid      map[string]*Image
-	byname    map[string]*Image
-	bydigest  map[digest.Digest][]*Image
+	lastWrite        lockfile.LastWrite
+	images           []*Image
+	idindex          *truncindex.TruncIndex
+	byid             map[string]*Image
+	byname           map[string]*Image
+	bydigest         map[digest.Digest][]*Image
+	bymatchingdigest map[digest.Digest]*Image
 }
 
 func copyImage(i *Image) *Image {
@@ -183,6 +196,7 @@ func copyImage(i *Image) *Image {
 		ID:              i.ID,
 		Digest:          i.Digest,
 		Digests:         copySlicePreferringNil(i.Digests),
+		MatchingDigest:  i.MatchingDigest,
 		Names:           copySlicePreferringNil(i.Names),
 		NamesHistory:    copySlicePreferringNil(i.NamesHistory),
 		TopLayer:        i.TopLayer,
@@ -517,6 +531,7 @@ func (r *imageStore) load(lockedForWriting bool) (bool, error) {
 	ids := make(map[string]*Image)
 	names := make(map[string]*Image)
 	digests := make(map[digest.Digest][]*Image)
+	matchingDigests := make(map[digest.Digest]*Image)
 	var errorToResolveBySaving error // == nil
 	for n, image := range images {
 		ids[image.ID] = images[n]
@@ -538,6 +553,9 @@ func (r *imageStore) load(lockedForWriting bool) (bool, error) {
 			list := digests[digest]
 			digests[digest] = append(list, image)
 		}
+		if image.MatchingDigest != "" {
+			matchingDigests[image.MatchingDigest] = image
+		}
 		image.ReadOnly = !r.lockfile.IsReadWrite()
 	}
 
@@ -554,6 +572,7 @@ func (r *imageStore) load(lockedForWriting bool) (bool, error) {
 	r.byid = ids
 	r.byname = names
 	r.bydigest = digests
+	r.bymatchingdigest = matchingDigests
 	if errorToResolveBySaving != nil {
 		return false, r.Save()
 	}
@@ -601,10 +620,11 @@ func newImageStore(dir string) (rwImageStore, error) {
 		lockfile: lockfile,
 		dir:      dir,
 
-		images:   []*Image{},
-		byid:     make(map[string]*Image),
-		byname:   make(map[string]*Image),
-		bydigest: make(map[digest.Digest][]*Image),
+		images:           []*Image{},
+		byid:             make(map[string]*Image),
+		byname:           make(map[string]*Image),
+		bydigest:         make(map[digest.Digest][]*Image),
+		bymatchingdigest: make(map[digest.Digest]*Image),
 	}
 	if err := istore.startWritingWithReload(false); err != nil {
 		return nil, err
@@ -629,10 +649,11 @@ func newROImageStore(dir string) (roImageStore, error) {
 		lockfile: lockfile,
 		dir:      dir,
 
-		images:   []*Image{},
-		byid:     make(map[string]*Image),
-		byname:   make(map[string]*Image),
-		bydigest: make(map[digest.Digest][]*Image),
+		images:           []*Image{},
+		byid:             make(map[string]*Image),
+		byname:           make(map[string]*Image),
+		bydigest:         make(map[digest.Digest][]*Image),
+		bymatchingdigest: make(map[digest.Digest]*Image),
 	}
 	if err := istore.startReadingWithReload(false); err != nil {
 		return nil, err
@@ -706,6 +727,15 @@ func (r *imageStore) create(id string, names []string, layer string, options Ima
 	if _, idInUse := r.byid[id]; idInUse {
 		return nil, fmt.Errorf("an image with ID %q already exists: %w", id, ErrDuplicateID)
 	}
+	if options.MatchingDigest != "" {
+		// Report the duplicate as ErrDuplicateID so that callers which used to
+		// detect existing images by their ID (== digest) keep working; an
+		// image with this MatchingDigest is "the same image" as the one they
+		// are trying to create.
+		if image, digestInUse := r.bymatchingdigest[options.MatchingDigest]; digestInUse {
+			return nil, fmt.Errorf("an image with matching digest %q already exists (ID %q): %w", options.MatchingDigest, image.ID, ErrDuplicateID)
+		}
+	}
 	names = dedupeStrings(names)
 	for _, name := range names {
 		if image, nameInUse := r.byname[name]; nameInUse {
@@ -716,6 +746,7 @@ func (r *imageStore) create(id string, names []string, layer string, options Ima
 		ID:             id,
 		Digest:         options.Digest,
 		Digests:        dedupeDigests(options.Digests),
+		MatchingDigest: options.MatchingDigest,
 		Names:          names,
 		NamesHistory:   copySlicePreferringNil(options.NamesHistory),
 		TopLayer:       layer,
@@ -746,6 +777,9 @@ func (r *imageStore) create(id string, names []string, layer string, options Ima
 	for _, digest := range image.Digests {
 		list := r.bydigest[digest]
 		r.bydigest[digest] = append(list, image)
+	}
+	if image.MatchingDigest != "" {
+		r.bymatchingdigest[image.MatchingDigest] = image
 	}
 	defer func() {
 		if err != nil {
@@ -865,6 +899,9 @@ func (r *imageStore) Delete(id string) error {
 	}
 	id = image.ID
 	delete(r.byid, id)
+	if image.MatchingDigest != "" && r.bymatchingdigest[image.MatchingDigest] == image {
+		delete(r.bymatchingdigest, image.MatchingDigest)
+	}
 	// This can only fail if the ID is already missing, which shouldn’t happen — and in that case the index is already in the desired state anyway.
 	// The store’s Delete method is used on various paths to recover from failures, so this should be robust against partially missing data.
 	_ = r.idindex.Delete(id)
@@ -913,6 +950,17 @@ func (r *imageStore) ByDigest(d digest.Digest) ([]*Image, error) {
 		return copyImageSlice(images), nil
 	}
 	return nil, fmt.Errorf("locating image with digest %q: %w", d, ErrImageUnknown)
+}
+
+// Requires startReading or startWriting.
+func (r *imageStore) ByMatchingDigest(d digest.Digest) (*Image, error) {
+	if d == "" {
+		return nil, fmt.Errorf("locating image with empty matching digest: %w", ErrImageUnknown)
+	}
+	if image, ok := r.bymatchingdigest[d]; ok {
+		return copyImage(image), nil
+	}
+	return nil, fmt.Errorf("locating image with matching digest %q: %w", d, ErrImageUnknown)
 }
 
 // Requires startReading or startWriting.

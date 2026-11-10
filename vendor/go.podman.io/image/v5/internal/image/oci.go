@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	ociencspec "github.com/containers/ocicrypt/spec"
+	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/iolimits"
@@ -105,6 +106,19 @@ func (m *manifestOCI1) OCIConfig(ctx context.Context) (*imgspecv1.Image, error) 
 // WARNING: The list may contain duplicates, and they are semantically relevant.
 func (m *manifestOCI1) LayerInfos() []types.BlobInfo {
 	return manifestLayerInfosToBlobInfos(m.m.LayerInfos())
+}
+
+// MatchingDigest returns a digest which uniquely identifies the image by its contents,
+// irrespective of which reference was used to locate it.  Non-image artifacts have no
+// such value, because their configuration is not expected to change with the other layers.
+func (m *manifestOCI1) MatchingDigest([]digest.Digest) (digest.Digest, error) {
+	if m.m.Config.MediaType != imgspecv1.MediaTypeImageConfig {
+		return "", internalManifest.NewNonImageArtifactError(&m.m.Manifest)
+	}
+	if err := m.m.Config.Digest.Validate(); err != nil {
+		return "", err
+	}
+	return m.m.Config.Digest, nil
 }
 
 // EmbeddedDockerReferenceConflicts whether a Docker reference embedded in the manifest, if any, conflicts with destination ref.

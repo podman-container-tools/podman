@@ -522,6 +522,10 @@ type Store interface {
 	// Image returns a specific image.
 	Image(id string) (*Image, error)
 
+	// ImageByMatchingDigest returns the image whose MatchingDigest field
+	// equals the specified digest, across all image stores.
+	ImageByMatchingDigest(d digest.Digest) (*Image, error)
+
 	// ImagesByTopLayer returns a list of images which reference the specified
 	// layer as their top layer.  They will have different IDs and names
 	// and may have different metadata, big data items, and flags.
@@ -727,6 +731,11 @@ type ImageOptions struct {
 	// possibly a manually-specified value, that we can use to locate the
 	// image.  If Digest is set, its value is also in this list.
 	Digests []digest.Digest
+	// MatchingDigest, if not empty, is a deterministic value identifying the
+	// image by its contents, used to decide whether a newly-added image is
+	// "the same" as an existing one.  Creating an image whose MatchingDigest
+	// equals that of an existing image fails with ErrDuplicateID.
+	MatchingDigest digest.Digest
 	// Metadata is caller-specified metadata associated with the layer.
 	Metadata string
 	// BigData is a set of items which should be stored with the image.
@@ -1768,11 +1777,12 @@ func (s *store) CreateImage(id string, names []string, layer, metadata string, i
 				if i, err := store.Get(id); err == nil {
 					// set information about this image in "options"
 					options = ImageOptions{
-						Metadata:     i.Metadata,
-						CreationDate: i.Created,
-						Digest:       i.Digest,
-						Digests:      copySlicePreferringNil(i.Digests),
-						NamesHistory: copySlicePreferringNil(i.NamesHistory),
+						Metadata:       i.Metadata,
+						CreationDate:   i.Created,
+						Digest:         i.Digest,
+						Digests:        copySlicePreferringNil(i.Digests),
+						MatchingDigest: i.MatchingDigest,
+						NamesHistory:   copySlicePreferringNil(i.NamesHistory),
 					}
 					for _, key := range i.BigDataNames {
 						data, err := store.BigData(id, key)
@@ -1804,6 +1814,9 @@ func (s *store) CreateImage(id string, names []string, layer, metadata string, i
 				options.Digest = iOptions.Digest
 			}
 			options.Digests = append(options.Digests, iOptions.Digests...)
+			if iOptions.MatchingDigest != "" {
+				options.MatchingDigest = iOptions.MatchingDigest
+			}
 			if iOptions.Metadata != "" {
 				options.Metadata = iOptions.Metadata
 			}
@@ -2601,12 +2614,13 @@ func (s *store) updateNames(id string, names []string, op updateNameOperation) e
 		if i, err := store.Get(id); err == nil {
 			// "pull up" the image so that we can change its names list
 			options := ImageOptions{
-				CreationDate: i.Created,
-				Digest:       i.Digest,
-				Digests:      copySlicePreferringNil(i.Digests),
-				Metadata:     i.Metadata,
-				NamesHistory: copySlicePreferringNil(i.NamesHistory),
-				Flags:        copyMapPreferringNil(i.Flags),
+				CreationDate:   i.Created,
+				Digest:         i.Digest,
+				Digests:        copySlicePreferringNil(i.Digests),
+				MatchingDigest: i.MatchingDigest,
+				Metadata:       i.Metadata,
+				NamesHistory:   copySlicePreferringNil(i.NamesHistory),
+				Flags:          copyMapPreferringNil(i.Flags),
 			}
 			for _, key := range i.BigDataNames {
 				data, err := store.BigData(id, key)
@@ -3693,6 +3707,31 @@ func (s *store) Image(id string) (*Image, error) {
 		return res, err
 	}
 	return nil, fmt.Errorf("locating image with ID %q: %w", id, ErrImageUnknown)
+}
+
+func (s *store) ImageByMatchingDigest(d digest.Digest) (*Image, error) {
+	if d == "" {
+		return nil, fmt.Errorf("locating image with empty matching digest: %w", ErrImageUnknown)
+	}
+	if res, done, err := readAllImageStores(s, func(store roImageStore) (*Image, bool, error) {
+		image, err := store.ByMatchingDigest(d)
+		if err == nil {
+			if store != s.imageStore {
+				// As in Image(), ignore an entry in a read-only store if we
+				// have an entry with the same ID in the read-write store:
+				// the read-only record was superseded when the image was
+				// "pulled up" into writable storage.
+				if _, localErr := s.imageStore.Get(image.ID); localErr == nil {
+					return nil, false, nil
+				}
+			}
+			return image, true, nil
+		}
+		return nil, false, nil
+	}); done {
+		return res, err
+	}
+	return nil, fmt.Errorf("locating image with matching digest %q: %w", d, ErrImageUnknown)
 }
 
 func (s *store) ImagesByTopLayer(id string) ([]*Image, error) {
