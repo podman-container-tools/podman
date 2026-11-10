@@ -158,7 +158,7 @@ var _ = Describe("Podman build", func() {
 
 		session := podmanTest.Podman([]string{"build", targetPath})
 		session.WaitWithDefaultTimeout()
-		expectStderr := fmt.Sprintf("no Containerfile or Dockerfile specified or found in context directory, %s", targetPath)
+		expectStderr := "cannot find Containerfile or Dockerfile in context directory"
 		Expect(session).Should(ExitWithError(125, expectStderr))
 
 		session = podmanTest.Podman([]string{"build", "-f", "foo", targetPath})
