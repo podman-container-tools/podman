@@ -57,6 +57,12 @@ podman pod logs mywebserver`,
 )
 
 func init() {
+	if registry.IsRemote() {
+		podLogsCommand.Example = `podman pod logs -c ctrname podName
+podman pod logs -c ctrname --tail 2 mywebserver
+podman pod logs -c ctrname --follow=true --since 10m podID`
+	}
+
 	// pod logs
 	registry.Commands = append(registry.Commands, registry.CliCommand{
 		Command: podLogsCommand,
@@ -73,7 +79,7 @@ func logsFlags(cmd *cobra.Command) {
 	flags.BoolVarP(&logsPodOptions.Follow, "follow", "f", false, "Follow log output.")
 
 	containerNameFlag := "container"
-	flags.StringVarP(&logsPodOptions.ContainerName, containerNameFlag, "c", "", "Filter logs by container name or id which belongs to pod")
+	flags.StringVarP(&logsPodOptions.ContainerName, containerNameFlag, "c", "", "Filter logs by container name or id which belongs to pod (required when run remotely)")
 	_ = cmd.RegisterFlagCompletionFunc(containerNameFlag, common.AutocompleteContainers)
 
 	sinceFlagName := "since"
@@ -115,7 +121,7 @@ func logs(cmd *cobra.Command, args []string) error {
 
 	// Remote can only process one container at a time
 	if registry.IsRemote() && logsPodOptions.ContainerName == "" {
-		return fmt.Errorf("-c or --container cannot be empty: %w", define.ErrInvalidArg)
+		return fmt.Errorf("-c or --container must be specified when run remotely: %w", define.ErrInvalidArg)
 	}
 
 	logsPodOptions.StdoutWriter = os.Stdout
