@@ -965,9 +965,9 @@
 			"args": [
 				{
 					"index": 0,
-					"value": 40,
-					"valueTwo": 0,
-					"op": "SCMP_CMP_EQ"
+					"value": 4294967295,
+					"valueTwo": 40,
+					"op": "SCMP_CMP_MASKED_EQ"
 				}
 			],
 			"comment": "",
@@ -984,15 +984,15 @@
 			"args": [
 				{
 					"index": 0,
-					"value": 16,
-					"valueTwo": 0,
-					"op": "SCMP_CMP_EQ"
+					"value": 4294967295,
+					"valueTwo": 16,
+					"op": "SCMP_CMP_MASKED_EQ"
 				},
 				{
 					"index": 2,
-					"value": 9,
-					"valueTwo": 0,
-					"op": "SCMP_CMP_EQ"
+					"value": 4294967295,
+					"valueTwo": 9,
+					"op": "SCMP_CMP_MASKED_EQ"
 				}
 			],
 			"comment": "",
