@@ -51,8 +51,13 @@ type HostInfo struct {
 	MemTotal           int64             `json:"memTotal"`
 	NetworkBackend     string            `json:"networkBackend"`
 	NetworkBackendInfo types.NetworkInfo `json:"networkBackendInfo"`
-	OCIRuntime         *OCIRuntimeInfo   `json:"ociRuntime"`
-	OS                 string            `json:"os"`
+	// NetworkFirewallDriver is the effective firewall driver used by the
+	// network backend (netavark): the configured network.firewall_driver
+	// when set, otherwise the default reported by the netavark binary.
+	// Empty when it cannot be determined or the backend is not netavark.
+	NetworkFirewallDriver string          `json:"networkFirewallDriver,omitempty"`
+	OCIRuntime            *OCIRuntimeInfo `json:"ociRuntime"`
+	OS                    string          `json:"os"`
 	// RemoteSocket returns the UNIX domain socket the Podman service is listening on
 	RemoteSocket *RemoteSocket `json:"remoteSocket,omitempty"`
 	// RootlessNetworkCmd returns the default rootless network command (pasta)

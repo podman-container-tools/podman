@@ -142,6 +142,10 @@ func GetInfo(w http.ResponseWriter, r *http.Request) {
 			info.Runtimes[k] = dockerSystem.RuntimeWithStatus{Runtime: rt.Runtime}
 		}
 	}
+	// The FirewallBackend field was introduced in the Docker API v1.49.
+	if _, err := utils.SupportedVersion(r, ">=1.49.0"); err == nil {
+		info.Info.FirewallBackend = getFirewallBackend(infoData)
+	}
 
 	utils.WriteResponse(w, http.StatusOK, info)
 }
@@ -305,4 +309,20 @@ func getDefaultAddressPools(configInfo *config.Config) []dockerSystem.NetworkAdd
 	}
 
 	return pools
+}
+
+// getFirewallBackend returns the firewall backend configuration for the Docker API.
+// It reuses the effective driver reported by podman info
+// (host.networkFirewallDriver): the configured network.firewall_driver
+// when set, otherwise the default compiled into the netavark binary.
+// If it cannot be determined, nil is returned rather than fabricating a value.
+func getFirewallBackend(infoData *define.Info) *dockerSystem.FirewallInfo {
+	driver := infoData.Host.NetworkFirewallDriver
+	if driver == "" {
+		return nil
+	}
+
+	return &dockerSystem.FirewallInfo{
+		Driver: driver,
+	}
 }
