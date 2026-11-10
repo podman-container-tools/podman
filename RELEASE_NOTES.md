@@ -1,5 +1,11 @@
 # Release Notes
 
+## 5.8.10
+### Security
+- Addresses CVE-2026-121885, untrusted image labels could be used to trick podman auto-update into restarting incorrect systemd units [GHSA-55rm-rwr7-q2wr](https://github.com/podman-container-tools/podman/security/advisories/GHSA-55rm-rwr7-q2wr).
+- Addresses CVE-2026-111361, malicious containers images could be able to bypass Digest and Signature validation [GHSA-pggw-qqjf-6cxw](https://github.com/podman-container-tools/container-libs/security/advisories/GHSA-pggw-qqjf-6cxw).
+- Addresses CVE-2026-123876, default seccomp profile socket deny rule could be bypass by a malicious container.
+
 ## 5.8.9
 ### Bugfixes
 - Fixed an issue where Podman would not function when run under WSL 3 ([#29749](https://github.com/podman-container-tools/podman/issues/29749)).
