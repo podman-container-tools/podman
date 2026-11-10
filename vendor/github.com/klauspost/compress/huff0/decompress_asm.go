@@ -28,7 +28,6 @@ type decompress4xContext struct {
 	limit    *byte    // stream 0's output pointer must stay below this
 	ilowest  *byte    // start of the input block; no read goes below it
 	ip       [4]*byte // each stream's 8-byte input window, advanced by the asm
-	inner    *byte    // scratch for the asm: the current inner-loop limit
 }
 
 // Symbols decoded per stream between reloads by the 4X asm loops; must

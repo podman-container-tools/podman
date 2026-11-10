@@ -193,6 +193,9 @@ type ContainersConfig struct {
 	// NoHosts tells container engine whether to create its own /etc/hosts
 	NoHosts bool `toml:"no_hosts,omitempty"`
 
+	// NoNewPrivileges prevents processes in containers from gaining additional privileges.
+	NoNewPrivileges bool `toml:"no_new_privileges,omitempty"`
+
 	// OOMScoreAdj tunes the host's OOM preferences for containers
 	// (accepts values from -1000 to 1000).
 	OOMScoreAdj *int `toml:"oom_score_adj,omitempty"`
@@ -347,6 +350,11 @@ type EngineConfig struct {
 	// know when a healthcheck is run or failed allow users to turn it off by setting it to false.
 	// Default is true.
 	HealthcheckEvents bool `toml:"healthcheck_events,omitempty"`
+
+	// HealthcheckEventsOnChange limits healthcheck events to changes in the
+	// health status instead of emitting an event for every healthcheck run.
+	// This setting only applies when HealthcheckEvents is true. Default is false.
+	HealthcheckEventsOnChange bool `toml:"healthcheck_events_on_change,omitempty"`
 
 	// HelperBinariesDir is a list of directories which are used to search for
 	// helper binaries.

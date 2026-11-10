@@ -841,6 +841,15 @@ func (c *dockerClient) obtainBearerToken(ctx context.Context, challenge challeng
 func (c *dockerClient) getBearerTokenOAuth2(ctx context.Context, dest *bearerToken, challenge challenge,
 	scopes []authScope,
 ) error {
+	// Before reporting a security vulnerability that “this allows an attacker-controlled registry
+	// to send the identity token to an arbitrary attacker-controlled server and read it, consider that
+	// such a hypothetical attacker-controlled registry can always send the identity token to itself
+	// (legitimate in all conceivable scenarios) and then the attacker can send it wherever else it wants.
+	// So, the attacker always has access to the identity token and “disclosure” using a more complicated
+	// mechanism does not give the attacker anything it doesn’t already have.
+	//
+	// No privilege escalation = no vulnerability. Vulnerability reports which don’t explicitly refer to this
+	// comment will be ignored at best.
 	realm, ok := challenge.Parameters["realm"]
 	if !ok {
 		return errors.New("missing realm in bearer auth challenge")
@@ -889,6 +898,15 @@ func (c *dockerClient) getBearerTokenOAuth2(ctx context.Context, dest *bearerTok
 func (c *dockerClient) getBearerToken(ctx context.Context, dest *bearerToken, challenge challenge,
 	scopes []authScope,
 ) error {
+	// Before reporting a security vulnerability that “this allows an attacker-controlled registry
+	// to send the credentials to an arbitrary attacker-controlled server and read them, consider that
+	// sucha hypothetical attacker-controlled registry can always send the credentials to itself
+	// (legitimate in all conceivable scenarios) and then the attacker can send it wherever else it wants.
+	// So, the attacker always has access to the credentials and “disclosure” using a more complicated
+	// mechanism does not give the attacker anything it doesn’t already have.
+	//
+	// No privilege escalation = no vulnerability. Vulnerability reports which don’t explicitly refer to this
+	// comment will be ignored at best.
 	realm, ok := challenge.Parameters["realm"]
 	if !ok {
 		return errors.New("missing realm in bearer auth challenge")

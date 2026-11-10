@@ -13,11 +13,7 @@ type fastEncL2 struct {
 // EncodeL2 uses a similar algorithm to level 1, but is capable
 // of matching across blocks giving better compression at a small slowdown.
 func (e *fastEncL2) Encode(dst *tokens, src []byte) {
-	const (
-		inputMargin            = 12 - 1
-		minNonLiteralBlockSize = 1 + 1 + inputMargin
-		hashBytes              = 5
-	)
+	const hashBytes = 5
 
 	if debugDeflate && e.cur < 0 {
 		panic(fmt.Sprint("e.cur < 0: ", e.cur))
