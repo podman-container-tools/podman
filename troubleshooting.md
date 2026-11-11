@@ -120,7 +120,7 @@ communicate with a registry and not use TLS verification.
 For a global workaround, users[1] can create the file `/etc/containers/registries.conf.d/registry-NAME.conf`
 (replacing NAME with the name of this registry) with the following content (replacing FULLY.QUALIFIED.NAME.OF.REGISTRY with the address of this registry):
 
-```
+```toml
 [[registry]]
 location = "FULLY.QUALIFIED.NAME.OF.REGISTRY"
 insecure = true
@@ -476,7 +476,7 @@ Once the user logs out all the containers exit.
 # loginctl enable-linger $UID
 ```
 
-### 18) `podman run` fails with "bpf create: permission denied error"
+### 18) `podman run` fails with 'bpf create: permission denied error'
 
 The Kernel Lockdown patches deny eBPF programs when Secure Boot is enabled in the BIOS. [Matthew Garrett's post](https://mjg59.dreamwidth.org/50577.html) describes the relationship between Lockdown and Secure Boot and [Jan-Philip Gehrcke's](https://gehrcke.de/2019/09/running-an-ebpf-program-may-require-lifting-the-kernel-lockdown/) connects this with eBPF. [RH bug 1768125](https://bugzilla.redhat.com/show_bug.cgi?id=1768125) contains some additional details.
 
@@ -484,7 +484,9 @@ The Kernel Lockdown patches deny eBPF programs when Secure Boot is enabled in th
 
 Attempts to run podman result in
 
-```Error: bpf create : Operation not permitted: OCI runtime permission denied error```
+```
+Error: bpf create : Operation not permitted: OCI runtime permission denied error
+```
 
 #### Solution
 
@@ -1228,7 +1230,7 @@ When using the __--tty__ (__-t__) flag, unexpected carriage returns are outputte
 
 The container program prints a newline (`\n`) but the terminal outputs a carriage return and a newline (`\r\n`).
 
-```
+```console
 $ podman run --rm -t fedora echo abc | od -c
 0000000   a   b   c  \r  \n
 0000005
@@ -1236,7 +1238,7 @@ $ podman run --rm -t fedora echo abc | od -c
 
 When run directly on the host, the result is as expected.
 
-```
+```console
 $ echo abc | od -c
 0000000   a   b   c  \n
 0000004
@@ -1244,7 +1246,7 @@ $ echo abc | od -c
 
 Extra carriage returns can also shift the prompt to the right.
 
-```
+```console
 $ podman run --rm -t fedora sh -c "echo 1; echo 2; echo 3" | cat -A
 1^M$
     2^M$
@@ -1256,7 +1258,7 @@ $ podman run --rm -t fedora sh -c "echo 1; echo 2; echo 3" | cat -A
 
 Run Podman without the __--tty__ (__-t__) flag.
 
-```
+```console
 $ podman run --rm fedora echo abc | od -c
 0000000   a   b   c  \n
 0000004
@@ -1269,7 +1271,7 @@ Where does the extra carriage return `\r` come from?
 
 The extra `\r` is not outputted by Podman but by the terminal. In fact, a reconfiguration of the terminal can make the extra `\r` go away.
 
-```
+```console
 $ podman run --rm -t fedora /bin/sh -c "stty -onlcr && echo abc" | od -c
 0000000   a   b   c  \n
 0000004
@@ -1283,7 +1285,7 @@ Podman 4.3.0 introduced the options _uid_ and _gid_ that can be given to `--user
 
 When using a Podman version older than 4.3.0, the options _uid_ and _gid_ are not recognized, and an "unrecognized namespace mode" error is raised.
 
-```
+```console
 $ uid=1000
 $ gid=1000
 $ podman run --rm
@@ -1300,7 +1302,7 @@ Use __--uidmap__ and __--gidmap__ options to describe the same UID and GID mappi
 
 Run
 
-```
+```console
 $ uid=1000
 $ gid=1000
 $ subuidSize=$(( $(podman info --format "{{ range \
@@ -1324,7 +1326,7 @@ $ podman run --rm \
 which uses the same UID and GID mapping as when specifying
 `--userns keep-id:uid=$uid,gid=$gid` with Podman 4.3.0 (or greater)
 
-```
+```console
 $ uid=1000
 $ gid=1000
 $ podman run --rm \
@@ -1339,7 +1341,7 @@ $ podman run --rm \
 Replace `/bin/cat /proc/self/uid_map` with
 `/bin/cat /proc/self/gid_map` to show the GID mapping.
 
-### 40) Podman fails to find expected image with "error locating pulled image", "image not known"
+### 40) Podman fails to find expected image with 'error locating pulled image', 'image not known'
 
 When trying to do a Podman command that pulls an image from local storage or a remote repository,
 an error is raised saying "image not known" or "error locating pulled image".  Even though the image
@@ -1349,7 +1351,7 @@ had been verified before the Podman command was invoked.
 
 After verifying that an image is in place either locally or on a remote repository, a Podman command
 referencing that image will fail in a manner like:
-```
+```console
 # ls Containerfile
 FROM registry.access.redhat.com/ubi8-minimal:latest
 MAINTAINER Podman Community
@@ -1417,28 +1419,28 @@ This could be caused by the child container using `fuse-overlayfs` for writing t
 
 If you don't have access to the parent run process, such as in a CI environment, then the second option is to change the storage driver to `vfs` in the parent image by changing changing this line in your `storage.conf` file: `driver = "vfs"`. You may have to run `podman system reset` for this to take effect. You know it's changed when `podman info |grep graphDriverName` outputs `graphDriverName: vfs`. This method is slower performance than using the volume method above but is significantly faster than `fuse-overlayfs`
 
-### 43) `podman run --userns=auto` fails with "Error: creating container storage: not enough unused IDs in user namespace"
+### 43) `podman run --userns=auto` fails with 'Error: creating container storage: not enough unused IDs in user namespace'
 
 Using `--userns=auto` when creating new containers does not work as long as any containers exist that were created with `--userns=keep-id` or `--userns=nomap`
 
 #### Symptom
 
-1. Run with `--userns=auto`
+1. Run with `--userns=auto`:
    ```
    $ podman run --rm -d --userns=auto alpine sleep 3600
    ```
    The command succeeds.
-2. Run with `--userns=auto`
+2. Run with `--userns=auto`:
    ```
    $ podman run --rm -d --userns=auto alpine sleep 3600
    ```
    The command succeeds.
-3. Run with `--userns=keep-id`
+3. Run with `--userns=keep-id`:
    ```
    $ podman run --rm -d --userns=keep-id alpine sleep 3600
    ```
    The command succeeds.
-4. Run with `--userns=auto`
+4. Run with `--userns=auto`:
    ```
    $ podman run --rm -d --userns=auto alpine sleep 3600
    ```
@@ -1478,7 +1480,7 @@ option `root-auto-userns-user` in the file _/etc/containers/storage.conf_
 #### Symptom
 
 Run rootful podman with `--userns=auto`
-```
+```sh
 sudo podman run --rm --userns=auto alpine echo hello
 ```
 The command fails with the error message:
@@ -1498,14 +1500,14 @@ For details, see [subid(5)](https://man7.org/linux/man-pages/man5/subuid.5.html)
 The following steps create the user _containers_ and assigns big subuid and subgid ranges to it:
 
 1. Create the user _containers_
-   ```
+   ```sh
    sudo useradd --comment "Helper user to reserve subuids and subgids for Podman" \
                 --no-create-home \
                 --shell /usr/sbin/nologin \
                 containers
    ```
 2. Check the subuid and subgid ranges of the user _containers_
-   ```
+   ```console
    $ grep ^containers: /etc/subuid
    containers:720896:65536
    $ grep ^containers: /etc/subgid
@@ -1522,7 +1524,7 @@ The following steps create the user _containers_ and assigns big subuid and subg
 
 Test the echo command again
 
-```
+```sh
 sudo podman run --rm --userns=auto alpine echo hello
 ```
 
@@ -1575,7 +1577,7 @@ For example, bind-mounting the directory `/usr/share` succeeds even though
 the user does not have write permissions to the directory. The following
 command succeeds:
 
-```
+```sh
 podman run --rm -v /usr/share:/dir fedora ls /dir
 ```
 
@@ -1586,7 +1588,7 @@ Alternative 1
 Use the `O` flag to mount the directory from the host
 as a temporary storage using the overlay file system.
 
-```
+```console
 podman run --rm -v /var/test:/dir:O fedora ls /dir
 ```
 
@@ -1595,7 +1597,7 @@ finishes executing, similar to a tmpfs mount point being unmounted.
 
 The following command succeeds:
 
-```
+```sh
 podman run --rm -v /var/test:/dir:O fedora touch /dir/file
 ```
 
@@ -1606,13 +1608,13 @@ Alternative 2
 If the directory `/var/test` resides on a file system that supports XATTR,
 set a directory SELinux context that corresponds to the podman volume flag `:z`
 
-```
+```sh
 sudo chcon -R system_u:object_r:container_file_t:s0 /var/test
 ```
 
 The following command now succeeds
 
-```
+```sh
 podman run --rm -v /var/test:/dir ls /dir
 ```
 
@@ -1621,14 +1623,14 @@ Alternative 3
 Modify the default SELinux context configuration for the directory `/var/test`
 with the command
 
-```
+```sh
 sudo semanage fcontext -a -s system_u -t container_file_t "/var/test(/.*)?"
 ```
 
 Change the SElinux contexts recursively for files and directories under `/var/test`
 to match the new configuration
 
-```
+```sh
 sudo restorecon -R -F -v /var/test
 ```
 
@@ -1636,7 +1638,7 @@ Alternative 4
 
 Add the option `--security-opt label=disable` to disable SELinux for the Podman command.
 
-```
+```sh
 podman run --rm --security-opt label=disable -v /var/test:/dir fedora ls /dir
 ```
 
@@ -1648,7 +1650,7 @@ Specifying `podman run` command-line options related to UID/GID mapping (such as
 
 Example 1
 
-```
+```console
 $ podman pod create pod1
 2d99a6c3d736b3b5e9f105e6c89c91ae719f954b8486d54bccb7b94dde697cde
 $ podman run --rm --pod pod1 --uidmap 0:0:2000 --name ctr1 alpine sleep 100
@@ -1657,7 +1659,7 @@ Error: cannot specify a new uid/gid map when entering a pod with an infra contai
 
 Example 2
 
-```
+```console
 $ podman pod create --uidmap 0:0:2000 pod1
 aa445fb0163c43ca5c6400d36557914f36194b9b9917e1d51b7f57719802dc46
 $ podman run --rm --pod pod1 --uidmap 0:0:2000 --name ctr1 alpine sleep 100
@@ -1674,7 +1676,7 @@ when creating the pod and not when creating the container.
 In other words, options such as `--userns`, `--uidmap`, `--gidmap`, should only be passed
 to `podman pod create`.
 
-```
+```sh
 podman pod create --uidmap 0:0:2000 pod1
 podman run --rm -d --pod pod1 --name ctr1 alpine sleep 100
 podman run --rm -d --pod pod1 --name ctr2 alpine sleep 100
@@ -1693,7 +1695,7 @@ have different IP addresses. Podman provides an internal DNS server that resolve
 
 Example using pod without specifying UID/GID mapping:
 
-```
+```sh
 podman pod create pod1
 podman run --pod pod1 --rm -d docker.io/library/python python3 -m http.server 8080 --bind 127.0.0.1
 podman run --pod pod1 --rm docker.io/library/fedora curl -s -S http://127.0.0.1:8080
@@ -1701,7 +1703,7 @@ podman run --pod pod1 --rm docker.io/library/fedora curl -s -S http://127.0.0.1:
 
 Example using a custom network without specifying UID/GID mapping:
 
-```
+```sh
 podman network create --opt=isolate=strict mynet
 podman run --network mynet --rm -d --name ctr1 --network-alias ctr1alias docker.io/library/python python3 -m http.server 8080 --bind 0.0.0.0
 podman run --network mynet --rm docker.io/library/fedora curl -s -S http://ctr1:8080
@@ -1712,7 +1714,7 @@ As the containers are not running in a pod, it's possible to run them with diffe
 Add `--uidmap 0:0:2000`, `--uidmap 0:0:5000` and  `--uidmap 0:0:3000` to demonstrate
 that different UID/GID mappings are possible.
 
-```
+```sh
 podman network create --opt=isolate=strict mynet
 podman run --uidmap 0:0:2000 --network mynet --rm -d --name ctr1 --network-alias ctr1alias docker.io/library/python python3 -m http.server 8080 --bind 0.0.0.0
 podman run --uidmap 0:0:5000 --network mynet --rm docker.io/library/fedora curl -s -S http://ctr1:8080
@@ -1729,7 +1731,7 @@ local address of the listening TCP socket is 127.0.0.1 in the container.
 Start a web server that is bound to 127.0.0.1 in a container.
 The container name is _test_.
 
-```
+```sh
 bind=127.0.0.1
 podman run --rm -d \
            --name test \
@@ -1740,7 +1742,7 @@ podman run --rm -d \
 
 Run curl to access the web server
 
-```
+```console
 $ curl -s -S 127.0.0.1:8080/
 curl: (56) Recv failure: Connection reset by peer
 ```
@@ -1748,7 +1750,7 @@ curl: (56) Recv failure: Connection reset by peer
 To show the port and local address of the listening TCP socket
 in the container _test_, run
 
-```
+```console
 $ path=$(podman inspect --format '{{.NetworkSettings.SandboxKey}}' test)
 $ echo $path
 /run/user/1001/netns/netns-35f6df1f-1622-5d6d-3bbb-70f5d16e09bc
@@ -1763,7 +1765,7 @@ Alternative 1
 
 Let the web server bind to 0.0.0.0 instead of 127.0.0.1
 
-```
+```sh
 bind=0.0.0.0
 podman run --rm \
            -d \
@@ -1774,7 +1776,7 @@ podman run --rm \
 
 Run curl to access the web server
 
-```
+```console
 $ curl -s -S 127.0.0.1:8080/ | head -1
 <!DOCTYPE HTML>
 ```
@@ -1792,7 +1794,7 @@ Use `--network=host`
 
 Start a web server that is bound to 127.0.0.1
 
-```
+```sh
 bind=127.0.0.1
 podman run --rm \
            -d \
@@ -1803,7 +1805,7 @@ podman run --rm \
 
 Run curl to access the web server
 
-```
+```console
 $ curl -s -S 127.0.0.1:8080/ | head -1
 <!DOCTYPE HTML>
 ```
@@ -1823,7 +1825,7 @@ This limit can be configured in `/proc/sys/net/ipv4/ip_unprivileged_port_start`
 
 Pasta does not have the privileges to create a listening socket on a port below 1024.
 
-```
+```console
 $ cat /proc/sys/net/ipv4/ip_unprivileged_port_start
 1024
 $ podman run --rm -d -p 80:80 docker.io/library/nginx
@@ -1834,7 +1836,7 @@ Couldn't listen on requested TCP ports
 
 A similar problem can be seen when using `--network=host`
 
-```
+```console
 $ cat /proc/sys/net/ipv4/ip_unprivileged_port_start
 1024
 $ podman run --rm --network=host docker.io/traefik/whoami
@@ -1847,7 +1849,7 @@ $ podman run --rm --network=host docker.io/traefik/whoami
 Configure `ip_unprivileged_port_start` to allow unprivileged users to
 bind to port numbers 80 and above.
 
-```
+```console
 $ sudo sh -c "echo 80 > /proc/sys/net/ipv4/ip_unprivileged_port_start"
 $ cat /proc/sys/net/ipv4/ip_unprivileged_port_start
 80
@@ -1864,7 +1866,7 @@ net.ipv4.ip_unprivileged_port_start=80
 
 and reload the configuration
 
-```
+```sh
 sudo sysctl --system
 ```
 
@@ -1877,7 +1879,7 @@ host's main network interface fails when using Pasta.
 
 Show the IP address of the main network interface
 
-```
+```console
 $ hostname -I
 192.168.64.3 fd06:cd88:fba4:8d1:fa83:8dc1:f5fd:d3e0
 ```
@@ -1886,7 +1888,7 @@ Result: 192.168.64.3
 
 Start a web server that listens on that IP address
 
-```
+```console
 $ addr=192.168.64.3
 $ podman run
     --rm \
@@ -1899,7 +1901,7 @@ bb662dc47c32f62dc735367dde43ae488fd5b64570c2e4415f0083d6617f5dec
 
 Connecting to the service fails when running curl in another container.
 
-```
+```console
 $ podman run --rm docker.io/library/fedora curl -sS ${addr}:8080
 curl: (7) Failed to connect to 192.168.64.3 port 8080 after 0 ms: Could not connect to server
 ```
@@ -1911,7 +1913,7 @@ Alternative 1
 Instead of connecting to the IP address of the host's main network interface,
 connect to `host.containers.internal` or `host.docker.internal`
 
-```
+```console
 $ podman run --rm docker.io/library/fedora curl -sS host.containers.internal:8080 | head -1
 <!DOCTYPE HTML>
 ```
@@ -1922,7 +1924,7 @@ Instead of connecting to `host.containers.internal` or `host.docker.internal`, y
 also connect to an arbitrary hostname such as `my.example.com`, by adding
 the option `--add-host my.example.com:host-gateway`.
 
-```
+```console
 $ podman run --rm --add-host my.example.com:host-gateway docker.io/library/fedora curl -sS my.example.com:8080 | head -1
 <!DOCTYPE HTML>
 ```
@@ -1938,33 +1940,33 @@ to the container unit file. The following error message is printed
 
 Create directory
 
-```
+```sh
 mkdir -p ~/.config/containers/systemd
 ```
 
 Create file `~/.config/containers/systemd/my.container` containing
 
-```
+```ini
 [Container]
 Image=docker.io/library/alpine sh -c "sleep inf"
 ```
 
 Reload the systemd manager
 
-```
+```sh
 systemctl --user daemon-reload
 ```
 
 Enable linger
 
-```
+```sh
 sudo loginctl enable-linger $USER
 ```
 
 Despite being incorrect, some users might believe that the following
 command is needed
 
-```
+```sh
 systemctl --user enable my.service
 ```
 
@@ -1979,7 +1981,7 @@ Failed to enable unit: Unit /run/user/1000/systemd/generator/my.service is trans
 Quadlets should not be enabled with `systemctl --user enable`, instead add
 an install section to the container unit.
 
-```
+```ini
 [Install]
 WantedBy=multi-user.target
 ```
