@@ -1,7 +1,7 @@
-% podman-image-trust 1
+% podman-image-trust-show 1
 
 ## NAME
-podman\-image\-trust - Manage container registry image trust policy
+podman\-image\-trust\-show - Display container registry image trust policy
 
 
 ## SYNOPSIS

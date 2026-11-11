@@ -1,7 +1,7 @@
-% podman-image-trust 1
+% podman-image-trust-set 1
 
 ## NAME
-podman\-image\-trust - Manage container registry image trust policy
+podman\-image\-trust\-set - Set container registry image trust policy
 
 
 ## SYNOPSIS

@@ -1,0 +1,22 @@
+% podman-image-trust 1
+
+## NAME
+podman\-image\-trust - Manage container registry image trust policy
+
+## SYNOPSIS
+**podman image trust** *subcommand*
+
+## DESCRIPTION
+Manage container registry image trust policies.
+
+Use the **set** subcommand to configure image trust policies and the **show** subcommand to display existing policies.
+
+## COMMANDS
+
+| Command | Man Page | Description |
+| ------- | -------- | ----------- |
+| set | [podman-image-trust-set(1)](podman-image-trust-set.1.md) | Set container registry image trust policy. |
+| show | [podman-image-trust-show(1)](podman-image-trust-show.1.md) | Display container registry image trust policy. |
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-image(1)](podman-image.1.md)**, **[podman-image-trust-set(1)](podman-image-trust-set.1.md)**, **[podman-image-trust-show(1)](podman-image-trust-show.1.md)**
