@@ -6,6 +6,7 @@
 |:-|:-|:-|
 | ![End User](https://img.shields.io/badge/End_User-blue) | Amadeus IT Group | https://amadeus.com |
 | ![End User](https://img.shields.io/badge/End_User-blue) | Axoflow | https://axoflow.com |
+| ![End User](https://img.shields.io/badge/End_User-blue) | Caliente.mx | https://www.caliente.mx |
 | ![End User](https://img.shields.io/badge/End_User-blue) | IBM | https://www.ibm.com |
 | ![End User](https://img.shields.io/badge/End_User-blue) | NTT Global | https://www.global.ntt |
 | ![Integration](https://img.shields.io/badge/Integration-red) | Avassa Edge Platform | https://www.avassa.io |
