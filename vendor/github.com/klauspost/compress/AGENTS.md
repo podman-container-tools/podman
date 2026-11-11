@@ -83,14 +83,16 @@ README describes the packages themselves.
 
 ## Assembly is generated
 
-- zstd, huff0 and s2 assembly is generated with [avo](https://github.com/mmcloughlin/avo)
-  from `zstd/_generate`, `huff0/_generate` and `s2/_generate`. Never edit the
+- zstd, huff0 and s2 assembly is generated with the
+  [honeycombio/avo](https://github.com/honeycombio/avo) fork of avo from
+  `zstd/_generate`, `huff0/_generate` and `s2/_generate`. Never edit the
   `.s` files by hand: change the generator, run `go generate -v -x` in the
   `_generate` directory, and commit the regenerated output. CI's `generate` job
   fails if the committed files differ from the generator's output.
-- The arm64 files are lowered from the same amd64 program by the
-  `honeycombio/avo` fork that the `_generate/go.mod` files `replace` avo with.
-  A change to the generator changes both architectures; build and test both.
+- The arm64 files are lowered from the same amd64 program by the fork, which
+  the `_generate` modules import as `github.com/honeycombio/avo`; keep all
+  three on the same fork commit. A change to the generator changes both
+  architectures; build and test both.
 - When moving the avo pin, regenerate and check the output is byte-identical
   unless a change is intended, so unrelated printer changes don't slip into a
   review.

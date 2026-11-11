@@ -130,6 +130,7 @@ type compressor struct {
 	state  *advancedState
 
 	sync          bool // requesting flush
+	closing       bool // sync is from close, so no more data follows
 	byteAvailable bool // if true, still need to process window[index-1].
 }
 
@@ -737,38 +738,49 @@ func (d *compressor) storeHuff() {
 // if enough has been accumulated or we at the end of the stream.
 // Any error that occurred will be in d.err
 func (d *compressor) storeFast() {
-	// We only compress if we have maxStoreBlockSize.
-	if d.windowEnd < len(d.window) {
-		if !d.sync {
-			return
-		}
-		// Handle extremely small sizes.
-		if d.windowEnd < 128 {
-			if d.windowEnd == 0 {
-				return
-			}
-			if d.windowEnd <= 32 {
-				d.err = d.writeStoredBlock(d.window[:d.windowEnd])
-			} else {
-				d.w.writeBlockHuff(false, d.window[:d.windowEnd], true)
-				d.err = d.w.err
-			}
-			d.tokens.Reset()
-			d.windowEnd = 0
-			d.fast.Reset()
-			return
-		}
+	// We only compress if we have maxStoreBlockSize, or are flushing.
+	if d.windowEnd == 0 || (d.windowEnd < len(d.window) && !d.sync) {
+		return
 	}
 
+	// smallBlockSize is the window size below which the encoder has too little
+	// data to draw conclusions from.
+	const smallBlockSize = 128
+
+	if d.closing && d.windowEnd < smallBlockSize && !d.fast.hasHistory() {
+		// Nothing precedes or follows this window, so there is no history to
+		// match against or keep in sync, and a window this small is not worth
+		// searching on its own. Write it as is.
+		if d.windowEnd <= 32 {
+			d.err = d.writeStoredBlock(d.window[:d.windowEnd])
+		} else {
+			d.w.writeBlockHuff(false, d.window[:d.windowEnd], true)
+			d.err = d.w.err
+		}
+		d.windowEnd = 0
+		return
+	}
+
+	// Encode must be called even when the window is too small for it to emit
+	// tokens, since it also appends the window to the match history. Leaving a
+	// gap there would offset every later match from what the decoder sees.
 	d.fast.Encode(&d.tokens, d.window[:d.windowEnd])
-	// If we made zero matches, store the block as is.
-	if d.tokens.n == 0 {
+	switch {
+	case d.windowEnd < minNonLiteralBlockSize,
+		d.tokens.n == 0 && d.windowEnd >= smallBlockSize:
+		// Either too small for Encode to emit tokens, and for a Huffman table
+		// to pay for itself, or big enough that finding no match at all most
+		// likely means incompressible data, which is not worth a Huffman pass.
+		// Store the block as is.
 		d.err = d.writeStoredBlock(d.window[:d.windowEnd])
-		// If we removed less than 1/16th, huffman compress the block.
-	} else if int(d.tokens.n) > d.windowEnd-(d.windowEnd>>4) {
+	case d.tokens.n == 0, int(d.tokens.n) > d.windowEnd-(d.windowEnd>>4):
+		// A small block without matches can still have a skewed literal
+		// distribution, and matches that removed less than 1/16th of the
+		// literals do not pay for a dynamic block. Huffman only, which stores
+		// the block if that ends up smaller.
 		d.w.writeBlockHuff(false, d.window[:d.windowEnd], d.sync)
 		d.err = d.w.err
-	} else {
+	default:
 		d.w.writeBlockDynamic(&d.tokens, false, d.window[:d.windowEnd], d.sync)
 		d.err = d.w.err
 	}
@@ -856,6 +868,7 @@ func (d *compressor) init(w io.Writer, level int) (err error) {
 func (d *compressor) reset(w io.Writer) {
 	d.w.reset(w)
 	d.sync = false
+	d.closing = false
 	d.err = nil
 	// We only need to reset a few things for Snappy.
 	if d.fast != nil {
@@ -893,6 +906,7 @@ func (d *compressor) close() error {
 		return d.err
 	}
 	d.sync = true
+	d.closing = true
 	d.step(d)
 	if d.err != nil {
 		return d.err

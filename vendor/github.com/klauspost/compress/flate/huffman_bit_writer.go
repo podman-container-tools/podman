@@ -1021,7 +1021,8 @@ func (w *huffmanBitWriter) writeBlockHuff(eof bool, input []byte, sync bool) {
 	if w.lastHeader > 0 {
 		reuseSize := w.literalEncoding.canReuseBits(w.literalFreq[:256])
 
-		if estBits < reuseSize {
+		// The open block isn't final, so the last block can't reuse it.
+		if eof || estBits < reuseSize {
 			if debugDeflate {
 				fmt.Println("NOT reusing, reuse:", reuseSize/8, "> new:", estBits/8, "header est:", w.lastHeader/8, "bytes")
 			}

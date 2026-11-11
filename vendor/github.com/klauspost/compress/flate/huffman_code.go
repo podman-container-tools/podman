@@ -41,6 +41,10 @@ type huffmanEncoder struct {
 
 	// sortcache is scratch space for sortByFreq.
 	sortcache [literalCount + 1]literalNode
+
+	// Scratch space for treeBitCounts.
+	nodeFreq   [literalCount]int32
+	nodeParent [2 * literalCount]uint16
 }
 
 type literalNode struct {
@@ -155,6 +159,66 @@ func (h *huffmanEncoder) canReuseBits(freq []uint16) int {
 		}
 	}
 	return total
+}
+
+// treeBitCounts builds an unrestricted Huffman tree for list and returns
+// an integer slice in which slice[i] is the number of literals that should
+// be encoded using i bits, together with the maximum number of bits used.
+//
+// This method is only called when len(list) >= 3.
+//
+// list is an array of the literals with non-zero frequencies
+// and their associated frequencies. The array is in order of increasing
+// frequency.
+//
+// This is much faster than bitCounts, but can produce codes longer
+// than allowed. In that case bitCounts must be used instead.
+func (h *huffmanEncoder) treeBitCounts(list []literalNode) ([]int32, int) {
+	n := len(list)
+	// Leaves are nodes 0..n-1, in order of increasing frequency,
+	// and internal nodes are n..2n-2, in order of creation, which is
+	// also increasing frequency. The two smallest unused nodes are
+	// therefore always at the front of the two ranges.
+	parent := h.nodeParent[:2*n-1]
+	freq := h.nodeFreq[:n-1]
+	leafPos, nodePos := 0, 0
+	for k := range n - 1 {
+		var f int32
+		for range 2 {
+			if leafPos < n && (nodePos >= k || int32(list[leafPos].freq) <= freq[nodePos]) {
+				f += int32(list[leafPos].freq)
+				parent[leafPos] = uint16(n + k)
+				leafPos++
+			} else {
+				f += freq[nodePos]
+				parent[n+nodePos] = uint16(n + k)
+				nodePos++
+			}
+		}
+		freq[k] = f
+	}
+
+	// Compute the depth of every node, root first, and count leaf depths.
+	// Reuse freq as the depth of the internal nodes.
+	depth := freq
+	bitCount := h.bitCount[:]
+	clear(bitCount)
+	depth[n-2] = 0
+	maxBits := 0
+	for k := 2*n - 3; k >= 0; k-- {
+		d := depth[int(parent[k])-n] + 1
+		if k >= n {
+			depth[k-n] = d
+			continue
+		}
+		if int(d) >= len(bitCount) {
+			// Too deep for any caller; report and let the caller fall back.
+			return nil, int(d)
+		}
+		bitCount[d]++
+		maxBits = max(maxBits, int(d))
+	}
+	return bitCount[:maxBits+1], maxBits
 }
 
 // Return the number of literals assigned to each bit size in the Huffman encoding
@@ -427,8 +491,14 @@ func (h *huffmanEncoder) generate(freq []uint16, maxBits int32) {
 	// by frequency orders it by (frequency, literal).
 	h.sortByFreq(list)
 
-	// Get the number of literals for each bit count
-	bitCount := h.bitCounts(list, maxBits)
+	// Get the number of literals for each bit count.
+	// An unrestricted Huffman tree is fast to compute and is nearly
+	// always within the limit. Fall back to the slower length-limited
+	// construction otherwise.
+	bitCount, used := h.treeBitCounts(list)
+	if used > int(maxBits) {
+		bitCount = h.bitCounts(list, maxBits)
+	}
 	// And do the assignment
 	h.assignEncodingAndSize(bitCount, list, codes)
 }

@@ -21,6 +21,8 @@ profile {{.Name}} flags=(attach_disconnected,mediate_deleted) {
   # Allow signals from privileged profiles and from within the same profile
   signal (receive) peer=unconfined,
   signal (send,receive) peer={{.Name}},
+  # With AppArmor 5.0+, child processes get a stacked profile.
+  signal (send,receive) peer={{.Name}}//&*,
   # Allow certain signals from OCI runtimes (podman, runc and crun)
   signal (receive) peer={/usr/bin/,/usr/sbin/,}runc,
   signal (receive) peer={/usr/bin/,/usr/sbin/,}crun*,
@@ -48,6 +50,8 @@ profile {{.Name}} flags=(attach_disconnected,mediate_deleted) {
 {{if ge .Version 208095}}
   # suppress ptrace denials when using 'ps' inside a container
   ptrace (trace,read) peer={{.Name}},
+  # With AppArmor 5.0+, child processes get a stacked profile.
+  ptrace (trace,read) peer={{.Name}}//&*,
 {{end}}
 }
 `
