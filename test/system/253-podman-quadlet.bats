@@ -660,6 +660,12 @@ EOF
     assert "$output" =~ "^noheading-test.container" "noheading should should contain only the quadlet name"
     assert "${#lines[@]}" -eq 1 "list output should contain exactly one line"
 
+    # Test output with quiet flag
+    run_podman quadlet list --quiet
+    assert $status -eq 0 "quadlet list --quiet should succeed"
+    assert "$output" =~ "^noheading-test.container" "quiet should should contain only the quadlet name"
+    assert "${#lines[@]}" -eq 1 "list output should contain exactly one line"
+
     # Clean up
     run_podman quadlet rm noheading-test.container
 }

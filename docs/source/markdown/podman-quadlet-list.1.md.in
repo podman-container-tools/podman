@@ -43,6 +43,10 @@ Print results with a Go template.
 
 @@option noheading
 
+#### **--quiet**, **-q**
+
+Print Quadlet output in quiet mode. Only print the Quadlet names.
+
 ## EXAMPLES
 
 Simple list command
