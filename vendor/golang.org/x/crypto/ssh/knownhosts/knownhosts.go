@@ -397,10 +397,15 @@ func (db *hostKeyDB) checkAddr(a addr, remoteKey ssh.PublicKey) error {
 	return keyErr
 }
 
-// The Read function parses file contents.
+// The Read function parses file contents. Lines that cannot be parsed are
+// skipped, but if there are invalid lines and no valid ones, an error
+// reporting the first invalid line is returned.
 func (db *hostKeyDB) Read(r io.Reader, filename string) error {
 	scanner := bufio.NewScanner(r)
 
+	var firstErr error
+	firstErrLine := 0
+	valid := 0
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -411,10 +416,21 @@ func (db *hostKeyDB) Read(r io.Reader, filename string) error {
 		}
 
 		if err := db.parseLine(line, filename, lineNum); err != nil {
-			return fmt.Errorf("knownhosts: %s:%d: %v", filename, lineNum, err)
+			if firstErr == nil {
+				firstErr = err
+				firstErrLine = lineNum
+			}
+			continue
 		}
+		valid++
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if valid == 0 && firstErr != nil {
+		return fmt.Errorf("knownhosts: %s: no valid entries, line %d: %v", filename, firstErrLine, firstErr)
+	}
+	return nil
 }
 
 // New creates a host key callback from the given OpenSSH host key
@@ -422,7 +438,9 @@ func (db *hostKeyDB) Read(r io.Reader, filename string) error {
 // ssh.ClientConfig.HostKeyCallback. By preference, the key check
 // operates on the hostname if available, i.e. if a server changes its
 // IP address, the host key check will still succeed, even though a
-// record of the new IP address is not available.
+// record of the new IP address is not available. Lines that cannot be
+// parsed are skipped, but an error is returned if a file contains invalid
+// lines and no valid ones.
 func New(files ...string) (ssh.HostKeyCallback, error) {
 	db := newHostKeyDB()
 	for _, fn := range files {

@@ -5,7 +5,6 @@
 package agent
 
 import (
-	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -304,71 +303,6 @@ func parseEd25519Key(req []byte) (*AddedKey, error) {
 	return addedKey, nil
 }
 
-func checkDSAParams(param *dsa.Parameters) error {
-	// SSH specifies FIPS 186-2, which only provided a single size
-	// (1024 bits) DSA key. FIPS 186-3 allows for larger key
-	// sizes, which would confuse SSH.
-	if l := param.P.BitLen(); l != 1024 {
-		return fmt.Errorf("ssh: unsupported DSA key size %d", l)
-	}
-
-	// FIPS 186-2 specifies that Q must be exactly 160 bits. We must enforce
-	// this to prevent DoS attacks where an attacker sends a huge Q which makes
-	// verification slow.
-	if l := param.Q.BitLen(); l != 160 {
-		return fmt.Errorf("ssh: unsupported DSA sub-prime size %d", l)
-	}
-
-	// The generator G is an element of the group, so it must be strictly less
-	// than the modulus P.
-	if param.G.Cmp(param.P) >= 0 {
-		return errors.New("ssh: DSA generator larger than modulus")
-	}
-
-	// G must be positive.
-	if param.G.Sign() <= 0 {
-		return errors.New("ssh: DSA generator must be positive")
-	}
-
-	return nil
-}
-
-func parseDSAKey(req []byte) (*AddedKey, error) {
-	var k dsaKeyMsg
-	if err := ssh.Unmarshal(req, &k); err != nil {
-		return nil, err
-	}
-	params := dsa.Parameters{
-		P: k.P,
-		Q: k.Q,
-		G: k.G,
-	}
-	if err := checkDSAParams(&params); err != nil {
-		return nil, err
-	}
-
-	// The public value Y must be a non-zero element of the group, i.e. strictly
-	// between 0 and P, to prevent a maliciously oversized Y from slowing
-	// signature operations.
-	if k.Y.Sign() <= 0 || k.Y.Cmp(k.P) >= 0 {
-		return nil, errors.New("agent: DSA public value Y out of range")
-	}
-
-	priv := &dsa.PrivateKey{
-		PublicKey: dsa.PublicKey{
-			Parameters: params,
-			Y:          k.Y,
-		},
-		X: k.X,
-	}
-
-	addedKey := &AddedKey{PrivateKey: priv, Comment: k.Comments}
-	if err := setConstraints(addedKey, k.Constraints); err != nil {
-		return nil, err
-	}
-	return addedKey, nil
-}
-
 func unmarshalECDSA(curveName string, keyBytes []byte, privScalar *big.Int) (priv *ecdsa.PrivateKey, err error) {
 	priv = &ecdsa.PrivateKey{
 		D: privScalar,
@@ -483,48 +417,6 @@ func parseRSACert(req []byte) (*AddedKey, error) {
 	return addedKey, nil
 }
 
-func parseDSACert(req []byte) (*AddedKey, error) {
-	var k dsaCertMsg
-	if err := ssh.Unmarshal(req, &k); err != nil {
-		return nil, err
-	}
-	pubKey, err := ssh.ParsePublicKey(k.CertBytes)
-	if err != nil {
-		return nil, err
-	}
-	cert, ok := pubKey.(*ssh.Certificate)
-	if !ok {
-		return nil, errors.New("agent: bad DSA certificate")
-	}
-
-	// A DSA publickey as marshaled by dsaPublicKey.Marshal() in keys.go
-	var w struct {
-		Name       string
-		P, Q, G, Y *big.Int
-	}
-	if err := ssh.Unmarshal(cert.Key.Marshal(), &w); err != nil {
-		return nil, fmt.Errorf("agent: Unmarshal failed to parse public key: %v", err)
-	}
-
-	priv := &dsa.PrivateKey{
-		PublicKey: dsa.PublicKey{
-			Parameters: dsa.Parameters{
-				P: w.P,
-				Q: w.Q,
-				G: w.G,
-			},
-			Y: w.Y,
-		},
-		X: k.X,
-	}
-
-	addedKey := &AddedKey{PrivateKey: priv, Certificate: cert, Comment: k.Comments}
-	if err := setConstraints(addedKey, k.Constraints); err != nil {
-		return nil, err
-	}
-	return addedKey, nil
-}
-
 func parseECDSACert(req []byte) (*AddedKey, error) {
 	var k ecdsaCertMsg
 	if err := ssh.Unmarshal(req, &k); err != nil {
@@ -578,16 +470,12 @@ func (s *server) insertIdentity(req []byte) error {
 	switch record.Type {
 	case ssh.KeyAlgoRSA:
 		addedKey, err = parseRSAKey(req)
-	case ssh.InsecureKeyAlgoDSA:
-		addedKey, err = parseDSAKey(req)
 	case ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521:
 		addedKey, err = parseECDSAKey(req)
 	case ssh.KeyAlgoED25519:
 		addedKey, err = parseEd25519Key(req)
 	case ssh.CertAlgoRSAv01:
 		addedKey, err = parseRSACert(req)
-	case ssh.InsecureCertAlgoDSAv01:
-		addedKey, err = parseDSACert(req)
 	case ssh.CertAlgoECDSA256v01, ssh.CertAlgoECDSA384v01, ssh.CertAlgoECDSA521v01:
 		addedKey, err = parseECDSACert(req)
 	case ssh.CertAlgoED25519v01:

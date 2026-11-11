@@ -14,7 +14,6 @@ package agent
 
 import (
 	"bytes"
-	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -103,9 +102,8 @@ type ConstraintExtension struct {
 
 // AddedKey describes an SSH key to be added to an Agent.
 type AddedKey struct {
-	// PrivateKey must be a *rsa.PrivateKey, *dsa.PrivateKey,
-	// ed25519.PrivateKey or *ecdsa.PrivateKey, which will be inserted into the
-	// agent.
+	// PrivateKey must be a *rsa.PrivateKey, ed25519.PrivateKey or
+	// *ecdsa.PrivateKey, which will be inserted into the agent.
 	PrivateKey interface{}
 	// Certificate, if not nil, is communicated to the agent and will be
 	// stored with the key.
@@ -551,17 +549,6 @@ type rsaKeyMsg struct {
 	Constraints []byte `ssh:"rest"`
 }
 
-type dsaKeyMsg struct {
-	Type        string `sshtype:"17|25"`
-	P           *big.Int
-	Q           *big.Int
-	G           *big.Int
-	Y           *big.Int
-	X           *big.Int
-	Comments    string
-	Constraints []byte `ssh:"rest"`
-}
-
 type ecdsaKeyMsg struct {
 	Type        string `sshtype:"17|25"`
 	Curve       string
@@ -596,17 +583,6 @@ func (c *client) insertKey(s interface{}, comment string, constraints []byte) er
 			Iqmp:        k.Precomputed.Qinv,
 			P:           k.Primes[0],
 			Q:           k.Primes[1],
-			Comments:    comment,
-			Constraints: constraints,
-		})
-	case *dsa.PrivateKey:
-		req = ssh.Marshal(dsaKeyMsg{
-			Type:        ssh.InsecureKeyAlgoDSA,
-			P:           k.P,
-			Q:           k.Q,
-			G:           k.G,
-			Y:           k.Y,
-			X:           k.X,
 			Comments:    comment,
 			Constraints: constraints,
 		})
@@ -675,14 +651,6 @@ type rsaCertMsg struct {
 	Constraints []byte `ssh:"rest"`
 }
 
-type dsaCertMsg struct {
-	Type        string `sshtype:"17|25"`
-	CertBytes   []byte
-	X           *big.Int
-	Comments    string
-	Constraints []byte `ssh:"rest"`
-}
-
 type ecdsaCertMsg struct {
 	Type        string `sshtype:"17|25"`
 	CertBytes   []byte
@@ -742,14 +710,6 @@ func (c *client) insertCert(s interface{}, cert *ssh.Certificate, comment string
 			Iqmp:        k.Precomputed.Qinv,
 			P:           k.Primes[0],
 			Q:           k.Primes[1],
-			Comments:    comment,
-			Constraints: constraints,
-		})
-	case *dsa.PrivateKey:
-		req = ssh.Marshal(dsaCertMsg{
-			Type:        cert.Type(),
-			CertBytes:   cert.Marshal(),
-			X:           k.X,
 			Comments:    comment,
 			Constraints: constraints,
 		})
@@ -868,19 +828,18 @@ var _ ssh.AlgorithmSigner = &agentKeyringSigner{}
 //
 // This map must be kept in sync with the one in certs.go.
 var certKeyAlgoNames = map[string]string{
-	ssh.CertAlgoRSAv01:         ssh.KeyAlgoRSA,
-	ssh.CertAlgoRSASHA256v01:   ssh.KeyAlgoRSASHA256,
-	ssh.CertAlgoRSASHA512v01:   ssh.KeyAlgoRSASHA512,
-	ssh.InsecureCertAlgoDSAv01: ssh.InsecureKeyAlgoDSA,
-	ssh.CertAlgoECDSA256v01:    ssh.KeyAlgoECDSA256,
-	ssh.CertAlgoECDSA384v01:    ssh.KeyAlgoECDSA384,
-	ssh.CertAlgoECDSA521v01:    ssh.KeyAlgoECDSA521,
-	ssh.CertAlgoSKECDSA256v01:  ssh.KeyAlgoSKECDSA256,
-	ssh.CertAlgoED25519v01:     ssh.KeyAlgoED25519,
-	ssh.CertAlgoSKED25519v01:   ssh.KeyAlgoSKED25519,
-	ssh.CertAlgoMLDSA44v01Go:   ssh.KeyAlgoMLDSA44,
-	ssh.CertAlgoMLDSA65v01Go:   ssh.KeyAlgoMLDSA65,
-	ssh.CertAlgoMLDSA87v01Go:   ssh.KeyAlgoMLDSA87,
+	ssh.CertAlgoRSAv01:        ssh.KeyAlgoRSA,
+	ssh.CertAlgoRSASHA256v01:  ssh.KeyAlgoRSASHA256,
+	ssh.CertAlgoRSASHA512v01:  ssh.KeyAlgoRSASHA512,
+	ssh.CertAlgoECDSA256v01:   ssh.KeyAlgoECDSA256,
+	ssh.CertAlgoECDSA384v01:   ssh.KeyAlgoECDSA384,
+	ssh.CertAlgoECDSA521v01:   ssh.KeyAlgoECDSA521,
+	ssh.CertAlgoSKECDSA256v01: ssh.KeyAlgoSKECDSA256,
+	ssh.CertAlgoED25519v01:    ssh.KeyAlgoED25519,
+	ssh.CertAlgoSKED25519v01:  ssh.KeyAlgoSKED25519,
+	ssh.CertAlgoMLDSA44v01Go:  ssh.KeyAlgoMLDSA44,
+	ssh.CertAlgoMLDSA65v01Go:  ssh.KeyAlgoMLDSA65,
+	ssh.CertAlgoMLDSA87v01Go:  ssh.KeyAlgoMLDSA87,
 }
 
 // underlyingAlgo returns the signature algorithm associated with algo (which is
