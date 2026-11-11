@@ -68,4 +68,4 @@ be performed like this:
 
 
 ## SEE ALSO
-**[podman(1)](podman.1.md)**, **[podman-manifest-add(1)](podman-manifest-add.1.md)**, **[podman-manifest-annotate(1)](podman-manifest-annotate.1.md)**, **[podman-manifest-create(1)](podman-manifest-create.1.md)**, **[podman-manifest-inspect(1)](podman-manifest-inspect.1.md)**, **[podman-manifest-push(1)](podman-manifest-push.1.md)**, **[podman-manifest-remove(1)](podman-manifest-remove.1.md)**
+**[podman(1)](podman.1.md)**, **[podman-manifest-add(1)](podman-manifest-add.1.md)**, **[podman-manifest-annotate(1)](podman-manifest-annotate.1.md)**, **[podman-manifest-create(1)](podman-manifest-create.1.md)**, **[podman-manifest-exists(1)](podman-manifest-exists.1.md)**, **[podman-manifest-inspect(1)](podman-manifest-inspect.1.md)**, **[podman-manifest-push(1)](podman-manifest-push.1.md)**, **[podman-manifest-remove(1)](podman-manifest-remove.1.md)**, **[podman-manifest-rm(1)](podman-manifest-rm.1.md)**
