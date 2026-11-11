@@ -28,6 +28,3 @@ $ sudo podman pod exists backend; echo $?
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**
-
-## HISTORY
-December 2018, Originally compiled by Brent Baude (bbaude at redhat dot com)

@@ -36,6 +36,3 @@ $ podman untag httpd myhttpd myregistryhost:5000/fedora/httpd:v2
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-December 2019, Originally compiled by Sascha Grunert <sgrunert@suse.com>

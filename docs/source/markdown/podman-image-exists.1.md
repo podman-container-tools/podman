@@ -36,6 +36,3 @@ $ echo $?
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-image(1)](podman-image.1.md)**
-
-## HISTORY
-November 2018, Originally compiled by Brent Baude (bbaude at redhat dot com)

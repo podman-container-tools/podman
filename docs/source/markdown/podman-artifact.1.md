@@ -28,6 +28,3 @@ from its local "artifact store".
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-Sept 2024, Originally compiled by Brent Baude <bbaude@redhat.com>

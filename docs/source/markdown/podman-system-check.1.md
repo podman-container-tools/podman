@@ -56,6 +56,3 @@ $ podman system check --repair --max=1h --force
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**
-
-## HISTORY
-April 2024

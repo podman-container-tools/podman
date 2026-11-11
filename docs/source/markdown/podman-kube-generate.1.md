@@ -244,6 +244,3 @@ status:
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-container(1)](podman-container.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-kube-play(1)](podman-kube-play.1.md)**, **[podman-kube-down(1)](podman-kube-down.1.md)**
-
-## HISTORY
-December 2018, Originally compiled by Brent Baude (bbaude at redhat dot com)

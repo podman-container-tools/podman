@@ -110,7 +110,3 @@ f9f0a8a58c9e02a2b3250b88cc5c95b1e10245ca2c4161d19376580aaa90f55c
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-images(1)](podman-images.1.md)**
-
-## HISTORY
-December 2018, Originally compiled by Brent Baude (bbaude at redhat dot com)
-December 2020, converted filter information from docs.docker.com documentation by Dan Walsh (dwalsh at redhat dot com)

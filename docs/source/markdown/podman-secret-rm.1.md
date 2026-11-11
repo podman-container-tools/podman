@@ -52,6 +52,3 @@ $ podman secret rm --ignore mysecret1 mysecret2 non_existent_secret
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-secret(1)](podman-secret.1.md)**
-
-## HISTORY
-January 2021, Originally compiled by Ashley Cui <acui@redhat.com>

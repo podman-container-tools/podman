@@ -128,6 +128,3 @@ _EOF
 
 ## SEE ALSO
 **[containers.conf(5)](containers.conf.5.md)**, **[podman(1)](podman.1.md)**, **[podman-exec(1)](podman-exec.1.md)**, **[podman-systemd.unit(5)](podman-systemd.unit.5.md)**
-
-## HISTORY
-May 2023, Originally compiled by Dan Walsh <dwalsh@redhat.com>

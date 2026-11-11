@@ -55,6 +55,3 @@ fred
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-network(1)](podman-network.1.md)**
-
-## HISTORY
-August 2019, Originally compiled by Brent Baude <bbaude@redhat.com>

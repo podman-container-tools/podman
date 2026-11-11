@@ -76,6 +76,3 @@ sha256:6c28fa07a5b0a1cee29862c1f6ea38a66df982495b14da2c052427eb628ed8c6
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-artifact(1)](podman-artifact.1.md)**
-
-## HISTORY
-Sept 2024, Originally compiled by Brent Baude <bbaude@redhat.com>

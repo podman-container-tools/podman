@@ -102,6 +102,3 @@ amd64
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**
-
-## HISTORY
-June 2022, Originally compiled by Ashley Cui <acui@redhat.com>

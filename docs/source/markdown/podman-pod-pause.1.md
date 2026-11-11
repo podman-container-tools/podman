@@ -40,6 +40,3 @@ $ podman pod pause --all
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-pod-unpause(1)](podman-pod-unpause.1.md)**, **[podman-pause(1)](podman-pause.1.md)**
-
-## HISTORY
-July 2018, Originally compiled by Peter Hunt <pehunt@redhat.com>

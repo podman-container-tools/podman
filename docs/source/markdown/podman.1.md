@@ -521,6 +521,3 @@ for solutions to common issues.
 
 See [podman-rootless(7)](https://github.com/containers/podman/blob/main/rootless.md)
 for rootless issues.
-
-## HISTORY
-Dec 2016, Originally compiled by Dan Walsh <dwalsh@redhat.com>

@@ -100,6 +100,3 @@ $ podman history --format json debian
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-July 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

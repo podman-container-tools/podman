@@ -39,6 +39,3 @@ $ sudo podman pod prune --force
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-pod(1)](podman-pod.1.md)**
-
-## HISTORY
-April 2019, Originally compiled by Peter Hunt (pehunt at redhat dot com)

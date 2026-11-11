@@ -78,6 +78,3 @@ Deleted: d29200bf974dbc48dc66c23c4031548531b6b5943e5f25ee7bda232e3b6b27f4
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[skopeo-delete(1)](https://github.com/containers/skopeo/blob/main/docs/skopeo-delete.1.md)**
-
-## HISTORY
-March 2017, Originally compiled by Dan Walsh <dwalsh@redhat.com>

@@ -117,6 +117,3 @@ Config Dir: {/Users/jacksparrow/.config/containers/podman/machine/applehv <nil>}
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**
-
-## HISTORY
-April 2022, Originally compiled by Brent Baude <bbaude@redhat.com>

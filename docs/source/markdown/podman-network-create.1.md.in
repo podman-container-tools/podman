@@ -125,8 +125,3 @@ newnet
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-network(1)](podman-network.1.md)**, **[podman-network-inspect(1)](podman-network-inspect.1.md)**, **[podman-network-ls(1)](podman-network-ls.1.md)**, **[containers.conf(5)](https://github.com/containers/common/blob/main/docs/containers.conf.5.md)**
-
-## HISTORY
-August 2021, Updated with the new network format by Paul Holzinger <pholzing@redhat.com>
-
-August 2019, Originally compiled by Brent Baude <bbaude@redhat.com>

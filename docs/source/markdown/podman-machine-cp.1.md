@@ -58,6 +58,3 @@ Copy Successful
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**
-
-## HISTORY
-February 2025, Originally compiled by Jake Correnti <jcorrent@redhat.com>

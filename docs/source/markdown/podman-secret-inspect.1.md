@@ -69,6 +69,3 @@ $ podman secret inspect --showsecret --format "{{.Spec.Name}} {{.SecretData}}" m
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-secret(1)](podman-secret.1.md)**
-
-## HISTORY
-January 2021, Originally compiled by Ashley Cui <acui@redhat.com>

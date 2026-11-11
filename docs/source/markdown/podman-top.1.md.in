@@ -116,8 +116,3 @@ root   1     0      0.000   1h2m12.497061672s   ?     0s     sleep 100000
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **ps(1)**, **seccomp(2)**, **proc(5)**, **capabilities(7)**
-
-## HISTORY
-July 2018, Introduce format descriptors by Valentin Rothberg <vrothberg@suse.com>
-
-December 2017, Originally compiled by Brent Baude <bbaude@redhat.com>

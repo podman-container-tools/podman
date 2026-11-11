@@ -69,6 +69,3 @@ using fuse-overlayfs and the overlay driver.
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**,  **[fuse-overlayfs(1)](https://github.com/containers/fuse-overlayfs/blob/main/fuse-overlayfs.1.md)**, **[containers-storage.conf(5)](https://github.com/containers/storage/blob/main/docs/containers-storage.conf.5.md)**
-
-## HISTORY
-November 2019, Originally compiled by Dan Walsh (dwalsh at redhat dot com)

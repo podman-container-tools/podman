@@ -71,8 +71,3 @@ Subnet: 10.88.0.0/16 Gateway: 10.88.0.1
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-network(1)](podman-network.1.md)**, **[podman-network-ls(1)](podman-network-ls.1.md)**, **[podman-network-create(1)](podman-network-create.1.md)**
-
-## HISTORY
-August 2021, Updated with the new network format by Paul Holzinger <pholzing@redhat.com>
-
-August 2019, Originally compiled by Brent Baude <bbaude@redhat.com>

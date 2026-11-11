@@ -86,6 +86,3 @@ Loaded image:  registry.fedoraproject.org/fedora:latest
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-save(1)](podman-save.1.md)**
-
-## HISTORY
-July 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

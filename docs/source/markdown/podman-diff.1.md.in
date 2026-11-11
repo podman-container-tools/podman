@@ -56,6 +56,3 @@ A /test
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-container-diff(1)](podman-container-diff.1.md)**, **[podman-image-diff(1)](podman-image-diff.1.md)**
-
-## HISTORY
-August 2017, Originally compiled by Ryan Cole <rycole@redhat.com>

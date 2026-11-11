@@ -49,7 +49,3 @@ Print usage statement
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-November 2018, Added --format flag by Tomas Tomecek <ttomecek@redhat.com>
-July 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

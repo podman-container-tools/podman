@@ -147,6 +147,3 @@ Loaded image: docker.io/library/alpine:latest
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-load(1)](podman-load.1.md)**, **[podman-save(1)](podman-save.1.md)**, **[podman-remote(1)](podman-remote.1.md)**, **[podman-system-connection-add(1)](podman-system-connection-add.1.md)**, **[containers.conf(5)](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)**, **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**
-
-## HISTORY
-July 2021, Originally written by Charlie Doern <cdoern@redhat.com>

@@ -27,6 +27,3 @@ $ podman farm create farm1 f37 f38
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-farm(1)](podman-farm.1.md)**, **[podman-system-connection(1)](podman-system-connection.1.md)**, **[podman-system-connection-add(1)](podman-system-connection-add.1.md)**
-
-## HISTORY
-July 2023, Originally compiled by Urvashi Mohnani (umohnani at redhat dot com)

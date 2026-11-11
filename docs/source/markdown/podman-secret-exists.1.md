@@ -38,6 +38,3 @@ $
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-secret(1)](podman-secret.1.md)**
-
-## HISTORY
-April 2023, Originally compiled by Ygal Blum `<ygal.blum@gmail.com>`

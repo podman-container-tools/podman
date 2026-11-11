@@ -52,6 +52,3 @@ $ podman logout --all
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-login(1)](podman-login.1.md)**, **[containers-auth.json(5)](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md)**
-
-## HISTORY
-August 2017, Originally compiled by Urvashi Mohnani <umohnani@redhat.com>

@@ -48,6 +48,3 @@ $
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**
-
-## HISTORY
-Feb 2024, Originally compiled by Brent Baude<bbaude@redhat.com>

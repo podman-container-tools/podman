@@ -51,6 +51,3 @@ To update healthchecks:
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-run(1)](podman-run.1.md)**, **[podman-create(1)](podman-create.1.md)**, **[podman-inspect(1)](podman-inspect.1.md)**, **[podman-update(1)](podman-update.1.md)**
-
-## HISTORY
-Feb 2019, Originally compiled by Brent Baude <bbaude@redhat.com>

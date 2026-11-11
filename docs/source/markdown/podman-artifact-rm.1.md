@@ -55,6 +55,3 @@ $ podman artifact rm -i 3f78d5b8ba98b2
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-artifact(1)](podman-artifact.1.md)**
-
-## HISTORY
-Jan 2025, Originally compiled by Brent Baude <bbaude@redhat.com>

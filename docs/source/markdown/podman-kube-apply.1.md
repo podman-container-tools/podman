@@ -69,6 +69,3 @@ vol-test-3-pod   1/1     Running   0          9m
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-container(1)](podman-container.1.md)**, **[podman-pod(1)](podman-pod.1.md)**, **[podman-kube-play(1)](podman-kube-play.1.md)**, **[podman-kube-generate(1)](podman-kube-generate.1.md)**
-
-## HISTORY
-September 2022, Originally compiled by Urvashi Mohnani (umohnani at redhat dot com)

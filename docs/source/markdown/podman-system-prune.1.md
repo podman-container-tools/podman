@@ -158,7 +158,3 @@ Total reclaimed space: 0B
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**
-
-## HISTORY
-February 2019, Originally compiled by Dan Walsh (dwalsh at redhat dot com)
-December 2020, converted filter information from docs.docker.com documentation by Dan Walsh (dwalsh at redhat dot com)

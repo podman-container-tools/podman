@@ -58,6 +58,3 @@ Writing manifest to image destination
 
 See [podman-troubleshooting(7)](https://github.com/containers/podman/blob/main/troubleshooting.md)
 for solutions to common issues.
-
-## HISTORY
-Jan 2025, Originally compiled by Brent Baude <bbaude@redhat.com>

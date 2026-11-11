@@ -40,7 +40,3 @@ $ podman tag mymariadb mycontainerregistry.io/namespace/mariadb:10 mycontainerre
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**
-
-## HISTORY
-December 2019, Update description to refer to 'name' instead of 'alias' by Sascha Grunert <sgrunert@suse.com>
-July 2017, Originally compiled by Ryan Cole <rycole@redhat.com>

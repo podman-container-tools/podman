@@ -81,6 +81,3 @@ $ podman machine ssh myvm rpm -q podman
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-machine(1)](podman-machine.1.md)**
-
-## HISTORY
-March 2021, Originally compiled by Ashley Cui <acui@redhat.com>

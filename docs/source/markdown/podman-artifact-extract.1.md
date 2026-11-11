@@ -69,6 +69,3 @@ README.md
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-artifact(1)](podman-artifact.1.md)**
-
-## HISTORY
-Feb 2025, Originally compiled by Paul Holzinger <pholzing@redhat.com>

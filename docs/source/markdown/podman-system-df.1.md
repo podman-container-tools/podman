@@ -96,6 +96,3 @@ Local Volumes: 796.6MB (47.8MB (6%) reclaimable)
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-system(1)](podman-system.1.md)**
-
-## HISTORY
-March 2019, Originally compiled by Qi Wang (qiwan at redhat dot com)

@@ -312,10 +312,3 @@ bb310a0780ae  docker.io/library/alpine:latest  /bin/sh  3 minutes ago  Created  
 ```
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[podman-container(1)](podman-container.1.md)**, **systemctl(1)**, **systemd.unit(5)**, **systemd.service(5)**, **[conmon(8)](https://github.com/containers/conmon/blob/main/docs/conmon.8.md)**, **[podman-systemd.unit(5)](podman-systemd.unit.5.md)**
-
-## HISTORY
-April 2020, Updated details and added use case to use generated .service files as root and non-root, by Sujil Shah (sushah at redhat dot com)
-
-August 2019, Updated with pod support by Valentin Rothberg (rothberg at redhat dot com)
-
-April 2019, Originally compiled by Brent Baude (bbaude at redhat dot com)
