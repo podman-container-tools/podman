@@ -389,7 +389,7 @@ func (ic *ContainerEngine) ContainerCommit(_ context.Context, nameOrID string, o
 		configReader = bytes.NewReader(opts.Config)
 	}
 	options := new(containers.CommitOptions).WithAuthor(opts.Author).WithChanges(changes).WithComment(opts.Message).WithConfig(configReader).WithSquash(opts.Squash).WithStream(!opts.Quiet)
-	options.WithFormat(opts.Format).WithPause(opts.Pause).WithRepo(repo).WithTag(tag)
+	options.WithFormat(opts.Format).WithIncludeVolumes(opts.IncludeVolumes).WithPause(opts.Pause).WithRepo(repo).WithTag(tag)
 	response, err := containers.Commit(ic.ClientCtx, nameOrID, options)
 	if err != nil {
 		return nil, err
