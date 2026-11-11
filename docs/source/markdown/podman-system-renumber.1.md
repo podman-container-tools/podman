@@ -15,8 +15,6 @@ When all available locks are exhausted, no further containers and pods can be cr
 
 **podman system renumber** must be called after any changes to **num_locks** - failure to do so results in errors starting Podman as the number of locks available conflicts with the configured number of locks.
 
-**podman system renumber** can also be used to migrate 1.0 and earlier versions of Podman, which used a different locking scheme, to the new locking model. It is not strictly required to do this, but it is highly recommended to do so as deadlocks can occur otherwise.
-
 If possible, avoid calling **podman system renumber** while there are other Podman processes running.
 
 ## EXAMPLES
