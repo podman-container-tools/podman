@@ -105,8 +105,6 @@ It does not affect _/etc/resolv.conf_ in the final image.
 
 @@option farm
 
-This option specifies the name of the farm to be used in the build process.
-
 @@option file
 
 @@option force-compression
