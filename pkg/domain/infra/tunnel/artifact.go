@@ -34,6 +34,14 @@ func (ir *ImageEngine) ArtifactInspect(_ context.Context, name string, _ entitie
 	return artifacts.Inspect(ir.ClientCtx, name, &artifacts.InspectOptions{})
 }
 
+func (ir *ImageEngine) ArtifactExists(_ context.Context, nameOrDigest string) (*entities.BoolReport, error) {
+	exists, err := artifacts.Exists(ir.ClientCtx, nameOrDigest, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &entities.BoolReport{Value: exists}, nil
+}
+
 func (ir *ImageEngine) ArtifactList(_ context.Context, _ entities.ArtifactListOptions) ([]*entities.ArtifactListReport, error) {
 	return artifacts.List(ir.ClientCtx, &artifacts.ListOptions{})
 }

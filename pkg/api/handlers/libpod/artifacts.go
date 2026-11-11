@@ -45,6 +45,23 @@ func InspectArtifact(w http.ResponseWriter, r *http.Request) {
 	utils.WriteResponse(w, http.StatusOK, report)
 }
 
+func ExistsArtifact(w http.ResponseWriter, r *http.Request) {
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	name := utils.GetName(r)
+
+	imageEngine := abi.ImageEngine{Libpod: runtime}
+	report, err := imageEngine.ArtifactExists(r.Context(), name)
+	if err != nil {
+		utils.InternalServerError(w, err)
+		return
+	}
+	if !report.Value {
+		utils.ArtifactNotFound(w, name, libartifact_types.ErrArtifactNotExist)
+		return
+	}
+	utils.WriteResponse(w, http.StatusNoContent, "")
+}
+
 func ListArtifact(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 

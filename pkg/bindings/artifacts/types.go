@@ -92,3 +92,8 @@ type ListOptions struct{}
 //
 //go:generate go run ../generator/generator.go InspectOptions
 type InspectOptions struct{}
+
+// ExistsOptions
+//
+//go:generate go run ../generator/generator.go ExistsOptions
+type ExistsOptions struct{}

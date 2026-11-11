@@ -33,6 +33,28 @@ func (s *APIServer) registerArtifactHandlers(r *mux.Router) error {
 	//   500:
 	//     $ref: "#/responses/internalError"
 	r.HandleFunc(VersionedPath("/libpod/artifacts/{name:.*}/json"), s.APIHandler(libpod.InspectArtifact)).Methods(http.MethodGet)
+	// swagger:operation GET /libpod/artifacts/{name}/exists libpod ArtifactExistsLibpod
+	// ---
+	// tags:
+	//   - artifacts
+	// summary: Artifact exists
+	// description: Check if an OCI artifact exists in local storage by name or digest.
+	// produces:
+	//   - application/json
+	// parameters:
+	//   - name: name
+	//     in: path
+	//     description: Name or digest of the artifact
+	//     required: true
+	//     type: string
+	// responses:
+	//   204:
+	//     description: artifact exists
+	//   404:
+	//     $ref: "#/responses/artifactNotFound"
+	//   500:
+	//     $ref: "#/responses/internalError"
+	r.HandleFunc(VersionedPath("/libpod/artifacts/{name:.*}/exists"), s.APIHandler(libpod.ExistsArtifact)).Methods(http.MethodGet)
 	// swagger:operation GET /libpod/artifacts/json libpod ArtifactListLibpod
 	// ---
 	// tags:
