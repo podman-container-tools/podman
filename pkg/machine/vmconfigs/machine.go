@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -115,7 +114,7 @@ func (mc *MachineConfig) Unlock() {
 
 // Refresh reloads the config file from disk
 func (mc *MachineConfig) Refresh() error {
-	content, err := os.ReadFile(mc.configPath.GetPath())
+	content, err := mc.configPath.Read()
 	if err != nil {
 		return err
 	}

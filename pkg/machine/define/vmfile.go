@@ -46,7 +46,12 @@ func (m *VMFile) Delete() error {
 
 // Read the contents of a given file and return in []bytes
 func (m *VMFile) Read() ([]byte, error) {
-	return os.ReadFile(m.GetPath())
+	f, err := openShareDelete(m.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
 }
 
 // Read the first n bytes of a given file and return in []bytes
