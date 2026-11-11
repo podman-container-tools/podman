@@ -64,10 +64,10 @@ require (
 	github.com/vbauerster/mpb/v8 v8.16.3
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
-	go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14
+	go.podman.io/buildah v1.46.1
 	go.podman.io/common v0.70.1-0.20261105174844-179286b8f253
-	go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253
-	go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253
+	go.podman.io/image/v5 v5.42.1
+	go.podman.io/storage v1.65.1
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.25.0
@@ -181,7 +181,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
-	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/text v0.44.0 // indirect

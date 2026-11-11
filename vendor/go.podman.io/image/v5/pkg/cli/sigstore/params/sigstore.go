@@ -1,10 +1,11 @@
 package params
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // SigningParameterFile collects parameters used for creating sigstore signatures.
@@ -65,7 +66,9 @@ func ParseFile(path string) (*SigningParameterFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %q: %w", path, err)
 	}
-	if err := yaml.Load(source, &res, yaml.WithKnownFields()); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(source))
+	dec.KnownFields(true)
+	if err = dec.Decode(&res); err != nil {
 		return nil, fmt.Errorf("parsing %q: %w", path, err)
 	}
 	return &res, nil

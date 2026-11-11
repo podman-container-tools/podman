@@ -254,9 +254,7 @@ func CommonBuildOptionsFromFlagSet(flags *pflag.FlagSet, findFlagFunc func(name 
 // when seccompProfile is non-default and securityOpts does not already contain
 // a seccomp option.
 func addSeccompFromConfig(securityOpts []string, seccompProfile string) []string {
-	// When compiled without seccomp build tag (e.g. podman-remote),
-	// we don't forward the client's seccomp configuration over to the server.
-	if !supportsSeccomp || seccompProfile == "" || seccompProfile == SeccompDefaultPath {
+	if seccompProfile == "" || seccompProfile == SeccompDefaultPath {
 		return securityOpts
 	}
 	for _, opt := range securityOpts {
@@ -327,8 +325,9 @@ func parseSecurityOpts(securityOpts []string, commonOpts *define.CommonBuildOpti
 		case "apparmor":
 			commonOpts.ApparmorProfile = con[1]
 		case "seccomp":
-			// Support for the profile is checked by setupSeccomp() in the
-			// binary that runs the build, which may not be this one.
+			if !supportsSeccomp && con[1] != "unconfined" {
+				return fmt.Errorf("seccomp profile %q requested, but seccomp support is not enabled in this build", con[1])
+			}
 			commonOpts.SeccompProfilePath = con[1]
 		case "mask":
 			commonOpts.Masks = append(commonOpts.Masks, strings.Split(con[1], ":")...)
@@ -1408,66 +1407,37 @@ func ContainerIgnoreFile(contextDir, path string, containerFiles []string) ([]st
 		excludes, err := imagebuilder.ParseIgnore(path)
 		return excludes, path, err
 	}
-	// If path was not supplied, look for `<containerfile>.dockerignore` and
-	// `<containerfile>.containerignore`. When both exist, `.containerignore` wins.
-	// securejoin confines lookups with RESOLVE_IN_ROOT semantics, matching
-	// Docker BuildKit behavior. When the containerfile is inside contextDir
-	// we resolve relative to contextDir; when it is outside (e.g.
-	// overlay-mounted context or -f pointing elsewhere) we resolve relative
-	// to the containerfile's parent directory.
+	// If path was not supplied give priority to `<containerfile>.containerignore` first.
 	for _, containerfile := range containerFiles {
 		if !filepath.IsAbs(containerfile) {
 			containerfile = filepath.Join(contextDir, containerfile)
 		}
-		cleanPath := filepath.Clean(containerfile)
-		relPath, relErr := filepath.Rel(contextDir, cleanPath)
-		insideContext := relErr == nil && relPath != ".." && !strings.HasPrefix(relPath, ".."+string(filepath.Separator))
-		var rootDir, baseName string
-		if insideContext {
-			rootDir = contextDir
-			baseName = relPath
-		} else {
-			rootDir = filepath.Dir(cleanPath)
-			baseName = filepath.Base(cleanPath)
+		containerfileIgnore := ""
+		if err := fileutils.Exists(containerfile + ".containerignore"); err == nil {
+			containerfileIgnore = containerfile + ".containerignore"
 		}
-		excludes, resolved, err := findIgnoreFile(rootDir, baseName+".dockerignore", baseName+".containerignore")
-		if err != nil {
-			return nil, "", err
+		if err := fileutils.Exists(containerfile + ".dockerignore"); err == nil {
+			containerfileIgnore = containerfile + ".dockerignore"
 		}
-		if resolved != "" {
-			return excludes, resolved, nil
+		if containerfileIgnore != "" {
+			excludes, err := imagebuilder.ParseIgnore(containerfileIgnore)
+			return excludes, containerfileIgnore, err
 		}
 	}
-	excludes, resolved, err := findIgnoreFile(contextDir, ".dockerignore", ".containerignore")
-	if err != nil {
-		return nil, "", err
+	path, symlinkErr := securejoin.SecureJoin(contextDir, ".containerignore")
+	if symlinkErr != nil {
+		return nil, "", symlinkErr
 	}
-	if resolved != "" {
-		return excludes, resolved, nil
+	excludes, err := imagebuilder.ParseIgnore(path)
+	if errors.Is(err, os.ErrNotExist) {
+		path, symlinkErr = securejoin.SecureJoin(contextDir, ".dockerignore")
+		if symlinkErr != nil {
+			return nil, "", symlinkErr
+		}
+		excludes, err = imagebuilder.ParseIgnore(path)
 	}
-	return nil, "", nil
-}
-
-// findIgnoreFile tries each candidate name resolved under rootDir using
-// securejoin (RESOLVE_IN_ROOT semantics). When both exist the last one wins.
-func findIgnoreFile(rootDir string, candidates ...string) ([]string, string, error) {
-	var excludes []string
-	var matched string
-	for _, name := range candidates {
-		resolved, err := securejoin.SecureJoin(rootDir, name)
-		if err != nil {
-			continue
-		}
-		f, err := os.Open(resolved)
-		if err != nil {
-			continue
-		}
-		excludes, err = imagebuilder.ParseIgnoreReader(f)
-		f.Close()
-		if err != nil {
-			return nil, "", err
-		}
-		matched = resolved
+	if errors.Is(err, os.ErrNotExist) {
+		return excludes, "", nil
 	}
-	return excludes, matched, nil
+	return excludes, path, err
 }

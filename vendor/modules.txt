@@ -763,7 +763,7 @@ go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
-# go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14
+# go.podman.io/buildah v1.46.1
 ## explicit; go 1.26.8
 go.podman.io/buildah
 go.podman.io/buildah/bind
@@ -871,7 +871,7 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253
+# go.podman.io/image/v5 v5.42.1
 ## explicit; go 1.26.0
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
@@ -948,7 +948,7 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253
+# go.podman.io/storage v1.65.1
 ## explicit; go 1.26.0
 go.podman.io/storage
 go.podman.io/storage/drivers
@@ -1010,17 +1010,6 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.6
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# go.yaml.in/yaml/v4 v4.0.0
-## explicit; go 1.18
-go.yaml.in/yaml/v4
-go.yaml.in/yaml/v4/internal/libyaml
-go.yaml.in/yaml/v4/internal/plugin
-go.yaml.in/yaml/v4/internal/plugin/mergekey
-go.yaml.in/yaml/v4/plugin/aliasdata
-go.yaml.in/yaml/v4/plugin/errorformat/v3
-go.yaml.in/yaml/v4/plugin/errorformat/v4
-go.yaml.in/yaml/v4/plugin/loaderlimits
-go.yaml.in/yaml/v4/plugin/mergekey
 # golang.org/x/crypto v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/crypto/argon2

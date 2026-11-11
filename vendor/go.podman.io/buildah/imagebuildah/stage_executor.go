@@ -69,7 +69,6 @@ type stageExecutor struct {
 	ctx                   context.Context // we need _some_ way to get this into our Copy() and Run() methods
 	systemContext         *types.SystemContext
 	executor              *executor
-	labelNode             *parser.Node // the instruction that applies --label values, if this is the last stage
 	log                   func(format string, args ...any)
 	index                 int
 	stages                imagebuilder.Stages
@@ -651,10 +650,6 @@ func (s *stageExecutor) performCopy(excludes []string, copies ...imagebuilder.Co
 			options.IgnoreFile = ""
 		}
 
-		if copy.Unpack != nil {
-			options.Unpack = types.NewOptionalBool(*copy.Unpack)
-		}
-
 		if len(nonGitSources) > 0 {
 			if err := s.builder.AddContext(s.ctx, copy.Dest, copy.Download, options, nonGitSources...); err != nil {
 				return err
@@ -1135,35 +1130,18 @@ func (s *stageExecutor) prepare(ctx context.Context, from string, initializeIBCo
 	// In a multi-stage build where `FROM --platform=<>` was used then we must
 	// reset context for new stages so that new stages don't inherit unexpected
 	// `--platform` from prior stages.
-	effectivePlatform := stage.Builder.Platform
-	if effectivePlatform == "" &&
-		len(s.stages) > 1 &&
-		s.systemContext.ArchitectureChoice == "" &&
-		s.systemContext.VariantChoice == "" &&
-		s.systemContext.OSChoice == "" {
-		for _, prevStage := range s.stages[:s.index] {
-			if prevStage.Builder.Platform != "" {
-				if s.executor.systemContext.ArchitectureChoice != "" ||
-					s.executor.systemContext.OSChoice != "" ||
-					s.executor.systemContext.VariantChoice != "" {
-					s.systemContext.ArchitectureChoice = s.executor.systemContext.ArchitectureChoice
-					s.systemContext.VariantChoice = s.executor.systemContext.VariantChoice
-					s.systemContext.OSChoice = s.executor.systemContext.OSChoice
-				} else {
-					effectivePlatform = "local"
-				}
-				break
-			}
-		}
-	}
-	if effectivePlatform != "" {
-		imageOS, imageArch, imageVariant, err := parse.Platform(effectivePlatform)
+	if stage.Builder.Platform != "" || (len(s.stages) > 1 && (s.systemContext.ArchitectureChoice == "" && s.systemContext.VariantChoice == "" && s.systemContext.OSChoice == "")) {
+		imageOS, imageArch, imageVariant, err := parse.Platform(stage.Builder.Platform)
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse platform %q: %w", effectivePlatform, err)
+			return nil, fmt.Errorf("unable to parse platform %q: %w", stage.Builder.Platform, err)
 		}
-		s.systemContext.ArchitectureChoice = imageArch
-		s.systemContext.VariantChoice = imageVariant
-		s.systemContext.OSChoice = imageOS
+		if imageArch != "" || imageVariant != "" {
+			s.systemContext.ArchitectureChoice = imageArch
+			s.systemContext.VariantChoice = imageVariant
+		}
+		if imageOS != "" {
+			s.systemContext.OSChoice = imageOS
+		}
 	}
 
 	builderOptions := buildah.BuilderOptions{
@@ -1370,13 +1348,6 @@ func (s *stageExecutor) setLinkedLayerHistory(node *parser.Node, addedContentSum
 	return nil
 }
 
-// stageMatchesNoCacheFilter reports whether a stage, identified by its name (the
-// alias given after "AS", or the stringified position if it has none) or its
-// numeric position, was named in a --no-cache-filter argument.
-func stageMatchesNoCacheFilter(noCacheFilter map[string]struct{}, stageName string, stagePosition int) bool {
-	return internalUtil.SetHas(noCacheFilter, stageName) || internalUtil.SetHas(noCacheFilter, strconv.Itoa(stagePosition))
-}
-
 // Execute runs each of the steps in the stage's parsed tree, in turn.
 func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string, commitResults *buildah.CommitResults, onlyBaseImg bool, err error) {
 	select {
@@ -1388,11 +1359,7 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 	var resourceUsage rusage.Rusage
 	stage := s.stage
 	ib := stage.Builder
-	stageNoCache := stageMatchesNoCacheFilter(s.executor.noCacheFilter, stage.Name, stage.Position)
-	checkForLayers := s.executor.layers && s.executor.useCache && !stageNoCache
-	if stageNoCache {
-		logrus.Debugf("not checking for cached layers for stage %q (%d): matched --no-cache-filter", stage.Name, stage.Position)
-	}
+	checkForLayers := s.executor.layers && s.executor.useCache
 	moreStages := s.index < len(s.stages)-1
 	lastStage := !moreStages
 	onlyBaseImage := false
@@ -1565,15 +1532,6 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 		s.isLastStep = lastStage && lastInstruction
 		// Resolve any arguments in this instruction.
 		step := ib.Step()
-		if s.labelNode != nil && node == s.labelNode {
-			// This is the instruction that applies --label values.
-			// Expand references to variables that are set in this stage.
-			labelNodes, err := imagebuilder.ParseDockerfile(strings.NewReader(labelInstruction(s.executor.labels, step.Env)))
-			if err != nil {
-				return "", nil, false, fmt.Errorf("parsing label instruction: %w", err)
-			}
-			node = labelNodes.Children[0]
-		}
 		if err := step.Resolve(node); err != nil {
 			return "", nil, false, fmt.Errorf("resolving step %+v: %w", *node, err)
 		}
@@ -1606,8 +1564,8 @@ func (s *stageExecutor) execute(ctx context.Context, base string) (imgID string,
 			if step.Command == command.Copy && (flag == "--chmod" || flag == "--chown" || flag == "--from" || flag == "--exclude") {
 				return "", nil, false, fmt.Errorf("COPY only supports the --chmod=<permissions>, --chown=<uid:gid>, --from=<image|stage>, and --exclude=<pattern> flags")
 			}
-			if step.Command == command.Add && (flag == "--chmod" || flag == "--chown" || flag == "--checksum" || flag == "--exclude" || flag == "--unpack") {
-				return "", nil, false, fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, --checksum=<checksum>, --exclude=<pattern>, and --unpack=<bool> flags")
+			if step.Command == command.Add && (flag == "--chmod" || flag == "--chown" || flag == "--checksum" || flag == "--exclude") {
+				return "", nil, false, fmt.Errorf("ADD only supports the --chmod=<permissions>, --chown=<uid:gid>, --checksum=<checksum>, and --exclude=<pattern> flags")
 			}
 			if strings.Contains(flag, "--from") && step.Command == command.Copy {
 				arr := strings.Split(flag, "=")
@@ -2205,13 +2163,9 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 				mountOptionSource = mountInfo.Source
 				mountOptionSource, err = imagebuilder.ProcessWord(mountOptionSource, s.stage.Builder.Arguments())
 				if err != nil {
-					return "", fmt.Errorf("getCreatedBy: while replacing arg variables with values for source=%q: %w", mountOptionSource, err)
+					return "", fmt.Errorf("getCreatedBy: while replacing arg variables with values for format %q: %w", mountOptionSource, err)
 				}
 				mountOptionFrom = mountInfo.From
-				mountOptionFrom, err = imagebuilder.ProcessWord(mountOptionFrom, s.stage.Builder.Arguments())
-				if err != nil {
-					return "", fmt.Errorf("getCreatedBy: while replacing arg variables with values for from=%q: %w", mountOptionFrom, err)
-				}
 				// If source is not specified then default is '.'
 				if mountOptionSource == "" {
 					mountOptionSource = "."
@@ -2230,20 +2184,16 @@ func (s *stageExecutor) getCreatedBy(node *parser.Node, addedContentSummary stri
 						// Found valid image, get image digest.
 						mountCheckSum = builder.FromImageDigest
 					} else {
-						additionalBuildContext, ok := s.executor.additionalBuildContexts[mountOptionFrom]
-						if !ok {
-							return "", fmt.Errorf("internal error locating additional build context %q", mountOptionFrom)
-						}
-						if additionalBuildContext.IsImage {
-							if builder, ok := s.executor.containerMap[additionalBuildContext.Value]; ok {
+						if s.executor.additionalBuildContexts[mountOptionFrom].IsImage {
+							if builder, ok := s.executor.containerMap[s.executor.additionalBuildContexts[mountOptionFrom].Value]; ok {
 								// Found valid image, get image digest.
 								mountCheckSum = builder.FromImageDigest
 							}
 						} else {
 							// Found additional build context, get directory sha.
-							basePath := additionalBuildContext.Value
-							if additionalBuildContext.IsURL {
-								basePath = additionalBuildContext.DownloadedCache
+							basePath := s.executor.additionalBuildContexts[mountOptionFrom].Value
+							if s.executor.additionalBuildContexts[mountOptionFrom].IsURL {
+								basePath = s.executor.additionalBuildContexts[mountOptionFrom].DownloadedCache
 							}
 							mountCheckSum, err = generatePathChecksum(filepath.Join(basePath, mountOptionSource))
 							if err != nil {

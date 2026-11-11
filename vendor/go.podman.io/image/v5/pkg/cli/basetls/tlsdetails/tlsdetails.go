@@ -11,11 +11,12 @@
 package tlsdetails
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
 	"go.podman.io/image/v5/pkg/cli/basetls"
-	"go.yaml.in/yaml/v4"
+	"go.yaml.in/yaml/v3"
 )
 
 // BaseTLSFromOptionalFile returns a basetls.Config matching a containers-tls-details.yaml file at the specified path.
@@ -49,7 +50,9 @@ func ParseFile(path string) (*basetls.TLSDetailsFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %q: %w", path, err)
 	}
-	if err := yaml.Load(source, &res, yaml.WithKnownFields()); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(source))
+	dec.KnownFields(true)
+	if err = dec.Decode(&res); err != nil {
 		return nil, fmt.Errorf("parsing %q: %w", path, err)
 	}
 	return &res, nil

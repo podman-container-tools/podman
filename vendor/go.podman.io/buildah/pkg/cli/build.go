@@ -485,7 +485,6 @@ func GenBuildOptions(c *cobra.Command, inputArgs []string, iopts BuildOptions) (
 		MaxPullPushRetries:      iopts.Retry,
 		NamespaceOptions:        namespaceOptions,
 		NoCache:                 iopts.NoCache,
-		NoCacheFilter:           iopts.NoCacheFilter,
 		OS:                      systemContext.OSChoice,
 		OSFeatures:              iopts.OSFeatures,
 		OSVersion:               iopts.OSVersion,
