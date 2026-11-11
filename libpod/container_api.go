@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -593,33 +592,6 @@ func (c *Container) Export(out io.Writer) error {
 
 	defer c.newContainerEvent(events.Export)
 	return c.export(out)
-}
-
-// AddArtifact creates and writes to an artifact file for the container
-func (c *Container) AddArtifact(name string, data []byte) error {
-	if !c.valid {
-		return define.ErrCtrRemoved
-	}
-
-	return os.WriteFile(c.getArtifactPath(name), data, 0o740)
-}
-
-// GetArtifact reads the specified artifact file from the container
-func (c *Container) GetArtifact(name string) ([]byte, error) {
-	if !c.valid {
-		return nil, define.ErrCtrRemoved
-	}
-
-	return os.ReadFile(c.getArtifactPath(name))
-}
-
-// RemoveArtifact deletes the specified artifacts file
-func (c *Container) RemoveArtifact(name string) error {
-	if !c.valid {
-		return define.ErrCtrRemoved
-	}
-
-	return os.Remove(c.getArtifactPath(name))
 }
 
 // Wait blocks until the container exits and returns its exit code.
