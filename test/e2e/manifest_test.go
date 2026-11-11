@@ -708,6 +708,31 @@ RUN touch /file
 		Expect(podmanTest.NumberOfContainersRunning()).To(Equal(0))
 	})
 
+	It("push with invalid compression-level to registry", func() {
+		registryOptions := &podmanRegistry.Options{
+			PodmanPath: podmanTest.PodmanBinary,
+			PodmanArgs: podmanTest.MakeOptions(nil, PodmanExecOptions{}),
+			Image:      "docker-archive:" + imageTarPath(REGISTRY_IMAGE),
+		}
+		if IsRemote() {
+			registryOptions.PodmanArgs = getRemoteOptions(podmanTest, nil)
+		}
+		registry, err := podmanRegistry.StartWithOptions(registryOptions)
+		Expect(err).ToNot(HaveOccurred())
+		defer func() {
+			err := registry.Stop()
+			Expect(err).ToNot(HaveOccurred())
+		}()
+
+		podmanTest.PodmanExitCleanly("manifest", "create", "foo")
+		podmanTest.PodmanExitCleanly("manifest", "add", "foo", "containers-storage:"+CITEST_IMAGE)
+
+		// The level must also reach the server with the remote client
+		push := podmanTest.Podman([]string{"manifest", "push", "--compression-format=gzip", "--compression-level=50", "--tls-verify=false", "--creds=" + registry.User + ":" + registry.Password, "foo", "localhost:" + registry.Port + "/badlevel"})
+		push.WaitWithDefaultTimeout()
+		Expect(push).Should(ExitWithError(125, "invalid compression level"))
+	})
+
 	It("push with error", func() {
 		session := podmanTest.Podman([]string{"manifest", "push", "badsrcvalue", "baddestvalue"})
 		session.WaitWithDefaultTimeout()
