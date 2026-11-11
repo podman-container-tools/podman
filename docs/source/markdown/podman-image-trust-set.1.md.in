@@ -5,7 +5,7 @@ podman\-image\-trust\-set - Set container registry image trust policy
 
 
 ## SYNOPSIS
-**podman image trust** set [*options*] *registry[/repository]*
+**podman image trust set** [*options*] *registry[/repository]*
 
 ## DESCRIPTION
 Manages which registries to trust as a source of container images  based on its location. (This option is not available with the remote Podman client, including Mac and Windows (excluding WSL2) machines)
