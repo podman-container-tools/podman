@@ -11,7 +11,7 @@ The `podman manifest` command provides subcommands which can be used to:
 
     * Create a working Docker manifest list or OCI image index.
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command  | Man Page                                                     | Description                                                                              |
 | -------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |

@@ -9,7 +9,7 @@ podman\-secret - Manage podman secrets
 ## DESCRIPTION
 podman secret is a set of subcommands that manage secrets.
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                               | Description                                            |
 | ------- | ------------------------------------------------------ | ------------------------------------------------------ |

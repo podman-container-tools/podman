@@ -43,7 +43,7 @@ To update healthchecks:
 - Use `podman update <flag> <container>` to update the healthcheck settings of a container while the container is running
 - Example: `podman update --health-max-log-count=10 <container>` to store up to 10 healthcheck results in the log
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                          | Description                                                                    |
 | ------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |

@@ -33,7 +33,7 @@ supported by platform.  The asterisk denotes the default provider for the platfo
 | Windows | wsl*     |
 | Windows | hyperv   |
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                                 | Description                                                     |
 |---------|----------------------------------------------------------|-----------------------------------------------------------------|

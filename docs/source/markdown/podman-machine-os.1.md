@@ -9,7 +9,7 @@ podman\-machine\-os - Manage a Podman virtual machine's OS
 ## DESCRIPTION
 `podman machine os` is a set of subcommands that manage a Podman virtual machine's operating system.
 
-## SUBCOMMANDS
+## COMMANDS
 
 | Command | Man Page                                                     | Description                                 |
 |---------|--------------------------------------------------------------|---------------------------------------------|
