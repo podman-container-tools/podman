@@ -296,6 +296,19 @@ farm2 [QA] false true
 			session = podmanTest.Podman(cmd)
 			session.WaitWithDefaultTimeout()
 			Expect(session).Should(Not(ExitCleanly()))
+
+			// same as above, but with --ignore it must succeed silently
+			cmd = []string{"farm", "rm", "--ignore", "foo", "bar"}
+			session = podmanTest.Podman(cmd)
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+
+			// mixed existing + missing with -i: no warning on stderr
+			cmd = []string{"farm", "rm", "-i", "farm2", "nonexistent-farm"}
+			session = podmanTest.Podman(cmd)
+			session.WaitWithDefaultTimeout()
+			Expect(session).Should(ExitCleanly())
+			Expect(session.Out.Contents()).Should(ContainSubstring("Farm \"farm2\" deleted"))
 		})
 
 		It("remove --all farms", func() {
