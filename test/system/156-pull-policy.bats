@@ -22,7 +22,9 @@ load helpers.registry
     run_podman create -q $IMAGE true
     local tmpcid=$output
     run_podman commit -q $tmpcid $image_for_test
-    local image_id=$output
+    # The image is removed below and pulled again with a new (random) ID, so
+    # the commit-time ID cannot be used for the assertions below.
+    local image_id
     run_podman rm $tmpcid
     run_podman image push --tls-verify=false --authfile=$authfile $image_for_test
     # Remove the local image to make sure it will be pulled again
@@ -39,6 +41,11 @@ load helpers.registry
     # Test policy=missing with image not present (should succeed)
     run_podman pull --tls-verify=false --authfile $authfile --policy missing $image_for_test
     assert "$output" =~ "Writing manifest to image destination"
+
+    # The pull created a new image record; capture its ID.  This is the ID that
+    # subsequent no-op pulls must report.
+    run_podman image inspect --format '{{.Id}}' $image_for_test
+    image_id=$output
 
     # Test policy=missing with image present (should not pull again)
     run_podman pull --tls-verify=false --authfile $authfile --policy missing $image_for_test
