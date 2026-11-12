@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/podman/v6/cmd/podman/registry"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/domain/entities"
@@ -157,4 +158,37 @@ func PrintGenericJSON(data any) error {
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "     ")
 	return enc.Encode(data)
+}
+
+// TokenRepoTag splits an image reference into its repository and tag.
+// "<none>" is returned for missing parts; digest-only references have no tag.
+func TokenRepoTag(ref string) (string, string, error) {
+	if ref == "<none>:<none>" {
+		return "<none>", "<none>", nil
+	}
+
+	repo, err := reference.Parse(ref)
+	if err != nil {
+		return "<none>", "<none>", err
+	}
+
+	named, ok := repo.(reference.Named)
+	if !ok {
+		return ref, "<none>", nil
+	}
+	name := named.Name()
+	if name == "" {
+		name = "<none>"
+	}
+
+	tagged, ok := repo.(reference.Tagged)
+	if !ok {
+		return name, "<none>", nil
+	}
+	tag := tagged.Tag()
+	if tag == "" {
+		tag = "<none>"
+	}
+
+	return name, tag, nil
 }

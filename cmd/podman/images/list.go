@@ -13,9 +13,9 @@ import (
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
 	"go.podman.io/common/pkg/report"
-	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
+	"go.podman.io/podman/v6/cmd/podman/utils"
 	"go.podman.io/podman/v6/cmd/podman/validate"
 	"go.podman.io/podman/v6/pkg/domain/entities"
 )
@@ -228,7 +228,7 @@ func sortImages(imageS []*entities.ImageSummary) ([]imageReporter, error) {
 			untagged := []imageReporter{}
 			for _, tag := range e.RepoTags {
 				h.ImageSummary = *e
-				h.Repository, h.Tag, err = tokenRepoTag(tag)
+				h.Repository, h.Tag, err = utils.TokenRepoTag(tag)
 				if err != nil {
 					return nil, fmt.Errorf("parsing repository tag: %q: %w", tag, err)
 				}
@@ -284,37 +284,6 @@ func sortImages(imageS []*entities.ImageSummary) ([]imageReporter, error) {
 	})
 
 	return imgs, err
-}
-
-func tokenRepoTag(ref string) (string, string, error) {
-	if ref == "<none>:<none>" {
-		return "<none>", "<none>", nil
-	}
-
-	repo, err := reference.Parse(ref)
-	if err != nil {
-		return "<none>", "<none>", err
-	}
-
-	named, ok := repo.(reference.Named)
-	if !ok {
-		return ref, "<none>", nil
-	}
-	name := named.Name()
-	if name == "" {
-		name = "<none>"
-	}
-
-	tagged, ok := repo.(reference.Tagged)
-	if !ok {
-		return name, "<none>", nil
-	}
-	tag := tagged.Tag()
-	if tag == "" {
-		tag = "<none>"
-	}
-
-	return name, tag, nil
 }
 
 func lsFormatFromFlags(flags listFlagType) string {

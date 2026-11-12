@@ -859,4 +859,28 @@ RUN touch /file
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitWithError(1, ""))
 	})
+
+	It("list", func() {
+		session := podmanTest.PodmanExitCleanly("manifest", "create", "foo")
+		id := session.OutputToString()
+
+		session = podmanTest.PodmanExitCleanly("manifest", "list", "-q")
+		Expect(session.OutputToStringArray()).To(Equal([]string{id[:12]}))
+
+		session = podmanTest.Podman([]string{"manifest", "list", "-q", "--format", "json"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "quiet and format flags cannot be used together"))
+
+		session = podmanTest.PodmanExitCleanly("manifest", "ls", "--format", "json")
+		var manifests []map[string]any
+		err := json.Unmarshal([]byte(session.OutputToString()), &manifests)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(manifests).To(HaveLen(1))
+		Expect(manifests[0]["Id"]).To(Equal(id))
+
+		session = podmanTest.PodmanExitCleanly("manifest", "list", "--format", "{{.Repository}} {{.Tag}} {{.ID}}")
+		Expect(session.OutputToStringArray()).To(Equal([]string{"localhost/foo latest " + id[:12]}))
+
+		podmanTest.PodmanExitCleanly("manifest", "rm", "foo")
+	})
 })
