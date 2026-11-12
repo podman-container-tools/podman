@@ -24,6 +24,7 @@ import (
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/detach"
 	"go.podman.io/common/pkg/resize"
+	"go.podman.io/storage/pkg/unshare"
 	"golang.org/x/sys/unix"
 )
 
@@ -697,6 +698,16 @@ func (c *Container) prepareProcessExec(options *ExecOptions, env []string, sessi
 	}
 	pspec.SelinuxLabel = c.config.ProcessLabel
 	pspec.Args = options.Cmd
+
+	// A rootless runtime cannot lower oom_score_adj below the value it
+	// inherited, so clamp it as generateSpec does for the container start.
+	if unshare.IsRootless() && pspec.OOMScoreAdj != nil {
+		oomScoreAdj, err := maybeClampOOMScoreAdj(*pspec.OOMScoreAdj)
+		if err != nil {
+			return nil, err
+		}
+		pspec.OOMScoreAdj = &oomScoreAdj
+	}
 
 	// We need to default this to false else it will inherit terminal as true
 	// from the container.

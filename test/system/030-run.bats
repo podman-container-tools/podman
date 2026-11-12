@@ -1126,8 +1126,13 @@ EOF
     if grep -- -1000 /proc/self/oom_score_adj; then
         skip "the current oom-score-adj is already -1000"
     fi
-    run_podman 0+w run --oom-score-adj=-1000 --rm $IMAGE true
+    cname=c-oom-$(safename)
+    run_podman 0+w run -d --name $cname --oom-score-adj=-1000 $IMAGE top
     require_warning "Requested oom_score_adj=.* is lower than the current one, changing to "
+    run_podman 0+w exec $cname cat /proc/self/oom_score_adj
+    require_warning "Requested oom_score_adj=.* is lower than the current one, changing to "
+    assert "${lines[-1]}" == "$(cat /proc/self/oom_score_adj)" "exec oom_score_adj is clamped"
+    run_podman rm -f -t0 $cname
 }
 
 # CVE-2022-1227 : podman top joins container mount NS and uses nsenter from image
