@@ -148,6 +148,12 @@ func ParseBuildOpts(cmd *cobra.Command, args []string, buildOpts *BuildFlagsWrap
 		return nil, errors.New("cannot specify --squash-all with --squash")
 	}
 
+	if cmd.Flags().Changed("manifest") && cmd.Flags().Changed("tag") {
+		if slices.Contains(buildOpts.Tag, buildOpts.Manifest) {
+			return nil, errors.New("the same name must not be specified for both '--tag' and '--manifest'")
+		}
+	}
+
 	if cmd.Flag("metadata-file").Changed && registry.IsRemote() {
 		return nil, errors.New("'--metadata-file' option is not supported in remote mode")
 	}

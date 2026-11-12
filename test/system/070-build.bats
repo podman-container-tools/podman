@@ -1240,6 +1240,14 @@ EOF
     is "$output" "Error: cannot specify --squash-all with --squash" "--squash and --sqaush-all should conflict"
 }
 
+@test "podman build --manifest and --tag same name should fail" {
+    echo FROM scratch > $PODMAN_TMPDIR/Dockerfile
+
+    imgname="b-$(safename)"
+    run_podman 125 build --manifest $imgname --tag $imgname $PODMAN_TMPDIR
+    is "$output" "Error: the same name must not be specified for both '--tag' and '--manifest'" "expected conflict error"
+}
+
 @test "podman build --volumes-from conflict" {
     rand_content=$(random_string 50)
 
