@@ -330,6 +330,8 @@ function manifestListAddArtifactOnce() {
     run_podman rmi $list localhost:${PODMAN_LOGIN_REGISTRY_PORT}/$list
 }
 
+# Note: "manifest list" here refers to the OCI/Docker manifest list object,
+# testing `podman manifest add --artifact` (not the `podman manifest list` subcommand).
 @test "manifest list --add --artifact" {
     # Build a list and add some files to it, making sure to exercise and verify
     # every flag available.
@@ -359,5 +361,53 @@ function manifestListAddArtifactOnce() {
     for titleFlag in "" "--artifact-exclude-titles" ; do
         manifestListAddArtifactOnce
     done
+}
+
+@test "podman manifest list / ls subcommand" {
+    run_podman manifest list -q
+    is "$output" "" "manifest list is initially empty"
+
+    run_podman 125 manifest list extra-arg
+    is "$output" 'Error: `podman manifest list` takes no arguments' "rejects positional args"
+
+    local m1="localhost/m1-$(safename)"
+    local m2="localhost/m2-$(safename)"
+
+    run_podman manifest create $m1
+    local id1="$output"
+    run_podman manifest add $m1 $IMAGE
+
+    sleep 0.5
+
+    run_podman manifest create $m2
+    local id2="$output"
+
+    run_podman manifest list
+    is "$output" ".*\"Id\": \"$id1\".*" "default JSON output includes $m1"
+    is "$output" ".*\"Id\": \"$id2\".*" "default JSON output includes $m2"
+    is "$output" ".*\"IsManifestList\": true.*" "IsManifestList is true"
+
+    run_podman manifest ls -q
+    assert "${#lines[@]}" -eq 2 "ls -q outputs 2 manifest IDs"
+    is "${lines[0]}" "${id2:0:12}" "newest manifest ($m2) is listed first"
+    is "${lines[1]}" "${id1:0:12}" "older manifest ($m1) is listed second"
+
+    run_podman manifest list -q --no-trunc
+    is "${lines[0]}" "$id2" "--no-trunc outputs full id2"
+    is "${lines[1]}" "$id1" "--no-trunc outputs full id1"
+
+    run_podman manifest list --format "{{.Repository}} {{.Tag}} {{.ID}}"
+    assert "${#lines[@]}" -eq 2 "2 rows without 'table' prefix"
+
+    run_podman manifest list --format "table {{.Repository}} {{.Tag}} {{.ID}}"
+    assert "${#lines[@]}" -eq 3 "header + 2 rows with 'table' prefix"
+    is "${lines[0]}" "REPOSITORY *TAG *IMAGE ID" "header line printed"
+
+    run_podman manifest list --noheading --format "table {{.ID}}"
+    assert "${#lines[@]}" -eq 2 "--noheading suppresses header row"
+
+    run_podman manifest rm $m1 $m2
+    run_podman manifest list -q
+    is "$output" "" "manifest list is empty after rm"
 }
 # vim: filetype=sh
