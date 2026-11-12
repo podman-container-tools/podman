@@ -46,7 +46,7 @@ type SecretDriverSpec = types.SecretDriverSpec
 type SecretCreateRequest struct {
 	// User-defined name of the secret.
 	Name string
-	// Base64-url-safe-encoded (RFC 4648) data to store as secret.
+	// Base64-encoded (RFC 4648 section 4) data to store as secret.
 	Data string
 	// Driver represents a driver (default "file")
 	Driver SecretDriverSpec
