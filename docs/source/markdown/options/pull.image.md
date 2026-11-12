@@ -8,7 +8,7 @@
 #### **--pull**=*policy*
 << endif >>
 
-Pull image policy. The default is **missing**.
+Pull image policy. The default is **missing**. An unrecognized pull policy will cause the command to fail.
 
 - **always**: Always pull the image and throw an error if the pull fails.
 - **missing**: Only pull the image when it does not exist in the local containers storage.  Throw an error if no image is found and the pull fails.

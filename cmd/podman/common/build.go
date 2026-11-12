@@ -352,21 +352,19 @@ func buildFlagsWrapperToOptions(c *cobra.Command, contextDir string, flags *Buil
 	// --pull-always and --pull-never.  The --pull-never and --pull-always options
 	// will not be documented.
 	pullPolicy := buildahDefine.PullIfMissing
-	if c.Flags().Changed("pull") && strings.EqualFold(strings.TrimSpace(flags.Pull), "true") {
+	switch {
+	case c.Flags().Changed("pull"):
+		if val := strings.ToLower(strings.TrimSpace(flags.Pull)); val != "" {
+			var ok bool
+			pullPolicy, ok = buildahDefine.PolicyMap[val]
+			if !ok {
+				return nil, fmt.Errorf("unrecognized pull policy %q", flags.Pull)
+			}
+		}
+	case flags.PullAlways:
 		pullPolicy = buildahDefine.PullAlways
-	}
-	if flags.PullAlways || strings.EqualFold(strings.TrimSpace(flags.Pull), "always") {
-		pullPolicy = buildahDefine.PullAlways
-	}
-
-	if flags.PullNever ||
-		strings.EqualFold(strings.TrimSpace(flags.Pull), "false") ||
-		strings.EqualFold(strings.TrimSpace(flags.Pull), "never") {
+	case flags.PullNever:
 		pullPolicy = buildahDefine.PullNever
-	}
-
-	if strings.EqualFold(strings.TrimSpace(flags.Pull), "newer") {
-		pullPolicy = buildahDefine.PullIfNewer
 	}
 
 	var cleanTmpFile bool
