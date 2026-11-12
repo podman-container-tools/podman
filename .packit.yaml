@@ -138,6 +138,7 @@ jobs:
     trigger: release
     update_release: false
     packages: [podman-fedora]
+    upstream_tag_exclude: '^v\d+(?:\.\d+)*-rc\d+$'
     dist_git_branches: &fedora_targets
       - fedora-all
 
