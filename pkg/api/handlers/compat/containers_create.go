@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -145,7 +146,6 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("fill out specgen: %w", err))
 		return
 	}
-
 	if inlineSeccompProfile != "" {
 		sg.SeccompProfile = inlineSeccompProfile
 		// keep SecurityOpt in inspect output matching what the client sent
@@ -178,15 +178,7 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	ic := abi.ContainerEngine{Libpod: runtime}
 	report, err := ic.ContainerCreate(r.Context(), sg)
 	if err != nil {
-		if errors.Is(err, define.ErrCtrExists) || errors.Is(err, storage.ErrDuplicateName) {
-			utils.Error(w, http.StatusConflict, fmt.Errorf("container create: %w", err))
-			return
-		}
-		if errors.Is(err, define.ErrInvalidArg) {
-			utils.Error(w, http.StatusBadRequest, fmt.Errorf("container create: %w", err))
-			return
-		}
-		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("container create: %w", err))
+		utils.Error(w, containerCreateErrorStatus(err), fmt.Errorf("container create: %w", err))
 		return
 	}
 	warnings := []string{}
@@ -198,6 +190,17 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		Warnings: warnings,
 	}
 	utils.WriteResponse(w, http.StatusCreated, createResponse)
+}
+
+func containerCreateErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, define.ErrCtrExists), errors.Is(err, define.ErrVolumeExists), errors.Is(err, storage.ErrDuplicateName):
+		return http.StatusConflict
+	case errors.Is(err, define.ErrInvalidArg):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func stringMaptoArray(m map[string]string) []string {
@@ -364,6 +367,17 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 			}
 		case mount.TypeVolume:
 			if m.VolumeOptions != nil {
+				if driverConfig := m.VolumeOptions.DriverConfig; driverConfig != nil {
+					addField(&builder, "volume-driver", driverConfig.Name)
+					optionNames := make([]string, 0, len(driverConfig.Options))
+					for name := range driverConfig.Options {
+						optionNames = append(optionNames, name)
+					}
+					sort.Strings(optionNames)
+					for _, name := range optionNames {
+						addField(&builder, "volume-opt", name+"="+driverConfig.Options[name])
+					}
+				}
 				addField(&builder, "subpath", m.VolumeOptions.Subpath)
 			}
 			// All current VolumeOpts are handled above
@@ -737,7 +751,12 @@ func addField(b *strings.Builder, name, value string) {
 	if b.Len() > 0 {
 		b.WriteRune(',')
 	}
-	b.WriteString(name)
-	b.WriteRune('=')
-	b.WriteString(value)
+	field := name + "=" + value
+	if strings.ContainsAny(field, ",\"\r\n") {
+		b.WriteRune('"')
+		b.WriteString(strings.ReplaceAll(field, "\"", "\"\""))
+		b.WriteRune('"')
+		return
+	}
+	b.WriteString(field)
 }

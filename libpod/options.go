@@ -1389,6 +1389,23 @@ func WithNamedVolumes(volumes []*ContainerNamedVolume) CtrCreateOption {
 	}
 }
 
+// WithNamedVolumeCreateOptions sets options used only when creating named
+// volumes. The map is keyed by the volume's container destination.
+func WithNamedVolumeCreateOptions(options map[string]NamedVolumeCreateOptions) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		if ctr.namedVolumeCreateOptions == nil {
+			ctr.namedVolumeCreateOptions = make(map[string]NamedVolumeCreateOptions, len(options))
+		}
+		maps.Copy(ctr.namedVolumeCreateOptions, options)
+
+		return nil
+	}
+}
+
 // WithOverlayVolumes adds the given overlay volumes to the container.
 func WithOverlayVolumes(volumes []*ContainerOverlayVolume) CtrCreateOption {
 	return func(ctr *Container) error {
@@ -1623,8 +1640,6 @@ func WithVolumeName(name string) VolumeCreateOption {
 }
 
 // WithVolumeDriver sets the volume's driver.
-// It is presently not implemented, but will be supported in a future Podman
-// release.
 func WithVolumeDriver(driver string) VolumeCreateOption {
 	return func(volume *Volume) error {
 		if volume.valid {

@@ -192,6 +192,57 @@ var _ = Describe("Podman volume plugins", func() {
 		Expect(ctr2.OutputToString()).To(ContainSubstring("helloworld"))
 	})
 
+	It("creates a plugin-backed named volume from --mount", func() {
+		podmanTest.AddImageToRWStore(volumeTest)
+
+		pluginStatePath := filepath.Join(podmanTest.TempDir, "volumes")
+		err := os.Mkdir(pluginStatePath, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		pluginName := "testvol9"
+		podmanTest.PodmanExitCleanly(
+			"run", "--network=none", "--security-opt", "label=disable",
+			"-v", "/run/docker/plugins:/run/docker/plugins",
+			"-v", fmt.Sprintf("%v:%v", pluginStatePath, pluginStatePath),
+			"-d", volumeTest, "--sock-name", pluginName, "--path", pluginStatePath,
+		)
+
+		// Make sure the socket is available before creating the volume.
+		err = WaitForFile(fmt.Sprintf("/run/docker/plugins/%s.sock", pluginName))
+		Expect(err).ToNot(HaveOccurred())
+
+		volName := "testVolumeFromMount"
+		mount := fmt.Sprintf("type=volume,source=%s,target=/test,volume-driver=%s", volName, pluginName)
+		podmanTest.PodmanExitCleanly(
+			"run", "--network=none", "--rm", "--security-opt", "label=disable",
+			"--mount", mount, ALPINE, "true",
+		)
+
+		inspect := podmanTest.PodmanExitCleanly("volume", "inspect", "--format", "{{.Driver}}", volName)
+		Expect(inspect.OutputToString()).To(Equal(pluginName))
+
+		// An existing volume may be reused when the requested driver matches.
+		sameDriverMount := fmt.Sprintf("type=volume,source=%s,target=/test,volume-driver=%s", volName, pluginName)
+		podmanTest.PodmanExitCleanly(
+			"run", "--network=none", "--rm", "--security-opt", "label=disable",
+			"--mount", sameDriverMount, ALPINE, "true",
+		)
+
+		// Omitting the driver also reuses an existing named volume.
+		noDriverMount := fmt.Sprintf("type=volume,source=%s,target=/test", volName)
+		podmanTest.PodmanExitCleanly(
+			"run", "--network=none", "--rm", "--security-opt", "label=disable",
+			"--mount", noDriverMount, ALPINE, "true",
+		)
+
+		// An explicit different driver must not silently reuse the existing volume.
+		conflictingDriverMount := fmt.Sprintf("type=volume,source=%s,target=/test,volume-driver=local", volName)
+		conflictingDriver := podmanTest.Podman([]string{"run", "--network=none", "--rm", "--security-opt", "label=disable", "--mount", conflictingDriverMount, ALPINE, "true"})
+		conflictingDriver.WaitWithDefaultTimeout()
+		Expect(conflictingDriver).To(ExitWithError(125,
+			fmt.Sprintf("Error: volume %q already exists with driver %q, but requested driver is %q: volume already exists", volName, pluginName, "local")))
+	})
+
 	It("podman volume reload", func() {
 		podmanTest.AddImageToRWStore(volumeTest)
 
