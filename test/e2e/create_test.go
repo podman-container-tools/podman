@@ -295,10 +295,13 @@ var _ = Describe("Podman create", func() {
 		session := podmanTest.Podman([]string{"create", "-q", "--pull=always", "--arch=arm64", "--name=foo", ALPINELISTTAG})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		// Image IDs are no longer content-derived; resolve the expected ID from
+		// the arm64 instance digest instead of hardcoding it.
+		expectedID := podmanTest.PodmanExitCleanly("image", "inspect", "--format", "{{.Id}}", ALPINEARM64DIGEST).OutputToString()
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.Image}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64ID))
+		Expect(session.OutputToString()).To(Equal(expectedID))
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.ImageName}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
@@ -310,10 +313,13 @@ var _ = Describe("Podman create", func() {
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(Exit(0))
 		Expect(session.ErrorToString()).To(ContainSubstring("Writing manifest to image destination"), "progress message from pull")
+		// Image IDs are no longer content-derived; resolve the expected ID from
+		// the arm64 instance digest instead of hardcoding it.
+		expectedID := podmanTest.PodmanExitCleanly("image", "inspect", "--format", "{{.Id}}", ALPINEARM64DIGEST).OutputToString()
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.Image}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64ID))
+		Expect(session.OutputToString()).To(Equal(expectedID))
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.ImageName}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
@@ -324,10 +330,13 @@ var _ = Describe("Podman create", func() {
 		session := podmanTest.Podman([]string{"create", "-q", "--pull=always", "--arch=arm64", "--name=foo", ALPINEARM64DIGEST})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		// Image IDs are no longer content-derived; resolve the expected ID from
+		// the arm64 instance digest instead of hardcoding it.
+		expectedID := podmanTest.PodmanExitCleanly("image", "inspect", "--format", "{{.Id}}", ALPINEARM64DIGEST).OutputToString()
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.Image}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64ID))
+		Expect(session.OutputToString()).To(Equal(expectedID))
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.ImageName}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
@@ -338,10 +347,13 @@ var _ = Describe("Podman create", func() {
 		session := podmanTest.Podman([]string{"create", "-q", "--pull=always", "--arch=arm64", "--name=foo", ALPINEARM64DIGEST})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		// Image IDs are no longer content-derived; resolve the expected ID from
+		// the arm64 instance digest instead of hardcoding it.
+		expectedID := podmanTest.PodmanExitCleanly("image", "inspect", "--format", "{{.Id}}", ALPINEARM64DIGEST).OutputToString()
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.Image}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64ID))
+		Expect(session.OutputToString()).To(Equal(expectedID))
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.ImageName}}", "foo"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
