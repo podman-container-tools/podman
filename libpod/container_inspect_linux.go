@@ -130,6 +130,12 @@ func (c *Container) platformInspectContainerHostConfig(ctrSpec *spec.Spec, hostC
 				}
 				hostConfig.BlkioDeviceWriteIOps = writeIops
 			}
+			// Device cgroup rules are stored on this container's own spec
+			// under the base annotation key.
+			if deviceCgroupRules, ok := c.config.Spec.Annotations[define.DeviceCgroupRuleAnnotation]; ok {
+				// Split comma-separated rules into individual entries for Docker API compatibility
+				hostConfig.DeviceCgroupRules = strings.Split(deviceCgroupRules, ",")
+			}
 		}
 	}
 
