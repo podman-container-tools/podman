@@ -1,6 +1,7 @@
 package quadlet
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -44,6 +45,8 @@ func listFlags(cmd *cobra.Command) {
 	_ = quadletListCmd.RegisterFlagCompletionFunc(filterFlagName, common.AutocompleteQuadletFilters)
 
 	flags.BoolP("noheading", "n", false, "Do not print headers")
+
+	flags.BoolVarP(&listOptions.Quiet, "quiet", "q", false, "Print Quadlet output in quiet mode")
 }
 
 func init() {
@@ -56,6 +59,9 @@ func init() {
 
 func list(cmd *cobra.Command, _ []string) error {
 	quadlets, err := registry.ContainerEngine().QuadletList(cmd.Context(), listOptions)
+	if listOptions.Quiet && cmd.Flag("format").Changed {
+		return errors.New("quiet and format flags cannot be used together")
+	}
 	if err != nil {
 		return err
 	}
@@ -76,11 +82,14 @@ func outputTemplate(cmd *cobra.Command, responses []*entities.ListQuadlet) error
 	defer rpt.Flush()
 
 	var err error
-	origin := report.OriginPodman
-	if cmd.Flag("format").Changed {
-		origin = report.OriginUser
+	switch {
+	case cmd.Flag("format").Changed:
+		rpt, err = rpt.Parse(report.OriginUser, format)
+	case listOptions.Quiet:
+		rpt, err = rpt.Parse(report.OriginUser, "{{.Name}}\n")
+	default:
+		rpt, err = rpt.Parse(report.OriginPodman, format)
 	}
-	rpt, err = rpt.Parse(origin, format)
 	if err != nil {
 		return err
 	}
