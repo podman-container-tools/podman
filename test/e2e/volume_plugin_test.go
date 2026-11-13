@@ -192,6 +192,34 @@ var _ = Describe("Podman volume plugins", func() {
 		Expect(ctr2.OutputToString()).To(ContainSubstring("helloworld"))
 	})
 
+	It("creates a plugin-backed named volume from --mount", func() {
+		podmanTest.AddImageToRWStore(volumeTest)
+
+		pluginStatePath := filepath.Join(podmanTest.TempDir, "volumes")
+		err := os.Mkdir(pluginStatePath, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		pluginName := "testvol9"
+		plugin := podmanTest.Podman([]string{"run", "--network=none", "--security-opt", "label=disable", "-v", "/run/docker/plugins:/run/docker/plugins", "-v", fmt.Sprintf("%v:%v", pluginStatePath, pluginStatePath), "-d", volumeTest, "--sock-name", pluginName, "--path", pluginStatePath})
+		plugin.WaitWithDefaultTimeout()
+		Expect(plugin).Should(ExitCleanly())
+
+		// Make sure the socket is available before creating the volume.
+		err = WaitForFile(fmt.Sprintf("/run/docker/plugins/%s.sock", pluginName))
+		Expect(err).ToNot(HaveOccurred())
+
+		volName := "testVolumeFromMount"
+		mount := fmt.Sprintf("type=volume,source=%s,target=/test,volume-driver=%s", volName, pluginName)
+		container := podmanTest.Podman([]string{"run", "--network=none", "--rm", "--security-opt", "label=disable", "--mount", mount, ALPINE, "true"})
+		container.WaitWithDefaultTimeout()
+		Expect(container).Should(ExitCleanly())
+
+		inspect := podmanTest.Podman([]string{"volume", "inspect", "--format", "{{.Driver}}", volName})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).Should(ExitCleanly())
+		Expect(inspect.OutputToString()).To(Equal(pluginName))
+	})
+
 	It("podman volume reload", func() {
 		podmanTest.AddImageToRWStore(volumeTest)
 

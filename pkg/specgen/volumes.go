@@ -19,6 +19,10 @@ type NamedVolume struct {
 	// If empty, a new named volume with a pseudorandomly generated name
 	// will be mounted at the given destination.
 	Name string
+	// Driver is the volume driver to use if the volume needs to be created.
+	Driver string
+	// DriverOptions are options passed to the volume driver if the volume needs to be created.
+	DriverOptions map[string]string
 	// Destination to mount the named volume within the container. Must be
 	// an absolute path. Path will be created if it does not exist.
 	Dest string

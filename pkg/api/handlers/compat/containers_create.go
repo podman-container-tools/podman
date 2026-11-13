@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -145,6 +146,7 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("fill out specgen: %w", err))
 		return
 	}
+	applyMountVolumeDriverConfig(sg, body.HostConfig.Mounts)
 
 	if inlineSeccompProfile != "" {
 		sg.SeccompProfile = inlineSeccompProfile
@@ -198,6 +200,22 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 		Warnings: warnings,
 	}
 	utils.WriteResponse(w, http.StatusCreated, createResponse)
+}
+
+func applyMountVolumeDriverConfig(sg *specgen.SpecGenerator, mounts []mount.Mount) {
+	for _, m := range mounts {
+		if m.Type != mount.TypeVolume || m.VolumeOptions == nil || m.VolumeOptions.DriverConfig == nil {
+			continue
+		}
+		for _, volume := range sg.Volumes {
+			if volume.Name != m.Source || volume.Dest != path.Clean(m.Target) {
+				continue
+			}
+			volume.Driver = m.VolumeOptions.DriverConfig.Name
+			volume.DriverOptions = m.VolumeOptions.DriverConfig.Options
+			break
+		}
+	}
 }
 
 func stringMaptoArray(m map[string]string) []string {

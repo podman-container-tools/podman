@@ -42,6 +42,7 @@ type universalMount struct {
 	mount spec.Mount
 	// Used only with Named Volume type mounts
 	subPath string
+	driver  string
 }
 
 // Parse all volume-related options in the create config into a set of mounts
@@ -315,7 +316,7 @@ func mounts(mountFlag []string, configMounts []string) (*containerMountMap, erro
 }
 
 func parseMountOptions(mountType string, args []string) (*universalMount, error) {
-	var setTmpcopyup, setRORW, setSuid, setDev, setExec, setRelabel, setOwnership, setSwap bool
+	var setTmpcopyup, setRORW, setSuid, setDev, setExec, setRelabel, setOwnership, setSwap, setVolumeDriver bool
 
 	mnt := new(universalMount)
 	for _, arg := range args {
@@ -446,6 +447,18 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 				return nil, fmt.Errorf("%v: %w", name, errOptionArg)
 			}
 			mnt.subPath = value
+		case "volume-driver":
+			if mountType != define.TypeVolume {
+				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
+			}
+			if !hasValue || value == "" {
+				return nil, fmt.Errorf("%v: %w", name, errOptionArg)
+			}
+			if setVolumeDriver {
+				return nil, fmt.Errorf("cannot pass %q option more than once: %w", name, errOptionArg)
+			}
+			setVolumeDriver = true
+			mnt.driver = value
 		case "target", "dst", "dest", "destination":
 			if mnt.mount.Destination != "" {
 				return nil, fmt.Errorf("cannot pass %q option more than once: %w", name, errOptionArg)
@@ -659,6 +672,7 @@ func getNamedVolume(args []string) (*specgen.NamedVolume, error) {
 
 	newVolume.Options = mnt.mount.Options
 	newVolume.SubPath = mnt.subPath
+	newVolume.Driver = mnt.driver
 	newVolume.Name = mnt.mount.Source
 	newVolume.Dest = mnt.mount.Destination
 	return newVolume, nil

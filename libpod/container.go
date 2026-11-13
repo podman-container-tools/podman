@@ -121,6 +121,10 @@ type Container struct {
 	// the settings from the container config should be used.
 	perNetworkOpts []types.NamedPerNetworkOptions
 
+	// namedVolumeCreateOptions are only used while creating named volumes.
+	// They are not persisted in the container config.
+	namedVolumeCreateOptions map[string]NamedVolumeCreateOptions
+
 	// This is true if a container is restored from a checkpoint.
 	restoreFromCheckpoint bool
 
@@ -258,6 +262,13 @@ type ContainerNamedVolume struct {
 	// NoCreate indicates that the volume must already exist and should not
 	// be created automatically if it doesn't exist.
 	NoCreate bool `json:"noCreate,omitempty"`
+}
+
+// NamedVolumeCreateOptions contains volume driver settings used only while
+// creating a named volume.
+type NamedVolumeCreateOptions struct {
+	Driver        string
+	DriverOptions map[string]string
 }
 
 // ContainerOverlayVolume is an overlay volume that will be mounted into the
