@@ -40,7 +40,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/mdlayher/vsock v1.4.0
 	github.com/moby/docker-image-spec v1.3.1
-	github.com/moby/moby/api v1.56.1
+	github.com/moby/moby/api v1.57.0
 	github.com/moby/moby/client v0.6.2
 	github.com/moby/sys/capability v0.5.0
 	github.com/moby/sys/user v0.5.0
