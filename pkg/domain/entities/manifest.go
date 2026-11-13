@@ -23,6 +23,8 @@ type ManifestInspectOptions struct {
 	Authfile string `json:"-" schema:"-"`
 	// Should TLS registry certificate be verified?
 	SkipTLSVerify types.OptionalBool `json:"-" schema:"-"`
+	// Format - change the output to JSON or a Go template.
+	Format string `json:",omitempty"`
 }
 
 // ManifestAddOptions provides model for adding digests to manifest list

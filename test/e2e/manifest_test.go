@@ -22,6 +22,7 @@ import (
 	podmanRegistry "go.podman.io/podman/v6/hack/podman-registry-go"
 	. "go.podman.io/podman/v6/test/utils"
 	"go.podman.io/storage/pkg/archive"
+	"go.podman.io/storage/pkg/stringid"
 )
 
 // validateManifestHasAllArchs checks that the specified manifest has all
@@ -134,6 +135,39 @@ var _ = Describe("Podman manifest", func() {
 		} else {
 			Expect(stderr).Should(ContainSubstring("The manifest type application/vnd.docker.distribution.manifest.v2+json is not a manifest list but a single image."))
 		}
+	})
+
+	It("inspect --format", func() {
+		listName := "localhost/manifest-format-" + stringid.GenerateRandomID()
+		session := podmanTest.Podman([]string{"manifest", "create", listName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		defer func() {
+			podmanTest.Podman([]string{"manifest", "rm", listName}).WaitWithDefaultTimeout()
+		}()
+
+		session = podmanTest.Podman([]string{"manifest", "add", listName, ALPINE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		// Explicit --format json outputs valid JSON
+		session = podmanTest.Podman([]string{"manifest", "inspect", "--format", "json", listName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(ContainSubstring(`"schemaVersion": 2`))
+		Expect(session.OutputToString()).To(ContainSubstring(`"manifests":`))
+
+		// Go template for top-level fields
+		session = podmanTest.Podman([]string{"manifest", "inspect", "-f", "{{.SchemaVersion}} {{.MediaType}}", listName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(HavePrefix("2 application/vnd."))
+
+		// Go template ranging over .Manifests
+		session = podmanTest.Podman([]string{"manifest", "inspect", "--format", "{{range .Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}\n{{end}}", listName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(ContainSubstring("/"))
 	})
 
 	It("add w/ inspect", func() {
