@@ -1479,7 +1479,12 @@ func (ic *ContainerEngine) ContainerMount(_ context.Context, nameOrIDs []string,
 	}
 	for _, ctr := range containers {
 		report := entities.ContainerMountReport{Id: ctr.ID()}
-		report.Path, report.Err = ctr.Mount()
+		mountPoint, err := ctr.Mount()
+		if err != nil {
+			report.Err = err
+		} else {
+			report.Path = mountPoint.PathWithoutProtectionDeferred()
+		}
 		if options.All &&
 			(errors.Is(report.Err, define.ErrNoSuchCtr) ||
 				errors.Is(report.Err, define.ErrCtrRemoved)) {
