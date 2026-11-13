@@ -87,7 +87,7 @@ Valid options for `[Container]` are listed below:
 | Mount=type=...                       | --mount type=...                                     |
 | Network=host                         | --network host                                       |
 | NetworkAlias=name                    | --network-alias name                                 |
-| NoNewPrivileges=true                 | --security-opt no-new-privileges                     |
+| NoNewPrivileges=true/false           | --security-opt no-new-privileges=true/false          |
 | Notify=true                          | --sdnotify container                                 |
 | PidsLimit=10000                      | --pids-limit 10000                                   |
 | Pod=pod-name                         | --pod=pod-name                                       |
@@ -248,10 +248,11 @@ Specify the paths to mask separated by a colon. `Mask=/path/1:/path/2`. A masked
 
 @@option quadlet:network-alias
 
-### `NoNewPrivileges=bool` (defaults to `false`)
+### `NoNewPrivileges=bool`
 
 If enabled, this disables the container processes from gaining additional privileges via things like
-setuid and file capabilities.
+setuid and file capabilities. If unset, Podman uses the `no_new_privileges` value from
+`containers.conf`, which defaults to `false`. An explicit `true` or `false` overrides that value.
 
 ### `Notify=bool` (defaults to `false`)
 

@@ -193,6 +193,9 @@ type ContainersConfig struct {
 	// NoHosts tells container engine whether to create its own /etc/hosts
 	NoHosts bool `toml:"no_hosts,omitempty"`
 
+	// NoNewPrivileges prevents processes in containers from gaining additional privileges.
+	NoNewPrivileges bool `toml:"no_new_privileges,omitempty"`
+
 	// OOMScoreAdj tunes the host's OOM preferences for containers
 	// (accepts values from -1000 to 1000).
 	OOMScoreAdj *int `toml:"oom_score_adj,omitempty"`
