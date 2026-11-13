@@ -182,6 +182,7 @@ var _ = Describe("Podman pull", func() {
 		session := podmanTest.Podman([]string{"pull", "-q", "--arch=arm64", ALPINELISTDIGEST})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		imageID := session.OutputToString()
 		// inspect using the digest of the list
 		session = podmanTest.Podman([]string{"inspect", "--format", "{{.RepoTags}}", ALPINELISTDIGEST})
 		session.WaitWithDefaultTimeout()
@@ -205,12 +206,12 @@ var _ = Describe("Podman pull", func() {
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINELISTDIGEST))
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64DIGEST))
 		// inspect using the image ID
-		session = podmanTest.Podman([]string{"inspect", "--format", "{{.RepoTags}}", ALPINEARM64ID})
+		session = podmanTest.Podman([]string{"inspect", "--format", "{{.RepoTags}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(HavePrefix("[]"))
 		// inspect using the image ID
-		session = podmanTest.Podman([]string{"inspect", "--format", "{{.RepoDigests}}", ALPINEARM64ID})
+		session = podmanTest.Podman([]string{"inspect", "--format", "{{.RepoDigests}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINELISTDIGEST))
@@ -228,6 +229,7 @@ var _ = Describe("Podman pull", func() {
 		session := podmanTest.Podman([]string{"pull", "-q", "--arch=arm64", ALPINEARM64DIGEST})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		imageID := session.OutputToString()
 
 		// inspect using the digest of the list
 		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", ALPINELISTDIGEST})
@@ -250,12 +252,12 @@ var _ = Describe("Podman pull", func() {
 		Expect(string(session.Out.Contents())).To(Not(ContainSubstring(ALPINELISTDIGEST)))
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64DIGEST))
 		// inspect using the image ID
-		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", ALPINEARM64ID})
+		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(HavePrefix("[]"))
 		// inspect using the image ID
-		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoDigests}}", ALPINEARM64ID})
+		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoDigests}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(Not(ContainSubstring(ALPINELISTDIGEST)))
@@ -273,6 +275,7 @@ var _ = Describe("Podman pull", func() {
 		session := podmanTest.Podman([]string{"pull", "-q", "--arch=arm64", ALPINELISTTAG})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
+		imageID := session.OutputToString()
 		// inspect using the tag we used for pulling
 		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", ALPINELISTTAG})
 		session.WaitWithDefaultTimeout()
@@ -307,12 +310,12 @@ var _ = Describe("Podman pull", func() {
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINELISTDIGEST))
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINEARM64DIGEST))
 		// inspect using the image ID
-		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", ALPINEARM64ID})
+		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoTags}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINELISTTAG))
 		// inspect using the image ID
-		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoDigests}}", ALPINEARM64ID})
+		session = podmanTest.PodmanNoCache([]string{"inspect", "--format", "{{.RepoDigests}}", imageID})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
 		Expect(string(session.Out.Contents())).To(ContainSubstring(ALPINELISTDIGEST))
