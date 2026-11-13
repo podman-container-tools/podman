@@ -55,6 +55,10 @@ func (s *APIServer) registerSecretHandlers(r *mux.Router) error {
 	// responses:
 	//   '201':
 	//     $ref: "#/responses/SecretCreateResponse"
+	//   '400':
+	//      "$ref": "#/responses/badParamError"
+	//   '409':
+	//      "$ref": "#/responses/conflictError"
 	//   '500':
 	//      "$ref": "#/responses/internalError"
 	r.Handle(VersionedPath("/libpod/secrets/create"), s.APIHandler(libpod.CreateSecret)).Methods(http.MethodPost)

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
@@ -163,11 +162,7 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 	ic := abi.ContainerEngine{Libpod: runtime}
 	report, err := ic.SecretCreate(r.Context(), createParams.Name, bytes.NewReader(createParams.Data), createParams.Opts)
 	if err != nil {
-		if strings.Contains(err.Error(), "secret name in use") {
-			utils.Error(w, http.StatusConflict, err)
-			return
-		}
-		utils.InternalServerError(w, err)
+		utils.Error(w, utils.GetCreateSecretStatus(err), err)
 		return
 	}
 	utils.WriteResponse(w, http.StatusOK, report)
