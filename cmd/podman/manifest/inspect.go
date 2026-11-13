@@ -3,10 +3,13 @@ package manifest
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+	"go.podman.io/common/libimage/define"
 	"go.podman.io/common/pkg/auth"
 	"go.podman.io/common/pkg/completion"
+	"go.podman.io/common/pkg/report"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/podman/v6/cmd/podman/common"
 	"go.podman.io/podman/v6/cmd/podman/registry"
@@ -15,6 +18,7 @@ import (
 
 var (
 	inspectOptions entities.ManifestInspectOptions
+	inspectFormat  string
 	tlsVerifyCLI   bool
 	inspectCmd     = &cobra.Command{
 		Use:               "inspect [options] IMAGE",
@@ -22,8 +26,10 @@ var (
 		Long:              "Display the contents of a manifest list or image index.",
 		RunE:              inspect,
 		ValidArgsFunction: common.AutocompleteImages,
-		Example:           "podman manifest inspect localhost/list",
-		Args:              cobra.ExactArgs(1),
+		Example: `podman manifest inspect localhost/list
+podman manifest inspect --format "{{.MediaType}}" localhost/list
+podman manifest inspect --format '{{range .Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}} {{.Digest}}{{"\n"}}{{end}}' localhost/list`,
+		Args: cobra.ExactArgs(1),
 	}
 )
 
@@ -37,11 +43,18 @@ func init() {
 	authfileFlagName := "authfile"
 	flags.StringVar(&inspectOptions.Authfile, authfileFlagName, auth.GetDefaultAuthFile(), "path of the authentication file. Use REGISTRY_AUTH_FILE environment variable to override")
 	_ = inspectCmd.RegisterFlagCompletionFunc(authfileFlagName, completion.AutocompleteDefault)
+
 	flags.BoolP("verbose", "v", false, "Added for Docker compatibility")
 	_ = flags.MarkHidden("verbose")
+
 	flags.BoolVar(&tlsVerifyCLI, "tls-verify", true, "require HTTPS and verify certificates when accessing the registry")
+
 	flags.Bool("insecure", false, "Purely for Docker compatibility")
 	_ = flags.MarkHidden("insecure")
+
+	formatFlagName := "format"
+	flags.StringVarP(&inspectFormat, formatFlagName, "f", "json", "Format the output to a Go template or json")
+	_ = inspectCmd.RegisterFlagCompletionFunc(formatFlagName, common.AutocompleteFormat(&define.ManifestListData{}))
 }
 
 func inspect(cmd *cobra.Command, args []string) error {
@@ -56,14 +69,28 @@ func inspect(cmd *cobra.Command, args []string) error {
 		insecure, _ := cmd.Flags().GetBool("insecure")
 		inspectOptions.SkipTLSVerify = types.NewOptionalBool(insecure)
 	}
+
 	list, err := registry.ImageEngine().ManifestInspect(cmd.Context(), args[0], inspectOptions)
 	if err != nil {
 		return err
 	}
-	prettyJSON, err := json.MarshalIndent(list, "", "    ")
-	if err != nil {
-		return err
+
+	switch {
+	case report.IsJSON(inspectFormat) || inspectFormat == "":
+		prettyJSON, err := json.MarshalIndent(list, "", "    ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(prettyJSON))
+		return nil
+	default:
+		// Landing here implies user has given a custom --format
+		rpt, err := report.New(os.Stdout, "manifest inspect").Parse(report.OriginUser, inspectFormat)
+		if err != nil {
+			return err
+		}
+		defer rpt.Flush()
+
+		return rpt.Execute([]any{list})
 	}
-	fmt.Println(string(prettyJSON))
-	return nil
 }
