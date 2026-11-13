@@ -157,8 +157,7 @@ jobs:
             context:
               revdeps: "yes"
 
-  # NOTE: Breaking changes related to Podman6 will only be shipped to Fedora
-  # Rawhide (to be Fedora 45) and newer.
+  # Rawhide always gets the latest updates.
   - job: propose_downstream
     trigger: release
     update_release: false
@@ -166,16 +165,28 @@ jobs:
     dist_git_branches:
       - fedora-rawhide
 
-  # Release candidates shouldn't be pushed to stable Fedora streams.
-  # TODO: Update dist_git_branches as and when new Fedora releases are
-  # available.
+  # version_update_mask makes sure that downstream updates are proposed only for
+  # Fedora branches that already use the same Podman major version as the
+  # upstream release, preventing different major versions from mixing.
+  #
+  # For example, with Podman 6.2:
+  # - F43 and F44 (Podman 5.x): skipped
+  # - F45 (Podman 6.x): updated
+  #
+  # With Podman 5.8:
+  # - F43 and F44 (Podman 5.x): updated
+  # - F45 (Podman 6.x): skipped
+  #
+  # upstream_tag_exclude makes sure that unstable release candidates don't get
+  # pushed into stable Fedoras.
   - job: propose_downstream
     trigger: release
     update_release: false
     packages: [podman-fedora]
     upstream_tag_exclude: '^v\d+(?:\.\d+)*-rc\d+$'
+    version_update_mask: '\d+\.'
     dist_git_branches:
-      - fedora-45
+      - fedora-stable
 
   # ***NOTE***: On the Fedora dist-git side, packit only triggers koji_build and
   # bodhi_update jobs for targets in .packit.yaml
