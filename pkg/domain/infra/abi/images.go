@@ -25,7 +25,9 @@ import (
 	bdefine "go.podman.io/buildah/define"
 	"go.podman.io/buildah/pkg/volumes"
 	"go.podman.io/common/libimage"
+	commonDefine "go.podman.io/common/libimage/define"
 	"go.podman.io/common/libimage/filter"
+	commonPlatform "go.podman.io/common/libimage/platform"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
@@ -662,6 +664,22 @@ func removeErrorsToExitCode(rmErrors []error) int {
 
 // Remove removes one or more images from local storage.
 func (ir *ImageEngine) Remove(ctx context.Context, images []string, opts entities.ImageRemoveOptions) (report *entities.ImageRemoveReport, rmErrors []error) {
+	if len(opts.Platforms) > 0 {
+		report = &entities.ImageRemoveReport{}
+		defer func() {
+			report.ExitCode = removeErrorsToExitCode(rmErrors)
+		}()
+		for _, name := range images {
+			imageReport, imageErrors := ir.removeImagePlatforms(ctx, name, opts)
+			if imageReport != nil {
+				report.Deleted = append(report.Deleted, imageReport.Deleted...)
+				report.Untagged = append(report.Untagged, imageReport.Untagged...)
+			}
+			rmErrors = append(rmErrors, imageErrors...)
+		}
+		return report, rmErrors
+	}
+
 	report = &entities.ImageRemoveReport{}
 
 	// Set the exit code at very end.
@@ -692,6 +710,198 @@ func (ir *ImageEngine) Remove(ctx context.Context, images []string, opts entitie
 	rmErrors = libimageErrors
 
 	return report, rmErrors
+}
+
+func (ir *ImageEngine) removeImagePlatforms(ctx context.Context, name string, opts entities.ImageRemoveOptions) (*entities.ImageRemoveReport, []error) {
+	runtime := ir.Libpod.LibimageRuntime()
+	img, _, err := runtime.LookupImage(name, &libimage.LookupImageOptions{ManifestList: true})
+	if err != nil {
+		return nil, []error{err}
+	}
+
+	isManifestList, err := img.IsManifestList(ctx)
+	if err != nil {
+		return nil, []error{fmt.Errorf("checking if image %q is a manifest list: %w", name, err)}
+	}
+	if !isManifestList {
+		inspectData, err := img.Inspect(ctx, nil)
+		if err != nil {
+			return nil, []error{err}
+		}
+		actual := imgspecv1.Platform{
+			OS:           inspectData.Os,
+			Architecture: inspectData.Architecture,
+		}
+		for _, requested := range opts.Platforms {
+			if requested.Variant == "" {
+				continue
+			}
+			source, err := img.StorageReference()
+			if err != nil {
+				return nil, []error{fmt.Errorf("getting image reference for %q: %w", name, err)}
+			}
+			imageCloser, err := source.NewImage(ctx, ir.Libpod.SystemContext())
+			if err != nil {
+				return nil, []error{fmt.Errorf("reading image %q: %w", name, err)}
+			}
+			config, configErr := imageCloser.OCIConfig(ctx)
+			closeErr := imageCloser.Close()
+			if configErr != nil || closeErr != nil {
+				return nil, []error{fmt.Errorf("reading image platform for %q: %w", name, errors.Join(configErr, closeErr))}
+			}
+			actual.Variant = config.Variant
+			break
+		}
+		if !matchesAnyPlatform(opts.Platforms, actual) {
+			return nil, []error{fmt.Errorf("image %q platform %s does not match requested platforms", name, commonPlatform.ToString(actual.OS, actual.Architecture, actual.Variant))}
+		}
+
+		opts.Platforms = nil
+		return ir.Remove(ctx, []string{name}, opts)
+	}
+
+	list, err := img.ToManifestList()
+	if err != nil {
+		return nil, []error{fmt.Errorf("reading manifest list %q: %w", name, err)}
+	}
+	listData, err := list.Inspect()
+	if err != nil {
+		return nil, []error{fmt.Errorf("inspecting manifest list %q: %w", name, err)}
+	}
+
+	selected, matchedRequests := manifestDigestsForPlatforms(listData.Manifests, opts.Platforms)
+	for i, found := range matchedRequests {
+		if !found {
+			requested := opts.Platforms[i]
+			return nil, []error{fmt.Errorf("platform %s was not found in manifest list %q", commonPlatform.ToString(requested.OS, requested.Architecture, requested.Variant), name)}
+		}
+	}
+
+	type platformImage struct {
+		image      *libimage.Image
+		containers []string
+		manifestID digest.Digest
+	}
+	platformImages := make([]platformImage, 0, len(selected))
+	for _, instanceDigest := range selected {
+		child, _, lookupErr := runtime.LookupImage(instanceDigest.String(), nil)
+		if lookupErr != nil {
+			if errors.Is(lookupErr, storage.ErrImageUnknown) {
+				continue
+			}
+			return nil, []error{fmt.Errorf("looking up platform image %s: %w", instanceDigest, lookupErr)}
+		}
+		containers, err := child.Containers()
+		if err != nil {
+			return nil, []error{fmt.Errorf("checking containers for platform image %s: %w", instanceDigest, err)}
+		}
+		if len(containers) > 0 && !opts.Force {
+			return nil, []error{fmt.Errorf("platform image %s is used by containers %v: %w", instanceDigest, containers, storage.ErrImageUsedByContainer)}
+		}
+		platformImages = append(platformImages, platformImage{
+			image:      child,
+			containers: containers,
+			manifestID: instanceDigest,
+		})
+	}
+
+	report := &entities.ImageRemoveReport{}
+	for _, instanceDigest := range selected {
+		if err := list.RemoveInstance(instanceDigest); err != nil {
+			return report, []error{fmt.Errorf("removing platform %s from manifest list %q: %w", instanceDigest, name, err)}
+		}
+		report.Deleted = append(report.Deleted, instanceDigest.String())
+	}
+
+	if !opts.NoPrune {
+		for _, child := range platformImages {
+			dangling, err := child.image.IsDangling(ctx)
+			if err != nil {
+				return report, []error{fmt.Errorf("checking if platform image %s is dangling: %w", child.manifestID, err)}
+			}
+			if !dangling || (len(child.containers) > 0 && opts.DisableForceRemoveContainers) {
+				continue
+			}
+			childOptions := opts
+			childOptions.Platforms = nil
+			childReport, childErrors := ir.Remove(ctx, []string{child.image.ID()}, childOptions)
+			if childReport != nil {
+				report.Deleted = append(report.Deleted, childReport.Deleted...)
+				report.Untagged = append(report.Untagged, childReport.Untagged...)
+			}
+			if len(childErrors) > 0 {
+				return report, childErrors
+			}
+		}
+	}
+
+	updatedList, err := list.Inspect()
+	if err != nil {
+		return report, []error{fmt.Errorf("inspecting updated manifest list %q: %w", name, err)}
+	}
+	if len(updatedList.Manifests) == 0 {
+		parentOptions := opts
+		parentOptions.Platforms = nil
+		parentOptions.LookupManifest = true
+		parentOptions.Force = true
+		parentReport, parentErrors := ir.Remove(ctx, []string{img.ID()}, parentOptions)
+		if parentReport != nil {
+			report.Deleted = append(report.Deleted, parentReport.Deleted...)
+			report.Untagged = append(report.Untagged, parentReport.Untagged...)
+		}
+		if len(parentErrors) > 0 {
+			return report, parentErrors
+		}
+	}
+	return report, nil
+}
+
+func manifestDigestsForPlatforms(descriptors []commonDefine.ManifestListDescriptor, requested []imgspecv1.Platform) ([]digest.Digest, []bool) {
+	matchedRequests := make([]bool, len(requested))
+	selected := make([]digest.Digest, 0, len(descriptors))
+	matchedDigests := make(map[digest.Digest]bool)
+	for _, descriptor := range descriptors {
+		actual := imgspecv1.Platform{
+			OS:           descriptor.Platform.OS,
+			Architecture: descriptor.Platform.Architecture,
+			Variant:      descriptor.Platform.Variant,
+		}
+		for i, req := range requested {
+			if matchesPlatform(req, actual) {
+				matchedRequests[i] = true
+				if !matchedDigests[descriptor.Digest] {
+					selected = append(selected, descriptor.Digest)
+					matchedDigests[descriptor.Digest] = true
+				}
+			}
+		}
+	}
+
+	for _, descriptor := range descriptors {
+		referencedDigest := digest.Digest(descriptor.Annotations["vnd.docker.reference.digest"])
+		if matchedDigests[referencedDigest] && !matchedDigests[descriptor.Digest] {
+			selected = append(selected, descriptor.Digest)
+			matchedDigests[descriptor.Digest] = true
+		}
+	}
+	return selected, matchedRequests
+}
+
+func matchesAnyPlatform(requested []imgspecv1.Platform, actual imgspecv1.Platform) bool {
+	for _, platform := range requested {
+		if matchesPlatform(platform, actual) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesPlatform(requested, actual imgspecv1.Platform) bool {
+	requestedOS, requestedArchitecture, requestedVariant := commonPlatform.Normalize(requested.OS, requested.Architecture, requested.Variant)
+	actualOS, actualArchitecture, actualVariant := commonPlatform.Normalize(actual.OS, actual.Architecture, actual.Variant)
+	return (requestedOS == "" || requestedOS == actualOS) &&
+		(requestedArchitecture == "" || requestedArchitecture == actualArchitecture) &&
+		(requestedVariant == "" || requestedVariant == actualVariant)
 }
 
 // Shutdown Libpod engine
