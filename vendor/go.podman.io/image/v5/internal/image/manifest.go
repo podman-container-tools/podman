@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/manifest"
@@ -30,6 +31,11 @@ type genericManifest interface {
 	// The Digest field is guaranteed to be provided; Size may be -1.
 	// WARNING: The list may contain duplicates, and they are semantically relevant.
 	LayerInfos() []types.BlobInfo
+	// MatchingDigest returns a digest which uniquely identifies the image by its contents,
+	// irrespective of which reference was used to locate it, and unchanged by whether or
+	// how the layers are compressed.  diffIDs are only used by formats which compute the
+	// configuration from them (docker schema1); other formats ignore the value.
+	MatchingDigest(diffIDs []digest.Digest) (digest.Digest, error)
 	// EmbeddedDockerReferenceConflicts whether a Docker reference embedded in the manifest, if any, conflicts with destination ref.
 	// It returns false if the manifest does not embed a Docker reference.
 	// (This embedding unfortunately happens for Docker schema1, please do not add support for this in any new formats.)
