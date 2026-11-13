@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,6 +63,12 @@ type BuildFilePaths struct {
 	newContainerFiles []string // dockerfile paths, relative to context dir, ToSlash()ed
 	dontexcludes      []string
 	excludes          []string
+	secrets           []buildSecret
+}
+
+type buildSecret struct {
+	name     string
+	contents []byte
 }
 
 // RequestParts contains the components of an HTTP request for the build API.
@@ -662,17 +669,14 @@ func prepareContainerFiles(containerFiles []string, contextDir string, stdinDest
 	return &out, nil
 }
 
-// prepareSecrets processes build secrets by creating temporary files for them.
-// It moves secrets to the context directory and modifies the secret configuration
-// to use relative paths suitable for remote builds.
-// WARNING: Caller must ensure tempManager.Cleanup() is called to remove any temporary files created.
-func prepareSecrets(secrets []string, contextDir string, tempManager *remote_build_helpers.TempFileManager) ([]string, []string, error) {
+// prepareSecrets resolves secrets without writing copies to the client filesystem.
+func prepareSecrets(secrets []string) ([]string, []buildSecret, error) {
 	if len(secrets) == 0 {
 		return nil, nil, nil
 	}
 
 	secretsForRemote := []string{}
-	tarContent := []string{}
+	tarContent := []buildSecret{}
 
 	parsed, err := parse.Secrets(secrets)
 	if err != nil {
@@ -685,13 +689,9 @@ func prepareSecrets(secrets []string, contextDir string, tempManager *remote_bui
 			return nil, nil, err
 		}
 
-		tmpSecret, err := tempManager.CreateTempFileFromReader(contextDir, "podman-build-secret-*", bytes.NewReader(contents))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		tarContent = append(tarContent, tmpSecret)
-		secretsForRemote = append(secretsForRemote, fmt.Sprintf("id=%s,src=%s", secret.ID, filepath.Base(tmpSecret)))
+		name := "podman-build-secret-" + rand.Text()
+		tarContent = append(tarContent, buildSecret{name: name, contents: contents})
+		secretsForRemote = append(secretsForRemote, fmt.Sprintf("id=%s,src=%s", secret.ID, name))
 	}
 
 	return secretsForRemote, tarContent, nil
@@ -702,7 +702,7 @@ func prepareSecrets(secrets []string, contextDir string, tempManager *remote_bui
 // additional build contexts, supporting URLs, images, and local directories.
 // WARNING: Caller must close request body.
 func prepareRemoteRequestBody(ctx context.Context, requestParts *RequestParts, buildFilePaths *BuildFilePaths, options types.BuildOptions) (*RequestParts, error) {
-	tarfile, err := nTar(append(buildFilePaths.excludes, buildFilePaths.dontexcludes...), buildFilePaths.tarContent...)
+	tarfile, err := nTar(append(buildFilePaths.excludes, buildFilePaths.dontexcludes...), buildFilePaths.secrets, buildFilePaths.tarContent...)
 	if err != nil {
 		logrus.Errorf("Cannot tar container entries %v error: %v", buildFilePaths.tarContent, err)
 		return nil, err
@@ -860,7 +860,7 @@ func prepareRemoteRequestBody(ctx context.Context, requestParts *RequestParts, b
 				}
 				file.Close()
 			} else {
-				tarContent, err := nTar(nil, context.Value)
+				tarContent, err := nTar(nil, nil, context.Value)
 				if err != nil {
 					pw.CloseWithError(fmt.Errorf("creating tar content %q: %w", name, err))
 					return
@@ -963,8 +963,8 @@ func processBuildResponse(response *bindings.APIResponse, stdout io.Writer, save
 
 // prepareLocalRequestBody prepares HTTP request parameters for local build API calls.
 // It sets up local context directory and additional build contexts using already translated paths.
-func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *BuildFilePaths, options types.BuildOptions) (*RequestParts, error) {
-	// ContextDirectory is the client's path (build() creates secret and stdin files under it); the
+func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, buildFilePaths *BuildFilePaths, options types.BuildOptions) (*RequestParts, error) {
+	// ContextDirectory is the client's path (build() creates stdin files under it); the
 	// server's path is in RemoteContextDirectory when localapi translated it, and empty when the
 	// caller already passed a server path as ContextDirectory.
 	remoteContextDir := options.ContextDirectory
@@ -972,6 +972,18 @@ func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *B
 		remoteContextDir = options.RemoteContextDirectory
 	}
 	requestParts.Params.Set("localcontextdir", remoteContextDir)
+
+	if buildFilePaths != nil && len(buildFilePaths.secrets) > 0 {
+		body, err := nTar(nil, buildFilePaths.secrets)
+		if err != nil {
+			return nil, err
+		}
+		requestParts.Body = body
+		if requestParts.Headers == nil {
+			requestParts.Headers = make(http.Header)
+		}
+		requestParts.Headers.Set("Content-Type", "application/x-tar")
+	}
 
 	for name, context := range options.AdditionalBuildContexts {
 		switch {
@@ -992,8 +1004,8 @@ func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *B
 // rather than uploading build contexts. The containerFiles and options parameters should contain
 // already translated paths pointing to files on the remote server, making it suitable for scenarios
 // where build contexts already exist on the server (e.g., shared filesystems, mounted volumes).
-// options.ContextDirectory stays the client's path to the shared context directory, where secret
-// and stdin files are written; options.RemoteContextDirectory, when set, is the path the request
+// options.ContextDirectory stays the client's path to the shared context directory, where
+// stdin files are written; options.RemoteContextDirectory, when set, is the path the request
 // sends for it.
 //
 // The context directory and containerFiles paths must be accessible on the remote server.
@@ -1001,6 +1013,9 @@ func prepareLocalRequestBody(_ context.Context, requestParts *RequestParts, _ *B
 //
 // Returns a BuildReport containing the final image ID and save format.
 func BuildFromServerContext(ctx context.Context, containerFiles []string, options types.BuildOptions) (*types.BuildReport, error) {
+	if options.CommonBuildOpts != nil && len(options.CommonBuildOpts.Secrets) > 0 && !remote_build_helpers.SupportsLocalBuildSecrets(bindings.ServiceVersion(ctx)) {
+		return nil, bindings.NewAPIVersionError("/local/build", bindings.ServiceVersion(ctx), "6.3.0")
+	}
 	return build(ctx, containerFiles, options, "/local/build", prepareLocalRequestBody)
 }
 
@@ -1079,9 +1094,7 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 		}
 	}
 
-	// build secrets are usually absolute host path or relative to context dir on host
-	// in any case move secret to current context and ship the tar.
-	secretsForRemote, secretsTarContent, err := prepareSecrets(options.CommonBuildOpts.Secrets, options.ContextDirectory, tempManager)
+	secretsForRemote, secretsTarContent, err := prepareSecrets(options.CommonBuildOpts.Secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -1092,7 +1105,7 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 			return nil, err
 		}
 		requestParts.Params.Add("secrets", c)
-		buildFilePaths.tarContent = append(buildFilePaths.tarContent, secretsTarContent...)
+		buildFilePaths.secrets = secretsTarContent
 	}
 
 	// If ignorefile is outside the context directory, add it to tarball (same as containerfile)
@@ -1141,15 +1154,15 @@ func build(ctx context.Context, containerFiles []string, options types.BuildOpti
 
 // nTar builds a gzip-compressed tar of sources and returns it as a ReadCloser.
 // sources[0] is the build context directory (walked recursively). Remaining entries
-// are extra regular files (e.g. secrets) that are always archived; exclude patterns
-// apply only to the first source.
-func nTar(excludes []string, sources ...string) (io.ReadCloser, error) {
+// are extra regular files. Secrets are appended without applying exclude patterns.
+// With no sources, the archive contains only secrets.
+func nTar(excludes []string, secrets []buildSecret, sources ...string) (io.ReadCloser, error) {
 	pm, err := fileutils.NewPatternMatcher(excludes)
 	if err != nil {
 		return nil, fmt.Errorf("processing excludes list %v: %w", excludes, err)
 	}
 
-	if len(sources) == 0 {
+	if len(sources) == 0 && len(secrets) == 0 {
 		return nil, errors.New("no source(s) provided for build")
 	}
 
@@ -1207,8 +1220,7 @@ func nTar(excludes []string, sources ...string) (io.ReadCloser, error) {
 					if !dentry.Type().IsRegular() {
 						return fmt.Errorf("path %s must be a regular file", path)
 					}
-					// Additional sources are absolute host paths (Containerfiles passed by path, or
-					// temp files such as secrets placed under the context directory). Strip the
+					// Additional sources are absolute host paths (e.g. Containerfiles). Strip the
 					// resolved context directory so tar member names are relative to that root,
 					// like entries from the primary walk (i == 0). Using the raw absolute path would
 					// produce members that unpack as a spurious host path tree (e.g. Users/...)
@@ -1305,6 +1317,20 @@ func nTar(excludes []string, sources ...string) (io.ReadCloser, error) {
 				return nil
 			})
 			merr = multierror.Append(merr, err)
+		}
+		for _, secret := range secrets {
+			if err := tw.WriteHeader(&tar.Header{
+				Name: secret.name,
+				Mode: 0o600,
+				Size: int64(len(secret.contents)),
+			}); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
+			if _, err := tw.Write(secret.contents); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
 		}
 	}()
 	rc := ioutils.NewReadCloserWrapper(pr, func() error {

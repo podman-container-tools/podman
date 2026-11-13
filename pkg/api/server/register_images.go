@@ -1987,7 +1987,12 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	// tags:
 	//  - images
 	// summary: Create image from local build context
-	// description: Build an image from a local build context directory without requiring tar archive upload. The build context must already exist on the server filesystem.
+	// description: |
+	//   Build an image from a local build context directory without uploading the context.
+	//   The build context must already exist on the server filesystem.
+	//   Since Podman 6.3.0, an optional application/x-tar request body can contain build secrets.
+	//   The archive may be gzip-compressed. The server extracts it outside the build context.
+	//   Each src in the secrets query parameter must name a regular file at the root of this archive.
 	// parameters:
 	//  - in: header
 	//    name: X-Registry-Config

@@ -3,6 +3,7 @@
 package compat
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -153,6 +154,7 @@ type BuildContext struct {
 	AdditionalBuildContexts map[string]*buildahDefine.AdditionalBuildContext
 	ContainerFiles          []string
 	IgnoreFile              string
+	SecretDirectory         string
 }
 
 func (b *BuildContext) validateLocalAPIPaths() error {
@@ -361,50 +363,68 @@ func processBuildContext(query url.Values, r *http.Request, buildContext *BuildC
 
 // processSecrets processes build secrets for podman-remote operations.
 // Moves secrets outside build context to prevent accidental inclusion in images.
-func processSecrets(query *BuildQuery, contextDirectory string, queryValues url.Values) ([]string, error) {
+func processSecrets(query *BuildQuery, sourceDirectory string, secretDirectory string, queryValues url.Values) ([]string, error) {
 	secrets := []string{}
 	m := []string{}
 	if err := utils.ParseOptionalJSONField(query.Secrets, "secrets", queryValues, &m); err != nil {
 		return nil, err
 	}
 
-	// for podman-remote all secrets must be picked from context director
-	// hence modify src so contextdir is added as prefix
+	if len(m) > 0 {
+		if err := os.MkdirAll(secretDirectory, 0o700); err != nil {
+			return nil, err
+		}
+	}
 	for _, secret := range m {
-		secretOpt := strings.Split(secret, ",")
-		if len(secretOpt) > 0 {
-			modifiedOpt := []string{}
-			for _, token := range secretOpt {
-				key, val, hasVal := strings.Cut(token, "=")
-				if hasVal {
-					if key == "src" {
-						/* move secret away from contextDir */
-						/* to make sure we dont accidentally commit temporary secrets to image*/
-						builderDirectory, _ := filepath.Split(contextDirectory)
-						// following path is outside build context
-						newSecretPath := filepath.Join(builderDirectory, val)
-						oldSecretPath := filepath.Join(contextDirectory, val)
-						err := os.Rename(oldSecretPath, newSecretPath)
-						if err != nil {
-							return nil, err
-						}
-
-						modifiedSrc := fmt.Sprintf("src=%s", newSecretPath)
-						modifiedOpt = append(modifiedOpt, modifiedSrc)
-					} else {
-						modifiedOpt = append(modifiedOpt, token)
+		modifiedOpt := []string{}
+		for token := range strings.SplitSeq(secret, ",") {
+			key, val, hasVal := strings.Cut(token, "=")
+			if !hasVal {
+				continue
+			}
+			if key != "src" {
+				modifiedOpt = append(modifiedOpt, token)
+				continue
+			}
+			if !validSecretFilename(val) {
+				return nil, fmt.Errorf("invalid secret filename %q", val)
+			}
+			newSecretPath := filepath.Join(secretDirectory, val)
+			oldSecretPath := filepath.Join(sourceDirectory, val)
+			info, err := os.Lstat(oldSecretPath)
+			if err != nil {
+				return nil, err
+			}
+			if !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("secret %q must be a regular file", val)
+			}
+			if oldSecretPath != newSecretPath {
+				err := os.Rename(oldSecretPath, newSecretPath)
+				// Older local API clients write secrets on the shared filesystem.
+				if errors.Is(err, syscall.EXDEV) {
+					contents, readErr := os.ReadFile(oldSecretPath)
+					if readErr != nil {
+						return nil, readErr
 					}
+					if err := os.WriteFile(newSecretPath, contents, 0o600); err != nil {
+						return nil, err
+					}
+					err = os.Remove(oldSecretPath)
+				}
+				if err != nil {
+					return nil, err
 				}
 			}
-			secrets = append(secrets, strings.Join(modifiedOpt, ","))
+			modifiedOpt = append(modifiedOpt, "src="+newSecretPath)
 		}
+		secrets = append(secrets, strings.Join(modifiedOpt, ","))
 	}
 	return secrets, nil
 }
 
 // createBuildOptions creates a buildah BuildOptions struct from query parameters and build context.
 // WARNING: caller must call the cleanup function if not nil.
-func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues url.Values, r *http.Request) (*buildahDefine.BuildOptions, cleanUpFunc, error) {
+func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues url.Values, r *http.Request, anchorDir string) (*buildahDefine.BuildOptions, cleanUpFunc, error) {
 	identityLabel, _ := utils.ParseOptionalBool(query.IdentityLabel, "identitylabel", queryValues)
 
 	// Process various query parameters
@@ -438,7 +458,11 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		return nil, nil, utils.GetBadRequestError("dnssearch", query.DNSSearch, err)
 	}
 
-	secrets, err := processSecrets(query, buildCtx.ContextDirectory, queryValues)
+	secretSource := buildCtx.ContextDirectory
+	if buildCtx.SecretDirectory != "" {
+		secretSource = buildCtx.SecretDirectory
+	}
+	secrets, err := processSecrets(query, secretSource, filepath.Join(anchorDir, "secrets"), queryValues)
 	if err != nil {
 		return nil, nil, utils.GetBadRequestError("secrets", query.Secrets, err)
 	}
@@ -1087,7 +1111,23 @@ func getLocalBuildContext(r *http.Request, query url.Values, anchorDir string, _
 		return nil, utils.GetGenericBadRequestError(err)
 	}
 
+	reader := bufio.NewReader(r.Body)
+	if _, err := reader.Peek(1); errors.Is(err, io.EOF) {
+		return buildContext, nil // Older clients send no body.
+	} else if err != nil {
+		return nil, utils.GetGenericBadRequestError(err)
+	}
+	buildContext.SecretDirectory, err = extractTarFile(anchorDir, "secrets", reader)
+	if err != nil {
+		return nil, utils.GetGenericBadRequestError(fmt.Errorf("reading build secrets: %w", err))
+	}
+
 	return buildContext, nil
+}
+
+// validSecretFilename accepts a filename without path separators.
+func validSecretFilename(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\\`)
 }
 
 // LocalBuildImage handles HTTP requests for building container images using the Local API.
@@ -1160,7 +1200,7 @@ func buildImage(w http.ResponseWriter, r *http.Request, getBuildContextFunc getB
 	}
 
 	// Create build options
-	buildOptions, cleanup, err := createBuildOptions(query, buildContext, queryValues, r)
+	buildOptions, cleanup, err := createBuildOptions(query, buildContext, queryValues, r, anchorDir)
 	if cleanup != nil {
 		defer cleanup()
 	}
@@ -1239,7 +1279,7 @@ func handleBuildContexts(r *http.Request, query url.Values, anchorDir string, mu
 
 	if !multipart {
 		logrus.Debug("No multipart needed")
-		out.ContextDirectory, err = extractTarFile(anchorDir, r.Body)
+		out.ContextDirectory, err = extractTarFile(anchorDir, "build", r.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -1265,7 +1305,7 @@ func handleBuildContexts(r *http.Request, query url.Values, anchorDir string, mu
 		fieldName := part.FormName()
 
 		if fieldName == "MainContext" {
-			mainDir, err := extractTarFile(anchorDir, part)
+			mainDir, err := extractTarFile(anchorDir, "build", part)
 			if err != nil {
 				return nil, fmt.Errorf("extracting main context in multipart: %w", err)
 			}
@@ -1351,8 +1391,8 @@ func parseLibPodIsolation(isolation string) (buildah.Isolation, error) {
 	return parse.IsolationOption(isolation)
 }
 
-func extractTarFile(anchorDir string, r io.ReadCloser) (string, error) {
-	buildDir := filepath.Join(anchorDir, "build")
+func extractTarFile(anchorDir, subdirectory string, r io.Reader) (string, error) {
+	buildDir := filepath.Join(anchorDir, subdirectory)
 	err := os.Mkdir(buildDir, 0o700)
 	if err != nil {
 		return "", err

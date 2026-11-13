@@ -6,8 +6,14 @@ import (
 	"io"
 	"os"
 
+	"github.com/blang/semver/v4"
 	"github.com/sirupsen/logrus"
 )
+
+// SupportsLocalBuildSecrets reports whether the server accepts a secrets-only build body.
+func SupportsLocalBuildSecrets(version *semver.Version) bool {
+	return version.Major > 6 || (version.Major == 6 && version.Minor >= 3)
+}
 
 // TempFileManager manages temporary files created during image build.
 // It maintains a list of created temporary files and provides cleanup functionality
