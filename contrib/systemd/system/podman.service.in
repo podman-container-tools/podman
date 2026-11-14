@@ -13,4 +13,4 @@ Environment=LOGGING="--log-level=info"
 ExecStart=@@PODMAN@@ $LOGGING system service
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

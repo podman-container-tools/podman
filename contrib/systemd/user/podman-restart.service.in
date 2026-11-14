@@ -1,1 +1,16 @@
-../system/podman-restart.service.in
+[Unit]
+Description=Podman Start All Containers With Restart Policy Set To Always
+Documentation=man:podman-start(1)
+StartLimitIntervalSec=0
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+Environment=LOGGING="--log-level=info"
+ExecStart=@@PODMAN@@ $LOGGING start --all --filter restart-policy=always
+ExecStop=/bin/sh -c '@@PODMAN@@ $LOGGING stop $(@@PODMAN@@ container ls --filter restart-policy=always -q)'
+
+[Install]
+WantedBy=default.target
