@@ -407,6 +407,16 @@ t GET containers/testcon/json 200 \
 podman rm -f -t0 testcon
 podman network rm testnet
 
+# check that compat inspect includes user-defined network, https://github.com/containers/podman/issues/29862
+podman network create caddynet
+podman run --name caddyctr --network caddynet -d $IMAGE top
+
+t GET containers/caddyctr/json 200 \
+  .NetworkSettings.Networks.caddynet.NetworkID~[0-9a-f]\\{64\\}
+
+podman rm -f -t0 caddyctr
+podman network rm caddynet
+
 # 0 means unlimited, need same with docker
 t GET containers/json?limit=0 200 \
   .[0].Id~[0-9a-f]\\{64\\}
