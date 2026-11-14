@@ -353,7 +353,8 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	if len(s.LogConfiguration.Driver) < 1 {
 		s.LogConfiguration.Driver = rtc.Containers.LogDriver
 	}
-	if len(s.LogConfiguration.Path) < 1 {
+	// syslog has no local log file; do not inherit containers.conf log_path.
+	if len(s.LogConfiguration.Path) < 1 && s.LogConfiguration.Driver != define.SyslogLogging {
 		s.LogConfiguration.Path = rtc.Containers.LogPath
 	}
 	if len(rtc.Containers.LogTag) > 0 {

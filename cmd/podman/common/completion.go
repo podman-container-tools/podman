@@ -1159,10 +1159,10 @@ func AutocompleteImageVolume(_ *cobra.Command, _ []string, _ string) ([]string, 
 }
 
 // AutocompleteLogDriver - Autocomplete log-driver options.
-// -> "journald", "none", "k8s-file", "passthrough", "passthrough-tty"
+// -> "journald", "none", "k8s-file", "passthrough", "passthrough-tty", "syslog"
 func AutocompleteLogDriver(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	// don't show json-file
-	logDrivers := []string{define.JournaldLogging, define.NoLogging, define.KubernetesLogging}
+	logDrivers := []string{define.JournaldLogging, define.NoLogging, define.KubernetesLogging, define.SyslogLogging}
 	if !registry.IsRemote() {
 		logDrivers = append(logDrivers, define.PassthroughLogging, define.PassthroughTTYLogging)
 	}
@@ -1170,9 +1170,9 @@ func AutocompleteLogDriver(_ *cobra.Command, _ []string, _ string) ([]string, co
 }
 
 // AutocompleteLogOpt - Autocomplete log-opt options.
-// -> "path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label="
+// -> "path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label=", "syslog-address=", "syslog-facility="
 func AutocompleteLogOpt(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	logOptions := []string{"path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label="}
+	logOptions := []string{"path=", "tag=", "max-size=", "max-file=", "log-rotate=", "label=", "syslog-address=", "syslog-facility="}
 	if strings.HasPrefix(toComplete, "path=") {
 		return nil, cobra.ShellCompDirectiveDefault
 	}

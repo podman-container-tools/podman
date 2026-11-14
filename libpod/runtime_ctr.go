@@ -587,7 +587,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	}
 
 	switch ctr.config.LogDriver {
-	case define.NoLogging, define.PassthroughLogging, define.JournaldLogging:
+	case define.NoLogging, define.PassthroughLogging, define.JournaldLogging, define.SyslogLogging:
 		break
 	default:
 		if ctr.config.LogPath == "" {

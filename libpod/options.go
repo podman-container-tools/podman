@@ -1000,7 +1000,7 @@ func WithLogDriver(driver string) CtrCreateOption {
 		switch driver {
 		case "":
 			return fmt.Errorf("log driver must be set: %w", define.ErrInvalidArg)
-		case define.JournaldLogging, define.KubernetesLogging, define.JSONLogging, define.NoLogging, define.PassthroughLogging, define.PassthroughTTYLogging:
+		case define.JournaldLogging, define.KubernetesLogging, define.JSONLogging, define.NoLogging, define.PassthroughLogging, define.PassthroughTTYLogging, define.SyslogLogging:
 			break
 		default:
 			return fmt.Errorf("invalid log driver: %w", define.ErrInvalidArg)
@@ -1032,6 +1032,21 @@ func WithLogPath(path string) CtrCreateOption {
 			ctr.config.LogPath = path
 		}
 
+		return nil
+	}
+}
+
+// WithLogDriverOptions stores driver-specific log options.
+// Keys beginning with syslog- are forwarded to conmon for the syslog driver.
+func WithLogDriverOptions(opts map[string]string) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		if len(opts) == 0 {
+			return nil
+		}
+		ctr.config.LogDriverOptions = maps.Clone(opts)
 		return nil
 	}
 }
