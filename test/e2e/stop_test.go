@@ -262,6 +262,12 @@ var _ = Describe("Podman stop", func() {
 	It("podman stop --cidfile", func() {
 		cidFile := filepath.Join(tempdir, "cid")
 
+		// --cidfile must not be hidden on remote clients, see #25649.
+		help := podmanTest.Podman([]string{"stop", "--help"})
+		help.WaitWithDefaultTimeout()
+		Expect(help).Should(ExitCleanly())
+		Expect(help.OutputToString()).To(ContainSubstring("--cidfile"))
+
 		session := podmanTest.Podman([]string{"create", "--cidfile", cidFile, ALPINE, "top"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
