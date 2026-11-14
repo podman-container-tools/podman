@@ -32,6 +32,7 @@ import (
 	"go.podman.io/image/v5/pkg/blobinfocache/none"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage/pkg/fileutils"
+	"go.podman.io/storage/pkg/ioutils"
 	"go.podman.io/storage/pkg/lockfile"
 )
 
@@ -79,6 +80,13 @@ func NewArtifactStore(storePath string, sc *types.SystemContext) (*ArtifactStore
 			return nil, createErr
 		}
 	}
+
+	artifactStore.lock.Lock()
+	defer artifactStore.lock.Unlock()
+	if err := artifactStore.removeUnnamedArtifacts(context.Background()); err != nil {
+		return nil, err
+	}
+
 	return artifactStore, nil
 }
 
@@ -242,11 +250,26 @@ func (as *ArtifactStore) copyArtifact(ctx context.Context, srcRef types.ImageRef
 
 // Pull an artifact from an image registry to a local store.
 func (as *ArtifactStore) Pull(ctx context.Context, ref ArtifactReference, opts libimage.CopyOptions) (_ digest.Digest, pullErr error) {
-	srcRef, err := docker.NewReference(ref.ref)
+	srcRef, err := docker.NewReference(ref.Named())
 	if err != nil {
 		return "", err
 	}
-	artifactDigest, err := as.withLockedLayout(ref.String(), func(localRef types.ImageReference) (digest.Digest, error) {
+	artifactDigest, err := as.withLockedLayout(ref.String(), func(localRef types.ImageReference) (_ digest.Digest, err error) {
+		previousDigest := as.getManifestDigestForTag(ref.String())
+		tagReleased := false
+		defer func() {
+			if err != nil && tagReleased {
+				if rbErr := as.restoreTaggedManifestForPull(ref, previousDigest); rbErr != nil {
+					err = fmt.Errorf("%w (rollback ref name: %v)", err, rbErr)
+				}
+			}
+		}()
+		if previousDigest != "" {
+			if err = as.releaseTaggedManifestForPull(ref, previousDigest); err != nil {
+				return "", err
+			}
+			tagReleased = true
+		}
 		return as.copyArtifact(ctx, srcRef, localRef, opts)
 	})
 	if err != nil {
@@ -258,9 +281,88 @@ func (as *ArtifactStore) Pull(ctx context.Context, ref ArtifactReference, opts l
 	return artifactDigest, nil
 }
 
+func (as *ArtifactStore) readOCIIndex() (specV1.Index, error) {
+	rawData, err := os.ReadFile(as.indexPath())
+	if err != nil {
+		return specV1.Index{}, err
+	}
+	var index specV1.Index
+	if err := json.Unmarshal(rawData, &index); err != nil {
+		return specV1.Index{}, err
+	}
+	return index, nil
+}
+
+func (as *ArtifactStore) writeOCIIndex(index specV1.Index) error {
+	rawData, err := json.Marshal(&index)
+	if err != nil {
+		return err
+	}
+	return ioutils.AtomicWriteFile(as.indexPath(), rawData, 0o644)
+}
+
+// getManifestDigestForTag returns the manifest digest for a tag in index.json.
+func (as *ArtifactStore) getManifestDigestForTag(tagName string) digest.Digest {
+	index, err := as.readOCIIndex()
+	if err != nil {
+		return ""
+	}
+	for _, desc := range index.Manifests {
+		if desc.Annotations[specV1.AnnotationRefName] == tagName {
+			return desc.Digest
+		}
+	}
+	return ""
+}
+
+// setIndexManifestRefName updates org.opencontainers.image.ref.name on one manifest.
+// If requireCurrent is non-empty, the update is skipped unless the annotation matches.
+// Note: must be called while holding the store lock.
+func (as *ArtifactStore) setIndexManifestRefName(manifestDigest digest.Digest, refName string, requireCurrent string) error {
+	if manifestDigest == "" {
+		return nil
+	}
+	index, err := as.readOCIIndex()
+	if err != nil {
+		return err
+	}
+	for i, desc := range index.Manifests {
+		if desc.Digest != manifestDigest {
+			continue
+		}
+		if requireCurrent != "" && desc.Annotations[specV1.AnnotationRefName] != requireCurrent {
+			return nil
+		}
+		if index.Manifests[i].Annotations == nil {
+			index.Manifests[i].Annotations = make(map[string]string)
+		}
+		index.Manifests[i].Annotations[specV1.AnnotationRefName] = refName
+		return as.writeOCIIndex(index)
+	}
+	return nil
+}
+
+// releaseTaggedManifestForPull moves the pull tag to repo@sha256:<digest> on the manifest that
+// currently holds it, so copyArtifact can attach the tag to the new manifest without leaving
+// an unnamed index entry.
+// Note: must be called while holding the store lock.
+func (as *ArtifactStore) releaseTaggedManifestForPull(ref ArtifactReference, manifestDigest digest.Digest) error {
+	digestName, err := ref.DigestReference(manifestDigest)
+	if err != nil {
+		return err
+	}
+	return as.setIndexManifestRefName(manifestDigest, digestName, ref.String())
+}
+
+// restoreTaggedManifestForPull puts the pull tag back on a manifest after a failed pull.
+// Note: must be called while holding the store lock.
+func (as *ArtifactStore) restoreTaggedManifestForPull(ref ArtifactReference, manifestDigest digest.Digest) error {
+	return as.setIndexManifestRefName(manifestDigest, ref.String(), "")
+}
+
 // Push an artifact to an image registry.
 func (as *ArtifactStore) Push(ctx context.Context, src, dest ArtifactReference, opts libimage.CopyOptions) (_ digest.Digest, pushErr error) {
-	destRef, err := docker.NewReference(dest.ref)
+	destRef, err := docker.NewReference(dest.Named())
 	if err != nil {
 		return "", err
 	}
@@ -292,6 +394,36 @@ func createNewArtifactManifest(options *libartTypes.AddOptions) specV1.Manifest 
 		Config:       specV1.DescriptorEmptyJSON,
 		Layers:       make([]specV1.Descriptor, 0),
 		Annotations:  annotations,
+	}
+}
+
+// removeUnnamedArtifacts deletes index entries missing org.opencontainers.image.ref.name.
+// Legacy unnamed orphans cannot be retagged (their repository name is unknown).
+// Note: must be called while holding the store lock.
+//
+// DeleteImage mutates index.json; layout.List must be called again after each removal
+// instead of walking the first snapshot and deleting every unnamed entry in one pass.
+func (as *ArtifactStore) removeUnnamedArtifacts(ctx context.Context) error {
+	for {
+		lrs, err := layout.List(as.storePath)
+		if err != nil {
+			return err
+		}
+		var deleted bool
+		for _, l := range lrs {
+			if _, ok := l.ManifestDescriptor.Annotations[specV1.AnnotationRefName]; ok {
+				continue
+			}
+			logrus.Debugf("Removing unnamed artifact manifest %s from %s", l.ManifestDescriptor.Digest, as.storePath)
+			if err := l.Reference.DeleteImage(ctx, as.SystemContext); err != nil {
+				return err
+			}
+			deleted = true
+			break
+		}
+		if !deleted {
+			return nil
+		}
 	}
 }
 
