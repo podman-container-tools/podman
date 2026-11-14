@@ -188,7 +188,7 @@ RELABEL="system_u:object_r:container_file_t:s0"
     #  2) The service container is stopped
     #  #) The service container is marked as a service container
     run_podman stop $PODCTRNAME
-    _ensure_pod_state $PODNAME Exited
+    _ensure_pod_state $PODNAME exited
     _ensure_container_running $service_container false
     run_podman container inspect $service_container --format "{{.IsService}}"
     is "$output" "true"
