@@ -2363,6 +2363,11 @@ rootless=%d
 			}
 			src := filepath.Join(c.config.SecretsPath, secret.Name)
 			dest := filepath.Join(base, secretFileName)
+			if base != "" && c.IsReadOnly() && filepath.IsLocal(secretFileName) {
+				if err := c.createSecretMountPoint(c.state.BindMounts[base], secretFileName); err != nil {
+					return fmt.Errorf("creating mount point for secret %q: %w", secret.Name, err)
+				}
+			}
 			c.state.BindMounts[dest] = src
 		}
 	}
