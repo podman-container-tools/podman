@@ -1,0 +1,211 @@
+name: Label PRs awaiting author
+
+# Marks open PRs where the *author* has been silent for 8 weeks (comment,
+# review reply, or commit). Distinct from stale.yml, which uses any activity.
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  awaiting-author:
+    if: github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read  # to check that the awaiting-author label exists
+      pull-requests: write
+    steps:
+      - name: Label PRs with no author activity for 8 weeks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          LABEL: awaiting-author
+          DAYS: "56"
+        run: |
+          set -euo pipefail
+
+          REPO="${GH_REPO:?}"
+          OWNER="${REPO%%/*}"
+          NAME="${REPO##*/}"
+          CUTOFF="$(date -u -d "${DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)"
+
+          if ! gh api "repos/${REPO}/labels/${LABEL}" >/dev/null 2>&1; then
+            echo "Label '${LABEL}' does not exist. Create it in the repository before running this workflow."
+            exit 0
+          fi
+
+          is_bot() {
+            local b
+            for b in "dependabot[bot]" "renovate[bot]" "github-actions[bot]"; do
+              if [ "$1" = "$b" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          last_author_activity() {
+            local author="$1"
+            local created="$2"
+            local last
+            last="$(jq -r --arg author "$author" '
+              def lc: ascii_downcase;
+              def is_author: ((.login // "") | lc) == ($author | lc);
+              [
+                (.comments.nodes[]? | select(.author | is_author) | .createdAt),
+                (.reviews.nodes[]? | select((.author | is_author) and .submittedAt != null) | .submittedAt),
+                (.reviewThreads.nodes[]? | .comments.nodes[]? | select(.author | is_author) | .createdAt),
+                (.commits.nodes[]? | .commit as $c |
+                  select(
+                    ((($c.author.user.login // "") | lc) == ($author | lc))
+                    or (([$c.authors.nodes[]? | (.user.login // "")] | map(lc) | index($author | lc)) != null)
+                  ) | $c.committedDate)
+              ] | map(select(. != null and . != "")) | if length == 0 then empty else max end
+            ')"
+            if [ -z "$last" ] || [ "$last" = "null" ]; then
+              last="$created"
+            fi
+            printf '%s' "$last"
+          }
+
+          LIST_QUERY='
+          query($owner: String!, $name: String!, $cursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequests(first: 50, states: OPEN, after: $cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  number
+                  isDraft
+                  createdAt
+                  author { login }
+                  labels(first: 50) { nodes { name } }
+                }
+              }
+            }
+          }
+          '
+
+          ACTIVITY_QUERY='
+          query($owner: String!, $name: String!, $number: Int!) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                comments(last: 100) { nodes { createdAt author { login } } }
+                reviews(last: 100) { nodes { submittedAt author { login } } }
+                commits(last: 100) {
+                  nodes {
+                    commit {
+                      committedDate
+                      author { user { login } }
+                      authors(first: 10) { nodes { user { login } } }
+                    }
+                  }
+                }
+                reviewThreads(last: 100) {
+                  nodes {
+                    comments(last: 50) { nodes { createdAt author { login } } }
+                  }
+                }
+              }
+            }
+          }
+          '
+
+          pr_file="$(mktemp)"
+          trap 'rm -f "$pr_file"' EXIT
+
+          cursor=""
+          has_next="true"
+          while [ "$has_next" = "true" ]; do
+            if [ -z "$cursor" ]; then
+              resp="$(gh api graphql -f query="$LIST_QUERY" -F owner="$OWNER" -F name="$NAME")"
+            else
+              resp="$(gh api graphql -f query="$LIST_QUERY" -F owner="$OWNER" -F name="$NAME" -F cursor="$cursor")"
+            fi
+            if printf '%s' "$resp" | jq -e '.errors != null' >/dev/null; then
+              echo "GraphQL error listing pull requests:"
+              printf '%s' "$resp" | jq '.errors'
+              exit 1
+            fi
+            printf '%s' "$resp" | jq -c '.data.repository.pullRequests.nodes[]?' >> "$pr_file"
+            has_next="$(printf '%s' "$resp" | jq -r '.data.repository.pullRequests.pageInfo.hasNextPage')"
+            cursor="$(printf '%s' "$resp" | jq -r '.data.repository.pullRequests.pageInfo.endCursor // empty')"
+          done
+
+          labeled=0
+          unlabeled=0
+          skipped=0
+          failed=0
+
+          while IFS= read -r pr; do
+            [ -n "$pr" ] || continue
+            number="$(jq -r '.number' <<<"$pr")"
+            is_draft="$(jq -r '.isDraft' <<<"$pr")"
+            created="$(jq -r '.createdAt' <<<"$pr")"
+            author="$(jq -r '.author.login // empty' <<<"$pr")"
+            labeled_already="$(jq -r --arg l "$LABEL" 'any(.labels.nodes[]?; .name == $l)' <<<"$pr")"
+
+            if [ "$is_draft" = "true" ] || [ -z "$author" ] || is_bot "$author"; then
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            # Too new to be waiting 8 weeks, and no label to remove.
+            if [[ "$created" > "$CUTOFF" ]] && [ "$labeled_already" != "true" ]; then
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            # Label cannot be valid yet: createdAt is more recent than the cutoff.
+            if [[ "$created" > "$CUTOFF" ]]; then
+              echo "Removing ${LABEL} from #${number} (PR younger than ${DAYS} days)"
+              if gh pr edit "$number" --remove-label "$LABEL"; then
+                unlabeled=$((unlabeled + 1))
+              else
+                echo "Failed to remove ${LABEL} from #${number}"
+                failed=$((failed + 1))
+              fi
+              continue
+            fi
+
+            activity_resp="$(gh api graphql -f query="$ACTIVITY_QUERY" -F owner="$OWNER" -F name="$NAME" -F number="$number")"
+            if printf '%s' "$activity_resp" | jq -e '.errors != null' >/dev/null; then
+              echo "GraphQL error for #${number}:"
+              printf '%s' "$activity_resp" | jq '.errors'
+              failed=$((failed + 1))
+              continue
+            fi
+
+            pr_data="$(jq '.data.repository.pullRequest' <<<"$activity_resp")"
+            last="$(printf '%s' "$pr_data" | last_author_activity "$author" "$created")"
+
+            if [[ "$last" < "$CUTOFF" ]]; then
+              if [ "$labeled_already" != "true" ]; then
+                echo "Labeling #${number} (last author activity ${last})"
+                if gh pr edit "$number" --add-label "$LABEL" \
+                  && gh pr comment "$number" --body "@${author} this PR has had no comment, review reply, or new commit from the author in 8 weeks. It has been labeled \`${LABEL}\`. Please update the PR or comment if you are still working on it."; then
+                  labeled=$((labeled + 1))
+                else
+                  echo "Failed to label #${number}"
+                  failed=$((failed + 1))
+                fi
+              else
+                echo "Already labeled #${number} (last author activity ${last})"
+              fi
+            elif [ "$labeled_already" = "true" ]; then
+              echo "Removing ${LABEL} from #${number} (last author activity ${last})"
+              if gh pr edit "$number" --remove-label "$LABEL"; then
+                unlabeled=$((unlabeled + 1))
+              else
+                echo "Failed to remove ${LABEL} from #${number}"
+                failed=$((failed + 1))
+              fi
+            fi
+          done < "$pr_file"
+
+          echo "Labeled: ${labeled}  Unlabeled: ${unlabeled}  Skipped: ${skipped}  Failed: ${failed}"
+          if [ "$failed" -gt 0 ]; then
+            exit 1
+          fi
