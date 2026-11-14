@@ -312,4 +312,39 @@ load helpers
 
     run_podman rm -f -t0 $cid
 }
+
+# bats test_tags=ci:parallel
+@test "podman exec inherits precreate hook environment" {
+    # Regression test for #29347: podman exec must see environment variables
+    # set by a precreate hook, just like the container's init process does.
+    ctr=c_$(safename)
+    hooksdir=$PODMAN_TMPDIR/hooks_$(safename)
+
+    skip_if_remote "--hooks-dir is not usable with remote"
+
+    mkdir -p "$hooksdir"
+    cat > "$hooksdir/settings.json" <<EOF
+{
+    "version": "1.0.0",
+    "when": { "always": true },
+    "hook": {
+        "path": "$hooksdir/hook.sh"
+    },
+    "stages": ["precreate"]
+}
+EOF
+    cat >"$hooksdir/hook.sh" <<EOF
+#!/bin/sh
+jq '.process.env += ["PODMAN_HOOK_VAR=set_by_hook"]'
+EOF
+    chmod +x "$hooksdir/hook.sh"
+
+    run_podman run -d --name="$ctr" --hooks-dir="$hooksdir" $IMAGE sleep infinity
+
+    run_podman exec "$ctr" printenv PODMAN_HOOK_VAR
+    assert "$output" = "set_by_hook" "exec must inherit env var set by precreate hook"
+
+    run_podman rm -f -t0 "$ctr"
+    rm -rf "$hooksdir"
+}
 # vim: filetype=sh
