@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
@@ -323,16 +325,17 @@ func resizeTTY(ctx context.Context, endpoint string, height *int, width *int) er
 	return rsp.Process(nil)
 }
 
-type rawFormatter struct {
-	logrus.TextFormatter
+type rawWriter struct {
+	w io.Writer
 }
 
-func (f *rawFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	buffer, err := f.TextFormatter.Format(entry)
-	if err != nil {
-		return buffer, err
+func (w *rawWriter) Write(p []byte) (int, error) {
+	buf := slices.Concat(p, []byte("\r"))
+	n, err := w.w.Write(buf)
+	if n > len(p) {
+		n = len(p)
 	}
-	return append(buffer, '\r'), nil
+	return n, err
 }
 
 // This is intended to not be run as a goroutine, handling resizing for a container
@@ -370,22 +373,23 @@ func attachHandleResize(ctx, winCtx context.Context, winChange chan os.Signal, i
 }
 
 // Configure the given terminal for raw mode
-func setRawTerminal(file *os.File) (*terminal.State, error) {
+func setRawTerminal(file *os.File) (*terminal.State, io.Writer, error) {
 	state, err := makeRawTerm(file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	logrus.SetFormatter(&rawFormatter{})
+	normalLogWriter := log.Writer()
+	log.SetOutput(&rawWriter{w: normalLogWriter})
 
-	return state, err
+	return state, normalLogWriter, err
 }
 
 // setupTTYRawMode sets up raw terminal mode for the given file and returns
 // a cleanup function that should be deferred.
 // This helper function eliminates code duplication between Attach() and ExecStartAndAttach().
 func setupTTYRawMode(file *os.File) (func(), error) {
-	state, err := setRawTerminal(file)
+	state, normalLogWriter, err := setRawTerminal(file)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +398,7 @@ func setupTTYRawMode(file *os.File) (func(), error) {
 		if err := terminal.Restore(int(file.Fd()), state); err != nil {
 			logrus.Errorf("Unable to restore terminal: %q", err)
 		}
-		logrus.SetFormatter(&logrus.TextFormatter{})
+		log.SetOutput(normalLogWriter)
 	}
 
 	return cleanup, nil

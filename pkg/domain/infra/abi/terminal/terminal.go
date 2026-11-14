@@ -5,8 +5,11 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/signal"
+	"slices"
 
 	"github.com/moby/term"
 	"github.com/sirupsen/logrus"
@@ -62,8 +65,8 @@ func resizeTty(ctx context.Context, resize chan resize.TerminalSize) {
 	}()
 }
 
-func restoreTerminal(state *term.State) error {
-	logrus.SetFormatter(&logrus.TextFormatter{})
+func restoreTerminal(state *term.State, normalLogWriter io.Writer) error {
+	log.SetOutput(normalLogWriter)
 	return term.RestoreTerminal(os.Stdin.Fd(), state)
 }
 
@@ -79,7 +82,20 @@ func (f *RawTtyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return bytes, err
 }
 
-func handleTerminalAttach(ctx context.Context, resize chan resize.TerminalSize) (context.CancelFunc, *term.State, error) {
+type rawWriter struct {
+	w io.Writer
+}
+
+func (w *rawWriter) Write(p []byte) (int, error) {
+	buf := slices.Concat(p, []byte("\r"))
+	n, err := w.w.Write(buf)
+	if n > len(p) {
+		n = len(p)
+	}
+	return n, err
+}
+
+func handleTerminalAttach(ctx context.Context, resize chan resize.TerminalSize) (context.CancelFunc, *term.State, io.Writer, error) {
 	logrus.Debugf("Handling terminal attach")
 
 	subCtx, cancel := context.WithCancel(ctx)
@@ -90,13 +106,14 @@ func handleTerminalAttach(ctx context.Context, resize chan resize.TerminalSize) 
 	if err != nil {
 		// allow caller to not have to do any cleaning up if we error here
 		cancel()
-		return nil, nil, fmt.Errorf("unable to save terminal state: %w", err)
+		return nil, nil, nil, fmt.Errorf("unable to save terminal state: %w", err)
 	}
 
-	logrus.SetFormatter(&RawTtyFormatter{})
+	normalLogWriter := log.Writer()
+	log.SetOutput(&rawWriter{w: normalLogWriter})
 	if _, err := term.SetRawTerminal(os.Stdin.Fd()); err != nil {
-		return cancel, nil, err
+		return cancel, nil, nil, err
 	}
 
-	return cancel, oldTermState, nil
+	return cancel, oldTermState, normalLogWriter, nil
 }
