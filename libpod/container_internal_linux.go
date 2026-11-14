@@ -846,3 +846,51 @@ func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) 
 	}
 	return false, err
 }
+
+// createSecretMountPoint creates the mount point of a secret in the directory
+// mounted on /run/secrets, as the OCI runtime cannot create it when that
+// directory is read-only.  The source directory can be controlled by the
+// container, so every component is resolved without following symlinks out
+// of it.
+func (c *Container) createSecretMountPoint(srcDir, name string) error {
+	if srcDir == "" {
+		return nil
+	}
+	dir, err := os.OpenFile(srcDir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	for comp := range strings.SplitSeq(filepath.Dir(name), string(os.PathSeparator)) {
+		if comp == "." {
+			continue
+		}
+		next, err := pathrs.MkdirAllHandle(dir, comp, 0o755)
+		_ = dir.Close()
+		if err != nil {
+			return err
+		}
+		dir = next
+		if err := chmodHandle(dir, 0o755); err != nil {
+			_ = dir.Close()
+			return err
+		}
+	}
+	defer dir.Close()
+
+	fd, err := unix.Openat(int(dir.Fd()), filepath.Base(name), unix.O_CREAT|unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return err
+	}
+	return unix.Close(fd)
+}
+
+// chmodHandle sets the mode of the directory referenced by an O_PATH handle,
+// ignoring the umask.
+func chmodHandle(handle *os.File, mode os.FileMode) error {
+	f, err := pathrs.Reopen(handle, unix.O_RDONLY|unix.O_DIRECTORY)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Chmod(mode)
+}
