@@ -42,6 +42,36 @@ func TestCreateAndDeallocate(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Test that DeallocateAllLocks reports a lock it could not remove instead of
+// returning success.
+func TestDeallocateAllLocksError(t *testing.T) {
+	d := t.TempDir()
+
+	lockDir := filepath.Join(d, "locks")
+	l, err := CreateFileLock(lockDir)
+	assert.NoError(t, err)
+
+	lock, err := l.AllocateLock()
+	assert.NoError(t, err)
+
+	// Make one entry impossible to remove. os.Remove refuses to remove a
+	// non-empty directory, which fails no matter which user the tests run
+	// as - a permission-based failure would be skipped by root. The name
+	// sorts before the numeric lock files so that DeallocateAllLocks(),
+	// which walks the directory in sorted order, hits it first.
+	stuck := filepath.Join(lockDir, "!stuck")
+	assert.NoError(t, os.Mkdir(stuck, 0o700))
+	assert.NoError(t, os.WriteFile(filepath.Join(stuck, "child"), nil, 0o600))
+
+	err = l.DeallocateAllLocks()
+	assert.ErrorContains(t, err, stuck)
+
+	// The failure must not stop the remaining locks from being deallocated.
+	// AllocateGivenLock() creates the lock file with O_EXCL, so it only
+	// succeeds if the lock really was removed.
+	assert.NoError(t, l.AllocateGivenLock(lock))
+}
+
 // Test that creating and destroying locks work
 func TestLockAndUnlock(t *testing.T) {
 	d := t.TempDir()
