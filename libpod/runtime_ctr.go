@@ -243,6 +243,10 @@ func (r *Runtime) newContainer(ctx context.Context, rSpec *spec.Spec, options ..
 }
 
 func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Container, retErr error) {
+	defer func() {
+		ctr.namedVolumeCreateOptions = nil
+	}()
+
 	if ctr.IsDefaultInfra() || ctr.IsService() {
 		err := ctr.createInitRootfs()
 		if err != nil {
@@ -550,18 +554,24 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 			WithVolumeName(vol.Name),
 			WithVolumeMountLabel(ctr.MountLabel()),
 		}
+		createOptions := ctr.namedVolumeCreateOptions[vol.Dest]
+		if createOptions.Driver != "" {
+			volOptions = append(volOptions, WithVolumeDriver(createOptions.Driver))
+		}
 		if isAnonymous {
 			volOptions = append(volOptions, WithVolumeAnonymous())
 		}
 
-		// If volume-opts are set, parse and add driver opts.
+		// volume-opt is also accepted on --mount and is passed through to the
+		// volume driver only when creating the volume.
+		driverOpts := maps.Clone(createOptions.DriverOptions)
 		if len(vol.Options) > 0 {
-			isDriverOpts := false
-			driverOpts := make(map[string]string)
 			var volOpts []string
 			for _, opts := range vol.Options {
 				if strings.HasPrefix(opts, "volume-opt") {
-					isDriverOpts = true
+					if driverOpts == nil {
+						driverOpts = make(map[string]string)
+					}
 					driverOptKey, driverOptValue, err := util.ParseDriverOpts(opts)
 					if err != nil {
 						return nil, err
@@ -572,10 +582,9 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 				}
 			}
 			vol.Options = volOpts
-			if isDriverOpts {
-				parsedOptions := []VolumeCreateOption{WithVolumeOptions(driverOpts)}
-				volOptions = append(volOptions, parsedOptions...)
-			}
+		}
+		if len(driverOpts) > 0 {
+			volOptions = append(volOptions, WithVolumeOptions(driverOpts))
 		}
 
 		volOptions = append(volOptions, WithVolumeUID(ctr.RootUID()), WithVolumeGID(ctr.RootGID()))

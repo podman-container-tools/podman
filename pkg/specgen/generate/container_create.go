@@ -506,6 +506,7 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 
 	if len(volumes) != 0 {
 		var vols []*libpod.ContainerNamedVolume
+		volumeCreateOptions := make(map[string]libpod.NamedVolumeCreateOptions)
 		for _, v := range volumes {
 			vols = append(vols, &libpod.ContainerNamedVolume{
 				Name:        v.Name,
@@ -514,8 +515,17 @@ func createContainerOptions(rt *libpod.Runtime, s *specgen.SpecGenerator, pod *l
 				IsAnonymous: v.IsAnonymous,
 				SubPath:     v.SubPath,
 			})
+			if v.Driver != "" || len(v.DriverOptions) > 0 {
+				volumeCreateOptions[v.Dest] = libpod.NamedVolumeCreateOptions{
+					Driver:        v.Driver,
+					DriverOptions: v.DriverOptions,
+				}
+			}
 		}
 		options = append(options, libpod.WithNamedVolumes(vols))
+		if len(volumeCreateOptions) > 0 {
+			options = append(options, libpod.WithNamedVolumeCreateOptions(volumeCreateOptions))
+		}
 	}
 
 	if len(overlays) != 0 {

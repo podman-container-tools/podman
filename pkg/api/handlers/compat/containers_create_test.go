@@ -5,10 +5,12 @@ package compat
 import (
 	"testing"
 
+	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/podman/v6/pkg/api/handlers"
+	"go.podman.io/podman/v6/pkg/specgen"
 )
 
 func TestCLIOptsInit(t *testing.T) {
@@ -68,6 +70,42 @@ func TestCLIOptsInit(t *testing.T) {
 			assert.Equal(t, test.want, opts.Init)
 		})
 	}
+}
+
+func TestApplyMountVolumeDriverConfig(t *testing.T) {
+	sg := &specgen.SpecGenerator{
+		ContainerStorageConfig: specgen.ContainerStorageConfig{
+			Volumes: []*specgen.NamedVolume{
+				{Name: "volume-one", Dest: "/data"},
+				{Name: "volume-two", Dest: "/other"},
+			},
+		},
+	}
+	mounts := []mount.Mount{
+		{
+			Type:   mount.TypeVolume,
+			Source: "volume-one",
+			Target: "/data/",
+			VolumeOptions: &mount.VolumeOptions{DriverConfig: &mount.Driver{
+				Name:    "test-plugin",
+				Options: map[string]string{"foo": "bar"},
+			}},
+		},
+		{
+			Type:   mount.TypeBind,
+			Source: "/host",
+			Target: "/other",
+			VolumeOptions: &mount.VolumeOptions{DriverConfig: &mount.Driver{
+				Name: "ignored-plugin",
+			}},
+		},
+	}
+
+	applyMountVolumeDriverConfig(sg, mounts)
+
+	assert.Equal(t, "test-plugin", sg.Volumes[0].Driver)
+	assert.Equal(t, map[string]string{"foo": "bar"}, sg.Volumes[0].DriverOptions)
+	assert.Empty(t, sg.Volumes[1].Driver)
 }
 
 func TestExtractInlineSeccompProfile(t *testing.T) {

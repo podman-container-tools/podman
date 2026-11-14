@@ -76,6 +76,11 @@ Options specific to type=**volume**:
 
 - *subpath*: Mount only a specific subpath within the volume, instead of the whole volume.
 
+- *volume-driver*: Name of the driver to use when creating a volume. If the named volume already exists,
+  the existing volume is used.
+
+- *volume-opt*: Driver-specific option in `key=value` form. This option can be specified more than once and is passed to the driver only when creating the volume.
+
 - *relabel*: *shared*, *private*. Recursively walk the mount and set the security system (e.g. SELinux) label on each file to grant access permissions from the container context.
   *shared* applies a label that grants permissions to all containers, while *private* applies a label that grants permissions to this specific container.
 
@@ -181,3 +186,5 @@ Examples:
 - `type=volume,destination=/path/in/container`
 
 - `type=volume,src=test_vol,dst=/data,subpath=/code/docs`
+
+- `type=volume,src=test_vol,dst=/data,volume-driver=local,volume-opt=type=tmpfs,volume-opt=device=tmpfs`

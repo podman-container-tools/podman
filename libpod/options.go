@@ -1389,6 +1389,26 @@ func WithNamedVolumes(volumes []*ContainerNamedVolume) CtrCreateOption {
 	}
 }
 
+// WithNamedVolumeCreateOptions sets options used only when creating named
+// volumes. The map is keyed by the volume's container destination.
+func WithNamedVolumeCreateOptions(options map[string]NamedVolumeCreateOptions) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+
+		if ctr.namedVolumeCreateOptions == nil {
+			ctr.namedVolumeCreateOptions = make(map[string]NamedVolumeCreateOptions, len(options))
+		}
+		for dest, volumeOptions := range options {
+			volumeOptions.DriverOptions = maps.Clone(volumeOptions.DriverOptions)
+			ctr.namedVolumeCreateOptions[dest] = volumeOptions
+		}
+
+		return nil
+	}
+}
+
 // WithOverlayVolumes adds the given overlay volumes to the container.
 func WithOverlayVolumes(volumes []*ContainerOverlayVolume) CtrCreateOption {
 	return func(ctr *Container) error {

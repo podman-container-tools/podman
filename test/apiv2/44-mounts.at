@@ -138,4 +138,31 @@ t POST /v1.48/containers/create?name=voldriver_no_driver_test \
 cid=$(jq -r '.Id' <<<"$output")
 t DELETE containers/${cid}?v=true 204
 
+# Compat API DriverConfig is used when creating a named volume. The mount's
+# driver overrides the container-wide VolumeDriver and its options reach local.
+driver_opts_vol="apiv2-driver-opts-vol"
+t POST /v1.48/containers/create?name=driver_opts_mount_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"notexist","Mounts":[{"Type":"volume","Source":"'$driver_opts_vol'","Target":"/data","VolumeOptions":{"DriverConfig":{"Name":"local","Options":{"type":"tmpfs","device":"tmpfs","o":"nodev,nosuid"}}}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t GET volumes/${driver_opts_vol} 200 \
+  .Driver=local \
+  .Options.type=tmpfs \
+  .Options.device=tmpfs \
+  .Options.o=nodev,nosuid
+t DELETE containers/${cid}?v=true 204
+podman volume rm "$driver_opts_vol"
+
+# A DriverConfig name must be resolved for a newly created volume.
+t POST /v1.48/containers/create?name=unknown_mount_driver_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"Mounts":[{"Type":"volume","Source":"apiv2-unknown-driver-vol","Target":"/data","VolumeOptions":{"DriverConfig":{"Name":"notexist"}}}]}' \
+  500 \
+  .cause~"required plugin missing"
+
 podman volume rm -f "$vd_vol1" "$vd_vol2"
