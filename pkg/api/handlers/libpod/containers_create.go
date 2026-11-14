@@ -31,6 +31,8 @@ type specGeneratorWire struct {
 
 // CreateContainer takes a specgenerator and makes a container. It returns
 // the new container ID on success along with any warnings.
+// Note: Libpod container creation uses the OCI runtime specification for mounts,
+// which expects "destination" (instead of Docker's "target" parameter).
 func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
 	conf, err := runtime.GetConfigNoCopy()
