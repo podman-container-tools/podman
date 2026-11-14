@@ -858,6 +858,10 @@ func (s *APIServer) registerContainersHandlers(r *mux.Router) error {
 	// description: Remove containers not in use
 	// parameters:
 	//  - in: query
+	//    name: external
+	//    type: boolean
+	//    description: Remove external containers from storage instead of Podman-managed containers.
+	//  - in: query
 	//    name: filters
 	//    type: string
 	//    description:  |
