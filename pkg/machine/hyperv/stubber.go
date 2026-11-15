@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"syscall"
 
@@ -98,14 +97,11 @@ func (h HyperVStubber) CreateVM(_ define.CreateVMOpts, mc *vmconfigs.MachineConf
 	// the Hyper-V Administrators group yet. Add them if necessary so
 	// that future commands work without elevation.
 	if windows.IsReExecuting() && !IsHyperVAdminsGroupMember() {
-		u, err := user.Current()
+		username, err := AddCurrentUserToHyperVAdminGroup()
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Adding user %s to the Hyper-V Administrators group", u.Username)
-		if err := AddUserToHyperVAdminGroup(u.Username); err != nil {
-			return err
-		}
+		logrus.Infof("Added user %s to the Hyper-V Administrators group", username)
 	}
 
 	// count number of existing machines, used later to determine if Registry should be cleaned over a failure

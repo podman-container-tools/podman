@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -135,14 +134,13 @@ func doPreparationForGroupMembership() error {
 		fmt.Println("User is already a member of the Hyper-V Administrators group")
 		return nil
 	}
-	u, err := user.Current()
+	// Use the process token rather than user.Current(): the latter needs the
+	// user's profile, which a never-logged-on account does not have yet.
+	username, err := hyperv.AddCurrentUserToHyperVAdminGroup()
 	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
-	}
-	if err := hyperv.AddUserToHyperVAdminGroup(u.Username); err != nil {
 		return fmt.Errorf("failed to add user to Hyper-V Administrators group: %w", err)
 	}
-	fmt.Printf("\nAdded user %s to the Hyper-V Administrators group\n", u.Username)
+	fmt.Printf("\nAdded user %s to the Hyper-V Administrators group\n", username)
 	fmt.Println("Note: You may need to log out and log back in for the new group membership to take effect.")
 	return nil
 }
@@ -255,13 +253,10 @@ func doResetForGroupMembership() error {
 			return nil
 		}
 	}
-	u, err := user.Current()
+	username, err := hyperv.RemoveCurrentUserFromHyperVAdminGroup()
 	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
-	}
-	if err := hyperv.RemoveUserFromHyperVAdminGroup(u.Username); err != nil {
 		return fmt.Errorf("failed to remove user from Hyper-V Administrators group: %w", err)
 	}
-	fmt.Printf("Removed user %s from the Hyper-V Administrators group\n", u.Username)
+	fmt.Printf("Removed user %s from the Hyper-V Administrators group\n", username)
 	return nil
 }
