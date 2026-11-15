@@ -12,6 +12,7 @@ import (
 	"math/bits"
 
 	"github.com/klauspost/compress/internal/le"
+	"github.com/klauspost/compress/internal/regmask"
 )
 
 // bitReader reads a bitstream in reverse.
@@ -205,6 +206,41 @@ func (b *bitReaderShifted) fill() {
 		b.bitsRead -= 8
 		b.off--
 	}
+}
+
+// shiftedState is the part of a bitReaderShifted that changes while
+// reading. Decode loops hold it by value so it stays in registers.
+// value is always le.Load64(in, off) << bitsRead.
+type shiftedState struct {
+	value    uint64
+	off      uint
+	bitsRead uint8
+}
+
+func (b *bitReaderShifted) state() shiftedState {
+	return shiftedState{value: b.value, off: b.off, bitsRead: b.bitsRead}
+}
+
+func (b *bitReaderShifted) setState(s shiftedState) {
+	b.value, b.off, b.bitsRead = s.value, s.off, s.bitsRead
+}
+
+// refill reloads the whole container with one load and no branch,
+// leaving at least 57 bits. off must be at least bitsRead/8.
+func (s shiftedState) refill(in []byte) shiftedState {
+	s.off -= uint(s.bitsRead >> 3)
+	s.bitsRead &= 7
+	s.value = le.Load64(in, s.off) << (s.bitsRead & regmask.Shift64ByUint8)
+	return s
+}
+
+// decode reads one symbol from a table indexed by the top bits of the
+// container, value >> peek.
+func (s shiftedState) decode(single *[1 << tableLogMax]dEntrySingle, peek uint8) (shiftedState, uint8) {
+	v := single[(s.value>>(peek&regmask.Shift64ByUint8))&(1<<tableLogMax-1)].entry
+	s.bitsRead += uint8(v)
+	s.value <<= uint8(v) & regmask.Shift64ByUint8
+	return s, uint8(v >> 8)
 }
 
 func (b *bitReaderShifted) remaining() uint {

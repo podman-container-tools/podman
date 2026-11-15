@@ -2,6 +2,8 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"slices"
 
 	"github.com/containers/libtrust"
@@ -117,19 +119,63 @@ func Digest(manifest []byte) (digest.Digest, error) {
 // with any necessary implied transformations like stripping v1s1 signatures.
 // This is publicly visible as c/image/manifest.DigestWithAlgorithm.
 func DigestWithAlgorithm(manifest []byte, algo digest.Algorithm) (digest.Digest, error) {
+	// Keep this condition in sync with the condition in manifest.Schema1FromManifest.
 	if GuessMIMEType(manifest) == DockerV2Schema1SignedMediaType {
-		sig, err := libtrust.ParsePrettySignature(manifest, "signatures")
+		if err := ValidateUnambiguousManifestFormat(manifest, DockerV2Schema1SignedMediaType,
+			AllowedFieldFSLayers|AllowedFieldHistory|AllowedFieldSignatures); err != nil {
+			return "", err
+		}
+		payload, err := Schema1SignedManifestPayload(manifest)
 		if err != nil {
 			return "", err
 		}
-		manifest, err = sig.Payload()
-		if err != nil {
-			// Coverage: This should never happen, libtrust's Payload() can fail only if joseBase64UrlDecode() fails, on a string
-			// that libtrust itself has josebase64UrlEncode()d
-			return "", err
-		}
+		manifest = payload
 	}
 	return algo.FromBytes(manifest), nil
+}
+
+// Schema1SignedManifestPayload returns the libtrust JWS payload of a signed schema1 manifestBlob
+// (the bytes over which the manifest's digest is computed) after verifying that the payload
+// describes the same manifest as manifestBlob.
+//
+// This verification is critical for security - the payload is reconstructed from the
+// JWS "protected" header and without it an attacker could serve a manifestBlob whose body differs
+// from the payload. It would lead to the manifest's digest referring to content other than
+// what is actually served and wrong digest pinning.
+func Schema1SignedManifestPayload(manifestBlob []byte) ([]byte, error) {
+	sig, err := libtrust.ParsePrettySignature(manifestBlob, "signatures")
+	if err != nil {
+		return nil, err
+	}
+	payload, err := sig.Payload()
+	if err != nil {
+		// Coverage: This should never happen, libtrust's Payload() can fail only if joseBase64UrlDecode() fails, on a string
+		// that libtrust itself has josebase64UrlEncode()d
+		return nil, err
+	}
+	if err := ensureSchema1BlobMatchesPayload(manifestBlob, payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+// ensureSchema1BlobMatchesPayload returns nil iff the JSON unmarshaled payload
+// has all fields the same as the unmarshaled manifestBlob without the
+// "signatures" field, and contains no other fields.
+func ensureSchema1BlobMatchesPayload(manifestBlob, payload []byte) error {
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBlob, &manifest); err != nil {
+		return err
+	}
+	delete(manifest, "signatures")
+	var payloadWithoutSignatures map[string]any
+	if err := json.Unmarshal(payload, &payloadWithoutSignatures); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(manifest, payloadWithoutSignatures) {
+		return fmt.Errorf("schema1 manifest signature payload does not match the manifest contents")
+	}
+	return nil
 }
 
 // MatchesDigest returns true iff the manifest matches expectedDigest.

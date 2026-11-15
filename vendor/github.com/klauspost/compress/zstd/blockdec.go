@@ -39,7 +39,10 @@ const (
 	// maxCompressedBlockSize is the biggest allowed compressed block size (128KB)
 	maxCompressedBlockSize = 128 << 10
 
-	compressedBlockOverAlloc    = 16
+	// compressedBlockOverAlloc is the slack past the logical end that the
+	// assembly's extended copies may read and write. It must match the
+	// constant of the same name in _generate/gen.go.
+	compressedBlockOverAlloc    = 32
 	maxCompressedBlockSizeAlloc = 128<<10 + compressedBlockOverAlloc
 
 	// Maximum possible block size (all Raw+Uncompressed).

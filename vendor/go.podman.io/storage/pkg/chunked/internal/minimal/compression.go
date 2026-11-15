@@ -298,14 +298,12 @@ func footerDataToBlob(footer ZstdChunkedFooterData) []byte {
 	return manifestDataLE
 }
 
-// normalizeTime returns nil if t is nil or zero; otherwise it returns a pointer to a copy of t
-// converted to UTC, so that the serialized TOC does not depend on the local timezone.
-func normalizeTime(t *time.Time) *time.Time {
+// timeIfNotZero returns a pointer to the time.Time if it is not zero, otherwise it returns nil.
+func timeIfNotZero(t *time.Time) *time.Time {
 	if t == nil || t.IsZero() {
 		return nil
 	}
-	utc := t.UTC()
-	return &utc
+	return t
 }
 
 // NewFileMetadata creates a basic FileMetadata entry for hdr.
@@ -331,9 +329,9 @@ func NewFileMetadata(hdr *tar.Header) (FileMetadata, error) {
 		Size:       hdr.Size,
 		UID:        hdr.Uid,
 		GID:        hdr.Gid,
-		ModTime:    normalizeTime(&hdr.ModTime),
-		AccessTime: normalizeTime(&hdr.AccessTime),
-		ChangeTime: normalizeTime(&hdr.ChangeTime),
+		ModTime:    timeIfNotZero(&hdr.ModTime),
+		AccessTime: timeIfNotZero(&hdr.AccessTime),
+		ChangeTime: timeIfNotZero(&hdr.ChangeTime),
 		Devmajor:   hdr.Devmajor,
 		Devminor:   hdr.Devminor,
 		Xattrs:     xattrs,

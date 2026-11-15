@@ -22,6 +22,7 @@ func Decompress(b []byte, s *Scratch) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.cleanup()
 	s.Out = s.Out[:0]
 	err = s.readNCount()
 	if err != nil {
