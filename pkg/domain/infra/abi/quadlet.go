@@ -127,12 +127,7 @@ func (ic *ContainerEngine) QuadletInstall(ctx context.Context, pathsOrURLs []str
 
 	// Loop over the URLs
 	for _, quadletURL := range quadletURLs {
-		installedPath, err := installQuadletFromURL(ctx, ic, quadletURL, installDir, options.Replace)
-		if err != nil {
-			installReport.QuadletErrors[quadletURL] = err
-			continue
-		}
-		installReport.InstalledQuadlets[quadletURL] = installedPath
+		installQuadletFromURL(ctx, ic, quadletURL, installDir, options.Replace, &installReport)
 	}
 	// Loop over the paths
 	for _, quadletPath := range quadletPaths {
@@ -145,27 +140,11 @@ func (ic *ContainerEngine) QuadletInstall(ctx context.Context, pathsOrURLs []str
 		// Check if this file is a .quadlets file
 		switch {
 		case quadletExt == ".quadlets":
-			// Parse the multi-quadlet file
-			sections, err := parseMultiQuadletFile(quadletPath.src)
-			if err != nil {
-				installReport.QuadletErrors[quadletPath.src] = err
-				continue
-			}
 			// The sections installation folder can be different
 			// than the root `installDir`. For example if the .quadlets
 			// file is part of an application and is in a subdirectory.
 			sectionsDestDir := filepath.Dir(quadletPath.dst)
-			// Install each quadlet section as a separate file
-			for _, section := range sections {
-				installedPath, err := installMultiQuadletSection(ctx, ic, section, sectionsDestDir, options.Replace)
-				if err != nil {
-					installReport.QuadletErrors[quadletPath.src] = fmt.Errorf("unable to install multi-quadlet section %w", err)
-					continue
-				}
-				// Record the installation (use a unique key for each section)
-				sectionKey := fmt.Sprintf("%s#%s", quadletPath.src, filepath.Base(installedPath))
-				installReport.InstalledQuadlets[sectionKey] = installedPath
-			}
+			installMultiQuadletFile(ctx, ic, quadletPath.src, quadletPath.src, sectionsDestDir, options.Replace, &installReport)
 		case systemdquadlet.IsExtSupported(quadletPath.src) ||
 			options.Application != "":
 			// If quadletPath is a single file with a supported extension, or
@@ -191,20 +170,40 @@ func (ic *ContainerEngine) QuadletInstall(ctx context.Context, pathsOrURLs []str
 	return &installReport, nil
 }
 
-func installQuadletFromURL(ctx context.Context, ic *ContainerEngine, quadletURL string, installDir string, replace bool) (string, error) {
+func installMultiQuadletFile(ctx context.Context, ic *ContainerEngine, key, srcPath, installDir string, replace bool, report *entities.QuadletInstallReport) {
+	sections, err := parseMultiQuadletFile(srcPath)
+	if err != nil {
+		report.QuadletErrors[key] = err
+		return
+	}
+	for _, section := range sections {
+		installedPath, err := installMultiQuadletSection(ctx, ic, section, installDir, replace)
+		if err != nil {
+			report.QuadletErrors[key] = fmt.Errorf("unable to install multi-quadlet section: %w", err)
+			continue
+		}
+		sectionKey := fmt.Sprintf("%s#%s", key, filepath.Base(installedPath))
+		report.InstalledQuadlets[sectionKey] = installedPath
+	}
+}
+
+func installQuadletFromURL(ctx context.Context, ic *ContainerEngine, quadletURL string, installDir string, replace bool, report *entities.QuadletInstallReport) {
 	r, err := http.Get(quadletURL)
 	if err != nil {
-		return "", fmt.Errorf("unable to download URL %s: %w", quadletURL, err)
+		report.QuadletErrors[quadletURL] = fmt.Errorf("unable to download URL %s: %w", quadletURL, err)
+		return
 	}
 	defer r.Body.Close()
 	quadletFileName, err := getFileName(r, quadletURL)
 	if err != nil {
-		return "", fmt.Errorf("unable to get file name from url %s: %w", quadletURL, err)
+		report.QuadletErrors[quadletURL] = fmt.Errorf("unable to get file name from url %s: %w", quadletURL, err)
+		return
 	}
 	// It's a URL. Pull to temporary file.
 	tmpFile, err := os.CreateTemp("", quadletFileName)
 	if err != nil {
-		return "", fmt.Errorf("unable to create temporary file to download URL %s: %w", quadletURL, err)
+		report.QuadletErrors[quadletURL] = fmt.Errorf("unable to create temporary file to download URL %s: %w", quadletURL, err)
+		return
 	}
 	defer func() {
 		tmpFile.Close()
@@ -214,9 +213,19 @@ func installQuadletFromURL(ctx context.Context, ic *ContainerEngine, quadletURL 
 	}()
 	_, err = io.Copy(tmpFile, r.Body)
 	if err != nil {
-		return "", fmt.Errorf("populating temporary file: %w", err)
+		report.QuadletErrors[quadletURL] = fmt.Errorf("populating temporary file: %w", err)
+		return
 	}
-	return ic.installQuadlet(ctx, tmpFile.Name(), filepath.Join(installDir, quadletFileName), replace)
+	if filepath.Ext(quadletFileName) == ".quadlets" {
+		installMultiQuadletFile(ctx, ic, quadletURL, tmpFile.Name(), installDir, replace, report)
+		return
+	}
+	installedPath, err := ic.installQuadlet(ctx, tmpFile.Name(), filepath.Join(installDir, quadletFileName), replace)
+	if err != nil {
+		report.QuadletErrors[quadletURL] = err
+		return
+	}
+	report.InstalledQuadlets[quadletURL] = installedPath
 }
 
 func installMultiQuadletSection(ctx context.Context, ic *ContainerEngine, section quadletSection, installDir string, replace bool) (string, error) {
