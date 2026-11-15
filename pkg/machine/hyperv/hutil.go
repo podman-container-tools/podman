@@ -55,6 +55,20 @@ func IsHyperVAdminsGroupMember() bool {
 	return member
 }
 
+// lookupOrResolveSID returns the SID for the given username.  If username is
+// empty it falls back to getCurrentUserSID so callers that do not have a
+// reliable username (e.g., no loaded user profile) can still obtain a SID.
+func lookupOrResolveSID(username string) (*syswindows.SID, error) {
+	if username != "" {
+		sid, _, _, err := syswindows.LookupSID("", username)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up SID for user %q: %w", username, err)
+		}
+		return sid, nil
+	}
+	return getCurrentUserSID()
+}
+
 // AddUserToHyperVAdminGroup adds the specified user to the local Hyper-V Administrators group.
 // The Win32 syscall logic used here is based on Microsoft's hcsshim implementation:
 // https://github.com/microsoft/hcsshim/blob/20ecf50b2ef0c8884448be87d4b6b58b8d62ce94/internal/winapi/user.go#L170
@@ -64,9 +78,9 @@ func AddUserToHyperVAdminGroup(username string) error {
 		return err
 	}
 
-	userSid, _, _, err := syswindows.LookupSID("", username)
+	userSid, err := lookupOrResolveSID(username)
 	if err != nil {
-		return fmt.Errorf("failed to look up SID for user %q: %w", username, err)
+		return err
 	}
 
 	info := localGroupMembersInfo0{
@@ -99,9 +113,9 @@ func RemoveUserFromHyperVAdminGroup(username string) error {
 		return err
 	}
 
-	userSid, _, _, err := syswindows.LookupSID("", username)
+	userSid, err := lookupOrResolveSID(username)
 	if err != nil {
-		return fmt.Errorf("failed to look up SID for user %q: %w", username, err)
+		return err
 	}
 
 	info := localGroupMembersInfo0{
@@ -142,11 +156,47 @@ func getHyperVAdminGroupNamePtr() (*uint16, error) {
 	return syswindows.UTF16PtrFromString(groupName)
 }
 
-// getCurrentUserSID retrieves the SID of the user running the current process
+// getCurrentUserSIDFromToken retrieves the SID of the user running the current
+// process by reading the process access token directly.  This avoids calling
+// user.Current(), which on Windows requires the user profile to be loaded (via
+// GetUserProfileDirectory) and can fail with ERROR_INVALID_FUNCTION in
+// restricted execution contexts such as Azure VM Run Commands.
+func getCurrentUserSIDFromToken() (*syswindows.SID, error) {
+	token, err := syswindows.OpenCurrentProcessToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open current process token: %w", err)
+	}
+	defer token.Close()
+
+	tokenUser, err := token.GetTokenUser()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token user from process token: %w", err)
+	}
+
+	// The SID returned by GetTokenUser is owned by the TokenUser struct; copy
+	// it so the caller can use it after the token is closed.
+	sid, err := tokenUser.User.Sid.Copy()
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy user SID: %w", err)
+	}
+
+	return sid, nil
+}
+
+// getCurrentUserSID retrieves the SID of the user running the current process.
+// It first tries to read the SID directly from the process access token, which
+// works even when the user profile is not loaded.  If that fails it falls back
+// to the user.Current() / LookupSID path.
 func getCurrentUserSID() (*syswindows.SID, error) {
+	sid, err := getCurrentUserSIDFromToken()
+	if err == nil {
+		return sid, nil
+	}
+	logrus.Debugf("getCurrentUserSIDFromToken failed, falling back to user.Current(): %v", err)
+
 	u, err := user.Current()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get current user (the user profile may not be loaded): %w", err)
 	}
 
 	userSid, _, _, err := syswindows.LookupSID("", u.Username)
