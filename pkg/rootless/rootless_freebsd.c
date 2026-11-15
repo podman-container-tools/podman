@@ -59,5 +59,7 @@ static void __attribute__((constructor)) init()
 
           FD_SET (fd % FD_SETSIZE, &(open_files_set[fd / FD_SETSIZE]));
         }
+      /* An open directory fd makes chroot(2) fail inside a jail.  */
+      closedir (d);
     }
 }
