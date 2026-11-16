@@ -18,7 +18,7 @@ podman\-systemd.unit - systemd units using Podman Quadlet
 
 ### Podman rootful unit search path
 
-Quadlet files for the root user can be placed in the following directories ordered in precedence. Meaning duplicate named quadlets found under /run take precedence over ones in /etc, as well as those in /usr:
+Quadlet files for the root user can be placed in the following directories, in order of precedence: duplicate-named quadlets found under /run take precedence over those in /etc and /usr:
 
 Temporary quadlets, usually used for testing:
 
@@ -57,7 +57,7 @@ All options and tables available in standard systemd unit files are supported. F
 the [Service] table and [Install] tables pass directly to systemd and are handled by it.
 See systemd.unit(5) man page for more information.
 
-The Podman generator reads the search paths above and reads files with the extensions `.container`
+The Podman generator reads the search paths above and reads files with the extensions `.container`,
 `.volume`, `.network`, `.build`, `.pod`, `.kube`, and `.artifact`, and for each file generates a similarly named `.service` file. Be aware that
 existing vendor services (i.e., in `/usr/`) are replaced if they have the same name. The generated unit files can
 be started and managed with `systemctl` like any other systemd service. `systemctl {--user} list-unit-files`
@@ -110,7 +110,7 @@ Adding the following snippet to a Quadlet file extends the startup timeout to 15
 TimeoutStartSec=900
 ```
 
-Quadlet requires the use of cgroup v2, use `podman info --format {{.Host.CgroupsVersion}}` to check on the system.
+Quadlet requires the use of cgroup v2. Use `podman info --format {{.Host.CgroupsVersion}}` to check on the system.
 
 ### Service Type
 
@@ -127,9 +127,9 @@ leaves the job in a "started" state which prevents subsequent activations by the
 `systemd.service(5)` man page.
 
 Examples for such cases:
-- `.container` file with an image that exits after their entrypoint has finished
+- `.container` file with an image that exits after its entrypoint has finished
 
-- `.kube` file pointing to a Kubernetes Yaml file that does not define any containers. E.g. PVCs only
+- `.kube` file pointing to a Kubernetes YAML file that does not define any containers. E.g. PVCs only
 
 ### Enabling unit files
 
@@ -151,7 +151,7 @@ Currently, only the `Alias`, `WantedBy`, `RequiredBy`, and `UpheldBy` keys are s
 
 The Install section can be part of the main file, or it can be in a
 separate drop-in file as described above. The latter allows you to
-install an non-enabled unit and then later enabling it by installing
+install a non-enabled unit and then later enabling it by installing
 the drop-in.
 
 ### Template files
@@ -265,7 +265,7 @@ ExecStart=/usr/bin/podman run ... -v my-name-%i:/mnt/path ...
 
 ### Relative paths
 
-In order to support Systemd specifiers, Quadlet does not resolve relative paths that start with `%`.
+In order to support systemd specifiers, Quadlet does not resolve relative paths that start with `%`.
 To resolve such a path, prepend it with `./`.
 
 For example, instead of `EnvironmentFile=%n/env` use `EnvironmentFile=./%n/env`
@@ -452,7 +452,7 @@ Valid options for `[Container]` are listed below:
 | Volume=/source:/dest                 | --volume /source:/dest                               |
 | WorkingDir=$HOME                     | --workdir $HOME                                      |
 
-Description of `[Container]` section are:
+The description of the `[Container]` section is:
 
 ### `AddCapability=`
 
@@ -885,7 +885,7 @@ If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 add
 the host; use [::] for IPv6.
 
 Note that not listing a host port means that Podman automatically selects one, and it
-may be different for each invocation of service. This makes that a less useful option. The
+may be different for each invocation of service. This makes it a less useful option. The
 allocated port can be found with the `podman port` command.
 
 This key can be listed multiple times.
@@ -1048,7 +1048,7 @@ This key can be listed multiple times.
 
 ### `Ulimit=`
 
-Ulimit options. Sets the ulimits values inside of the container.
+Ulimit options. Sets the ulimit values inside the container.
 
 This key can be listed multiple times.
 
@@ -1257,7 +1257,7 @@ This key can be listed multiple times.
 
 This key contains a list of arguments passed directly to the end of the `podman pod create` command
 in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
-of what unexpected interactions can be caused by these arguments, is not recommended to use
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
 this option.
 
 The format of this is a space separated list of arguments, which can optionally be individually
@@ -1287,7 +1287,7 @@ If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 add
 the host; use [::] for IPv6.
 
 Note that not listing a host port means that Podman automatically selects one, and it
-may be different for each invocation of service. This makes that a less useful option. The
+may be different for each invocation of service. This makes it a less useful option. The
 allocated port can be found with the `podman port` command.
 
 When using `host` networking via `Network=host`, the `PublishPort=` option cannot be used.
@@ -1455,7 +1455,7 @@ This key can be listed multiple times.
 This key contains a list of arguments passed directly to the end of the `podman kube play` command
 in the generated file (right before the path to the yaml file in the command line). It can be used to
 access Podman features otherwise unsupported by the generator. Since the generator is unaware
-of what unexpected interactions can be caused by these arguments, is not recommended to use
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
 this option.
 
 The format of this is a space separated list of arguments, which can optionally be individually
@@ -1490,7 +1490,7 @@ Note, the name should not include the `.service` file extension
 
 ### `SetWorkingDirectory=`
 
-Set the `WorkingDirectory` field of the `Service` group of the Systemd service unit file.
+Set the `WorkingDirectory` field of the `Service` group of the systemd service unit file.
 Used to allow `podman kube play` to correctly resolve relative paths.
 Supported values are `yaml` and `unit` to set the working directory to that of the YAML or Quadlet Unit file respectively.
 
@@ -1499,7 +1499,7 @@ Please note that if the `WorkingDirectory` field of the `Service` group is set,
 Quadlet will not set it even if `SetWorkingDirectory` is set
 
 Special case:
-* If multiple `Yaml` path are provided only `unit` is supported.
+* If multiple `Yaml` paths are provided only `unit` is supported.
 
 ### `UserNS=`
 
@@ -1524,7 +1524,7 @@ the generated service file is `$NAME-network.service`. The `NetworkName` option 
 overriding this default name with a user-provided one.
 
 In order to update the network parameters you will first need to manually remove the podman network and then restart the service.
-Set `NetworkDeleteOnStop=true` to override the behavior and delete the network when the device is stopped.
+Set `NetworkDeleteOnStop=true` to override the behavior and delete the network when the service is stopped.
 
 Using network units allows containers to depend on networks being automatically pre-created. This is
 particularly interesting when using special options to control network creation, as Podman otherwise creates networks with the default options.
@@ -1620,7 +1620,7 @@ This is equivalent to the Podman `--ipam-driver` option
 
 ### `IPRange=`
 
-Allocate container IP from a range. The range must be a either a complete subnet in CIDR notation or be
+Allocate container IP from a range. The range must be either a complete subnet in CIDR notation or be
 in the `<startIP>-<endIP>` syntax which allows for a more flexible range compared to the CIDR subnet.
 The ip-range option must be used with a subnet option.
 
@@ -1650,7 +1650,7 @@ When set to `true` the network is deleted when the service is stopped
 The (optional) name of the Podman network.
 If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
 i.e. a `$name.network` file creates a `systemd-$name` Podman network to avoid
-conflicts with user-managed network.
+conflicts with user-managed networks.
 
 ### `Options=`
 
@@ -1663,7 +1663,7 @@ This is equivalent to the Podman `--opt` option
 This key contains a list of arguments passed directly to the end of the `podman network create` command
 in the generated file (right before the name of the network in the command line). It can be used to
 access Podman features otherwise unsupported by the generator. Since the generator is unaware
-of what unexpected interactions can be caused by these arguments, is not recommended to use
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
 this option.
 
 The format of this is a space separated list of arguments, which can optionally be individually
@@ -1731,7 +1731,7 @@ Load the specified containers.conf(5) module. Equivalent to the Podman `--module
 
 This key can be listed multiple times.
 
-### `Copy=` (default to `true`)
+### `Copy=` (defaults to `true`)
 
 If enabled, the content of the image located at the mountpoint of the volume is copied into the
 volume on the first run.
@@ -1768,7 +1768,7 @@ The host (numeric) GID, or group name to use as the group for the volume. Differ
 
 ### `Image=`
 
-Specifies the image the volume is based on when `Driver` is set to the `image`.
+Specifies the image the volume is based on when `Driver` is set to `image`.
 It is recommended to use a fully qualified image name rather than a short name, both for
 performance and robustness reasons.
 
@@ -1796,7 +1796,7 @@ The mount options to use for a filesystem as used by the **mount(8)** command `-
 This key contains a list of arguments passed directly to the end of the `podman volume create` command
 in the generated file (right before the name of the volume in the command line). It can be used to
 access Podman features otherwise unsupported by the generator. Since the generator is unaware
-of what unexpected interactions can be caused by these arguments, is not recommended to use
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
 this option.
 
 The format of this is a space separated list of arguments, which can optionally be individually
@@ -2062,14 +2062,14 @@ the `File=` key or to that of the Quadlet `.build` unit file, respectively. This
 resolve relative paths.
 
 When using one of the special keys (`file` or `unit`), the `WorkingDirectory` field of the `Service`
-group of the Systemd service unit will also be set to accordingly. Alternatively, users can
+group of the systemd service unit will also be set accordingly. Alternatively, users can
 explicitly set the `WorkingDirectory` field of the `Service` group in the `.build` file. Please note
 that if the `WorkingDirectory` field of the `Service` group is set by the user, Quadlet will not
 overwrite it even if `SetWorkingDirectory` is set to `file` or `unit`.
 
 By providing a URL to `SetWorkingDirectory=` you can instruct `podman build` to clone a Git
 repository or download an archive file extracted to a temporary location by `podman build` as build
-context. Note that in this case, the `WorkingDirectory` of the Systemd service unit is left
+context. Note that in this case, the `WorkingDirectory` of the systemd service unit is left
 untouched by Quadlet.
 
 Note that providing context directory is mandatory for a `.build` file, unless a `File=` key has
@@ -2148,7 +2148,7 @@ This is equivalent to the Podman `--all-tags` option.
 
 ### `Arch=`
 
-Override the architecture, defaults to hosts, of the image to be pulled.
+Override the architecture, defaults to hosts', of the image to be pulled.
 
 This is equivalent to the Podman `--arch` option.
 
@@ -2218,7 +2218,7 @@ requires setting
 
 ### `OS=`
 
-Override the OS, defaults to hosts, of the image to be pulled.
+Override the OS, defaults to hosts', of the image to be pulled.
 
 This is equivalent to the Podman `--os` option.
 
@@ -2279,7 +2279,7 @@ the container artifact pull command. The generated service is a one-time command
 exists on the host, pulling it if needed.
 
 Using artifact units allows containers to depend on artifacts being automatically pulled. This is
-particularly useful for managing artifacts that containers need to mount or access, the **Artifact** key is mandatory inside of the [Artifact] unit.
+particularly useful for managing artifacts that containers need to mount or access. The **Artifact** key is mandatory inside of the [Artifact] unit.
 
 Valid options for `[Artifact]` are listed below:
 

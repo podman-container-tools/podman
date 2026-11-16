@@ -23,7 +23,7 @@ Supported filters:
 
 | Filter | Description                                                                                        |
 |:------:|----------------------------------------------------------------------------------------------------|
-| label  | Only remove networks, with (or without, in the case of label!=[...] is used) the specified labels. |
+| label  | Only remove networks, with (or without, in the case where label!=[...] is used) the specified labels. |
 | until  | Only remove networks created before given timestamp.                                               |
 
 The `label` *filter* accepts two formats. One is the `label`=*key* or `label`=*key*=*value*, which removes networks with the specified labels. The other format is the `label!`=*key* or `label!`=*key*=*value*, which removes networks without the specified labels.
@@ -41,7 +41,7 @@ Prune networks:
 $ podman network prune
 ```
 
-Prune all networks created not created in the last two hours:
+Prune all networks not created in the last two hours:
 ```
 $ podman network prune --filter until=2h
 ```

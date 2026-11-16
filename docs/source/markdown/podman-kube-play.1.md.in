@@ -8,11 +8,11 @@ podman-kube-play - Create containers, pods and volumes based on Kubernetes YAML
 
 ## DESCRIPTION
 **podman kube play** reads in a structured file of Kubernetes YAML.  It recreates the containers, pods, or volumes described in the YAML.  Containers within a pod are then started, and the ID of the new Pod or the name of the new Volume is output. If the YAML file is specified as "-", then `podman kube play` reads the YAML file from stdin.
-The input can also be a URL that points to a YAML file such as https://podman.io/demo.yml. `podman kube play` reads the YAML from the URL and create pods and containers from it.
+The input can also be a URL that points to a YAML file such as https://podman.io/demo.yml. `podman kube play` reads the YAML from the URL and creates pods and containers from it.
 
 Using the `--down` command line option, it is also capable of tearing down the pods created by a previous run of `podman kube play`.
 
-Using the `--replace` command line option, it tears down the pods(if any) created by a previous run of `podman kube play` and recreate the pods with the Kubernetes YAML file.
+Using the `--replace` command line option, it tears down the pods (if any) created by a previous run of `podman kube play` and recreates the pods with the Kubernetes YAML file.
 
 Ideally the input file is created by the Podman command (see podman-kube-generate(1)).  This guarantees a smooth import and expected results.
 
@@ -28,23 +28,23 @@ Currently, the supported Kubernetes kinds are:
 
 `Kubernetes Pods or Deployments`
 
-Only five volume types are supported by kube play, the *hostPath*, *emptyDir*, *configMap*, *persistentVolumeClaim*, and *image* volume types.
+Only five volume types are supported by kube play: the *hostPath*, *emptyDir*, *configMap*, *persistentVolumeClaim*, and *image* volume types.
 
 - When using the *hostPath* volume type, only the  *default (empty)*, *DirectoryOrCreate*, *Directory*, *FileOrCreate*, *File*, *Socket*, *CharDevice* and *BlockDevice* subtypes are supported. Podman interprets the value of *hostPath* *path* as a file path when it contains at least one forward slash, otherwise Podman treats the value as the name of a named volume.
 - When using a *persistentVolumeClaim*, the value for *claimName* is the name for the Podman named volume.
-- When using an *emptyDir* volume, Podman creates an anonymous volume that is attached the containers running inside the pod and is deleted once the pod is removed.
-- When using an *configMap* volume, Podman creates an anonymous volume that is attached the containers running inside the pod and is deleted once the pod is removed.
+- When using an *emptyDir* volume, Podman creates an anonymous volume that is attached to the containers running inside the pod and is deleted once the pod is removed.
+- When using a *configMap* volume, Podman creates an anonymous volume that is attached to the containers running inside the pod and is deleted once the pod is removed.
 - When using an *image* volume, Podman creates a read-only image volume with an empty subpath (the whole image is mounted). The image must already exist locally. It is supported in rootful mode only.
 
 Note: The default restart policy for containers is `always`.  You can change the default by setting the `restartPolicy` field in the spec.
 
 Note: When playing a kube YAML with init containers, the init container is created with init type value `once`. To change the default type, use the `io.podman.annotations.init.container.type` annotation to set the type to `always`.
 
-Note: *hostPath* volume types created by kube play is given an SELinux shared label (z), bind mounts are not relabeled (use `chcon -t container_file_t -R <directory>`).
+Note: *hostPath* volume types created by kube play are given an SELinux shared label (z); bind mounts are not relabeled (use `chcon -t container_file_t -R <directory>`).
 
 Note: To set userns of a pod, use the **io.podman.annotations.userns** annotation in the pod/deployment definition. For example, **io.podman.annotations.userns=keep-id** annotation tells Podman to create a user namespace where the current rootless user's UID:GID are mapped to the same values in the container. This can be overridden with the `--userns` flag.
 
-Note: Use the **io.podman.annotations.volumes-from** annotation to bind mount volumes of one container to another. You can mount volumes from multiple source containers to a target container. The source containers that belong to the same pod must be defined before the source container in the kube YAML. The annotation format is `io.podman.annotations.volumes-from/targetContainer: "sourceContainer1:mountOpts1;sourceContainer2:mountOpts2"`.
+Note: Use the **io.podman.annotations.volumes-from** annotation to bind mount volumes of one container to another. You can mount volumes from multiple source containers to a target container. The source containers that belong to the same pod must be defined before the target container in the kube YAML. The annotation format is `io.podman.annotations.volumes-from/targetContainer: "sourceContainer1:mountOpts1;sourceContainer2:mountOpts2"`.
 
 Note: If the `:latest` tag is used, Podman attempts to pull the image from a registry. If the image was built locally with Podman or Buildah, it has `localhost` as the domain, in that case, Podman uses the image from the local store even if it has the `:latest` tag.
 
@@ -123,7 +123,7 @@ kube supports a custom CDI selector: `podman.io/device=<host device path>`.
 
 `Kubernetes ConfigMap`
 
-Kubernetes ConfigMap can be referred as a source of environment variables or volumes in Pods or Deployments.
+Kubernetes ConfigMap can be referred to as a source of environment variables or volumes in Pods or Deployments.
 ConfigMaps aren't a standalone object in Podman; instead, when a container uses a ConfigMap, Podman creates environment variables or volumes as needed.
 
 For example, the following YAML document defines a ConfigMap and then uses it in a Pod:
@@ -278,7 +278,7 @@ Define or override a port definition in the YAML file.
 The lists of ports in the YAML file and the command line are merged. Matching is done by using the **containerPort** field.
 If **containerPort** exists in both the YAML file and the option, the latter takes precedence.
 
-In case this options is used with **--multiple-pods** option then number of published ports should be equal to the number of replicas in container spec, e.g. Deployment.spec.replicas is 3, then **--publish** is set to "8080:80,8081:80,8082:80"
+In case this option is used with **--multiple-pods** option then number of published ports should be equal to the number of replicas in container spec, e.g. Deployment.spec.replicas is 3, then **--publish** is set to "8080:80,8081:80,8082:80"
 
 #### **--publish-all**
 
@@ -333,7 +333,7 @@ the running pods and containers.
 When  attached  in the tty mode, you can kill the pods and containers by pressing
 Ctrl-C or receiving any other interrupt signals.
 
-All pods, containers, and volumes created with `podman kube play` is removed
+All pods, containers, and volumes created with `podman kube play` are removed
 upon exit.
 
 ## EXAMPLES

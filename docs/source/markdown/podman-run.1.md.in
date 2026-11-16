@@ -38,7 +38,7 @@ When running from a user defined network namespace, the _/etc/netns/NSNAME/resol
 will be used if it exists, otherwise _/etc/resolv.conf_ will be used.
 
 Default settings are defined in `containers.conf`. Most settings for remote
-connections use the servers containers.conf, except when documented in man
+connections use the server's containers.conf, except when documented in man
 pages.
 
 ## IMAGE
@@ -900,11 +900,11 @@ $ podman run --name container1 --personality=LINUX32 fedora bash
 $ podman run --name container1 --rootfs /path/to/rootfs:O bash
 ```
 
-### Handling Timezones in java applications in a container.
+### Handling Timezones in Java applications in a container.
 
 In order to use a timezone other than UTC when running a
 Java application within a container, the `TZ` environment variable must be
-set within the container. Java applications ignores the value set with the
+set within the container. Java applications ignore the value set with the
 `--tz` option.
 
 ```
@@ -981,7 +981,7 @@ program whose job is to watch the primary process of the container, and if the
 container dies, save the exit code.  It also holds open the tty of the
 container, so that it can be attached to later. This is what allows Podman to
 run in detached mode (backgrounded), so Podman can exit but conmon continues to
-run.  Each container has their own instance of conmon. Conmon waits for the
+run.  Each container has its own instance of conmon. Conmon waits for the
 container to exit, gathers and saves the exit code, and then launches a Podman
 process to complete the container cleanup, by shutting down the network and
 storage.   For more information about conmon, see the conmon(8) man

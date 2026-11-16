@@ -13,7 +13,7 @@ podman\-build - Build a container image using a Containerfile
 Containerfiles or Dockerfiles and a specified build context directory. A
 Containerfile uses the same syntax as a Dockerfile internally. For this
 document, a file referred to as a Containerfile can be a file named
-either 'Containerfile' or 'Dockerfile' exclusively. Any file that has additional
+either 'Containerfile' or 'Dockerfile' exclusively. Any file that has an additional
 extension attached will not be recognized by `podman build .` unless a `-f` flag is
 used to specify the file.
 
@@ -59,7 +59,7 @@ provided for scripting compatibility.
 
 #### **--all-platforms**
 
-Instead of building for a set of platforms specified using the **--platform** option, inspect the build's base images, and build for all of the platforms for which they are all available.  Stages that use *scratch* as a starting point can not be inspected, so at least one non-*scratch* stage must be present for detection to work usefully.
+Instead of building for a set of platforms specified using the **--platform** option, inspect the build's base images, and build for all of the platforms for which they are all available.  Stages that use *scratch* as a starting point cannot be inspected, so at least one non-*scratch* stage must be present for detection to work usefully.
 
 @@option annotation.image
 
@@ -68,7 +68,7 @@ Instead of building for a set of platforms specified using the **--platform** op
 Set the architecture of the image to be built, and that of the base image to be
 pulled, if the build uses one, to the provided value instead of using the
 architecture of the build host. Unless overridden, subsequent lookups of the
-same image in the local storage matches this architecture, regardless of the
+same image in the local storage match this architecture, regardless of the
 host. (Examples: arm, arm64, 386, amd64, ppc64le, s390x)
 
 @@option authfile
@@ -311,8 +311,8 @@ The --output (or -o) option extends the default behavior of building a container
 The value for --output is a comma-separated sequence of key=value pairs, defining the output type and options.
 
 Supported _keys_ are:
-- **dest**: Destination path for exported output. Valid value is absolute or relative path, `-` means the standard output.
-- **type**: Defines the type of output to be used. Valid values is documented below.
+- **dest**: Destination path for exported output. Valid value is absolute or relative path; `-` means the standard output.
+- **type**: Defines the type of output to be used. Valid values are documented below.
 
 Valid _type_ values are:
 - **local**: write the resulting build files to a directory on the client-side.
@@ -328,11 +328,11 @@ Alternatively, instead of a comma-separated sequence, the value of **--output** 
 Set the *os/arch* of the built image (and its base image, when using one)
 to the provided value instead of using the current operating system and
 architecture of the host (for example `linux/arm`).  Unless overridden,
-subsequent lookups of the same image in the local storage matches this
+subsequent lookups of the same image in the local storage match this
 platform, regardless of the host.
 
 If `--platform` is set, then the values of the `--arch`, `--os`, and
-`--variant` options is overridden.
+`--variant` options are overridden.
 
 The `--platform` option can be specified more than once, or given a
 comma-separated list of values as its argument.  When more than one platform is
@@ -484,8 +484,8 @@ Sign the image using a GPG key with the specified FINGERPRINT. (This option is n
 
 #### **--stdin**
 
-Pass stdin into the RUN containers. Sometime commands being RUN within a Containerfile
-want to request information from the user. For example apt asking for a confirmation for install.
+Pass stdin into the RUN containers. Sometimes commands being RUN within a Containerfile
+want to request information from the user. For example, apt asks for confirmation before installing.
 Use --stdin to be able to interact from the terminal during the build.
 
 @@option tag
@@ -748,7 +748,7 @@ src
 ```
 
 `*/*.c`
-Excludes files and directories whose names ends with .c in any top level
+Excludes files and directories whose names end with .c in any top level
 subdirectory. For example, the source file include/rootless.c.
 
 `**/output*`
@@ -773,7 +773,7 @@ described here: **[containerignore(5)](https://github.com/containers/container-l
 ### registries.conf (`/etc/containers/registries.conf`)
 
 registries.conf is the configuration file which specifies which container
-registries is consulted when completing image names which do not include
+registries are consulted when completing image names which do not include
 a registry or domain portion.
 See **[containers-registries.conf(5)](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)**
 

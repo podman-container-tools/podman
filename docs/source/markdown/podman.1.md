@@ -41,7 +41,7 @@ The CGroup manager to use for container cgroups. Supported values are __cgroupfs
 
 Note: Setting this flag can cause certain commands to break when called on containers previously created by the other CGroup manager type.
 
-__cgroupfs__ doesn't work in Rootless mode and containers cgroups aren't used.
+__cgroupfs__ doesn't work in Rootless mode and container cgroups aren't used.
 
 #### **--config**
 Location of config file. Mainly for docker compatibility, only the authentication parts of the config are supported.
@@ -206,7 +206,7 @@ Path to a PEM file containing the private key matching `--tls-cert`. `--tls-cert
 
 Path to the tmp directory, for libpod runtime content. Defaults to `$XDG_RUNTIME_DIR/libpod/tmp` as rootless and `/run/libpod/tmp` as rootful.
 
-NOTE --tmpdir is not used for the temporary storage of downloaded images.  Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to use `/var/tmp`.
+NOTE --tmpdir is not used for the temporary storage of downloaded images.  Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to `/var/tmp`.
 
 #### **--transient-store**
 
@@ -305,7 +305,7 @@ Ignored when the `--root` or `--storage-driver` options are set.
 
 #### **TMPDIR**
 
-Set the temporary storage location of downloaded container images. Podman defaults to use `/var/tmp`.
+Set the temporary storage location of downloaded container images. Podman defaults to `/var/tmp`.
 
 #### **XDG_CONFIG_HOME**
 
@@ -440,7 +440,7 @@ the exit codes follow the `chroot` standard, see below:
 
 Podman has builtin defaults for command line options. These defaults can be overridden using the containers.conf configuration files.
 
-For a complete list of supported paths and their override order, see **containers.conf(5)**. Podman merges its builtin defaults with the specified fields from these files, if they exist. Fields specified in the users file override the administrator's file, which overrides the distribution's file, which override the built-in defaults.
+For a complete list of supported paths and their override order, see **containers.conf(5)**. Podman merges its builtin defaults with the specified fields from these files, if they exist. Fields specified in the users file override the administrator's file, which overrides the distribution's file, which overrides the built-in defaults.
 
 Podman uses builtin defaults if no containers.conf file is found.
 
@@ -470,7 +470,7 @@ storage.conf is the storage configuration file for all tools using containers/st
 
 The storage configuration file specifies all of the available container storage options for tools using shared container storage.
 
-When Podman runs in rootless mode, For a complete list of supported paths, including user-specific and system-wide defaults, see **containers-storage.conf(5)**.
+When Podman runs in rootless mode, for a complete list of supported paths, including user-specific and system-wide defaults, see **containers-storage.conf(5)**.
 
 If the **CONTAINERS_STORAGE_CONF** environment variable is set, then its value is used for the storage.conf file rather than the default.
 
