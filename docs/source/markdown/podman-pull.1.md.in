@@ -17,7 +17,7 @@ podman pull copies an image from a registry onto the local machine. The command 
 *IMPORTANT: Images are stored in local image storage.*
 
 ## SOURCE
-SOURCE is the location from which the container image is pulled from. It supports all transports from **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**. If no transport is specified, the input is subject to short-name resolution and the `docker` (i.e., container registry) transport is used.  For remote clients, including Mac and Windows (excluding WSL2) machines, `docker` is the only supported transport.
+SOURCE is the location from which the container image is pulled. It supports all transports from **[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md)**. If no transport is specified, the input is subject to short-name resolution and the `docker` (i.e., container registry) transport is used.  For remote clients, including Mac and Windows (excluding WSL2) machines, `docker` is the only supported transport.
 
 ```
 # Pull from a container registry
@@ -84,22 +84,22 @@ Print the usage statement.
 **short-name-aliases.conf** (`/var/cache/containers/short-name-aliases.conf`, `$HOME/.cache/containers/short-name-aliases.conf`)
 
 When users specify images that do not include the container registry where the
-image is stored, this is called a short name. The use of unqualified-search registries entails an ambiguity as it is unclear from which registry a given image, referenced by a short name, may be pulled from.
+image is stored, this is called a short name. The use of unqualified-search registries entails an ambiguity as it is unclear from which registry a given image, referenced by a short name, may be pulled.
 
 Using short names is subject to the risk of hitting squatted registry namespaces. If the unqualified-search registries are set to ["public-registry.com",  "my-private-registry.com"] an attacker may take over a namespace of `public-registry.com` such that an image may be pulled from `public-registry.com` instead of the intended source `my-private-registry.com`.
 
 While it is highly recommended to always use fully-qualified image references, existing deployments using short names may not be easily changed. To circumvent the aforementioned ambiguity, so called short-name aliases can be configured that point to a fully-qualified image reference. Distributions often ship a default shortnames.conf expansion file in /etc/containers/registries.conf.d/ directory. Administrators can use this directory to add their own local short-name expansion files.
 
 When pulling an image, if the user does not specify the complete registry, container engines attempt to expand the short-name into a full name. If the command is executed with a tty, the user is prompted to select a registry from the
-default list unqualified registries defined in registries.conf. The user's selection is then stored in a cache file to be used in all future short-name expansions. Rootful short-names are stored in /var/cache/containers/short-name-aliases.conf. Rootless short-names are stored in the $HOME/.cache/containers/short-name-aliases.conf file.
+default list of unqualified registries defined in registries.conf. The user's selection is then stored in a cache file to be used in all future short-name expansions. Rootful short-names are stored in /var/cache/containers/short-name-aliases.conf. Rootless short-names are stored in the $HOME/.cache/containers/short-name-aliases.conf file.
 
 For more information on short-names, see `containers-registries.conf(5)`
 
 **registries.conf** (`/etc/containers/registries.conf`)
 
-registries.conf is the configuration file which specifies which container registries is consulted when completing image names which do not include a registry or domain portion.
+registries.conf is the configuration file which specifies which container registries are consulted when completing image names which do not include a registry or domain portion.
 
-NOTE: Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to use `/var/tmp`.
+NOTE: Use the environment variable `TMPDIR` to change the temporary storage location of downloaded container images. Podman defaults to `/var/tmp`.
 
 
 ## EXAMPLES
@@ -207,7 +207,7 @@ Storing signatures
 3cba58dad5d9b35e755b48b634acb3fdd185ab1c996ac11510cc72c17780e13c
 ```
 
-Pull an image with up to 6 retries, delaying 10 seconds between retries in quet mode.
+Pull an image with up to 6 retries, delaying 10 seconds between retries in quiet mode.
 ```
 $ podman --remote pull -q --retry 6 --retry-delay 10s ubi9
 4d6addf62a90e392ff6d3f470259eb5667eab5b9a8e03d20b41d0ab910f92170

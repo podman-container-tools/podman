@@ -19,7 +19,7 @@ can easily fail
 * Container images cannot easily be shared with other users
 * Difficult to use additional stores for sharing content
 * Does not work on NFS or parallel filesystem homedirs (e.g. [GPFS](https://www.ibm.com/support/knowledgecenter/en/SSFKCN/gpfs_welcome.html))
-  * NFS and parallel filesystems enforce file creation on different UIDs on the server side and does not understand User Namespace.
+  * NFS and parallel filesystems enforce file creation on different UIDs on the server side and do not understand User Namespace.
   * When a container root process like YUM attempts to create a file owned by a different UID, NFS Server/GPFS denies the creation.
 * Requires a writable home directory that is not mounted with noexec or nodev
   * User can set up storage to point to other directories they can write to

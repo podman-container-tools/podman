@@ -540,7 +540,7 @@ program whose job is to watch the primary process of the container, and if the
 container dies, save the exit code.  It also holds open the tty of the
 container, so that it can be attached to later. This is what allows Podman to
 run in detached mode (backgrounded), so Podman can exit but conmon continues to
-run.  Each container has their own instance of conmon. Conmon waits for the
+run.  Each container has its own instance of conmon. Conmon waits for the
 container to exit, gathers and saves the exit code, and then launches a Podman
 process to complete the container cleanup, by shutting down the network and
 storage.   For more information about conmon, see the conmon(8) man
