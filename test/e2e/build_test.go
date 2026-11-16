@@ -1480,4 +1480,11 @@ COPY --from=img2 /etc/alpine-release /prefix-test/container-prefix.txt`
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitWithError(125, `missing required key "type"`))
 	})
+
+	// Should error because --no-cache=false used with --cache-ttl=0
+	It("podman build --no-cache=false --cache-ttl=0 must fail", func() {
+		session := podmanTest.Podman([]string{"build", "-f", "build/basicalpine/Containerfile", "--cache-ttl", "0", "--no-cache=false"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, "cannot use --cache-ttl with duration as 0 and --no-cache=false"))
+	})
 })
