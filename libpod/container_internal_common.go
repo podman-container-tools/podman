@@ -2336,8 +2336,9 @@ rootless=%d
 	// Add Subscription Mounts
 	subscriptionMounts := subscriptions.MountsWithUIDGID(c.config.MountLabel, c.state.RunDir, c.runtime.config.Containers.DefaultMountsFile, c.state.Mountpoint, c.RootUID(), c.RootGID(), rootless.IsRootless(), false)
 	for _, mount := range subscriptionMounts {
-		if _, ok := c.state.BindMounts[mount.Destination]; !ok {
-			c.state.BindMounts[mount.Destination] = mount.Source
+		dest := filepath.Clean(mount.Destination)
+		if _, ok := c.state.BindMounts[dest]; !ok {
+			c.state.BindMounts[dest] = mount.Source
 		}
 	}
 
