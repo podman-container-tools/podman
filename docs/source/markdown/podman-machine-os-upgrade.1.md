@@ -48,7 +48,7 @@ cannot be used with --restart
 #### **--format**, **-f**
 
 Define a structured output format.  The only valid value for this is `json`.  Using this option
-imples a dry-run. This option cannot be used with --restart.
+implies a dry-run. This option cannot be used with --restart.
 
 #### **--help**
 

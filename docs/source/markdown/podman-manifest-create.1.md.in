@@ -42,7 +42,7 @@ $ podman manifest create mylist:v1.11
 9cfd24048d5fc80903f088f1531a21bff01172abe66effa8941a4c2308dc745f
 ```
 
-Create the specified manifest manifest or modify it if it previously exist.
+Create the specified manifest or modify it if it previously existed.
 ```
 $ podman manifest create --amend mylist:v1.11
 9cfd24048d5fc80903f088f1531a21bff01172abe66effa8941a4c2308dc745f

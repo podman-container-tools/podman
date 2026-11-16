@@ -9,7 +9,7 @@ podman\-completion - Generate shell completion scripts
 ## DESCRIPTION
 **podman completion** generates shell completion scripts for a variety of shells. Supported shells are *bash*, *zsh*, *fish* and *powershell*.
 
-These script are used by the shell to provide suggestions and complete commands when the command is typed and `[TAB]` is pressed.
+These scripts are used by the shell to provide suggestions and complete commands when the command is typed and `[TAB]` is pressed.
 
 Usually these scripts are automatically installed via the package manager.
 

@@ -16,10 +16,10 @@ Add network-scoped alias for the container. If the network has DNS enabled (`pod
 these aliases can be used for name resolution on the given network in addition to the container name.  Multiple *--alias* options may be specified as input. See **DNS NOTES** in **[podman-network(1)](podman-network.1.md)**.
 
 #### **--ip**=*address*
-Set a static ipv4 address for this container on this network.
+Set a static IPv4 address for this container on this network.
 
 #### **--ip6**=*address*
-Set a static ipv6 address for this container on this network.
+Set a static IPv6 address for this container on this network.
 
 #### **--mac-address**=*address*
 Set a static mac address for this container on this network.

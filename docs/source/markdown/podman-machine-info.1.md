@@ -9,7 +9,7 @@ podman\-machine\-info - Display machine host info
 ## DESCRIPTION
 
 Display information pertaining to the machine host.
-Rootless only, as all `podman machine` commands can be only be used with rootless Podman.
+Rootless only, as all `podman machine` commands can only be used with rootless Podman.
 
 *Note*: The `DefaultMachine` field in the `Host` output does not suggest that
 one can set a default podman machine via system connections. This value represents

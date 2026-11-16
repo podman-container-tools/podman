@@ -80,7 +80,7 @@ In addition to normal output, display the total file size if the type is a conta
 
 ## EXAMPLES
 
-Inspect the specified container and print its information in json format.
+Inspect the specified container and print its information in JSON format.
 ```
 $ podman container inspect foobar
 [

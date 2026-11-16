@@ -22,7 +22,7 @@ the `--append` option, the original creation timestamp is preserved.
 @@option annotation.manifest
 
 Note: Set annotations for each file being added. The annotation "org.opencontainers.image.title" is used
-to name the layer when mounted into a container, this title must be unigue for each artifact layer.
+to name the layer when mounted into a container, this title must be unique for each artifact layer.
 
 #### **--append**, **-a**
 

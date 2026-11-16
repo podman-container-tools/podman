@@ -6,4 +6,4 @@
 
 Customize the entry that is written to the `/etc/group` file within the container when `--user` is used.
 
-The variables $GROUPNAME, $GID, and $USERLIST are automatically replaced with their value at runtime if present.
+The variables $GROUPNAME, $GID, and $USERLIST are automatically replaced with their values at runtime if present.
