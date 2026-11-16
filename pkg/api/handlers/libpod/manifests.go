@@ -561,11 +561,10 @@ func ManifestModify(w http.ResponseWriter, r *http.Request) {
 		// directory that will be removed along with this list,
 		// whenever that happens.
 		artifactExtraction.Go(func() {
-			storageConfig := runtime.StorageConfig()
 			// FIXME: knowing that this is the location of the
 			// per-image-record-stuff directory is a little too
 			// "inside storage"
-			fileDir, err := os.MkdirTemp(filepath.Join(runtime.GraphRoot(), storageConfig.GraphDriverName+"-images", manifestList.ID()), "")
+			fileDir, err := os.MkdirTemp(filepath.Join(runtime.GraphRoot(), runtime.GraphDriver()+"-images", manifestList.ID()), "")
 			if err != nil {
 				artifactExtractionError = err
 				return
