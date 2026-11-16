@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/storage"
+	graphdriver "go.podman.io/storage/drivers"
 )
 
 const schemaVersion = 1
@@ -310,6 +313,29 @@ func (s *SQLiteState) GetDBConfig() (*DBConfig, error) {
 	return cfg, nil
 }
 
+// graphDriverWithoutRecord returns the graph driver to check the requested
+// runtimeDriver against when the database has no graph driver recorded and
+// c/storage's default does not name one either.
+//
+// That happens if storage.conf does not set a driver: c/storage then selects
+// one when the store is opened, so the database was written with an empty
+// driver.  The database cannot tell which driver was in use, so a driver that
+// is explicitly requested (e.g. --storage-driver overlay) is accepted, unless
+// the graph root was already used with a different driver: using another
+// driver would silently present an empty store, so compare against the one
+// that is there.
+func graphDriverWithoutRecord(runtimeDriver, graphRoot string) string {
+	if runtimeDriver == "" {
+		return ""
+	}
+	priors := graphdriver.ScanPriorDrivers(graphRoot)
+	if len(priors) == 0 || priors[runtimeDriver] {
+		return runtimeDriver
+	}
+	names := slices.Sorted(maps.Keys(priors))
+	return names[0]
+}
+
 // ValidateDBConfig validates paths in the given runtime against the database.
 // If no containers/pods/volumes are present, overwrite the current cached
 // paths. If containers/pods/volumes are present, check for consistency and
@@ -438,6 +464,11 @@ func (s *SQLiteState) ValidateDBConfig(_ *Runtime) (defErr error) {
 	if graphDriver == "" {
 		logrus.Debugf("Database uses empty-string graph driver, substituting default %q", storeOpts.GraphDriverName)
 		graphDriver = storeOpts.GraphDriverName
+	}
+	// Neither the database nor the default names a driver: see
+	// graphDriverWithoutRecord().
+	if graphDriver == "" {
+		graphDriver = graphDriverWithoutRecord(runtimeGraphDriver, runtimeGraphRoot)
 	}
 
 	checkField := func(fieldName, dbVal, ourVal string, isPath bool) error {
