@@ -3,6 +3,7 @@
 package libpod
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,6 +122,54 @@ func TestValidateDBConfigProtectedWhenObjectsExist(t *testing.T) {
 	err = state.ValidateDBConfig(runtime)
 	require.Error(t, err)
 	require.ErrorIs(t, err, define.ErrDBBadConfig)
+}
+
+func TestValidateDBConfigGraphDriver(t *testing.T) {
+	t.Run("different driver in database is rejected", func(t *testing.T) {
+		runtime, state, manager := getSqliteStateWithFullConfig(t)
+
+		runtime.storageConfig.GraphDriverName = "overlay"
+		require.NoError(t, state.ValidateDBConfig(runtime))
+
+		ctr, err := getTestCtr1(manager)
+		require.NoError(t, err)
+		require.NoError(t, state.AddContainer(ctr))
+
+		runtime.storageConfig.GraphDriverName = "vfs"
+		err = state.ValidateDBConfig(runtime)
+		require.Error(t, err)
+		require.ErrorIs(t, err, define.ErrDBBadConfig)
+	})
+}
+
+func TestGraphDriverWithoutRecord(t *testing.T) {
+	withDrivers := func(t *testing.T, names ...string) string {
+		t.Helper()
+		root := t.TempDir()
+		for _, name := range names {
+			require.NoError(t, os.Mkdir(filepath.Join(root, name), 0o700))
+		}
+		return root
+	}
+
+	tests := []struct {
+		name          string
+		runtimeDriver string
+		graphRootDirs []string
+		expected      string
+	}{
+		{"no driver requested", "", []string{"overlay"}, ""},
+		{"explicit driver, new graph root", "overlay", nil, "overlay"},
+		{"explicit driver, graph root used with it", "overlay", []string{"overlay"}, "overlay"},
+		{"explicit driver, graph root used with several", "vfs", []string{"overlay", "vfs"}, "vfs"},
+		{"explicit driver, graph root used with another", "vfs", []string{"overlay"}, "overlay"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := withDrivers(t, tt.graphRootDirs...)
+			assert.Equal(t, tt.expected, graphDriverWithoutRecord(tt.runtimeDriver, root))
+		})
+	}
 }
 
 func TestAddAndGetContainer(t *testing.T) {
