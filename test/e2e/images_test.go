@@ -61,7 +61,11 @@ var _ = Describe("Podman images", func() {
 		session = podmanTest.Podman([]string{"images", "-qn"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.OutputToStringArray()).To(HaveLen(len(CACHE_IMAGES)))
+		// AddImageToRWStore restores a second record for an image that is
+		// also visible in the read-only cache.  Image IDs are no longer
+		// content-derived, so both records are listed. That's why we
+		// expect the output length to be one more than the number of cache images.
+		Expect(session.OutputToStringArray()).To(HaveLen(len(CACHE_IMAGES) + 1))
 	})
 
 	It("podman images with digests", func() {
@@ -121,7 +125,8 @@ var _ = Describe("Podman images", func() {
 		session := podmanTest.Podman([]string{"images", "-q", ALPINE})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.OutputToStringArray()).To(HaveLen(1))
+		// One read-only cache record plus the record restored into the RW store.
+		Expect(session.OutputToStringArray()).To(HaveLen(2))
 
 		session = podmanTest.Podman([]string{"tag", ALPINE, "foo:a"})
 		session.WaitWithDefaultTimeout()
