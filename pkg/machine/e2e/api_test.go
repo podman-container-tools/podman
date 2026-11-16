@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/containers/podman/v5/pkg/machine"
+	"github.com/containers/podman/v5/pkg/machine/define"
 	"github.com/docker/docker/client"
 	jsoniter "github.com/json-iterator/go"
 	. "github.com/onsi/ginkgo/v2"
@@ -22,9 +24,6 @@ const (
 var _ = Describe("run podman API test calls", func() {
 
 	It("client connect to machine socket", func() {
-		if runtime.GOOS == "windows" {
-			Skip("Go docker client doesn't support unix socket on Windows")
-		}
 		name := randomString()
 		i := new(initMachine)
 		session, err := mb.setName(name).setCmd(i.withImage(mb.imagePath).withNow()).run()
@@ -40,26 +39,61 @@ var _ = Describe("run podman API test calls", func() {
 		err = jsoniter.Unmarshal(inspectSession.Bytes(), &inspectInfo)
 		Expect(err).ToNot(HaveOccurred())
 		sockPath := inspectInfo[0].ConnectionInfo.PodmanSocket.GetPath()
+		Eventually(sockPath, 10*time.Second).Should(BeAnExistingFile())
 
-		cli, err := client.NewClientWithOpts(client.WithHost("unix://" + sockPath))
-		Expect(err).ToNot(HaveOccurred())
-		_, err = cli.Ping(context.Background())
-		Expect(err).ToNot(HaveOccurred())
-
-		// check with curl
-		cmd := exec.Command("curl", "--unix-socket", sockPath, "http://d/v5.0.0/libpod/info")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Run()
-		Expect(err).ToNot(HaveOccurred())
-
-		if runtime.GOOS == "windows" {
-			// check that the pipe connection also works on windows
-			pipePath := inspectInfo[0].ConnectionInfo.PodmanPipe.GetPath()
-			cli, err := client.NewClientWithOpts(client.WithHost(NamedPipeProto + filepath.ToSlash(pipePath)))
+		checkAPI := func() {
+			// check with docker client
+			host := "unix://" + sockPath
+			if runtime.GOOS == "windows" {
+				// Go docker client doesn't support unix socket on Windows,
+				// use the pipe connection instead
+				host = NamedPipeProto + filepath.ToSlash(inspectInfo[0].ConnectionInfo.PodmanPipe.GetPath())
+			}
+			cli, err := client.NewClientWithOpts(client.WithHost(host))
 			Expect(err).ToNot(HaveOccurred())
 			_, err = cli.Ping(context.Background())
 			Expect(err).ToNot(HaveOccurred())
+
+			// check with curl
+			cmd := exec.Command("curl", "--unix-socket", sockPath, "http://d/v5.0.0/libpod/info")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+			Expect(err).ToNot(HaveOccurred())
 		}
+		checkAPI()
+
+		// Kill the proxy without giving it a chance to remove its socket, as
+		// happens when the host shuts down. The next start must still bring
+		// the API back.
+		// gvproxy writes its pid file next to the API socket.
+		runtimeDir := filepath.Dir(inspectInfo[0].ConnectionInfo.PodmanSocket.Path)
+		pid := apiProxyPID(name, runtimeDir)
+		proxy, err := os.FindProcess(pid)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(proxy.Kill()).To(Succeed())
+		Eventually(func() bool { return processExists(pid) }, 10*time.Second).Should(BeFalse())
+		Expect(sockPath).To(BeAnExistingFile())
+
+		stop := new(stopMachine)
+		stopSession, err := mb.setCmd(stop).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stopSession).To(Exit(0))
+
+		start := new(startMachine)
+		startSession, err := mb.setCmd(start).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(startSession).To(Exit(0))
+
+		checkAPI()
 	})
 })
+
+// gvproxyPID returns the PID recorded in the gvproxy pid file in runtimeDir.
+func gvproxyPID(runtimeDir string) int {
+	pidFile, err := define.NewMachineFile(filepath.Join(runtimeDir, "gvproxy.pid"), nil)
+	Expect(err).ToNot(HaveOccurred())
+	pid, err := pidFile.ReadPIDFrom()
+	Expect(err).ToNot(HaveOccurred())
+	return pid
+}

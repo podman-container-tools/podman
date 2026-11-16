@@ -54,6 +54,10 @@ func waitOnProcess(processID int) error {
 
 	p, err := psutil.NewProcess(int32(processID))
 	if err != nil {
+		if errors.Is(err, psutil.ErrorProcessNotRunning) {
+			logrus.Debugf("Gvproxy already dead, exiting cleanly")
+			return nil
+		}
 		return fmt.Errorf("looking up PID %d: %w", processID, err)
 	}
 
