@@ -15,6 +15,8 @@ import (
 type fastEnc interface {
 	Encode(dst *tokens, src []byte)
 	Reset()
+	// hasHistory reports whether there is previous data to match against.
+	hasHistory() bool
 }
 
 func newFastEnc(level int) fastEnc {
@@ -48,6 +50,15 @@ const (
 	bTableSize   = 1 << bTableBits                                  // Size of the table
 	allocHistory = maxStoreBlockSize * 5                            // Size to preallocate for history.
 	bufferReset  = (1 << 31) - allocHistory - maxStoreBlockSize - 1 // Reset the buffer offset when reaching this.
+
+	// inputMargin is the number of bytes the encoders must be able to read
+	// past the last position they look for a match at.
+	inputMargin = 12 - 1
+
+	// minNonLiteralBlockSize is the smallest block Encode will emit tokens for.
+	// Smaller blocks are only added to the history and must be written by the
+	// caller.
+	minNonLiteralBlockSize = 1 + 1 + inputMargin
 )
 
 const (
@@ -188,3 +199,5 @@ func (e *fastGen) Reset() {
 	}
 	e.hist = e.hist[:0]
 }
+
+func (e *fastGen) hasHistory() bool { return len(e.hist) > 0 }

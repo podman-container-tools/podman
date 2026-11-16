@@ -9,11 +9,7 @@ type fastEncL5 struct {
 }
 
 func (e *fastEncL5) Encode(dst *tokens, src []byte) {
-	const (
-		inputMargin            = 12 - 1
-		minNonLiteralBlockSize = 1 + 1 + inputMargin
-		hashShortBytes         = 4
-	)
+	const hashShortBytes = 4
 	if debugDeflate && e.cur < 0 {
 		panic(fmt.Sprint("e.cur < 0: ", e.cur))
 	}
@@ -320,11 +316,7 @@ type fastEncL5Window struct {
 }
 
 func (e *fastEncL5Window) Encode(dst *tokens, src []byte) {
-	const (
-		inputMargin            = 12 - 1
-		minNonLiteralBlockSize = 1 + 1 + inputMargin
-		hashShortBytes         = 4
-	)
+	const hashShortBytes = 4
 	maxMatchOffset := e.maxOffset
 	if debugDeflate && e.cur < 0 {
 		panic(fmt.Sprint("e.cur < 0: ", e.cur))
@@ -635,6 +627,8 @@ func (e *fastEncL5Window) Reset() {
 	}
 	e.hist = e.hist[:0]
 }
+
+func (e *fastEncL5Window) hasHistory() bool { return len(e.hist) > 0 }
 
 func (e *fastEncL5Window) addBlock(src []byte) int32 {
 	// check if we have space already

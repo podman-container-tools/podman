@@ -134,6 +134,12 @@ func (s *Scratch) prepare(in []byte) (*Scratch, error) {
 	return s, nil
 }
 
+// cleanup clears any pointers to user supplied buffers.
+func (s *Scratch) cleanup() {
+	s.br.b = nil
+	s.bits.in = nil
+}
+
 // tableStep returns the next table index.
 func tableStep(tableSize uint32) uint32 {
 	return (tableSize >> 1) + (tableSize >> 3) + 3

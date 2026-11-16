@@ -57,64 +57,44 @@ func (d *Decoder) Decompress4X(dst, src []byte) ([]byte, error) {
 	var off uint8
 	var decoded int
 
-	// Decode 2 values from each decoder/loop.
+	// Decode 4 values from each stream per loop. Each stream is refilled
+	// with one branch-free load, which leaves at least 57 bits: enough for
+	// 4 symbols of up to tableLogMax bits. A refill moves back at most
+	// 6 bytes, so off >= 8 keeps it in range.
 	const bufoff = 256
-	for {
-		if br[0].off < 4 || br[1].off < 4 || br[2].off < 4 || br[3].off < 4 {
-			break
-		}
+	tab := (*[tlSize]dEntrySingle)(single)
+	peek := 64 - d.actualTableLog
+	in0, in1, in2, in3 := br[0].in, br[1].in, br[2].in, br[3].in
+	s0, s1, s2, s3 := br[0].state(), br[1].state(), br[2].state(), br[3].state()
+	for s0.off >= 8 && s1.off >= 8 && s2.off >= 8 && s3.off >= 8 {
+		s0, s1, s2, s3 = s0.refill(in0), s1.refill(in1), s2.refill(in2), s3.refill(in3)
+		var v0, v1, v2, v3 uint8
 
-		{
-			const stream = 0
-			const stream2 = 1
-			br[stream].fillFast()
-			br[stream2].fillFast()
+		s0, v0 = s0.decode(tab, peek)
+		s1, v1 = s1.decode(tab, peek)
+		s2, v2 = s2.decode(tab, peek)
+		s3, v3 = s3.decode(tab, peek)
+		buf[0][off], buf[1][off], buf[2][off], buf[3][off] = v0, v1, v2, v3
 
-			val := br[stream].peekBitsFast(d.actualTableLog)
-			val2 := br[stream2].peekBitsFast(d.actualTableLog)
-			v := single[val&tlMask]
-			v2 := single[val2&tlMask]
-			br[stream].advance(uint8(v.entry))
-			br[stream2].advance(uint8(v2.entry))
-			buf[stream][off] = uint8(v.entry >> 8)
-			buf[stream2][off] = uint8(v2.entry >> 8)
+		s0, v0 = s0.decode(tab, peek)
+		s1, v1 = s1.decode(tab, peek)
+		s2, v2 = s2.decode(tab, peek)
+		s3, v3 = s3.decode(tab, peek)
+		buf[0][off+1], buf[1][off+1], buf[2][off+1], buf[3][off+1] = v0, v1, v2, v3
 
-			val = br[stream].peekBitsFast(d.actualTableLog)
-			val2 = br[stream2].peekBitsFast(d.actualTableLog)
-			v = single[val&tlMask]
-			v2 = single[val2&tlMask]
-			br[stream].advance(uint8(v.entry))
-			br[stream2].advance(uint8(v2.entry))
-			buf[stream][off+1] = uint8(v.entry >> 8)
-			buf[stream2][off+1] = uint8(v2.entry >> 8)
-		}
+		s0, v0 = s0.decode(tab, peek)
+		s1, v1 = s1.decode(tab, peek)
+		s2, v2 = s2.decode(tab, peek)
+		s3, v3 = s3.decode(tab, peek)
+		buf[0][off+2], buf[1][off+2], buf[2][off+2], buf[3][off+2] = v0, v1, v2, v3
 
-		{
-			const stream = 2
-			const stream2 = 3
-			br[stream].fillFast()
-			br[stream2].fillFast()
+		s0, v0 = s0.decode(tab, peek)
+		s1, v1 = s1.decode(tab, peek)
+		s2, v2 = s2.decode(tab, peek)
+		s3, v3 = s3.decode(tab, peek)
+		buf[0][off+3], buf[1][off+3], buf[2][off+3], buf[3][off+3] = v0, v1, v2, v3
 
-			val := br[stream].peekBitsFast(d.actualTableLog)
-			val2 := br[stream2].peekBitsFast(d.actualTableLog)
-			v := single[val&tlMask]
-			v2 := single[val2&tlMask]
-			br[stream].advance(uint8(v.entry))
-			br[stream2].advance(uint8(v2.entry))
-			buf[stream][off] = uint8(v.entry >> 8)
-			buf[stream2][off] = uint8(v2.entry >> 8)
-
-			val = br[stream].peekBitsFast(d.actualTableLog)
-			val2 = br[stream2].peekBitsFast(d.actualTableLog)
-			v = single[val&tlMask]
-			v2 = single[val2&tlMask]
-			br[stream].advance(uint8(v.entry))
-			br[stream2].advance(uint8(v2.entry))
-			buf[stream][off+1] = uint8(v.entry >> 8)
-			buf[stream2][off+1] = uint8(v2.entry >> 8)
-		}
-
-		off += 2
+		off += 4
 
 		if off == 0 {
 			if bufoff > dstEvery {
@@ -126,10 +106,6 @@ func (d *Decoder) Decompress4X(dst, src []byte) ([]byte, error) {
 				d.bufs.Put(buf)
 				return nil, errors.New("corruption detected: stream overrun 2")
 			}
-			//copy(out, buf[0][:])
-			//copy(out[dstEvery:], buf[1][:])
-			//copy(out[dstEvery*2:], buf[2][:])
-			//copy(out[dstEvery*3:], buf[3][:])
 			*(*[bufoff]byte)(out) = buf[0]
 			*(*[bufoff]byte)(out[dstEvery:]) = buf[1]
 			*(*[bufoff]byte)(out[dstEvery*2:]) = buf[2]
@@ -138,6 +114,10 @@ func (d *Decoder) Decompress4X(dst, src []byte) ([]byte, error) {
 			decoded += bufoff * 4
 		}
 	}
+	br[0].setState(s0)
+	br[1].setState(s1)
+	br[2].setState(s2)
+	br[3].setState(s3)
 	if off > 0 {
 		ioff := int(off)
 		if len(out) < dstEvery*3+ioff {
