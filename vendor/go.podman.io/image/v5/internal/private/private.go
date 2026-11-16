@@ -212,6 +212,8 @@ func (e BadPartialRequestError) Error() string {
 	return e.Status
 }
 
+var _ error = BadPartialRequestError{} // Disambiguate whether *BadPartialRequestError or BadPartialRequestError is expected to be used, for the ptrtoerror linter.
+
 // UnparsedImage is an internal extension to the types.UnparsedImage interface.
 type UnparsedImage interface {
 	types.UnparsedImage

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -23,6 +22,10 @@ type driverConfig struct {
 	KeyID string
 	// GPGHomedir is the homedir where the GPG keys are stored
 	GPGHomedir string
+	// GPGProgram is the executable used for GPG operations.
+	GPGProgram string
+	// ShowGPGStderr sends GPG diagnostics to the caller's standard error.
+	ShowGPGStderr bool
 }
 
 func (cfg *driverConfig) ParseOpts(opts map[string]string) {
@@ -36,10 +39,16 @@ func (cfg *driverConfig) ParseOpts(opts map[string]string) {
 	if val, ok := opts["gpghomedir"]; ok {
 		cfg.GPGHomedir = val
 	}
+	if val, ok := opts["gpg_program"]; ok {
+		cfg.GPGProgram = val
+	}
+	if val, ok := opts["show_stderr"]; ok {
+		cfg.ShowGPGStderr = val == "true"
+	}
 }
 
 func defaultDriverConfig() *driverConfig {
-	cfg := &driverConfig{}
+	cfg := &driverConfig{GPGProgram: "gpg"}
 
 	if home, err := os.UserHomeDir(); err == nil {
 		defaultLocations := []string{
@@ -117,8 +126,14 @@ func (d *Driver) Lookup(id string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := os.Stat(key); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%s: %w", id, define.ErrNoSuchSecret)
+		}
+		return nil, fmt.Errorf("checking secret %s: %w", id, err)
+	}
 	if err := d.gpg(context.TODO(), nil, out, "--decrypt", key); err != nil {
-		return nil, fmt.Errorf("%s: %w", id, define.ErrNoSuchSecret)
+		return nil, fmt.Errorf("decrypting secret %s: %w", id, err)
 	}
 	if out.Len() == 0 {
 		return nil, fmt.Errorf("%s: %w", id, define.ErrNoSuchSecret)
@@ -128,14 +143,16 @@ func (d *Driver) Lookup(id string) ([]byte, error) {
 
 // Store saves the bytes associated with an ID. An error is returned if the ID already exists.
 func (d *Driver) Store(id string, data []byte) error {
-	if _, err := d.Lookup(id); err == nil {
-		return fmt.Errorf("%s: %w", id, define.ErrSecretIDExists)
-	}
-	in := bytes.NewReader(data)
 	key, err := d.getPath(id)
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(key); err == nil {
+		return fmt.Errorf("%s: %w", id, define.ErrSecretIDExists)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking secret %s: %w", id, err)
+	}
+	in := bytes.NewReader(data)
 	return d.gpg(context.TODO(), in, nil, "--encrypt", "-r", d.KeyID, "-o", key)
 }
 
@@ -158,11 +175,18 @@ func (d *Driver) gpg(ctx context.Context, in io.Reader, out io.Writer, args ...s
 	if d.GPGHomedir != "" {
 		args = append([]string{"--homedir", d.GPGHomedir}, args...)
 	}
-	cmd := exec.CommandContext(ctx, "gpg", args...)
+	cmd, err := gpgCommand(ctx, d.GPGProgram, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Env = os.Environ()
 	cmd.Stdin = in
 	cmd.Stdout = out
-	cmd.Stderr = io.Discard
+	if d.ShowGPGStderr {
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stderr = io.Discard
+	}
 	return cmd.Run()
 }
 

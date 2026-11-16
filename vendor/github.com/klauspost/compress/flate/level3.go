@@ -11,11 +11,9 @@ type fastEncL3 struct {
 // Encode uses a similar algorithm to level 2, will check up to two candidates.
 func (e *fastEncL3) Encode(dst *tokens, src []byte) {
 	const (
-		inputMargin            = 12 - 1
-		minNonLiteralBlockSize = 1 + 1 + inputMargin
-		tableBits              = 16
-		tableSize              = 1 << tableBits
-		hashBytes              = 5
+		tableBits = 16
+		tableSize = 1 << tableBits
+		hashBytes = 5
 	)
 
 	if debugDeflate && e.cur < 0 {

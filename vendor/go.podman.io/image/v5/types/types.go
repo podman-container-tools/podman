@@ -372,6 +372,8 @@ func (e ManifestTypeRejectedError) Error() string {
 	return e.Err.Error()
 }
 
+var _ error = ManifestTypeRejectedError{} // Disambiguate whether *ManifestTypeRejectedError or ManifestTypeRejectedError is expected to be used, for the ptrtoerror linter.
+
 // UnparsedImage is an Image-to-be; until it is verified and accepted, it only caries its identity and caches manifest and signature blobs.
 // Thus, an UnparsedImage can be created from an ImageSource simply by fetching blobs without interpreting them,
 // allowing cryptographic signature verification to happen first, before even fetching the manifest, or parsing anything else.

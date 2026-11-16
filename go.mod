@@ -41,7 +41,7 @@ require (
 	github.com/mdlayher/vsock v1.4.0
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/moby/api v1.57.0
-	github.com/moby/moby/client v0.6.2
+	github.com/moby/moby/client v0.6.3
 	github.com/moby/sys/capability v0.5.0
 	github.com/moby/sys/user v0.5.0
 	github.com/moby/term v0.5.2
@@ -65,9 +65,9 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/bbolt v1.5.0
 	go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14
-	go.podman.io/common v0.70.1-0.20261105174844-179286b8f253
-	go.podman.io/image/v5 v5.42.1-0.20261105174844-179286b8f253
-	go.podman.io/storage v1.65.1-0.20261105174844-179286b8f253
+	go.podman.io/common v0.70.1-0.20261116084638-6da6e80dc141
+	go.podman.io/image/v5 v5.42.2-0.20261116084638-6da6e80dc141
+	go.podman.io/storage v1.65.2-0.20261116084638-6da6e80dc141
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.25.0
@@ -111,7 +111,7 @@ require (
 	github.com/digitalocean/go-libvirt v0.0.0-20220804181439-8648fbde413e // indirect
 	github.com/disiqueira/gotree/v3 v3.0.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/docker-credential-helpers v0.9.12 // indirect
+	github.com/docker/docker-credential-helpers v0.9.13 // indirect
 	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
@@ -129,7 +129,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/compress v1.20.4 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20240909124753-873cd0166683 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
@@ -184,7 +184,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/oauth2 v0.37.0 // indirect
+	golang.org/x/oauth2 v0.38.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260825221802-da73d73af1c5 // indirect

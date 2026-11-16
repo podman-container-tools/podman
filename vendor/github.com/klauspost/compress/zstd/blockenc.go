@@ -376,6 +376,7 @@ func (b *blockEnc) encodeLits(lits []byte, raw bool) error {
 		lh.setSizes(len(out), len(lits), single)
 		if len(out)+lh.size() >= len(lits) {
 			err = huff0.ErrIncompressible
+			b.dropUnwrittenTable(reUsed)
 		}
 	}
 	switch err {
@@ -427,6 +428,15 @@ func (b *blockEnc) encodeLits(lits []byte, raw bool) error {
 	// No sequences.
 	b.output = append(b.output, 0)
 	return nil
+}
+
+// dropUnwrittenTable stops later blocks reusing the literal table after
+// compressed literals are written raw: a new table became the previous one,
+// but the decoder never gets it.
+func (b *blockEnc) dropUnwrittenTable(reUsed bool) {
+	if !reUsed {
+		b.litEnc.Reuse = huff0.ReusePolicyNone
+	}
 }
 
 // encodeRLE will encode an RLE block.
@@ -540,6 +550,7 @@ func (b *blockEnc) encode(org []byte, raw, rawAllLits bool) error {
 		szComp := lh.size()
 		if len(out)+szComp >= len(b.literals)+szRaw {
 			err = huff0.ErrIncompressible
+			b.dropUnwrittenTable(reUsed)
 		}
 	}
 	switch err {

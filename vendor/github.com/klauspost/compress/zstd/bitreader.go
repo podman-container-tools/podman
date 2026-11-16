@@ -11,6 +11,7 @@ import (
 	"math/bits"
 
 	"github.com/klauspost/compress/internal/le"
+	"github.com/klauspost/compress/internal/regmask"
 )
 
 // bitReader reads a bitstream in reverse.
@@ -64,17 +65,6 @@ func (b *bitReader) get32BitsFast(n uint8) uint32 {
 	return v
 }
 
-// fillFast() will make sure at least 32 bits are available.
-// There must be at least 4 bytes available.
-func (b *bitReader) fillFast() {
-	if b.bitsRead < 32 {
-		return
-	}
-	b.cursor -= 4
-	b.value = (b.value << 32) | uint64(le.Load32(b.in, b.cursor))
-	b.bitsRead -= 32
-}
-
 // fillFastStart() assumes the bitreader is empty and there is at least 8 bytes to read.
 func (b *bitReader) fillFastStart() {
 	b.cursor -= 8
@@ -99,6 +89,57 @@ func (b *bitReader) fill() {
 		b.cursor -= 1
 		b.value = (b.value << 8) | uint64(b.in[b.cursor])
 	}
+}
+
+// bitReadState is the part of a bitReader that changes while reading.
+// Decode loops hold it by value so it stays in registers.
+type bitReadState struct {
+	value    uint64
+	cursor   int
+	bitsRead uint8
+}
+
+func (b *bitReader) state() bitReadState {
+	return bitReadState{value: b.value, cursor: b.cursor, bitsRead: b.bitsRead}
+}
+
+func (b *bitReader) setState(s bitReadState) {
+	b.value, b.cursor, b.bitsRead = s.value, s.cursor, s.bitsRead
+}
+
+// getBits is bitReader.getBits.
+func (s bitReadState) getBits(n uint8) (bitReadState, int) {
+	if n == 0 {
+		return s, 0
+	}
+	s, v := s.get32BitsFast(n)
+	return s, int(v)
+}
+
+// get32BitsFast is bitReader.get32BitsFast.
+func (s bitReadState) get32BitsFast(n uint8) (bitReadState, uint32) {
+	v := uint32((s.value << (s.bitsRead & regmask.Shift64ByUint8)) >> ((64 - n) & regmask.Shift64ByUint8))
+	s.bitsRead += n
+	return s, v
+}
+
+// fill is bitReader.fill reading from in.
+func (s bitReadState) fill(in []byte) bitReadState {
+	if s.bitsRead < 32 {
+		return s
+	}
+	if s.cursor >= 4 {
+		s.cursor -= 4
+		s.value = (s.value << 32) | uint64(le.Load32(in, s.cursor))
+		s.bitsRead -= 32
+		return s
+	}
+	s.bitsRead -= uint8(8 * s.cursor)
+	for s.cursor > 0 {
+		s.cursor--
+		s.value = (s.value << 8) | uint64(in[s.cursor])
+	}
+	return s
 }
 
 // finished returns true if all bits have been read from the bit stream.

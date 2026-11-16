@@ -64,9 +64,11 @@ func getCPUInfo(pattern string) (info string, err error) {
 	return "", fmt.Errorf("getCPUInfo for pattern: %s not found", pattern)
 }
 
-func getCPUVariantDarwinWindows(arch string) string {
-	// Darwin and Windows only support v7 for ARM32 and v8 for ARM64 and so we can use
-	// runtime.GOARCH to determine the variants
+func getCPUVariantFromArch(arch string) string {
+	// ARMv8 is unambiguously 64-bit. Assuming v7 for 32-bit ARM is a safe guess:
+	// it's strictly true for Darwin/Windows and fine for FreeBSD in practice. On FreeBSD,
+	// ARMv6 is effectively deprecated and ARMv7 lacks pre-built packages, so this
+	// assumption won't impact realistic workloads (https://www.freebsd.org/platforms/).
 	var variant string
 	switch arch {
 	case "arm64":
@@ -80,7 +82,7 @@ func getCPUVariantDarwinWindows(arch string) string {
 	return variant
 }
 
-func getCPUVariantArm() string {
+func getCPUVariantLinuxArm() string {
 	variant, err := getCPUInfo("Cpu architecture")
 	if err != nil {
 		logrus.Errorf("Couldn't get cpu architecture: %v", err)
@@ -133,11 +135,13 @@ func getCPUVariantArm() string {
 }
 
 func getCPUVariant(os string, arch string) string {
-	if os == "darwin" || os == "windows" {
-		return getCPUVariantDarwinWindows(arch)
+	// Only Linux exposes the CPU variant via /proc/cpuinfo; on other OSes
+	// (darwin, windows, freebsd) infer it from the architecture (arm64 -> v8).
+	if os != "linux" {
+		return getCPUVariantFromArch(arch)
 	}
 	if arch == "arm" || arch == "arm64" {
-		return getCPUVariantArm()
+		return getCPUVariantLinuxArm()
 	}
 	return ""
 }
