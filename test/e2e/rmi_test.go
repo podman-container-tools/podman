@@ -149,7 +149,11 @@ var _ = Describe("Podman rmi", func() {
 		session = podmanTest.Podman([]string{"images", "-q"})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
-		Expect(session.OutputToStringArray()).To(HaveLen(len(CACHE_IMAGES) + 1))
+		// AddImageToRWStore restores a second record for ALPINE, which is
+		// already visible in the read-only cache (image IDs are no longer
+		// content-derived).  The committed "test1" image accounts for the
+		// other extra entry.
+		Expect(session.OutputToStringArray()).To(HaveLen(len(CACHE_IMAGES) + 2))
 	})
 
 	It("podman rmi with cached images", func() {
