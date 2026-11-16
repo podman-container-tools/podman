@@ -169,6 +169,9 @@ func systemd(cmd *cobra.Command, args []string) error {
 	case 2:
 		return fmt.Errorf("%s and %s are redundant and cannot be used together", stopTimeoutFlagName, stopTimeoutCompatFlagName)
 	}
+	if format != "" && !report.IsJSON(format) {
+		return fmt.Errorf("unknown --format argument: %s", format)
+	}
 
 	reports, err := registry.ContainerEngine().GenerateSystemd(cmd.Context(), args[0], systemdOptions)
 	if err != nil {
@@ -205,14 +208,10 @@ func systemd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	switch {
-	case report.IsJSON(format):
+	if report.IsJSON(format) {
 		return printJSON(reports.Units)
-	case format == "":
-		return printDefault(reports.Units)
-	default:
-		return fmt.Errorf("unknown --format argument: %s", format)
 	}
+	return printDefault(reports.Units)
 }
 
 func printDefault(units map[string]string) error {

@@ -62,6 +62,9 @@ func mount(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && mountOpts.All {
 		return errors.New("when using the --all switch, you may not pass any image names or IDs")
 	}
+	if mountOpts.Format != "" && !report.IsJSON(mountOpts.Format) {
+		return fmt.Errorf("unknown --format argument: %q", mountOpts.Format)
+	}
 
 	reports, err := registry.ImageEngine().Mount(cmd.Context(), args, mountOpts)
 	if err != nil {
@@ -76,13 +79,8 @@ func mount(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	switch {
-	case report.IsJSON(mountOpts.Format):
+	if report.IsJSON(mountOpts.Format) {
 		return printJSON(reports)
-	case mountOpts.Format == "":
-		break // see default format below
-	default:
-		return fmt.Errorf("unknown --format argument: %q", mountOpts.Format)
 	}
 
 	mrs := make([]mountReporter, 0, len(reports))

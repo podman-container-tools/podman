@@ -112,6 +112,18 @@ var _ = Describe("Podman generate systemd", func() {
 		Expect(session.OutputToString()).To(ContainSubstring("/container-nginx.service"))
 	})
 
+	It("podman generate systemd --files with unknown format writes no file", func() {
+		podmanTest.PodmanExitCleanly("create", "--name", "foobar", ALPINE, "top")
+
+		session := podmanTest.Podman([]string{"generate", "systemd", "--files", "--name", "--format", "foo", "foobar"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).To(ExitWithError(125, "unknown --format argument: foo"))
+
+		cwd, err := os.Getwd()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(filepath.Join(cwd, "container-foobar.service")).ToNot(BeAnExistingFile())
+	})
+
 	It("podman generate systemd with timeout", func() {
 		n := podmanTest.Podman([]string{"run", "--name", "nginx", "-dt", NGINX_IMAGE})
 		n.WaitWithDefaultTimeout()

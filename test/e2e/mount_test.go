@@ -69,6 +69,27 @@ var _ = Describe("Podman mount", func() {
 		Expect(umount).Should(ExitCleanly())
 	})
 
+	It("podman mount with unknown format does not mount", func() {
+		setup := podmanTest.PodmanExitCleanly("create", ALPINE, "ls")
+		cid := setup.OutputToString()
+
+		mount := podmanTest.Podman([]string{"mount", "--format={{.foobar}}", cid})
+		mount.WaitWithDefaultTimeout()
+		Expect(mount).To(ExitWithError(125, `unknown --format argument: "{{.foobar}}"`))
+
+		lmount := podmanTest.PodmanExitCleanly("mount")
+		Expect(lmount.OutputToString()).To(Equal(""))
+	})
+
+	It("podman image mount with unknown format does not mount", func() {
+		mount := podmanTest.Podman([]string{"image", "mount", "--format={{.foobar}}", ALPINE})
+		mount.WaitWithDefaultTimeout()
+		Expect(mount).To(ExitWithError(125, `unknown --format argument: "{{.foobar}}"`))
+
+		lmount := podmanTest.PodmanExitCleanly("image", "mount")
+		Expect(lmount.OutputToString()).To(Equal(""))
+	})
+
 	It("podman mount many", func() {
 		setup1 := podmanTest.Podman([]string{"create", ALPINE, "ls"})
 		setup1.WaitWithDefaultTimeout()
