@@ -728,7 +728,7 @@ localmachine: ## Run machine tests locally (pkg/machine/e2e/)
 	$(MAKE) ginkgo-run GINKGO_PARALLEL=n TAGS="$(REMOTETAGS)" GINKGO_FLAKE_ATTEMPTS=0 FOCUS_FILE=$(FOCUS_FILE) GINKGOWHAT=pkg/machine/e2e/.
 
 .PHONY: localsystem
-localsystem: ## Run system tests locally (test/system/)
+localsystem: bin/podman bin/quadlet ## Run system tests locally (test/system/)
 	# Wipe existing config, database, and cache: start with clean slate.
 	$(RM) -rf ${HOME}/.local/share/containers ${HOME}/.config/containers
 	PODMAN=$(CURDIR)/bin/podman QUADLET=$(CURDIR)/bin/quadlet bats -T --filter-tags '!ci:parallel' test/system/
@@ -736,7 +736,7 @@ localsystem: ## Run system tests locally (test/system/)
 
 
 .PHONY: remotesystem
-remotesystem: ## Run system tests for remote client (test/system/)
+remotesystem: podman-remote quadlet ## Run system tests for remote client (test/system/)
 	# Wipe existing config, database, and cache: start with clean slate.
 	$(RM) -rf ${HOME}/.local/share/containers ${HOME}/.config/containers
 	PODMAN=$(CURDIR)/bin/podman-remote QUADLET=$(CURDIR)/bin/quadlet \
