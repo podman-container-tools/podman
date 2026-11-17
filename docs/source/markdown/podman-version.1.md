@@ -21,7 +21,7 @@ Change output format to "json" or a Go template.
 | .Client ...         | Version of local podman  |
 | .Server ...         | Version of remote podman |
 
-Each of the above fields branch deeper into further subfields
+Each of the above fields branches deeper into further subfields
 such as .Version, .APIVersion, .GoVersion, and more.
 
 ## Example

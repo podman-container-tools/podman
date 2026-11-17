@@ -13,7 +13,7 @@ by your OS/Distro vendor.
 ## CI Artifacts
 
 If you're looking for something even more bleeding-edge, esp. for testing
-purposes and/or in other CI systems.  There are several permalinks available
+purposes and/or in other CI systems, there are several permalinks available
 depending on how much you want to download.  Everything inside has at least
 gone through and passed CI testing.  However, **they are all unsigned**, and
 frequently changing.  Perfectly fine for non-production testing but please
@@ -40,7 +40,7 @@ matches corresponding changes in the artifacts task.
   , and
   [rootlessport](https://api.cirrus-ci.com/v1/artifact/github/containers/podman/Artifacts/binary/rootlessport) -
   Built on the latest supported Fedora release.
-* MacOS
+* macOS
   [arm64](https://api.cirrus-ci.com/v1/artifact/github/containers/podman/Artifacts/binary/podman-installer-macos-arm64.pkg)
   installation package.  Again, this is **not** signed, so expect warnings if you try to install it.
   There's also a binary release *ZIP-file* for

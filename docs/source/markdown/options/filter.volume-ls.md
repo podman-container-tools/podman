@@ -21,7 +21,7 @@ Volumes can be filtered by the following attributes:
 | label       | [Key] or [Key=Value] Label assigned to a volume                                       |
 | label!      | [Key] or [Key=Value] Volumes without the specified label                              |
 | name        | [Name] Volume name (accepts regex)                                                    |
-| opt         | Matches a storage driver options                                                      |
+| opt         | Matches storage driver options                                                        |
 | scope       | Filters volume by scope                                                               |
 | after/since | Filter by volumes created after the given VOLUME (name or tag)                        |
 | until       | Filter by volumes created before given timestamp                                      |

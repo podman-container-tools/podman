@@ -22,7 +22,7 @@ Inspect all volumes.
 
 #### **--format**, **-f**=*format*
 
-Format volume output using Go template
+Format volume output using a Go template
 
 Valid placeholders for the Go template are listed below:
 

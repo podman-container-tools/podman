@@ -10,7 +10,7 @@ podman\-machine - Manage Podman's virtual machine
 `podman machine` is a set of subcommands that manage Podman's virtual machine.
 
 Podman on MacOS and Windows requires a virtual machine. This is because containers are Linux -
-containers do not run on any other OS because containers' core functionality are
+containers do not run on any other OS because containers' core functionality is
 tied to the Linux kernel. Podman machine must be used to manage MacOS and Windows machines,
 but can be optionally used on Linux.
 

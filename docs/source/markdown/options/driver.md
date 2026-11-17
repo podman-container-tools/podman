@@ -11,7 +11,7 @@
 Driver to manage the network. Currently `bridge`, `macvlan` and `ipvlan` are supported. Defaults to `bridge`.
 When running rootless, the `macvlan` and `ipvlan` drivers have no access to the host network interfaces because rootless networking requires a separate network namespace.
 
-The netavark backend allows the use of so called *netavark plugins*, see the
+The netavark backend allows the use of so-called *netavark plugins*, see the
 [plugin-API.md](https://github.com/containers/netavark/blob/main/plugin-API.md)
 documentation in netavark. The binary must be placed in a specified directory
 so Podman can discover it, this list is set in `netavark_plugin_dirs` in

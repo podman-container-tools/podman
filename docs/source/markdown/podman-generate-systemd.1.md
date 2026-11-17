@@ -41,7 +41,7 @@ active
 
 #### **--after**=*dependency_name*
 
-Add the systemd unit after (`After=`) option, that ordering dependencies between the list of dependencies and this service. This option may be specified more than once.
+Add the systemd unit after (`After=`) option, that orders the dependencies between this service and the list of dependencies. This option may be specified more than once.
 
 User-defined dependencies are appended to the generated unit file, but any existing options needed or defined by default (e.g., `online.target`) are **not** removed or overridden.
 
@@ -59,7 +59,7 @@ If an environment variable is specified without a value, Podman checks the host 
 
 Generate files instead of printing to stdout.  The generated files are named {container,pod}-{ID,name}.service and are placed in the current working directory.
 
-Note: On a system with SELinux enabled, the generated files inherits contexts from the current working directory. Depending on the SELinux setup, changes to the generated files using `restorecon`, `chcon`, or `semanage` may be required to allow systemd to access these files. Alternatively, use the `-Z` option when running `mv` or `cp`.
+Note: On a system with SELinux enabled, the generated files inherit contexts from the current working directory. Depending on the SELinux setup, changes to the generated files using `restorecon`, `chcon`, or `semanage` may be required to allow systemd to access these files. Alternatively, use the `-Z` option when running `mv` or `cp`.
 
 #### **--format**=*format*
 

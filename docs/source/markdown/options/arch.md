@@ -8,5 +8,5 @@
 #### **--arch**=*ARCH*
 << endif >>
 
-Override the architecture, defaults to the host, of the image to be pulled. For example, `arm`.
-Unless overridden, subsequent lookups of the same image in the local storage matches this architecture, regardless of the host.
+Override the architecture (which defaults to the host) of the image to be pulled. For example, `arm`.
+Unless overridden, subsequent lookups of the same image in the local storage match this architecture, regardless of the host.

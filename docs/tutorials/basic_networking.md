@@ -39,7 +39,7 @@ Most containers and pods being run with Podman adhere to a couple of simple scen
 By default, rootful Podman will create a bridged network.  This is the most straightforward
 and preferred network setup for Podman. Bridge networking creates an interface for
 the container on an internal bridge network, which is then connected to the internet
-via Network Address Translation(NAT).  We also see users wanting to use `macvlan`
+via Network Address Translation (NAT).  We also see users wanting to use `macvlan`
 for networking as well. The `macvlan` plugin forwards an entire network interface
 from the host into the container, allowing it access to the network the host is connected
 to. And finally, the default network configuration for rootless containers is pasta.
@@ -48,7 +48,7 @@ user-mode networking for containers.
 
 ### Bridge
 
-A bridge network is defined as an internal network is created where both the
+A bridge network is defined as an internal network that is created where both the
 container and host are attached.  Then this network is capable of allowing the containers
 to communicate outside the host.
 
@@ -78,7 +78,7 @@ As mentioned earlier, pasta is the default network configuration for rootless
 users. Rootless users can also use netavark for bridge networking.
 The user experience of rootless netavark is very akin to a rootful netavark, except that
 there is no default network configuration provided. You simply need to create a
-network, and the one will be created as a bridge network.
+network, and it will be created as a bridge network.
 
 By default, rootless bridge networks use `rootlessport` for port forwarding.
 `rootlessport` is a userspace proxy that attempts to preserve the original
@@ -100,7 +100,7 @@ will be executed inside an extra network namespace. To join this namespace, use
 
 #### Default Network
 
-The default network `podman` with netavark is memory-only.  It does not support dns resolution because of backwards compatibility with Docker.  To change settings, export the in-memory network and change the file.
+The default network `podman` with netavark is memory-only.  It does not support DNS resolution because of backwards compatibility with Docker.  To change settings, export the in-memory network and change the file.
 
 For the default rootful network use
 ```
@@ -116,7 +116,7 @@ podman network inspect podman | jq .[] > ~/.local/share/containers/storage/netwo
 
 #### Example
 
-By default, rootful containers use the netavark for its default network if
+By default, rootful containers use netavark as their default network if
 you have not migrated from Podman v3.
 In this case, no network name must be passed to Podman.  However, you can create
 additional bridged networks with the podman create command.

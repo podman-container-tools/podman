@@ -32,7 +32,7 @@ Examples for these transports in URI form are provided below.
 
 Podman machine images are stored as OCI images at `quay.io/podman/machine-os`. When applying an image using this
 command, the fully qualified OCI reference name must be used including tag where the tag is the
-version of Podman that is inside the VM. By default, Podman will attempt to pull only the statement
+version of Podman that is inside the VM. By default, Podman will attempt to pull only the same
 version as itself.
 
 The default machine name is `podman-machine-default`. If a machine name is not specified as an argument,
@@ -73,7 +73,7 @@ $ podman machine os apply containers-storage:[/home/core/.local/share/containers
 ```
 
 Apply a new custom operating system that was pulled or built on your existing machine by the privileged user.  Note that
-because a privileged user built or pulled the image, `bootc` will resolve that users storage and the path
+because a privileged user built or pulled the image, `bootc` will resolve that user's storage and the path
 is not needed.
 ```
 $ podman machine os apply containers-storage:localhost/mycustomimage:latest

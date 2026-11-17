@@ -1,6 +1,6 @@
 # Running the machine tests
 
-This document is a quick how-to run machine tests. Not all dependencies, like
+This document is a quick how-to on running machine tests. Not all dependencies, like
 `gvproxy` are documented. You must install `gvproxy` in all cases described
 below.
 
@@ -16,14 +16,14 @@ You must not have any machines defined before running tests. Consider running
 ### Scoping tests
 
 You can scope tests in the machine suite by adding various incantations of
-`FOCUS=`. For example, add `FOCUS_FILE=basic_test.go` to only run basic test. Or
-add `FOCUS="simple init with start"` to only run one test case. For windows, the
-syntax differs slightly. In windows, executing something like following achieves
+`FOCUS=`. For example, add `FOCUS_FILE=basic_test.go` to only run the basic test. Or
+add `FOCUS="simple init with start"` to only run one test case. For Windows, the
+syntax differs slightly. In Windows, executing something like the following achieves
 the same result:
 
 `./winmake localmachine "basic_test.go start_test.go"`
 
-To focus on one specific test on windows, run `ginkgo` manually:
+To focus on one specific test on Windows, run `ginkgo` manually:
 
 ```pwsh
 $remotetags = "remote exclude_graphdriver_btrfs containers_image_openpgp"
@@ -50,7 +50,7 @@ above.
 
 ### Hyper-V
 
-1. Open a powershell as admin
+1. Open a PowerShell as admin
 1. `.\winmake.ps1 podman-remote && .\winmake.ps1 win-gvproxy`
 1. `$env:CONTAINERS_HELPER_BINARY_DIR="$pwd\bin\windows"`
 1. `$env:CONTAINERS_MACHINE_PROVIDER="hyperv"`
@@ -58,7 +58,7 @@ above.
 
 ### WSL
 
-1. Open a powershell as a regular user
+1. Open a PowerShell as a regular user
 1. `.\winmake.ps1 podman-remote && .\winmake.ps1 win-gvproxy`
 1. `$env:CONTAINERS_HELPER_BINARY_DIR="$pwd\bin\windows"`
 1. `$env:CONTAINERS_MACHINE_PROVIDER="wsl"`

@@ -9,7 +9,7 @@ one or more engineers.
 
 ## Future feature considerations
 
-The following features are of general importantance to Podman.  While these features have no timeline
+The following features are of general importance to Podman.  While these features have no timeline
 associated with them yet, they will likely be on future quarterly milestones.
 
 * Further improvements to `podman machine` to better support Podman Desktop and other developer usecases.
@@ -35,7 +35,7 @@ This section is a historical account of what features were prioritized by quarte
 
 #### Features ####
 
-- [ ] Ongoing upgrades to support newer Docker API versions in the RESTFUl service
+- [ ] Ongoing upgrades to support newer Docker API versions in the RESTFUL service
 - [ ] Improvements to Quadlet documentation
 - [ ] Systemwide rootless user configuration
 - [ ] Improvements to the Windows installer

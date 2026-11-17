@@ -8,7 +8,7 @@ networks and manifests among others.
 The bindings require that the Podman system service is running for the specified user.  This can be done with systemd using the `systemctl` command or manually
 by calling the service directly.
 
-### Starting the service with system
+### Starting the service with systemd
 The command to start the Podman service differs slightly depending on the user that is running the service.  For a rootful service,
 start the service like this:
 ```
@@ -66,7 +66,7 @@ Composite types are not duplicated rather the address is used. As such, you shou
 field between initializing the *Option structure and calling the bindings method.
 
 #### Inspect a container
-The following example obtains the inspect information for a container named `foorbar` and then prints
+The following example obtains the inspect information for a container named `foobar` and then prints
 the container's ID. Note the use of optional inspect options for size.
 ```
 import (
@@ -95,7 +95,7 @@ func main() {
 ```
 
 #### Pull an image
-The following example pulls the image `quay.ioo/libpod/alpine_nginx` to the local image store.
+The following example pulls the image `quay.io/libpod/alpine_nginx` to the local image store.
 ```
 import (
 	"context"
@@ -237,8 +237,7 @@ Jul 22 13:51:15 nagato.nanadai.me systemd[1048]: podman.service: Consumed 1.339s
 $
 ```
 
-You can also verify that the information being passed back and forth is correct by putting
-with a tool like `socat`, which can dump what the socket is seeing.
+You can also verify that the information being passed back and forth is correct by putting it through a tool like `socat`, which can dump what the socket is seeing.
 
 ## Reducing Binary Size with "remote" Build Tag
 When building a program that uses the Podman Go bindings, you can reduce the binary size by passing the "remote" build tag to the go build command.  This tag excludes code related to local Podman operations, which is not needed for applications that only interact with Podman over a network.

@@ -19,7 +19,7 @@ available, but this logging mechanism completely disables events; nothing is rep
 
 By default, streaming mode is used, printing new events as they occur.  Previous events can be listed via `--since` and `--until`.
 
-The *container* event type reports the follow statuses:
+The *container* event type reports the following statuses:
  * attach
  * checkpoint
  * cleanup
@@ -49,7 +49,7 @@ The *container* event type reports the follow statuses:
  * unpause
  * update
 
-The *pod* event type reports the follow statuses:
+The *pod* event type reports the following statuses:
  * create
  * kill
  * pause
@@ -97,7 +97,7 @@ The *secret* type reports the following statuses:
 
 #### Verbose Create Events
 
-Setting `events_container_create_inspect_data=true` in containers.conf(5) instructs Podman to create more verbose container-create events which include a JSON payload with detailed information about the containers.  The JSON payload is identical to the one of podman-container-inspect(1).  The associated field in journald is named `PODMAN_CONTAINER_INSPECT_DATA`.
+Setting `events_container_create_inspect_data=true` in containers.conf(5) instructs Podman to create more verbose container-create events which include a JSON payload with detailed information about the containers.  The JSON payload is identical to that of podman-container-inspect(1).  The associated field in journald is named `PODMAN_CONTAINER_INSPECT_DATA`.
 
 ## OPTIONS
 

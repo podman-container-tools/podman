@@ -7,7 +7,7 @@
 Additional arguments for the container; this has exactly the same effect as passing
 more arguments after a `podman run <image> <arguments>` invocation.
 
-The format is the same as for [systemd command lines](https://www.freedesktop.org/software/systemd/man/systemd.service.html#Command%20lines),
+The format is the same as for [systemd command lines](https://www.freedesktop.org/software/systemd/man/systemd.service.html#Command%20lines).
 However, unlike the similarly named systemd `ExecStart=` directive
 which operates on the ambient root filesystem, it is very common for container
 images to have their own `ENTRYPOINT` or `CMD` metadata which this interacts with.

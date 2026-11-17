@@ -19,7 +19,7 @@ As well as some systemd helpers like `systemd-cgls` and `systemd-cgtop` are stil
 ## Equivalents
 
 For many troubleshooting and information collection steps, there may be an existing pattern.
-Following provides equivalent with `Podman` tools for gathering information or jumping into containers, for operational use.
+The following provides `Podman` equivalents for gathering information or jumping into containers, for operational use.
 
 ## Development Transfer
 
@@ -108,7 +108,7 @@ These commands behave differently from the commands in Docker:
 
 | Command | Description |
 | :--- | :--- |
-| `podman volume create`                | While `docker volume create` is idempotent, `podman volume create` raises an error if the volume does already exist. See this [docker issue](https://github.com/moby/moby/issues/16068) for more information.|
+| `podman volume create`                | While `docker volume create` is idempotent, `podman volume create` raises an error if the volume already exists. See this [docker issue](https://github.com/moby/moby/issues/16068) for more information.|
 | `podman run -v /tmp/noexist:/tmp ...` | While `docker run -v /tmp/noexist:/tmp` will create non existing volumes on the host, Podman will report that the volume does not exist. The Podman team sees this as a bug in Docker.|
 
 ## Missing commands in podman

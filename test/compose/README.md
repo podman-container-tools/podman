@@ -6,7 +6,7 @@ docker-compose v1 is no longer supported upstream so we no longer test with it.
 
 Each subdirectory must contain one docker-compose.yml file along with
 all necessary infrastructure for it (e.g. Containerfile, any files
-to be copied into the container, and so on.
+to be copied into the container, and so on).
 
 The `test-compose` script will, for each test subdirectory:
 

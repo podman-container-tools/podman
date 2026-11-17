@@ -7,7 +7,7 @@ podman\-farm\-build - Build images on farm nodes, then bundle them into a manife
 **podman farm build** [*options*] [*context*]
 
 ## DESCRIPTION
-**podman farm build** Builds an image on all nodes in a farm and bundles them up into a manifest list.
+**podman farm build** builds an image on all nodes in a farm and bundles them up into a manifest list.
 It executes the `podman build` command on the nodes in the farm with the given Containerfile. Once the
 images are built on all the farm nodes, the images will be pushed to the registry given via the **--tag**
 flag. Once all the images have been pushed, a manifest list will be created locally and pushed to the registry

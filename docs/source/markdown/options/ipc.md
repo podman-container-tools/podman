@@ -13,4 +13,4 @@ a private IPC namespace.
 - **none**:  private IPC namespace, with /dev/shm not mounted.
 - **ns:**_path_: path to an IPC namespace to join.
 - **private**: private IPC namespace.
-- **shareable**: private IPC namespace with a possibility to share it with other containers.
+- **shareable**: private IPC namespace with the possibility of sharing it with other containers.

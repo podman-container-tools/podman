@@ -43,19 +43,19 @@ go test -v -run TestMyFunction ./pkg/specgen/
 ```
 
 # Test utils
-Test utils provide common functions and structs for testing. It includes two structs:
+Test utils provide common functions and structs for testing. They include two structs:
 * `PodmanTest`: Handle the *podman* command and other global resources like temporary
 directory. It provides basic methods, like checking podman image and pod status. Test
-suites should create their owner test *struct* as a composite of `PodmanTest`, and their
-owner PodmanMakeOptions().
+suites should create their own test *struct* as a composite of `PodmanTest`, and their
+own PodmanMakeOptions().
 
 * `PodmanSession`: Store execution session data and related *methods*. Such like get command
-output and so on. It can be used directly in the test suite, only embed it to your owner
-session struct if you need expend it.
+output and so on. It can be used directly in the test suite, only embed it to your own
+session struct if you need to extend it.
 
 ## Unittest for test/utils
-To ensure neither *tests* nor *utils* break, There are unit-tests for each *functions* and
-*structs* in `test/utils`. When you adding functions or structs to this *package*, please
+To ensure neither *tests* nor *utils* break, There are unit-tests for each *function* in
+`test/utils`. When you adding functions or structs to this *package*, please
 update both unit-tests for it and this documentation.
 
 ### Run unit test for test/utils
@@ -66,8 +66,8 @@ make localunit
 ```
 
 ## Structure of the test utils and test suites
-The test *utils* package is at the same level of test suites. Each test suites also have their
-owner common functions and structs stored in `libpod_suite_test.go`.
+The test *utils* package is at the same level of test suites. Each test suite also has its
+own common functions and structs stored in `libpod_suite_test.go`.
 
 # Ginkgo test framework
 [Ginkgo](https://github.com/onsi/ginkgo) is a BDD testing framework. This allows
@@ -90,7 +90,7 @@ The test currently depend on:
  - systemd/systemctl
  - yq
 
-Most of these are only required for a few tests so it is not a big issue if not everything is installed. Only a few test should fail then.
+Most of these are only required for a few tests so it is not a big issue if not everything is installed. Only a few tests should fail then.
 
 ### Installing ginkgo
 Build ginkgo and install it under ./test/tools/build/ginkgo with the following command:
@@ -128,10 +128,10 @@ The following environment variables are supported by the test setup:
  - `PODMAN_BINARY`: path to the podman binary, defaults to `bin/podman` in the repository root.
  - `PODMAN_REMOTE_BINARY`: path to the podman-remote binary, defaults to `bin/podman-remote` in the repository root.
  - `QUADLET_BINARY`: path to the quadlet binary, defaults to `bin/quadlet` in the repository root.
- - `CONMON_BINARY`: path to th conmon binary, defaults to `/usr/libexec/podman/conmon`.
+ - `CONMON_BINARY`: path to the conmon binary, defaults to `/usr/libexec/podman/conmon`.
  - `OCI_RUNTIME`: which oci runtime to use, defaults to `crun`.
  - `PODMAN_DB`: the database backend `sqlite` (default) or `boltdb`.
- - `PODMAN_TEST_IMAGE_CACHE_DIR`: path were the container images should be cached, defaults to `/tmp`.
+ - `PODMAN_TEST_IMAGE_CACHE_DIR`: path where the container images should be cached, defaults to `/tmp`.
 
 Note: These variables are used by the integration tests (test/e2e) only not the system tests (test/system).
 

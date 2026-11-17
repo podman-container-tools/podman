@@ -56,7 +56,7 @@ sudo systemctl daemon-reload
 sudo systemctl start hello.service
 ```
 
-Note quadlet services cannot be enabled as they are a generated systemd unit,
+Note quadlet services cannot be enabled as they are generated systemd units,
 see [podman-systemd.unit(5)](podman-systemd.unit.5.md#enabling-unit-files) for more information.
 
 

@@ -20,16 +20,16 @@ Description about important directories in our repository.
 
 ### contrib/
 
-- CI scripts, packaging files some container image build files.
+- CI scripts, packaging files and some container image build files.
 
 ### docs/
 
-- Sphinx based documentation for Podman that is build on [Read the Docs](https://readthedocs.com/) and hosted at [docs.podman.io](https://docs.podman.io/).
+- Sphinx based documentation for Podman that is built on [Read the Docs](https://readthedocs.com/) and hosted at [docs.podman.io](https://docs.podman.io/).
 - More information is found in [README.md](./README.md).
 
 ### libpod/ (only works on linux and freebsd)
 - Underlying core for most Podman operations, defines container, pod, volume management operations.
-- Contains the database to store these information on disk, either Sqlite or Botldb (our old db format).
+- Contains the database to store this information on disk, either Sqlite or Botldb (our old db format).
 - Integrates with our other libraries such as:
 	- containers/storage to create and mount container storage.
 	- containers/buildah for building images.
@@ -63,7 +63,7 @@ Description about important directories in our repository.
 
 ##### pkg/domain/infra/abi/
 
-- Implements the two interfaces for the local mode (podman) that calls then directly into the core parts of libpod/ or our other libraries containers/{common,image,storage}...
+- Implements the two interfaces for the local mode (podman) that then calls directly into the core parts of libpod/ or our other libraries containers/{common,image,storage}...
 
 #### pkg/libartifact/
 
@@ -80,7 +80,7 @@ Description about important directories in our repository.
 
 ### test/
 
-- Various tests suites, see the test [README.md](../test/README.md) for more details.
+- Various test suites, see the test [README.md](../test/README.md) for more details.
 - These run on linux only.
 
 ### vendor/

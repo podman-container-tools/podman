@@ -7,7 +7,7 @@ podman\-pod\-stats - Display a live stream of resource usage stats for container
 **podman pod stats** [*options*] [*pod*]
 
 ## DESCRIPTION
-Display a live stream of containers in one or more pods resource usage statistics.  Running rootless is only supported on cgroups v2.
+Display a live stream of resource usage statistics for containers in one or more pods.  Running rootless is only supported on cgroups v2.
 
 ## OPTIONS
 

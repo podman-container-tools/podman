@@ -11,7 +11,7 @@ podman\-history - Show the history of an image
 ## DESCRIPTION
 **podman history** displays the history of an image by printing out information
 about each layer used in the image. The information printed out for each layer
-include Created (time and date), Created By, Size, and Comment. The output can
+includes Created (time and date), Created By, Size, and Comment. The output can
 be truncated or not using the **--no-trunc** flag. If the **--human** flag is
 set, the time of creation and size are printed out in a human readable format.
 The **--quiet** flag displays the ID of the image only when set and the **--format**

@@ -117,7 +117,7 @@ Podman is part of the containers ecosystem and integrates with other tools like 
 
 * **Image registry**: Podman does not operate as a centralized image registry, though it can interact with various registries.
 
-* **Container runtime**: Podman does not implement the low-level container runtime (it uses  crun, runc etc..).
+* **Container runtime**: Podman does not implement the low-level container runtime (it uses crun, runc, etc.).
 
 * **Storage management**: Podman does not provide distributed storage solutions, only local container storage.
 
@@ -127,7 +127,7 @@ Podman is part of the containers ecosystem and integrates with other tools like 
 
 This self-assessment is created by the Podman team to perform an internal analysis of the project's security.  It is not intended to provide a security audit of Podman, or function as an independent assessment or attestation of Podman's security health.
 
-This document serves to provide Podman users with an initial understanding of Podman's security, where to find existing security documentation, Podman plans for security, and general overview of Podman security practices, both for development of Podman as well as security of Podman.
+This document serves to provide Podman users with an initial understanding of Podman's security, where to find existing security documentation, Podman plans for security, and a general overview of Podman security practices, both for development of Podman as well as security of Podman.
 
 This document provides the CNCF TAG-Security with an initial understanding of Podman to assist in a joint-assessment, necessary for projects under incubation.  Taken together, this document and the joint-assessment serve as a cornerstone for if and when Podman seeks graduation and is preparing for a security audit.
 
@@ -225,7 +225,7 @@ Podman is a critical component of the cloud-native ecosystem:
 
 * **Response Time**: The team commits to responding to vulnerability reports within 48 hours. All medium and higher severity exploitable vulnerabilities are prioritized as a matter of general practice.
 
-* **Coordination**: For critical vulnerabilities, ct Security team coordinates with downstream projects to file bug trackers for downstreams (Fedora / RHEL).
+* **Coordination**: For critical vulnerabilities, the CT Security team coordinates with downstream projects to file bug trackers for downstreams (Fedora / RHEL).
 
 * **Credit**: Security researchers who responsibly disclose vulnerabilities are credited in security advisories and release notes.
 
@@ -272,6 +272,6 @@ Podman is a critical component of the cloud-native ecosystem:
 
 ### Related Projects / Vendors
 
-* **Buildah**: A tool that facitiliates building OCI container images.
+* **Buildah**: A tool that facilitates building OCI container images.
 
 * **Skopeo**: A command line utility to perform various operations on container images and image repositories like copying an image, inspecting a remote image, deleting an image from an image repository.

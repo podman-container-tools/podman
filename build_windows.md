@@ -69,7 +69,7 @@ $env:Path += ";C:\Program Files\Go\bin\;C:\Program Files\Git\cmd\"
 [Pandoc](https://pandoc.org/) is used to generate Podman documentation. It is
 used for building the documentation.
 Pandoc can be installed from https://pandoc.org/installing.html. When performing
-the Pandoc installation one, has to choose the option "Install for all users"
+the Pandoc installation one has to choose the option "Install for all users"
 (to put the binaries into "Program Files" directory).
 Alternatively, Podman documentation can be built using a container with the target
 `docs-using-podman` in the `winmake.ps1` script.
@@ -299,7 +299,7 @@ When `machine init` completes, run `machine start`:
 podman machine start
 ```
 
-:information_source: If the virtualization provider is Hyperv-V, execute the
+:information_source: If the virtualization provider is Hyper-V, execute the
 above commands in an administrator terminal.
 
 ### Run a container using podman
@@ -506,7 +506,7 @@ msiexec /package contrib\win-installer\podman-5.7.0.msi /l*v podman-msi.log `
 ```
 
 :information_source: If uninstallation fails, the installer may end up in an
-inconsistent state. Podman results as uninstalled, but the MSI package is still
+inconsistent state. Podman is then uninstalled, but the MSI package is still
 tracked in the Windows registry and will affect further attempts to reinstall
 Podman. When this is the case, trying to reinstall Podman results in the
 installer returning zero (success) but no action is executed. The package
@@ -708,7 +708,7 @@ msiexec /x "{<product-code>}"
 ## Validate changes before submitting a PR
 
 The script `winmake.ps1` has a couple of targets to check the source code
-statically. GitHub Pull request checks execute the same statical analysis. It is
+statically. GitHub Pull request checks execute the same statistical analysis. It is
 highly recommended that you run them locally before submitting a PR.
 
 ### winmake lint
@@ -734,7 +734,7 @@ tools:
 Target `validatepr` performs a more exhaustive validation but takes
 significantly more time to complete. It uses `podman` to run the target
 `.validatepr` of the [Linux `Makefile`](Makefile). It builds Podman for Linux,
-MacOS and Windows and then performs the same checks as the `lint` target plus
+macOS and Windows and then performs the same checks as the `lint` target plus
 many more.
 
 :information_source: Create and start a Podman machine before running

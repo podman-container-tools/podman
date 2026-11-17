@@ -42,9 +42,9 @@ Assuming a path separator of `/`, a first argument of **src_path** and second ar
 
 The command requires **src_path** and **dest_path** to exist according to the above rules.
 
-If **src_path** is local and is a symbolic link, the symbolic target, is copied by default.
+If **src_path** is local and is a symbolic link, the symbolic target is copied by default.
 
-A *colon* ( : ) is used as a delimiter between a container and its path, it can also be used when specifying paths to a **src_path** or **dest_path** on a local machine, for example, `file:name.txt`.
+A *colon* ( : ) is used as a delimiter between a container and its path. It can also be used when specifying paths to a **src_path** or **dest_path** on a local machine, for example, `file:name.txt`.
 
 *IMPORTANT: while using a *colon* ( : ) in a local machine path, one must be explicit with a relative or absolute path, for example: `/path/to/file:name.txt` or `./file:name.txt`*
 

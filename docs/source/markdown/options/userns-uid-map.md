@@ -14,6 +14,6 @@ in-container UID, a corresponding starting host-level UID, and the number of con
 
 This option overrides the *remap-uids* setting in the *options* section of /etc/containers/storage.conf.
 
-If this option is not specified, but a global --userns-uid-map setting is supplied, settings from the global option is used.
+If this option is not specified, but a global --userns-uid-map setting is supplied, settings from the global option are used.
 
 If none of --userns-uid-map-user, --userns-gid-map-group, or --userns-uid-map are specified, but --userns-gid-map is specified, the UID map is set to use the same numeric values as the GID map.

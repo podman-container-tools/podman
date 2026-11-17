@@ -10,7 +10,7 @@
 
 Set driver specific options.
 
-All drivers accept the `mtu`, `metric`, `no_default_route` and options.
+All drivers accept the `mtu`, `metric`, and `no_default_route` options.
 
 - `mtu`: Sets the Maximum Transmission Unit (MTU) and takes an integer value.
 - `metric` Sets the Route Metric for the default route created in every container joined to this network. Accepts a positive integer value. Can only be used with the Netavark network backend.
@@ -31,7 +31,7 @@ Additionally the `bridge` driver supports the following options:
   - `managed`: Podman creates and deletes the bridge and changes sysctls of it. It adds firewall rules to masquerade outgoing traffic, as well as setup port forwarding for incoming traffic using DNAT.
   - `unmanaged`: Podman uses an existing bridge. It must exist by the time you want to start a container which uses the network. There will be no NAT or port forwarding, even if such options were passed while creating the container.
 
-The `macvlan` and `ipvlan` driver support the following options:
+The `macvlan` and `ipvlan` drivers support the following options:
 
 - `parent`: The host device which is used for the macvlan interface. Defaults to the default route interface.
 - `mode`: This option sets the specified ip/macvlan mode on the interface.

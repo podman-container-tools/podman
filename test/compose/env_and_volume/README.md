@@ -4,7 +4,7 @@ environment variable and volume
 This test creates two containers both of which are running flask.  The first container has
 an environment variable called PODMAN_MSG.  That container pipes the contents of PODMAN_MSG
 to a file on a shared volume between the containers.  The second container then reads the
-file are returns the PODMAN_MSG value via flask (http).
+file and returns the PODMAN_MSG value via flask (http).
 
 Validation
 ------------

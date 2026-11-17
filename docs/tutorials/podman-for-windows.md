@@ -11,7 +11,7 @@ containers. This guest is referred to as a Podman machine and is managed with
 the `podman machine` command.
 
 On Windows, each Podman machine is backed by a virtualized Windows Subsystem for
-Linux (WSLv2) distribution or an Hyper-V virtual machine.
+Linux (WSLv2) distribution or a Hyper-V virtual machine.
 
 The Podman command can be run directly from your Windows PowerShell (or CMD)
 prompt, where it remotely communicates with the podman service running in the
@@ -48,7 +48,7 @@ Table of Contents
 Prerequisites
 -------------
 
-Because Podman uses WSLv2 or Hyper-V recent features, you need Windows 11 or
+Because Podman uses recent features of WSLv2 or Hyper-V, you need Windows 11 or
 later. Internally, WSL and Hyper-V use virtualization, so your system must
 support and have hardware virtualization enabled. If you are running Windows on
 a VM, you must have a VM that supports nested virtualization.
@@ -428,7 +428,7 @@ distributions, the CPU and Memory values represent the total resources shared
 across running systems. The opposite applies to the Disk value. It is
 independent and represents the amount of storage for each individual
 distribution.
-The CPU, memory and disk size values for an Hyper-V machines instead, represent
+The CPU, memory and disk size values for Hyper-V machines, instead, represent
 the number of vCPUs, memory and disk size allocated to the machine. Those values
 can be configured when creating the machine using the `--cpus`, `--memory` and
 `--disk-size` options. Or edited later using the `podman machine set` command.

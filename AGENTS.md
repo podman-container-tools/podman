@@ -131,7 +131,7 @@ It("should work correctly", func() {
 
 ## Manpages
 
-- **Location**: Source for manpages are `.md` and `.md.in` files in `docs/source/markdown`. `.md.in` files, when present, are the definitive source and compile into `.md` files.
+- **Location**: Sources for manpages are `.md` and `.md.in` files in `docs/source/markdown`. `.md.in` files, when present, are the definitive source and compile into `.md` files.
 - **Deduplication**: `.md.in` files add shared options using `@@option` syntax, with options located in `docs/source/markdown/options`.
 
 ## Common Pitfalls for AI Agents

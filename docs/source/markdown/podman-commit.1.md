@@ -12,7 +12,7 @@ podman\-commit - Create new image based on the changed container
 **podman commit** creates an image based on a changed *container*. The author of the image can be set using the **--author** OPTION. Various image instructions can be configured with the **--change** OPTION and a commit message can be set using the **--message** OPTION. The *container* and its processes are paused while the image is committed. If this is not desired, the **--pause** OPTION can be set to *false*. When the commit is complete, Podman prints out the ID of the new image.
 
 If `image` does not begin with a registry name component, `localhost` is added to the name.
-If `image` is not provided, the values for the `REPOSITORY` and `TAG` values of the created image is set to `<none>`.
+If `image` is not provided, the values for the `REPOSITORY` and `TAG` values of the created image are set to `<none>`.
 
 ## OPTIONS
 #### **--author**, **-a**=*author*

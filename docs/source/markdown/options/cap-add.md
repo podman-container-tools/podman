@@ -11,7 +11,7 @@
 Add Linux capabilities.
 
 Granting additional capabilities increases the privileges of the
-processes running inside the container and potentially allow it to
+processes running inside the container and potentially allows it to
 break out of confinement.  Capabilities like `CAP_SYS_ADMIN`,
 `CAP_SYS_PTRACE`, `CAP_MKNOD` and `CAP_SYS_MODULE` are particularly
 dangerous when they are not used within a user namespace.  Please

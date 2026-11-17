@@ -1,7 +1,7 @@
 # Podman CLI
 
 The following is an example of how to add a new primary command (`manifest`) and a sub-command (`inspect`) to the Podman CLI.
-This is example code, the production code has additional error checking and the business logic provided.
+This is example code; the production code has additional error checking and provides the business logic.
 
 See items below for details on building, installing, contributing to Podman:
  - [Readme](README.md)

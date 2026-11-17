@@ -31,7 +31,7 @@ The `before` *filter* accepts formats: `<image-name>[:<tag>]`, `<image id>` or `
 
 The `containers` *filter* shows images that have a running container based on that image.
 
-The `dangling` *filter* shows images that are taking up disk space and serve no purpose. Dangling image is a file system layer that was used in a previous build of an image and is no longer referenced by any image. They are denoted with the `<none>` tag, consume disk space and serve no active purpose.
+The `dangling` *filter* shows images that are taking up disk space and serve no purpose. A dangling image is a file system layer that was used in a previous build of an image and is no longer referenced by any image. It is denoted with the `<none>` tag, consumes disk space and serves no active purpose.
 
 The `digest` *filter* accepts the image digest string.
 

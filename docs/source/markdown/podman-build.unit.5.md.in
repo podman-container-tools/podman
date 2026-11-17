@@ -117,14 +117,14 @@ the `File=` key or to that of the Quadlet `.build` unit file, respectively. This
 resolve relative paths.
 
 When using one of the special keys (`file` or `unit`), the `WorkingDirectory` field of the `Service`
-group of the Systemd service unit will also be set accordingly. Alternatively, users can
+group of the systemd service unit will also be set accordingly. Alternatively, users can
 explicitly set the `WorkingDirectory` field of the `Service` group in the `.build` file. Please note
 that if the `WorkingDirectory` field of the `Service` group is set by the user, Quadlet will not
 overwrite it even if `SetWorkingDirectory` is set to `file` or `unit`.
 
 By providing a URL to `SetWorkingDirectory=` you can instruct `podman build` to clone a Git
 repository or download an archive file extracted to a temporary location by `podman build` as build
-context. Note that in this case, the `WorkingDirectory` of the Systemd service unit is left
+context. Note that in this case, the `WorkingDirectory` of the systemd service unit is left
 untouched by Quadlet.
 
 URLs are interpreted in the same way as [podman-build(1)](podman-build.1.md).

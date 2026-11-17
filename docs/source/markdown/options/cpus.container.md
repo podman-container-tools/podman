@@ -5,7 +5,7 @@
 #### **--cpus**=*number*
 
 Number of CPUs. The default is *0.0* which means no limit. This is shorthand
-for **--cpu-period** and **--cpu-quota**, therefore the option cannot be specified with
+for **--cpu-period** and **--cpu-quota**; therefore the option cannot be specified with
 **--cpu-period** or **--cpu-quota**.
 
 On some systems, changing the CPU limits may not be allowed for non-root

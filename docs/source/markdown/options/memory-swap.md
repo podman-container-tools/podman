@@ -9,7 +9,7 @@ A _unit_ can be **b** (bytes), **k** (kibibytes), **m** (mebibytes), or **g** (g
 
 Must be used with the **-m** (**--memory**) flag.
 The argument value must be larger than that of
- **-m** (**--memory**) By default, it is set to double
+ **-m** (**--memory**). By default, it is set to double
 the value of **--memory**.
 
 Set _number_ to **-1** to enable unlimited swap.

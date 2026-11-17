@@ -4,4 +4,4 @@
 ####> are applicable to all of those.
 #### **--identity-label**
 
-Adds default identity label `io.buildah.version` if set. (default true).
+Adds a default identity label `io.buildah.version` if set. (default true).

@@ -8,7 +8,7 @@ Significant versions
 are tagged, including *release candidates* (`rc`).
 All relevant **minor** releases (`vX.Y`) have their own branches.  The **latest**
 development efforts occur on the *main* branch.  Branches with a
-*rhel* suffix are use for long-term support of downstream RHEL releases.
+*rhel* suffix are used for long-term support of downstream RHEL releases.
 
 ## Release workflow expectations
 
@@ -52,9 +52,9 @@ a release intended for downstream *RHEL* consumption.
 ## Unreleased Milestones
 
 Non-release versions may occasionally appear tagged on a branch, without
-the typical (major) receive media postings or artifact distribution.  For
+the typical (major) release media postings or artifact distribution.  For
 example, as required for the (separate) RHEL release process.  Otherwise
-these tags are simply milestones of reference purposes and may
+these tags are simply milestones for reference purposes and may
 generally be safely ignored.
 
 ## Process
@@ -85,7 +85,7 @@ spelled with complete minutiae.
       the initial GitHub Actions CI run on the branch for any unexpected failures.
       The runs can be monitored from the repository's
       [Actions page](https://github.com/podman-container-tools/podman/actions).
-   1. If there are CI test or automation boops that need fixing on the branch,
+   1. If there are CI tests or automation bugs that need fixing on the branch,
       attend to them using normal PR process (to *main* first, then backport
       changes to the new branch). Ideally, CI should be "green" on the new
       branch before proceeding.
@@ -108,7 +108,7 @@ spelled with complete minutiae.
       Keep this list open/available for reference as you edit.
    1. Edit `RELEASE_NOTES.md`
 
-      * Add/update the version-section of with sub-sections for *Features*
+      * Add/update the version section with sub-sections for *Features*
         (new functionality), *Changes* (altered podman behaviors),
         *Bugfixes* (self-explanatory), *Security* (resolved security
         vulnerabilities), *API* (all related features, changes, and bugfixes),
@@ -195,7 +195,7 @@ spelled with complete minutiae.
          * podman-remote-static-linux_arm64.tar.gz
          * shasums
       1. An email should have been sent to the [podman](mailto:podman@lists.podman.io) mailing list.
-         Keep an eye on it make sure the email went through to the list.
+         Keep an eye on it to make sure the email went through to the list.
    1. The release action will also bump the Podman version on podman.io. It will open a PR if a non-rc latest version is released. Go to the [podman.io](https://github.com/containers/podman.io) repo and merge the PR opened by this action, if needed.
    1. After the tag is pushed, an action to bump to -dev will run. A PR will be opened for this bump. Merge this PR if needed.
 

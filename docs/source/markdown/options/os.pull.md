@@ -8,5 +8,5 @@
 #### **--os**=*OS*
 << endif >>
 
-Override the OS, defaults to the host, of the image to be pulled. For example, `windows`.
-Unless overridden, subsequent lookups of the same image in the local storage matches this OS, regardless of the host.
+Override the OS (which defaults to the host) of the image to be pulled. For example, `windows`.
+Unless overridden, subsequent lookups of the same image in the local storage match this OS, regardless of the host.

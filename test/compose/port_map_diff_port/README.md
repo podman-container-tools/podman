@@ -1,4 +1,4 @@
-port map on different port
+port map on different ports
 ===============
 
 This test creates a container that runs flask on different ports for the container

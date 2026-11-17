@@ -55,7 +55,7 @@ Set variant of the imported image.
 
 ## EXAMPLES
 
-Import the selected tarball into new image, specifying the CMD, ENTRYPOINT and LABEL:
+Import the selected tarball into a new image, specifying the CMD, ENTRYPOINT and LABEL:
 ```
 $ podman import --change CMD=/bin/bash --change ENTRYPOINT=/bin/sh --change LABEL=blue=image ctr.tar image-imported
 Getting image source signatures
@@ -68,7 +68,7 @@ Storing signatures
 db65d991f3bbf7f31ed1064db9a6ced7652e3f8166c4736aa9133dadd3c7acb3
 ```
 
-Import the selected tarball into new image, specifying the CMD, ENTRYPOINT and LABEL:
+Import the selected tarball into a new image, specifying the CMD, ENTRYPOINT and LABEL:
 ```
 $ podman import --change 'ENTRYPOINT ["/bin/sh","-c","test-image"]'  --change LABEL=blue=image test-image.tar image-imported
 Getting image source signatures
@@ -79,7 +79,7 @@ Storing signatures
 110552350206337183ceadc0bdd646dc356e06514c548b69a8917b4182414b
 ```
 
-Import new tagged image from stdin in quiet mode:
+Import a new tagged image from stdin in quiet mode:
 ```
 $ cat ctr.tar | podman -q import --message "importing the ctr.tar file" - image-imported
 db65d991f3bbf7f31ed1064db9a6ced7652e3f8166c4736aa9133dadd3c7acb3

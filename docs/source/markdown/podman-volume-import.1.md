@@ -9,7 +9,7 @@ podman\-volume\-import - Import tarball contents into an existing podman volume
 ## DESCRIPTION
 
 **podman volume import** imports the contents of a tarball into the podman volume's mount point.
-The contents of the volume is merged with the content of the tarball with the latter taking precedence.
+The contents of the volume are merged with the content of the tarball with the latter taking precedence.
 **podman volume import** can consume piped input when using `-` as source path.
 
 The given volume must already exist and is not created by podman volume import.

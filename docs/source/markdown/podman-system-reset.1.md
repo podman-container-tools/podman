@@ -19,7 +19,7 @@ or `volume_path`.
 of the relevant configurations. If the administrator modified the configuration files first,
 `podman system reset` might not be able to clean up the previous storage.
 
-`podman system reset` does not restart podman.service and podman.socket systemd units. You may need to manually restart it after running this command.
+`podman system reset` does not restart podman.service and podman.socket systemd units. You may need to manually restart them after running this command.
 
 ## OPTIONS
 #### **--force**, **-f**

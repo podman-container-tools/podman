@@ -13,7 +13,7 @@ podman\-save - Save image(s) to an archive or directory
 **podman save** writes to STDOUT by default and can be redirected to a
 file using the **output** flag. The **quiet** flag suppresses the output when set.
 **podman save** saves parent layers of the image(s) and the image(s) can be loaded using **podman load**.
-To export the containers, use the **podman export**.
+To export the containers, use **podman export**.
 Note: `:` is a restricted character and cannot be part of the file name.
 
 **podman save** operates on *images*: the resulting archive (OCI or docker-archive) preserves the image's layers, history and tags, and is restored as the same image with **podman load**. This is different from **podman export**, which flattens a *container's* filesystem into a single-layer tarball with no image history. To capture a container's filesystem instead, see **podman-export(1)**.

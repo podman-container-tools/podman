@@ -44,7 +44,7 @@ binary of `podman` you build from git.  To ensure that the podman you build here
 `make podman-remote HELPER_BINARIES_DIR=/opt/podman/bin`
 
 (Also note that because the `Makefile` rules do not correctly invalidate the binary when this variable changes,
- so if you already have a build you'll need to `rm bin/darwin/podman` first if you have an existing build).
+ if you already have a build you'll need to `rm bin/darwin/podman` first if you have an existing build).
 
 Alternatively, you can set `helper_binaries_dir=` in `~/.config/containers/containers.conf`.
 
@@ -127,7 +127,7 @@ $ container machine run --name podman-dev --root -- dnf -y install git
 Then configure the machine for Podman development following the Podman
 documentation, using the shell opened by `container machine run --name
 podman-dev` (typically `sudo dnf -y builddep rpm/podman.spec` is enough to
-configure the machine for building and test Podman).
+configure the machine for building and testing Podman).
 
 - [Building from source](https://podman.io/docs/installation#building-from-source):
   lists the build dependencies to install on Fedora, and the required Go version.

@@ -68,7 +68,7 @@ Print usage statement
 #### **--limit**=*limit*
 
 Limit the number of results (default 25).
-Note: The results from each registry is limited to this value.
+Note: The results from each registry are limited to this value.
 Example if limit is 10 and two registries are being searched, the total
 number of results is 20, 10 from each (if there are at least 10 matches in each).
 The order of the search results is the order in which the API endpoint returns the results.
@@ -128,7 +128,7 @@ Note: This works only with registries that implement the v2 API. If tried with a
 
 **registries.conf** (`/etc/containers/registries.conf`)
 
-registries.conf is the configuration file which specifies which container registries is consulted when completing image names which do not include a registry or domain portion.
+registries.conf is the configuration file which specifies which container registries are consulted when completing image names which do not include a registry or domain portion.
 
 ## SEE ALSO
 **[podman(1)](podman.1.md)**, **[containers-registries(5)](https://github.com/containers/image/blob/main/docs/containers-registries.5.md)**

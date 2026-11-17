@@ -8,7 +8,7 @@
 #### **--image-volume**=**anonymous** | *tmpfs* | *ignore*
 << endif >>
 
-Tells Podman how to handle the builtin image volumes. Default is **anonymous**.
+Tells Podman how to handle the built-in image volumes. Default is **anonymous**.
 
 - **anonymous**: An anonymous named volume is created and mounted into the container.
 - **tmpfs**: The volume is mounted onto the container as a tmpfs, which allows the users to create

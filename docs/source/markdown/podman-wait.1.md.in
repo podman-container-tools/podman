@@ -21,7 +21,7 @@ such as those created by `podman kube play`, the containers may be repeatedly
 exiting and restarting, possibly with different exit codes. `podman wait` will
 only display and detect the first exit after the wait command was started.
 
-When running a container with podman run --rm wait does not wait for the
+When running a container with `podman run --rm`, wait does not wait for the
 container to be fully removed. To wait for the removal of a container use
 `--condition=removed`.
 

@@ -4,7 +4,7 @@
 ####> are applicable to all of those.
 #### **--hooks-dir**=*path*
 
-Each *.json file in the path configures a hook for buildah build containers. For more details on the syntax of the JSON files and the semantics of hook injection. Buildah currently support both the 1.0.0 and 0.1.0 hook schemas, although the 0.1.0 schema is deprecated.
+Each *.json file in the path configures a hook for buildah build containers. For more details on the syntax of the JSON files and the semantics of hook injection, Buildah currently supports both the 1.0.0 and 0.1.0 hook schemas, although the 0.1.0 schema is deprecated.
 
 This option may be set multiple times; paths from later options have higher precedence.
 

@@ -126,7 +126,7 @@ location = "FULLY.QUALIFIED.NAME.OF.REGISTRY"
 insecure = true
 ```
 
-[1] If you are using a Mac / Windows, you should execute `podman machine ssh` to login into podman machine before adding the insecure entry to the registry—conf file.
+[1] If you are using a Mac / Windows, you should execute `podman machine ssh` to log in to the podman machine before adding the insecure entry to the registry-conf file.
 
 **This is an insecure method and should be used cautiously.**
 
@@ -168,7 +168,7 @@ When the Dockerfile contains a command like `RUN useradd -u 99999000 -g users ne
 
 #### Symptom
 
-If you are using a useradd command within a Dockerfile with a large UID/GID, it will create a large sparse file `/var/log/lastlog`.  This can cause the build to hang forever.  Go language does not support sparse files correctly, which can lead to some huge files being created in your container image.
+If you are using a useradd command within a Dockerfile with a large UID/GID, it will create a large sparse file `/var/log/lastlog`.  This can cause the build to hang forever.  The Go language does not support sparse files correctly, which can lead to some huge files being created in your container image.
 
 #### Solution
 
@@ -176,7 +176,7 @@ If the entry in the Dockerfile looked like: RUN useradd -u 99999000 -g users new
 
 ### 7) Permission denied when running Podman commands
 
-When rootless Podman attempts to execute a container on a non exec home directory a permission error will be raised.
+When rootless Podman attempts to execute a container on a non-exec home directory a permission error will be raised.
 
 #### Symptom
 
@@ -217,12 +217,12 @@ the system.
 
 #### Solution
 
-Newer versions of Podman (2.0 or greater) support running init based containers
-with a different SELinux labels, which allow the container process access to the
+Newer versions of Podman (2.0 or greater) support running init-based containers
+with different SELinux labels, which allow the container process access to the
 cgroup file system. This feature requires container-selinux-2.132 or newer
 versions.
 
-Prior to Podman 2.0, the SELinux boolean `container_manage_cgroup` allows
+Prior to Podman 2.0, the SELinux boolean `container_manage_cgroup` allowed
 container processes to write to the cgroup file system. Turn on this boolean,
 on SELinux separated systems, to allow systemd to run properly in the container.
 Only do this on systems running older versions of Podman.
@@ -463,7 +463,7 @@ You'll need to either:
 
 ### 17) rootless containers exit once the user session exits
 
-You need to set lingering mode through loginctl to prevent user processes to be killed once
+You need to set lingering mode through loginctl to prevent user processes from being killed once
 the user session completed.
 
 #### Symptom
@@ -559,7 +559,7 @@ LOGINCTL(1), SYSTEMD(1)
 
 ### 22) Containers default detach keys conflict with shell history navigation
 
-Podman defaults to `ctrl-p,ctrl-q` to detach from a running containers. The
+Podman defaults to `ctrl-p,ctrl-q` to detach from a running container. The
 bash and zsh shells default to `ctrl-p` for the displaying of the previous
 command.  This causes issues when running a shell inside of a container.
 
@@ -571,7 +571,7 @@ display this previous command, or anything else.  Conmon is waiting for an
 additional character to see if the user wants to detach from the container.
 Adding additional characters to the command will cause it to be displayed along
 with the additional character. If the user types ctrl-p a second time the shell
-display the 2nd to last command.
+displays the 2nd to last command.
 
 #### Solution
 
@@ -583,8 +583,8 @@ $ podman run -ti --detach-keys ctrl-q,ctrl-q fedora sh
 ```
 
 To make this change the default for all containers, users can modify the
-containers.conf file. This can be done simply in your home directory, but adding the
-following lines to users containers.conf
+containers.conf file. This can be done simply in your home directory, by adding the
+following lines to the user's containers.conf
 
 ```console
 $ cat >> ~/.config/containers/containers.conf << _eof
@@ -593,14 +593,14 @@ detach_keys="ctrl-q,ctrl-q"
 _eof
 ```
 
-In order to effect root running containers and all users, modify the system
+In order to affect root running containers and all users, modify the system
 wide defaults in `/etc/containers/containers.conf`.
 
 
 ### 23) Container with exposed ports won't run in a pod
 
 A container with ports that have been published with the `--publish` or `-p` option
-can not be run within a pod.
+cannot be run within a pod.
 
 #### Symptom
 
@@ -658,7 +658,7 @@ file to `/etc/modules.load.d`.  See `man modules-load.d` for more details.
 
 ### 25) podman run --rootfs link/to//read/only/dir does not work
 
-An error such as "OCI runtime error" on a read-only filesystem or the error "{image} is not an absolute path or is a symlink" are often times indicators for this issue.  For more details, review this [issue](
+An error such as "OCI runtime error" on a read-only filesystem or the error "{image} is not an absolute path or is a symlink" is often an indicator of this issue.  For more details, review this [issue](
 https://github.com/containers/podman/issues/5895).
 
 #### Symptom
@@ -700,7 +700,7 @@ permissions. This causes setting resource limits to fail.
 
 #### Symptom
 
-Running a container with a resource limit options will fail with an error similar to the following:
+Running a container with a resource limit option will fail with an error similar to the following:
 
 `--cpus`, `--cpu-period`, `--cpu-quota`, `--cpu-shares`:
 
@@ -742,16 +742,16 @@ CPU and CPUSET limits.
 
 This can happen when running a container from an image for another architecture than the one you are running on.
 
-For example, if a remote repository only has, and thus send you, a `linux/arm64` _OS/ARCH_ but you run on `linux/amd64` (as happened in https://github.com/openMF/community-app/issues/3323 due to https://github.com/timbru31/docker-ruby-node/issues/564).
+For example, if a remote repository only has, and thus sends you, a `linux/arm64` _OS/ARCH_ but you run on `linux/amd64` (as happened in https://github.com/openMF/community-app/issues/3323 due to https://github.com/timbru31/docker-ruby-node/issues/564).
 
 ### 28) `Error: failed to create sshClient: Connection to bastion host (ssh://user@host:22/run/user/.../podman/podman.sock) failed.: ssh: handshake failed: ssh: unable to authenticate, attempted methods [none publickey], no supported methods remain`
 
-In some situations where the client is not on the same machine as where the podman daemon is running the client key could be using a cipher not supported by the host. This indicates an issue with one's SSH config. Until remedied using podman over ssh
+In some situations where the client is not on the same machine as where the Podman daemon is running, the client key could be using a cipher not supported by the host. This indicates an issue with one's SSH config. Until remedied, using Podman over ssh
 with a pre-shared key will be impossible.
 
 #### Symptom
 
-The accepted ciphers per `/etc/crypto-policies/back-ends/openssh.config` are not one that was used to create the public/private key pair that was transferred over to the host for ssh authentication.
+The accepted ciphers per `/etc/crypto-policies/back-ends/openssh.config` are not ones that were used to create the public/private key pair that was transferred over to the host for ssh authentication.
 
 You can confirm this is the case by attempting to connect to the host via `podman-remote info` from the client and simultaneously on the host running `journalctl -f` and watching for the error `userauth_pubkey: key type ssh-rsa not in PubkeyAcceptedAlgorithms [preauth]`.
 
@@ -785,7 +785,7 @@ $ podman-remote info
 Container network can't be reached after `firewall-cmd --reload` and `systemctl restart firewalld` Running `podman network reload` will fix it but it has to be done manually.
 
 #### Symptom
-The firewall rules created by podman are lost when the firewall is reloaded.
+The firewall rules created by Podman are lost when the firewall is reloaded.
 
 #### Solution
 [@ranjithrajaram](https://github.com/containers/podman/issues/5431#issuecomment-847758377) has created a systemd-hook to fix this issue
@@ -822,8 +822,8 @@ ExecStart=/usr/bin/podman network reload --all
 WantedBy=default.target
 ```
 
-However, If you use busctl monitor then you can't get machine-readable output on RHEL 8.
-Since it doesn't have `busctl -j` as mentioned here by [@yrro](https://github.com/containers/podman/issues/5431#issuecomment-896943018).
+However, if you use busctl monitor then you can't get machine-readable output on RHEL 8.
+It doesn't have `busctl -j` as mentioned here by [@yrro](https://github.com/containers/podman/issues/5431#issuecomment-896943018).
 
 For RHEL 8, you can use the following one-liner bash script.
 ```ini
@@ -939,7 +939,7 @@ Error: creating tmpdir: mkdir /run/user/1000: permission denied
 
 #### Solution
 
-Podman expects a valid login session for the `rootless+cgroupv2` use-case. Podman execution is expected to fail if the login session is not present. In most cases, podman will figure out a solution on its own but if `XDG_RUNTIME_DIR` is pointing to a path that is not writable execution will most likely fail. Typical scenarios of such cases are seen when users are trying to use Podman with `su - <user> -c '<podman-command>'`, or `sudo -l` and badly configured systemd session.
+Podman expects a valid login session for the `rootless+cgroupv2` use-case. Podman execution is expected to fail if the login session is not present. In most cases, podman will figure out a solution on its own but if `XDG_RUNTIME_DIR` is pointing to a path that is not writable execution will most likely fail. Typical scenarios of such cases are seen when users are trying to use Podman with `su - <user> -c '<Podman-command>'`, `sudo -l`, or a badly configured systemd session.
 
 Alternatives:
 
@@ -987,8 +987,8 @@ If the `/proc/self/loginuid` file is already initialized then the
 
 This happens when running Podman from a user session since the
 `/proc/self/loginuid` file is already initialized.  The solution is to
-run Podman from a system service, either using the Podman service, and
-then using podman -remote to start the container or simply by running
+run Podman from a system service, either by using the Podman service, or
+simply by running
 something like `systemd-run podman run ...`.  In this case the
 container will only need `CAP_AUDIT_WRITE`.
 
@@ -1097,8 +1097,8 @@ the same problem could also occur even without specifying `--user`.
 
 Another variant of the same problem could occur when using
 `--user=root:root` (the default), but where the root user creates non-root owned files
-in some way (e.g by creating them themselves, or switching the effective UID to
-a rootless user and then creates files).
+in some way (e.g., by creating them themselves, or switching the effective UID to
+a rootless user and then creating files).
 
 See also the troubleshooting tip:
 
@@ -1160,7 +1160,7 @@ user: hpc
 and then look it up in `/etc/passwd` of the container.
 
 If the problem occurs in a container that is started to run as root but later
-switches to an effictive UID of a rootless user, it might be less
+switches to an effective UID of a rootless user, it might be less
 straightforward to find out the UID and the GID. Reading the
 `Containerfile`, `Dockerfile` or the `/etc/passwd` could give a clue.
 
@@ -1195,7 +1195,7 @@ See also the troubleshooting tip:
 
 ### 36) Images in the additional stores can be deleted even if there are containers using them
 
-When an image in an additional store is used, it is not locked thus it
+When an image in an additional store is used, it is not locked, so it
 can be deleted even if there are containers using it.
 
 #### Symptom
@@ -1204,7 +1204,7 @@ WARN[0000] Can't stat lower layer "/var/lib/containers/storage/overlay/l/7HS76F2
 
 #### Solution
 
-It is the user responsibility to make sure images in an additional
+It is the user's responsibility to make sure images in an additional
 store are not deleted while being used by containers in another
 store.
 
@@ -1218,9 +1218,9 @@ While running podman remote commands with the most updated Podman, issues that w
 
 #### Solution
 
-When upgrading Podman to a particular version for the required fixes, users often make the mistake of only upgrading the Podman client. However, suppose a setup uses `podman-remote` or uses a client that communicates with the Podman server on a remote machine via the REST API. In that case, it is required to upgrade both the Podman client and the Podman server running on the remote machine. Both the Podman client and server must be upgraded to the same version.
+When upgrading Podman to a particular version for the required fixes, users often make the mistake of only upgrading the Podman client. If a setup uses `podman-remote` or uses a client that communicates with the Podman server on a remote machine via the REST API, then it is required to upgrade both the Podman client and the Podman server running on the remote machine. Both the Podman client and server must be upgraded to the same version.
 
-Example: If a particular bug was fixed in `v4.1.0` then the Podman client must have version `v4.1.0` as well the Podman server must have version `v4.1.0`.
+Example: If a particular bug was fixed in `v4.1.0` then the Podman client must have version `v4.1.0` as well as the Podman server must have version `v4.1.0`.
 
 ### 38) Unexpected carriage returns are outputted on the terminal
 
@@ -1264,7 +1264,7 @@ $ podman run --rm fedora echo abc | od -c
 0000004
 ```
 
-The __--tty__ (__-t__) flag should only be used when the program requires user interaction in the termainal, for instance expecting
+The __--tty__ (__-t__) flag should only be used when the program requires user interaction in the terminal, for instance expecting
 the user to type an answer to a question.
 
 Where does the extra carriage return `\r` come from?
@@ -1405,9 +1405,9 @@ ERRO[0002] did not get container create message from subprocess: EOF
 
 See also [Buildah issue 4228](https://github.com/containers/buildah/issues/4228) for a full discussion of the problem.
 
-### 42) podman-in-podman builds that are file I/0 intensive are very slow
+### 42) podman-in-podman builds that are file I/O intensive are very slow
 
-When using the `overlay` storage driver to do a nested `podman build` inside a running container, file I/O operations such as `COPY` of a large amount of data is very slow or can hang completely.
+When using the `overlay` storage driver to do a nested `podman build` inside a running container, file I/O operations such as `COPY` of a large amount of data are very slow or can hang completely.
 
 #### Symptom
 
@@ -1417,7 +1417,7 @@ Using the default `overlay` storage driver, a `COPY`, `ADD`, or an I/O intensive
 
 This could be caused by the child container using `fuse-overlayfs` for writing to `/var/lib/containers/storage`. Writes can be slow with `fuse-overlayfs`. The solution is to use the native `overlay` filesystem by using a local directory on the host system as a volume to `/var/lib/containers/storage` like so: `podman run --privileged --rm -it -v ./nested_storage:/var/lib/containers/storage parent:latest`. Ensure that the base image of `parent:latest` in this example has no contents in `/var/lib/containers/storage` in the image itself for this to work. Once using the native volume, the nested container should not fall back to `fuse-overlayfs` to write files and the nested build will complete much faster.
 
-If you don't have access to the parent run process, such as in a CI environment, then the second option is to change the storage driver to `vfs` in the parent image by changing changing this line in your `storage.conf` file: `driver = "vfs"`. You may have to run `podman system reset` for this to take effect. You know it's changed when `podman info |grep graphDriverName` outputs `graphDriverName: vfs`. This method is slower performance than using the volume method above but is significantly faster than `fuse-overlayfs`
+If you don't have access to the parent run process, such as in a CI environment, then the second option is to change the storage driver to `vfs` in the parent image by changing this line in your `storage.conf` file: `driver = "vfs"`. You may have to run `podman system reset` for this to take effect. You know it's changed when `podman info |grep graphDriverName` outputs `graphDriverName: vfs`. This method offers slower performance than using the volume method above but is significantly faster than `fuse-overlayfs`
 
 ### 43) `podman run --userns=auto` fails with 'Error: creating container storage: not enough unused IDs in user namespace'
 
@@ -1457,10 +1457,10 @@ To avoid this, specify the `size` option, for example `--userns=keep-id:size=200
 
 ### 44) `sudo podman run --userns=auto` fails with `Cannot find mappings for user "containers"`
 
-When rootful podman is invoked with `--userns=auto`, podman needs to
+When rootful Podman is invoked with `--userns=auto`, Podman needs to
 pick subranges of subuids and subgids for the user namespace of the container.
-Rootful podman ensures that the subuid and subgid ranges for such containers
-do not overlap, but how can rootful podman prevent other tools
+Rootful Podman ensures that the subuid and subgid ranges for such containers
+do not overlap, but how can rootful Podman prevent other tools
 from accidentally using these IDs?
 
 It's not possible to block other tools that are running as root from using these IDs,
@@ -1468,18 +1468,18 @@ but such tools would normally not use subuids and subgids that have already
 been assigned to a user in _/etc/subuid_ and _/etc/subgid_.
 
 The username _containers_ on the host has a special function for rootful Podman.
-Rootful podman uses the subuids and subgids of the user _containers_ when
+Rootful Podman uses the subuids and subgids of the user _containers_ when
 running `--userns=auto` containers. The user _containers_ has no need for these
 subuids and subgids because no processes should be started as the user _containers_.
 In other words, the user _containers_ is a special user that only exists on the system
-to reserve _subuids_ and _subgids_ for rootful podman.
+to reserve _subuids_ and _subgids_ for rootful Podman.
 
 _containers_ is the default username but it can be changed by setting the
 option `root-auto-userns-user` in the file _/etc/containers/storage.conf_
 
 #### Symptom
 
-Run rootful podman with `--userns=auto`
+Run rootful Podman with `--userns=auto`
 ```sh
 sudo podman run --rm --userns=auto alpine echo hello
 ```
@@ -1497,7 +1497,7 @@ Add subuid and subgid ranges for the user _containers_ in _/etc/subuid_ and _/et
 or provide such ranges with _/etc/nsswitch.conf_.
 For details, see [subid(5)](https://man7.org/linux/man-pages/man5/subuid.5.html).
 
-The following steps create the user _containers_ and assigns big subuid and subgid ranges to it:
+The following steps create the user _containers_ and assign big subuid and subgid ranges to it:
 
 1. Create the user _containers_
    ```sh
@@ -1517,9 +1517,9 @@ The following steps create the user _containers_ and assigns big subuid and subg
    Typically you would like the reserved pool to be bigger than that. The bigger
    the size, the more containers could be started with `sudo podman run --userns=auto ...`
 3. Edit the line for the user _containers_ in the files  _/etc/subuid_ and _/etc/subgid_
-   to make the ranges bigger. Ensure that the subuid range of the user _containers_ do
+   to make the ranges bigger. Ensure that the subuid range of the user _containers_ does
    not overlap with any other subuid ranges in the files _/etc/subuid_. Ensure that the
-   subgid range of the user _containers_ do not overlap with any other subgid ranges in
+   subgid range of the user _containers_ does not overlap with any other subgid ranges in
    the files _/etc/subgid_.
 
 Test the echo command again
@@ -1627,7 +1627,7 @@ with the command
 sudo semanage fcontext -a -s system_u -t container_file_t "/var/test(/.*)?"
 ```
 
-Change the SElinux contexts recursively for files and directories under `/var/test`
+Change the SELinux contexts recursively for files and directories under `/var/test`
 to match the new configuration
 
 ```sh
@@ -1818,7 +1818,7 @@ see [**podman-run(1)**](https://docs.podman.io/en/latest/markdown/podman-run.1.h
 
 ### 48) Pasta fails with `Listen failed` or rootless podman fails with `bind: permission denied`
 
-Unprivileged users on a Linux system can not bind to ports below 1024 by default.
+Unprivileged users on a Linux system cannot bind to ports below 1024 by default.
 This limit can be configured in `/proc/sys/net/ipv4/ip_unprivileged_port_start`
 
 #### Symptom

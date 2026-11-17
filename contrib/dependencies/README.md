@@ -26,11 +26,11 @@ $ ./contrib/dependencies/dependencies.sh -c quadlet list
 ```
 $ ./contrib/dependencies/dependencies.sh tree
 ```
-Note the output is general not very readable so it is unlikely that it helps much.
+Note the output is generally not very readable so it is unlikely that it helps much.
 
 ### Show what imports a specific package
 
-To know what import a given package use
+To know what imports a given package, use
 
 ```
 $ ./contrib/dependencies/dependencies.sh why ./pkg/ps/
@@ -107,12 +107,12 @@ That gives insight into the symbol sizes. There is likely not much that can be d
 though unless you manage to de-duplicate a lot of code somehow. Or avoid some of the new imports/symbols.
 
 The `diff` and `weight-diff` commands accept two git references as argument to diff between,
-i.e. branch names, git tags, or commit sha's should all work. Basically anything that git checkout accepts.
+i.e. branch names, git tags, or commit shas should all work. Basically anything that git checkout accepts.
 
 ## Debloat exercise
 
-When actively working to reduce binary size it is easiest to look into big dependencies that have not
-many users which can be replaced with something else or maybe are not needed at all.
+When actively working to reduce binary size it is easiest to look into big dependencies that do not
+have many users which can be replaced with something else or maybe are not needed at all.
 
 To find such dependencies use the cut command
 ```
@@ -133,26 +133,26 @@ go/types                                                                        
 
 Here you see a list of all imported packages:
  - InDegree means how many times it is imported.
- - Cut.PackageCount shows how many packages (including transitive imports) are getting drop by removing this package.
+ - Cut.PackageCount shows how many packages (including transitive imports) are getting dropped by removing this package.
  - Cut.AllFiles.Size and Cut.Go.Lines show the info about the go source files of that package and its transitive imports.
    Note this is not the actual binary size. File size/Line count is not directly related to the resulting binary size.
    It is likely that if we only use a single function out of a big package we do not bloat the binary size by much.
 
-Look for packages with a low InDegree count and a high PackageCount for best gains. A low important count makes it of
-course easier to remove the dep somehow. A high PackageCount count means the binary size gain will likely be a lot.
+Look for packages with a low InDegree count and a high PackageCount for best gains. A low importance count makes it of
+course easier to remove the dep somehow. A high PackageCount means the binary size gain will likely be a lot.
 
-Of course there is a log of basic functionality that we can just remove/replace so it requires best judgement to
+Of course there is a lot of basic functionality that we can just remove/replace so it requires best judgement to
 actually find packages that we can remove.
 
-A special case are the `vendor/golang.org/x/...` packages, these are actually vendored by the standard library directly
+A special case is the `vendor/golang.org/x/...` packages, these are actually vendored by the standard library directly
 and not shared with our `golang.org/x/...` imports. As such they cause bloat but since they are used by the std lib we
-cannot really get rid of them easily or change them as such we have to simple accept them.
+cannot really get rid of them easily or change them as such we have to simply accept them.
 
 The `go/types` package is a good example of finding something to be cut. It is only used once for one small function so
 we can replace it easily. That is done in https://github.com/containers/buildah/pull/6253.
 
-Because file size != binary size it may be worth to look into the actual symbol size of each package first before deciding
-if we really gain much by removing it to spend
+Because file size != binary size it may be worth looking into the actual symbol size of each package first before deciding
+if we really gain much by removing it
 
 This is done with the weight command:
 ```
@@ -166,9 +166,9 @@ $ ./contrib/dependencies/dependencies.sh weight
 ...
 ```
 
-The output lists each packages total size and then the individual symbol sizes sorted by the biggest packages first.
+The output lists each package's total size and then the individual symbol sizes sorted by the biggest packages first.
 
 Here we can see is that `go/types` is recorded with `476690` bytes so it is a good candidate to cut.
 
-Overall there is no silver bullet to this, it mostly relies on experience which parts of the code would be good
+Overall there is no silver bullet to this, it mostly relies on experience to determine which parts of the code would be good
 candidates for removal/reworks to reduce the number of dependencies.

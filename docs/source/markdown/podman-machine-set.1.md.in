@@ -67,7 +67,7 @@ Assign a USB device from the host to the VM.
 Only supported for QEMU Machines.
 
 The device needs to be present when the VM starts.
-The device needs to have proper permissions in order to be assign to podman machine.
+The device needs to have proper permissions in order to be assigned to the Podman machine.
 
 Use an empty string to remove all previously set USB devices.
 

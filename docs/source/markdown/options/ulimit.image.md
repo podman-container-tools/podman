@@ -15,7 +15,7 @@ Specifies resource limits to apply to processes launched when processing `RUN` i
   "nice": niceness adjustment (nice -n, ulimit -e)
   "nofile": maximum number of open files (ulimit -n)
   "nproc": maximum number of processes (ulimit -u)
-  "rss": maximum size of a process's (ulimit -m)
+  "rss": maximum size of a process's resident set (ulimit -m)
   "rtprio": maximum real-time scheduling priority (ulimit -r)
   "rttime": maximum amount of real-time execution between blocking syscalls
   "sigpending": maximum number of pending signals (ulimit -i)

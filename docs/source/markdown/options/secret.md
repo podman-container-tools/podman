@@ -19,7 +19,7 @@ When secrets are specified as type `env`, the secret is set as an environment va
 Secrets are written in the container at the time of container creation, and modifying the secret using `podman secret` commands
 after the container is created affects the secret inside the container.
 
-Secrets and its storage are managed using the `podman secret` command.
+Secrets and their storage are managed using the `podman secret` command.
 
 Secret Options
 

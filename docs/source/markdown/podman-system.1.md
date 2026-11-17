@@ -7,7 +7,7 @@ podman\-system - Manage podman
 **podman system** *subcommand*
 
 ## DESCRIPTION
-The system command allows management of the podman systems
+The system command allows management of the Podman system
 
 ## COMMANDS
 

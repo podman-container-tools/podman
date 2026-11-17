@@ -93,7 +93,7 @@ sudo -E GNUPGHOME=$HOME/.gnupg \
 Storing signatures
 ```
 
-If we now take a look at the systems signature storage, then we see that there
+If we now take a look at the system's signature storage, then we see that there
 is a new signature available, which was caused by the image push:
 
 ```bash
@@ -185,7 +185,7 @@ signing container images with Podman and GPG:
 3. The web server has to be configured in any
    `/etc/containers/registries.d/*.yaml` file
 4. Every image pulling system has to be configured to contain the enforcing
-   policy configuration via `policy.conf`
+   policy configuration via `policy.json`
 
 That’s it for image signing and GPG. The cool thing is that this setup works out
 of the box with [CRI-O][2] as well and can be used to sign container images in

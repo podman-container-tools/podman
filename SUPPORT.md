@@ -31,10 +31,10 @@ combinations:
 
 For Linux, we test the latest versions of Fedora and Debian.
 
-Operating systems and hardware outside our automated testing is considered "best effort".
+Operating systems and hardware outside our automated testing are considered "best effort".
 In many cases, we are unable to test, triage, and develop for combinations outside what
 our automated testing covers. We are however willing to accept PRs to fix issues for
-specific platforms that exists in the upstream code as long as support for them was not
+specific platforms that exist in the upstream code as long as support for them was not
 removed intentionally.
 
 As of Podman 6, we no longer support Windows 10 nor Intel Macs.  While no code was removed

@@ -28,7 +28,7 @@ Systemd sets the _podman.service_ state as inactive. At this point there is no
 **podman system service** process running. No unnecessary compute resources are wasted.
 As soon as another client connects, systemd activates the systemd service again.
 
-The systemd unit files that declares the Podman API service for users are
+The systemd unit files that declare the Podman API service for users are
 
 * _/usr/lib/systemd/user/podman.service_
 * _/usr/lib/systemd/user/podman.socket_
@@ -56,7 +56,7 @@ Note: The default systemd unit files (system and user) change the log-level opti
 
 To support running an API service without using a systemd service, the command also takes an
 optional endpoint argument for the API in URI form.  For example, *unix:///tmp/foobar.sock* or *tcp://localhost:8080*.
-If no endpoint is provided, defaults is used.  The default endpoint for a rootful
+If no endpoint is provided, the default is used.  The default endpoint for a rootful
 service is *unix:///run/podman/podman.sock* and rootless is *unix://$XDG_RUNTIME_DIR/podman/podman.sock* (for
 example *unix:///run/user/1000/podman/podman.sock*)
 
@@ -71,7 +71,7 @@ To access the API service inside a container:
 Please note that the API grants full access to all Podman functionality, and thus allows arbitrary code execution as the user running the API, with no ability to limit or audit this access.
 The API's security model is built upon access via a Unix socket with access restricted via standard file permissions, ensuring that only the user running the service will be able to access it.
 TLS can be used to secure this socket by requiring clients to present a certificate signed by a trusted certificate authority ("CA"), as well as to allow the client to verify the identity of the API.
-We *strongly* recommend against making the API socket available via the network (IE, bindings the service to a *tcp* URL) without enabling mutual TLS to authenticate the client.
+We *strongly* recommend against making the API socket available via the network (i.e., binding the service to a *tcp* URL) without enabling mutual TLS to authenticate the client.
 Even access via Localhost carries risks - anyone with access to the system will be able to access the API.
 If remote access is required, we instead recommend forwarding the API socket via SSH, and limiting access on the remote machine to the greatest extent possible.
 If a *tcp* URL must be used without TLS, using the *--cors* option is recommended to improve security.

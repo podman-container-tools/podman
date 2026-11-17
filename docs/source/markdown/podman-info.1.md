@@ -28,7 +28,7 @@ Change output format to "json" or a Go template.
 | .Store ...          | ...the storage driver and paths         |
 | .Version ...        | ...podman version                       |
 
-Each of the above branch out into further subfields, more than can
+Each of the above branches out into further subfields, more than can
 reasonably be enumerated in this document.
 
 ## EXAMPLES

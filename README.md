@@ -17,7 +17,7 @@ Podman is based on libpod, a library for container lifecycle management that is 
 
 Podman releases a new major or minor release 4 times a year, during the second week of February, May, August, and November. Patch releases are more frequent and may occur at any time to get bugfixes out to users. All releases are PGP signed. Public keys of members of the team approved to make releases are located [here](https://github.com/containers/release-keys/tree/main/podman).
 
-Only the most recent release receives upstream support. Exceptions are sometimes made in which case we offer a LTS version, the supported versions can be found [here](https://github.com/podman-container-tools/community/blob/main/SUPPORT.md#long-term-support-lts-versions)
+Only the most recent release receives upstream support. Exceptions are sometimes made in which case we offer an LTS version. The supported versions can be found [here](https://github.com/podman-container-tools/community/blob/main/SUPPORT.md#long-term-support-lts-versions)
 
 * Continuous Integration:
   * [![Build Status](https://github.com/containers/podman/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/containers/podman/actions/workflows/ci.yml?query=branch%3Amain)
@@ -112,7 +112,7 @@ Podman uses OCI projects and best of breed libraries for different aspects:
 
 ## Podman Information for Developers
 
-For blogs, release announcements and more, please checkout the [podman.io](https://podman.io) website!
+For blogs, release announcements and more, please check out the [podman.io](https://podman.io) website!
 
 **[Installation notes](install.md)**
 Information on how to install Podman in your environment.
@@ -160,7 +160,7 @@ Buildah and Podman are two complementary open-source projects that are
 available on most Linux platforms and both projects reside at
 [GitHub.com](https://github.com) with Buildah
 [here](https://github.com/containers/buildah) and Podman
-[here](https://github.com/containers/podman).  Both, Buildah and Podman are
+[here](https://github.com/containers/podman).  Both Buildah and Podman are
 command line tools that work on Open Container Initiative (OCI) images and
 containers.  The two projects differentiate in their specialization.
 

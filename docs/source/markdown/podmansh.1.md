@@ -58,7 +58,7 @@ RequiredBy=default.target
 _EOF
 ```
 
-Alternatively, while running as root, create a Quadlet where the user is allowed to become root within the user namespace. They can also permanently read/write content from their home directory which is volume mounted from the actual host's users account, rather than being inside of the container.
+Alternatively, while running as root, create a Quadlet where the user is allowed to become root within the user namespace. They can also permanently read/write content from their home directory which is volume mounted from the actual host's user account, rather than being inside of the container.
 
 ```
 # useradd -s /usr/bin/podmansh confinedu
@@ -88,7 +88,7 @@ RequiredBy=default.target
 _EOF
 ```
 
-Another example, while running as root, create a Quadlet where the users inside this container are allowed to execute containers with SELinux separation and able to read and write content in the $HOME/data directory.
+Another example, while running as root, create a Quadlet where the users inside this container are allowed to execute containers with SELinux separation and to read and write content in the $HOME/data directory.
 
 ```
 # useradd -s /usr/bin/podmansh fullu
