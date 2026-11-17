@@ -526,6 +526,18 @@ func getAllWSLDistros(running bool) (map[string]struct{}, error) {
 	return all, nil
 }
 
+// parseSystemRunningOutput parses the output of the script `isSystemRunning`
+// and returns true if the output is "running" or "degraded". Any message
+// before the state (e.g. a WSL warning) is ignored.
+func parseSystemRunningOutput(out []byte) bool {
+	fields := bytes.Fields(out)
+	if len(fields) == 0 {
+		return false
+	}
+	state := string(fields[len(fields)-1])
+	return state == "running" || state == "degraded"
+}
+
 // isSystemdRunning checks the WSL distribution systemd status. It returns true
 // if it's running or degraded.
 // Note: this function should be used carefully: if the WSL distribution
@@ -533,7 +545,9 @@ func getAllWSLDistros(running bool) (map[string]struct{}, error) {
 func isSystemdRunning(dist string) (bool, error) {
 	cmd := wutil.NewWSLCommand("-u", "root", "-d", dist, "sh")
 	cmd.Stdin = strings.NewReader(isSystemRunning)
-	out, err := cmd.CombinedOutput()
+	// We use cmd.Output() and not cmd.CombinedOutput() so that wsl.exe
+	// warnings on stderr don't pollute the state.
+	out, err := cmd.Output()
 	if err != nil {
 		// `systemctl is-system-running` exits non-zero for states other than
 		// "running" (e.g., "degraded", "starting"), but from a WSL point of view,
@@ -544,8 +558,7 @@ func isSystemdRunning(dist string) (bool, error) {
 			return false, err
 		}
 	}
-	state := strings.TrimSpace(string(out))
-	return state == "running" || state == "degraded", nil
+	return parseSystemRunningOutput(out), nil
 }
 
 func terminateDist(dist string) error {
