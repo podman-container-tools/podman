@@ -380,6 +380,10 @@ func cliOpts(cc handlers.CreateContainerConfig, rtc *config.Config) (*entities.C
 				}
 				addField(&builder, "subpath", m.VolumeOptions.Subpath)
 			}
+		case mount.TypeImage:
+			if m.ImageOptions != nil {
+				addField(&builder, "subpath", m.ImageOptions.Subpath)
+			}
 			// All current VolumeOpts are handled above
 			// See vendor/github.com/containers/common/pkg/parse/parse.go:ValidateVolumeOpts()
 		}
