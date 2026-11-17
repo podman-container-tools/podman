@@ -1,0 +1,29 @@
+{{- varname .ID}}Default
+{{- if .IsPrimitive }}
+  {{- print " " }}={{ print " " }}
+  {{- if .IsCustomFormatter }}
+    {{- if stringContains .Zero "(\"" }}
+      {{- .GoType }}({{ printGoLiteral .Default }}){{/* strfmt type initializer that takes string */}}
+    {{- else }}
+      {{- .Zero }}{{/* strfmt type initializer that requires UnmarshalText(), e.g. Date, Datetime, Duration */}}
+    {{- end }}
+  {{- else }}
+    {{- .GoType }}({{ printGoLiteral .Default }}){{/* regular go primitive type initializer */}}
+  {{- end }}
+{{- else if .IsArray }}{{/* do not initialize from possible defaults in nested arrays */}}
+  {{- if .Child.IsPrimitive }}
+    {{- print " " }}={{ print " " }}
+    {{- if .Child.IsCustomFormatter }}
+      {{- .Zero }}{{/* initialization strategy with UnmarshalText() */}}
+    {{- else }}
+       {{- .GoType }}{{ arrayInitializer .Default }}{{/* regular go primitive type initializer: simple slice initializer */}}
+    {{- end }}
+  {{- else if .Child.IsArray }}
+    {{- print " " }}={{ print " " }}
+    {{- .Zero }}{{/* initialization strategy with json.Unmarshal() */}}
+  {{- else }}
+    {{- print " " }}{{ .GoType }}{{/* shouldn't have that: simple schema is either primitive or array */}}
+  {{- end }}
+{{- else }}
+  {{- print " " }}{{ .GoType }}{{/* shouldn't have that: simple schema is either primitive or array */}}
+{{- end }}

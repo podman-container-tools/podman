@@ -1,0 +1,7 @@
+## assert-podman-final-args .
+## assert-podman-args-regex "--file" "Containerfile"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=.
+File=Containerfile

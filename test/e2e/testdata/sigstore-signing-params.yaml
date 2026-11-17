@@ -1,0 +1,2 @@
+privateKeyFile: "testdata/sigstore-key.key"
+privateKeyPassphraseFile: "testdata/sigstore-key.key.pass"

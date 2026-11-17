@@ -1,0 +1,6 @@
+## assert-failed
+## assert-stderr-contains "Group set without User"
+
+[Container]
+Image=localhost/imagename
+Group=foobar

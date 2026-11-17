@@ -1,0 +1,9 @@
+## !assert-podman-args "--cap-drop" "all"
+## assert-podman-args "--cap-drop" "cap_dac_override"
+## assert-podman-args "--cap-drop" "cap_audit_write"
+## assert-podman-args "--cap-drop" "cap_ipc_owner"
+
+[Container]
+Image=localhost/imagename
+DropCapability=CAP_DAC_OVERRIDE CAP_AUDIT_WRITE
+DropCapability=CAP_IPC_OWNER

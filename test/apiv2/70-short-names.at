@@ -1,0 +1,138 @@
+# -*- sh -*-
+#
+# Tests for exercising short-name resolution in the compat API.
+#
+
+# Pull the libpod/quay image which is used in all tests below.
+t POST "images/create?fromImage=quay.io/libpod/alpine:latest" 200 .error~null .status~".*Download complete.*"
+
+# 14291 - let a short-name resolve to a *local* non Docker-Hub image.
+t POST containers/create Image=alpine 201 .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 .Config.Image="quay.io/libpod/alpine:latest" .Image~sha256:[0-9a-f]\\{64\\}
+podman rm -f $cid
+
+########## TAG
+
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo"  201
+t DELETE "images/docker.io/library/foo"               200
+
+
+########## BUILD
+
+function test_build {
+    from=$1
+    tag=$2
+    fqn=$3
+
+    TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+    CONTAINERFILE_TAR="${TMPD}/containerfile.tar"
+    cat > $TMPD/containerfile << EOF
+FROM $from
+RUN  touch /foo
+EOF
+    tar --format=posix -C $TMPD -cvf ${CONTAINERFILE_TAR} containerfile &> /dev/null
+
+    t POST "/build?dockerfile=containerfile&t=$tag" $CONTAINERFILE_TAR 200 \
+      .stream~".*Successfully tagged .*"
+
+    rm -rf $TMPD
+    t DELETE "images/$fqn" 200
+}
+
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo" 201
+test_build foo bar "docker.io/library/bar:latest"
+t DELETE "images/foo"                                200
+
+
+########## TAG
+
+# The libpod endpoint will resolve to it without issues.
+t GET "libpod/images/alpine/exists" 204
+
+# Now let's tag the image with 'foo'.  Remember, it will be normalized to
+# docker.io/library/foo.
+t GET  "libpod/images/docker.io/library/foo/exists" 404
+t POST "images/quay.io/libpod/alpine/tag?repo=foo"  201
+t GET  "libpod/images/docker.io/library/foo/exists" 204
+
+
+########## REMOVE
+
+t DELETE "images/foo"    200                          # removes the previously tagged image
+
+
+########## GET
+
+# Same procedure as above but with the /get endpoint.
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo" 201
+t GET    "images/foo/get"                            200 '[POSIX tar archive]'
+t DELETE "images/foo"                                200
+t GET    "images/alpine/get"                         200
+
+
+########## HISTORY
+
+t GET    "images/alpine/history"                     200
+t GET    "images/quay.io/libpod/alpine/history"      200
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo" 201
+t GET    "libpod/images/foo/history"                 200
+t DELETE "images/foo"                                200
+
+
+########## PUSH
+
+t POST   "images/quay.io/libpod/alpine/push?destination=localhost:9999/do/not:exist" 500
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo"                                 201
+t POST   "images/foo/push?destination=localhost:9999/do/not:exist"                   500
+t DELETE "images/foo"                                                                200
+
+
+########## CREATE A CONTAINER
+
+t POST   "containers/create"                         Image=alpine                       201
+t POST   "containers/create"                         Image=quay.io/libpod/alpine:latest 201
+cid=$(jq -r '.Id' <<<"$output")
+t POST   "images/quay.io/libpod/alpine/tag?repo=foo"                                    201
+t POST   "containers/create"                         Image=foo                          201
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE "images/foo"                                                                   200
+t DELETE "containers/$cid"                                                              204
+
+########## COMMIT CONTAINER
+
+t POST   "containers/create"                      Image=quay.io/libpod/alpine:latest 201
+cid=$(jq -r '.Id' <<<"$output")
+t GET    "images/alpine/get"                                                         200
+t POST   "commit?container=$cid&repo=foo&tag=tag"                                    201
+t GET    "images/foo/get"                                                            404 .cause="image not known"
+t GET    "images/foo:tag/get"                                                        200
+t DELETE "images/docker.io/library/foo:tag"                                          200
+t DELETE "containers/$cid"                                                           204
+
+
+######### SMOKE TESTS WITHOUT DOCKER.IO ENFORCEMENT
+
+# Note that we need to restart the service with a custom containers.conf to
+# disable the docker.io enforcement.
+
+stop_service
+CONTAINERS_CONF=$TESTS_DIR/containers.conf start_service
+
+t POST   "images/create?fromImage=quay.io/libpod/alpine:latest"       200 .error~null .status~".*Download complete.*"
+t POST   "images/alpine/tag?repo=foo"                                 201
+t GET    "images/localhost/foo:latest/get"                            200
+t DELETE "images/foo"                                                 200
+t GET    "images/alpine/history"                                      200
+t POST   "images/alpine/push?destination=localhost:9999/do/not:exist" 500
+t POST   "containers/create" Image=alpine                             201
+cid=$(jq -r '.Id' <<<"$output")
+t POST   "commit?container=$cid&repo=foo&tag=tag"                     201
+t DELETE "images/localhost/foo:tag"                                   200
+t DELETE "containers/$cid"                                            204
+
+test_build alpine bar "localhost/bar:latest"
+
+
+stop_service
+start_service

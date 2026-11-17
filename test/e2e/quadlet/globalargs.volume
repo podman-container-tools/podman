@@ -1,0 +1,7 @@
+## assert-podman-global-args "volume" "--volumepath=/var/lib/somewhere"
+## assert-podman-global-args "volume" "--imagestore=/var/lib/store"
+## assert-podman-global-args "volume" "--log-level=debug"
+
+[Volume]
+GlobalArgs=--volumepath=/var/lib/somewhere
+GlobalArgs=--imagestore=/var/lib/store --log-level=debug

@@ -1,0 +1,5 @@
+## assert-podman-final-args "/some/path" "an arg" "a;b\\nc\\td'e" "a;b\\nc\\td" "a\"b" "Hello World"
+
+[Container]
+Image=localhost/imagename
+Exec=/some/path "an arg" "a;b\nc\td'e" a;b\nc\td 'a"b' '\110ello \127orld'

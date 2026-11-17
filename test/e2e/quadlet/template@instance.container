@@ -1,0 +1,11 @@
+## assert-podman-final-args localhost/changed-image
+## assert-podman-args "--name" "systemd-%p_%i"
+## assert-symlink want.service.wants/template@instance.service ../template@instance.service
+## assert-podman-args --env "FOO=bar"
+
+[Container]
+# Will be changed by /template@instance.container.d/10-image.conf
+Image=localhost/imagename
+
+[Install]
+WantedBy=want.service

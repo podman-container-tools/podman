@@ -1,0 +1,5 @@
+## assert-key-is "Service" "WorkingDirectory" "/etc/containers/systemd"
+
+[Kube]
+Yaml=/etc/containers/systemd/deployment.yml
+SetWorkingDirectory=yaml

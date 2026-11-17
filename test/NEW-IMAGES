@@ -1,0 +1,14 @@
+#
+# As of July 2024, all CI VMs include a local registry prepopulated
+# with all container images used in tests:
+#
+#     https://github.com/containers/automation_images/pull/357
+#     https://github.com/containers/podman/pull/22726
+#
+# From time to time -- infrequently, we hope! -- existing images are
+# updated, or tests are added that require new images. Those must be
+# prefetched on each CI job, at least until new VMs are built. This
+# file contains those images.
+#
+# Format is one FQIN per line. Enumerate them below:
+#

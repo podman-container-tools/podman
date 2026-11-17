@@ -1,0 +1,7 @@
+## assert-key-is "Service" "SyslogIdentifier" "mytest"
+
+[Service]
+SyslogIdentifier=mytest
+
+[Kube]
+Yaml=deployment.yml

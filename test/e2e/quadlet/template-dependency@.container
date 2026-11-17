@@ -1,0 +1,10 @@
+## assert-podman-args-key-val "--mount" "," "type=volume,source=systemd-template-dependency-%i,destination=/path/in/container,ro=true"
+## assert-podman-args -v systemd-template-dependency-%i:/container/quadlet
+## assert-podman-args "--network" "systemd-template-dependency-%i"
+## assert-key-is "Unit" "Requires"  "template-dependency-network@.service" "template-dependency-volume@.service" "template-dependency-volume@.service"
+
+[Container]
+Image=localhost/imagename
+Mount=type=volume,source=template-dependency@.volume,destination=/path/in/container,ro=true
+Volume=template-dependency@.volume:/container/quadlet
+Network=template-dependency@.network

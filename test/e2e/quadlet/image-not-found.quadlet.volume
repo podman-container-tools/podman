@@ -1,0 +1,6 @@
+## assert-failed
+## assert-stderr-contains "requested Quadlet image not-found.image was not found"
+
+[Volume]
+Driver=image
+Image=not-found.image

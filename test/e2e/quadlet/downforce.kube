@@ -1,0 +1,8 @@
+## assert-podman-stop-post-args "kube"
+## assert-podman-stop-post-args "down"
+## assert-podman-stop-post-args "--force"
+## assert-podman-stop-post-final-args-regex .*/podman-e2e-.*/subtest-.*/quadlet/deployment.yml
+
+[Kube]
+Yaml=deployment.yml
+KubeDownForce=true

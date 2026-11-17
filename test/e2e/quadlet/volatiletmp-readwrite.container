@@ -1,0 +1,5 @@
+## assert-podman-args "--tmpfs" "/tmp:rw,size=512M,mode=1777"
+
+[Container]
+Image=localhost/imagename
+VolatileTmp=yes

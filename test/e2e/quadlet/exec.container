@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename "/some/binary file" "--arg1" "arg 2"
+
+[Container]
+Image=localhost/imagename
+Exec="/some/binary file" --arg1 \
+  "arg 2"

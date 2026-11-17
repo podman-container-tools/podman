@@ -1,0 +1,141 @@
+# -*- sh -*-
+
+podman pull $IMAGE &>/dev/null
+
+# Test various HostConfig options
+tmpfs_name="/mytmpfs"
+t POST containers/create?name=hostconfig_test \
+  Image=$IMAGE \
+  Cmd='["df","-P","'$tmpfs_name'"]' \
+  HostConfig='{"Binds":["/tmp/doesnotexist:/test1"]' \
+  TmpFs="{\"$tmpfs_name\":\"rw,noatime\"}}" \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+# Prior to #9512, the tmpfs would be called '/mytmpfs=rw', with the '=rw'
+t GET containers/${cid}/json 200 \
+  .HostConfig.Tmpfs[\"${tmpfs_name}\"]~rw,
+
+# Run the container, verify output
+t POST containers/${cid}/start 204
+t POST containers/${cid}/wait  200
+t GET  containers/${cid}/logs?stdout=true  200
+
+# /logs returns application/octet-stream, which our test helper saves in
+# an outfile rather than returning in $output. That's why we can't test
+# this directly in the /logs test above; instead, we rely on knowing the
+# path to the stored results. The 'tr' is needed because there may be
+# null bytes in the outfile.
+like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".* ${tmpfs_name}" \
+     "'df' output includes tmpfs name"
+
+# Reject 'noatime' for bind mount
+t POST libpod/containers/create \
+  Image=$IMAGE \
+  Mounts='[{"type":"bind","source":"/nosuchdir","destination":"/data","options":["noatime"]}]' \
+  500 \
+  .cause="invalid mount option" \
+  .message~"the 'noatime' option is only allowed with tmpfs mounts"
+
+# Compat API: HostConfig.Mounts.VolumeOptions.Subpath mounts only the selected volume subdirectory
+subpath_vol="apiv2-subpath-vol"
+podman volume create "$subpath_vol"
+podman run --rm -v "$subpath_vol":/mnt "$IMAGE" sh -c "mkdir -p /mnt/test1 /mnt/test2; touch /mnt/test1/hello1; touch /mnt/test2/hello2"
+
+t POST containers/create?name=compat_mount_subpath_test \
+  Image=$IMAGE \
+  Cmd='["ls","-1","/test1"]' \
+  HostConfig='{"Mounts":[{"Type":"volume","Source":"'$subpath_vol'","Target":"/test1","VolumeOptions":{"Subpath":"test1"}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST containers/${cid}/start 204
+t POST containers/${cid}/wait 200
+t GET  containers/${cid}/logs?stdout=true 200
+like "$(tr -d \\0 <$WORKDIR/curl.result.out)" ".*hello1$" "compat mount subpath returns only selected subdir"
+
+t DELETE containers/${cid}?v=true 204
+podman volume rm "$subpath_vol"
+
+# Compat API: HostConfig.Mounts with TmpfsOptions.Options (Docker API v1.46)
+tmpfs_name2="/mytmpfs2"
+t POST containers/create?name=compat_tmpfs_options_test \
+  Image=$IMAGE \
+  Cmd='["mount"]' \
+  HostConfig='{"Mounts":[{"Type":"tmpfs","Target":"/mytmpfs2","TmpfsOptions":{"Options":[["noexec"],["ro"],["tmpfs-size","67"]]}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t GET containers/${cid}/json 200 \
+  .HostConfig.Tmpfs.[\"$tmpfs_name2\"]="noexec,ro,size=67,rprivate,nosuid,nodev,tmpcopyup"
+
+t DELETE containers/${cid}?v=true 204
+
+# Compat API (v1.48+): the container-wide HostConfig.VolumeDriver does not apply
+# to volumes defined through Mounts, so create must warn about it.
+# NOTE: 't' defaults to /v1.44 for compat paths, so versions are explicit here.
+vd_vol1="apiv2-voldriver-vol1"
+vd_vol2="apiv2-voldriver-vol2"
+podman volume create "$vd_vol1"
+podman volume create "$vd_vol2"
+
+# Driver set + volume mount without its own driver: one warning
+t POST /v1.48/containers/create?name=voldriver_warn_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=1 \
+  .Warnings[0]~".*volume-driver configuration is ignored.*"
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+# First mount sets its own driver, second does not: the second still warns
+t POST /v1.48/containers/create?name=voldriver_warn_second_mount_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1","VolumeOptions":{"DriverConfig":{"Name":"local"}}},{"Type":"volume","Source":"'$vd_vol2'","Target":"/v2"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=1
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+# No warning: API older than 1.48 (version gate), volume mount sets its own
+# driver, or no container-wide driver. Warnings must be an empty array, not null.
+t POST /v1.47/containers/create?name=voldriver_old_api_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|type=array \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+t POST /v1.48/containers/create?name=voldriver_per_mount_driver_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"VolumeDriver":"local","Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1","VolumeOptions":{"DriverConfig":{"Name":"local"}}}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+t POST /v1.48/containers/create?name=voldriver_no_driver_test \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig='{"Mounts":[{"Type":"volume","Source":"'$vd_vol1'","Target":"/v1"}]}' \
+  201 \
+  .Id~[0-9a-f]\\{64\\} \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t DELETE containers/${cid}?v=true 204
+
+podman volume rm -f "$vd_vol1" "$vd_vol2"

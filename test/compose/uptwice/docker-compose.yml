@@ -1,0 +1,5 @@
+services:
+    app:
+        build: .
+        command: sleep 10001
+        stop_signal: SIGKILL # faster shutdown, no reason to wait 10 seconds

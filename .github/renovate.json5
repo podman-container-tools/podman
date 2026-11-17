@@ -1,0 +1,46 @@
+/*
+
+Validate this file before committing with (from repository root):
+
+    podman run -it \
+        -v ./.github/renovate.json5:/usr/src/app/renovate.json5:z \
+        ghcr.io/renovatebot/renovate:latest \
+        renovate-config-validator
+
+and/or use the pre-commit hook: https://github.com/renovatebot/pre-commit-hooks
+*/
+
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  /*************************************************
+   ****** Global/general configuration options *****
+   *************************************************/
+
+  // Reuse predefined sets of configuration options to DRY
+  "extends": [
+    // https://github.com/podman-container-tools/automation/blob/main/renovate/defaults.json5
+    "github>podman-container-tools/automation//renovate/defaults.json5"
+  ],
+
+  /*************************************************
+   *** Repository-specific configuration options ***
+   *************************************************/
+
+  "ignorePaths": [
+    "**/vendor/**",
+    "**/docs/**",
+  ],
+
+  "addLabels": ["release-note-none"],
+
+  // N/B: LAST matching rule wins
+  "packageRules": [
+    // Updates for `github.com/containers/*` should be checked more frequently than other deps.
+    {
+      "matchCategories": ["golang"],
+      "schedule": "before 11am",
+      "matchPackageNames": ["github.com/containers{/,}**"]
+    },
+  ],
+}

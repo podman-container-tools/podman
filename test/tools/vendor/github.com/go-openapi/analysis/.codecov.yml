@@ -1,0 +1,14 @@
+codecov:
+  notify:
+    after_n_builds: 2
+
+coverage:
+  status:
+    patch:
+      default:
+        target: 80%
+
+ignore:
+ - "testdata"
+ - "internal/antest"
+ - "internal/testintegration"

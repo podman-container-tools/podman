@@ -1,0 +1,14 @@
+{
+  "cdiVersion": "0.3.0",
+  "kind": "vendor.com/device",
+  "devices": [
+    {
+      "name": "myKmsg",
+      "containerEdits": {
+        "mounts": [
+          {"hostPath": "/dev/kmsg", "containerPath": "/dev/kmsg1", "options": ["rw", "rprivate", "rbind"]}
+        ]
+      }
+    }
+  ]
+}

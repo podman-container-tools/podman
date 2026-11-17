@@ -1,0 +1,2 @@
+FROM quay.io/libpod/alpine:latest
+RUN echo hello

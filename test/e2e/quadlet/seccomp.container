@@ -1,0 +1,5 @@
+## assert-podman-args --security-opt seccomp=unconfined
+
+[Container]
+Image=localhost/imagename
+SeccompProfile=unconfined

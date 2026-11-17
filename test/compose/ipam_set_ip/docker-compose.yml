@@ -1,0 +1,17 @@
+services:
+  test:
+    image: alpine
+    mac_address: 32:b5:b2:55:48:72
+    networks:
+      net1:
+        ipv4_address: 10.123.0.253
+    tty: true
+    command: ["top"]
+
+networks:
+  net1:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.123.0.0/24

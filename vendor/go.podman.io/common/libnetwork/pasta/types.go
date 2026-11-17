@@ -1,0 +1,32 @@
+package pasta
+
+import "net"
+
+const (
+	BinaryName      = "pasta"
+	PestoBinaryName = "pesto"
+)
+
+// PestoClient wraps the pesto binary path and control socket path,
+// providing methods to add and remove port forwarding rules.
+type PestoClient struct {
+	Binary string
+	// BinaryErr is the original error from FindHelperBinary if Binary is "".
+	BinaryErr  error
+	SocketPath string
+}
+
+type SetupResult struct {
+	// IpAddresses configured by pasta
+	IPAddresses []net.IP
+	// DNSForwardIP is the ip used in --dns-forward, it should be added as first
+	// entry to resolv.conf in the container.
+	DNSForwardIPs []string
+	// MapGuestIps are the ips used for the --map-guest-addr option which
+	// we can use for the host.containers.internal entry.
+	MapGuestAddrIPs []string
+	// IPv6 says whenever pasta run with ipv6 support
+	IPv6 bool
+	// Pid of the pasta process.
+	Pid int
+}

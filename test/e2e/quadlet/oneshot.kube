@@ -1,0 +1,19 @@
+## assert-podman-args "kube"
+## assert-podman-args "play"
+## assert-podman-final-args-regex .*/podman-e2e-.*/subtest-.*/quadlet/deployment.yml
+## assert-podman-args "--replace"
+## assert-podman-args "--service-container=true"
+## assert-podman-stop-post-args "kube"
+## assert-podman-stop-post-args "down"
+## assert-podman-stop-post-final-args-regex .*/podman-e2e-.*/subtest-.*/quadlet/deployment.yml
+## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
+## assert-key-is "Service" "KillMode" "mixed"
+## assert-key-is "Service" "Type" "oneshot"
+## assert-key-is "Service" "Environment" "PODMAN_SYSTEMD_UNIT=%n"
+## assert-key-is "Service" "SyslogIdentifier" "%N"
+
+[Kube]
+Yaml=deployment.yml
+
+[Service]
+Type=oneshot

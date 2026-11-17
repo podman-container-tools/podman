@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# This script is intended to help developers get buildah-tests-under-podman
+# working again in case of failure.
+#
+ME=$(basename $0)
+
+die() {
+    echo "$ME: $*" >&2
+    exit 1
+}
+
+# Confirm that we're in a test-buildah* subdir of podman
+whereami=$(basename $(pwd))
+if [[ ! $whereami =~ test-buildah-v ]]; then
+    die "Please run me while cd'ed to a test-buildah-vN.M directory"
+fi
+
+# FIXME: check that git repo is buildah
+git remote -v | grep -q '[BUILDAHREPO]' \
+    || die "This does not look like a buildah repo (git remote -v)"
+
+# We could do the commit automatically, but it's prudent to require human
+# involvement.
+modified=$(git status --untracked=no --porcelain)
+if [[ -n "$modified" ]]; then
+    echo $modified
+    die "Please commit your changes: git commit --amend --all"
+fi
+
+# Remove any 00??-*.patch files
+rm -f 0001-*.patch
+
+# Check count of commits, barf if need to squash
+n_commits=$(git log --pretty=format:%h [BASETAG]..HEAD | wc -l)
+if [[ $n_commits -gt 1 ]]; then
+    die "Please squash your commits"
+fi
+
+# Scope check: make sure the only files changed is helpers.bash
+changes=$(git diff --name-status [BASETAG]..HEAD | grep -E -v '\stests/helpers.bash')
+if [[ -n "$changes" ]]; then
+    echo $changes
+    die "Found modified files other than 'tests/helpers.bash'"
+fi
+
+###############################################################################
+# All right - things look good. Generate the patch, and copy it into place.
+
+git format-patch [BASETAG]
+
+# Once again, make sure there's exactly one and only one commit
+shopt -s nullglob
+patch2=$(echo 0002-*.patch)
+if [[ -n "$patch2" ]]; then
+    die "Internal error: I thought I checked for squashed commits, but still see $patch2"
+fi
+
+# All looks good. We can now copy that patch into its proper place in the
+# podman repo.
+cp 0001-*.patch ../test/buildah-bud/buildah-tests.diff

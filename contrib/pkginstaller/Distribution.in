@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<installer-script minSpecVersion="1.000000">
+    <title>Podman __VERSION__</title>
+    <background mime-type="image/svg+xml" file="banner.svg" scaling="proportional"/>
+    <welcome file="welcome.html" mime-type="text/html" />
+    <conclusion file="conclusion.html" mime-type="text/html" />
+    <license file="LICENSE.txt"/>
+    <options customize="never" hostArchitectures="x86_64,arm64" />
+    <domains enable_localSystem="true" />
+    <choices-outline>
+        <line choice="podman"/>
+    </choices-outline>
+    <choice id="podman" title="podman">
+        <pkg-ref id="podman.pkg"/>
+    </choice>
+    <pkg-ref id="podman.pkg">podman.pkg</pkg-ref>
+</installer-script>

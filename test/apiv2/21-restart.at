@@ -1,0 +1,47 @@
+# -*- sh -*-
+#
+# test 'restart' endpoints
+#
+
+podman pull $IMAGE &>/dev/null
+
+# restart, by name
+# Exit cleanly on SIGTERM; leak lockfile on SIGKILL (will fail to restart, allowing indirect observation of SIGKILL)
+podman run -dt --name mypause $IMAGE ./pause &>/dev/null
+
+t GET  libpod/containers/mypause/json 200 .State.Status=running
+RESTART=$(date +%s.%N)
+t POST libpod/containers/mypause/restart 204
+t GET "libpod/events?stream=false&since=$RESTART"  200  \
+  'select(.status | contains("restart")).Action=restart' \
+  'select(.status | contains("died")).Action=died' \
+  'select(.status | contains("died")).Actor.Attributes.containerExitCode=0'
+
+# restart, by ID
+# Remember that podman() hides all output; we need to get our CID via inspect
+t GET  libpod/containers/mypause/json 200 .State.Status=running
+cid=$(jq -r .Id <<<"$output")
+RESTART=$(date +%s.%N)
+t POST libpod/containers/$cid/restart  204
+t GET "libpod/events?stream=false&since=$RESTART"  200  \
+  'select(.status | contains("restart")).Action=restart' \
+  'select(.status | contains("died")).Action=died' \
+  'select(.status | contains("died")).Actor.Attributes.containerExitCode=0'
+
+# restart, using compat API
+t GET  containers/mypause/json 200 .State.Status=running
+RESTART=$(date +%s.%N)
+t POST containers/mypause/restart 204
+t GET "libpod/events?stream=false&since=$RESTART"  200  \
+  'select(.status | contains("restart")).Action=restart' \
+  'select(.status | contains("died")).Action=died' \
+  'select(.status | contains("died")).Actor.Attributes.containerExitCode=0'
+t GET  containers/mypause/json 200 .State.Status=running
+cid=$(jq -r .Id <<<"$output")
+RESTART=$(date +%s.%N)
+t POST containers/$cid/restart 204
+t GET "libpod/events?stream=false&since=$RESTART"  200  \
+  'select(.status | contains("restart")).Action=restart' \
+  'select(.status | contains("died")).Action=died' \
+  'select(.status | contains("died")).Actor.Attributes.containerExitCode=0'
+t DELETE containers/mypause?force=true    204

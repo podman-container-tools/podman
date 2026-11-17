@@ -1,0 +1,15 @@
+## assert-podman-pre-args -v /host/dir:/container/volume
+## assert-podman-pre-args -v /host/dir2:/container/volume2:Z
+## assert-podman-pre-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
+## assert-podman-pre-args -v named:/container/named
+## assert-podman-pre-args -v systemd-basic:/container/quadlet
+## assert-podman-pre-args -v %h/container:/container/volume4
+
+[Pod]
+Volume=/host/dir:/container/volume
+Volume=/host/dir2:/container/volume2:Z
+Volume=./host/dir3:/container/volume3
+Volume=/container/empty
+Volume=named:/container/named
+Volume=basic.volume:/container/quadlet
+Volume=%h/container:/container/volume4

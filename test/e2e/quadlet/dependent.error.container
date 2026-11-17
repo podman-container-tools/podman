@@ -1,0 +1,9 @@
+## assert-failed
+## assert-stderr-contains "unable to translate dependency for basic.container"
+
+[Unit]
+After=basic.container
+Requires=basic.container
+
+[Container]
+Image=localhost/imagename

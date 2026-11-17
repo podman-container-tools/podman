@@ -1,0 +1,31 @@
+# -*- sh -*-
+#
+# subnet pools conversion tests
+#
+
+# Create a temporary containers.conf with custom DefaultSubnetPools
+testdir=$(mktemp -d)
+cat > $testdir/containers.default_subnet_pools.conf <<EOF
+[network]
+default_subnet_pools = [
+  { "base" = "10.89.0.0/16", "size" = 24 },
+  { "base" = "10.90.0.0/15", "size" = 26 }
+]
+EOF
+
+# Restart podman with custom config
+stop_service
+CONTAINERS_CONF=$testdir/containers.default_subnet_pools.conf start_service
+
+# Test the Docker-compatible API endpoints
+t GET info 200 \
+  '.DefaultAddressPools | length=2' \
+  '.DefaultAddressPools[0].Base=10.89.0.0/16' \
+  '.DefaultAddressPools[0].Size=24' \
+  '.DefaultAddressPools[1].Base=10.90.0.0/15' \
+  '.DefaultAddressPools[1].Size=26'
+
+# Restart with the default containers.conf for next tests.
+rm -rf $testdir
+stop_service
+start_service

@@ -1,0 +1,8 @@
+## assert-podman-args --userns keep-id:uid=200,gid=210
+
+[Container]
+Image=localhost/imagename
+# The added three spaces to keep-id are necessary for test of trimwhitespace
+RemapUsers=keep-id   
+RemapUid=200
+RemapGid=210

@@ -1,0 +1,9 @@
+/.cache/
+/.gocache/
+/.tmp/
+/bin/
+/vendor/
+.#*
+.aider*
+debug.test*
+/node_modules

@@ -1,0 +1,5 @@
+## assert-failed
+## assert-stderr-contains "the key Image is mandatory when using the image driver"
+
+[Volume]
+Driver=image

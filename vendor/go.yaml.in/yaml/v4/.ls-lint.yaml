@@ -1,0 +1,19 @@
+# Copyright 2025 The go-yaml Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The ls-lint configuration file.
+# More information on the file format can be found on https://ls-lint.org/
+ls:
+  # root directory
+  .yml: exists:0      # .yml files
+  .*.yml: exists:0    # .yml dotfiles
+
+  # any subdirectory, even dotfile directory
+  '**':
+    .yml: exists:0    # .yml files
+    .*.yml: exists:0  # .yml dotfiles
+
+ignore:
+- .git          # git folder
+- .cache        # cache folder
+- yts/testdata  # third-party folder

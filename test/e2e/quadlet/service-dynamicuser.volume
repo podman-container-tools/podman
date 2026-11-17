@@ -1,0 +1,3 @@
+## assert-stderr-contains "using key DynamicUser in the Service group is not supported"
+[Service]
+DynamicUser=foobar

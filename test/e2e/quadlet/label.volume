@@ -1,0 +1,8 @@
+## assert-last-key-contains Service ExecStart " --label org.foo.Arg1=arg1 "
+## assert-last-key-contains Service ExecStart " --label org.foo.Arg2=arg2 "
+## assert-last-key-contains Service ExecStart " --label org.foo.Arg3=arg3 "
+
+[Volume]
+Label=org.foo.Arg1=arg1
+Label=org.foo.Arg2=arg2 \
+   org.foo.Arg3=arg3

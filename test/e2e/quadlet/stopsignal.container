@@ -1,0 +1,5 @@
+## assert-podman-args "--stop-signal" "SIGKILL"
+
+[Container]
+Image=localhost/imagename
+StopSignal=SIGKILL

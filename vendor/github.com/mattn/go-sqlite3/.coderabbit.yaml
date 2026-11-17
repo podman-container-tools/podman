@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  # Skip the vendored SQLite amalgamation. These files are copied verbatim from
+  # upstream SQLite (see the License section in README.md) and are not code that
+  # this project authors or reviews.
+  path_filters:
+    - "!sqlite3-binding.c"
+    - "!sqlite3-binding.h"
+    - "!sqlite3ext.h"
+  auto_review:
+    enabled: true
+    drafts: false
+chat:
+  auto_reply: true

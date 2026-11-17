@@ -1,0 +1,21 @@
+# This service runs once each boot to remove potential leftover
+# container state from previous boots.
+
+# This is needed when using transient storage mode in podman where the
+# database and other configs are stored in tmpfs, but some other files
+# are not. If we don't run this after an unclean boot then there may
+# be some leftover files that grow over time.
+
+[Unit]
+Description=Clean up podman transient data
+RequiresMountsFor=%t/containers
+Documentation=man:podman-system-prune(1)
+Requires=boot-complete.target
+After=local-fs.target boot-complete.target
+
+[Service]
+Type=oneshot
+ExecStart=@@PODMAN@@ system prune --external
+
+[Install]
+WantedBy=default.target

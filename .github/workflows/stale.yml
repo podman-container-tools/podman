@@ -1,0 +1,33 @@
+name: Mark stale issues and pull requests
+
+# Please refer to https://github.com/actions/stale/blob/master/action.yml
+# to see all config knobs of the stale action.
+
+on:
+  schedule:
+  # Do not run at the top of the hour to avoid github action job limits that will drop jobs sometimes.
+  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+  - cron: "27 1 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    if: github.repository == 'podman-container-tools/podman'
+    permissions:
+      issues: write  # for actions/stale to close stale issues
+      pull-requests: write  # for actions/stale to close stale PRs
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: 'A friendly reminder that this issue had no activity for 30 days.'
+        stale-pr-message: 'A friendly reminder that this PR had no activity for 30 days.'
+        stale-issue-label: 'stale-issue'
+        stale-pr-label: 'stale-pr'
+        days-before-stale: 30
+        days-before-close: 365
+        remove-stale-when-updated: true

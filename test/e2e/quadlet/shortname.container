@@ -1,0 +1,4 @@
+## assert-stderr-contains "not a fully qualified image name"
+
+[Container]
+Image=shortname

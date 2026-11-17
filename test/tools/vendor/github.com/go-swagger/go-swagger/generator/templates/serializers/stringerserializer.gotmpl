@@ -1,0 +1,16 @@
+{{ define "stringerSerializer" }}
+// String implements the fmt.Stringer interface.
+//
+// It renders the field values of this {{ humanize .Name }} as JSON, so that pointer
+// properties show their value rather than their address when formatted with %s or %v.
+func ({{.ReceiverName}} *{{ .GoName }}) String() string {
+  if {{ .ReceiverName }} == nil {
+    return "null"
+  }
+  b, err := jsonutils.WriteJSON({{ .ReceiverName }})
+  if err != nil {
+    return err.Error()
+  }
+  return string(b)
+}
+{{- end }}

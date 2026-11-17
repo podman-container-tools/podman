@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --env "MAIN=mainvalue"
+## assert-podman-args --env "FIRST=value"
+## assert-podman-args --env "SECOND=othervalue"
+
+[Container]
+Image=localhost/imagename
+Environment=MAIN=mainvalue

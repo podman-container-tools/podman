@@ -1,0 +1,12 @@
+## assert-podman-global-args "kube" "--conmon=/usr/bin/somewhere"
+## assert-podman-global-args "kube" "--imagestore=/var/lib/somestore"
+## assert-podman-global-args "kube" "--log-level=debug"
+
+## assert-podman-stop-post-global-args "kube" "--conmon=/usr/bin/somewhere"
+## assert-podman-stop-post-global-args "kube" "--imagestore=/var/lib/somestore"
+## assert-podman-stop-post-global-args "kube" "--log-level=debug"
+
+[Kube]
+Yaml=file.yml
+GlobalArgs=--conmon=/usr/bin/somewhere
+GlobalArgs=--imagestore=/var/lib/somestore --log-level=debug

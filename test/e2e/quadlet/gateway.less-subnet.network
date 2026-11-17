@@ -1,0 +1,7 @@
+## assert-failed
+## assert-stderr-contains "cannot set more gateways than subnets"
+
+[Network]
+Subnet=192.168.1.0/24
+Gateway=192.168.1.1
+Gateway=192.168.2.1

@@ -1,0 +1,13 @@
+## assert-last-key-contains Service ExecStart " --opt o=uid=0,gid=11,rw,compress=zstd "
+## assert-last-key-contains Service ExecStart " --opt type=btrfs "
+## assert-last-key-contains Service ExecStart " --opt device=/dev/vda1 "
+## assert-last-key-contains Service ExecStart " --opt nocopy "
+
+[Volume]
+# Test usernames too
+User=root
+Group=11
+Device=/dev/vda1
+Type=btrfs
+Options=rw,compress=zstd
+Copy=no

@@ -1,0 +1,8 @@
+## assert-podman-final-args https://github.com/containers/PodmanHello/archive/refs/heads/main.tar.gz
+## assert-podman-args "--tag" "localhost/podman-hello-archive"
+## assert-podman-args "--file" "PodmanHello-main/Containerfile"
+
+[Build]
+ImageTag=localhost/podman-hello-archive
+File=PodmanHello-main/Containerfile
+SetWorkingDirectory=https://github.com/containers/PodmanHello/archive/refs/heads/main.tar.gz

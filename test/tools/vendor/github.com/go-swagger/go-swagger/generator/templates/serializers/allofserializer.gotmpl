@@ -1,0 +1,180 @@
+{{ define "allOfSerializer" }}
+  {{- $receiverName := .ReceiverName }}
+// UnmarshalJSON unmarshals this object from a JSON structure
+func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
+  {{- range .AllOf }}
+    // {{ .GoName }}
+    {{- if and .IsAnonymous .Properties }}{{/* unmarshalling properties in all of anonymous objects */}}
+      {{- $part :=  .GoName }}
+      var data{{ $part }} struct {
+      {{- range .Properties }}
+        {{- if not .IsBaseType }}
+          {{- if not $.IsExported }}
+            {{ template "privstructfield" . }}
+          {{- else }}
+            {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+          {{- end }}
+        {{ else }}
+          {{ if not $.IsExported }}
+            {{ template "privstructfield" . }}
+          {{ else }}
+            {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+          {{ end }}
+        {{ end }}
+      {{- end }}
+      {{- if .HasAdditionalProperties }}
+        {{ .AdditionalProperties.GoName }}{{ if not .IsExported }}Field{{ end }} map[string]{{ template "schemaType" .AdditionalProperties }} `json:"-"`
+      {{- end }}
+      {{- if .AdditionalItems }}
+        {{ .AdditionalItems.GoName }}{{ if or (not .IsExported) .IsSubType }}Field{{ end }} []{{ template "schemaType" .AdditionalItems }} `json:"-"`
+      {{- end }}
+  }
+  if err := jsonutils.ReadJSON(raw, &data{{ $part }}); err != nil {
+    return err
+  }
+      {{ range .Properties }}
+  {{ $receiverName }}.{{ .GoName }} = data{{ $part }}.{{ .GoName }}
+      {{ end }}
+    {{- else if .IsAnonymous }}
+  var {{ varname .Name }} {{ .GoType }}
+  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} jsonutils.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
+    return err
+  }
+  {{ .ValueExpression }} = {{ varname .Name }}
+    {{- end }}
+    {{- if not .IsAnonymous }}{{/* unmarshalling allOf named objects */}}
+  var {{ varname .Name }} {{ .GoType }}
+  if err := {{ if .IsBaseType}}Unmarshal{{ .GoType }}(bytes.NewBuffer(raw), &{{ varname .Name }}){{ else }} jsonutils.ReadJSON(raw, &{{ varname .Name }}){{ end }}; err != nil {
+    return err
+  }
+  {{ .ReceiverName }}.{{ dropPackage .GoType }} = {{ varname .Name }}
+    {{ end }}
+  {{ end }}
+  {{- if .Properties }}
+    // now for regular properties
+    {{- $part :=  .GoName }}
+    var props{{ $part }} struct {
+    {{- range .Properties }}
+      {{- if not .IsBaseType }}
+        {{- if not $.IsExported }}
+          {{ template "privstructfield" . }}
+        {{- else }}
+          {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+        {{- end }}
+      {{- else }}
+        {{- if not $.IsExported }}
+          {{ template "privstructfield" . }}
+        {{- else }}
+          {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+        {{- end }}
+      {{- end }}
+    {{ end }}
+    }
+    if err := jsonutils.ReadJSON(raw, &props{{ $part }}); err != nil {
+       return err
+    }
+    {{- range .Properties }}
+      {{ $receiverName }}.{{ .GoName }} = props{{ $part }}.{{ .GoName }}
+    {{ end }}
+  {{- end }}
+  {{ if .HasAdditionalProperties }}
+  // TODO: AdditionalProperties
+  {{- end }}
+  {{- if .AdditionalItems }}
+  // TODO: AdditionalItems
+  {{- end }}
+  return nil
+}
+
+// MarshalJSON marshals this object to a JSON structure
+func ({{.ReceiverName}} {{ .GoName }}) MarshalJSON() ([]byte, error) {
+  _parts := make([][]byte, 0, {{ len .AllOf }})
+  {{ range .AllOf }}
+    {{- if and .IsAnonymous .Properties }}
+      {{- $part :=  .GoName }}
+  var data{{ $part }} struct {
+      {{- range .Properties }}
+        {{- if not .IsBaseType }}
+          {{- if not $.IsExported }}
+            {{ template "privstructfield" . }}
+          {{- else }}
+            {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+          {{- end }}
+        {{- else }}
+          {{- if not $.IsExported }}
+            {{ template "privstructfield" . }}
+          {{- else }}
+            {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+            {{- end }}
+        {{- end }}
+      {{ end }}
+      {{- if .HasAdditionalProperties }}
+        {{ .AdditionalProperties.GoName }}{{ if not .IsExported }}Field{{ end }} map[string]{{ template "schemaType" .AdditionalProperties }} `json:"-"`
+      {{- end }}
+      {{- if .AdditionalItems }}
+        {{ .AdditionalItems.GoName }}{{ if or (not .IsExported) .IsSubType }}Field{{ end }} []{{ template "schemaType" .AdditionalItems }} `json:"-"`
+      {{- end }}
+  }
+
+      {{ range .Properties }}
+  data{{ $part }}.{{ .GoName }} = {{ $receiverName }}.{{ .GoName }}
+      {{ end }}
+
+  jsonData{{ $part }}, err{{ $part }} := jsonutils.WriteJSON(data{{ $part }})
+  if err{{ $part }} != nil {
+    return nil, err{{ $part }}
+  }
+  _parts = append(_parts, jsonData{{ $part }})
+    {{- else if .IsAnonymous }}{{/* unmarshalling anonymous type composition */}}
+  {{ varname .Name }}, err := jsonutils.WriteJSON({{ .ValueExpression }})
+  if err != nil {
+    return nil, err
+  }
+  _parts = append(_parts, {{ varname .Name }})
+    {{- end }}
+    {{- if not .IsAnonymous }}
+
+  {{ varname .Name }}, err := jsonutils.WriteJSON({{ $receiverName }}.{{ dropPackage .GoType }})
+  if err != nil {
+    return nil, err
+  }
+  _parts = append(_parts, {{ varname .Name }})
+    {{- end }}
+  {{- end }}
+  {{- if .Properties }}
+
+    // now for regular properties
+    {{- $part :=  .GoName }}
+    var props{{ $part }} struct {
+    {{- range .Properties }}
+      {{- if not .IsBaseType }}
+        {{- if not $.IsExported }}
+          {{ template "privstructfield" . }}
+        {{- else }}
+          {{ .GoName}} {{ template "schemaType" . }} {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+        {{- end }}
+      {{- else }}
+        {{- if not $.IsExported }}
+          {{ template "privstructfield" . }}
+        {{- else }}
+          {{ .GoName}} json.RawMessage {{ jsonFieldTag .OriginalName (and (not .Required) .IsEmptyOmitted) .IsJSONString }}
+        {{- end }}
+      {{- end }}
+    {{ end }}
+    }
+    {{- range .Properties }}
+    props{{ $part }}.{{ .GoName }} = {{ $receiverName }}.{{ .GoName }}
+    {{ end }}
+    jsonDataProps{{ $part }}, err{{ $part }} := jsonutils.WriteJSON(props{{ $part }})
+    if err{{ $part }} != nil {
+        return nil, err{{ $part }}
+    }
+    _parts = append(_parts, jsonDataProps{{ $part }})
+  {{- end }}
+  {{- if .HasAdditionalProperties }}
+  {{- end }}
+  {{- if .HasAdditionalItems }}
+  {{- end }}
+  return jsonutils.ConcatJSON(_parts...), nil
+}
+{{- end }}

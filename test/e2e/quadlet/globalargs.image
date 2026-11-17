@@ -1,0 +1,8 @@
+## assert-podman-global-args "image" "--identity=path=/etc/identity"
+## assert-podman-global-args "image" "--syslog"
+## assert-podman-global-args "image" "--log-level=debug"
+
+[Image]
+Image=image:latest
+GlobalArgs=--identity=path=/etc/identity
+GlobalArgs=--syslog --log-level=debug

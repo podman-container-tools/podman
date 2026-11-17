@@ -1,0 +1,127 @@
+% podman-network.unit 5
+
+# NAME
+
+podman\-network.unit - systemd unit files for managing Podman networks using Quadlet
+
+# SYNOPSIS
+
+*name*.network
+
+# DESCRIPTION
+
+Network files are named with a `.network` extension and contain a section `[Network]` describing the
+named Podman network. The generated service is a one-time command that ensures that the network
+exists on the host, creating it if needed.
+
+By default, the Podman network has the same name as the unit, but with a `systemd-` prefix, i.e. for
+a network file named `$NAME.network`, the generated Podman network is called `systemd-$NAME`, and
+the generated service file is `$NAME-network.service`. The `NetworkName` option allows for
+overriding this default name with a user-provided one.
+
+Please note that stopping the corresponding service will not remove the Podman network by default -
+this can be overridden by the `NetworkDeleteOnStop=true` option.
+
+In addition, updating an existing network is not supported.
+In order to update the network parameters, you must first manually remove the Podman network and then restart the service.
+
+Using network units allows containers to depend on networks being automatically pre-created. This is
+particularly interesting when using special options to control network creation, as Podman otherwise creates networks with the default options.
+
+# USAGE SUMMARY
+
+The `.network` file is parsed by the `podman-system-generator` at boot or reload, generating a systemd
+`.service` that runs `podman network create`.
+
+# OPTIONS
+
+Valid options for `[Network]` are listed below:
+
+| **[Network] options**               | **podman network create equivalent**                            |
+|-------------------------------------|-----------------------------------------------------------------|
+| ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                                         |
+| DisableDNS=true                     | --disable-dns                                                   |
+| DNS=192.168.55.1                    | --dns=192.168.55.1                                              |
+| Driver=bridge                       | --driver bridge                                                 |
+| Gateway=192.168.55.3                | --gateway 192.168.55.3                                          |
+| GlobalArgs=--log-level=debug        | --log-level=debug                                               |
+| InterfaceName=enp1                  | --interface-name enp1                                           |
+| Internal=true                       | --internal                                                      |
+| IPAMDriver=dhcp                     | --ipam-driver dhcp                                              |
+| IPRange=192.168.55.128/25           | --ip-range 192.168.55.128/25                                    |
+| IPv6=true                           | --ipv6                                                          |
+| Label="XYZ"                         | --label "XYZ"                                                   |
+| NetworkDeleteOnStop=true            | Add ExecStopPost to delete the network when the unit is stopped |
+| NetworkName=foo                     | podman network create foo                                       |
+| Options=isolate=true                | --opt isolate=true                                              |
+| PodmanArgs=--dns=192.168.55.1       | --dns=192.168.55.1                                              |
+| Subnet=192.5.0.0/16                 | --subnet 192.5.0.0/16                                           |
+
+
+@@option quadlet:module
+
+@@option quadlet:disable-dns
+
+@@option quadlet:dns
+
+@@option quadlet:driver
+
+@@option quadlet:gateway
+
+@@option quadlet:global-args
+
+@@option quadlet:interface-name
+
+@@option quadlet:internal
+
+@@option quadlet:ipam-driver
+
+@@option quadlet:ip-range
+
+@@option quadlet:ipv6
+
+@@option quadlet:label.network
+
+### `NetworkDeleteOnStop=true` (defaults to `false`)
+
+When set to `true`, the network is deleted when the service is stopped.
+
+### `NetworkName=foo`
+
+The (optional) name of the Podman network.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.network` file creates a `systemd-$name` Podman network to avoid
+conflicts with user-managed networks.
+
+@@option quadlet:opt
+
+@@option quadlet:podman-args
+
+@@option quadlet:subnet
+
+# EXAMPLES
+
+Basic bridge network:
+
+```
+[Network]
+NetworkName=private0
+Subnet=10.10.0.0/16
+Gateway=10.10.0.1
+```
+
+Enable IPv6 with IPAM driver:
+
+```
+[Network]
+NetworkName=v6net
+Subnet=fd00:dead:beef::/64
+IPv6=true
+IPAMDriver=host-local
+```
+
+# SEE ALSO
+
+[podman-network-create(1)](podman-network-create.1.md),
+[podman-systemd.unit(5)](podman-systemd.unit.5.md),
+[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)

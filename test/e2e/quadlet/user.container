@@ -1,0 +1,7 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--user" "998:999"
+
+[Container]
+Image=localhost/imagename
+User=998
+Group=999

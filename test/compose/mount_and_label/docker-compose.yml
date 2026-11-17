@@ -1,0 +1,12 @@
+version: '3'
+services:
+  web:
+    build: frontend
+    ports:
+      - '5000:5000'
+    volumes:
+      - /tmp/data:/data:ro
+    security_opt:
+      - label=disable
+    labels:
+      - "io.podman=the_best"

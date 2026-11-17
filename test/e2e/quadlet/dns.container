@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--dns" "8.7.7.7"
+## assert-podman-args "--dns" "8.8.8.8"
+
+[Container]
+Image=localhost/imagename
+DNS=8.7.7.7
+DNS=8.8.8.8

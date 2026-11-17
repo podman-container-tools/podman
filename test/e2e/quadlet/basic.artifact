@@ -1,0 +1,10 @@
+## assert-podman-final-args quay.io/libpod/testartifact:20250206-single
+## assert-podman-args "artifact"
+## assert-podman-args "pull"
+## assert-key-is "Service" "Type" "oneshot"
+## assert-key-is "Service" "RemainAfterExit" "yes"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service"
+## assert-key-is-regex "Unit" "Wants" "network-online.target|podman-user-wait-network-online.service"
+
+[Artifact]
+Artifact=quay.io/libpod/testartifact:20250206-single

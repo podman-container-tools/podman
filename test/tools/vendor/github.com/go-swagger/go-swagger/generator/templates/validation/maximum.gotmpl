@@ -1,0 +1,23 @@
+{{- if or (hasPrefix .UnderlyingType "int") }}
+  {{- if and (hasPrefix .UnderlyingType "int64") (not .IsAliased) }}
+if err := validate.MaximumInt({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+  {{- else }}
+if err := validate.MaximumInt({{ path . }}, {{ printf "%q" .Location }}, int64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+  {{- end }}
+{{- else }}
+  {{- if hasPrefix .UnderlyingType "uint" }}
+    {{- if and (hasPrefix .UnderlyingType "uint64") (not .IsAliased) }}
+if err := validate.MaximumUint({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+    {{- else }}
+if err := validate.MaximumUint({{ path . }}, {{ printf "%q" .Location }}, uint64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+    {{- end }}
+  {{- else }}
+    {{- if and (eq .UnderlyingType "float64") (not .IsAliased) }}
+if err := validate.Maximum({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+    {{- else }}
+if err := validate.Maximum({{ path . }}, {{ printf "%q" .Location }}, float64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Maximum }}, {{.ExclusiveMaximum }}); err != nil {
+    {{- end }}
+  {{- end }}
+{{- end }}
+  return err
+}

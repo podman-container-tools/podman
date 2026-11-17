@@ -1,0 +1,4 @@
+## assert-podman-final-args localhost/imagename:v1
+
+[Container]
+Image=multiple-tags.build

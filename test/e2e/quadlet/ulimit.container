@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --ulimit nproc=1234:5678
+## assert-podman-args --ulimit cpu=1234:5678
+
+[Container]
+Image=localhost/imagename
+Ulimit=nproc=1234:5678
+Ulimit=cpu=1234:5678

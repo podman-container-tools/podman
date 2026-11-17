@@ -1,0 +1,64 @@
+# Configuration file for c-for-go, which go-libvirt uses to translate the const
+# and type definitions from the C-language sources in the libvirt project into
+# Go. This file is used by the c-for-go binary (github.com/xlab/c-for-go), which
+# is called when 'go generate' is run. See libvirt.go for the command line used.
+---
+GENERATOR:
+    PackageName: libvirt
+    PackageLicense: |
+        Copyright 2018 The go-libvirt Authors.
+
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+    Includes: []
+
+PARSER:
+    # We can't use environment variables here, but we don't want to process the
+    # libvirt version installed in the system folders (if any). Instead we'll
+    # rely on our caller to link the libvirt source directory to lv_source/, and
+    # run on that code. This isn't ideal, but changes to c-for-go are needed to
+    # fix it.
+    IncludePaths: [./lv_source/include, ./lv_source/build/include]
+    SourcesPaths:
+        - libvirt/libvirt.h
+        - libvirt/virterror.h
+
+TRANSLATOR:
+    ConstRules:
+        defines: eval
+    Rules:
+        global:
+            - {action: accept, from: "^vir"}
+        post-global:
+            - {action: replace, from: "^vir"}
+            - {load: snakecase}
+            # Follow golint's capitalization conventions.
+            - {action: replace, from: "Api([A-Z]|$)", to: "API$1"}
+            - {action: replace, from: "Cpu([A-Z]|$)", to: "CPU$1"}
+            - {action: replace, from: "Dns([A-Z]|$)", to: "DNS$1"}
+            - {action: replace, from: "Eof([A-Z]|$)", to: "EOF$1"}
+            - {action: replace, from: "Id([A-Z]|$)", to: "ID$1"}
+            - {action: replace, from: "Ip([A-Z]|$)", to: "IP$1"}
+            - {action: replace, from: "Tls([A-Z]|$)", to: "TLS$1"}
+            - {action: replace, from: "Uuid([A-Z]|$)", to: "UUID$1"}
+            - {action: replace, from: "Uri([A-Z]|$)", to: "URI$1"}
+            - {action: replace, from: "Vcpu([A-Z]|$)", to: "VCPU$1"}
+            - {action: replace, from: "Xml([A-Z]|$)", to: "XML$1"}
+            - {action: replace, from: "Rpc([A-Z]|$)", to: "RPC$1"}
+            - {action: replace, from: "Ssh([A-Z]|$)", to: "SSH$1"}
+            - {action: replace, from: "Http([A-Z]|$)", to: "HTTP$1"}
+            - {transform: unexport, from: "^From"}
+        const:
+            - {action: accept, from: "^VIR_"}
+            # Special case to prevent a collision with a type:
+            - {action: replace, from: "^VIR_DOMAIN_JOB_OPERATION", to: "VIR_DOMAIN_JOB_OPERATION_STR"}
+            - {transform: lower}

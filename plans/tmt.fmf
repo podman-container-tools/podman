@@ -1,0 +1,24 @@
+# reverse dependency tests for https://github.com/teemtee/tmt/
+summary: Run podman tests
+
+enabled: false
+adjust+:
+  when: revdeps == yes
+  enabled: true
+
+discover:
+    how: fmf
+    url: https://github.com/teemtee/tmt
+    filter: "tag:podman"
+    adjust-tests:
+      - check: avc
+
+prepare:
+    - name: update-deps
+      when: initiator == packit
+      how: shell
+      script: bash $TMT_TREE/contrib/packit-tmt/update-deps.sh
+      order: 20
+
+execute:
+    how: tmt

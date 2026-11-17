@@ -1,0 +1,7 @@
+## assert-podman-args "--subuidname" "utest"
+## assert-podman-args "--subgidname" "gtest"
+
+[Container]
+Image=localhost/imagename
+SubUIDMap=utest
+SubGIDMap=gtest

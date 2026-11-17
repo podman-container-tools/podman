@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--entrypoint=top -b"
+
+[Container]
+Image=localhost/imagename
+Entrypoint=top -b

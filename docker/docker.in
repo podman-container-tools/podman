@@ -1,0 +1,4 @@
+#!/bin/sh
+[ -e ${ETCDIR}/containers/nodocker ] || [ -e "${XDG_CONFIG_HOME-$HOME/.config}/containers/nodocker" ] || \
+echo "Emulate Docker CLI using podman. Create ${ETCDIR}/containers/nodocker to quiet msg." >&2
+exec ${BINDIR}/podman "$@"

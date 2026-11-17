@@ -1,0 +1,278 @@
+package shim
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"path/filepath"
+	"strings"
+	"time"
+
+	gvproxy "github.com/containers/gvisor-tap-vsock/pkg/types"
+	"github.com/sirupsen/logrus"
+	"go.podman.io/common/pkg/config"
+	"go.podman.io/podman/v6/pkg/machine"
+	"go.podman.io/podman/v6/pkg/machine/connection"
+	"go.podman.io/podman/v6/pkg/machine/define"
+	"go.podman.io/podman/v6/pkg/machine/env"
+	"go.podman.io/podman/v6/pkg/machine/ports"
+	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
+)
+
+const (
+	dockerSock           = "/var/run/docker.sock"
+	defaultGuestSock     = "/run/user/%d/podman/podman.sock"
+	dockerConnectTimeout = 5 * time.Second
+	sshReadinessTimeout  = 30 * time.Second
+)
+
+var (
+	ErrNotRunning      = errors.New("machine not in running state")
+	ErrSSHNotListening = errors.New("machine is not listening on ssh port")
+)
+
+func startHostForwarder(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider, dirs *define.MachineDirs, hostSocks []string) (*machine.GvProxyNotifier, error) {
+	forwardUser := mc.SSH.RemoteUsername
+
+	// TODO should this go up the stack higher or
+	// the guestSock is "inside" the guest machine
+	guestSock := fmt.Sprintf(defaultGuestSock, mc.HostUser.UID)
+	if mc.HostUser.Rootful {
+		guestSock = "/run/podman/podman.sock"
+		forwardUser = "root"
+	}
+
+	cfg, err := config.Default()
+	if err != nil {
+		return nil, err
+	}
+
+	binary, err := cfg.FindHelperBinary(machine.ForwarderBinaryName, false)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := gvproxy.NewGvproxyCommand()
+
+	// GvProxy PID file path is now derived
+	runDir := dirs.RuntimeDir
+	cmd.PidFile = filepath.Join(runDir.GetPath(), "gvproxy.pid")
+
+	cmd.LogFile = filepath.Join(runDir.GetPath(), "gvproxy.log")
+
+	cmd.SSHPort = mc.SSH.Port
+
+	// Windows providers listen on multiple sockets since they do not involve links
+	for _, hostSock := range hostSocks {
+		cmd.AddForwardSock(hostSock)
+		cmd.AddForwardDest(guestSock)
+		cmd.AddForwardUser(forwardUser)
+		cmd.AddForwardIdentity(mc.SSH.IdentityPath)
+	}
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		cmd.Debug = true
+		logrus.Debug(cmd)
+	}
+
+	// This allows a provider to perform additional setup as well as
+	// add in any provider specific options for gvproxy
+	if err := provider.StartNetworking(mc, &cmd); err != nil {
+		return nil, err
+	}
+
+	c := cmd.Cmd(binary)
+	setGvproxyProcessAttributes(c)
+
+	gvProxyNotifier, err := machine.NewGvProxyNotifier(runDir.GetPath())
+	if err != nil {
+		return nil, fmt.Errorf("setting up gvproxy notification listener: %w", err)
+	}
+	// Ensure "unix:///absolute/path" form so gvproxy's url.Parse keeps
+	// the host empty and puts the full path into uri.Path.
+	socketPath := filepath.ToSlash(gvProxyNotifier.SocketPath())
+	if !strings.HasPrefix(socketPath, "/") {
+		socketPath = "/" + socketPath
+	}
+	c.Args = append(c.Args, "-notification", "unix://"+socketPath)
+
+	logrus.Debugf("gvproxy command-line: %s", strings.Join(c.Args, " "))
+	if err := c.Start(); err != nil {
+		gvProxyNotifier.Close()
+		machine.CleanupGvProxyNotifySocket(runDir.GetPath())
+		return nil, fmt.Errorf("unable to execute: %q: %w", cmd.ToCmdline(), err)
+	}
+
+	return gvProxyNotifier, nil
+}
+
+func startNetworking(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) (string, machine.APIForwardingState, *machine.GvProxyNotifier, error) {
+	// An externally stopped VM can leave its host proxy behind. On Windows,
+	// clean up a verified orphan before checking the SSH port; otherwise the
+	// orphan itself can cause an unnecessary port reassignment.
+	if err := cleanupStaleHostForwarder(mc, provider); err != nil {
+		return "", 0, nil, err
+	}
+
+	if err := removeStaleAPISocket(mc, provider); err != nil {
+		return "", 0, nil, err
+	}
+
+	// Check if SSH port is in use, and reassign if necessary
+	if !ports.IsLocalPortAvailable(mc.SSH.Port) {
+		logrus.Warnf("detected port conflict on machine ssh port [%d], reassigning", mc.SSH.Port)
+		if err := reassignSSHPort(mc, provider); err != nil {
+			return "", 0, nil, err
+		}
+	}
+
+	// Provider has its own networking code path (e.g. WSL)
+	if provider.UseProviderNetworkSetup() {
+		return "", 0, nil, provider.StartNetworking(mc, nil)
+	}
+
+	dirs, err := env.GetMachineDirs(provider.VMType())
+	if err != nil {
+		return "", 0, nil, err
+	}
+
+	hostSocks, forwardSock, forwardingState, err := setupMachineSockets(mc, dirs)
+	if err != nil {
+		return "", 0, nil, err
+	}
+
+	gvProxyNotifier, err := startHostForwarder(mc, provider, dirs, hostSocks)
+	if err != nil {
+		return "", 0, nil, err
+	}
+
+	return forwardSock, forwardingState, gvProxyNotifier, nil
+}
+
+// removeStaleAPISocket deletes the API socket left behind by a host proxy
+// that did not exit cleanly (e.g. when the host shuts down). The new proxy
+// fails to listen on it otherwise.
+func removeStaleAPISocket(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
+	sock, err := mc.APISocket()
+	if err != nil {
+		return err
+	}
+	if err := sock.Delete(); err != nil {
+		// On WSL the socket belongs to win-sshproxy, which only serves the API
+		// (SSH does not go through it), so the machine is usable without it.
+		if provider.UseProviderNetworkSetup() { // WSL
+			logrus.Warnf("unable to remove stale API socket %q: %v", sock.GetPath(), err)
+			return nil
+		}
+		return fmt.Errorf("removing stale API socket %q: %w", sock.GetPath(), err)
+	}
+	return nil
+}
+
+// conductVMReadinessCheck checks to make sure the machine is in the proper state
+// and that SSH is up and running
+func conductVMReadinessCheck(mc *vmconfigs.MachineConfig, maxBackoffs int, backoff time.Duration, stateF func() (define.Status, error)) (connected bool, sshError error, err error) {
+	for i := range maxBackoffs {
+		if i > 0 {
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+		state, err := stateF()
+		if err != nil {
+			return false, nil, err
+		}
+		if state != define.Running {
+			sshError = ErrNotRunning
+			continue
+		}
+		if !isListening(mc.SSH.Port) {
+			sshError = ErrSSHNotListening
+			continue
+		}
+
+		// Also make sure that SSH is up and running.  The
+		// ready service's dependencies don't fully make sure
+		// that clients can SSH into the machine immediately
+		// after boot.
+		//
+		// CoreOS users have reported the same observation but
+		// the underlying source of the issue remains unknown.
+
+		// Use a timeout context for the SSH readiness check to prevent indefinite blocking
+		// when the SSH server hangs (e.g., due to interoperability issues like OpenSSH 10.2p1)
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), sshReadinessTimeout)
+			defer cancel()
+			if sshError = machine.LocalhostSSHWithCtx(ctx, mc.SSH.RemoteUsername, mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, []string{"true"}); sshError != nil {
+				logrus.Debugf("SSH readiness check for machine failed: %v", sshError)
+				return
+			}
+			connected = true
+			sshError = nil
+		}()
+		if connected {
+			break
+		}
+	}
+	return connected, sshError, err
+}
+
+func reassignSSHPort(mc *vmconfigs.MachineConfig, provider vmconfigs.VMProvider) error {
+	newPort, err := ports.AllocateMachinePort()
+	if err != nil {
+		return err
+	}
+
+	success := false
+	defer func() {
+		if !success {
+			if err := ports.ReleaseMachinePort(newPort); err != nil {
+				logrus.Warnf("could not release port allocation as part of failure rollback (%d): %v", newPort, err)
+			}
+		}
+	}()
+
+	// Write a transient invalid port, to force a retry on failure
+	oldPort := mc.SSH.Port
+	mc.SSH.Port = 0
+	if err := mc.Write(); err != nil {
+		return err
+	}
+
+	if err := ports.ReleaseMachinePort(oldPort); err != nil {
+		logrus.Warnf("could not release current ssh port allocation (%d): %v", oldPort, err)
+	}
+
+	// Update the backend's settings if relevant (e.g. WSL)
+	if err := provider.UpdateSSHPort(mc, newPort); err != nil {
+		return err
+	}
+
+	mc.SSH.Port = newPort
+	if err := connection.UpdateConnectionPairPort(mc.Name, newPort, mc.HostUser.UID, mc.SSH.RemoteUsername, mc.SSH.IdentityPath); err != nil {
+		return fmt.Errorf("could not update remote connection configuration: %w", err)
+	}
+
+	// Write updated port back
+	if err := mc.Write(); err != nil {
+		return err
+	}
+
+	// inform defer routine not to release the port
+	success = true
+
+	return nil
+}
+
+func isListening(port int) bool {
+	// Check if we can dial it
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port), 10*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	if err := conn.Close(); err != nil {
+		logrus.Error(err)
+	}
+	return true
+}

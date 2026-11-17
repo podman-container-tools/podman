@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--dns-option" "ndots:1"
+## assert-podman-args "--dns-option" "color:blue"
+
+[Container]
+Image=localhost/imagename
+DNSOption=ndots:1
+DNSOption=color:blue

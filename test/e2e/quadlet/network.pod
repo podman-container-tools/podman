@@ -1,0 +1,6 @@
+## assert-podman-pre-args --network host
+## assert-podman-pre-args --publish 127.0.0.1:80:90
+
+[Pod]
+Network=host
+PublishPort=127.0.0.1:80:90

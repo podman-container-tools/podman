@@ -1,0 +1,6 @@
+#!/bin/bash
+if [[ "$@" == "env" ]]; then
+    printenv DOCKER_HOST DOCKER_BUILDKIT
+    exit 0
+fi
+echo "arguments: $@"

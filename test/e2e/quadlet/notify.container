@@ -1,0 +1,5 @@
+## assert-podman-args "--sdnotify=container"
+
+[Container]
+Image=localhost/imagename
+Notify=yes

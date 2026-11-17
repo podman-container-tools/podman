@@ -1,0 +1,9 @@
+## assert-last-key-contains Service ExecStart " --opt type=bind "
+## assert-last-key-contains Service ExecStart " --opt device=/var/lib/data "
+## assert-last-key-contains Service ExecStart " --opt nocopy "
+## assert-last-key-contains Unit RequiresMountsFor "/var/lib/data"
+
+[Volume]
+Device=/var/lib/data
+Type=bind
+Copy=no

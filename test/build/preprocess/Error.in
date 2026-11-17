@@ -1,0 +1,5 @@
+FROM alpine:latest
+
+#include "common"
+
+#error

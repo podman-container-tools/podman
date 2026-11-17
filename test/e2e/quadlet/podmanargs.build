@@ -1,0 +1,14 @@
+## assert-podman-args "--foo"
+## assert-podman-args "--bar"
+## assert-podman-args "--also"
+## assert-podman-args "--with-key=value"
+## assert-podman-args "--with-space" "yes"
+
+[Build]
+ImageTag=image:latest
+SetWorkingDirectory=unit
+PodmanArgs="--foo" \
+  --bar
+PodmanArgs=--also
+PodmanArgs=--with-key=value
+PodmanArgs=--with-space yes

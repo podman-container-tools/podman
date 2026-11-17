@@ -1,0 +1,36 @@
+# -*- sh -*-
+#
+# Tests for the container and pod clone endpoints
+#
+
+podman pull $IMAGE &>/dev/null
+
+# container clone
+podman create --name clonesrc --memory 128m $IMAGE top >/dev/null
+
+t POST libpod/containers/clonesrc/clone name=clonedst memory=64m 201 \
+  .Id~[0-9a-f]\\{64\\}
+cid=$(jq -r '.Id' <<<"$output")
+
+t GET libpod/containers/$cid/json 200 \
+  .Name=clonedst \
+  .HostConfig.Memory=67108864
+
+# unset options keep the value of the original container
+t POST libpod/containers/clonesrc/clone name=clonedst2 201
+t GET libpod/containers/clonedst2/json 200 \
+  .HostConfig.Memory=134217728
+
+t POST libpod/containers/nosuchcontainer/clone 404 \
+  .cause="no such container" \
+  .message~'no container with name or ID "nosuchcontainer" found.*'
+t POST libpod/containers/clonesrc/clone cpus='"abc"' 400 \
+  .cause~'.*cannot unmarshal string into Go struct field ContainerCloneEntities.cpus of type float64' \
+  .message~'decode(): .*'
+t POST libpod/containers/clonesrc/clone force=true 400 \
+  .cause="invalid argument" \
+  .message="cannot set force without destroy: invalid argument"
+
+podman rm -f -t0 clonesrc clonedst clonedst2 >/dev/null
+
+# vim: filetype=sh

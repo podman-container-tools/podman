@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --security-opt unmask=/proc/sys/foo:/proc/sys/bar
+## assert-podman-args --security-opt unmask=all
+
+[Container]
+Image=localhost/imagename
+Unmask=/proc/sys/foo:/proc/sys/bar
+Unmask=all

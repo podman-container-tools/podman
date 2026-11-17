@@ -1,0 +1,209 @@
+//go:build linux || freebsd
+
+package integration
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"go.podman.io/podman/v6/libpod/define"
+	"go.podman.io/podman/v6/pkg/annotations"
+	. "go.podman.io/podman/v6/test/utils"
+)
+
+var _ = Describe("Podman container inspect", func() {
+	It("podman inspect a container for the container manager annotation", func() {
+		const testContainer = "container-inspect-test-1"
+		setup := podmanTest.RunTopContainer(testContainer)
+		setup.WaitWithDefaultTimeout()
+		Expect(setup).Should(ExitCleanly())
+
+		data := podmanTest.InspectContainer(testContainer)
+		Expect(data[0].Config.Annotations[annotations.ContainerManager]).
+			To(Equal(annotations.ContainerManagerLibpod))
+	})
+
+	It("podman inspect includes masked and readonly paths in HostConfig", func() {
+		const testContainer = "container-inspect-host-config-paths"
+		setup := podmanTest.RunTopContainer(testContainer)
+		setup.WaitWithDefaultTimeout()
+		Expect(setup).Should(ExitCleanly())
+
+		inspect := podmanTest.PodmanExitCleanly("inspect", "--format", "{{json .HostConfig}}", testContainer)
+
+		var hostConfig map[string]json.RawMessage
+		Expect(json.Unmarshal([]byte(inspect.OutputToString()), &hostConfig)).To(Succeed())
+		for _, pathField := range []string{"MaskedPaths", "ReadonlyPaths"} {
+			_, exists := hostConfig[pathField]
+			Expect(exists).To(BeTrue())
+		}
+	})
+
+	It("podman inspect shows exposed ports", func() {
+		name := "testcon"
+		session := podmanTest.Podman([]string{"run", "-d", "--stop-timeout", "0", "--expose", "8787/udp", "--expose", "99/sctp", "--name", name, ALPINE, "sleep", "100"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		data := podmanTest.InspectContainer(name)
+
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].NetworkSettings.Ports).
+			To(Equal(map[string][]define.InspectHostPort{"8787/udp": nil, "99/sctp": nil}))
+		Expect(data[0].Config.ExposedPorts).
+			To(Equal(map[string]struct{}{"8787/udp": {}, "99/sctp": {}}))
+
+		session = podmanTest.Podman([]string{"ps", "--format", "{{.Ports}}"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal("99/sctp, 8787/udp"))
+	})
+
+	It("podman inspect shows exposed ports on image", func() {
+		name := "testcon"
+		session := podmanTest.Podman([]string{"run", "-d", "--expose", "8989", "--name", name, NGINX_IMAGE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		data := podmanTest.InspectContainer(name)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].NetworkSettings.Ports).
+			To(Equal(map[string][]define.InspectHostPort{"80/tcp": nil, "8989/tcp": nil}))
+
+		session = podmanTest.Podman([]string{"ps", "--format", "{{.Ports}}"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal("80/tcp, 8989/tcp"))
+	})
+
+	It("podman inspect exposed ports includes published ports", func() {
+		hostPort := GetPort()
+		c1 := "ctr1"
+		c1s := podmanTest.Podman([]string{"run", "-d", "--expose", "22/tcp", "-p", fmt.Sprintf("%d:80/tcp", hostPort), "--name", c1, ALPINE, "top"})
+		c1s.WaitWithDefaultTimeout()
+		Expect(c1s).Should(ExitCleanly())
+
+		c2 := "ctr2"
+		c2s := podmanTest.Podman([]string{"run", "-d", "--net", fmt.Sprintf("container:%s", c1), "--name", c2, ALPINE, "top"})
+		c2s.WaitWithDefaultTimeout()
+		Expect(c2s).Should(ExitCleanly())
+
+		data1 := podmanTest.InspectContainer(c1)
+		Expect(data1).To(HaveLen(1))
+		Expect(data1[0].Config.ExposedPorts).
+			To(Equal(map[string]struct{}{"22/tcp": {}, "80/tcp": {}}))
+
+		data2 := podmanTest.InspectContainer(c2)
+		Expect(data2).To(HaveLen(1))
+		Expect(data2[0].Config.ExposedPorts).To(BeNil())
+	})
+
+	It("podman inspect shows volumes-from with mount options", func() {
+		ctr1 := "volfctr"
+		ctr2 := "voltctr"
+		vol1 := filepath.Join(podmanTest.TempDir, "vol-test1")
+		volsctr := ctr1 + ":z,ro"
+
+		err := os.MkdirAll(vol1, 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		session := podmanTest.Podman([]string{"create", "--name", ctr1, "-v", vol1, CITEST_IMAGE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		session = podmanTest.Podman([]string{"create", "--volumes-from", volsctr, "--name", ctr2, CITEST_IMAGE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		data := podmanTest.InspectContainer(ctr2)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].HostConfig.VolumesFrom).To(Equal([]string{volsctr}))
+		Expect(data[0].Config.Annotations[define.VolumesFromAnnotation]).To(Equal(volsctr))
+	})
+
+	// https://github.com/containers/podman/issues/29164
+	It("podman inspect supports docker-compatible HostIp in format template", func() {
+		ctrName := "hostip-compat"
+		session := podmanTest.Podman([]string{"create", "--name", ctrName, "-p", "127.0.0.1::8080/tcp", ALPINE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		inspect := podmanTest.Podman([]string{"inspect", "--format", `{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostIp }}`, ctrName})
+		inspect.WaitWithDefaultTimeout()
+		Expect(inspect).Should(ExitCleanly())
+		Expect(inspect.OutputToString()).To(Equal("127.0.0.1"))
+	})
+
+	It("podman inspect hides secrets mounted to env", func() {
+		secretName := "mysecret"
+
+		secretFilePath := filepath.Join(podmanTest.TempDir, "secret")
+		err := os.WriteFile(secretFilePath, []byte("mySecretValue"), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		session := podmanTest.Podman([]string{"secret", "create", secretName, secretFilePath})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		name := "testcon"
+		session = podmanTest.Podman([]string{"run", "--secret", fmt.Sprintf("%s,type=env", secretName), "--name", name, CITEST_IMAGE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		data := podmanTest.InspectContainer(name)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].Config.Env).To(ContainElement(Equal(secretName + "=*******")))
+	})
+
+	It("podman inspect identifies init container", func() {
+		podName := "test-init-pod"
+		initCtrName := "test-init-ctr"
+		normalCtrName := "test-normal-ctr"
+
+		podmanTest.PodmanExitCleanly("pod", "create", "--name", podName)
+
+		podmanTest.PodmanExitCleanly("create", "--pod", podName, "--init-ctr=always", "--name", initCtrName, ALPINE, "echo", "init")
+
+		podmanTest.PodmanExitCleanly("create", "--pod", podName, "--name", normalCtrName, ALPINE, "top")
+
+		initData := podmanTest.InspectContainer(initCtrName)
+		Expect(initData).To(HaveLen(1))
+		Expect(initData[0].IsInitCtr).To(BeTrue())
+		Expect(initData[0].InitContainerType).To(Equal("always"))
+
+		normalData := podmanTest.InspectContainer(normalCtrName)
+		Expect(normalData).To(HaveLen(1))
+		Expect(normalData[0].IsInitCtr).To(BeFalse())
+		Expect(normalData[0].InitContainerType).To(BeEmpty())
+	})
+
+	It("podman inspect NetworkSettings DNSNames and Aliases", func() {
+		netName := "dnstest"
+		session := podmanTest.Podman([]string{"network", "create", netName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		defer podmanTest.removeNetwork(netName)
+
+		ctrName := "testdns"
+		session = podmanTest.Podman([]string{"create", "--name", ctrName, "--hostname", "myhostname", "--network", netName, "--network-alias", "myalias", ALPINE, "top"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		cid := session.OutputToString()
+
+		data := podmanTest.InspectContainer(ctrName)
+		Expect(data).To(HaveLen(1))
+		Expect(data[0].NetworkSettings.Networks).To(HaveKey(netName))
+
+		network := data[0].NetworkSettings.Networks[netName]
+		// Aliases should only contain user-provided alias
+		Expect(network.Aliases).To(Equal([]string{"myalias"}))
+		// DNSNames should contain container name, user alias, short ID, and hostname
+		Expect(network.DNSNames).To(ContainElement(ctrName))
+		Expect(network.DNSNames).To(ContainElement("myalias"))
+		Expect(network.DNSNames).To(ContainElement(cid[0:12]))
+		Expect(network.DNSNames).To(ContainElement("myhostname"))
+	})
+})

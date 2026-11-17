@@ -1,0 +1,7 @@
+## assert-podman-args "--annotation" "io.containers.autoupdate=registry"
+## assert-podman-args "--annotation" "io.containers.autoupdate/foobarx=local"
+
+[Kube]
+Yaml=deployment.yml
+AutoUpdate=registry
+AutoUpdate=foobar/local

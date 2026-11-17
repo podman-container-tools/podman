@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --http-proxy
+
+[Container]
+Image=localhost/imagename
+HttpProxy=true

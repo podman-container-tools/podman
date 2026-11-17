@@ -1,0 +1,249 @@
+//go:build !remote && (linux || freebsd)
+
+package libpod
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"go.podman.io/storage/pkg/regexp"
+
+	"github.com/sirupsen/logrus"
+	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/podman/v6/libpod/define"
+	"golang.org/x/sys/unix"
+)
+
+// Timeout before declaring that runtime has failed to kill a given
+// container
+const killContainerTimeout = 5 * time.Second
+
+// ociError is used to parse the OCI runtime JSON log.  It is not part of the
+// OCI runtime specifications, it follows what runc does
+type ociError struct {
+	Level string `json:"level,omitempty"`
+	Time  string `json:"time,omitempty"`
+	Msg   string `json:"msg,omitempty"`
+}
+
+// parseOCIErrors decodes the JSON error log written by the OCI runtime.
+// The runtime either logs a single error (may be pretty-printed in a newer crun)
+// or several errors, one JSON object per line.
+func parseOCIErrors(log []byte) ([]ociError, error) {
+	var errs []ociError
+	dec := json.NewDecoder(bytes.NewReader(log))
+	for dec.More() {
+		var e ociError
+		if err := dec.Decode(&e); err != nil {
+			return nil, err
+		}
+		errs = append(errs, e)
+	}
+	return errs, nil
+}
+
+// joinOCIErrors combines the messages of the given errors into a single
+// newline-separated string, skipping empty messages.
+func joinOCIErrors(errs []ociError) string {
+	var b strings.Builder
+	for _, e := range errs {
+		if e.Msg == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(e.Msg)
+	}
+	return b.String()
+}
+
+// getOCIRuntimeErrorMultiline turns the errors parsed from the OCI runtime log
+// into a single error.
+func getOCIRuntimeErrorMultiline(name string, errs []ociError) error {
+	switch len(errs) {
+	// Fallback.
+	case 0:
+		return fmt.Errorf("%s: %w", name, define.ErrOCIRuntime)
+	// Single error is pattern matched by getOCIRuntimeError.
+	case 1:
+		return getOCIRuntimeError(name, errs[0].Msg)
+	// Forward multiple (multi-line) errors as-is to provide full context
+	// (e.g. CRIU restore with a TCP connection established).
+	default:
+		return fmt.Errorf("%s: %s: %w", name, joinOCIErrors(errs), define.ErrOCIRuntime)
+	}
+}
+
+// Bind ports to keep them closed on the host
+func bindPorts(ports []types.PortMapping, forceListen bool) ([]*os.File, error) {
+	var files []*os.File
+	sctpWarning := true
+	for _, port := range ports {
+		isV6 := false
+		if port.HostIP != "" {
+			isV6 = net.ParseIP(port.HostIP).To4() == nil
+		}
+		protocols := strings.SplitSeq(port.Protocol, ",")
+		for protocol := range protocols {
+			for i := uint16(0); i < port.Range; i++ {
+				f, err := bindPort(protocol, port.HostIP, port.HostPort+i, isV6, &sctpWarning, forceListen)
+				if err != nil {
+					// close all open ports in case of early error so we do not
+					// rely on the garbage collector to close them
+					for _, f := range files {
+						f.Close()
+					}
+					return nil, err
+				}
+				if f != nil {
+					files = append(files, f)
+				}
+			}
+		}
+	}
+	return files, nil
+}
+
+// bindPort reserves a port on the host using socket+bind, listen() only when listen is set to true
+// Dual-stack bind by default unless hostIP is specified.
+func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool, forceListen bool) (*os.File, error) {
+	switch protocol {
+	case "tcp", "udp":
+		sockType := unix.SOCK_STREAM
+		if protocol == "udp" {
+			sockType = unix.SOCK_DGRAM
+		}
+
+		domain, sa, err := buildSockAddr(hostIP, port, isV6)
+		if err != nil {
+			return nil, err
+		}
+
+		fd, err := unix.Socket(domain, sockType|unix.SOCK_CLOEXEC, 0)
+		if err != nil {
+			// If hostIP == "" and IPv6 is not supported, fall back to IPv4
+			if hostIP == "" && errors.Is(err, unix.EAFNOSUPPORT) {
+				return bindPortV4Fallback(protocol, sockType, port)
+			}
+			return nil, fmt.Errorf("cannot create socket for %s port %d: %w", protocol, port, err)
+		}
+
+		if err := setupSocketOpts(fd, domain, hostIP); err != nil {
+			unix.Close(fd)
+			return nil, err
+		}
+
+		if err := unix.Bind(fd, sa); err != nil {
+			unix.Close(fd)
+			return nil, fmt.Errorf("cannot bind %s port %s: %w", protocol, net.JoinHostPort(hostIP, strconv.FormatUint(uint64(port), 10)), err)
+		}
+
+		if forceListen && sockType == unix.SOCK_STREAM {
+			if err := unix.Listen(fd, 0); err != nil {
+				unix.Close(fd)
+				return nil, fmt.Errorf("cannot listen on %s port %s: %w", protocol, net.JoinHostPort(hostIP, strconv.FormatUint(uint64(port), 10)), err)
+			}
+		}
+
+		return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
+
+	case "sctp":
+		if *sctpWarning {
+			logrus.Info("Port reservation for SCTP is not supported")
+			*sctpWarning = false
+		}
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown protocol %s", protocol)
+	}
+}
+
+func buildSockAddr(hostIP string, port uint16, isV6 bool) (int, unix.Sockaddr, error) {
+	// default behaviour when hostIP == "" is to bind dual-stack
+	// if hostIP != ""; determine the stack using the address specified
+	if hostIP == "" {
+		return unix.AF_INET6, &unix.SockaddrInet6{Port: int(port)}, nil
+	}
+	ip := net.ParseIP(hostIP)
+	if ip == nil {
+		return 0, nil, fmt.Errorf("invalid IP address: %s", hostIP)
+	}
+	if isV6 {
+		sa := &unix.SockaddrInet6{Port: int(port)}
+		copy(sa.Addr[:], ip.To16())
+		return unix.AF_INET6, sa, nil
+	}
+	sa := &unix.SockaddrInet4{Port: int(port)}
+	copy(sa.Addr[:], ip.To4())
+	return unix.AF_INET, sa, nil
+}
+
+func setupSocketOpts(fd, domain int, hostIP string) error {
+	if domain == unix.AF_INET6 {
+		v6only := 1
+		if hostIP == "" {
+			v6only = 0
+		}
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_IPV6, unix.IPV6_V6ONLY, v6only); err != nil {
+			return fmt.Errorf("cannot set IPV6_V6ONLY: %w", err)
+		}
+	}
+	return nil
+}
+
+func bindPortV4Fallback(protocol string, sockType int, port uint16) (*os.File, error) {
+	fd, err := unix.Socket(unix.AF_INET, sockType|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create socket for %s port %d: %w", protocol, port, err)
+	}
+	if err := unix.Bind(fd, &unix.SockaddrInet4{Port: int(port)}); err != nil {
+		unix.Close(fd)
+		return nil, fmt.Errorf("cannot bind %s port %s: %w", protocol, net.JoinHostPort("", strconv.FormatUint(uint64(port), 10)), err)
+	}
+	return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
+}
+
+var (
+	regexPermissionDenied = regexp.Delayed("(?i).*permission denied.*|.*operation not permitted.*")
+	regexNotFound         = regexp.Delayed("(?i).*executable file not found in.*|.*no such file or directory.*|.*open executable.*")
+	regexProcAttr         = regexp.Delayed("`/proc/[a-z0-9-].+/attr.*`")
+)
+
+func getOCIRuntimeError(name, runtimeMsg string) error {
+	includeFullOutput := logrus.GetLevel() == logrus.DebugLevel
+
+	if match := regexPermissionDenied.FindString(runtimeMsg); match != "" {
+		errStr := match
+		if includeFullOutput {
+			errStr = runtimeMsg
+		}
+		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimePermissionDenied)
+	}
+	if match := regexNotFound.FindString(runtimeMsg); match != "" {
+		errStr := match
+		if includeFullOutput {
+			errStr = runtimeMsg
+		}
+		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrOCIRuntimeNotFound)
+	}
+	if match := regexProcAttr.FindString(runtimeMsg); match != "" {
+		errStr := match
+		if includeFullOutput {
+			errStr = runtimeMsg
+		}
+		if strings.HasSuffix(match, "/exec`") {
+			return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrSetSecurityAttribute)
+		} else if strings.HasSuffix(match, "/current`") {
+			return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrGetSecurityAttribute)
+		}
+		return fmt.Errorf("%s: %s: %w", name, strings.Trim(errStr, "\n"), define.ErrSecurityAttribute)
+	}
+	return fmt.Errorf("%s: %s: %w", name, strings.Trim(runtimeMsg, "\n"), define.ErrOCIRuntime)
+}

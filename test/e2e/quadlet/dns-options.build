@@ -1,0 +1,10 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-podman-args "--dns-option" "ndots:1"
+## assert-podman-args "--dns-option" "color:blue"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+DNSOption=ndots:1
+DNSOption=color:blue

@@ -1,0 +1,10 @@
+## assert-podman-args "--userns" "auto:uidmapping=0:10000:10,uidmapping=10:20000:10,gidmapping=0:10000:10,gidmapping=10:20000:10,size=20"
+
+[Container]
+Image=localhost/imagename
+RemapUsers=auto
+RemapUid=0:10000:10
+RemapUid=10:20000:10
+RemapGid=0:10000:10
+RemapGid=10:20000:10
+RemapUidSize=20

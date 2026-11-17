@@ -1,0 +1,9 @@
+## assert-stderr-contains "using key User in the Service group is not supported"
+[Container]
+Image=localhost/imagename
+# This is fine
+User=1000
+
+[Service]
+# This isn't
+User=1000

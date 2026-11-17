@@ -1,0 +1,8 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --security-opt mask=/proc/sys/foo:/proc/sys/bar
+## assert-podman-args --security-opt mask=/proc/sys/foobar
+
+[Container]
+Image=localhost/imagename
+Mask=/proc/sys/foo:/proc/sys/bar
+Mask=/proc/sys/foobar

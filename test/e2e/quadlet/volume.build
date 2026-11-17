@@ -1,0 +1,21 @@
+## assert-podman-args -v /host/dir:/container/volume
+## assert-podman-args -v /host/dir2:/container/volume2:Z
+## assert-podman-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
+## assert-podman-args -v named:/container/named
+## assert-podman-args -v systemd-basic:/container/quadlet
+## assert-podman-args -v %h/container:/container/volume4
+## assert-key-is "Service" "Type" "notify"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Volume=/host/dir:/container/volume
+Volume=/host/dir2:/container/volume2:Z
+Volume=./host/dir3:/container/volume3
+Volume=/container/empty
+Volume=named:/container/named
+Volume=basic.volume:/container/quadlet
+Volume=%h/container:/container/volume4
+
+[Service]
+Type=notify

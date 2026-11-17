@@ -1,0 +1,9 @@
+## !assert-podman-args "--sdnotify=conmon"
+## !assert-podman-args "--sdnotify=container"
+## assert-key-is Service Type oneshot
+
+[Container]
+Image=localhost/imagename
+
+[Service]
+Type=oneshot

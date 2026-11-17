@@ -1,0 +1,16 @@
+## assert-podman-global-args "run" "--conmon=/usr/bin/somewhere"
+## assert-podman-global-args "run" "--imagestore=/var/lib/somestore"
+## assert-podman-global-args "run" "--log-level=debug"
+
+## assert-podman-stop-global-args "rm" "--conmon=/usr/bin/somewhere"
+## assert-podman-stop-global-args "rm" "--imagestore=/var/lib/somestore"
+## assert-podman-stop-global-args "rm" "--log-level=debug"
+
+## assert-podman-stop-post-global-args "rm" "--conmon=/usr/bin/somewhere"
+## assert-podman-stop-post-global-args "rm" "--imagestore=/var/lib/somestore"
+## assert-podman-stop-post-global-args "rm" "--log-level=debug"
+
+[Container]
+Image=image
+GlobalArgs=--conmon=/usr/bin/somewhere
+GlobalArgs=--imagestore=/var/lib/somestore --log-level=debug

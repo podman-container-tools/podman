@@ -1,0 +1,23 @@
+{{- if and (hasPrefix .UnderlyingType "int") (isInteger .MultipleOf) }}{{/* if the type is an integer, but the multiple factor is not, fall back to the float64 version of the validator */}}
+  {{- if and (hasPrefix .UnderlyingType "int64") (not .IsAliased) }}
+if err := validate.MultipleOfInt({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.MultipleOf }}); err != nil {
+  {{- else }}
+if err := validate.MultipleOfInt({{ path . }}, {{ printf "%q" .Location }}, int64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.MultipleOf }}); err != nil {
+  {{- end }}
+{{- else }}
+  {{- if and (hasPrefix .UnderlyingType "uint") (isInteger .MultipleOf) }}
+    {{- if and (hasPrefix .UnderlyingType "uint64") (not .IsAliased) }}
+if err := validate.MultipleOfUint({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.MultipleOf }}); err != nil {
+    {{- else }}
+if err := validate.MultipleOfUint({{ path . }}, {{ printf "%q" .Location }}, uint64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.MultipleOf }}); err != nil {
+    {{- end }}
+  {{- else }}
+    {{- if and (eq .UnderlyingType "float64") (not .IsAliased) }}
+if err := validate.MultipleOf({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.MultipleOf }}); err != nil {
+    {{- else }}
+if err := validate.MultipleOf({{ path . }}, {{ printf "%q" .Location }}, float64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.MultipleOf }}); err != nil {
+    {{- end }}
+  {{- end }}
+{{- end }}
+  return err
+}

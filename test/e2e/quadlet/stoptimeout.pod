@@ -1,0 +1,8 @@
+## assert-podman-stop-args --time=20
+
+[Unit]
+Description=A pod with a custom stop timeout
+
+[Pod]
+PodName=test-pod
+StopTimeout=20

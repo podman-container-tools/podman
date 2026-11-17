@@ -1,0 +1,8 @@
+## assert-podman-args "-v" "systemd-basic:/volume/basic"
+## assert-key-is "Unit" "Requires" "basic-volume.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Volume=basic.volume:/volume/basic

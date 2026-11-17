@@ -1,0 +1,21 @@
+# The resulting image can be used to generate podman-remote documentation.
+#
+# The CMD expects that the podman git repository is bind mounted to /podman.
+# The generated documentation will be copied to ./docs/build/remote/.
+#
+# Example usage:
+#   podman build --build-arg TARGET_OS=windows -t podman-docs-generator $(pwd)/docs
+#   podman run --rm -v $(pwd):/podman podman-docs-generator
+#
+FROM docker.io/golang:latest
+ARG TARGET_OS=windows # valid values: macos, linux, windows
+RUN apt-get update && apt-get install -y pandoc man
+RUN mkdir -p /podman-copy/podman
+ENV TARGET_OS=$TARGET_OS
+WORKDIR /podman-copy/podman
+CMD echo "Copying /podman/ to /podman-copy/. It will take some time but 1) the build will be faster 2) the local bin folder won't be overridden." && \
+    cp -a /podman/ /podman-copy/ && \
+    echo "Generating docs" && make podman-remote-${TARGET_OS}-docs && \
+    echo "Copying generated docs to /podman/" && mkdir -p /podman/docs/build/ && \
+    mkdir -p /podman/docs/build/remote/ && \
+    cp -a /podman-copy/podman/docs/build/remote/${TARGET_OS}/* /podman/docs/build/remote/

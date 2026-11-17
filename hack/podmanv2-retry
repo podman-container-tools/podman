@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# podman-try - try running a command via PODMAN1; use PODMAN2 as fallback
+#
+# Intended for use with a podmanv2 client. If a command isn't yet
+# implemented, fall back to regular podman:
+#
+#    Set PODMAN_V2 to the path to a podman v2 client
+#    Set PODMAN_FALLBACK to the path to regular podman
+#
+# THIS IS IMPERFECT. In particular, it will not work if stdin is redirected
+# (e.g. 'podman ... < file' or 'something | podman'); nor for anything
+# that generates continuous output ('podman logs -f'); and probably more
+# situations.
+#
+
+die() {
+    echo "$(basename $0): $*" >&2
+    exit 1
+}
+
+test -n "$PODMAN_V2" || die "Please set \$PODMAN_V2 (path to podman v2)"
+test -n "$PODMAN_FALLBACK" || die "Please set \$PODMAN_FALLBACK (path to podman)"
+
+result=$(${PODMAN_V2} "$@" 2>&1)
+rc=$?
+
+if [ $rc == 125 ]; then
+    if [[ "$result" =~ unrecognized\ command|unknown\ flag|unknown\ shorthand ]]; then
+        result=$(${PODMAN_FALLBACK} "$@")
+        rc=$?
+    fi
+fi
+
+echo -n "$result"
+exit $rc

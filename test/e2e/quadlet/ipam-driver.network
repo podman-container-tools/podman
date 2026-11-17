@@ -1,0 +1,5 @@
+## assert-podman-final-args systemd-ipam-driver
+## assert-podman-args "--ipam-driver" "dhcp"
+
+[Network]
+IPAMDriver=dhcp

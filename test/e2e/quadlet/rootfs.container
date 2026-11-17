@@ -1,0 +1,4 @@
+## assert-podman-final-args "--rootfs" "/var/lib/foobar"
+
+[Container]
+Rootfs=/var/lib/foobar

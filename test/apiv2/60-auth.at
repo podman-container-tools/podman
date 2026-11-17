@@ -1,0 +1,41 @@
+# -*- sh -*-
+#
+# registry-related tests
+#
+
+start_registry htpasswd
+
+# Test unreachable
+t POST /v1.40/auth username=$REGISTRY_USERNAME password=WrOnGPassWord serveraddress=doesnotexists.podman.io:1234/ \
+  500 \
+  .message~'.*no such host.*'
+
+# Test with wrong password. Confirm bad status and appropriate error message
+t POST /v1.40/auth username=$REGISTRY_USERNAME password=WrOnGPassWord serveraddress=localhost:$REGISTRY_PORT/ \
+  500 \
+  .message~'.* 401 Unauthorized'
+
+# Test with the right password. Confirm status message
+t POST /v1.40/auth username=$REGISTRY_USERNAME password=$REGISTRY_PASSWORD serveraddress=localhost:$REGISTRY_PORT/ \
+  200 \
+  .Status="Login Succeeded" \
+  .IdentityToken=""
+
+# Same test with url scheme provided
+t POST /v1.40/auth username=$REGISTRY_USERNAME password=$REGISTRY_PASSWORD serveraddress=https://localhost:$REGISTRY_PORT/ \
+  200 \
+  .Status="Login Succeeded" \
+  .IdentityToken=""
+
+# No username -> error
+t POST /v1.40/auth password=$REGISTRY_PASSWORD serveraddress=localhost:$REGISTRY_PORT/ \
+  500 \
+  .message~'.* cannot prompt for username without stdin'
+
+
+# No password -> error
+t POST /v1.40/auth username=$REGISTRY_USERNAME serveraddress=https://localhost:$REGISTRY_PORT/ \
+  500 \
+  .message~'.* reading password: inappropriate ioctl for device'
+
+stop_registry

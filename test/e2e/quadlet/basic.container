@@ -1,0 +1,21 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--name" "systemd-%N"
+## assert-podman-args "--rm"
+## assert-podman-args "--replace"
+## assert-podman-args "-d"
+## assert-podman-args "--cgroups=split"
+## assert-podman-args "--sdnotify=conmon"
+## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
+## assert-key-is "Service" "KillMode" "mixed"
+## assert-key-is "Service" "Delegate" "yes"
+## assert-key-is "Service" "Type" "notify"
+## assert-key-is "Service" "NotifyAccess" "all"
+## assert-key-is "Service" "SyslogIdentifier" "%N"
+## assert-key-is-regex "Service" "ExecStopPost" "-[/S].*/podman rm -v -f -i systemd-%N"
+## assert-key-is-regex "Service" "ExecStop" ".*/podman rm -v -f -i systemd-%N"
+## assert-key-is "Service" "Environment" "PODMAN_SYSTEMD_UNIT=%n"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service"
+## assert-key-is-regex "Unit" "Wants" "network-online.target|podman-user-wait-network-online.service"
+
+[Container]
+Image=localhost/imagename

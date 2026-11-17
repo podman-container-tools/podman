@@ -1,0 +1,5 @@
+## assert-podman-args "--tz" "foo"
+
+[Container]
+Image=localhost/imagename
+Timezone=foo

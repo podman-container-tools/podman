@@ -1,0 +1,6 @@
+[Container]
+Image=localhost/imagename
+## assert-podman-args-key-val "--network-alias" "," "name"
+NetworkAlias=name
+## assert-podman-args-key-val "--network-alias" "," "othername"
+NetworkAlias=othername

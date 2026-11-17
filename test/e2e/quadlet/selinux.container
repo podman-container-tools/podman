@@ -1,0 +1,9 @@
+## assert-podman-args "--security-opt" "label=type:foobar_t"
+## assert-podman-args "--security-opt" "label=level:s0:c1000,c10001"
+## assert-podman-args "--security-opt" "label=filetype:foobar_file_t"
+
+[Container]
+Image=localhost/imagename
+SecurityLabelType=foobar_t
+SecurityLabelFileType=foobar_file_t
+SecurityLabelLevel=s0:c1000,c10001

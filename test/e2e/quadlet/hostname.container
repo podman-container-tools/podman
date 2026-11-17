@@ -1,0 +1,4 @@
+[Container]
+Image=localhost/imagename
+## assert-podman-args "--hostname" "quadlet-host"
+HostName=quadlet-host

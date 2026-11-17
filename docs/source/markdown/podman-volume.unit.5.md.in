@@ -1,0 +1,145 @@
+% podman-volume.unit 5
+
+# NAME
+
+podman\-volume.unit - systemd unit files for managing container volumes using Podman Quadlet
+
+# SYNOPSIS
+
+*name*.volume
+
+# DESCRIPTION
+
+Volume files are named with a `.volume` extension and contain a section `[Volume]` describing the
+named Podman volume. The generated service is a one-time command that ensures that the volume
+exists on the host, creating it if needed.
+
+By default, the Podman volume has the same name as the unit, but with a `systemd-` prefix, i.e. for
+a volume file named `$NAME.volume`, the generated Podman volume is called `systemd-$NAME`, and the
+generated service file is `$NAME-volume.service`. The `VolumeName` option allows for overriding this
+default name with a user-provided one.
+
+Using volume units allows containers to depend on volumes being automatically pre-created. This is
+particularly interesting when using special options to control volume creation,
+as Podman otherwise creates volumes with the default options.
+
+# USAGE SUMMARY
+
+The `.volume` file is parsed by the `podman-system-generator` at boot or reload, generating a systemd
+`.service` that runs `podman volume create`.
+
+# OPTIONS
+
+Valid options for `[Volume]` are listed below:
+
+| **[Volume] options**                | **podman volume create equivalent**       |
+|-------------------------------------|-------------------------------------------|
+| ContainersConfModule=/etc/nvd\.conf | --module=/etc/nvd\.conf                   |
+| Copy=true                           | --opt copy                                |
+| Device=tmpfs                        | --opt device=tmpfs                        |
+| Driver=image                        | --driver=image                            |
+| GlobalArgs=--log-level=debug        | --log-level=debug                         |
+| Group=192                           | --opt group=192                           |
+| Image=quay.io/centos/centos\:latest | --opt image=quay.io/centos/centos\:latest |
+| Label="foo=bar"                     | --label "foo=bar"                         |
+| Options=XYZ                         | --opt "o=XYZ"                             |
+| PodmanArgs=--driver=image           | --driver=image                            |
+| Type=type                           | Filesystem type of Device                 |
+| User=123                            | --opt uid=123                             |
+| VolumeName=foo                      | podman volume create foo                  |
+
+Supported keys in `[Volume]` section are:
+
+@@option quadlet:module
+
+### `Copy=bool` (defaults to `true`)
+
+If enabled, the content of the image located at the mount point of the volume is copied into the
+volume on the first run.
+
+### `Device=`
+
+The path of a device which is mounted for the volume.
+
+### `Driver=`
+
+Specify the volume driver name. When set to `image`, the `Image` key must also be set.
+
+This is equivalent to the Podman `--driver` option.
+
+@@option quadlet:global-args
+
+
+### `Group=`
+
+The host (numeric) GID, or group name to use as the group for the volume.
+
+### `Image=`
+
+Specifies the image the volume is based on when `Driver` is set to `image`.
+It is recommended to use a fully qualified image name rather than a short name, both for
+performance and robustness reasons.
+
+The format of the name is the same as when passed to `podman pull`. So, it supports using
+`:tag` or digests to guarantee the specific image version.
+
+Special case:
+
+* If the `name` of the image ends with `.image`, Quadlet will use the image
+pulled by the corresponding `.image` file, and the generated systemd service contains a dependency on the `$name-image.service` (or the service name set in the .image file). Note: the corresponding `.image` file must exist.
+
+### `Label=`
+
+Set one or more OCI labels on the volume. The format is a list of
+`key=value` items, similar to `Environment`.
+
+This key can be listed multiple times.
+
+### `Options=`
+
+The mount options to use for a filesystem as used by the **mount(8)** command `-o` option.
+
+@@option quadlet:podman-args
+
+### `Type=`
+
+The filesystem type of `Device` as used by the **mount(8)** command's `-t` option.
+
+### `User=`
+
+The host (numeric) UID, or user name to use as the owner for the volume.
+
+### `VolumeName=`
+
+The (optional) name of the Podman volume.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.volume` file creates a `systemd-$name` Podman volume to avoid
+conflicts with user-managed volumes.
+
+# EXAMPLE
+
+Minimal volume unit:
+
+```
+[Volume]
+VolumeName=mydata
+Label=app=data
+User=1000
+Group=1000
+```
+
+Volume unit backed by an image:
+
+```
+[Volume]
+VolumeName=html
+Driver=image
+Image=quay.io/centos/centos:latest
+Copy=true
+```
+
+# SEE ALSO
+
+[systemd.unit(5)](https://www.freedesktop.org/software/systemd/man/systemd.unit.html),
+[podman-systemd.unit(5)](podman-systemd.unit.5.md),
+[podman-volume-create(1)](podman-volume-create.1.md)

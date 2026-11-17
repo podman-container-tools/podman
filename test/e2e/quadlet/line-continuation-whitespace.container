@@ -1,0 +1,9 @@
+## assert-podman-final-args localhost/imagename "/some/binary file" "--arg1" "arg 2"
+## assert-podman-args "--publish" "80:80"
+
+[Container]
+Image=localhost/imagename
+# Keep whitespace at the end of the following line
+Exec="/some/binary file" --arg1 \ 
+  "arg 2"
+PublishPort=80:80

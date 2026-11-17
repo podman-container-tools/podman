@@ -1,0 +1,5 @@
+## assert-failed
+## assert-stderr-contains "cannot set gateway or range without subnet"
+
+[Network]
+Gateway=192.168.1.1

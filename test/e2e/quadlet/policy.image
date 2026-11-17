@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--policy" "always"
+
+[Image]
+Image=localhost/imagename
+Policy=always

@@ -1,0 +1,60 @@
+# Copyright 2025 The go-yaml Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+version: '2'
+
+linters:
+  enable:
+  - dupword
+  - godoclint
+  - govet
+  - mirror
+  - misspell
+  - modernize
+  - nilnesserr
+  - nolintlint
+  - perfsprint
+  - staticcheck
+  - thelper
+  - unconvert
+  disable:
+  - errcheck
+  - ineffassign
+  - unused
+  settings:
+    dupword:
+      ignore:
+      - 'NULL'
+      - DOCUMENT-START
+      - BLOCK-END
+    godoclint:
+      default: none
+      enable:
+      - require-stdlib-doclink
+    govet:
+      enable-all: true
+      disable:
+      - fieldalignment
+      - shadow
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false
+      require-specific: true
+      require-explanation: true
+    staticcheck:
+      checks:
+      # enable all rules
+      - all
+      # disable some of them
+      - -QF1001  # De Morgan's laws is too opinionated.
+      - -ST1003  # The codebase has too many underscores in identifiers for now.
+
+formatters:
+  enable:
+  - gofumpt
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

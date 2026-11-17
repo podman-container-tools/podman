@@ -1,0 +1,7 @@
+## assert-key-is Service Environment key1=value1 key2=value2 PODMAN_SYSTEMD_UNIT=%n
+
+[Service]
+Environment=key1=value1
+Environment=key2=value2
+
+[Pod]

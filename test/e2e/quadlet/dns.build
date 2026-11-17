@@ -1,0 +1,10 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-podman-args "--dns" "8.7.7.7"
+## assert-podman-args "--dns" "8.8.8.8"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+DNS=8.7.7.7
+DNS=8.8.8.8

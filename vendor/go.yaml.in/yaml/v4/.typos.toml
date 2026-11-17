@@ -1,0 +1,37 @@
+# Copyright 2025 The go-yaml Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# This is the configuration file of typos (spell checker)
+# https://github.com/crate-ci/typos
+
+[files]
+# excluded file
+extend-exclude = [
+	"yts/testdata", # third-party test data
+]
+
+# setting for Go files configuration
+[type.go]
+extend-ignore-re = [
+	'ba-dum-tss\W+', # this one can be found in test files
+	'"yYnNtTfFoO',   # this one can be found in test files
+	'ba\?r',         # this one can be found in test files
+]
+
+[type.go.extend-words]
+# Here is a list of words we want to ignore in Go files
+typ = "typ"  # commonly used abbreviation for "type" in Go as "type" is a reserved identifier
+
+# setting for YAML files configuration
+[type.yaml]
+extend-ignore-re = [
+	'ba\?r',         # this one can be found in test files
+]
+
+[default.extend-words]
+EDN = "EDN"  # Extensible Data Notation
+caf = "caf"  # part of "café" shown as "caf\u00e9" in Unicode escape examples
+deprecat = "deprecat"  # Used as part of a command in a docs/ file
+Desolver = "Desolver"  # Type name: inverse of Resolver (removes tags)
+Desolve = "Desolve"  # Function name: inverse of Resolve
+desolve = "desolve"  # Function name variants

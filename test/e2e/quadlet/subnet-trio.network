@@ -1,0 +1,7 @@
+## assert-podman-final-args systemd-subnet-trio
+## assert-podman-args "--subnet" "192.168.1.0/24" "--gateway" "192.168.1.1" "--ip-range" "192.168.1.0/32"
+
+[Network]
+Subnet=192.168.1.0/24
+Gateway=192.168.1.1
+IPRange=192.168.1.0/32

@@ -1,0 +1,29 @@
+summary: Run toolbox tests (downstream only)
+
+enabled: false
+adjust+:
+    - enabled: true
+      when: initiator != packit and distro == fedora
+
+provision:
+    how: artemis
+    hardware:
+        memory: ">= 16 GB"
+        cpu:
+            cores: ">= 4"
+            threads: ">=8"
+        disk:
+            - size: ">= 512 GB"
+
+prepare:
+    - name: packages
+      how: install
+      package: [toolbox-tests]
+
+discover:
+    how: fmf
+    url: https://src.fedoraproject.org/rpms/toolbox
+    ref: "rawhide"
+
+execute:
+    how: tmt

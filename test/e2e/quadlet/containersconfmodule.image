@@ -1,0 +1,7 @@
+## assert-podman-global-args "image" "--module=/etc/container/1.conf"
+## assert-podman-global-args "image" "--module=/etc/container/2.conf"
+
+[Image]
+Image=image:latest
+ContainersConfModule=/etc/container/1.conf
+ContainersConfModule=/etc/container/2.conf

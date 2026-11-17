@@ -1,0 +1,5 @@
+[Pod]
+## assert-podman-pre-args "--add-host" "my-host-name:192.168.10.10"
+AddHost=my-host-name:192.168.10.10
+## assert-podman-pre-args "--add-host" "my-second-host-name:192.168.10.11"
+AddHost=my-second-host-name:192.168.10.11

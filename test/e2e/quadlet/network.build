@@ -1,0 +1,13 @@
+## assert-podman-final-args-regex /.*/podman-e2e-.*/subtest-.*/quadlet
+## assert-podman-args "--tag" "localhost/imagename"
+## assert-podman-args "--network" "host"
+## assert-key-is "Service" "Type" "oneshot"
+## assert-key-is "Service" "RemainAfterExit" "no"
+
+[Build]
+ImageTag=localhost/imagename
+SetWorkingDirectory=unit
+Network=host
+
+[Service]
+RemainAfterExit=no

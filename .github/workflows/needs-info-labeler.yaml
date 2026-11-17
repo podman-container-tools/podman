@@ -1,0 +1,33 @@
+name: Needs info labeler
+on:
+  issues:
+    types:
+      - labeled
+
+permissions: {}
+
+jobs:
+  add-comment:
+    if: |
+      github.event.label.name == 'needs-info' &&
+      github.repository == 'podman-container-tools/podman'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Add comment
+        run: gh issue comment "$NUMBER" --body "$BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: |
+            A reviewer has determined we need more information to understand the reported issue.  A comment on what is missing should be provided. Be certain you:
+
+            * provide an exact reproducer where possible
+            * verify you have provided all relevant information - minimum is `podman info`
+            * answer any follow up questions
+
+            If no response to the `needs-info` is provided in 30 days, this issue may be closed by our stale bot.
+
+            For more information on reporting issues on this repository, consult our [issue guide](ISSUE.md).

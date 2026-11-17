@@ -1,0 +1,6 @@
+## assert-failed
+## assert-stderr-contains "quadlet pod unit not-found.pod does not exist"
+
+[Container]
+Image=localhost/imagename
+Pod=not-found.pod

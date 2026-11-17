@@ -1,0 +1,19 @@
+{{ define "marshalBinarySerializer" }}
+// MarshalBinary interface implementation
+func ({{.ReceiverName}} *{{ .GoName }}) MarshalBinary() ([]byte, error) {
+  if {{ .ReceiverName }} == nil {
+    return nil, nil
+  }
+  return jsonutils.WriteJSON({{ .ReceiverName }})
+}
+
+// UnmarshalBinary interface implementation
+func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalBinary(b []byte) error {
+  var res {{ .GoName }}
+  if err := jsonutils.ReadJSON(b, &res); err != nil {
+    return err
+  }
+  *{{ .ReceiverName }} = res
+  return nil
+}
+{{- end }}

@@ -1,0 +1,6 @@
+## assert-podman-pre-args -v test-volume:/container/quadlet
+## assert-key-is "Unit" "Requires" "basic.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+
+[Pod]
+Volume=service-name.volume:/container/quadlet

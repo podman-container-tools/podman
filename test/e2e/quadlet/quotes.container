@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args "--name" "RemoveQuotes\"Name"
+
+[Container]
+Image="localhost/imagename"
+ContainerName="RemoveQuotes"Name"

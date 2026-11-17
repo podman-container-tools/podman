@@ -1,0 +1,10 @@
+## assert-podman-final-args run --name systemd-%N --replace --rm --cgroups=split --sdnotify=conmon  -d localhost/imagename
+
+[Container]
+Image=localhost/imagename
+
+# Disable all default features to get as empty podman run command as we can
+NoNewPrivileges=no
+DropCapability=
+VolatileTmp=no
+Timezone=

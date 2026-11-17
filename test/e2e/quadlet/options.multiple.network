@@ -1,0 +1,7 @@
+## assert-podman-final-args systemd-options.multiple
+## assert-podman-args "--opt" "mtu=1504"
+## assert-podman-args "--opt" "isolate=true"
+
+[Network]
+Options=mtu=1504
+Options=isolate=true

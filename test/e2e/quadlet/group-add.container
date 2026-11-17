@@ -1,0 +1,7 @@
+## assert-podman-args "--group-add" "keep-groups"
+## assert-podman-args "--group-add" "users"
+
+[Container]
+Image=localhost/imagename
+GroupAdd=keep-groups
+GroupAdd=users

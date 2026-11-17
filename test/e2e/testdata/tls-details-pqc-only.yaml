@@ -1,0 +1,3 @@
+minVersion: "1.3"
+namedGroups:
+  - "X25519MLKEM768"

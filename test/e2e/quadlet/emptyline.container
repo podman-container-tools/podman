@@ -1,0 +1,7 @@
+## assert-failed
+## assert-stderr-contains "no Image or Rootfs key specified"
+
+[Container]
+Exec=true \
+
+# must have a blank line above, but this line can be anything (including another blank line)

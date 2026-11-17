@@ -1,0 +1,155 @@
+# -*- sh -*-
+#
+# test more container-related endpoints
+#
+
+# Reset server to known good state
+stop_service
+start_service
+
+podman pull "${IMAGE}" &>/dev/null
+
+# Ensure clean slate
+podman rm -a -f &>/dev/null
+
+CTR="WaitTestingCtr"
+
+t POST "containers/nonExistent/wait?condition=next-exit" 404
+
+# Make sure to test a non-zero exit code (see #18889)
+podman create --name "${CTR}" "${IMAGE}" sh -c "exit 3"
+
+t GET libpod/containers/${CTR}/json 200 \
+  .Id~[0-9a-f]\\{64\\}
+
+# We need the cid for the wait test at the end
+cid=$(jq -r '.Id' <<<"$output")
+
+t POST "containers/${CTR}/wait?condition=non-existent-cond" 400
+t POST "libpod/containers/${CTR}/wait?condition=non-existent-cond" 500
+
+t POST "containers/${CTR}/wait?condition=not-running" 200 \
+  .StatusCode=0
+
+# Test waiting for EXIT (need to start a background trigger first)
+(sleep 2;podman start "${CTR}") &
+child_pid=$!
+
+# This will block until the background job completes
+t POST "containers/${CTR}/wait?condition=next-exit" 200 \
+  .StatusCode=3 \
+  .Error=null
+wait "${child_pid}"
+
+# Regression test for #29664: a logs-only attach to an exited container must
+# not reinitialize it or discard its exit code.
+t POST "containers/${CTR}/attach?stream=false&logs=true&stdout=true&stderr=true" 200
+t GET "containers/${CTR}/json" 200 \
+  .State.Status="exited" \
+  .State.ExitCode=3
+t POST "containers/${CTR}/wait" 200 \
+  .StatusCode=3 \
+  .Error=null
+
+# Compat not-running on an exited container must return the recorded exit code.
+t POST "containers/${CTR}/wait?condition=not-running" 200 \
+  .StatusCode=3 \
+  .Error=null
+
+# Wait for streaming attach to initialize the exited container before restarting it.
+(
+  for _ in {1..100}; do
+    state=$($PODMAN_BIN --root "$WORKDIR/server_root" inspect --format '{{.State.Status}}' "${CTR}" 2>/dev/null) || true
+    if [[ "$state" == "initialized" ]]; then
+      podman start "${CTR}"
+      exit
+    fi
+    sleep 0.1
+  done
+  echo "Timed out waiting for ${CTR}: last state was '$state'" >&2
+  podman start "${CTR}" || true
+  exit 1
+) &
+child_pid=$!
+t POST "containers/${CTR}/attach?stream=true&logs=true&stdout=true&stderr=true" 200
+wait "${child_pid}"
+t GET "containers/${CTR}/json" 200 \
+  .State.Status="exited" \
+  .State.ExitCode=3
+
+# Test that headers are sent before body. (We should actually never get a body)
+APIV2_TEST_EXPECT_TIMEOUT=2 t POST "containers/${CTR}/wait?condition=next-exit" 999
+like "$(<$WORKDIR/curl.headers.out)" ".*HTTP.* 200 OK.*" \
+     "Received headers from /wait"
+if [[ -s $WORKDIR/curl.result.out ]]; then
+    _show_ok 0 "UNEXPECTED: curl on /wait returned results"
+fi
+
+# Test waiting for REMOVE. Like above, start a background trigger.
+(sleep 2;podman container rm "${CTR}") &
+child_pid=$!
+
+t POST "containers/${CTR}/wait?condition=removed" 200 \
+  .StatusCode=3 \
+  .Error=null
+# Make sure the container has really been removed after waiting for
+# "condition=removed". This check is racy but should flake in case it doesn't
+# work correctly.
+t POST "containers/${CTR}/wait?condition=next-exit" 404
+# Compat waits on a removed container must report 404 for every condition.
+t POST "containers/${CTR}/wait?condition=not-running" 404
+t POST "containers/${CTR}/wait?condition=removed" 404
+wait "${child_pid}"
+
+t POST "libpod/containers/${CTR}/wait?condition=running" 404
+t POST "libpod/containers/${cid}/wait?condition=running" 404
+# The container no longer exists but we want to ensure the remote client
+# can still fetch the exit code correctly until the exit code is pruned
+# (after 5 mins) but only by the container id and not the name.
+t POST "libpod/containers/${CTR}/wait" 404
+t POST "libpod/containers/${cid}/wait" 200 \
+ "3"
+
+CTR2="waitNextExit"
+podman run -d --name "${CTR2}" "${IMAGE}" sh -c "sleep 5; exit 42"
+t POST "containers/${CTR2}/wait?condition=next-exit" 200 \
+  .StatusCode=42 \
+  .Error=null
+podman rm -f "${CTR2}"
+
+# libpod endpoint: Docker-style condition names should also be accepted.
+CTR3="libpodWaitNextExit"
+podman create --name "${CTR3}" "${IMAGE}" sh -c "exit 9"
+
+# not-running matches the freshly-created container immediately and returns
+# 0 (matches Docker: a never-started container is "not running" → exit 0).
+t POST "libpod/containers/${CTR3}/wait?condition=not-running" 200 "0"
+
+# next-exit must wait for the container to actually run and exit.
+(sleep 2; podman start "${CTR3}") &
+child_pid=$!
+t POST "libpod/containers/${CTR3}/wait?condition=next-exit" 200 "9"
+wait "${child_pid}"
+
+# After the container has exited, not-running must return the recorded
+# exit code (regression guard: the state-matching path would return -1).
+t POST "libpod/containers/${CTR3}/wait?condition=not-running" 200 "9"
+
+# removed waits for the container to be removed; exit code from the most
+# recent run is returned.
+(sleep 2; podman rm "${CTR3}") &
+child_pid=$!
+t POST "libpod/containers/${CTR3}/wait?condition=removed" 200 "9"
+wait "${child_pid}"
+
+# next-exit and removed also return when a never-started container is removed.
+CTR4="waitNeverStarted"
+for cond in next-exit removed; do
+    podman create --name "${CTR4}" "${IMAGE}" true
+    (sleep 2; podman rm "${CTR4}") &
+    child_pid=$!
+    t POST "containers/${CTR4}/wait?condition=${cond}" 200 \
+      .StatusCode=0 \
+      .Error=null
+    wait "${child_pid}"
+done

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Podman Desktop issues
+    url: https://github.com/containers/podman-desktop/issues
+    about: Please report issues with Podman Desktop here.
+  - name: Ask a question
+    url: https://github.com/containers/podman/discussions/new
+    about: Ask a question about Podman

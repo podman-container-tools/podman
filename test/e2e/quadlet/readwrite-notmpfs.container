@@ -1,0 +1,8 @@
+## assert-podman-args "--read-only=false"
+## !assert-podman-args "--read-only"
+## !assert-podman-args "--tmpfs" "/tmp:rw,size=512M,mode=1777"
+
+[Container]
+Image=localhost/imagename
+VolatileTmp=no
+ReadOnly=no

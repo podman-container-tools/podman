@@ -1,0 +1,5 @@
+## assert-podman-final-args systemd-driver
+## assert-podman-args "--driver" "macvlan"
+
+[Network]
+Driver=macvlan

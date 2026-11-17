@@ -1,0 +1,23 @@
+{{- if hasPrefix .UnderlyingType "int" }}
+  {{- if and (hasPrefix .UnderlyingType "int64") (not .IsAliased) }}
+if err := validate.MinimumInt({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+  {{- else }}
+if err := validate.MinimumInt({{ path . }}, {{ printf "%q" .Location }}, int64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+  {{- end }}
+{{- else }}
+  {{- if hasPrefix .UnderlyingType "uint" }}
+    {{- if and (hasPrefix .UnderlyingType "uint64") (not .IsAliased) }}
+if err := validate.MinimumUint({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+    {{- else }}
+if err := validate.MinimumUint({{ path . }}, {{ printf "%q" .Location }}, uint64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+    {{- end }}
+  {{- else }}
+    {{- if and (eq .UnderlyingType "float64") (not .IsAliased) }}
+if err := validate.Minimum({{ path . }}, {{ printf "%q" .Location }}, {{ if .IsNullable }}*{{ end }}{{.ValueExpression }}, {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+    {{- else }}
+if err := validate.Minimum({{ path . }}, {{ printf "%q" .Location }}, float64({{ if .IsNullable }}*{{ end }}{{.ValueExpression }}), {{.Minimum }}, {{.ExclusiveMinimum }}); err != nil {
+    {{- end }}
+  {{- end }}
+{{- end }}
+  return err
+}

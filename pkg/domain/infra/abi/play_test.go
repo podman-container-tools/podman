@@ -1,0 +1,424 @@
+//go:build !remote && (linux || freebsd)
+
+package abi
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/pkg/domain/entities"
+	v1 "go.podman.io/podman/v6/pkg/k8s.io/api/core/v1"
+	v12 "go.podman.io/podman/v6/pkg/k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func TestReadConfigMapFromFile(t *testing.T) {
+	tests := []struct {
+		name             string
+		configMapContent string
+		expectError      bool
+		expectedErrorMsg string
+		expected         []v1.ConfigMap
+	}{
+		{
+			"ValidConfigMap",
+			`
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+data:
+  myvar: foo
+`,
+			false,
+			"",
+			[]v1.ConfigMap{
+				{
+					TypeMeta: v12.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: v12.ObjectMeta{
+						Name: "foo",
+					},
+					Data: map[string]string{
+						"myvar": "foo",
+					},
+				},
+			},
+		},
+		{
+			"InvalidYAML",
+			`
+Invalid YAML
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+data:
+  myvar: foo
+`,
+			true,
+			"unable to read as kube YAML",
+			[]v1.ConfigMap{},
+		},
+		{
+			"InvalidKind",
+			`
+apiVersion: v1
+kind: InvalidKind
+metadata:
+  name: foo
+data:
+  myvar: foo
+`,
+			true,
+			"invalid YAML kind",
+			[]v1.ConfigMap{},
+		},
+		{
+			"ValidBinaryDataConfigMap",
+			`
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+binaryData:
+  data.zip: UEsDBBQACAAIAMm7SlUAAAAAAAAAAAwAAAAIACAAZGF0YS50eHRVVA0AB+qORGM7j0Rj6o5EY3V4CwABBOgDAAAE6AMAAEvKzEssqlRISSxJ5AIAUEsHCN0J2aAOAAAADAAAAFBLAQIUAxQACAAIAMm7SlXdCdmgDgAAAAwAAAAIACAAAAAAAAAAAACkgQAAAABkYXRhLnR4dFVUDQAH6o5EYzuPRGPqjkRjdXgLAAEE6AMAAAToAwAAUEsFBgAAAAABAAEAVgAAAGQAAAAAAA==
+`,
+			false,
+			"",
+			[]v1.ConfigMap{
+				{
+					TypeMeta: v12.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: v12.ObjectMeta{
+						Name: "foo",
+					},
+					BinaryData: map[string][]byte{"data.zip": {0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x08, 0x00, 0x08, 0x00, 0xc9, 0xbb, 0x4a, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x08, 0x00, 0x20, 0x00, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x74, 0x78, 0x74, 0x55, 0x54, 0x0d, 0x00, 0x07, 0xea, 0x8e, 0x44, 0x63, 0x3b, 0x8f, 0x44, 0x63, 0xea, 0x8e, 0x44, 0x63, 0x75, 0x78, 0x0b, 0x00, 0x01, 0x04, 0xe8, 0x03, 0x00, 0x00, 0x04, 0xe8, 0x03, 0x00, 0x00, 0x4b, 0xca, 0xcc, 0x4b, 0x2c, 0xaa, 0x54, 0x48, 0x49, 0x2c, 0x49, 0xe4, 0x02, 0x00, 0x50, 0x4b, 0x07, 0x08, 0xdd, 0x09, 0xd9, 0xa0, 0x0e, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x50, 0x4b, 0x01, 0x02, 0x14, 0x03, 0x14, 0x00, 0x08, 0x00, 0x08, 0x00, 0xc9, 0xbb, 0x4a, 0x55, 0xdd, 0x09, 0xd9, 0xa0, 0x0e, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x08, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa4, 0x81, 0x00, 0x00, 0x00, 0x00, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x74, 0x78, 0x74, 0x55, 0x54, 0x0d, 0x00, 0x07, 0xea, 0x8e, 0x44, 0x63, 0x3b, 0x8f, 0x44, 0x63, 0xea, 0x8e, 0x44, 0x63, 0x75, 0x78, 0x0b, 0x00, 0x01, 0x04, 0xe8, 0x03, 0x00, 0x00, 0x04, 0xe8, 0x03, 0x00, 0x00, 0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x56, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00}},
+				},
+			},
+		},
+		{
+			"MultiDocConfigMapFile",
+			`
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+data:
+  myvar: foo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bar
+data:
+  myvar: bar
+`,
+			false,
+			"",
+			[]v1.ConfigMap{
+				{
+					TypeMeta: v12.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: v12.ObjectMeta{
+						Name: "foo",
+					},
+					Data: map[string]string{
+						"myvar": "foo",
+					},
+				},
+				{
+					TypeMeta: v12.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: v12.ObjectMeta{
+						Name: "bar",
+					},
+					Data: map[string]string{
+						"myvar": "bar",
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			buf := bytes.NewReader([]byte(test.configMapContent))
+			cm, _, err := readConfigMapFromFile(buf, entities.KubeValidateIgnore)
+
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.expectedErrorMsg)
+			} else {
+				assert.NoError(t, err)
+				for _, expected := range test.expected {
+					assert.Contains(t, cm, expected)
+				}
+			}
+		})
+	}
+}
+
+func TestReadConfigMapFromFileValidate(t *testing.T) {
+	const configMapWithUnknownField = `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foo
+bogusfield: nope
+data:
+  myvar: foo
+`
+
+	t.Run("ignore accepts an unknown field", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		cms, warnings, err := readConfigMapFromFile(buf, entities.KubeValidateIgnore)
+		assert.NoError(t, err)
+		assert.Empty(t, warnings)
+		assert.Len(t, cms, 1)
+	})
+
+	t.Run("warn reports an unknown field but still reads it", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		cms, warnings, err := readConfigMapFromFile(buf, entities.KubeValidateWarn)
+		assert.NoError(t, err)
+		assert.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "ConfigMap")
+		assert.Len(t, cms, 1)
+	})
+
+	t.Run("strict fails on an unknown field", func(t *testing.T) {
+		buf := bytes.NewReader([]byte(configMapWithUnknownField))
+		_, _, err := readConfigMapFromFile(buf, entities.KubeValidateStrict)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "validating kube ConfigMap")
+	})
+}
+
+func TestGetKubeKind(t *testing.T) {
+	tests := []struct {
+		name             string
+		kubeYAML         string
+		expectError      bool
+		expectedErrorMsg string
+		expected         string
+	}{
+		{
+			"ValidKubeYAML",
+			`
+apiVersion: v1
+kind: Pod
+`,
+			false,
+			"",
+			"Pod",
+		},
+		{
+			"InvalidKubeYAML",
+			"InvalidKubeYAML",
+			true,
+			"cannot unmarshal",
+			"",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			kind, err := getKubeKind([]byte(test.kubeYAML))
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.expectedErrorMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.expected, kind)
+			}
+		})
+	}
+}
+
+func TestSplitMultiDocYAML(t *testing.T) {
+	tests := []struct {
+		name             string
+		kubeYAML         string
+		expectError      bool
+		expectedErrorMsg string
+		expected         int
+	}{
+		{
+			"ValidNumberOfDocs",
+			`
+apiVersion: v1
+kind: Pod
+---
+apiVersion: v1
+kind: Pod
+---
+apiVersion: v1
+kind: Pod
+`,
+			false,
+			"",
+			3,
+		},
+		{
+			"InvalidMultiDocYAML",
+			`
+apiVersion: v1
+kind: Pod
+---
+apiVersion: v1
+kind: Pod
+-
+`,
+			true,
+			"multi doc yaml could not be split",
+			0,
+		},
+		{
+			"DocWithList",
+			`
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Pod
+- apiVersion: v1
+  kind: Pod
+- apiVersion: v1
+  kind: Pod
+`,
+			false,
+			"",
+			3,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			docs, err := splitMultiDocYAML([]byte(test.kubeYAML))
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.expectedErrorMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.expected, len(docs))
+			}
+		})
+	}
+}
+
+func TestUnmarshalKubeObject(t *testing.T) {
+	type sample struct {
+		Name string `json:"name"`
+	}
+	const (
+		validDoc        = "name: valid\n"
+		unknownFieldDoc = "name: valid\nbogus: nope\n"
+	)
+
+	tests := []struct {
+		name          string
+		mode          entities.KubeValidateMode
+		document      string
+		expectError   bool
+		errContains   string
+		expectWarning bool
+	}{
+		{"ignore skips an unknown field", entities.KubeValidateIgnore, unknownFieldDoc, false, "", false},
+		{"warn reports an unknown field but keeps decoding", entities.KubeValidateWarn, unknownFieldDoc, false, "", true},
+		{"warn is silent on a valid document", entities.KubeValidateWarn, validDoc, false, "", false},
+		{"strict fails on an unknown field", entities.KubeValidateStrict, unknownFieldDoc, true, "validating kube Sample", false},
+		{"strict accepts a valid document", entities.KubeValidateStrict, validDoc, false, "", false},
+		{"an unset mode decodes leniently", entities.KubeValidateMode(""), unknownFieldDoc, false, "", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var obj sample
+			warnings, err := unmarshalKubeObject("Sample", test.mode, []byte(test.document), &obj)
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+				return
+			}
+			assert.NoError(t, err)
+			// Known fields are always decoded, whatever the mode.
+			assert.Equal(t, "valid", obj.Name)
+			if test.expectWarning {
+				assert.Len(t, warnings, 1)
+				assert.Contains(t, warnings[0], "kube Sample")
+			} else {
+				assert.Empty(t, warnings)
+			}
+		})
+	}
+}
+
+func TestGetBuildFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		imageName string
+		files     []string
+		expected  string
+	}{
+		{
+			name:      "backward compatible simple image name",
+			imageName: "service-a:latest",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image name",
+			imageName: "mocks/service-a:v3.42",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image falls back to simple image name",
+			imageName: "mocks/service-a:v3.43",
+			files:     []string{"service-a/Containerfile"},
+			expected:  "service-a/Containerfile",
+		},
+		{
+			name:      "nested image with registry and port",
+			imageName: "localhost:5000/mocks/service-a:v2.34",
+			files:     []string{"mocks/service-a/Containerfile"},
+			expected:  "mocks/service-a/Containerfile",
+		},
+		{
+			name:      "nested image with digest",
+			imageName: "quay.io/mocks/service-a@sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+			files:     []string{"mocks/service-a/Dockerfile"},
+			expected:  "mocks/service-a/Dockerfile",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			for _, file := range test.files {
+				path := filepath.Join(tmpDir, file)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+				require.NoError(t, os.WriteFile(path, []byte("FROM alpine\n"), 0o644))
+			}
+
+			got, err := getBuildFile(test.imageName, tmpDir)
+			require.NoError(t, err)
+
+			assert.Equal(t, filepath.Join(tmpDir, test.expected), got)
+		})
+	}
+}

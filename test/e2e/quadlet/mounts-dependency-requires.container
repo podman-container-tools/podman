@@ -1,0 +1,9 @@
+## assert-key-is "Unit" "RequiresMountsFor" "%t/containers" "/path/on/host"
+## assert-key-is-empty "Unit" "WantsMountsFor"
+
+[Quadlet]
+SetMountsDependency=Requires
+
+[Container]
+Image=localhost/imagename
+Mount=type=bind,source=/path/on/host,destination=/data

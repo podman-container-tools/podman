@@ -1,0 +1,16 @@
+[Unit]
+Description=Podman Start All Containers With Restart Policy Set To Always Or Unless-Stopped
+Documentation=man:podman-start(1)
+StartLimitIntervalSec=0
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+Environment=LOGGING="--log-level=info"
+ExecStart=@@PODMAN@@ $LOGGING start --all --filter should-start-on-boot=true
+ExecStop=@@PODMAN@@  $LOGGING stop --service --all
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+## assert-podman-stop-post-args "network"
+## assert-podman-stop-post-args "rm"
+## assert-podman-stop-post-final-args "test-network"
+
+[Network]
+NetworkName=test-network
+NetworkDeleteOnStop=true

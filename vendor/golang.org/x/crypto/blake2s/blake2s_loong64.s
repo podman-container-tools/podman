@@ -1,0 +1,196 @@
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build loong64 && gc && !purego
+
+#include "textflag.h"
+
+DATA ·iv0<>+0(SB)/4, $0x6a09e667
+DATA ·iv0<>+4(SB)/4, $0xbb67ae85
+DATA ·iv0<>+8(SB)/4, $0x3c6ef372
+DATA ·iv0<>+12(SB)/4, $0xa54ff53a
+GLOBL ·iv0<>(SB), RODATA|NOPTR, $16
+
+DATA ·iv1<>+0(SB)/4, $0x510e527f
+DATA ·iv1<>+4(SB)/4, $0x9b05688c
+DATA ·iv1<>+8(SB)/4, $0x1f83d9ab
+DATA ·iv1<>+12(SB)/4, $0x5be0cd19
+GLOBL ·iv1<>(SB), RODATA|NOPTR, $16
+
+#define SHUFFLE_1 \
+	VSHUF4IW	$57, V1, V1; \
+	VSHUF4IW	$78, V2, V2; \
+	VSHUF4IW	$147, V3, V3; \
+
+#define SHUFFLE_2 \
+	VSHUF4IW	$147, V1, V1; \
+	VSHUF4IW	$78, V2, V2; \
+	VSHUF4IW	$57, V3, V3; \
+
+#define LOAD_M(a, b, c, d, e, f, g, h) \
+	VMOVQ	a, V8.W[0]; \
+	VMOVQ	b, V8.W[1]; \
+	VMOVQ	c, V8.W[2]; \
+	VMOVQ	d, V8.W[3]; \
+	VMOVQ	e, V9.W[0]; \
+	VMOVQ	f, V9.W[1]; \
+	VMOVQ	g, V9.W[2]; \
+	VMOVQ	h, V9.W[3]; \
+
+#define ROUND_0 \
+	VADDW	V0, V8, V0; \
+	VADDW	V0, V1, V0; \
+	VXORV	V3, V0, V3; \
+	VROTRW	$16, V3, V3; \
+	VADDW	V2, V3, V2; \
+	VXORV	V1, V2, V1; \
+	VROTRW	$12, V1, V1; \
+	VADDW	V0, V9, V0; \
+	VADDW	V0, V1, V0; \
+	VXORV	V3, V0, V3; \
+	VROTRW	$8, V3, V3; \
+	VADDW	V2, V3, V2; \
+	VXORV	V1, V2, V1; \
+	VROTRW	$7, V1, V1; \
+
+#define ROUND_8	ROUND_0
+
+// func hashBlocksVX(h *[8]uint32, c *[2]uint32, flag uint32, blocks []byte)
+TEXT ·hashBlocksVX(SB), NOSPLIT, $0-48
+	MOVV	h+0(FP), R4
+	MOVV	c+8(FP), R5
+	MOVWU	flag+16(FP), R6
+	MOVV	blocks_base+24(FP), R7
+	MOVV	blocks_len+32(FP), R8
+	MOVW	(R5), R9	// c0
+	MOVW	4(R5), R10	// c1
+
+loop:
+	ADD	$0x40, R9
+	SGTU	$0x40, R9, R11
+	ADD	R10, R11, R10
+
+	MOVV	$·iv0<>(SB), R11
+	MOVV	$·iv1<>(SB), R12
+	MOVWU	0(R12), R13	// v12
+	MOVWU	4(R12), R14	// v13
+	MOVWU	8(R12), R15	// v14
+	MOVWU	12(R12), R16	// v15
+	XOR	R13, R9, R13
+	XOR	R14, R10, R14
+	XOR	R15, R6, R15
+
+	VMOVQ	(R4), V0
+	VMOVQ	16(R4), V1
+	VMOVQ	(R11), V2
+	VMOVQ	R16, V3.W[3]
+	VMOVQ	R13, V3.W[0]
+	VMOVQ	R14, V3.W[1]
+	VMOVQ	R15, V3.W[2]
+
+	MOVWU	(R7), R11
+	MOVWU	4(R7), R12
+	MOVWU	8(R7), R13
+	MOVWU	12(R7), R14
+	MOVWU	16(R7), R15
+	MOVWU	20(R7), R16
+	MOVWU	24(R7), R17
+	MOVWU	28(R7), R18
+	MOVWU	32(R7), R19
+	MOVWU	36(R7), R24
+	MOVWU	40(R7), R25
+	MOVWU	44(R7), R26
+	MOVWU	48(R7), R27
+	MOVWU	52(R7), R28
+	MOVWU	56(R7), R29
+	MOVWU	60(R7), R30
+
+	LOAD_M(R11, R13, R15, R17, R12, R14, R16, R18)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R19, R25, R27, R29, R24, R26, R28, R30)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R29, R15, R24, R28, R25, R19, R30, R17)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R12, R11, R26, R16, R27, R13, R18, R14)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R26, R27, R16, R30, R19, R11, R13, R28)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R25, R14, R18, R24, R29, R17, R12, R15)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R18, R14, R28, R26, R24, R12, R27, R29)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R13, R16, R15, R30, R17, R25, R11, R19)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R24, R16, R13, R25, R11, R18, R15, R30)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R29, R26, R17, R14, R12, R27, R19, R28)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R13, R17, R11, R19, R27, R25, R26, R14)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R15, R18, R30, R12, R28, R16, R29, R24)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R27, R12, R29, R15, R16, R30, R28, R25)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R11, R17, R24, R19, R18, R14, R13, R26)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R28, R18, R27, R14, R26, R29, R12, R24)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R16, R30, R19, R13, R11, R15, R17, R25)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R17, R29, R26, R11, R30, R24, R14, R19)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R27, R28, R12, R25, R13, R18, R15, R16)
+	ROUND_8
+	SHUFFLE_2
+
+	LOAD_M(R25, R19, R18, R12, R13, R15, R17, R16)
+	ROUND_0
+	SHUFFLE_1
+	LOAD_M(R30, R24, R14, R28, R26, R29, R27, R11)
+	ROUND_8
+	SHUFFLE_2
+
+	VMOVQ	(R4), V8
+	VMOVQ	16(R4), V9
+	VXORV	V8, V0, V8
+	VXORV	V9, V1, V9
+	VXORV	V8, V2, V8
+	VXORV	V9, V3, V9
+	VMOVQ	V8, (R4)
+	VMOVQ	V9, 16(R4)
+
+	SUBV	$64, R8
+	ADDV	$64, R7
+	BNE	R8, R0, loop
+
+	MOVW	R9, (R5)
+	MOVW	R10, 4(R5)
+
+	RET
+

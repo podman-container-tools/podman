@@ -1,0 +1,88 @@
+# -*- sh -*-
+#
+# Tests for build-related endpoints
+#
+
+# test if default compat build contains labels from base image
+TMPD=$(mktemp -d podman-apiv2-test.build.XXXXXXXX)
+function cleanBuildTest() {
+    podman rmi -a -f
+    rm -rf "${TMPD}" &> /dev/null
+}
+CONTAINERFILE_TAR="${TMPD}/containerfile.tar"
+cat > $TMPD/containerfile << EOF
+FROM $IMAGE
+RUN echo hello
+EOF
+tar --format=posix -C $TMPD -cvf ${CONTAINERFILE_TAR} containerfile &> /dev/null
+
+t POST "/build?dockerfile=containerfile&t=labeltest" $CONTAINERFILE_TAR 200 \
+  '.aux|select(has("ID")).ID~^sha256:[0-9a-f]\{64\}$'
+
+t GET images/labeltest/json 200 \
+  .Config.Labels.created_by="test/system/build-testimage"
+cleanBuildTest
+
+# --- /libpod/local/build tests
+
+TMPD=$(mktemp -d podman-apiv2-test.localbuild.XXXXXXXX)
+TMPD=$(realpath "$TMPD")
+
+
+cat > $TMPD/Containerfile << EOF
+FROM $IMAGE
+RUN echo "local build test"
+LABEL test=local-build
+EOF
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&t=localbuildtest" - 200
+
+t GET images/localbuildtest/json 200 \
+  .Config.Labels.test="local-build"
+
+
+cat > $TMPD/MyDockerfile << EOF
+FROM $IMAGE
+RUN echo "custom dockerfile"
+LABEL dockerfile=custom
+EOF
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&dockerfile=${TMPD}/MyDockerfile&t=customdockerfile" - 200
+
+t GET images/customdockerfile/json 200 \
+  .Config.Labels.dockerfile="custom"
+
+
+# Test local build with additional build contexts
+mkdir -p ${TMPD}/additional_context
+echo "additional file" > ${TMPD}/additional_context/extra.txt
+
+cat > $TMPD/AdditionalContext << EOF
+FROM $IMAGE
+COPY --from=additional /extra.txt /copied.txt
+RUN cat /copied.txt
+EOF
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&dockerfile=${TMPD}/AdditionalContext&additionalbuildcontexts=additional=localpath:${TMPD}/additional_context&t=additionalcontext" - 200
+
+echo "not a directory" > ${TMPD}/notadir
+t POST "libpod/local/build?localcontextdir=${TMPD}/notadir&t=filenotdir" - 400
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&dockerfile=/nonexistent/dockerfile&t=invalidfile" - 404
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&additionalbuildcontexts=malformed-context-spec=localpath:/nonexistent/directory&t=badcontext" - 404
+
+t POST "libpod/local/build?localcontextdir=${TMPD}&additionalbuildcontexts=malformed-context-spec=localpath:../../nonexistent/directory&t=badcontext" - 400
+
+cleanBuildTest
+
+t POST "libpod/local/build?localcontextdir=/nonexistent/directory&t=errortest" - 404
+
+t POST "libpod/local/build?localcontextdir=../../../etc/passwd&t=errortest" - 400
+
+t POST "libpod/local/build?t=missingcontext" - 400
+
+t POST "libpod/local/build?localcontextdir=&t=emptycontext" - 400
+
+
+# vim: filetype=sh

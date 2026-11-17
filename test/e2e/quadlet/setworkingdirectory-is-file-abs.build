@@ -1,0 +1,7 @@
+## assert-podman-args "--file" "/etc/containers/systemd/Containerfile"
+## assert-key-is "Service" "WorkingDirectory" "/etc/containers/systemd"
+
+[Build]
+File=/etc/containers/systemd/Containerfile
+ImageTag=localhost/imagename
+SetWorkingDirectory=file

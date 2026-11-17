@@ -1,0 +1,6 @@
+# assert-last-key-contains "Unit" "After" "startwithpod-pod.service"
+# assert-last-key-contains "Unit" "BindsTo" "startwithpod-pod.service"
+
+[Container]
+Image=localhost/image
+Pod=startwithpod.pod

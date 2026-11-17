@@ -1,0 +1,151 @@
+// Copyright 2018 Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// Based on work Copyright (c) 2013, Yann Collet, released under BSD License.
+
+package zstd
+
+import (
+	"github.com/klauspost/compress/internal/le"
+	"github.com/klauspost/compress/internal/regmask"
+)
+
+// bitState is a bit writer that stays in registers when passed and
+// returned by value. It writes into a buffer owned by the caller.
+type bitState struct {
+	c   uint64
+	nb  uint
+	pos int
+}
+
+// flush writes the whole bytes with one 8-byte store at pos, leaving
+// at most 7 bits. buf must have 8 bytes of room at pos.
+func (s bitState) flush(buf []byte) bitState {
+	le.Store64(buf, s.pos, s.c)
+	s.pos += int(s.nb >> 3)
+	s.c >>= (s.nb &^ 7) & regmask.Shift64ByUint
+	s.nb &= 7
+	return s
+}
+
+// add adds n bits from v, which must have no bits set above them.
+// There must be room for them.
+func (s bitState) add(v uint64, n uint) bitState {
+	s.c |= v << (s.nb & regmask.Shift64ByUint)
+	s.nb += n
+	return s
+}
+
+// addState adds the bits that FSE-encode tt from state, and returns
+// the next state from tab.
+func (s bitState) addState(state uint16, tab []uint16, tt symbolTransform) (bitState, uint16) {
+	nbBitsOut := (uint32(state) + tt.deltaNbBits) >> 16
+	s = s.add(uint64(state&bitMask16[nbBitsOut&31]), uint(nbBitsOut))
+	return s, tab[int32(state>>(nbBitsOut&regmask.Shift16ByUint32))+int32(tt.deltaFindState)]
+}
+
+// bitWriter will write bits.
+// First bit will be LSB of the first byte of output.
+type bitWriter struct {
+	bitContainer uint64
+	nBits        uint8
+	out          []byte
+}
+
+// bitMask16 is bitmasks. Has extra to avoid bounds check.
+var bitMask16 = [32]uint16{
+	0, 1, 3, 7, 0xF, 0x1F,
+	0x3F, 0x7F, 0xFF, 0x1FF, 0x3FF, 0x7FF,
+	0xFFF, 0x1FFF, 0x3FFF, 0x7FFF, 0xFFFF, 0xFFFF,
+	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	0xFFFF, 0xFFFF} /* up to 16 bits */
+
+var bitMask32 = [32]uint32{
+	0, 1, 3, 7, 0xF, 0x1F, 0x3F, 0x7F, 0xFF,
+	0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF, 0x3FFF, 0x7FFF, 0xFFFF,
+	0x1ffff, 0x3ffff, 0x7FFFF, 0xfFFFF, 0x1fFFFF, 0x3fFFFF, 0x7fFFFF, 0xffFFFF,
+	0x1ffFFFF, 0x3ffFFFF, 0x7ffFFFF, 0xfffFFFF, 0x1fffFFFF, 0x3fffFFFF, 0x7fffFFFF,
+} // up to 32 bits
+
+// addBits16NC will add up to 16 bits.
+// It will not check if there is space for them,
+// so the caller must ensure that it has flushed recently.
+func (b *bitWriter) addBits16NC(value uint16, bits uint8) {
+	b.bitContainer |= uint64(value&bitMask16[bits&31]) << (b.nBits & 63)
+	b.nBits += bits
+}
+
+// addBits32NC will add up to 31 bits.
+// It will not check if there is space for them,
+// so the caller must ensure that it has flushed recently.
+func (b *bitWriter) addBits32NC(value uint32, bits uint8) {
+	b.bitContainer |= uint64(value&bitMask32[bits&31]) << (b.nBits & 63)
+	b.nBits += bits
+}
+
+// addBits64NC will add up to 64 bits.
+// There must be space for 32 bits.
+func (b *bitWriter) addBits64NC(value uint64, bits uint8) {
+	if bits <= 31 {
+		b.addBits32Clean(uint32(value), bits)
+		return
+	}
+	b.addBits32Clean(uint32(value), 32)
+	b.flush32()
+	b.addBits32Clean(uint32(value>>32), bits-32)
+}
+
+// addBits32Clean will add up to 32 bits.
+// It will not check if there is space for them.
+// The input must not contain more bits than specified.
+func (b *bitWriter) addBits32Clean(value uint32, bits uint8) {
+	b.bitContainer |= uint64(value) << (b.nBits & 63)
+	b.nBits += bits
+}
+
+// addBits16Clean will add up to 16 bits. value may not contain more set bits than indicated.
+// It will not check if there is space for them, so the caller must ensure that it has flushed recently.
+func (b *bitWriter) addBits16Clean(value uint16, bits uint8) {
+	b.bitContainer |= uint64(value) << (b.nBits & 63)
+	b.nBits += bits
+}
+
+// flush32 will flush out, so there are at least 32 bits available for writing.
+func (b *bitWriter) flush32() {
+	if b.nBits < 32 {
+		return
+	}
+	b.out = append(b.out,
+		byte(b.bitContainer),
+		byte(b.bitContainer>>8),
+		byte(b.bitContainer>>16),
+		byte(b.bitContainer>>24))
+	b.nBits -= 32
+	b.bitContainer >>= 32
+}
+
+// flushAlign will flush remaining full bytes and align to next byte boundary.
+func (b *bitWriter) flushAlign() {
+	nbBytes := (b.nBits + 7) >> 3
+	for i := range nbBytes {
+		b.out = append(b.out, byte(b.bitContainer>>(i*8)))
+	}
+	b.nBits = 0
+	b.bitContainer = 0
+}
+
+// close will write the alignment bit and write the final byte(s)
+// to the output.
+func (b *bitWriter) close() {
+	// End mark
+	b.addBits16Clean(1, 1)
+	// flush until next byte.
+	b.flushAlign()
+}
+
+// reset and continue writing by appending to out.
+func (b *bitWriter) reset(out []byte) {
+	b.bitContainer = 0
+	b.nBits = 0
+	b.out = out
+}

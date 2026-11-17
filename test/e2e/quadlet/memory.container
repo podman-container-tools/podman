@@ -1,0 +1,6 @@
+## assert-podman-final-args localhost/imagename
+## assert-podman-args --memory 20g
+
+[Container]
+Image=localhost/imagename
+Memory=20g

@@ -1,0 +1,5 @@
+## assert-podman-final-args localhost/imagename
+
+[Container]
+ServiceName=basic
+Image=localhost/imagename

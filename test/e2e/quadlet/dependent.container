@@ -1,0 +1,11 @@
+## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+## assert-key-is "Unit" "PropagatesStopTo" "basic.service"
+
+[Unit]
+After=basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+Requires=basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+PropagatesStopTo=basic.container
+
+[Container]
+Image=localhost/imagename
