@@ -269,8 +269,11 @@ verify_loaded_image() {
     img1=${PODMAN_NONLOCAL_IMAGE_FQN}
     _prefetch $img1
 
-    run_podman images -a --format '{{.ID}} {{.Repository}}:{{.Tag}}' $img1
+    # Image IDs must not be assumed to be content digests and need not be
+    # preserved across save/load, so compare the name and the layers instead.
+    run_podman images -a --format '{{.Repository}}:{{.Tag}}' $img1
     images_output="$output"
+    get_image_layers $img1
 
     archive=$PODMAN_TMPDIR/myimage-$(safename).tar
     run_podman save $img1 -o $archive
@@ -288,8 +291,10 @@ verify_loaded_image() {
 
     run_podman load -i $SERVER/image.tar
 
-    run_podman images -a --format '{{.ID}} {{.Repository}}:{{.Tag}}' $img1
+    run_podman images -a --format '{{.Repository}}:{{.Tag}}' $img1
     assert "$output" == "$images_output"
+    run_podman image inspect --format '{{.RootFS.Layers}}' $img1
+    assert "$output" == "$iid_layers" "Layers of loaded image == original"
 
     run_podman rm -f -t0 $cname
 }
