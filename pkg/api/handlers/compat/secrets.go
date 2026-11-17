@@ -170,7 +170,7 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 		utils.InternalServerError(w, err)
 		return
 	}
-	utils.WriteResponse(w, http.StatusOK, report)
+	utils.WriteResponse(w, http.StatusCreated, report)
 }
 
 func UpdateSecret(w http.ResponseWriter, _ *http.Request) {
