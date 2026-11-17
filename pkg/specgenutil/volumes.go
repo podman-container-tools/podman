@@ -375,6 +375,8 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 					if name == "rw" {
 						mnt.mount.Options = append(mnt.mount.Options, "ro")
 					}
+				default:
+					return nil, fmt.Errorf("%s must be set to true or false, instead received %q: %w", name, value, util.ErrBadMntOption)
 				}
 			} else {
 				mnt.mount.Options = append(mnt.mount.Options, name)
