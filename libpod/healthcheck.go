@@ -413,8 +413,8 @@ func (c *Container) updateHealthCheckLog(hcl define.HealthCheckLog, hcResult def
 	return healthCheck, statusChanged, c.writeHealthCheckLog(healthCheck)
 }
 
-// healthCheckStatusChanged reports whether the current result is the first
-// recorded healthcheck after start/reset or changes the persisted health status.
+// healthCheckStatusChanged reports whether a new healthcheck result has to be
+// reported as an event when healthcheck_events_on_change is enabled.
 func healthCheckStatusChanged(previous, current define.HealthCheckResults) bool {
 	return len(previous.Log) == 0 || previous.Status != current.Status
 }

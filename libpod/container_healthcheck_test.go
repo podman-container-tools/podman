@@ -79,6 +79,26 @@ func TestHealthCheckStatusChanged(t *testing.T) {
 			current:  define.HealthCheckResults{Status: define.HealthCheckStarting, Log: []define.HealthCheckLog{{ExitCode: 1}}},
 			want:     true,
 		},
+		{
+			// unpause sets the status to reset but keeps the log and failing streak
+			name:     "first healthy result after unpause",
+			previous: define.HealthCheckResults{Status: define.HealthCheckReset, Log: []define.HealthCheckLog{{ExitCode: 0}}},
+			current:  define.HealthCheckResults{Status: define.HealthCheckHealthy, Log: []define.HealthCheckLog{{ExitCode: 0}, {ExitCode: 0}}},
+			want:     true,
+		},
+		{
+			// below the retry threshold the status stays reset, so there is no change
+			name:     "failing result after unpause below retries",
+			previous: define.HealthCheckResults{Status: define.HealthCheckReset, Log: []define.HealthCheckLog{{ExitCode: 0}}},
+			current:  define.HealthCheckResults{Status: define.HealthCheckReset, Log: []define.HealthCheckLog{{ExitCode: 0}, {ExitCode: 1}}},
+			want:     false,
+		},
+		{
+			name:     "repeated result with preserved log after unpause",
+			previous: define.HealthCheckResults{Status: define.HealthCheckHealthy, Log: []define.HealthCheckLog{{ExitCode: 0}, {ExitCode: 0}}},
+			current:  define.HealthCheckResults{Status: define.HealthCheckHealthy, Log: []define.HealthCheckLog{{ExitCode: 0}, {ExitCode: 0}, {ExitCode: 0}}},
+			want:     false,
+		},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
