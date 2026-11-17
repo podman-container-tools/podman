@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	goRuntime "runtime"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
+	"go.podman.io/podman/v6/pkg/api/handlers/utils/apiutil"
 	api "go.podman.io/podman/v6/pkg/api/types"
 )
 
@@ -82,6 +84,12 @@ func StatsContainer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// only include os_type if API version is >= 1.52 or no version is given (latest)
+	includeOSType := false
+	if _, err := utils.SupportedVersion(r, ">=1.52.0"); err == nil || errors.Is(err, apiutil.ErrVersionNotGiven) {
+		includeOSType = true
+	}
+
 streamLabel: // A label to flatten the scope
 	select {
 	case <-r.Context().Done():
@@ -107,6 +115,9 @@ streamLabel: // A label to flatten the scope
 			return
 		}
 		s.Stats.PreRead = preRead
+		if includeOSType {
+			s.OSType = goRuntime.GOOS
+		}
 
 		// one-shot=true: the two GetContainerStats calls are only
 		// milliseconds apart so cpu_stats.cpu is not meaningful (#29912).

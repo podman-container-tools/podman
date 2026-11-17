@@ -52,6 +52,9 @@ type StatsJSON struct {
 	Name string `json:"name,omitempty"`
 	ID   string `json:"Id,omitempty"`
 
+	// OSType request version >=1.52
+	OSType string `json:"os_type,omitempty"`
+
 	// Networks request version >=1.21
 	Networks map[string]container.NetworkStats `json:"networks,omitempty"`
 }
@@ -64,6 +67,10 @@ type DockerStatsJSON struct {
 
 	Name string `json:"name,omitempty"`
 	ID   string `json:"id,omitempty"`
+
+	// OSType request version >=1.52
+	OSType string `json:"os_type,omitempty"`
+
 	// Networks request version >=1.21
 	Networks map[string]container.NetworkStats `json:"networks,omitempty"`
 }
