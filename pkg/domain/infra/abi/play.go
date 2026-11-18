@@ -245,6 +245,17 @@ func applyAnnotationsOption(target *map[string]string, options entities.PlayKube
 	return annotations.ValidateAnnotations(*target)
 }
 
+func (ic *ContainerEngine) ensureServiceContainer(ctx context.Context, options entities.PlayKubeOptions, serviceContainer *libpod.Container, name string) (*libpod.Container, error) {
+	if options.ServiceContainer && serviceContainer == nil {
+		ctr, err := ic.createServiceContainer(ctx, name, options)
+		if err != nil {
+			return nil, err
+		}
+		return ctr, nil
+	}
+	return nil, nil
+}
+
 func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options entities.PlayKubeOptions) (_ *entities.PlayKubeReport, finalErr error) {
 	if options.ServiceContainer && options.Start == types.OptionalBoolFalse { // Sanity check to be future proof
 		return nil, fmt.Errorf("running a service container requires starting the pod(s)")
@@ -349,26 +360,18 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		}
 
 		// TODO: create constants for the various "kinds" of yaml files.
-		if options.ServiceContainer && serviceContainer == nil && (kind == "Pod" || kind == "Deployment") {
-			ctr, err := ic.createServiceContainer(ctx, k8sName(content, "service"), options)
-			if err != nil {
-				return nil, err
+		cleanupServiceContainer := func(ctr *libpod.Container) {
+			if finalErr == nil {
+				return
 			}
-			serviceContainer = ctr
-			// Make sure to remove the container in case something goes wrong below.
-			defer func() {
-				if finalErr == nil {
-					return
-				}
-				if err := ic.Libpod.RemoveContainer(ctx, ctr, true, true, nil); err != nil {
-					// Log this in debug mode so that we don't print out an error and confuse the user
-					// when the service container can't be removed because the pod still exists
-					// This can happen when an error happens during kube play and we are trying to
-					// clean up after the error. The service container will be removed as part of the
-					// teardown function.
-					logrus.Debugf("Error cleaning up service container after failure: %v", err)
-				}
-			}()
+			if err := ic.Libpod.RemoveContainer(ctx, ctr, true, true, nil); err != nil {
+				// Log this in debug mode so that we don't print out an error and confuse the user
+				// when the service container can't be removed because the pod still exists
+				// This can happen when an error happens during kube play and we are trying to
+				// clean up after the error. The service container will be removed as part of the
+				// teardown function.
+				logrus.Debugf("Error cleaning up service container after failure: %v", err)
+			}
 		}
 
 		switch kind {
@@ -394,6 +397,16 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 
 			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
 			podTemplateSpec.Spec = podYAML.Spec
+
+			if serviceContainerName, found := podYAML.Annotations[define.ServiceContainerNameAnnotation]; !found {
+				serviceContainerName = k8sName(content, "service")
+			}
+			if ctr, err := ic.ensureServiceContainer(ctx, options, serviceContainer, serviceContainerName); err != nil {
+				return nil, err
+			} else if ctr != nil {
+				defer cleanupServiceContainer(ctr)
+				serviceContainer = ctr
+			}
 
 			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer)
 			if err != nil {
@@ -435,6 +448,16 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 
 			if err := applyAnnotationsOption(&deploymentYAML.Annotations, options); err != nil {
 				return nil, err
+			}
+
+			if serviceContainerName, found := deploymentYAML.Annotations[define.ServiceContainerNameAnnotation]; !found {
+				serviceContainerName = k8sName(content, "service")
+			}
+			if ctr, err := ic.ensureServiceContainer(ctx, options, serviceContainer, serviceContainerName); err != nil {
+				return nil, err
+			} else if ctr != nil {
+				defer cleanupServiceContainer(ctr)
+				serviceContainer = ctr
 			}
 
 			numReplicas = 1
