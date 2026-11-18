@@ -2226,6 +2226,29 @@ WORKDIR /madethis`, BB)
 		Expect(session.OutputToString()).To(ContainSubstring("mysecret_target2"))
 	})
 
+	It("podman run --secret with --read-only", func() {
+		secretsString := "somesecretdata"
+		secretFilePath := filepath.Join(podmanTest.TempDir, "secret")
+		err := os.WriteFile(secretFilePath, []byte(secretsString), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+
+		session := podmanTest.Podman([]string{"secret", "create", "mysecret_ro", secretFilePath})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		// The secrets directory is mounted read-only, so the runtime may not be
+		// able to create the mount points for the secrets inside of it.
+		session = podmanTest.Podman([]string{"run", "--rm", "--read-only", "--secret", "mysecret_ro", ALPINE, "cat", "/run/secrets/mysecret_ro"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal(secretsString))
+
+		session = podmanTest.Podman([]string{"run", "--rm", "--read-only", "--secret", "mysecret_ro,target=sub/dir/hello", ALPINE, "cat", "/run/secrets/sub/dir/hello"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal(secretsString))
+	})
+
 	It("podman run --secret source=mysecret,type=env", func() {
 		secretsString := "somesecretdata"
 		secretFilePath := filepath.Join(podmanTest.TempDir, "secret")

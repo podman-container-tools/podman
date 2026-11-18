@@ -2363,6 +2363,9 @@ rootless=%d
 			}
 			src := filepath.Join(c.config.SecretsPath, secret.Name)
 			dest := filepath.Join(base, secretFileName)
+			if err := c.createSecretMountPoint(filepath.Join(runPath, "secrets"), dest); err != nil {
+				return fmt.Errorf("creating mount point for secret %s: %w", secret.Name, err)
+			}
 			c.state.BindMounts[dest] = src
 		}
 	}
@@ -3155,6 +3158,36 @@ func (c *Container) createSecretMountDir(runPath string) error {
 	}
 
 	return err
+}
+
+// createSecretMountPoint creates the empty file a secret is mounted on, inside
+// the host directory that is mounted at secretsDir in the container.
+// The OCI runtime cannot be relied on to create it: in a read-only container
+// the secrets directory is mounted read-only, and crun 1.31 and later do not
+// create missing mount points inside a read-only bind mount.
+// Nothing is done when dest is not below secretsDir.
+func (c *Container) createSecretMountPoint(secretsDir, dest string) error {
+	hostDir, ok := c.state.BindMounts[secretsDir]
+	if !ok {
+		return nil
+	}
+	rel, err := filepath.Rel(secretsDir, dest)
+	if err != nil {
+		return err
+	}
+	if rel == "." || !filepath.IsLocal(rel) {
+		return nil
+	}
+	mountPoint := filepath.Join(hostDir, rel)
+	rootIDs := idtools.IDPair{UID: c.RootUID(), GID: c.RootGID()}
+	if err := idtools.MkdirAllAndChownNew(filepath.Dir(mountPoint), 0o755, rootIDs); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(mountPoint, os.O_CREATE|os.O_RDONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // isIdmapOption reports whether a single volume option requests idmapping
