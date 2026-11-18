@@ -235,6 +235,16 @@ func k8sName(content []byte, suffix string) string {
 	return hash[0:12] + "-" + suffix
 }
 
+func applyAnnotationsOption(target *map[string]string, options entities.PlayKubeOptions) error {
+	if *target == nil {
+		*target = make(map[string]string)
+	}
+
+	maps.Copy(*target, options.Annotations)
+
+	return annotations.ValidateAnnotations(*target)
+}
+
 func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options entities.PlayKubeOptions) (_ *entities.PlayKubeReport, finalErr error) {
 	if options.ServiceContainer && options.Start == types.OptionalBoolFalse { // Sanity check to be future proof
 		return nil, fmt.Errorf("running a service container requires starting the pod(s)")
@@ -372,11 +382,8 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
-			for name, val := range options.Annotations {
-				if podYAML.Annotations == nil {
-					podYAML.Annotations = make(map[string]string)
-				}
-				podYAML.Annotations[name] = val
+			if err := applyAnnotationsOption(&podYAML.Annotations, options); err != nil {
+				return nil, err
 			}
 
 			// Merge CLI-specified labels into the pod's labels and validate them.
@@ -387,10 +394,6 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 
 			podTemplateSpec.ObjectMeta = podYAML.ObjectMeta
 			podTemplateSpec.Spec = podYAML.Spec
-
-			if err := annotations.ValidateAnnotations(podYAML.Annotations); err != nil {
-				return nil, err
-			}
 
 			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer)
 			if err != nil {
@@ -429,6 +432,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
+
+			if err := applyAnnotationsOption(&deploymentYAML.Annotations, options); err != nil {
+				return nil, err
+			}
 
 			numReplicas = 1
 			if deploymentYAML.Spec.Replicas != nil {
