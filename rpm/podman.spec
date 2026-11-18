@@ -27,11 +27,6 @@
 %endif
 %endif
 
-# Only RHEL and CentOS Stream rpms are built with fips-enabled go compiler
-%if %{defined rhel}
-%define fips_enabled 1
-%endif
-
 %global container_base_path go.podman.io
 
 # For LDFLAGS
@@ -250,14 +245,6 @@ LDFLAGS="$LDFLAGS -X %{ld_libpod}/define.gitCommit=$GIT_COMMIT"
 %gobuild -o bin/rootlessport ./cmd/rootlessport
 
 export BASEBUILDTAGS="seccomp $(hack/systemd_tag.sh) $(hack/libsubid_tag.sh) libsqlite3 grpcnotrace"
-
-# libtrust_openssl buildtag switches to using the FIPS-compatible func
-# `ecdsa.HashSign`.
-# Ref 1: https://github.com/golang-fips/go/blob/main/patches/015-add-hash-sign-verify.patch#L22
-# Ref 2: https://github.com/containers/libtrust/blob/main/ec_key_openssl.go#L23
-%if %{defined fips_enabled}
-export BASEBUILDTAGS="$BASEBUILDTAGS libtrust_openssl"
-%endif
 
 # build %%{name}
 export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
