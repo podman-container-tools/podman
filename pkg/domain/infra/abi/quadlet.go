@@ -426,6 +426,9 @@ func parseMultiQuadletFile(filePath string) ([]quadletSection, error) {
 			continue // Skip empty sections
 		}
 
+		// Ensure the section ends with a newline.
+		section += "\n"
+
 		// Determine quadlet type from section content
 		extension, err := detectQuadletType(section)
 		if err != nil {
