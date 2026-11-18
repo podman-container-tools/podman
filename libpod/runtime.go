@@ -223,8 +223,6 @@ func newRuntimeFromConfig(ctx context.Context, conf *config.Config, options ...R
 		return nil, fmt.Errorf("starting shutdown signal handler: %w", err)
 	}
 
-	runtime.config.CheckCgroupsAndAdjustConfig()
-
 	return runtime, nil
 }
 
