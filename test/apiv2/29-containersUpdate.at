@@ -31,4 +31,40 @@ t GET libpod/containers/$cid/json 200 \
 
 t DELETE containers/$cid 204
 
+t POST libpod/containers/create Image="$IMAGE" command='["sleep","120"]' \
+  netns='{"nsmode":"none"}' 201
+cid=$(jq -r '.Id' <<<"$output")
+t POST "containers/$cid/update" \
+  'BlkioDeviceReadBps=[{"Path":"/dev/null","Rate":1048576}]' \
+  400 '.message~.*not a block device'
+
+blkio_device=${PODMAN_TEST_BLKIO_DEVICE:-/dev/nullb0}
+if root && [ -b "$blkio_device" ]; then
+    t POST "containers/$cid/start" 204
+    t GET "containers/$cid/json" 200 .State.Running=true
+    if [[ $(jq -r '.State.Running' <<<"$output") != true ]]; then
+        t DELETE "containers/$cid?force=true" 204
+        return
+    fi
+    t POST "containers/$cid/update" \
+      "BlkioDeviceReadBps=[{\"Path\":\"$blkio_device\",\"Rate\":1048576}]" \
+      "BlkioDeviceWriteBps=[{\"Path\":\"$blkio_device\",\"Rate\":2097152}]" \
+      200
+    t GET "containers/$cid/json" 200 .HostConfig.BlkioDeviceReadBps[0].Rate=1048576
+    like "$("$PODMAN_BIN" --root "$WORKDIR/server_root" exec "$cid" cat /sys/fs/cgroup/io.max)" \
+      '.*rbps=1048576.*wbps=2097152.*' "both live rates set"
+
+    printf '%s\n' '{"BlkioDeviceReadBps":null}' >"$WORKDIR/blkio-null.json"
+    t POST "containers/$cid/update" "$WORKDIR/blkio-null.json" 200
+    t GET "containers/$cid/json" 200 .HostConfig.BlkioDeviceReadBps[0].Rate=1048576
+
+    t POST "containers/$cid/update" 'BlkioDeviceReadBps=[]' 200
+    t GET "containers/$cid/json" 200 \
+      .HostConfig.BlkioDeviceReadBps[0]=null \
+      .HostConfig.BlkioDeviceWriteBps[0].Rate=2097152
+    like "$("$PODMAN_BIN" --root "$WORKDIR/server_root" exec "$cid" cat /sys/fs/cgroup/io.max)" \
+      '.*rbps=max.*wbps=2097152.*' "only the requested live rule is cleared"
+fi
+t DELETE "containers/$cid?force=true" 204
+
 podman container rm -fa

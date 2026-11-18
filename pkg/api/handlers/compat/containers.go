@@ -33,6 +33,7 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/infra/abi"
 	"go.podman.io/podman/v6/pkg/ps"
 	"go.podman.io/podman/v6/pkg/signal"
+	"go.podman.io/podman/v6/pkg/specgen"
 	"go.podman.io/podman/v6/pkg/specgenutil"
 	"go.podman.io/podman/v6/pkg/util"
 )
@@ -887,12 +888,10 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		resources.Pids.Limit = &limit
 	}
 
-	// Blkio Weight
-	if options.BlkioWeight != 0 {
-		if resources.BlockIO == nil {
-			resources.BlockIO = new(spec.LinuxBlockIO)
-		}
-		resources.BlockIO.Weight = &options.BlkioWeight
+	resources.BlockIO, err = updateBlockIO(options, specgen.BlockDeviceNumbers)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, err)
+		return
 	}
 
 	// Restart policy, only changed when the request sets one (matches Docker)
