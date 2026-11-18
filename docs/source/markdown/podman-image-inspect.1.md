@@ -26,7 +26,7 @@ Valid placeholders for the Go template are listed below:
 | .Author              | Image author                                       |
 | .Comment             | Image comment                                      |
 | .Config ...          | Structure with config info                         |
-| .Created ...         | Image creation time (string, ISO3601)              |
+| .Created ...         | Image creation time (string, ISO8601)              |
 | .Digest              | Image digest (sha256:+64-char hash)                |
 | .GraphDriver ...     | Structure for the graph driver info                |
 | .HealthCheck ...     | Structure for the health check info                |

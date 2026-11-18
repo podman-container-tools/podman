@@ -5,7 +5,7 @@
 #### **--volumes-from**=*CONTAINER[:OPTIONS]*
 
 Mount volumes from the specified container(s). Used to share volumes between
-containers<<| and pods>>. The *options* is a comma-separated list with the following available elements:
+containers<<| and pods>>. The *options* are a comma-separated list with the following available elements:
 
 * **rw**|**ro**
 * **z**

@@ -19,7 +19,7 @@ The path to the CA cert file for the Kubernetes cluster. Usually the kubeconfig 
 
 #### **--file**, **-f**=*kube yaml filepath*
 
-Path to the kubernetes yaml file to deploy onto the kubernetes cluster. This file can be generated using the `podman kube generate` command. The input may be in the form of a yaml file, or stdin. For stdin, use `--file=-`.
+Path to the Kubernetes yaml file to deploy onto the Kubernetes cluster. This file can be generated using the `podman kube generate` command. The input may be in the form of a yaml file, or stdin. For stdin, use `--file=-`.
 
 #### **--kubeconfig**, **-k**=*kubeconfig filepath*
 

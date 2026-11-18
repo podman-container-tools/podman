@@ -25,7 +25,7 @@ Valid placeholders for the Go template are listed below:
 | .Active                   | Indicates whether volume is in use               |
 | .RawReclaimable           | Raw reclaimable size of each Type                |
 | .RawSize                  | Raw size of each type                            |
-| .Reclaimable              | Reclaimable size or each type (human-readable)   |
+| .Reclaimable              | Reclaimable size of each type (human-readable)   |
 | .Size                     | Size of each type (human-readable)               |
 | .Total                    | Total items for each type                        |
 | .Type                     | Type of data                                     |

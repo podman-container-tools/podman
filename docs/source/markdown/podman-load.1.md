@@ -9,7 +9,7 @@ podman\-load - Load image(s) from tar archives, directories, or URLs into contai
 **podman image load** [*options*]
 
 ## DESCRIPTION
-**podman load** loads a saved image(s) into local container storage from tar archives, directories, or URLs pointing to an tar archive. By default, **podman load** reads from stdin, to load from any of the other input sources use the `--input` option.
+**podman load** loads a saved image(s) into local container storage from tar archives, directories, or URLs pointing to a tar archive. By default, **podman load** reads from stdin, to load from any of the other input sources use the `--input` option.
 
 **podman load** operates on *images*: it restores an archive created by **podman save** as the same image, preserving its layers, history and tags. This is different from **podman import**, which builds a *new* image from a root-filesystem tarball (such as one produced by **podman export**) with no image history. To import a container's filesystem instead, see **podman-import(1)**.
 
