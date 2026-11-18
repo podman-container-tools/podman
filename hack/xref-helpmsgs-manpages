@@ -329,9 +329,6 @@ sub xref_by_man {
             my %diffignore = map { $_ => 1 } qw(-l --latest );
             next if $man =~ /-diff/ && $diffignore{$k};
 
-            # Special case: the 'trust' man page is a mess
-            next if $man =~ /-trust/;
-
             # Special case: '--net' is an undocumented shortcut
             next if $k eq '--net' && $help->{'--network'};
 
@@ -618,7 +615,6 @@ sub podman_man {
             $previous_flag = '';
         }
         elsif ($line =~ /^###\s+\w+\s+OPTIONS/) {
-            # podman image trust has sections for set & show
             $section = 'flags';
             $previous_flag = '';
         }
@@ -878,14 +874,6 @@ sub podman_man {
         $man{"--format"}{$_} = '!' for @$fields;
     }
 
-    # Special case: the 'image trust' man page tries hard to cover both set
-    # and show, which means it ends up not being machine-readable.
-    if ($command eq 'podman-image-trust') {
-        my %set  = %man;
-        my %show = %man;
-        $show{$_} = 1 for qw(--raw -j --json);
-        return +{ set => \%set, show => \%show }
-    }
 
     return \%man;
 }
@@ -962,9 +950,6 @@ sub podman_rst {
         }
         close $fh;
     }
-
-    # Special case: 'image trust set/show' are documented in image-trust.1
-    $rst{image}{trust}{$_} = { _desc => 'ok' } for (qw(set show));
 
     return \%rst;
 }
