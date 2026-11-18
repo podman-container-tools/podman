@@ -55,6 +55,8 @@ by `podman kube play` to create them.
 
 Note: To customize the name of the infra container created during `podman kube play`, use the **io.podman.annotations.infra.name** annotation in the pod definition. This annotation is automatically set when generating a kube yaml from a pod that was created with the `--infra-name` flag set.
 
+Note: To customize the name of the service container created during `podman kube play`, use the **io.podman.annotations.service-container.name** annotation in the pod definition.
+
 Note: Use the **io.podman.annotations.pids-limit/$ctrname** annotation to configure the pod's pids limit.
 
 Note: Use the **io.podman.annotations.cpuset/$ctrname** annotation to restrict a container's execution to a specific set of CPU cores. This is equivalent to the `--cpuset-cpus=number` option in podman-run(1).
