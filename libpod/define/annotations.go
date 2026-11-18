@@ -154,6 +154,10 @@ const (
 	// pod creation
 	InfraNameAnnotation = "io.podman.annotations.infra.name"
 
+	// ServiceContainerNameAnnotation is used by play kube to allow the user to customize the name of the
+	// service container
+	ServiceContainerNameAnnotation = "io.podman.annotations.service-container.name"
+
 	// UserNsAnnotation is used by play kube when playing a kube yaml to specify userns
 	// of the container
 	UserNsAnnotation = "io.podman.annotations.userns"
