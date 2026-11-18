@@ -190,3 +190,5 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	tags.cncf.io/container-device-interface/specs-go v1.1.1 // indirect
 )
+
+replace tags.cncf.io/container-device-interface => tags.cncf.io/container-device-interface v1.1.0

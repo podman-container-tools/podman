@@ -83,12 +83,13 @@ func ParseDevice(device string) (string, string, string) {
 		return "", "", device
 	}
 
-	qualifier, name, ok := strings.Cut(device, "=")
-	if !ok || qualifier == "" || name == "" {
+	parts := strings.SplitN(device, "=", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", device
 	}
 
-	vendor, class := ParseQualifier(qualifier)
+	name := parts[1]
+	vendor, class := ParseQualifier(parts[0])
 	if vendor == "" {
 		return "", "", device
 	}
@@ -104,11 +105,11 @@ func ParseDevice(device string) (string, string, string) {
 // If parsing fails, an empty vendor and the class set to the
 // verbatim input is returned.
 func ParseQualifier(kind string) (string, string) {
-	qualifier, value, ok := strings.Cut(kind, "/")
-	if !ok || qualifier == "" || value == "" {
+	parts := strings.SplitN(kind, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", kind
 	}
-	return qualifier, value
+	return parts[0], parts[1]
 }
 
 // ValidateVendorName checks the validity of a vendor name.
@@ -148,9 +149,6 @@ func validateVendorOrClassName(name string) error {
 	}
 	if !IsLetter(rune(name[0])) {
 		return fmt.Errorf("%q, should start with letter", name)
-	}
-	if len(name) == 1 {
-		return nil
 	}
 	for _, c := range string(name[1 : len(name)-1]) {
 		switch {
