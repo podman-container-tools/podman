@@ -411,7 +411,7 @@ Valid options for `[Container]` are listed below:
 | Mount=type=...                       | --mount type=...                                     |
 | Network=host                         | --network host                                       |
 | NetworkAlias=name                    | --network-alias name                                 |
-| NoNewPrivileges=true                 | --security-opt no-new-privileges                     |
+| NoNewPrivileges=true/false           | --security-opt no-new-privileges=true/false          |
 | Notify=true                          | --sdnotify container                                 |
 | PidsLimit=10000                      | --pids-limit 10000                                   |
 | Pod=pod-name                         | --pod=pod-name                                       |
@@ -828,10 +828,11 @@ to all the containers with that alias.
 
 This key can be listed multiple times.
 
-### `NoNewPrivileges=` (defaults to `false`)
+### `NoNewPrivileges=`
 
 If enabled, this disables the container processes from gaining additional privileges via things like
-setuid and file capabilities.
+setuid and file capabilities. If unset, Podman uses the `no_new_privileges` value from
+`containers.conf`, which defaults to `false`. An explicit `true` or `false` overrides that value.
 
 ### `Notify=` (defaults to `false`)
 

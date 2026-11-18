@@ -1171,6 +1171,29 @@ EOF
 }
 
 # bats test_tags=ci:parallel
+@test "podman create no_new_privileges from containers.conf module" {
+    skip_if_remote "--module is not supported for remote clients"
+
+    containersconf=$PODMAN_TMPDIR/no-new-privileges.conf
+    cat >$containersconf <<EOF
+[containers]
+no_new_privileges=true
+EOF
+
+    run_podman --module=$containersconf create $IMAGE
+    container_id=$output
+    run_podman inspect --format '{{.HostConfig.SecurityOpt}}' "$container_id"
+    assert "$output" =~ "no-new-privileges" "module should set no_new_privileges by default"
+    run_podman rm "$container_id"
+
+    run_podman --module=$containersconf create --security-opt no-new-privileges=false $IMAGE
+    container_id=$output
+    run_podman inspect --format '{{.HostConfig.SecurityOpt}}' "$container_id"
+    assert "$output" !~ "no-new-privileges" "explicit security-opt should override the module"
+    run_podman rm "$container_id"
+}
+
+# bats test_tags=ci:parallel
 @test "podman run --device-read-bps" {
     skip_if_rootless "cannot use this flag in rootless mode"
 

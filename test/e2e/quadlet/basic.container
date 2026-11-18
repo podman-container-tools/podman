@@ -5,6 +5,7 @@
 ## assert-podman-args "-d"
 ## assert-podman-args "--cgroups=split"
 ## assert-podman-args "--sdnotify=conmon"
+## !assert-podman-args "--security-opt" "no-new-privileges=false"
 ## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
 ## assert-key-is "Service" "KillMode" "mixed"
 ## assert-key-is "Service" "Delegate" "yes"

@@ -1,4 +1,4 @@
-## assert-podman-final-args run --name systemd-%N --replace --rm --cgroups=split --sdnotify=conmon  -d localhost/imagename
+## assert-podman-final-args run --name systemd-%N --replace --rm --cgroups=split --sdnotify=conmon  -d --security-opt no-new-privileges=false localhost/imagename
 
 [Container]
 Image=localhost/imagename

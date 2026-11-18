@@ -1079,6 +1079,7 @@ BOGUS=foo
 		Entry("name.container", "name.container"),
 		Entry("nestedselinux.container", "nestedselinux.container"),
 		Entry("network.container", "network.container"),
+		Entry("no-new-privileges.container", "no-new-privileges.container"),
 		Entry("notify.container", "notify.container"),
 		Entry("notify-healthy.container", "notify-healthy.container"),
 		Entry("oneshot.container", "oneshot.container"),
