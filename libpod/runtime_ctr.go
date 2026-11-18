@@ -75,7 +75,7 @@ func (r *Runtime) PrepareVolumeOnCreateContainer(ctx context.Context, ctr *Conta
 	if err == nil {
 		// Finish up mountStorage
 		ctr.state.Mounted = true
-		ctr.state.Mountpoint = mountPoint
+		ctr.state.Mountpoint = &mountPoint
 		if err = ctr.save(); err != nil {
 			logrus.Errorf("Saving container %s state: %v", ctr.ID(), err)
 		}

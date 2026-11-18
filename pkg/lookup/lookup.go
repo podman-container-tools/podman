@@ -5,9 +5,9 @@ import (
 	"os"
 	"strconv"
 
-	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/moby/sys/user"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/podman/v6/internal/protectedroot"
 )
 
 const (
@@ -24,7 +24,7 @@ type Overrides struct {
 
 // GetUserGroupInfo takes string forms of the container's mount path and the container user and
 // returns an ExecUser with uid, gid, sgids, and home.  And override can be provided for defaults.
-func GetUserGroupInfo(containerMount, containerUser string, override *Overrides) (*user.ExecUser, error) {
+func GetUserGroupInfo(containerMount protectedroot.PathRoot, containerUser string, override *Overrides) (*user.ExecUser, error) {
 	var (
 		passwdDest, groupDest string
 		defaultExecUser       *user.ExecUser
@@ -44,14 +44,14 @@ func GetUserGroupInfo(containerMount, containerUser string, override *Overrides)
 
 	if passwdDest == "" {
 		// Make sure the /etc/passwd destination is not a symlink to something naughty
-		if passwdDest, err = securejoin.SecureJoin(containerMount, etcpasswd); err != nil {
+		if passwdDest, err = containerMount.Join(etcpasswd); err != nil {
 			logrus.Debug(err)
 			return nil, err
 		}
 	}
 	if groupDest == "" {
 		// Make sure the /etc/group destination is not a symlink to something naughty
-		if groupDest, err = securejoin.SecureJoin(containerMount, etcgroup); err != nil {
+		if groupDest, err = containerMount.Join(etcgroup); err != nil {
 			logrus.Debug(err)
 			return nil, err
 		}
@@ -75,7 +75,7 @@ func GetUserGroupInfo(containerMount, containerUser string, override *Overrides)
 // GetContainerGroups uses securejoin to get a list of numerical groupids from a container. Per the runc
 // function it calls: If a group name cannot be found, an error will be returned. If a group id cannot be found,
 // or the given group data is nil, the id will be returned as-is  provided it is in the legal range.
-func GetContainerGroups(groups []string, containerMount string, override *Overrides) ([]uint32, error) {
+func GetContainerGroups(groups []string, containerMount protectedroot.PathRoot, override *Overrides) ([]uint32, error) {
 	var (
 		groupDest string
 		err       error
@@ -86,7 +86,7 @@ func GetContainerGroups(groups []string, containerMount string, override *Overri
 		groupPath = override.ContainerEtcGroupPath
 	}
 
-	if groupDest, err = securejoin.SecureJoin(containerMount, groupPath); err != nil {
+	if groupDest, err = containerMount.Join(groupPath); err != nil {
 		logrus.Debug(err)
 		return nil, err
 	}
@@ -108,13 +108,13 @@ func GetContainerGroups(groups []string, containerMount string, override *Overri
 // with the provided information, an ErrNoPasswdEntries is returned.
 // When the provided user name was an ID, a User structure with Uid
 // set is returned along with ErrNoPasswdEntries.
-func GetUser(containerMount, userIDorName string) (*user.User, error) {
+func GetUser(containerMount protectedroot.PathRoot, userIDorName string) (*user.User, error) {
 	var inputIsName bool
 	uid, err := strconv.Atoi(userIDorName)
 	if err != nil {
 		inputIsName = true
 	}
-	passwdDest, err := securejoin.SecureJoin(containerMount, etcpasswd)
+	passwdDest, err := containerMount.Join(etcpasswd)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +141,14 @@ func GetUser(containerMount, userIDorName string) (*user.User, error) {
 // an ErrNoGroupEntries error is returned.  When the provided group name
 // was an ID, a Group structure with Gid set is returned along with
 // ErrNoGroupEntries.
-func GetGroup(containerMount, groupIDorName string) (*user.Group, error) {
+func GetGroup(containerMount protectedroot.PathRoot, groupIDorName string) (*user.Group, error) {
 	var inputIsName bool
 	gid, err := strconv.Atoi(groupIDorName)
 	if err != nil {
 		inputIsName = true
 	}
 
-	groupDest, err := securejoin.SecureJoin(containerMount, etcgroup)
+	groupDest, err := containerMount.Join(etcgroup)
 	if err != nil {
 		return nil, err
 	}

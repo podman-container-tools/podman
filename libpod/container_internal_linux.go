@@ -24,6 +24,7 @@ import (
 	"go.podman.io/common/libnetwork/types"
 	"go.podman.io/common/pkg/cgroups"
 	"go.podman.io/common/pkg/config"
+	"go.podman.io/podman/v6/internal/protectedroot"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/shutdown"
 	"go.podman.io/podman/v6/pkg/rootless"
@@ -64,7 +65,7 @@ func (c *Container) prepare(ctx context.Context) error {
 		netNS                           string
 		networkStatus                   map[string]types.StatusBlock
 		createNetNSErr, mountStorageErr error
-		mountPoint                      string
+		mountPoint                      protectedroot.PathRoot
 		tmpStateLock                    sync.Mutex
 	)
 
@@ -118,7 +119,7 @@ func (c *Container) prepare(ctx context.Context) error {
 
 		// Finish up mountStorage
 		c.state.Mounted = true
-		c.state.Mountpoint = mountPoint
+		c.state.Mountpoint = &mountPoint
 
 		logrus.Debugf("Created root filesystem for container %s at %s", c.ID(), c.state.Mountpoint)
 	}()
@@ -741,8 +742,9 @@ var hasCapSysResource = sync.OnceValues(func() (bool, error) {
 })
 
 // containerPathIsFile returns true if the given containerPath is a file
-func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) {
-	f, err := pathrs.OpenInRoot(unsafeRoot, containerPath)
+func containerPathIsFile(root protectedroot.PathRoot, containerPath string) (bool, error) {
+	rootPath := root.PathWithoutProtection() // TODO replace once `PathRoot` provides `OpenInRoot`
+	f, err := pathrs.OpenInRoot(rootPath, containerPath)
 	if err != nil {
 		return false, err
 	}
