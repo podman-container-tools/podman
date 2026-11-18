@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/common/libnetwork/types"
+	"go.podman.io/common/pkg/umask"
 	"go.podman.io/podman/v6/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
@@ -428,4 +430,25 @@ func containerPathIsFile(unsafeRoot string, containerPath string) (bool, error) 
 		return true, nil
 	}
 	return false, err
+}
+
+// createSecretMountPoint creates the mount point of a secret in the directory
+// mounted on /run/secrets, as the OCI runtime cannot create it when that
+// directory is read-only.
+func (c *Container) createSecretMountPoint(srcDir, name string) error {
+	if srcDir == "" {
+		return nil
+	}
+	path, err := securejoin.SecureJoin(srcDir, name)
+	if err != nil {
+		return err
+	}
+	if err := umask.MkdirAllIgnoreUmask(filepath.Dir(path), os.FileMode(0o755)); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
