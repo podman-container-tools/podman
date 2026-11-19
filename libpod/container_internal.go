@@ -2877,6 +2877,7 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		if err := json.Unmarshal(resourcesToUpdate, c.config.Spec.Linux.Resources); err != nil {
 			return err
 		}
+		// A nil BlockIO was omitted from the JSON merge, so there are no lists to clear.
 		if blockIO := updateOptions.Resources.BlockIO; blockIO != nil {
 			mergeBlockIOUpdate(c.config.Spec.Linux.Resources.BlockIO, blockIO)
 			blockIOUpdated = blockIO.WeightDevice != nil ||

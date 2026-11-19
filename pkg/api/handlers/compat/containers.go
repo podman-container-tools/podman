@@ -888,6 +888,7 @@ func UpdateContainer(w http.ResponseWriter, r *http.Request) {
 		resources.Pids.Limit = &limit
 	}
 
+	// A nil BlockIO leaves the container's existing settings unchanged.
 	resources.BlockIO, err = updateBlockIO(options, specgen.BlockDeviceNumbers)
 	if err != nil {
 		utils.Error(w, http.StatusBadRequest, err)

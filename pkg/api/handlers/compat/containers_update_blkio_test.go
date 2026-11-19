@@ -47,6 +47,25 @@ func TestUpdateBlockIOPreservesRequestPresence(t *testing.T) {
 	}
 }
 
+func TestUpdateBlockIOIgnoresOmittedAndNullFields(t *testing.T) {
+	for _, body := range []string{
+		`{"PidsLimit":64}`,
+		`{"PidsLimit":64,"BlkioWeightDevice":null,"BlkioDeviceReadBps":null,"BlkioDeviceWriteBps":null,"BlkioDeviceReadIOps":null,"BlkioDeviceWriteIOps":null}`,
+	} {
+		var options container.UpdateConfig
+		if err := json.Unmarshal([]byte(body), &options); err != nil {
+			t.Fatal(err)
+		}
+		update, err := updateBlockIO(&options, func(path string) (int64, int64, error) {
+			t.Fatalf("unexpected device lookup: %q", path)
+			return 0, 0, nil
+		})
+		if err != nil || update != nil {
+			t.Errorf("updateBlockIO for %s: got (%+v, %v), want (nil, nil)", body, update, err)
+		}
+	}
+}
+
 func TestUpdateBlockIOReturnsDeviceError(t *testing.T) {
 	var options container.UpdateConfig
 	if err := json.Unmarshal([]byte(`{"BlkioDeviceWriteIOps":[{"Path":"/tmp/file","Rate":400}]}`), &options); err != nil {

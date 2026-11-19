@@ -54,6 +54,14 @@ if root && [ -b "$blkio_device" ]; then
     like "$("$PODMAN_BIN" --root "$WORKDIR/server_root" exec "$cid" cat /sys/fs/cgroup/io.max)" \
       '.*rbps=1048576.*wbps=2097152.*' "both live rates set"
 
+    t POST "containers/$cid/update" 'PidsLimit=64' 200
+    t GET "containers/$cid/json" 200 \
+      .HostConfig.PidsLimit=64 \
+      .HostConfig.BlkioDeviceReadBps[0].Rate=1048576 \
+      .HostConfig.BlkioDeviceWriteBps[0].Rate=2097152
+    like "$("$PODMAN_BIN" --root "$WORKDIR/server_root" exec "$cid" cat /sys/fs/cgroup/io.max)" \
+      '.*rbps=1048576.*wbps=2097152.*' "unrelated update preserves both live rates"
+
     printf '%s\n' '{"BlkioDeviceReadBps":null}' >"$WORKDIR/blkio-null.json"
     t POST "containers/$cid/update" "$WORKDIR/blkio-null.json" 200
     t GET "containers/$cid/json" 200 .HostConfig.BlkioDeviceReadBps[0].Rate=1048576
