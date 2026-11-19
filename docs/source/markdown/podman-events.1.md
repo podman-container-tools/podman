@@ -17,6 +17,11 @@ value to `file`.  Only `file` and `journald` are accepted. A `none` logger is al
 available, but this logging mechanism completely disables events; nothing is reported by
 `podman events`.
 
+Emission of `health_status` events can be controlled via `containers.conf`: `healthcheck_events`
+enables or disables them entirely (default true), and `healthcheck_events_on_change` restricts
+them to only when the health status actually changes instead of after every healthcheck run
+(default false).
+
 By default, streaming mode is used, printing new events as they occur.  Previous events can be listed via `--since` and `--until`.
 
 The *container* event type reports the follow statuses:

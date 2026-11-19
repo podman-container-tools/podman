@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -249,11 +250,9 @@ var _ = Describe("Podman healthcheck run", func() {
 				path := filepath.Join(podmanTest.TempDir, "containers.conf")
 				err := os.WriteFile(path, []byte("[engine]\nhealthcheck_events=false\n"), 0o644)
 				Expect(err).ToNot(HaveOccurred())
-				err = os.Setenv("CONTAINERS_CONF_OVERRIDE", path)
-				Expect(err).ToNot(HaveOccurred())
+				GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", path)
 				if IsRemote() {
-					podmanTest.StopRemoteService()
-					podmanTest.StartRemoteService()
+					podmanTest.RestartRemoteService()
 				}
 			}
 
@@ -275,6 +274,11 @@ var _ = Describe("Podman healthcheck run", func() {
 			inspect = podmanTest.InspectContainer("hc")
 			Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckUnhealthy))
 
+			// A repeated failed check keeps the unhealthy status.
+			hc = podmanTest.Podman([]string{"healthcheck", "run", "hc"})
+			hc.WaitWithDefaultTimeout()
+			Expect(hc).Should(ExitWithError(1, ""))
+
 			foo := podmanTest.Podman([]string{"exec", "hc", "touch", "/foo"})
 			foo.WaitWithDefaultTimeout()
 			Expect(foo).Should(ExitCleanly())
@@ -282,20 +286,23 @@ var _ = Describe("Podman healthcheck run", func() {
 			hc = podmanTest.Podman([]string{"healthcheck", "run", "hc"})
 			hc.WaitWithDefaultTimeout()
 			Expect(hc).Should(ExitCleanly())
+			podmanTest.PodmanExitCleanly("healthcheck", "run", "hc")
+			podmanTest.PodmanExitCleanly("healthcheck", "run", "hc")
 
 			inspect = podmanTest.InspectContainer("hc")
 			Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckHealthy))
 
 			// Test that events generated have correct status (#19237)
-			events := podmanTest.Podman([]string{"events", "--stream=false", "--filter", "event=health_status", "--since", "1m"})
-			events.WaitWithDefaultTimeout()
-			Expect(events).Should(ExitCleanly())
+			events := podmanTest.PodmanExitCleanly("events", "--stream=false", "--filter", "container=hc", "--filter", "event=health_status", "--since", "1m")
 			if hcEvent {
 				eventsOut := events.OutputToStringArray()
-				Expect(eventsOut).To(HaveLen(3))
+				Expect(eventsOut).To(HaveLen(6))
 				Expect(eventsOut[0]).To(ContainSubstring("health_status=starting"))
 				Expect(eventsOut[1]).To(ContainSubstring("health_status=unhealthy"))
-				Expect(eventsOut[2]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[2]).To(ContainSubstring("health_status=unhealthy"))
+				Expect(eventsOut[3]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[4]).To(ContainSubstring("health_status=healthy"))
+				Expect(eventsOut[5]).To(ContainSubstring("health_status=healthy"))
 			} else {
 				Expect(events.OutputToString()).To(BeEmpty())
 			}
@@ -308,6 +315,117 @@ var _ = Describe("Podman healthcheck run", func() {
 			Expect(ps.OutputToString()).To(ContainSubstring("hc"))
 		})
 	}
+
+	It("healthcheck_events_on_change emits only initial and changed statuses", func() {
+		path := filepath.Join(podmanTest.TempDir, "containers.conf")
+		err := os.WriteFile(path, []byte("[engine]\nhealthcheck_events_on_change=true\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", path)
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+		}
+
+		podmanTest.PodmanExitCleanly("run", "-dt", "--name", "hc-on-change", "--health-retries", "2", "--health-cmd", "ls /foo || exit 1", ALPINE, "top")
+
+		hc := podmanTest.Podman([]string{"healthcheck", "run", "hc-on-change"})
+		hc.WaitWithDefaultTimeout()
+		Expect(hc).Should(ExitWithError(1, ""))
+
+		hc = podmanTest.Podman([]string{"healthcheck", "run", "hc-on-change"})
+		hc.WaitWithDefaultTimeout()
+		Expect(hc).Should(ExitWithError(1, ""))
+
+		hc = podmanTest.Podman([]string{"healthcheck", "run", "hc-on-change"})
+		hc.WaitWithDefaultTimeout()
+		Expect(hc).Should(ExitWithError(1, ""))
+
+		podmanTest.PodmanExitCleanly("exec", "hc-on-change", "touch", "/foo")
+
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-on-change")
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-on-change")
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-on-change")
+
+		inspect := podmanTest.InspectContainer("hc-on-change")
+		Expect(inspect[0].State.Health).To(HaveField("Status", define.HealthCheckHealthy))
+
+		events := podmanTest.PodmanExitCleanly("events", "--stream=false", "--filter", "container=hc-on-change", "--filter", "event=health_status", "--since", "1m")
+		eventLines := events.OutputToStringArray()
+		Expect(eventLines).To(HaveLen(3))
+		Expect(eventLines[0]).To(ContainSubstring("health_status=starting"))
+		Expect(eventLines[1]).To(ContainSubstring("health_status=unhealthy"))
+		Expect(eventLines[2]).To(ContainSubstring("health_status=healthy"))
+	})
+
+	It("healthcheck_events_on_change with pause and unpause", func() {
+		// pausing needs the cgroup freezer, use the same guard as the pause tests
+		b, err := os.ReadFile("/proc/self/cgroup")
+		if err != nil {
+			Skip("cannot read self cgroup")
+		}
+		freezePath := filepath.Join("/sys/fs/cgroup", strings.TrimSuffix(strings.Replace(string(b), "0::", "", 1), "\n"), "cgroup.freeze")
+		if _, err := os.Stat(freezePath); err != nil {
+			Skip("freezer controller not available on the current kernel")
+		}
+
+		path := filepath.Join(podmanTest.TempDir, "containers.conf")
+		err = os.WriteFile(path, []byte("[engine]\nhealthcheck_events_on_change=true\n"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+		GinkgoT().Setenv("CONTAINERS_CONF_OVERRIDE", path)
+		if IsRemote() {
+			podmanTest.RestartRemoteService()
+		}
+
+		healthStatus := func() string {
+			inspect := podmanTest.PodmanExitCleanly("inspect", "--format", "{{.State.Health.Status}}", "hc-pause")
+			return inspect.OutputToString()
+		}
+		healthLogLen := func() string {
+			inspect := podmanTest.PodmanExitCleanly("inspect", "--format", "{{len .State.Health.Log}}", "hc-pause")
+			return inspect.OutputToString()
+		}
+		healthEvents := func() []string {
+			events := podmanTest.PodmanExitCleanly("events", "--stream=false", "--filter", "container=hc-pause", "--filter", "event=health_status", "--since", "1m")
+			return events.OutputToStringArray()
+		}
+
+		// "disable" keeps the timers out of the test, every check is run manually.
+		podmanTest.PodmanExitCleanly("run", "-dt", "--name", "hc-pause", "--health-interval", "disable", "--health-cmd", "ls /foo", ALPINE, "top")
+		podmanTest.PodmanExitCleanly("exec", "hc-pause", "touch", "/foo")
+
+		// The first passing check is a change, the repeated one is not.
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-pause")
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-pause")
+		Expect(healthStatus()).To(Equal(define.HealthCheckHealthy))
+		Expect(healthLogLen()).To(Equal("2"))
+		Expect(healthEvents()).To(HaveLen(1))
+
+		// Pausing neither touches the health status/log nor emits an event.
+		podmanTest.PodmanExitCleanly("pause", "hc-pause")
+		Expect(healthStatus()).To(Equal(define.HealthCheckHealthy))
+		Expect(healthLogLen()).To(Equal("2"))
+		Expect(healthEvents()).To(HaveLen(1))
+
+		// Unpausing keeps the log but marks the persisted status as reset, it
+		// does not emit an event on its own.
+		podmanTest.PodmanExitCleanly("unpause", "hc-pause")
+		Expect(healthStatus()).To(Equal(define.HealthCheckReset))
+		Expect(healthLogLen()).To(Equal("2"))
+		Expect(healthEvents()).To(HaveLen(1))
+
+		// The first check after unpause reports the status change, a repeated
+		// one is not a change anymore.
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-pause")
+		Expect(healthStatus()).To(Equal(define.HealthCheckHealthy))
+		Expect(healthLogLen()).To(Equal("3"))
+		Expect(healthEvents()).To(HaveLen(2))
+
+		podmanTest.PodmanExitCleanly("healthcheck", "run", "hc-pause")
+		Expect(healthEvents()).To(HaveLen(2))
+
+		for _, event := range healthEvents() {
+			Expect(event).To(ContainSubstring("health_status=healthy"))
+		}
+	})
 
 	It("hc logs do not include exec events", func() {
 		session := podmanTest.Podman([]string{"run", "-dt", "--name", "hc", "--health-cmd", "true", "--health-interval", "5s", "alpine", "sleep", "60"})
