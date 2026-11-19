@@ -106,6 +106,29 @@ EOF
     assert "$output" !~ "alpine-quadlet.container" "list should not contain removed container"
 }
 
+@test "quadlet verb - exists" {
+    local quadlet_name=qexists-$(safename).container
+    local quadlet_file=$PODMAN_TMPDIR/$quadlet_name
+    cat > $quadlet_file <<EOF
+[Container]
+Image=$IMAGE
+EOF
+
+    run_podman 1 quadlet exists $quadlet_name
+
+    run_podman quadlet install $quadlet_file
+    run_podman quadlet exists $quadlet_name
+
+    run_podman 125 quadlet exists $quadlet_name.badext
+    assert "$output" =~ "not a supported quadlet file type" "unsupported extension is an error"
+
+    run_podman 125 quadlet exists ${quadlet_name%.container}
+    assert "$output" =~ "not a supported quadlet file type" "name without extension is an error"
+
+    run_podman quadlet rm $quadlet_name
+    run_podman 1 quadlet exists $quadlet_name
+}
+
 @test "quadlet verb - list shows Pod column for container with Pod=" {
     local base=qpodlist-$(safename)
     local pod_unit=${base}.pod
