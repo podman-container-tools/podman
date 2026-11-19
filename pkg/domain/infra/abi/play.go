@@ -61,6 +61,17 @@ const sdNotifyAnnotation = "io.containers.sdnotify"
 // default network created/used by kube
 const kubeDefaultNetwork = "podman-default-kube-network"
 
+const (
+	kubeKindPod                   = "Pod"
+	kubeKindDeployment            = "Deployment"
+	kubeKindDaemonSet             = "DaemonSet"
+	kubeKindJob                   = "Job"
+	kubeKindPersistentVolumeClaim = "PersistentVolumeClaim"
+	kubeKindConfigMap             = "ConfigMap"
+	kubeKindSecret                = "Secret"
+	kubeKindList                  = "List"
+)
+
 // createServiceContainer creates a container that can later on
 // be associated with the pods of a K8s yaml.  It will be started along with
 // the first pod.
@@ -338,8 +349,8 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			return nil, fmt.Errorf("unable to read kube YAML: %w", err)
 		}
 
-		// TODO: create constants for the various "kinds" of yaml files.
-		if options.ServiceContainer && serviceContainer == nil && (kind == "Pod" || kind == "Deployment") {
+		needsServiceContainer := kind == kubeKindPod || kind == kubeKindDeployment || kind == kubeKindDaemonSet || kind == kubeKindJob
+		if options.ServiceContainer && serviceContainer == nil && needsServiceContainer {
 			ctr, err := ic.createServiceContainer(ctx, k8sName(content, "service"), options)
 			if err != nil {
 				return nil, err
@@ -362,11 +373,11 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		}
 
 		switch kind {
-		case "Pod":
+		case kubeKindPod:
 			var podYAML v1.Pod
 			var podTemplateSpec v1.PodTemplateSpec
 
-			warnings, err := unmarshalKubeObject("Pod", options.Validate, document, &podYAML)
+			warnings, err := unmarshalKubeObject(kubeKindPod, options.Validate, document, &podYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -402,10 +413,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
-		case "DaemonSet":
+		case kubeKindDaemonSet:
 			var daemonSetYAML v1apps.DaemonSet
 
-			warnings, err := unmarshalKubeObject("DaemonSet", options.Validate, document, &daemonSetYAML)
+			warnings, err := unmarshalKubeObject(kubeKindDaemonSet, options.Validate, document, &daemonSetYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -421,10 +432,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
-		case "Deployment":
+		case kubeKindDeployment:
 			var deploymentYAML v1apps.Deployment
 
-			warnings, err := unmarshalKubeObject("Deployment", options.Validate, document, &deploymentYAML)
+			warnings, err := unmarshalKubeObject(kubeKindDeployment, options.Validate, document, &deploymentYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -472,10 +483,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				setRanContainers(r)
 			}
 			validKinds++
-		case "Job":
+		case kubeKindJob:
 			var jobYAML v1.Job
 
-			warnings, err := unmarshalKubeObject("Job", options.Validate, document, &jobYAML)
+			warnings, err := unmarshalKubeObject(kubeKindJob, options.Validate, document, &jobYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -491,10 +502,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			report.ValidationWarnings = append(report.ValidationWarnings, r.ValidationWarnings...)
 			validKinds++
 			setRanContainers(r)
-		case "PersistentVolumeClaim":
+		case kubeKindPersistentVolumeClaim:
 			var pvcYAML v1.PersistentVolumeClaim
 
-			warnings, err := unmarshalKubeObject("PersistentVolumeClaim", options.Validate, document, &pvcYAML)
+			warnings, err := unmarshalKubeObject(kubeKindPersistentVolumeClaim, options.Validate, document, &pvcYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -526,19 +537,19 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 
 			report.Volumes = append(report.Volumes, r.Volumes...)
 			validKinds++
-		case "ConfigMap":
+		case kubeKindConfigMap:
 			var configMap v1.ConfigMap
 
-			warnings, err := unmarshalKubeObject("ConfigMap", options.Validate, document, &configMap)
+			warnings, err := unmarshalKubeObject(kubeKindConfigMap, options.Validate, document, &configMap)
 			if err != nil {
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 			configMaps = append(configMaps, configMap)
-		case "Secret":
+		case kubeKindSecret:
 			var secret v1.Secret
 
-			warnings, err := unmarshalKubeObject("Secret", options.Validate, document, &secret)
+			warnings, err := unmarshalKubeObject(kubeKindSecret, options.Validate, document, &secret)
 			if err != nil {
 				return nil, err
 			}
@@ -1698,12 +1709,12 @@ func readConfigMapFromFile(r io.Reader, mode entities.KubeValidateMode) ([]v1.Co
 			return nil, nil, fmt.Errorf("unable to read as kube YAML: %w", err)
 		}
 
-		if kind != "ConfigMap" {
+		if kind != kubeKindConfigMap {
 			return nil, nil, fmt.Errorf("invalid YAML kind: %q. [ConfigMap] is the only supported by --configmap", kind)
 		}
 
 		var configMap v1.ConfigMap
-		docWarnings, err := unmarshalKubeObject("ConfigMap", mode, document, &configMap)
+		docWarnings, err := unmarshalKubeObject(kubeKindConfigMap, mode, document, &configMap)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1748,7 +1759,7 @@ func splitMultiDocYAML(yamlContent []byte) ([][]byte, error) {
 
 		// The items in a document of kind "List" are fully qualified resources
 		// So, they can be treated as separate documents
-		if kind == "List" {
+		if kind == kubeKindList {
 			var kubeList metav1.List
 			if err := yaml.Unmarshal(document, &kubeList); err != nil {
 				return nil, err
@@ -1792,7 +1803,7 @@ func sortKubeKinds(documentList [][]byte) ([][]byte, error) {
 		}
 
 		switch kind {
-		case "Pod", "Deployment", "DaemonSet", "Job":
+		case kubeKindPod, kubeKindDeployment, kubeKindDaemonSet, kubeKindJob:
 			sortedDocumentList = append(sortedDocumentList, document)
 		default:
 			sortedDocumentList = append([][]byte{document}, sortedDocumentList...)
@@ -1897,7 +1908,7 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 		}
 
 		switch kind {
-		case "Pod":
+		case kubeKindPod:
 			var podYAML v1.Pod
 			if err := yaml.Unmarshal(document, &podYAML); err != nil {
 				return nil, fmt.Errorf("unable to read YAML as Kube Pod: %w", err)
@@ -1914,7 +1925,7 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 					volumeNames = append(volumeNames, vs.Secret.SecretName)
 				}
 			}
-		case "DaemonSet":
+		case kubeKindDaemonSet:
 			var daemonSetYAML v1apps.DaemonSet
 
 			if err := yaml.Unmarshal(document, &daemonSetYAML); err != nil {
@@ -1923,7 +1934,7 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 
 			podName := fmt.Sprintf("%s-pod", daemonSetYAML.Name)
 			podNames = append(podNames, podName)
-		case "Deployment":
+		case kubeKindDeployment:
 			var deploymentYAML v1apps.Deployment
 
 			if err := yaml.Unmarshal(document, &deploymentYAML); err != nil {
@@ -1948,7 +1959,7 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 			}
 			podName := fmt.Sprintf("%s-pod", deploymentName)
 			podNames = append(podNames, podName)
-		case "Job":
+		case kubeKindJob:
 			var jobYAML v1.Job
 
 			if err := yaml.Unmarshal(document, &jobYAML); err != nil {
@@ -1957,13 +1968,13 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 			jobName := jobYAML.ObjectMeta.Name
 			podName := fmt.Sprintf("%s-pod", jobName)
 			podNames = append(podNames, podName)
-		case "PersistentVolumeClaim":
+		case kubeKindPersistentVolumeClaim:
 			var pvcYAML v1.PersistentVolumeClaim
 			if err := yaml.Unmarshal(document, &pvcYAML); err != nil {
 				return nil, fmt.Errorf("unable to read YAML as Kube PersistentVolumeClaim: %w", err)
 			}
 			volumeNames = append(volumeNames, pvcYAML.Name)
-		case "Secret":
+		case kubeKindSecret:
 			var secret v1.Secret
 			if err := yaml.Unmarshal(document, &secret); err != nil {
 				return nil, fmt.Errorf("unable to read YAML as Kube Secret: %w", err)

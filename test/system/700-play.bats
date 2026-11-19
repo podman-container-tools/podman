@@ -216,6 +216,70 @@ RELABEL="system_u:object_r:container_file_t:s0"
 }
 
 # bats test_tags=ci:parallel
+@test "podman kube play --service-container with Job and DaemonSet" {
+    skip_if_remote "service containers only work locally"
+
+    for kind in Job DaemonSet; do
+        local name="$(echo "$kind" | tr '[:upper:]' '[:lower:]')-service-$(safename)"
+        TESTYAML=$PODMAN_TMPDIR/$name.yaml
+
+        if [[ $kind == "Job" ]]; then
+            cat > $TESTYAML << EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $name
+spec:
+  template:
+    metadata:
+      labels:
+        app: $name
+    spec:
+      restartPolicy: Never
+      containers:
+      - command:
+        - top
+        image: $IMAGE
+        name: worker
+        resources: {}
+EOF
+        else
+            cat > $TESTYAML << EOF
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: $name
+spec:
+  selector:
+    matchLabels:
+      app: $name
+  template:
+    metadata:
+      labels:
+        app: $name
+    spec:
+      containers:
+      - command:
+        - top
+        image: $IMAGE
+        name: worker
+        resources: {}
+EOF
+        fi
+
+        run_podman kube play --network host --service-container=true $TESTYAML
+
+        yaml_sha=$(sha256sum $TESTYAML)
+        service_container="${yaml_sha:0:12}-service"
+        run_podman container inspect --format '{{.IsService}}' $service_container
+        is "$output" "true"
+
+        run_podman pod rm -t 0 -f "$name-pod"
+        run_podman 1 container exists $service_container
+    done
+}
+
+# bats test_tags=ci:parallel
 @test "podman kube --network" {
     _write_test_yaml command=top
 
