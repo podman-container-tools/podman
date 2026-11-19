@@ -66,6 +66,16 @@ is $(jq -n "$api_sys_cpu <= ($after_ns * 1.01)" 2>/dev/null) "true" \
 is $(jq '.cpu_stats.online_cpus > 0' <<<"$output") "true" \
    "pod container compat stats: online_cpus > 0"
 
+# os_type is present for API >= 1.52 (and unversioned/latest)
+t GET /containers/podctr/stats?stream=false 200 \
+  .os_type=linux
+t GET /v1.52/containers/podctr/stats?stream=false 200 \
+  .os_type=linux
+
+# os_type is omitted for older API versions
+t GET /v1.51/containers/podctr/stats?stream=false 200 \
+  .os_type=null
+
 APIV2_TEST_EXPECT_TIMEOUT=6 t GET "containers/podctr/stats?stream=true" 999
 
 nlines=$(wc -l <"$WORKDIR/curl.result.out")
@@ -92,6 +102,10 @@ is $(jq -n "$libpod_sys_cpu >= ($before_ns * 0.99)" 2>/dev/null) "true" \
 
 is $(jq -n "$libpod_sys_cpu <= ($after_ns * 1.01)" 2>/dev/null) "true" \
    "libpod system_cpu_usage ($libpod_sys_cpu) <= /proc/stat after ($after_ns)"
+
+# libpod stats also include os_type
+t GET libpod/containers/podctr/stats?stream=false 200 \
+  .os_type=linux
 
 podman rm -f podctr
 podman pod rm -f statspod
