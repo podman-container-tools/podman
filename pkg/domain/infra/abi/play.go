@@ -427,6 +427,10 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
+			if err := applyAnnotationsOption(&daemonSetYAML.Annotations, options); err != nil {
+				return nil, err
+			}
+
 			r, proxies, err := ic.playKubeDaemonSet(ctx, &daemonSetYAML, options, &ipIndex, configMaps, serviceContainer)
 			if err != nil {
 				return nil, err
