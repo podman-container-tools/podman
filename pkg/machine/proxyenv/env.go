@@ -13,6 +13,18 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/vmconfigs"
 )
 
+// proxyReloadScriptTemplate reloads the systemd managers so that they pick up
+// the changes to the proxy configuration files.
+const proxyReloadScriptTemplate = `systemctl daemon-reload
+
+# The user manager may not be running yet (e.g. user@.service still
+# starting). That's fine: it will read the new user.conf.d when it
+# starts, so a failure here must not stop the machine start.
+systemctl --user -M %s@ daemon-reload || true
+`
+
+// proxySetupScriptTemplate writes the proxy environment variables in the
+// machine configuration files.
 const proxySetupScriptTemplate = `#!/bin/bash
 
 SYSTEMD_SYSTEM_CONF=/etc/systemd/system.conf.d/default-env.conf
@@ -33,13 +45,29 @@ for proxy in %s; do
 	printf "export %%s\n" "$proxy" >> $PROFILE_CONF
 done
 
-systemctl daemon-reload
+` + proxyReloadScriptTemplate
 
-# The user manager may not be running yet (e.g. user@.service still
-# starting). That's fine: it will read the new user.conf.d when it
-# starts, so a failure here must not stop the machine start.
-systemctl --user -M %s@ daemon-reload || true
-`
+// proxyCleanupScriptTemplate removes the proxy configuration files written by
+// a previous machine start. The systemd managers are reloaded only if a file
+// has been removed, to not slow down the start of machines without proxies.
+const proxyCleanupScriptTemplate = `#!/bin/bash
+
+removed=false
+for conf in /etc/systemd/system.conf.d/default-env.conf \
+	/etc/systemd/user.conf.d/default-env.conf \
+	/etc/environment.d/default-env.conf \
+	/etc/profile.d/default-env.sh; do
+	if [ -e "$conf" ]; then
+		rm -f "$conf"
+		removed=true
+	fi
+done
+
+if [ "$removed" = false ]; then
+	exit 0
+fi
+
+` + proxyReloadScriptTemplate
 
 func getProxyScript(isWSL bool, remoteUser string) io.Reader {
 	var envs []string
@@ -55,7 +83,12 @@ func getProxyScript(isWSL bool, remoteUser string) io.Reader {
 		}
 	}
 
-	script := fmt.Sprintf(proxySetupScriptTemplate, strings.Join(envs, " "), remoteUser)
+	var script string
+	if len(envs) == 0 {
+		script = fmt.Sprintf(proxyCleanupScriptTemplate, remoteUser)
+	} else {
+		script = fmt.Sprintf(proxySetupScriptTemplate, strings.Join(envs, " "), remoteUser)
+	}
 	logrus.Tracef("Final environment variable setup script: %s", script)
 	return strings.NewReader(script)
 }

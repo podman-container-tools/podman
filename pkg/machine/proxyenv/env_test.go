@@ -11,9 +11,17 @@ import (
 	"go.podman.io/common/pkg/config"
 )
 
-// wantScriptTemplate is the expected script, PROXIES is replaced with the
-// expected list of quoted proxy variables.
-const wantScriptTemplate = `#!/bin/bash
+const wantReloadScript = `systemctl daemon-reload
+
+# The user manager may not be running yet (e.g. user@.service still
+# starting). That's fine: it will read the new user.conf.d when it
+# starts, so a failure here must not stop the machine start.
+systemctl --user -M core@ daemon-reload || true
+`
+
+// wantSetupScriptTemplate is the expected script when proxy variables are
+// set, PROXIES is replaced with the expected list of quoted proxy variables.
+const wantSetupScriptTemplate = `#!/bin/bash
 
 SYSTEMD_SYSTEM_CONF=/etc/systemd/system.conf.d/default-env.conf
 SYSTEMD_USER_CONF=/etc/systemd/user.conf.d/default-env.conf
@@ -33,13 +41,27 @@ for proxy in PROXIES; do
 	printf "export %s\n" "$proxy" >> $PROFILE_CONF
 done
 
-systemctl daemon-reload
+` + wantReloadScript
 
-# The user manager may not be running yet (e.g. user@.service still
-# starting). That's fine: it will read the new user.conf.d when it
-# starts, so a failure here must not stop the machine start.
-systemctl --user -M core@ daemon-reload || true
-`
+// wantCleanupScript is the expected script when no proxy variable is set.
+const wantCleanupScript = `#!/bin/bash
+
+removed=false
+for conf in /etc/systemd/system.conf.d/default-env.conf \
+	/etc/systemd/user.conf.d/default-env.conf \
+	/etc/environment.d/default-env.conf \
+	/etc/profile.d/default-env.sh; do
+	if [ -e "$conf" ]; then
+		rm -f "$conf"
+		removed=true
+	fi
+done
+
+if [ "$removed" = false ]; then
+	exit 0
+fi
+
+` + wantReloadScript
 
 func Test_getProxyScript(t *testing.T) {
 	type env struct {
@@ -51,13 +73,20 @@ func Test_getProxyScript(t *testing.T) {
 		envs  []env
 	}
 	tests := []struct {
-		name        string
-		args        args
+		name string
+		args args
+		// wantProxies is empty when the cleanup script is expected.
 		wantProxies string
 		// Environment variable names are case-insensitive on Windows: setting
 		// http_proxy also makes HTTP_PROXY visible, so both are forwarded.
 		wantProxiesWindows string
 	}{
+		{
+			name: "no vars set",
+			args: args{
+				isWSL: false,
+			},
+		},
 		{
 			name: "all vars set",
 			args: args{
@@ -111,7 +140,10 @@ func Test_getProxyScript(t *testing.T) {
 			if runtime.GOOS == "windows" {
 				wantProxies = tt.wantProxiesWindows
 			}
-			want := strings.Replace(wantScriptTemplate, "PROXIES", wantProxies, 1)
+			want := wantCleanupScript
+			if wantProxies != "" {
+				want = strings.Replace(wantSetupScriptTemplate, "PROXIES", wantProxies, 1)
+			}
 			got := getProxyScript(tt.args.isWSL, "core")
 			buf := new(bytes.Buffer)
 			_, err := buf.ReadFrom(got)
