@@ -50,13 +50,13 @@ func init() {
 }
 
 func df(cmd *cobra.Command, _ []string) error {
+	if dfOptions.Format != "" && dfOptions.Verbose {
+		return errors.New("cannot combine --format and --verbose flags")
+	}
+
 	reports, err := registry.ContainerEngine().SystemDf(cmd.Context(), dfOptions)
 	if err != nil {
 		return err
-	}
-
-	if dfOptions.Format != "" && dfOptions.Verbose {
-		return errors.New("cannot combine --format and --verbose flags")
 	}
 
 	if dfOptions.Verbose {

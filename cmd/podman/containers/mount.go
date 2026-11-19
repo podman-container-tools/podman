@@ -83,6 +83,9 @@ func mount(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && mountOpts.Latest {
 		return errors.New("--latest and containers cannot be used together")
 	}
+	if mountOpts.Format != "" && !report.IsJSON(mountOpts.Format) {
+		return fmt.Errorf("unknown --format argument: %q", mountOpts.Format)
+	}
 	args = utils.RemoveSlash(args)
 
 	reports, err := registry.ContainerEngine().ContainerMount(cmd.Context(), args, mountOpts)
@@ -102,13 +105,8 @@ func mount(cmd *cobra.Command, args []string) error {
 		return errs.PrintErrors()
 	}
 
-	switch {
-	case report.IsJSON(mountOpts.Format):
+	if report.IsJSON(mountOpts.Format) {
 		return printJSON(reports)
-	case mountOpts.Format == "":
-		break // print defaults
-	default:
-		return fmt.Errorf("unknown --format argument: %q", mountOpts.Format)
 	}
 
 	mrs := make([]mountReporter, 0, len(reports))
