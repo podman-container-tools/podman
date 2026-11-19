@@ -34,6 +34,11 @@ for proxy in PROXIES; do
 done
 
 systemctl daemon-reload
+
+# The user manager may not be running yet (e.g. user@.service still
+# starting). That's fine: it will read the new user.conf.d when it
+# starts, so a failure here must not stop the machine start.
+systemctl --user -M core@ daemon-reload || true
 `
 
 func Test_getProxyScript(t *testing.T) {
@@ -107,7 +112,7 @@ func Test_getProxyScript(t *testing.T) {
 				wantProxies = tt.wantProxiesWindows
 			}
 			want := strings.Replace(wantScriptTemplate, "PROXIES", wantProxies, 1)
-			got := getProxyScript(tt.args.isWSL)
+			got := getProxyScript(tt.args.isWSL, "core")
 			buf := new(bytes.Buffer)
 			_, err := buf.ReadFrom(got)
 			assert.NoError(t, err)

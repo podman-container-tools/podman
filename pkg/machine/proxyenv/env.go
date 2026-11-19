@@ -34,9 +34,14 @@ for proxy in %s; do
 done
 
 systemctl daemon-reload
+
+# The user manager may not be running yet (e.g. user@.service still
+# starting). That's fine: it will read the new user.conf.d when it
+# starts, so a failure here must not stop the machine start.
+systemctl --user -M %s@ daemon-reload || true
 `
 
-func getProxyScript(isWSL bool) io.Reader {
+func getProxyScript(isWSL bool, remoteUser string) io.Reader {
 	var envs []string
 	for _, key := range config.ProxyEnv {
 		if value, ok := os.LookupEnv(key); ok {
@@ -50,12 +55,12 @@ func getProxyScript(isWSL bool) io.Reader {
 		}
 	}
 
-	script := fmt.Sprintf(proxySetupScriptTemplate, strings.Join(envs, " "))
+	script := fmt.Sprintf(proxySetupScriptTemplate, strings.Join(envs, " "), remoteUser)
 	logrus.Tracef("Final environment variable setup script: %s", script)
 	return strings.NewReader(script)
 }
 
 func ApplyProxies(mc *vmconfigs.MachineConfig) error {
 	return machine.LocalhostSSHWithStdin("root", mc.SSH.IdentityPath, mc.Name, mc.SSH.Port, []string{"/usr/bin/bash"},
-		getProxyScript(mc.WSLHypervisor != nil))
+		getProxyScript(mc.WSLHypervisor != nil, mc.SSH.RemoteUsername))
 }
