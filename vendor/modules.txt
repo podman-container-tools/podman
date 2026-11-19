@@ -1056,7 +1056,7 @@ golang.org/x/crypto/xts
 # golang.org/x/mod v0.42.0
 ## explicit; go 1.26.0
 golang.org/x/mod/semver
-# golang.org/x/net v0.62.0
+# golang.org/x/net v0.63.0
 ## explicit; go 1.26.0
 golang.org/x/net/bpf
 golang.org/x/net/html
