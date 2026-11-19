@@ -41,6 +41,13 @@ func (ic *ContainerEngine) SetupRootless(_ context.Context, noMoveProcess bool, 
 
 	// check for both euid == 0 and CAP_SYS_ADMIN because we may be running in a container with CAP_SYS_ADMIN set.
 	if os.Geteuid() == 0 && hasCapSysAdmin {
+		// Run this after the re-exec, otherwise the warning is printed twice.
+		rtConfig, err := ic.Libpod.GetConfigNoCopy()
+		if err != nil {
+			return err
+		}
+		rtConfig.CheckCgroupsAndAdjustConfig()
+
 		// do it only after podman has already re-execed and running with uid==0.
 		configureCgroup := cgroupMode != "disabled"
 		if configureCgroup {
