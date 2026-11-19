@@ -431,6 +431,16 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 
+			if serviceContainerName, found := daemonSetYAML.Annotations[define.ServiceContainerNameAnnotation]; !found {
+				serviceContainerName = k8sName(content, "service")
+			}
+			if ctr, err := ic.ensureServiceContainer(ctx, options, serviceContainer, serviceContainerName); err != nil {
+				return nil, err
+			} else if ctr != nil {
+				defer cleanupServiceContainer(ctr)
+				serviceContainer = ctr
+			}
+
 			r, proxies, err := ic.playKubeDaemonSet(ctx, &daemonSetYAML, options, &ipIndex, configMaps, serviceContainer)
 			if err != nil {
 				return nil, err
