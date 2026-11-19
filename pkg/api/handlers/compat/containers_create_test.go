@@ -5,6 +5,7 @@ package compat
 import (
 	"testing"
 
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/config"
@@ -140,6 +141,64 @@ func TestExtractInlineSeccompProfile(t *testing.T) {
 			profile, rest := extractInlineSeccompProfile(test.opts)
 			assert.Equal(t, test.expectedProfile, profile)
 			assert.Equal(t, test.expectedRest, rest)
+		})
+	}
+}
+
+func TestBackfillEmptyPortBindings(t *testing.T) {
+	tests := []struct {
+		name         string
+		portBindings network.PortMap
+		wantPorts    []string
+		want         network.PortMap
+	}{
+		{
+			name:         "nil map",
+			portBindings: nil,
+			wantPorts:    nil,
+			want:         nil,
+		},
+		{
+			name: "no empty bindings",
+			portBindings: network.PortMap{
+				network.MustParsePort("80/tcp"): {{HostPort: "8000"}},
+			},
+			wantPorts: nil,
+			want: network.PortMap{
+				network.MustParsePort("80/tcp"): {{HostPort: "8000"}},
+			},
+		},
+		{
+			name: "empty and nil bindings are backfilled",
+			portBindings: network.PortMap{
+				network.MustParsePort("8080/tcp"): {},
+				network.MustParsePort("53/udp"):   nil,
+			},
+			wantPorts: []string{"53/udp", "8080/tcp"},
+			want: network.PortMap{
+				network.MustParsePort("8080/tcp"): {{}},
+				network.MustParsePort("53/udp"):   {{}},
+			},
+		},
+		{
+			name: "mixed",
+			portBindings: network.PortMap{
+				network.MustParsePort("8080/tcp"): {},
+				network.MustParsePort("80/tcp"):   {{HostPort: "8000"}},
+			},
+			wantPorts: []string{"8080/tcp"},
+			want: network.PortMap{
+				network.MustParsePort("8080/tcp"): {{}},
+				network.MustParsePort("80/tcp"):   {{HostPort: "8000"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ports := backfillEmptyPortBindings(test.portBindings)
+			assert.Equal(t, test.wantPorts, ports)
+			assert.Equal(t, test.want, test.portBindings)
 		})
 	}
 }
