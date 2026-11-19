@@ -210,7 +210,6 @@ func copyFromContainer(ctx context.Context, container string, containerPath stri
 	isStdout := false
 	if hostPath == "-" {
 		isStdout = true
-		hostPath = os.Stdout.Name()
 	}
 
 	containerInfo, err := registry.ContainerEngine().ContainerStat(ctx, container, containerPath)
@@ -220,26 +219,30 @@ func copyFromContainer(ctx context.Context, container string, containerPath stri
 
 	var hostBaseName string
 	var resolvedToHostParentDir bool
-	hostInfo, hostInfoErr := copy.ResolveHostPath(hostPath)
-	if hostInfoErr != nil {
-		if strings.HasSuffix(hostPath, "/") {
-			return fmt.Errorf("%q could not be found on the host: %w", hostPath, hostInfoErr)
+	hostInfo := &copy.FileInfo{}
+	if !isStdout {
+		var hostInfoErr error
+		hostInfo, hostInfoErr = copy.ResolveHostPath(hostPath)
+		if hostInfoErr != nil {
+			if strings.HasSuffix(hostPath, "/") {
+				return fmt.Errorf("%q could not be found on the host: %w", hostPath, hostInfoErr)
+			}
+			// If it doesn't exist, then let's have a look at the parent dir.
+			parentDir := filepath.Dir(hostPath)
+			hostInfo, err = copy.ResolveHostPath(parentDir)
+			if err != nil {
+				return fmt.Errorf("%q could not be found on the host: %w", hostPath, hostInfoErr)
+			}
+			// If the specified path does not exist, we need to assume that
+			// it'll be created while copying.  Hence, we use it as the
+			// base path.
+			hostBaseName = filepath.Base(hostPath)
+			resolvedToHostParentDir = true
+		} else {
+			// If the specified path exists on the host, we must use its
+			// base path as it may have changed due to symlink evaluations.
+			hostBaseName = filepath.Base(hostInfo.LinkTarget)
 		}
-		// If it doesn't exist, then let's have a look at the parent dir.
-		parentDir := filepath.Dir(hostPath)
-		hostInfo, err = copy.ResolveHostPath(parentDir)
-		if err != nil {
-			return fmt.Errorf("%q could not be found on the host: %w", hostPath, hostInfoErr)
-		}
-		// If the specified path does not exist, we need to assume that
-		// it'll be created while copying.  Hence, we use it as the
-		// base path.
-		hostBaseName = filepath.Base(hostPath)
-		resolvedToHostParentDir = true
-	} else {
-		// If the specified path exists on the host, we must use its
-		// base path as it may have changed due to symlink evaluations.
-		hostBaseName = filepath.Base(hostInfo.LinkTarget)
 	}
 
 	if !isStdout {
