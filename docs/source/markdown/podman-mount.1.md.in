@@ -13,11 +13,11 @@ Mounts the specified containers' root file system in a location which can be
 accessed from the host, and returns its location.
 
 Podman lists all of the currently mounted containers, including external containers, when the command is executed
-without any arguments. External containers are containers in container/storage by tools other than Podman.
+without any arguments. External containers are containers in container/storage created by tools other than Podman.
 For example Buildah and CRI-O.
 
 Rootless mode only supports mounting VFS driver, unless Podman is run within the user namespace
-via the `podman unshare` command. All other storage drivers fails to mount.
+via the `podman unshare` command. All other storage drivers fail to mount.
 
 ## RETURN VALUE
 The location of the mounted file system.  On error an empty string and errno is

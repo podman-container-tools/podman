@@ -102,7 +102,6 @@ like:
 ```
 
 The build considers `foo` to be the context directory for the build. If an image with that same name already exists in local storage (matching the YAML `image` value), Podman does not rebuild unless `--build` is set.
-disable builds.
 
 Kube play supports CDI (Container Device Interface) device selectors to share
 host devices (e.g. GPUs) with containers. The configuration format follows

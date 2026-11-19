@@ -7,7 +7,7 @@ podman\-pod\-clone - Create a copy of an existing pod
 **podman pod clone** [*options*] *pod* *name*
 
 ## DESCRIPTION
-**podman pod clone** creates a copy of a pod, recreating the identical config for the pod and for all of its containers. Users can modify the pods new name and select pod details within the infra container
+**podman pod clone** creates a copy of a pod, recreating the identical config for the pod and for all of its containers. Users can modify the pod's new name and select pod details within the infra container
 
 ## OPTIONS
 
@@ -21,7 +21,7 @@ podman\-pod\-clone - Create a copy of an existing pod
 
 #### **--cpus**
 
-Set a number of CPUs for the pod that overrides the original pods CPU limits. If none are specified, the original pod's Nano CPUs are used.
+Set a number of CPUs for the pod that overrides the original pod's CPU limits. If none are specified, the original pod's Nano CPUs are used.
 
 @@option cpuset-cpus
 

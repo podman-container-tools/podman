@@ -8,8 +8,8 @@ podman\-quadlet\-rm - Removes an installed quadlet
 
 ## DESCRIPTION
 
-Remove one or more installed Quadlets from the current user. Following command also takes application name
-as input and removes all the Quadlets which belongs to that specific application.
+Remove one or more installed Quadlets from the current user. The following command also takes an application name
+as input and removes all the Quadlets which belong to that specific application.
 
 When the argument is uninstantiated template quadlet, this command removes the template quadlet file (e.g. `templateName@.container`) and the generated systemd template unit (e.g. `templateName@.service`). If there are running instances of that systemd template, the command fails if **--force** option is not set, and tries to stop the instances if **--force** option is set.
 

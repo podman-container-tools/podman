@@ -14,7 +14,7 @@ List all Quadlets configured for the current user. Outputs the following by defa
 
 #### **--filter**, **-f**=*filter*
 
-Filter output based on conditions give.
+Filter output based on conditions given.
 
 If there is more than one filter, the `--filter` option should be passed multiple times: **--filter** *name=test* **--filter** *status=active/running*.
 

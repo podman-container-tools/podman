@@ -69,7 +69,7 @@ print detailed information about credential store
 
 Add login credentials for specified registry to default authentication file;
 note that unlike the `docker` default, the default credentials are under `$XDG_RUNTIME_DIR`
-which is a subdirectory of `/run` (an emphemeral directory) and hence do not persist across reboot.
+which is a subdirectory of `/run` (an ephemeral directory) and hence do not persist across reboot.
 
 ```
 $ podman login quay.io

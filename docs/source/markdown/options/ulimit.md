@@ -8,7 +8,7 @@
 #### **--ulimit**=*option*
 << endif >>
 
-Ulimit options. Sets the ulimits values inside of the container.
+Ulimit options. Sets the ulimit values inside the container.
 
 --ulimit with a soft and hard limit in the format <type>=<soft limit>[:<hard limit>]. For example:
 

@@ -23,7 +23,7 @@ The default *hostIP* can be configured in **[containers.conf(5)](https://github.
 using the `default_host_ips` option under the `[network]` section.
 This option accepts an array to be able to set multiple bind IP addresses.
 For example setting `default_host_ips = ["127.0.0.1", "::1"]` will make the
-port be published on the ipv4 and ipv6 localhost address respectively.
+port be published on the ipv4 and ipv6 localhost addresses respectively.
 An explicit *hostIP* set on the command will always override the config option.
 
 By default, Podman publishes TCP ports. To publish a UDP port instead, give

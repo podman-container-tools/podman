@@ -25,7 +25,7 @@ Alter the output into a different format.  The only valid format for **podman im
 
 ## EXAMPLES
 
-Display image differences from images parent layer:
+Display image differences from the image's parent layer:
 ```
 $ podman image diff redis:old
 C /usr

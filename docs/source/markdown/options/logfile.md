@@ -4,6 +4,6 @@
 ####> are applicable to all of those.
 #### **--logfile**=*filename*
 
-Log output which is sent to standard output and standard error to the
-specified file instead of to standard output and standard error.
+Send log output—the stream normally written to standard output and standard error—to the
+specified file instead.
 This option is not supported on the remote client, including Mac and Windows (excluding WSL2) machines.

@@ -143,7 +143,7 @@ and warns that this consistency guarantee could not be provided.
 #### **--pre-checkpoint**, **-P**
 
 Dump the *container's* memory information only, leaving the *container* running. Later
-operations supersedes prior dumps.\
+operations supersede prior dumps.\
 The default is **false**.
 
 The functionality to only checkpoint the memory of the container and in a second
@@ -151,7 +151,7 @@ checkpoint only write out the memory pages which have changed since the first
 checkpoint relies on the Linux kernel's soft-dirty bit, which is not available
 on all systems as it depends on the system architecture and the configuration
 of the Linux kernel. Podman verifies if the current system supports this
-functionality and return an error if the current system does not support it.
+functionality and returns an error if the current system does not support it.
 
 #### **--print-stats**
 

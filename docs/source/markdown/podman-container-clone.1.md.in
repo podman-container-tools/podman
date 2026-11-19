@@ -21,7 +21,7 @@ If none is specified, the original container's cpu period is used
 
 @@option cpu-quota
 
-If none is specified, the original container's CPU quota are used.
+If none is specified, the original container's CPU quota is used.
 
 @@option cpu-shares
 
@@ -32,7 +32,7 @@ If none are specified, the original container's CPU shares are used.
 Set a number of CPUs for the container that overrides the original containers CPU limits. If none are specified, the original container's Nano CPUs are used.
 
 This is shorthand
-for **--cpu-period** and **--cpu-quota**, so only **--cpus** or either both the **--cpu-period** and **--cpu-quota** options can be set.
+for **--cpu-period** and **--cpu-quota**, so only **--cpus**, or both the **--cpu-period** and **--cpu-quota** options, can be set.
 
 This option is not supported on cgroups V1 rootless systems.
 

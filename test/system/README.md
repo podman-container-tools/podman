@@ -51,7 +51,7 @@ without having to wait for the entire test suite.
 
 Running tests
 =============
-To run the tests locally in your sandbox using `hack/bats` is recommend, check `hack/bats --help` for info about usage.
+To run the tests locally in your sandbox using `hack/bats` is recommended, check `hack/bats --help` for info about usage.
 
 To run the entire suite use `make localsystem` or `make remotesystem` for podman-remote testing.
 

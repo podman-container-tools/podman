@@ -8,7 +8,7 @@
 #### **--health-log-destination**=*directory_path*
 << endif >>
 
-Set the destination of the HealthCheck log. Directory path, local or events_logger (local use container state file) (Default: local)
+Set the destination of the HealthCheck log. Directory path, local or events_logger (local uses the container state file) (Default: local)
 
 * `local`: (default) HealthCheck logs are stored in overlay containers. (For example: `$runroot/healthcheck.log`)
 * `directory`: creates a log file named `<container-ID>-healthcheck.log` with HealthCheck logs in the specified directory.

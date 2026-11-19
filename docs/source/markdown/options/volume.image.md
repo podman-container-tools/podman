@@ -30,7 +30,7 @@ specified path when processing RUN instructions.
 
 You can specify multiple  **-v** options to mount one or more mounts.
 
-You can add the `:ro` or `:rw` suffix to a volume to mount it read-only or
+You can add the `:ro` or `:rw` suffix to a volume to mount it in read-only or
 read-write mode, respectively. By default, the volumes are mounted read-write.
 See examples.
 
@@ -72,15 +72,15 @@ For example, if a user wanted to volume mount their entire home directory into t
 `Overlay Volume Mounts`
 
 The `:O` flag tells Podman to mount the directory from the host as a
-temporary storage using the Overlay file system. The `RUN` command containers
-are allowed to modify contents within the mountpoint and are stored in the
+temporary storage using the Overlay file system. The containers' `RUN` commands
+are allowed to modify the contents within the mount point and are stored in the
 container storage in a separate directory.  In Overlay FS terms the source
 directory is the lower, and the container storage directory is the
 upper. Modifications to the mount point are destroyed when the `RUN` command
 finishes executing, similar to a tmpfs mount point.
 
 Any subsequent execution of `RUN` commands sees the original source directory
-content, any changes from previous RUN commands no longer exists.
+content, any changes from previous RUN commands no longer exist.
 
 One use case of the `overlay` mount is sharing the package cache from the
 host into the container to allow speeding up builds.
@@ -90,7 +90,7 @@ Note:
 - Overlay mounts are not currently supported in rootless mode.
 - The `O` flag is not allowed to be specified with the `Z` or `z` flags.
   Content mounted into the container is labeled with the private label.
-  On SELinux systems, labels in the source directory needs to be readable
+  On SELinux systems, labels in the source directory need to be readable
   by the container label. If not, SELinux container separation must be disabled
   for the container to work.
 - Modification of the directory volume mounted into the container with an
@@ -98,14 +98,14 @@ Note:
   the container finishes running.
 
 By default bind mounted volumes are `private`. That means any mounts done
-inside containers are not be visible on the host and vice versa. This behavior
+inside containers are not visible on the host and vice versa. This behavior
 can be changed by specifying a volume mount propagation property.
 
 When the mount propagation policy is set to `shared`, any mounts completed
-inside the container on that volume is visible to both the host and
+inside the container on that volume are visible to both the host and
 container. When the mount propagation policy is set to `slave`, one way mount
-propagation is enabled and any mounts completed on the host for that volume is
-visible only inside of the container. To control the mount propagation
+propagation is enabled and any mounts completed on the host for that volume are
+visible only inside the container. To control the mount propagation
 property of volume use the `:[r]shared`, `:[r]slave` or `:[r]private`
 propagation flag. For mount propagation to work on the source mount point (mount
 point where source dir is mounted on) has to have the right propagation properties.

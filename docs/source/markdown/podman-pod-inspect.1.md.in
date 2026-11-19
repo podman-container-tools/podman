@@ -21,7 +21,7 @@ Valid placeholders for the Go template are listed below:
 | **Placeholder**      | **Description**                             |
 |----------------------|---------------------------------------------|
 | .BlkioDeviceReadBps  | Block I/O Device Read, in bytes/sec         |
-| .BlkioDeviceWriteBps | Block I/O Device Read, in bytes/sec         |
+| .BlkioDeviceWriteBps | Block I/O Device Write, in bytes/sec         |
 | .BlkioWeight         | Block I/O Weight                            |
 | .BlkioWeightDevice   | Block I/O Device Weight                     |
 | .CgroupParent        | Pod cgroup parent                           |

@@ -83,7 +83,7 @@ Valid placeholders for the Go template are listed below:
 
 #### **--rollback**
 
-If restarting a systemd unit after updating the image has failed, rollback to using the previous image and restart the unit another time.  Default is true.
+If restarting a systemd unit after updating the image has failed, roll back to using the previous image and restart the unit another time.  Default is true.
 
 Note that detecting if a systemd unit has failed is best done by the container sending the READY message via SDNOTIFY.
 This way, restarting the unit waits until having received the message or a timeout kicked in.

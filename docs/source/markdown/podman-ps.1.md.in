@@ -14,7 +14,7 @@ podman\-ps - Print out information about containers
 
 ## DESCRIPTION
 **podman ps** lists the running containers on the system. Use the **--all** flag to view
-all the containers information.  By default it lists:
+all the containers' information.  By default it lists:
 
  * container id
  * the name of the image the container is using
@@ -116,7 +116,7 @@ Display the total file size
 
 #### **--sort**=*created*
 
-Sort by command, created, id, image, names, pod, runningfor, size, or status",
+Sort by command, created, id, image, names, pod, runningfor, size, or status,
 Note: Choosing size sorts by size of rootFs, not alphabetically like the rest of the options
 
 #### **--sync**

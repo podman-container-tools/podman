@@ -11,7 +11,7 @@ Many manpages include the OPTIONS **--all**, **-a** and/or **--latest**, **-l**.
 
 **podman subcommand command** [*optional*] *mandatory value*
 
-(If there is the possibility to chose between two or more mandatory command values. There should also always be a space before and after a vertical bar to ensure better readability.)
+(If there is the possibility to choose between two or more mandatory command values. There should also always be a space before and after a vertical bar to ensure better readability.)
 
 **podman command** [*optional*] *value1* | *value2*
 
@@ -50,7 +50,7 @@ All flags are referred to as OPTIONS. The term flags should not be used. All OPT
 OPTIONS that are quoted from other podman manpages or podman repositories have to be linked to those.\
 Example sentence: Use **[podman-generate-systemd --new](./source/markdown/podman-generate-systemd.1.md#--new)** for the problem.
 
- Each OPTION should be explained to the fullest extent below the OPTION itself. Each OPTION is behind an H4-header (`####`). If the OPTION has a default argument, it has to be explained in the description of the OPTION. If the OPTION is also not available with a command/OPTION/content/ on the remote Podman client, the sentence about the default argument should the second to last sentence. The sentence about the default argument should be in a new line as well as the *IMPORTANT* sentence.
+ Each OPTION should be explained to the fullest extent below the OPTION itself. Each OPTION is behind an H4-header (`####`). If the OPTION has a default argument, it has to be explained in the description of the OPTION. If the OPTION is also not available with a command/OPTION/content/ on the remote Podman client, the sentence about the default argument should be the second to last sentence. The sentence about the default argument should be in a new line as well as the *IMPORTANT* sentence.
 
  All OPTIONS are to be sorted in alphabetical order.
 
@@ -142,7 +142,7 @@ Description of the EXAMPLE two
 # podman command --status=better
 ```
 ## SEE ALSO
-All commands, including commands with OPTIONS, and config-files mentioned in the manpage have to be listed here. Podman commands, including commands with OPTIONS, and config-files have to be linked. If a command is mentioned several times with different OPTIONS it just have to be linked once. All other commands, including commands with OPTIONS, and config-files just have to be mentioned. If a command is mentioned several times with different OPTIONS it just has to be linked once.
+All commands, including commands with OPTIONS, and config-files mentioned in the manpage have to be listed here. Podman commands, including commands with OPTIONS, and config-files have to be linked. If a command is mentioned several times with different OPTIONS it just has to be linked once. All other commands, including commands with OPTIONS, and config-files just have to be mentioned. If a command is mentioned several times with different OPTIONS it just has to be linked once.
 
 Example:
 **[podman(1)](podman.1.md)**, **[podman-run(1)](podman-run.1.md)**, **[podman-create(1)](podman-create.1.md)**

@@ -30,12 +30,12 @@ suffix instead of being truncated when it reaches the maximum size
     (e.g. << '**LogOpt=log-rotate=true**' if is_quadlet else '**--log-opt log-rotate=true**' >>).
 
 **tag**: specify a custom log tag for the container
-    (e.g. << '**LogOpt=tag="{{.ImageName}}"**' if is_quadlet else '**--log-opt tag="{{.ImageName}}"**' >>.
+    (e.g. << '**LogOpt=tag="{{.ImageName}}"**' if is_quadlet else '**--log-opt tag="{{.ImageName}}"**' >>).
 It supports the same keys as **podman inspect --format**.
 This option is currently supported only by the **journald** log driver.
 
 **label**: specify a custom log label for the container
-    (e.g. **--log-opt label="CONTAINER_IMAGE={{.ImageName}}"**.
+    (e.g. **--log-opt label="CONTAINER_IMAGE={{.ImageName}}"**.)
 It supports the same keys as **podman inspect --format**.
 This option can be repeated multiple times.
 This option is currently supported only by the **journald** log driver.

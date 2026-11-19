@@ -40,20 +40,20 @@ When `import-native-ca` is set to `true`, the certificates are imported when
 `podman machine start` is executed.
 
 The default value for `import-native-ca` is `false`. This is because, without
-proper testing on customers environment (i.e. laptops connected to enterprises
+proper testing on customer environments (i.e. laptops connected to enterprises
 internal networks with thousands of CA certificates) we can't predict the
 impact of the certificates import on the time to startup the Podman machines
 and we prefer to be conservative.
 
 In our tests we have observed that the impact of the import of certificates
-at the startup is negligible (less then a second to import 1K+ certificates).
+at the startup is negligible (less than a second to import 1K+ certificates).
 If this is confirmed on a larger test base, the plan is to change the default
 value to `true`.
 
 ### Fetching the locally trusted certificates
 
 To import the locally trusted certificates, the Podman client retrieves the
-trusted certificates from the local certificates stores.
+trusted certificates from the local certificate stores.
 
 The location of these stores may vary depending on the host OS, but Go provides
 some abstractions to access the stores without worrying about the underlying
@@ -76,7 +76,7 @@ format and saved in the machine data folder:
 
 ### Installing the certificates in the guest OS
 
-To install the certificates in the Fedora machine, the clients copies in the
+To install the certificates in the Fedora machine, the client copies the
 `PEM` file containing all the host certificates in the guest `anchors` folder
 (`/etc/pki/ca-trust/source/anchors`) and runs the command `update-ca-trust`. See
 the [Fedora documentation for adding new certificates](https://docs.fedoraproject.org/en-US/quick-docs/using-shared-system-certificates/#_adding_new_certificates).
@@ -92,7 +92,7 @@ The certificates that are removed from the host will be automatically purged
 when the machine is restarted.
 
 This behaviour is a consequence of `update-ca-trust` removing the previously
-installed as part of the update.
+installed certificates as part of the update.
 
 ### If an error occurs during the import
 
@@ -105,7 +105,7 @@ process.
 
 ### Impact on the Podman machine startup time
 
-To evaluate the impact of certificates import to the machines startup times,
+To evaluate the impact of certificate import on the machines' startup times,
 I have [patched the Podman client](https://github.com/l0rd/podman/tree/import_native_ca) to add a `machine start` flag to mount or copy
 the certificates.
 
@@ -116,7 +116,7 @@ on Windows and `macOS`:
 - `scp`: Import of the certificates via `SCP`
 - `mnt`: Import of the certificates via mount
 
-The following table summarize the mean startup times for each type of run:
+The following table summarizes the mean startup times for each type of run:
 
 | PROVIDER | RUN TYPE | STARTUP TIME |
 | ---- | ---- | ---- |
@@ -241,7 +241,7 @@ needs to be updated.
 Documentation needs to be updated:
 
 - [Command: podman machine start](https://github.com/containers/podman/blob/main/docs/source/markdown/podman-machine-start.1.md.in)
-- [Tutorial: Installing Crtificate Authority](https://github.com/containers/podman/blob/main/docs/tutorials/podman-install-certificate-authority.md)
+- [Tutorial: Installing Certificate Authority](https://github.com/containers/podman/blob/main/docs/tutorials/podman-install-certificate-authority.md)
 
 ## **Further Description (Optional):**
 
@@ -249,7 +249,7 @@ None
 
 ## **Test Descriptions (Optional):**
 
-A new machine e2e tests will be added where we check that:
+A new machine e2e test will be added where we check that:
 
 - when the flag `--import-native-ca` is passed, the local certificates are
 imported.

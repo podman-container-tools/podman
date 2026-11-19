@@ -17,7 +17,7 @@ Supported filters:
 | ctr-number | Filter by number of containers in the pod.                                                       |
 | ctr-status | Filter by container status within the pod.                                                       |
 | id         | Filter by pod ID. (Prefix match by default; accepts regex)                                       |
-| label      | Filter by container with (or without, in the case of label!=[...] is used) the specified labels. |
+| label      | Filter by container with (or without, when `label!=[...]` is used) the specified labels. |
 | name       | Filter by pod name.                                                                              |
 | network    | Filter by network name or full ID of network.                                                    |
 | status     | Filter by pod status.                                                                            |

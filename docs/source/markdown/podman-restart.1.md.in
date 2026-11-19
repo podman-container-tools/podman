@@ -63,7 +63,7 @@ Restart all containers.
 $ podman restart --all
 ```
 
-Restart container using ID specified in a given files.
+Restart container using ID specified in a given file.
 ```
 $ podman restart --cidfile /home/user/cidfile-1
 $ podman restart --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2

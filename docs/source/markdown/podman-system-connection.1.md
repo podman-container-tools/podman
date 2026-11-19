@@ -18,8 +18,8 @@ will use instead.
 This file is managed by the podman commands and should never be edited by users directly. To manually
 configure the connections use `service_destinations` in containers.conf.
 
-If the ReadWrite column in the **podman system connection list** output is set to true the connection is
-stored in the `podman-connections.json` file otherwise it is stored in containers.conf and can therefore
+If the ReadWrite column in the **podman system connection list** output is set to true, the connection is
+stored in the `podman-connections.json` file; otherwise, it is stored in containers.conf and can therefore
 not be edited with the **podman system connection** commands.
 
 ## COMMANDS

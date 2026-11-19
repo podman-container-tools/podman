@@ -6,7 +6,7 @@
 
 Specifies that a GID mapping to be used to set ownership, at the
 filesystem level, on the working container's contents, can be found in entries in the `/etc/subgid` file which correspond to the specified group.
-Commands run when handling `RUN` instructions defaults to being run in
+Commands run when handling `RUN` instructions default to being run in
 their own user namespaces, configured using the UID and GID maps.
 If --userns-uid-map-user is specified, but --userns-gid-map-group is not specified, `podman` assumes that the specified user name is also a
 suitable group name to use as the default setting for this option.

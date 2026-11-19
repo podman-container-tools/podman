@@ -4,7 +4,7 @@
 ####> are applicable to all of those.
 #### **--no-stream**
 
-Disable streaming <<|pod >>stats and only pull the first result, default setting is false.
+Disable streaming <<|pod >>stats and only pull the first result. The default setting is false.
 
 Note: With **--no-stream**, the CPU percentage is a coarse snapshot measured
 over a brief sampling window (~100 ms). In streaming mode, it reflects

@@ -7,7 +7,7 @@ podman\-generate\-spec - Generate Specgen JSON based on containers or pods
 **podman generate spec** [*options*] *container | *pod*
 
 ## DESCRIPTION
-**podman generate spec** generates SpecGen JSON from Podman Containers and Pods. This JSON can be printed to a file, directly to the command line, or both.
+**podman generate spec** generates Specgen JSON from Podman Containers and Pods. This JSON can be printed to a file, directly to the command line, or both.
 
 This JSON can then be used as input for the Podman API, specifically for Podman container and pod creation. Specgen is Podman's internal structure for formulating new container-related entities.
 

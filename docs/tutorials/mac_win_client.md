@@ -50,7 +50,7 @@ The rest of this guide focuses on option 2 (remote client to an external Linux m
 
 ### Enable the Podman service on the server machine
 
-Before performing any  Podman client commands, you must enable the podman.sock SystemD service on the Linux server.  In these examples, we are running Podman as a normal, unprivileged user, also known as a rootless user.  By default, the rootless socket listens at  `/run/user/${UID}/podman/podman.sock`.  You can enable and start this socket permanently, using the following commands:
+Before performing any  Podman client commands, you must enable the podman.sock systemd service on the Linux server.  In these examples, we are running Podman as a normal, unprivileged user, also known as a rootless user.  By default, the rootless socket listens at  `/run/user/${UID}/podman/podman.sock`.  You can enable and start this socket permanently, using the following commands:
 ```
 $ systemctl --user enable --now podman.socket
 ```

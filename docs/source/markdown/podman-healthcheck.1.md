@@ -7,7 +7,7 @@ podman\-healthcheck - Manage healthchecks for containers
 **podman healthcheck** *subcommand*
 
 ## DESCRIPTION
-The **podman healthcheck** suite of commands are used to manage container healthchecks.
+The **podman healthcheck** suite of commands is used to manage container healthchecks.
 
 Healthchecks are typically sourced from images. Use `podman image inspect` to identify a healthcheck in the image's Config section.
 
@@ -26,7 +26,7 @@ Healthchecks can also be defined when creating a container via `podman run` or `
 - The startup healthcheck cannot be sourced from an image; it can only be set manually
 - Once the startup healthcheck succeeds (based on `--health-startup-success` consecutive successes), it stops and the regular healthcheck takes over
 - If it fails too many times (`--health-startup-retries`), the container can be restarted based on `--health-on-failure`
-- If `--health-cmd` option was set, but `--health-startup-cmd` one was missed, then value of `--health-cmd` option is used for startup health check.
+- If the `--health-cmd` option was set, but the `--health-startup-cmd` option was not provided, then the value of the `--health-cmd` option is used for startup health check.
 
 **When to use each:**
 - Use `--health-start-period` for simple cases where you know roughly how long startup takes

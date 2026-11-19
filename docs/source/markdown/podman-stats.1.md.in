@@ -1,7 +1,7 @@
 % podman-stats 1
 
 ## NAME
-podman\-stats - Display a live stream of one or more container's resource usage statistics
+podman\-stats - Display a live stream of one or more containers' resource usage statistics
 
 ## SYNOPSIS
 **podman stats** [*options*] [*container*]
@@ -119,8 +119,8 @@ ID             NAME           MEM USAGE / LIMIT
 ```
 
 Note: When using rootless networking with the rootlesskit port
-handler, the traffic sent via the port forwarding is accounted to
-the `lo` device.  Traffic accounted to `lo` is not accounted in the
+handler, the traffic sent via the port forwarding is attributed to
+the `lo` device.  Traffic attributed to `lo` is not accounted in the
 stats output.
 
 

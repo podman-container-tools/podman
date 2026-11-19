@@ -18,7 +18,7 @@ attaches to the container.
 
 #### **--all**
 
-Start all the containers, default is only running containers.
+Start all the containers; by default, only running containers are started.
 
 #### **--attach**, **-a**
 

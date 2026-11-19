@@ -28,7 +28,7 @@ will print the container ID after it has run. Note that we use port forwarding t
 access the HTTP server.
 
 ### Listing running containers
-The Podman *ps* command is used to list creating and running containers.
+The Podman *ps* command is used to list created and running containers.
 ```console
 podman ps
 ```
@@ -150,9 +150,9 @@ podman rm <container_id>
 You can verify the deletion of the container by running *podman ps -a*.
 
 ## Integration Tests
-For more information on how to set up and run the integration tests in your environment, checkout the Integration Tests [README.md](../../test/README.md)
+For more information on how to set up and run the integration tests in your environment, check out the Integration Tests [README.md](../../test/README.md)
 
 ## More information
 
-For more information on Podman and its subcommands, checkout the asciiart demos on the [README.md](../../README.md#commands)
+For more information on Podman and its subcommands, check out the asciiart demos on the [README.md](../../README.md#commands)
 page.

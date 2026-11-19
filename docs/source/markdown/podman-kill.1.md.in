@@ -50,7 +50,7 @@ Terminate all containers by sending `KILL` signal:
 $ podman kill --signal KILL -a
 ```
 
-Kill containers using ID specified in a given files:
+Kill containers using ID specified in a given file:
 ```
 $ podman kill --cidfile /home/user/cidfile-1
 $ podman kill --cidfile /home/user/cidfile-1 --cidfile ./cidfile-2

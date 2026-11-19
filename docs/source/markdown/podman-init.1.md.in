@@ -20,7 +20,7 @@ This can be used to inspect the container before it runs, or debug why a contain
 
 #### **--all**, **-a**
 
-Initialize all containers. Containers that have already initialized (including containers that have been started and are running) are ignored.
+Initialize all containers. Containers that have already been initialized (including containers that have been started and are running) are ignored.
 
 @@option latest
 

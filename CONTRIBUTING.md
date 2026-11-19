@@ -58,7 +58,7 @@ Usage: make <target>
 
 ### Install required tools
 
-Makefile allow you to install needed development tools (e.g. the linter):
+The Makefile allows you to install needed development tools (e.g. the linter):
 ```shell
 $ make install.tools
 ```

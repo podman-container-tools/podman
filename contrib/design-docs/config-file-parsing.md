@@ -17,17 +17,17 @@ the same parsing wise so users can better understand how it works.
 
 ## **Objective**
 
-We have several config files such a containers.conf, storage.conf, registries.conf and more that
-get all implement their own parsing logic and have a different feature set. The goal is to
+We have several config files such as containers.conf, storage.conf, registries.conf and more that
+all implement their own parsing logic and have a different feature set. The goal is to
 consolidate the parsing into a separate package and then port all files to use that package
-instead making them behave consistently.
+instead of making them behave consistently.
 
 ## **Detailed Description:**
 
 ### General
 
 Add new package to the storage library (`go.podman.io/storage/pkg/configfile`) which implements
-the core logic of how to read config files. The goal of the package is to define with config paths
+the core logic of how to read config files. The goal of the package is to define which config paths
 to use and in what order.
 
 It will however not define the structs and fields used for the actual content in each file, these
@@ -60,7 +60,7 @@ Where `<name>` is `containers`, `storage` or `registries` for each config file.
 The `<name>.rootless.conf.d/<UID>/` is a directory named by the user id. Only the user with this
 exact uid match will read the config files in this directory.
 The use case is for admin to be able to set a default for a specific user without having to write
-into their home directory. Note this is not intended as security mechanism, the user home directory
+into their home directory. Note this is not intended as a security mechanism, the user home directory
 config files will still have higher priority.
 
 FreeBSD:
@@ -83,8 +83,8 @@ https://uapi-group.org/specifications/specs/configuration_files_specification/
 
 Based on that the files must be loaded in this order:
 
-Read `$XDG_CONFIG_HOME/containers/<name>.conf`, only if this file doesn't exists read
-`/etc/containers/<name>.conf`, and if that doesn't exists read `/usr/share/containers/<name>.conf`
+Read `$XDG_CONFIG_HOME/containers/<name>.conf`, only if this file doesn't exist read
+`/etc/containers/<name>.conf`, and if that doesn't exist read `/usr/share/containers/<name>.conf`
 As such setting an empty file on `$XDG_CONFIG_HOME/containers/<name>.conf` would cause us to ignore
 all possible options that were set in the other files.
 Note: This is different from the current containers.conf loading where we would have read all files.
@@ -103,7 +103,7 @@ Regardless of which file has been loaded above it then must read the drop-in loc
 
 - `$XDG_CONFIG_HOME/containers/<name>.conf.d/`
 
-Only read files with the `.conf` file extension are read.
+Only files with the `.conf` extension are read.
 
 If there is a drop-in file with the same filename as in a prior location it will replace
 the prior one and only the latest match is read. Once we have the list of all drop-in files
@@ -208,7 +208,7 @@ other files.
 
 ##### storage.conf
 
-Deprecate `rootless_storage_path` option. With the `rootless/rootful` config location and admin could just use
+Deprecate `rootless_storage_path` option. With the `rootless/rootful` config location an admin could just use
 `graphroot` in the location in the rootless file location. As such there is no need to special case these fields
 in the parser.
 
@@ -226,12 +226,12 @@ point.
 
 Remove V1 config layout to simplify the parsing logic. If we do major config changes we might as well take the
 chance and remove this old format.
-Currently the V1 format is already rejected for drop-in files so this just effects the main config file.
+Currently the V1 format is already rejected for drop-in files so this just affects the main config file.
 
 Additionally there might be a few challenges here, c/image uses the SystemContext struct which allows
 users to set `RootForImplicitAbsolutePaths`, `SystemRegistriesConfPath`, `SystemRegistriesConfDirPath`.
 We must continue to support them as they are used by various tools.
-For `RootForImplicitAbsolutePaths` we update it to check bot the `/usr` and `/etc` locations.
+For `RootForImplicitAbsolutePaths` we update it to check both the `/usr` and `/etc` locations.
 When `SystemRegistriesConfPath` or `SystemRegistriesConfDirPath` are used don't do the normal parsing
 and just read the file/directory specified there and ignore the environment variables.
 
@@ -255,7 +255,7 @@ Right now it only uses `$HOME/.config/containers/registries.d` or `/etc/containe
 For consistency it would be best if it uses all drop in paths like shown above without the "main"
 file as this only support drop-in locations.
 
-Additionally there seems to exit code duplication in `podman/pkg/trust`. We should find a way to
+Additionally there seems to exist code duplication in `podman/pkg/trust`. We should find a way to
 not duplicate this logic at all in podman again.
 
 ##### certs.d
@@ -272,12 +272,12 @@ as part of this.
 
 This is a json file so I don't think the normal drop-in logic would be particular useful here.
 For consistency it should read also `/usr/share/containers/policy.json` if the /etc file doesn't
-exists.
+exist.
 
 It is also missing the XDG_CONFIG_HOME support[3] so fix that as well.
 
 We got an issue for drop-in support [5]. However I explicitly consider this out of scope for now
-due the increased complexity and short time line for podman 6. Drop-in support could still be
+due to the increased complexity and short timeline for podman 6. Drop-in support could still be
 added later as I don't consider that a breaking change, it only adds new functionality.
 
 ## Podman
@@ -317,7 +317,7 @@ change for IMO no real gain.
 
 Lastly this feature has been proposed by another dev in https://github.com/containers/podman/issues/6255.
 It is unclear to me if there is a single end user using this considering it does not work properly and we
-never had any reports about this AFAIK. The podman system service is not a daemon so any user who want the
+never had any reports about this AFAIK. The podman system service is not a daemon so any user who wants the
 config files to be reloaded can just stop the service and start it again without causing downtime for
 the running containers.
 
@@ -327,7 +327,7 @@ Overall not doing this greatly simplifies the code complexity.
 
 A better way to configure podman and a better understanding for users how to do it without having
 to worry that each config file behaves differently.
-Since we then have only once place that defines the load order we can have a single man page
+Since we then have only one place that defines the load order we can have a single man page
 documenting the load order as described above. All the config files man pages can then just
 refer to that and we don't have to duplicate so much docs.
 
@@ -400,4 +400,4 @@ Is there anything not covered above that needs to be mentioned?
 
 ## **Test Descriptions (Optional):**
 
-The code should be designed in a way to be unit testable and that they get parsed in the right order.
+The code should be designed so that it is unit testable and the files are parsed in the right order.

@@ -37,7 +37,7 @@ Future work after Podman 6 - which will exclusively use the new Conmon - will ex
 The original Conmon has served Podman for the last 8 years, but it has a number of serious limitations that make us reluctant to continue using it.
 1. **Architectural issues**. Conmon was written to support the initial CRI-O efforts almost a decade ago. Long-term maintenance was not an original focus of the design.
 2. **Language barrier**. Conmon is written in C, which we have very few maintainers with any experience in, or desire to acquire that experience.
-3. **Maintenance issues**. Because of the first two points, Common was effectively unmaintained for an extended period (~4 years), only ending recently when @jnovy stepped up as package maintainer. As a result, a large number of user requests for logging-related features have gone unanswered for extended periods - in some cases, close to 5 years.
+3. **Maintenance issues**. Because of the first two points, Conmon was effectively unmaintained for an extended period (~4 years), only ending recently when @jnovy stepped up as package maintainer. As a result, a large number of user requests for logging-related features have gone unanswered for extended periods - in some cases, close to 5 years.
 4. **Lack of testing**. The existing Conmon has some unit tests, no integration tests, and only basic E2E testing using parts of the CRI-O test suite. We have had a number of regressions in the past because of this (for example: https://github.com/containers/conmon/issues/477).
 5. **Error handling**. The existing Conmon architecture does a very poor job of error handling. In many cases, Conmon will simply exit without propagating an error to Podman, resulting in a complete lack of debug information for why a container failed. This causes significant difficulty assisting users as they attempt to debug container start issues.
 6. **Maintainer pool**. A rewrite of Conmon in a language more of our maintainers are familiar with would allow us to greatly increase the pool of contributors available and increase the pace of feature development.
@@ -73,7 +73,7 @@ This excludes common languages like Go and Python, and leaves us with only two r
 C would have the same limited maintainer pool as the existing Conmon, and thus we prefer Rust.
 
 To attempt to avoid the growth in size and resource utilization that makes conmon-rs unsuitable, we must be very careful.
-Rust is a static-linked language, which means every package we include adds to binary size (which is not directly correlated to memory usage, but does increase the time required to start containers as exec calls will take longer).
+Rust is a statically-linked language, which means every package we include adds to binary size (which is not directly correlated to memory usage, but does increase the time required to start containers as exec calls will take longer).
 By using as few libraries as possible (and selecting for small size and minimal dependency set when we use them) we believe we can minimize both memory usage and binary size.
 If this proves insufficient, we can remove the Rust standard library altogether and build against the C standard library.
 We believe we can keep memory usage to approximately 1.2-1.5MB of ram per Conmon - 2 to 2.5 times as much as the original Conmon, but still a very, very low number.
@@ -88,7 +88,7 @@ This will not be covered in this design document, and we expect to implement it 
 Architecturally, we believe that a very simple event loop is the best way to ensure resource utilization remains low.
 By avoiding async code and the Tokio library and instead directly using the C epoll API, we can write a very minimal event loop with few to no external dependencies.
 This will undo some of the advantages of Rust in familiarity and code quality, but given the limited goals of Conmon v3, this should not be a serious issue; the event loop will remain quite simple as well.
-We will focus on handling the container’s STDOUT and STDERR (copy to log driver, copy to all active attach sessions) and exec sessions’s STDIN (copy to container) in this loop.
+We will focus on handling the container’s STDOUT and STDERR (copy to log driver, copy to all active attach sessions) and exec sessions' STDIN (copy to container) in this loop.
 We can investigate whether adding process reaping to the loop makes sense or whether we should do that in a separate thread; both ideas have benefits.
 Specifically for reaping, we should also investigate using PIDFDs instead of simply waiting for SIGCHLD - particularly as we might consider moving additional processes, e.g. container exec sessions, under the same Conmon.
 We should also consider limiting the maximum number of simultaneous attach sessions.

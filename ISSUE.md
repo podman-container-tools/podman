@@ -37,16 +37,16 @@ your report.  If possible, always provide a _reliable reproducer_.  This is extr
 helpful for us during triage and bug fixing.  Good examples of a reliable reproducer are:
 
 * Provide precise Podman commands
-* Use generic images (like fedora/alpine/debian) where possible to reduce the chance your
-container images was a contributor. Abstracting away from the functional purpose helps
-diagnoses and reduces noise for us.
+* Use generic images (like fedora/alpine/debian) where possible to reduce the chance that your
+container images were a contributor. Abstracting away from the functional purpose helps
+diagnose and reduces noise for us.
 * If using the RESTFUL API, providing curl commands as a reproducer is preferred.  Be sure
 to provide the same data (or sample data) for things like POST.
 * Not requiring the use of a third party tool to reproduce the problem
 
 
 ### Look through existing issues before reporting a new issue
-Managing issues is a time consuming processes for maintainers.  You can save us time by
+Managing issues is a time-consuming process for maintainers.  You can save us time by
 making sure the issue you want to report has not already been reported.  It is appropriate
 to comment on the existing issue with relevant information.
 
@@ -120,4 +120,4 @@ Judgment:
 * the issue is too difficult or complicated or hard to track down.
 * decision should be made by two or more team members, with discussion in the issue/PR itself.
 
-When such an issue is closed, team member should apply the *jetsam* label.
+When such an issue is closed, a team member should apply the *jetsam* label.

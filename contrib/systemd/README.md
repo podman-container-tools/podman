@@ -1,6 +1,6 @@
 # Setting up Podman service for systemd socket activation
 
-## system-wide (podman service run as root)
+## system-wide (podman service runs as root)
 
  1. copy the `podman.service` and `podman.socket` files into `/etc/systemd/system`
  1. `systemctl daemon-reload`
@@ -18,7 +18,7 @@ Note: replace `@@PODMAN@@` with path to podman binary, such as `/usr/bin/podman`
 ### podman.socket
 You can refer to [this example](https://github.com/containers/podman/blob/main/contrib/systemd/system/podman.socket) for a sample podman.socket file.
 
-## user (podman service run as given user aka "rootless")
+## user (podman service runs as the given user aka "rootless")
 
  1. `mkdir -p ~/.config/systemd/user`
  1. copy the `podman.service` and `podman.socket` files into `~/.config/systemd/user`

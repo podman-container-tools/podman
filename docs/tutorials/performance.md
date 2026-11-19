@@ -153,7 +153,7 @@ You can avoid using _pasta_ in the following ways:
   pasta, so it has the same performance characteristics as the normal network on the host.
   Socket-activated services can be started and stopped in different ways:
   + Let systemd start the service when the first client connects. Let the service terminate by itself after some time of inactivity.
-    Using a service on demand, can free up compute resources.
+    Using a service on demand can free up compute resources.
   + Start the service explicitly (`systemctl --user enable foobar.service`). If the service is already
     running when the first client connects, there will be no delay due to container startup.
   The [socket activation tutorial](https://github.com/containers/podman/blob/main/docs/tutorials/socket_activation.md)

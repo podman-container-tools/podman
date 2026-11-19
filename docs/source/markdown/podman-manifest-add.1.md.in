@@ -67,7 +67,7 @@ for interoperability with a particular registry.
 
 When creating an artifact manifest and adding it to the image index, use the
 specified MIME type as the `mediaType` associated with the files' contents.  If
-not specified, guesses based on either the files names or their contents will
+not specified, guesses based on either the files' names or their contents will
 be made and used, but the option should be specified if certainty is needed.
 
 #### **--artifact-subject**=*imageName*

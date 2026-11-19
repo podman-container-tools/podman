@@ -6,7 +6,7 @@
 
 Allocate a pseudo-TTY. The default is **false**.
 
-When set to **true**, Podman allocates a pseudo-tty and attach to the standard
+When set to **true**, Podman allocates a pseudo-tty and attaches to the standard
 input of the container. This can be used, for example, to run a throwaway
 interactive shell.
 

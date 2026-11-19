@@ -24,11 +24,11 @@ Recursively remove all unused pods, containers, images, networks, and volume dat
 
 Removes any build containers that were created during the build, but were not removed because the build was unexpectedly terminated.
 
-Note: **This is not safe operation and should be executed only when no builds are in progress. It can interfere with builds in progress.**
+Note: **This is not a safe operation and should be executed only when no builds are in progress. It can interfere with builds in progress.**
 
 #### **--external**
 
-Tries to clean up remainders of previous containers or layers that are not references in the storage json files. These can happen in the case of unclean shutdowns or regular restarts in transient storage mode.
+Tries to clean up remainders of previous containers or layers that are not referenced in the storage json files. These can happen in the case of unclean shutdowns or regular restarts in transient storage mode.
 
 However, when using transient storage mode, the Podman database does not persist. This means containers leave the writable layers on disk after a reboot. When using a transient store, it is recommended that the **podman system prune --external** command is run during boot.
 
@@ -44,7 +44,7 @@ Supported filters:
 
 | Filter | Description                                                                                                     |
 |:------:|-----------------------------------------------------------------------------------------------------------------|
-| label  | Only remove containers and images, with (or without, in the case of label!=[...] is used) the specified labels. |
+| label  | Only remove containers and images, with (or without, when `label!=[...]` is used) the specified labels. |
 | until  | Only remove containers and images created before given timestamp.                                               |
 
 The `label` *filter* accepts two formats. One is the `label`=*key* or `label`=*key*=*value*, which removes containers and images with the specified labels. The other format is the `label!`=*key* or `label!`=*key*=*value*, which removes containers and images without the specified labels.
@@ -134,7 +134,7 @@ Deleted Containers
 Total reclaimed space: 24.55kB
 ```
 
-Prune containers filter until.
+Prune containers filtered by until.
 $ podman system prune --filter until=2m
 WARNING! This command removes:
         - all stopped containers

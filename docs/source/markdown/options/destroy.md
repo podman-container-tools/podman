@@ -4,4 +4,4 @@
 ####> are applicable to all of those.
 #### **--destroy**
 
-Remove the original <<container|pod>> that we are cloning once used to mimic the configuration.
+Remove the original <<container|pod>> being cloned, once its configuration has been copied.

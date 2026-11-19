@@ -17,7 +17,7 @@ Podman uses Buildah(1) internally to create container images. Both tools share i
 (not container) storage, hence each can use or manipulate images (but not containers)
 created by the other.
 
-Podman-remote provides a local client interacting with a Podman backend node through a RESTful API tunneled through a ssh connection. In this context, a Podman node is a Linux system with Podman installed on it and the API service activated. Credentials for this session can be passed in using flags, environment variables, or in `containers.conf`.
+Podman-remote provides a local client interacting with a Podman backend node through a RESTful API tunneled through an ssh connection. In this context, a Podman node is a Linux system with Podman installed on it and the API service activated. Credentials for this session can be passed in using flags, environment variables, or in `containers.conf`.
 
 The `containers.conf` file is placed under `$HOME/.config/containers/containers.conf` on Linux and Mac and `%APPDATA%\containers\containers.conf` on Windows.
 

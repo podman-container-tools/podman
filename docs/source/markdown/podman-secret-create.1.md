@@ -51,7 +51,7 @@ These labels can be viewed in `podman secret inspect` or `podman secret ls`.
 
 #### **--replace**=*false*
 
-If existing secret with the same name already exists, update the secret.
+If an existing secret with the same name already exists, update the secret.
 The `--replace` option does not change secrets within existing containers, only newly created containers.
 Cannot be used with `--ignore`.
  The default is **false**.
@@ -107,7 +107,7 @@ Mount a local file-based secret securely in a container.
 $ podman run --rm --secret source=my_secret,type=mount,uid=1001,gid=1001,mode=440 docker.io/library/alpine ls -l /run/secrets/my_secret
 ```
 
-Create gpg encrypted secret based on a local file using the pass driver.
+Create a GPG-encrypted secret based on a local file using the pass driver.
 ```
 $ podman secret create --driver=pass my_secret ./secret.txt.gpg
 ```

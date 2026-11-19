@@ -42,7 +42,7 @@ Supported filters:
 |:-----------:|------------------------------------------------------------------------------------------------------------|
 | all         | [Bool] When true, remove all unused volumes (same as **--all**). When false or unset, only anonymous volumes are considered. |
 | anonymous   | [Bool] Only remove volumes that are anonymous (true) or named (false).                                     |
-| label       | [String] Only remove volumes, with (or without, in the case of label!=[...] is used) the specified labels. |
+| label       | [String] Only remove volumes, with (or without, when `label!=[...]` is used) the specified labels. |
 | label!      | [String] Only remove volumes without the specified labels.                                                 |
 | until       | [DateTime] Only remove volumes created before given timestamp.                                             |
 | after/since | [Volume] Filter by volumes created after the given VOLUME (name or tag)                                    |

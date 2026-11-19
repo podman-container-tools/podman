@@ -47,12 +47,12 @@ Ignore the create request if a network with the same name already exists instead
 #### **--route**=*route*
 
 A static route in the format `<destination in CIDR notation>,<gateway|type>,<route metric (optional)>`.
-The gateway must be a valid ip address or alternatively a type can be set instead which must be either
+The gateway must be a valid IP address or alternatively a type can be set instead which must be either
 of `blackhole`, `unreachable` or `prohibit` and means the subnet will not be routed anywhere.
 This route will be added to every container in this network. It can be specified multiple times if more than one static route is desired.
 
-Note, routes are added into the container namespace, if a container is given the CAP_NET_ADMIN capability it is able to alter
-the routes so this cannot be used for security relevant things in that case.
+Note, routes are added into the container namespace. If a container is given the CAP_NET_ADMIN capability it is able to alter
+the routes, so this cannot be used for security relevant things in that case.
 
 @@option subnet
 

@@ -22,7 +22,7 @@ There are two drivers supported by Podman itself: **local** and **image**.
 
 The **local** driver uses a directory on disk as the backend by default, but can also use the **mount(8)** command to mount a filesystem as the volume if **--opt** is specified.
 
-The **image** driver uses an image as the backing store of for the volume.
+The **image** driver uses an image as the backing store for the volume.
 An overlay filesystem is created, which allows changes to the volume to be committed as a new layer on top of the image.
 
 Using a value other than **local** or **image**, Podman attempts to create the volume using a volume plugin with the given name.
@@ -65,7 +65,7 @@ options (also `-o`) passed to **mount(8)** with the following exceptions:
   The `inodes` option is supported on the "xfs[note]" file systems.
   Note: xfs filesystems must be mounted with the `prjquota` flag described in the **xfs_quota(8)** man page. Podman will throw an error if they're not.
   - The `o` option supports using volume options other than the UID/GID options with the **local** driver and requires root privileges.
-  - The `o` options supports the `timeout` option which allows users to set a driver specific timeout in seconds before volume creation fails. For example, **--opt=o=timeout=10** sets a driver timeout of 10 seconds.
+  - The `o` option supports the `timeout` option which allows users to set a driver specific timeout in seconds before volume creation fails. For example, **--opt=o=timeout=10** sets a driver timeout of 10 seconds.
 
 ***Note*** Do not confuse the `--opt,-o` create option with the `-o` mount option.  For example, with `podman volume create`, use `-o=o=uid=1000` *not* `-o=uid=1000`.
 
@@ -103,7 +103,7 @@ xfs_quota -x -c 'project -s storage volumes' /<xfs mount point>
 In the example above we are configuring the overlay storage driver for newly
 created containers as well as volumes to use project IDs with a **start offset**.
 All containers are assigned larger project IDs (e.g. >= 100000).
-All volume assigned project IDs larger project IDs starting with 200000.
+All volumes are assigned larger project IDs starting with 200000.
 This prevents xfs_quota management conflicts with containers/storage.
 
 ## EXAMPLES

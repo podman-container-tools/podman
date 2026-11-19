@@ -16,7 +16,7 @@ then the new machine will be named `podman-machine-default`.
 Rootless only.
 
 Podman on MacOS and Windows requires a virtual machine. This is because containers are Linux -
-containers do not run on any other OS because containers' core functionality are
+containers do not run on any other OS because containers' core functionality is
 tied to the Linux kernel. Podman machine must be used to manage MacOS and Windows machines,
 but can be optionally used on Linux.
 
@@ -25,7 +25,7 @@ SSH keys are automatically generated to access the VM, and system connections to
 and a user account inside the VM are added.
 
 By default, the VM distribution is a custom [Fedora CoreOS](https://getfedora.org/en/coreos?stream=stable)
-based image pushed to quay.io/podman/machine-os (build in https://github.com/containers/podman-machine-os).
+based image pushed to quay.io/podman/machine-os (built in https://github.com/containers/podman-machine-os).
 WSL is an exception and is based on a custom Fedora image.
 
 To check if there is an upgrade available for your machine os, you can run the following command:
@@ -44,7 +44,7 @@ more information.
 
 Note: Updating as described above can result in version mismatches between Podman on the host and Podman in the
 machine.  Executing `podman info` should reveal versions of both.  A configuration where the Podman host and machine
-mismatch are unsupported.
+mismatch is unsupported.
 
 To update the WSL image you must run dnf update inside, use the following command:
 ```
@@ -113,7 +113,7 @@ that have multiple providers.
 
 Whether this machine prefers rootful (`true`) or rootless (`false`)
 container execution. This option determines the remote connection default
-if there is no existing remote connection configurations.
+if there are no existing remote connection configurations.
 
 API forwarding, if available, follows this setting.
 
@@ -144,10 +144,10 @@ Only supported for QEMU Machines.
 The device needs to have proper permissions in order to be passed to the machine. This
 means the device needs to be under your user group.
 
-Note that using bus and device number are simpler but the values can change every boot
+Note that using bus and device numbers is simpler but the values can change every boot
 or when the device is unplugged.
 
-When specifying a USB using vendor and product ID's, if more than one device has the
+When specifying a USB using vendor and product IDs, if more than one device has the
 same vendor and product ID, the first available device is assigned.
 
 @@option user-mode-networking
@@ -184,7 +184,7 @@ actual storage on the host.
 In order to allow symlinks to work, on MacOS the default security model is
  *none*.
 
-The value of *mapped-xattr* specifies that 9p store symlinks and some file
+The value of *mapped-xattr* specifies that 9p stores symlinks and some file
 attributes as extended attributes on the host. This is suitable when the host
 and the guest do not need to interoperate on the shared filesystem, but has
 caveats for actual shared access; notably, symlinks on the host are not usable
@@ -197,7 +197,7 @@ volumes.
 Example: `-v "$HOME/git:$HOME/git:ro,security_model=none"`
 
 Default volume mounts are defined in *containers.conf*.  Unless changed, the default values
-is `$HOME:$HOME`.
+are `$HOME:$HOME`.
 
 **Note on Windows Subsystem for Linux (WSL)**
 Since all drives are mounted at `/mnt` on startup by default in WSL, passing
@@ -227,7 +227,7 @@ Initialize the default Podman machine pulling the content from the internet defa
 $ podman machine init --rootful
 ```
 
-Initialize the default Podman machine overriding its disk size override, pulling the content from the internet.
+Initialize the default Podman machine overriding its disk size, pulling the content from the internet.
 ```
 $ podman machine init --disk-size 50
 ```
@@ -242,12 +242,12 @@ Initialize the default Podman machine with the host directory `/Users` mounted i
 $ podman machine init -v /Users:/Users
 ```
 
-Initialize the default Podman machine with a usb device passthrough specified with options. Only supported for QEMU Machines.
+Initialize the default Podman machine with a USB device passthrough specified with options. Only supported for QEMU Machines.
 ```
 $ podman machine init --usb vendor=13d3,product=5406
 ```
 
-Initialize the default Podman machine with a usb device passthrough with specified with options. Only supported for QEMU Machines.
+Initialize the default Podman machine with a USB device passthrough specified with options. Only supported for QEMU Machines.
 ```
 $ podman machine init --usb bus=1,devnum=3
 ```

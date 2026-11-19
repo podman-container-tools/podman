@@ -10,7 +10,7 @@ In this document, I try to summarize:
 * Impacts to other components (like netavark, common)
 * Deprecations
 
-The content in this document are proposals generally. If a proposal is objectionable to a considerable number of people or
+The content in this document is a proposal generally. If a proposal is objectionable to a considerable number of people or
 stakeholders, then it will be reconsidered and decisions will be made consensually.  Also, new content certainly may be
 added during review.  Moreover, some of the features described below may have their own design documents where more detail
 will be provided.
@@ -42,7 +42,7 @@ will be provided.
 
 We have spent considerable time discussing when the Podman main branch should be open for Podman 6.  To understand this,
 we must understand the schedule for the upcoming months.  We still have active development occurring for Podman 5 series
-releases.  We have the following Podman 5 minor released scheduled:
+releases.  We have the following Podman 5 minor releases scheduled:
 
 * Podman 5.7 - November 2025 (first week)
 * Podman 5.8 - February 2026
@@ -112,7 +112,7 @@ configuration files.  With the popularity of our Windows and Mac clients, this b
 introduction of the “machine” function only made that worse.  In Podman 6, we must make containers-common more aware
 of our environment.
 
-Users are rightfully confused by which files they should edit and for what function.  Lets look at two examples:
+Users are rightfully confused by which files they should edit and for what function.  Let's look at two examples:
 *additional_stores* and the (machine) *provider* setting.  Today, both of these settings are valid in the
 *containers.conf* files.  But if you were to specify the *additional_stores* in the *containers.conf* that resides
 on the Mac client, it would have no impact.  It needs to be specified in the virtual machine where Podman actually
@@ -236,7 +236,7 @@ Apple Silicon Macs in 2020.  Apple has stated they will be EOL in 2028, but for 
 last supported operating system.
 
 According to Podman Desktop telemetry data, the Mac Intel numbers are already small and dwindling steadily.  As of
-late August 2025, Intel Macs users account for 3.7% of Mac users. This is down from 4.1% in May 2025, which was down
+late August 2025, Intel Mac users account for 3.7% of Mac users. This is down from 4.1% in May 2025, which was down
 from 6.1% in February 2025.  While these numbers do not reflect all of Podman users, we believe they would mirror
 Podman usage as well.
 

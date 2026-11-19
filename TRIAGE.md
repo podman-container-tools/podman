@@ -3,7 +3,7 @@ To manage new GitHub issues, maintainers perform issue triage on a regular basis
 
 This process includes:
 1. Ensure the issue is relevant to the correct repository (i.e. build issues go to buildah repo, podman desktop issues go to Podman Desktop repo, etc) and transfer as needed.
-2. Categorize issues by type and assign its associated label ([see below](#labels)) and “traiged” label. If the issue is a bug and it is of high impact, please assign a high-impact label.
+2. Categorize issues by type and assign its associated label ([see below](#labels)) and “triaged” label. If the issue is a bug and it is of high impact, please assign a high-impact label.
 3. Assign high-impact issues to either themselves or a [core maintainer](https://github.com/containers/podman/blob/main/OWNERS#L1).
 4. If [essential information is lacking](#checks-for-triaging), request it from the submitter and apply the 'needs-info' label.
 5. Once all the necessary information is gathered, the maintainer will assign the high-impact label if needed and removes the ‘needs-info’ label
@@ -20,7 +20,7 @@ While triaging, the maintainer has to look for the following information in the 
 4. Check if there is a good reproducer that preferably reproduces on the latest Podman version
 5. Any other missing information that could help with debugging.
 6. Check for similar issues and act accordingly
-7. If the issue is related to Brew. Chocolatey or another package manager, suggest the reporter to use the latest binaries on the release page
+7. If the issue is related to Brew, Chocolatey or another package manager, suggest the reporter to use the latest binaries on the release page
 
 ### Features:
 1. Check if the feature is already added to the newer Podman releases, if it is, add the appropriate suggestion and close the issue.

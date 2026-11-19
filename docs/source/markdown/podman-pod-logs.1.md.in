@@ -1,13 +1,13 @@
 % podman-pod-logs 1
 
 ## NAME
-podman\-pod\-logs - Display logs for pod with one or more containers
+podman\-pod\-logs - Display logs for a pod with one or more containers
 
 ## SYNOPSIS
 **podman pod logs** [*options*] *pod*
 
 ## DESCRIPTION
-The podman pod logs command batch-retrieves whatever logs are present with all the containers of a pod. Pod logs can be filtered by container name or ID using flag **-c** or **--container** if needed.
+The podman pod logs command batch-retrieves whatever logs are present from all the containers of a pod. Pod logs can be filtered by container name or ID using flag **-c** or **--container** if needed.
 
 Note: A long-running `podman pod log` command with a `-f` or `--follow` option needs to be reinvoked if a new container is added to the pod dynamically; otherwise, logs of newly added containers are not visible in the log stream.
 

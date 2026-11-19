@@ -152,7 +152,7 @@ For advanced users, the **overlay** option also supports custom non-volatile
 remove it on lifecycle completion.
 Example **:O,upperdir=/some/upper,workdir=/some/work**
 
-Subsequent executions of the container sees the original source directory
+Subsequent executions of the container see the original source directory
 content, any changes from previous <<container|pod>> executions no longer exist.
 
 One use case of the overlay mount is sharing the package cache from the
@@ -191,16 +191,16 @@ slave volumes, the source mount point has to be either shared or slave.
 
 To recursively mount a volume and all of its submounts into a
 <<container|pod>>, use the **rbind** option. By default the bind option is
-used, and submounts of the source directory is not mounted into the
+used, and submounts of the source directory are not mounted into the
 <<container|pod>>.
 
-Mounting the volume with a **copy** option tells podman to copy content from
+Mounting the volume with a **copy** option tells Podman to copy content from
 the underlying destination directory onto newly created internal volumes. The
 **copy** only happens on the initial creation of the volume. Content is not
 copied up when the volume is subsequently used on different containers. The
 **copy** option is ignored on bind mounts and has no effect.
 
-Mounting volumes with the **nosuid** options means that SUID executables on the
+Mounting volumes with the **nosuid** option means that SUID executables on the
 volume can not be used by applications to change their privilege. By default
 volumes are mounted with **nosuid**.
 
