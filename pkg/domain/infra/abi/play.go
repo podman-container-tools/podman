@@ -339,7 +339,8 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		}
 
 		// TODO: create constants for the various "kinds" of yaml files.
-		if options.ServiceContainer && serviceContainer == nil && (kind == "Pod" || kind == "Deployment") {
+		needsServiceContainer := kind == "Pod" || kind == "Deployment" || kind == "DaemonSet" || kind == "Job"
+		if options.ServiceContainer && serviceContainer == nil && needsServiceContainer {
 			ctr, err := ic.createServiceContainer(ctx, k8sName(content, "service"), options)
 			if err != nil {
 				return nil, err
