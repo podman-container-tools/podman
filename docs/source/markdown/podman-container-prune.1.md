@@ -9,6 +9,8 @@ podman\-container\-prune - Remove all stopped containers not associated with pod
 ## DESCRIPTION
 **podman container prune** removes all stopped containers that are not associated with a pod from local storage.
 
+When **--external** is specified, prune instead removes containers in storage that are not controlled by Podman, such as Buildah containers. Use the **until** filter to limit removal by the container's creation time. Mounted external containers cannot be removed by prune.
+
 ## OPTIONS
 #### **--filter**=*filters*
 
@@ -22,13 +24,17 @@ Supported filters:
 |:-----------:|----------------------------------------------------------------------------------------------------------------|
 | annotation  | Only remove containers, with (or without, in the case of annotation!=[...] is used) the specified annotations. |
 | label       | Only remove containers, with (or without, in the case of label!=[...] is used) the specified labels.           |
-| until       | Only remove containers created before given timestamp.                                                         |
+| until       | Only remove containers created before given timestamp. For external containers, this uses the creation time recorded in container storage. |
 
 The `label` *filter* accepts two formats. One is the `label`=*key* or `label`=*key*=*value*, which removes containers with the specified labels. The other format is the `label!`=*key* or `label!`=*key*=*value*, which removes containers without the specified labels. The `annotation` and `annotation!` filters work the same way for container annotations.
 
 **NOTE:** `label!` filters are combined with **AND**, so that the behavior is consistent with `label`, while in Docker, they are combined with **OR**.
 
 The `until` *filter* can be Unix timestamps, date formatted timestamps, or Go duration strings (e.g. 10m, 1h30m) computed relative to the machine’s time.
+
+#### **--external**
+
+Remove containers in storage that are not controlled by Podman, such as Buildah containers. This is a policy-based cleanup: the age filter does not guarantee that an external container is no longer used by another tool. Mounted containers are retained.
 
 #### **--force**, **-f**
 
@@ -71,6 +77,11 @@ $ podman container prune --filter until="10m"
 WARNING! This will remove all stopped containers.
 Are you sure you want to continue? [y/N] y
 3d366295e33d8cc612c4d873199bacadd55088d90d17dcafaa9a2d317ad50b4e
+```
+
+Remove external containers created before the last 24 hours:
+```
+$ podman container prune --external --filter until=24h
 ```
 
 ## SEE ALSO

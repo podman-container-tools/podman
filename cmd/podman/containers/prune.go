@@ -19,18 +19,19 @@ import (
 var (
 	pruneDescription = `podman container prune
 
-	Removes all non running containers`
+	Removes all non running containers, or external storage containers with --external`
 	pruneCommand = &cobra.Command{
 		Use:               "prune [options]",
 		Short:             "Remove all non running containers",
 		Long:              pruneDescription,
 		RunE:              prune,
 		ValidArgsFunction: completion.AutocompleteNone,
-		Example:           `podman container prune`,
+		Example:           `podman container prune --external --filter until=24h`,
 		Args:              validate.NoArgs,
 	}
-	force  bool
-	filter = []string{}
+	force         bool
+	pruneExternal bool
+	filter        = []string{}
 )
 
 func init() {
@@ -40,6 +41,7 @@ func init() {
 	})
 	flags := pruneCommand.Flags()
 	flags.BoolVarP(&force, "force", "f", false, "Do not prompt for confirmation.  The default is false")
+	flags.BoolVar(&pruneExternal, "external", false, "Remove containers in storage not controlled by Podman (e.g. Buildah containers)")
 	filterFlagName := "filter"
 	flags.StringArrayVar(&filter, filterFlagName, []string{}, "Provide filter values (e.g. 'label=<key>=<value>')")
 	_ = pruneCommand.RegisterFlagCompletionFunc(filterFlagName, common.AutocompletePruneFilters)
@@ -47,12 +49,16 @@ func init() {
 
 func prune(cmd *cobra.Command, _ []string) error {
 	var (
-		pruneOptions = entities.ContainerPruneOptions{}
+		pruneOptions = entities.ContainerPruneOptions{External: pruneExternal}
 		err          error
 	)
 	if !force {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Println("WARNING! This will remove all non running containers.")
+		if pruneExternal {
+			fmt.Println("WARNING! This will remove all external containers not controlled by Podman.")
+		} else {
+			fmt.Println("WARNING! This will remove all non running containers.")
+		}
 		fmt.Print("Are you sure you want to continue? [y/N] ")
 		answer, err := reader.ReadString('\n')
 		if err != nil {
