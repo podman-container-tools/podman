@@ -116,6 +116,18 @@ var _ = Describe("Verify podman containers.conf usage", func() {
 		Expect(session.OutputToString()).To(ContainSubstring("foo=bar"))
 	})
 
+	It("having env_merge from containers.conf", func() {
+		dockerfile := `FROM quay.io/libpod/alpine:latest
+	ENV PODMAN_TEST_VAR=original
+	`
+		podmanTest.BuildImage(dockerfile, "test-env-merge", "false")
+
+		session := podmanTest.Podman([]string{"run", "--rm", "test-env-merge", "printenv", "PODMAN_TEST_VAR"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+		Expect(session.OutputToString()).To(Equal("original-merged"))
+	})
+
 	It("additional devices", func() {
 		// containers.conf devices includes notone
 		session := podmanTest.Podman([]string{"run", "--device", "/dev/null:/dev/bar", ALPINE, "ls", "/dev"})
