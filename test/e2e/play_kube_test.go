@@ -4451,6 +4451,46 @@ VOLUME %s`, CITEST_IMAGE, hostPathDir+"/")
 		Expect(permData.OutputToString()).To(Equal("777"))
 	})
 
+	It("ConfigMap volume with executable script as command", func() {
+		// Files must be closed before the pod starts, or exec fails with ETXTBSY
+		cmYaml := `
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: script-configmap
+data:
+  script.sh: |
+    #!/bin/sh
+    true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: script-pod
+spec:
+  restartPolicy: Never
+  containers:
+  - command:
+    - /test/script.sh
+    image: ` + CITEST_IMAGE + `
+    name: script-ctr
+    volumeMounts:
+    - name: cm-volume
+      mountPath: /test
+  volumes:
+  - name: cm-volume
+    configMap:
+      name: script-configmap
+      defaultMode: 0755
+`
+
+		err := writeYaml(cmYaml, kubeYaml)
+		Expect(err).ToNot(HaveOccurred())
+		podmanTest.PodmanExitCleanly("kube", "play", kubeYaml)
+		wait := podmanTest.PodmanExitCleanly("wait", "script-pod-script-ctr")
+		Expect(wait.OutputToString()).To(Equal("0"))
+	})
+
 	It("configMap as volume with no defaultMode set", func() {
 		cmYaml := `
 kind: ConfigMap
