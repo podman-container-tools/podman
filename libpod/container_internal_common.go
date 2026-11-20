@@ -2124,8 +2124,9 @@ rootless=%d
 	// Add Subscription Mounts
 	subscriptionMounts := subscriptions.MountsWithUIDGID(c.config.MountLabel, c.state.RunDir, c.runtime.config.Containers.DefaultMountsFile, c.state.Mountpoint, c.RootUID(), c.RootGID(), rootless.IsRootless(), false)
 	for _, mount := range subscriptionMounts {
-		if _, ok := c.state.BindMounts[mount.Destination]; !ok {
-			c.state.BindMounts[mount.Destination] = mount.Source
+		dest := filepath.Clean(mount.Destination)
+		if _, ok := c.state.BindMounts[dest]; !ok {
+			c.state.BindMounts[dest] = mount.Source
 		}
 	}
 
@@ -2151,6 +2152,11 @@ rootless=%d
 			}
 			src := filepath.Join(c.config.SecretsPath, secret.Name)
 			dest := filepath.Join(base, secretFileName)
+			if base != "" && c.IsReadOnly() && filepath.IsLocal(secretFileName) {
+				if err := c.createSecretMountPoint(c.state.BindMounts[base], secretFileName); err != nil {
+					return fmt.Errorf("creating mount point for secret %q: %w", secret.Name, err)
+				}
+			}
 			c.state.BindMounts[dest] = src
 		}
 	}
