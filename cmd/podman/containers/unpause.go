@@ -62,10 +62,6 @@ func unpauseFlags(cmd *cobra.Command) {
 	filterFlagName := "filter"
 	flags.StringArrayVarP(&filters, filterFlagName, "f", []string{}, "Filter output based on conditions given")
 	_ = cmd.RegisterFlagCompletionFunc(filterFlagName, common.AutocompletePsFilters)
-
-	if registry.IsRemote() {
-		_ = flags.MarkHidden("cidfile")
-	}
 }
 
 func init() {
