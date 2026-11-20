@@ -1975,4 +1975,17 @@ spec:
     run_podman rm -f $cname
 }
 
+# bats test_tags=ci:parallel
+@test "podman run --read-only with secrets" {
+    secret_name="secret_$(random_string 10)"
+    secret_content=$(random_string)
+    run_podman secret create $secret_name - <<<"$secret_content"
+    run_podman run --rm --read-only --secret=$secret_name \
+               --secret=source=$secret_name,target=dir/other $IMAGE \
+               cat /run/secrets/$secret_name /run/secrets/dir/other
+    is "${lines[0]}" "$secret_content" "secret in a read-only container"
+    is "${lines[1]}" "$secret_content" "secret with a target in a subdirectory"
+    run_podman secret rm $secret_name
+}
+
 # vim: filetype=sh

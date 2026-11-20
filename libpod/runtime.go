@@ -1093,6 +1093,16 @@ func (r *Runtime) GraphRoot() string {
 	return r.store.GraphRoot()
 }
 
+// GraphDriver retrieves the name of the c/storage graph driver in use by
+// Libpod.  Unlike StorageConfig().GraphDriverName, this is the driver that was
+// actually selected, even when none is set in storage.conf.
+func (r *Runtime) GraphDriver() string {
+	if r.store == nil {
+		return ""
+	}
+	return r.store.GraphDriverName()
+}
+
 // GetPodName retrieves the pod name associated with a given full ID.
 // If the given ID does not correspond to any existing Pod or Container,
 // ErrNoSuchPod is returned.
