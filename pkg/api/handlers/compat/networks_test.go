@@ -184,3 +184,22 @@ func TestLeaseRangeToDockerIPRangeUsesNetworkAddress(t *testing.T) {
 		"prefix must start at the network address, not at StartIP")
 	assert.Equal(t, 22, got.Bits())
 }
+
+func TestConvertLibpodNetworkWithoutGateway(t *testing.T) {
+	_, subnet, err := net.ParseCIDR("10.89.0.0/24")
+	require.NoError(t, err)
+
+	network := &nettypes.Network{
+		Name:     "nogw",
+		ID:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		Driver:   nettypes.BridgeNetworkDriver,
+		Internal: true,
+		Subnets:  []nettypes.Subnet{{Subnet: nettypes.IPNet{IPNet: *subnet}}},
+	}
+
+	report, err := convertLibpodNetworktoDockerNetwork(nil, nil, network, false)
+	require.NoError(t, err)
+	require.Len(t, report.IPAM.Config, 1)
+	assert.Equal(t, netip.MustParsePrefix("10.89.0.0/24"), report.IPAM.Config[0].Subnet)
+	assert.False(t, report.IPAM.Config[0].Gateway.IsValid())
+}
