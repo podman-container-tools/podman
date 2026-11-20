@@ -1,0 +1,53 @@
+# -*- sh -*-
+#
+# Disconnecting an exited container must tear down its network (#30106).
+#
+
+if rootless; then
+    _show_ok skip "network disconnect bridge cleanup # skip - root only"
+else
+    # Prevent conmon's exit command from cleaning up the container before the
+    # disconnect request. Leave the real exit handling and netns intact.
+    conmon_wrapper=$WORKDIR/conmon-no-cleanup
+    cat > "$conmon_wrapper" <<EOF
+#!/usr/bin/env bash
+args=("\$@")
+for ((i = 0; i < \${#args[@]}; i++)); do
+    if [[ \${args[i]} == --exit-command ]]; then
+        args[i+1]="$(command -v true)"
+    fi
+done
+exec "$(command -v conmon)" "\${args[@]}"
+EOF
+    chmod +x "$conmon_wrapper"
+
+    network=disconnect-$(random_string 8)
+    ctr=$network-ctr
+    podman image exists $IMAGE || podman pull $IMAGE
+    t POST networks/create Name=$network 201
+    t GET libpod/networks/$network/json 200
+    bridge=$(jq -r '.network_interface' <<<"$output")
+
+    podman --conmon "$conmon_wrapper" run -d --name "$ctr" --network "$network" $IMAGE true
+    t POST containers/$ctr/wait 200 .StatusCode=0
+    t GET containers/$ctr/json 200 \
+        .State.Status=exited \
+        .NetworkSettings.SandboxKey~.*/netns/netns-
+
+    is "$(ip link show dev "$bridge" &>/dev/null && echo present)" present "bridge exists before disconnect"
+    t POST networks/$network/disconnect Container=$ctr 200
+    is "$(ip link show dev "$bridge" &>/dev/null && echo present)" "" "bridge removed after disconnect"
+
+    t DELETE containers/$ctr 204
+    t DELETE networks/$network 204
+
+    # Remove only this test's leaked bridge, even when the assertion fails.
+    if ip link show dev "$bridge" &>/dev/null; then
+        ip -brief link show dev "$bridge"
+        ip route show dev "$bridge"
+        ip link delete dev "$bridge"
+    fi
+    rm -f "$conmon_wrapper"
+fi
+
+# vim: filetype=sh
