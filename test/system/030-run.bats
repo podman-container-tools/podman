@@ -842,6 +842,34 @@ json-file | f
     fi
 }
 
+@test "podman run --rootfs :O - a failed start leaves no overlay mounted" {
+    skip_if_remote "checks the mount table of the podman process"
+
+    rootfs=$PODMAN_TMPDIR/rootfs
+    mkdir $rootfs
+    run_podman create $IMAGE
+    cid="$output"
+    run_podman export -o $PODMAN_TMPDIR/rootfs.tar $cid
+    tar -C $rootfs -xf $PODMAN_TMPDIR/rootfs.tar
+    run_podman rm $cid
+
+    # The user lookup runs after the overlay is mounted, and fails.
+    cname=c_$(safename)
+    run_podman 126 run --name $cname --user nosuchuser --rootfs $rootfs:O true
+    assert "$output" =~ "unable to find user nosuchuser"
+    run_podman container inspect --format '{{.ID}}' $cname
+    cid="$output"
+
+    if is_rootless; then
+        run_podman unshare cat /proc/self/mountinfo
+    else
+        run cat /proc/self/mountinfo
+    fi
+    assert "$output" !~ "$cid/rootfs/merge" "rootfs overlay unmounted after the failed start"
+
+    run_podman rm $cname
+}
+
 # https://github.com/containers/podman/issues/9096
 # podman exec may truncate stdout/stderr; actually a bug in conmon:
 # https://github.com/containers/conmon/issues/236
