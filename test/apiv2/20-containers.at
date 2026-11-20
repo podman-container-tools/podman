@@ -1235,3 +1235,32 @@ t GET containers/dnscontainer/json 200 \
 # cleanup
 podman rm -f dnscontainer
 podman network rm -f dnstest dnstest2
+
+# Empty PortBindings lists are backfilled with an unspecified HostIP/HostPort;
+# API >= 1.52 also returns a deprecation warning
+pb_body='{"PortBindings":{"8080/tcp":[],"53/udp":[],"80/tcp":[{"HostPort":"8000"}]}}'
+t POST /v1.52/containers/create?name=empty_pb_warn \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig="$pb_body" \
+  201 \
+  .Warnings\|length=1 \
+  .Warnings[0]~".*empty list of port-bindings: 53/udp, 8080/tcp\. Such bindings will be discarded.*"
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.PortBindings~.*\"8080/tcp\" \
+  .HostConfig.PortBindings~.*\"53/udp\" \
+  .HostConfig.PortBindings~.*\"80/tcp\"
+t DELETE containers/$cid 204
+
+# Older API versions are backfilled without a warning
+t POST /v1.51/containers/create?name=empty_pb_nowarn \
+  Image=$IMAGE \
+  Cmd='["true"]' \
+  HostConfig="$pb_body" \
+  201 \
+  .Warnings\|length=0
+cid=$(jq -r '.Id' <<<"$output")
+t GET containers/$cid/json 200 \
+  .HostConfig.PortBindings~.*\"8080/tcp\"
+t DELETE containers/$cid 204
