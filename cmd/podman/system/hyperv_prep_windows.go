@@ -20,10 +20,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/windows"
 )
 
-const (
-	mountsFlag    = "mounts"
-	defaultMounts = 2
-)
+const mountsFlag = "mounts"
 
 var (
 	hypervPrepDescription = `Command for Windows administrators who need to configure an host for running Hyper-V-based Podman machines.
@@ -60,6 +57,7 @@ func init() {
 	flags.BoolVar(&showStatus, "status", false, "Show vsock registry entries and Hyper-V group membership status")
 	flags.BoolVar(&resetEntries, "reset", false, "Remove all Podman vsock registry entries and optionally remove user from Hyper-V Administrators group")
 	flags.BoolVarP(&force, "force", "f", false, "Don't ask for confirmation during reset. Valid only when used with --reset.")
+	defaultMounts := len(registry.PodmanConfig().ContainersConfDefaultsRO.Machine.Volumes.Get())
 	flags.IntVar(&mounts, mountsFlag, defaultMounts, "Number of vsock entries to create for mount purpose")
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "reset", mountsFlag)
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "force")
