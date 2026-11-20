@@ -1,0 +1,111 @@
+% podman-manifest-list 1
+
+## NAME
+podman\-manifest\-list - List manifest lists and image indexes in local storage
+
+## SYNOPSIS
+**podman manifest list** [*options*]
+
+**podman manifest ls** [*options*]
+
+## DESCRIPTION
+
+List manifest lists and image indexes stored in local container storage.
+
+## OPTIONS
+
+#### **--format**, **-f**=*format*
+
+Change the default output format.  This can be of a supported type like 'json'
+or a Go template.
+Valid placeholders for the Go template are listed below:
+
+| **Placeholder** | **Description**                                      |
+| --------------- | ---------------------------------------------------- |
+| .Created        | Elapsed time since the manifest list was created     |
+| .CreatedAt      | Creation date and time of the manifest list          |
+| .Digest         | Manifest list digest                                 |
+| .ID             | Manifest list ID                                     |
+| .Repository     | Manifest list repository                             |
+| .Tag            | Manifest list tag                                    |
+
+#### **--help**
+
+Print usage statement.
+
+@@option no-trunc
+
+@@option noheading
+
+#### **--quiet**, **-q**
+
+Only print the manifest list IDs. This also implies no table heading
+is printed. This option cannot be combined with **--format**.
+
+## EXAMPLES
+
+List all manifest lists and image indexes in local storage.
+```
+$ podman manifest list
+REPOSITORY         TAG         IMAGE ID      CREATED
+localhost/mylist   latest      d663aec00035  2 weeks ago
+localhost/myindex  v1.0        ea058213e301  2 weeks ago
+```
+List all Podman manifest lists using the specified table format.
+```
+$ podman manifest list --format "table {{.ID}}\t{{.Repository}}\t{{.Tag}}"
+IMAGE ID      REPOSITORY         TAG
+d663aec00035  localhost/mylist   latest
+ea058213e301  localhost/myindex  v1.0
+```
+List all Podman manifest lists in json format.
+```
+$ podman manifest list --format json
+[
+    {
+        "Id": "d663aec000356e278e0840ee7df81a955092b8763c49868e985d3fa29cf07382",
+        "ParentId": "",
+        "RepoTags": [
+            "localhost/mylist:latest"
+        ],
+        "RepoDigests": [
+            "localhost/mylist@sha256:19d67af3f9aa775b4f3641f5820acbc77bcf9e02578d84b829d52d4f4581454c",
+            "localhost/mylist@sha256:20b959ad5960230b65a77b746bdbf5d991ade4d7a129c2554e167acdcc990531"
+        ],
+        "Created": 1794804372,
+        "Size": 488,
+        "SharedSize": 0,
+        "VirtualSize": 488,
+        "Labels": null,
+        "Containers": 0,
+        "Digest": "sha256:20b959ad5960230b65a77b746bdbf5d991ade4d7a129c2554e167acdcc990531",
+        "Names": [
+            "localhost/mylist:latest"
+        ]
+    },
+    {
+        "Id": "ea058213e30183fc9bcf147b01fbd0ccf7bcd11f25cbf8e0031df5fcbc787733",
+        "ParentId": "",
+        "RepoTags": [
+            "localhost/myindex:v1.0"
+        ],
+        "RepoDigests": [
+            "localhost/myindex@sha256:20b959ad5960230b65a77b746bdbf5d991ade4d7a129c2554e167acdcc990531",
+            "localhost/myindex@sha256:86ace1f75e20416867520134e57e384d6de50be646b98952d50b68c1430c8718"
+        ],
+        "Created": 1794804326,
+        "Size": 508,
+        "SharedSize": 0,
+        "VirtualSize": 508,
+        "Labels": null,
+        "Containers": 0,
+        "Digest": "sha256:20b959ad5960230b65a77b746bdbf5d991ade4d7a129c2554e167acdcc990531",
+        "Names": [
+            "localhost/myindex:v1.0"
+        ]
+    }
+]
+```
+
+## SEE ALSO
+**[podman(1)](podman.1.md)**, **[podman-manifest(1)](podman-manifest.1.md)**
