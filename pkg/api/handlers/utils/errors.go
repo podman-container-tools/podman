@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
+	secretsDefine "go.podman.io/common/pkg/secrets/define"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/errorhandling"
 	"go.podman.io/storage"
@@ -138,4 +139,15 @@ func ProcessBuildError(w http.ResponseWriter, err error) {
 		return
 	}
 	InternalServerError(w, err)
+}
+
+func GetCreateSecretStatus(err error) int {
+	switch {
+	case errors.Is(err, secretsDefine.ErrSecretExists):
+		return http.StatusConflict
+	case errors.Is(err, secretsDefine.ErrInvalidArg):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }

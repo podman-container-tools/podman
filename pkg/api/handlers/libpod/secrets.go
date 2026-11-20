@@ -46,7 +46,7 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 	ic := abi.ContainerEngine{Libpod: runtime}
 	report, err := ic.SecretCreate(r.Context(), query.Name, r.Body, opts)
 	if err != nil {
-		utils.InternalServerError(w, err)
+		utils.Error(w, utils.GetCreateSecretStatus(err), err)
 		return
 	}
 	utils.WriteResponse(w, http.StatusOK, report)
