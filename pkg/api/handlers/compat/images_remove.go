@@ -3,10 +3,12 @@
 package compat
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/pkg/api/handlers/utils"
@@ -32,6 +34,17 @@ func RemoveImage(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
 		return
 	}
+	var platforms []ocispec.Platform
+	if values := r.URL.Query()["platforms"]; len(values) > 0 {
+		if err := json.Unmarshal([]byte(values[0]), &platforms); err != nil || platforms == nil {
+			if err == nil {
+				err = errors.New("platforms must be a JSON array")
+			}
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse platforms: %w", err))
+			return
+		}
+	}
+
 	name := utils.GetName(r)
 	possiblyNormalizedName, err := utils.NormalizeToDockerHub(r, name)
 	if err != nil {
@@ -46,6 +59,7 @@ func RemoveImage(w http.ResponseWriter, r *http.Request) {
 		NoPrune:                      query.NoPrune,
 		Ignore:                       query.Ignore,
 		DisableForceRemoveContainers: true,
+		Platforms:                    platforms,
 	}
 	report, rmerrors := imageEngine.Remove(r.Context(), []string{possiblyNormalizedName}, options)
 	if len(rmerrors) > 0 && rmerrors[0] != nil {

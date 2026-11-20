@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	encconfig "github.com/containers/ocicrypt/config"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/image/v5/signature/signer"
 	"go.podman.io/image/v5/types"
@@ -26,6 +27,8 @@ type ImageRemoveOptions struct {
 	// NoPrune will not remove dangling images
 	NoPrune                      bool
 	DisableForceRemoveContainers bool
+	// Platforms specifies the target platforms for image removal.
+	Platforms []ocispec.Platform
 }
 
 // ImageRemoveReport is the response for removing one or more image(s) from storage
