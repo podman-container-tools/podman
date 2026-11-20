@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -320,10 +321,16 @@ func play(cmd *cobra.Command, args []string) error {
 		return errors.New("--force may be specified only with --down")
 	}
 
-	reader, err := readerFromArgs(args)
+	reader, err := readerFromArgs(args, entities.KubeFileSeparator)
 	if err != nil {
 		return err
 	}
+
+	configFiles, err := configFilePaths(args)
+	if err != nil {
+		return err
+	}
+	playOptions.ConfigFiles = configFiles
 
 	if playOptions.Down {
 		return teardown(cmd.Context(), reader, entities.PlayKubeDownOptions{Force: playOptions.Force})
@@ -353,7 +360,7 @@ func play(cmd *cobra.Command, args []string) error {
 		playOptions.ServiceContainer = true
 
 		// Read the kube yaml file again so that a reader can be passed down to the teardown function
-		teardownReader, err = readerFromArgs(args)
+		teardownReader, err = readerFromArgs(args, entities.KubeFileSeparator)
 		if err != nil {
 			return err
 		}
@@ -408,11 +415,11 @@ func playKube(cmd *cobra.Command, args []string) error {
 	return play(cmd, args)
 }
 
-func readerFromArgs(args []string) (*bytes.Reader, error) {
-	return readerFromArgsWithStdin(args, os.Stdin)
+func readerFromArgs(args []string, separators ...string) (*bytes.Reader, error) {
+	return readerFromArgsWithStdin(args, os.Stdin, separators...)
 }
 
-func readerFromArgsWithStdin(args []string, stdin io.Reader) (*bytes.Reader, error) {
+func readerFromArgsWithStdin(args []string, stdin io.Reader, separators ...string) (*bytes.Reader, error) {
 	// if user tried to pipe, shortcut the reading
 	if len(args) == 1 && args[0] == "-" {
 		data, err := io.ReadAll(stdin)
@@ -436,9 +443,14 @@ func readerFromArgsWithStdin(args []string, stdin io.Reader) (*bytes.Reader, err
 			return nil, err
 		}
 
+		separator := yamlFileSeparator
+		if len(separators) > 0 {
+			separator = separators[0]
+		}
+
 		if i < len(args)-1 {
-			// separate multiple files with YAML document separator
-			combined.WriteString(yamlFileSeparator)
+			// separate multiple files with YAML file separator
+			combined.WriteString(separator)
 		}
 	}
 
@@ -456,6 +468,26 @@ func readerFromArg(fileOrURL string) (io.ReadCloser, error) {
 	default:
 		return os.Open(fileOrURL)
 	}
+}
+
+func configFilePaths(args []string) ([]string, error) {
+	paths := make([]string, 0, len(args))
+
+	for _, arg := range args {
+		if arg == "-" || parse.ValidWebURL(arg) == nil {
+			paths = append(paths, "")
+			continue
+		}
+
+		path, err := filepath.Abs(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		paths = append(paths, path)
+	}
+
+	return paths, nil
 }
 
 func teardown(ctx context.Context, body io.Reader, options entities.PlayKubeDownOptions) error {
