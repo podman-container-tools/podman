@@ -182,7 +182,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}) SetPayload(payload {{ if and .
 // WriteResponse to the client
 func ({{ .ReceiverName }} *{{ pascalize .Name }}) WriteResponse(rw http.ResponseWriter, producer runtime.Producer) {
   {{ range .Headers }}
-  // response header {{.Name}}
+  // response header {{ escapeDoubleQuoted .Name }}
     {{ template "serverheaderbuilder" . -}}
   {{ end }}
   {{ if not .Schema }}

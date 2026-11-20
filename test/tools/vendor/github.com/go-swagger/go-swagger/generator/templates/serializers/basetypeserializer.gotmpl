@@ -31,7 +31,7 @@ func unmarshal{{ .GoName }}(data []byte, consumer runtime.Consumer) ({{ .GoName 
   buf := bytes.NewBuffer(data)
   {{ if .Discriminates }} buf2 := bytes.NewBuffer(data) {{ end }}
 
-  // the first time this is read is to fetch the value of the {{ .DiscriminatorField }} property.
+  // the first time this is read is to fetch the value of the {{ escapeDoubleQuoted .DiscriminatorField }} property.
   var getType struct { {{ pascalize .DiscriminatorField }} string `json:{{ printf "%q" .DiscriminatorField }}` }
   if err := consumer.Consume(buf, &getType); err != nil {
     return nil, err
@@ -41,7 +41,7 @@ func unmarshal{{ .GoName }}(data []byte, consumer runtime.Consumer) ({{ .GoName 
     return nil, err
   }
 
-  // The value of {{ .DiscriminatorField }} is used to determine which type to create and unmarshal the data into
+  // The value of {{ escapeDoubleQuoted .DiscriminatorField }} is used to determine which type to create and unmarshal the data into
   switch getType.{{ pascalize .DiscriminatorField }} {
     {{- range $k, $v := .Discriminates }}
     case {{ printf "%q" $k }}:
@@ -52,7 +52,7 @@ func unmarshal{{ .GoName }}(data []byte, consumer runtime.Consumer) ({{ .GoName 
       return &result, nil
     {{- end }}
   }
-  return nil, errors.New(422, "invalid {{ .DiscriminatorField }} value: %q", getType.{{ pascalize .DiscriminatorField }})
+  return nil, errors.New(422, "invalid {{ escapeDoubleQuoted .DiscriminatorField }} value: %q", getType.{{ pascalize .DiscriminatorField }})
 }
 {{- end }}
 

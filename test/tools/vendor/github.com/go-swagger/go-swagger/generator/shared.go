@@ -45,6 +45,8 @@ const (
 
 // DefaultSectionOpts for a given opts, this is used when no config file is passed
 // and uses the embedded templates when no local override can be found.
+//
+//nolint:gocognit // being refactored, this is indeed way to intricate to follow.
 func DefaultSectionOpts(gen *GenOpts) {
 	sec := gen.Sections
 	if len(sec.Models) == 0 {

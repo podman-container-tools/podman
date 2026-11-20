@@ -49,7 +49,7 @@ func (g *renderer) location(t *TemplateOpts, data any) (string, string, error) {
 	var tags []string
 	tagsF := v.FieldByName("Tags")
 	if tagsF.IsValid() {
-		if tt, ok := tagsF.Interface().([]string); ok {
+		if tt, ok := reflect.TypeAssert[[]string](tagsF); ok {
 			tags = tt
 		}
 	}
@@ -58,7 +58,7 @@ func (g *renderer) location(t *TemplateOpts, data any) (string, string, error) {
 	useTagsF := v.FieldByName("UseTags")
 	if useTagsF.IsValid() {
 		var ok bool
-		useTags, ok = useTagsF.Interface().(bool)
+		useTags, ok = reflect.TypeAssert[bool](useTagsF)
 		if !ok {
 			return "", "", fmt.Errorf("expected UseTags to be bool, but got %T", useTagsF.Interface())
 		}

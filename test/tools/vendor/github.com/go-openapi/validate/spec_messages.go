@@ -220,6 +220,12 @@ const (
 	// may indicate an unsafe or adversarial spec.
 	DubiousMultipleHostsWarning = "$ref values point to %d distinct remote hosts (%s): a spec referencing multiple hosts may be unsafe"
 
+	// DubiousNameWarning flags a name declared by the spec that contains a line break (\n or \r).
+	// No name in Swagger 2.0 needs one. Code generators print names into comments and string
+	// literals of the generated source, where a line break ends a // comment and turns the rest of
+	// the name into code.
+	DubiousNameWarning = "%s %q contains a line break: code generated from this spec may be unsafe"
+
 	InvalidObject = "expected an object in %q.%s"
 )
 
@@ -483,4 +489,8 @@ func dubiousAbsoluteRefMsg(ref string) errors.Error {
 
 func dubiousMultipleHostsMsg(count int, hosts string) errors.Error {
 	return errors.New(errors.CompositeErrorCode, DubiousMultipleHostsWarning, count, hosts)
+}
+
+func dubiousNameMsg(kind, name string) errors.Error {
+	return errors.New(errors.CompositeErrorCode, DubiousNameWarning, kind, name)
 }

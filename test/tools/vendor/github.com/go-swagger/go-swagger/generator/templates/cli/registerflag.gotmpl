@@ -60,7 +60,7 @@ if err := cmd.RegisterFlagCompletionFunc({{ flagNameVar .Name }},
         _ = cmd.PersistentFlags().String({{ flagNameVar .Name }}, "", {{ flagDescriptionVar .Name }})
         {{ template "enumcompletion" . }}
     {{- else }}
-        // warning: primitive {{.Name}} {{.GoType }} is not supported by go-swagger cli yet
+        // warning: primitive {{ escapeDoubleQuoted .Name }} {{.GoType }} is not supported by go-swagger cli yet
     {{- end }}
 {{ end }}
 
@@ -76,7 +76,7 @@ if err := cmd.RegisterFlagCompletionFunc({{ flagNameVar .Name }},
         {{ template "flagnamevar" . }}
         _ = cmd.PersistentFlags().StringSlice({{ flagNameVar .Name }}, []string{}, {{ flagDescriptionVar .Name }})
     {{- else }}
-        // warning: array {{.Name}} {{.GoType }} is not supported by go-swagger cli yet
+        // warning: array {{ escapeDoubleQuoted .Name }} {{.GoType }} is not supported by go-swagger cli yet
     {{- end }}
 {{ end }}
 
@@ -84,7 +84,7 @@ if err := cmd.RegisterFlagCompletionFunc({{ flagNameVar .Name }},
 {{/* each body parameter gets a string flag to input json raw string */}}
 {{ define "modelparamstringregistrator" }}
     {{ template "flagnamevar" . }}
-    _ = cmd.PersistentFlags().String({{ flagNameVar .Name }}, "", `Optional json string for [{{ .Name }}]. {{ escapeBackticks .Description }}`)
+    _ = cmd.PersistentFlags().String({{ flagNameVar .Name }}, "", `Optional json string for [{{ escapeBackticks .Name }}]. {{ escapeBackticks .Description }}`)
 {{ end }}
 
 {{ define "modelparamregistrator" }} {{/* register a param that has a schema */}}

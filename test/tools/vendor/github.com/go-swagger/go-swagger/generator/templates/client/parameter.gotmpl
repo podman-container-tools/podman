@@ -80,7 +80,7 @@ type {{ pascalize .Name }}Params struct {
       {{- if or .SwaggerFormat .Default }}
   //
         {{- if .SwaggerFormat }}
-  // Format: {{ .SwaggerFormat }}
+  // Format: {{ escapeDoubleQuoted .SwaggerFormat }}
         {{- end }}
         {{- if .Default }}
   // Default: {{ json .Default }}
@@ -92,7 +92,7 @@ type {{ pascalize .Name }}Params struct {
       {{- if or .SwaggerFormat .Default }}
   //
         {{- if .SwaggerFormat }}
-  // Format: {{ .SwaggerFormat }}
+  // Format: {{ escapeDoubleQuoted .SwaggerFormat }}
         {{- end }}
         {{- if .Default }}
   // Default: {{ json .Default }}
@@ -222,7 +222,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
       {{- if .IsQueryParam }}
 
-  // query param {{ .Name }}
+  // query param {{ escapeDoubleQuoted .Name }}
         {{- if .IsNullable }}
   var qr{{ pascalize .Name }} {{ .GoType }}
 
@@ -246,14 +246,14 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
       {{- else if .IsPathParam }}
 
-  // path param {{ .Name }}
+  // path param {{ escapeDoubleQuoted .Name }}
   if err := r.SetPathParam({{ printf "%q" .Name }}, {{ if .Formatter }}{{ .Formatter }}({{ if .IsNullable }}*{{end}}{{ .ValueExpression }}){{ else }}{{ if and (not .IsCustomFormatter) .IsNullable }}*{{end}}{{ .ValueExpression }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}); err != nil {
     return err
   }
 
       {{- else if .IsHeaderParam }}
 
-  // header param {{ .Name }}
+  // header param {{ escapeDoubleQuoted .Name }}
   if err := r.SetHeaderParam({{ printf "%q" .Name }}, {{ if .Formatter }}{{ .Formatter }}({{ if .IsNullable }}*{{end}}{{ .ValueExpression }}){{ else }}{{ if and (not .IsCustomFormatter) .IsNullable }}*{{end}}{{ .ValueExpression }}{{ if .IsCustomFormatter }}.String(){{end}}{{end}}); err != nil {
     return err
   }
@@ -263,7 +263,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
   if {{ .ValueExpression }} != nil {
           {{- end }}
-    // form file param {{ .Name }}
+    // form file param {{ escapeDoubleQuoted .Name }}
     if err := r.SetFileParam({{ printf "%q" .Name }}, {{ .ValueExpression }}); err != nil {
       return err
     }
@@ -272,7 +272,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
           {{- end }}
         {{- else }}
 
-  // form param {{ .Name }}
+  // form param {{ escapeDoubleQuoted .Name }}
           {{- if .IsNullable }}
   var fr{{ pascalize .Name }} {{ .GoType }}
   if {{ .ValueExpression }} != nil {
@@ -304,7 +304,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
         {{- if .Child }}{{/* bind complex parameters (arrays and nested structures) */}}
 
-  // binding items for {{ .Name }}
+  // binding items for {{ escapeDoubleQuoted .Name }}
   joined{{ pascalize .Name }} := {{ .ReceiverName }}.bindParam{{ pascalize .Name }}(reg)
         {{- else }}
   values{{ pascalize .Name }} := {{ if and (not .IsArray) (not .IsStream) (not .IsMap) (.IsNullable) }}*{{end}}{{ .ValueExpression }}
@@ -313,21 +313,21 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
         {{- if .IsQueryParam }}
 
-  // query array param {{ .Name }}
+  // query array param {{ escapeDoubleQuoted .Name }}
   if err := r.SetQueryParam({{ printf "%q" .Name }}, joined{{ pascalize .Name }}...); err != nil {
     return err
   }
 
         {{- else if and .IsFormParam }}
 
-  // form array param {{ .Name }}
+  // form array param {{ escapeDoubleQuoted .Name }}
   if err := r.SetFormParam({{ printf "%q" .Name }}, joined{{ pascalize .Name }}...); err != nil {
     return err
   }
 
         {{- else if and .IsPathParam }}
 
-  // path array param {{ .Name }}
+  // path array param {{ escapeDoubleQuoted .Name }}
   // SetPathParam does not support variadic arguments, since we used JoinByFormat
   // we can send the first item in the array as it's all the items of the previous
   // array joined together
@@ -339,7 +339,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
         {{- else if .IsHeaderParam }}
 
-  // header array param {{ .Name }}
+  // header array param {{ escapeDoubleQuoted .Name }}
   if len(joined{{ pascalize .Name }}) > 0 {
      if err := r.SetHeaderParam({{ printf "%q" .Name }}, joined{{ pascalize .Name }}[0]); err != nil {
       return err
@@ -372,7 +372,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Params) WriteToRequest(r runtime
 
 {{- range .Params }}
   {{- if and (not .IsBodyParam) (not .IsFileParam) .IsArray }}
-// bindParam{{ pascalize $.Name }} binds the parameter {{ .Name }}.
+// bindParam{{ pascalize $.Name }} binds the parameter {{ escapeDoubleQuoted .Name }}.
 func ({{ .ReceiverName }} *{{ pascalize $.Name }}Params) bindParam{{ pascalize .Name }}(formats strfmt.Registry) []string {
   {{ varname .Child.ValueExpression }}R := {{ if and (not .IsArray) (not .IsStream) (not .IsMap) (.IsNullable) }}*{{end}}{{ .ValueExpression }}
 

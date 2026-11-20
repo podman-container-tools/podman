@@ -29,7 +29,7 @@ type DiffCommand struct {
 	Args                struct {
 		OldSpec string `positional-arg-name:"{old spec}"`
 		NewSpec string `positional-arg-name:"{new spec}"`
-	} `required:"2" positional-args:"specs" description:"Input specs to be diff-ed"`
+	} `description:"Input specs to be diff-ed" positional-args:"specs" required:"2"`
 }
 
 // Execute diffs the two specs provided.

@@ -177,7 +177,7 @@ type {{ pascalize .Name }}API struct {
     {{- if .IsAPIKeyAuth}}
 
   // {{ pascalize .ID }}Auth registers a function that takes a token and returns a principal
-  // it performs authentication based on an api key {{ .Name }} provided in the {{.Source}}
+  // it performs authentication based on an api key {{ escapeDoubleQuoted .Name }} provided in the {{ escapeDoubleQuoted .Source }}
   {{ pascalize .ID }}Auth func(string) ({{ if .PrincipalIsNullable }}*{{ end }}{{ .Principal }}, error)
     {{- end }}
     {{- if .IsOAuth2 }}

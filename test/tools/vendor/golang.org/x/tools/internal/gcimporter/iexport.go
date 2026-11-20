@@ -1088,7 +1088,14 @@ func (w *exportWriter) doTyp(t types.Type, pkg *types.Package) {
 
 	case *types.Interface:
 		w.startType(interfaceType)
-		w.pkg(pkg) // qualifies unexported method funcs
+		methodPkg := pkg
+		for i := range t.NumExplicitMethods() {
+			if mp := t.ExplicitMethod(i).Pkg(); mp != nil {
+				methodPkg = mp
+				break
+			}
+		}
+		w.pkg(methodPkg) // qualifies unexported method funcs
 
 		n := t.NumEmbeddeds()
 		w.uint64(uint64(n))
@@ -1297,11 +1304,10 @@ func (w *exportWriter) value(typ types.Type, v constant.Value, pkg *types.Packag
 		}
 		w.mpint(&i, typ)
 	case types.IsFloat:
-		f := constantToFloat(v)
-		w.mpfloat(f, typ)
+		w.float(v, typ)
 	case types.IsComplex:
-		w.mpfloat(constantToFloat(constant.Real(v)), typ)
-		w.mpfloat(constantToFloat(constant.Imag(v)), typ)
+		w.float(constant.Real(v), typ)
+		w.float(constant.Imag(v), typ)
 	case types.IsString:
 		w.string(constant.StringVal(v))
 	default:
@@ -1339,6 +1345,39 @@ func constantToFloat(x constant.Value) *big.Float {
 	return &f
 }
 
+// float exports a floating-point constant value.
+func (w *exportWriter) float(x constant.Value, typ types.Type) {
+	if w.p.version < iexportVersionRationalFloats {
+		w.mpfloat(constantToFloat(x), typ) // 512-bit mantissa f.p.
+		return
+	}
+
+	// lossless encoding
+	switch v := constant.Val(constant.ToFloat(x)).(type) {
+	case *big.Rat:
+		if n := v.Num(); v.IsInt() && n.BitLen() <= 8*untypedMaxBytes {
+			w.uint64(floatTagInt) // integer
+			w.mpint(n, types.Typ[types.UntypedFloat])
+		} else {
+			w.uint64(floatTagRat) // rational
+			w.bigInt(n)
+			w.bigInt(v.Denom())
+		}
+	case *big.Float:
+		w.uint64(floatTagFloat) // 512-bit mantissa f.p.
+		w.mpfloat(v, typ)
+	default:
+		panic(internalErrorf("unexpected float constant %v (%T)", x, v))
+	}
+}
+
+// bigInt exports an arbitrary-precision integer as its big-endian
+// magnitude bytes (as a string) followed by a sign bool.
+func (w *exportWriter) bigInt(v *big.Int) {
+	w.string(string(v.Bytes())) // (big endian)
+	w.bool(v.Sign() < 0)
+}
+
 func valueToRat(x constant.Value) *big.Rat {
 	// Convert little-endian to big-endian.
 	// I can't believe this is necessary.
@@ -1346,7 +1385,11 @@ func valueToRat(x constant.Value) *big.Rat {
 	for i := 0; i < len(bytes)/2; i++ {
 		bytes[i], bytes[len(bytes)-1-i] = bytes[len(bytes)-1-i], bytes[i]
 	}
-	return new(big.Rat).SetInt(new(big.Int).SetBytes(bytes))
+	i := new(big.Int).SetBytes(bytes)
+	if constant.Sign(x) < 0 {
+		i.Neg(i) // constant.Bytes returns the absolute value
+	}
+	return new(big.Rat).SetInt(i)
 }
 
 // mpint exports a multi-precision integer.

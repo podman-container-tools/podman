@@ -115,6 +115,12 @@ func (t *typeResolver) ResolveSchema(schema *spec.Schema, isAnonymous, isRequire
 		return result, nil
 	}
 
+	defer func() {
+		if _, ok := t.isNullableOverride(schema); ok {
+			result.IsNullableSet = true
+		}
+	}()
+
 	extType, isExternalType := t.resolveExternalType(schema.Extensions)
 	if isExternalType {
 		tpe, pkg, alias := t.knownDefGoType(t.ModelName, *schema, t.goTypeName)
@@ -410,6 +416,9 @@ func (t *typeResolver) resolveSchemaRef(schema *spec.Schema, isRequired bool) (r
 	result.HasDiscriminator = res.HasDiscriminator
 	result.IsBaseType = result.HasDiscriminator
 	result.IsNullable = result.IsNullable || t.isNullable(ref) // this has to be overridden for slices and maps
+	if _, ok := t.isNullableOverride(ref); ok {
+		result.IsNullableSet = true
+	}
 	result.IsEnumCI = false
 
 	return returns, result, err
@@ -564,8 +573,13 @@ func (t *typeResolver) resolveArray(schema *spec.Schema, isAnonymous, isRequired
 		elem = resolved
 	}
 
-	if nullable, ok := t.isNullableOverride(elem); ok {
+	nullable, ok := t.isNullableOverride(schema.Items.Schema)
+	if !ok {
+		nullable, ok = t.isNullableOverride(elem)
+	}
+	if ok {
 		rt.IsNullable = nullable
+		rt.IsNullableSet = true
 	} else {
 		// this differs from isNullable for elements with AllOf
 		rt.IsNullable = len(elem.Properties) > 0 && !rt.HasDiscriminator
@@ -965,12 +979,14 @@ type resolvedType struct {
 	IsCustomFormatter bool
 	IsAliased         bool
 	IsNullable        bool
-	IsStream          bool
-	IsEmptyOmitted    bool
-	IsJSONString      bool
-	IsEnumCI          bool
-	IsBase64          bool
-	IsExternal        bool
+	// IsNullableSet reports whether nullability was explicitly set by an extension.
+	IsNullableSet  bool
+	IsStream       bool
+	IsEmptyOmitted bool
+	IsJSONString   bool
+	IsEnumCI       bool
+	IsBase64       bool
+	IsExternal     bool
 
 	// A tuple gets rendered as an anonymous struct with P{index} as property name
 	IsTuple            bool
