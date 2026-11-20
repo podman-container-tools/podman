@@ -31,7 +31,7 @@
   for {{ .IndexVar }} := range body {
       {{- if .Schema.Items.IsNullable }}
     if body[{{ .IndexVar }}] == nil {
-        {{- if .Schema.Items.Required }}
+        {{- if or .Schema.Items.Required (not .Schema.Items.IsNullableSet) }}
         res = append(res, errors.Required({{ .Child.Path }}, {{ printf "%q" .Child.Location }}, body[{{ .IndexVar }}]))
         break
         {{- else }}
@@ -150,7 +150,7 @@ if err := validate.UniqueItems({{ .Path }}, {{ printf "%q" .Location }}, {{ if a
  {{- end }}
  {{- if .Enum }}
 
-// {{ .ItemsDepth }}Enum: {{ .Enum }}
+// {{ .ItemsDepth }}Enum: {{ escapeDoubleQuoted (printf "%v" .Enum) }}
 if err := validate.EnumCase(
   {{- .Path }}, {{ printf "%q" .Location }},
   {{- if and (not .IsArray) (not .HasDiscriminator) (not .IsInterface) (not .IsStream) .IsNullable }}*{{ end -}}
@@ -261,7 +261,7 @@ var {{ varname .Child.ValueExpression }}R {{ .GoType }}
 for {{ if .Child.NeedsIndex }}{{ .IndexVar }}{{ else }}_{{ end }}, {{ varname .Child.ValueExpression }}V := range {{ varname .Child.ValueExpression }}C {
   {{- if .Child.IsArray }}{{/* recursive resolution of arrays in params */}}
     {{- if not .Child.SkipParse }}
-    // {{ .Child.ItemsDepth }}CollectionFormat: {{ .Child.CollectionFormat }}
+    // {{ .Child.ItemsDepth }}CollectionFormat: {{ escapeDoubleQuoted .Child.CollectionFormat }}
     {{- end }}
     {{ .Child.Child.ValueExpression }}C := {{ if .Child.SkipParse }}{{ varname .Child.ValueExpression }}V{{ else }}stringutils.SplitByFormat({{ varname .Child.ValueExpression }}V, {{ printf "%q" .Child.CollectionFormat }}){{ end }}
     {{- if .Child.HasSliceValidations }}
@@ -387,7 +387,7 @@ func New{{ pascalize .Name }}Params() {{ pascalize .Name }}Params {
 // {{ pascalize .Name }}Params contains all the bound params for the {{ humanize .Name }} operation
 // typically these are obtained from a http.Request
 //
-// swagger:parameters {{ .Name }}
+// swagger:parameters {{ escapeDoubleQuoted .Name }}
 type {{ pascalize .Name }}Params struct {
   // HTTP Request Object
   HTTPRequest *http.Request `json:"-"`
@@ -414,7 +414,7 @@ type {{ pascalize .Name }}Params struct {
 // Min Items: {{ .MinItems }}{{ end }}{{ if .UniqueItems }}
 // Unique: true{{ end }}{{ if .Location }}
 // In: {{ .Location }}{{ end }}{{ if .CollectionFormat }}
-// Collection Format: {{ .CollectionFormat }}{{ end }}{{ if .HasDefault }}
+// Collection Format: {{ escapeDoubleQuoted .CollectionFormat }}{{ end }}{{ if .HasDefault }}
 // Default: {{ printGoLiteral .Default }}{{ end }}
   {{ if not .Schema }}{{ .ID }} {{ if and (not .IsArray) (not .HasDiscriminator) (not .IsInterface) (not .IsStream) .IsNullable }}*{{ end }}{{.GoType}}{{ else }}{{ .ID }} {{ if and (not .Schema.IsBaseType) .IsNullable (not .Schema.IsStream) }}*{{ end }}{{.GoType}}{{ end }}
   {{- end}}
@@ -612,7 +612,7 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(file multipart.
   {{- else if not .IsBodyParam }}
     {{- if or .IsPrimitive .IsCustomFormatter }}
 
-// bind{{ .ID }} binds and validates parameter {{ .ID }} from {{ .Location }}.
+// bind{{ .ID }} binds and validates parameter {{ .ID }} from {{ escapeDoubleQuoted .Location }}.
 func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []string, hasKey bool, formats strfmt.Registry) error {
       {{- if and (not .IsPathParam) .Required }}
     if !hasKey {
@@ -656,7 +656,7 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []strin
   {{ .ValueExpression }} = {{ if .IsNullable }}&{{ end }}value
       {{- else if .IsCustomFormatter }}
 
-  // Format: {{ .SwaggerFormat }}
+  // Format: {{ escapeDoubleQuoted .SwaggerFormat }}
   value, err := formats.Parse({{ printf "%q" .SwaggerFormat }}, raw)
   if err != nil {
     return errors.InvalidType({{ .Path }}, {{ printf "%q" .Location }}, {{ printf "%q" .GoType }}, raw)
@@ -677,9 +677,9 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []strin
 }
     {{- else if .IsArray }}
 
-// bind{{ .ID }} binds and validates array parameter {{ .ID }} from {{ .Location }}.
+// bind{{ .ID }} binds and validates array parameter {{ .ID }} from {{ escapeDoubleQuoted .Location }}.
 //
-// Arrays are parsed according to CollectionFormat: "{{ .CollectionFormat }}" (defaults to "csv" when empty).
+// Arrays are parsed according to CollectionFormat: "{{ escapeDoubleQuoted .CollectionFormat }}" (defaults to "csv" when empty).
 func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []string, hasKey bool, formats strfmt.Registry) error {
       {{- if .Required }}
   if !hasKey {
@@ -687,7 +687,7 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []strin
   }
       {{- end }}
       {{- if eq .CollectionFormat "multi" }}
-  // CollectionFormat: {{ .CollectionFormat }}
+  // CollectionFormat: {{ escapeDoubleQuoted .CollectionFormat }}
   {{ varname .Child.ValueExpression }}C := rawData
       {{- else }}
   var qv{{ pascalize .Name }} string
@@ -695,7 +695,7 @@ func ({{ .ReceiverName }} *{{ $className }}Params) bind{{ .ID }}(rawData []strin
     qv{{ pascalize .Name }} = rawData[len(rawData) - 1]
   }
 
-  // CollectionFormat: {{ .CollectionFormat }}
+  // CollectionFormat: {{ escapeDoubleQuoted .CollectionFormat }}
   {{ varname .Child.ValueExpression }}C := stringutils.SplitByFormat(qv{{ pascalize .Name }}, {{ printf "%q" .CollectionFormat }})
       {{- end }}
       {{- if and .Required (not .AllowEmptyValue) }}

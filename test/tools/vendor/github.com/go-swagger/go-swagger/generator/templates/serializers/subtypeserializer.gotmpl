@@ -25,16 +25,16 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
       {{ range .Properties }}
         {{- if or .IsBaseType (not .IsExported) }}
           {{- if not .Required }}
-  var allOf{{ .GoName }} {{ if .IsArray }}[]{{ pascalize .Items.GoType }}{{ else }}{{ pascalize .GoType }}{{ end }}
+  var allOf{{ .GoName }} {{ if .IsArray }}[]{{ .Items.GoType }}{{ else }}{{ .GoType }}{{ end }}
   if string(data.{{ .GoName }}) != "null" {
-    {{ camelize .Name }}, err := Unmarshal{{ if .IsArray }}{{ pascalize .Items.GoType }}Slice{{ else }}{{ pascalize .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
+    {{ camelize .Name }}, err := {{ if .IsArray }}{{ if .Items.PkgAlias }}{{ .Items.PkgAlias }}.{{ else if containsPkgStr .Items.GoType }}{{ (split "." .Items.GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .Items.GoType }}Slice{{ else }}{{ if .PkgAlias }}{{ .PkgAlias }}.{{ else if containsPkgStr .GoType }}{{ (split "." .GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
     if err != nil && !stderrors.Is(err, io.EOF) {
       return err
     }
     allOf{{ .GoName }} = {{ camelize .Name }}
   }
           {{- else }}
-  allOf{{ .GoName }}, err := Unmarshal{{ if .IsArray }}{{ pascalize .Items.GoType }}Slice{{ else }}{{ pascalize .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
+  allOf{{ .GoName }}, err := {{ if .IsArray }}{{ if .Items.PkgAlias }}{{ .Items.PkgAlias }}.{{ else if containsPkgStr .Items.GoType }}{{ (split "." .Items.GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .Items.GoType }}Slice{{ else }}{{ if .PkgAlias }}{{ .PkgAlias }}.{{ else if containsPkgStr .GoType }}{{ (split "." .GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
   if err != nil && !stderrors.Is(err, io.EOF) {
     return err
   }
@@ -46,16 +46,16 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
   {{ range .Properties }}
     {{- if or .IsBaseType (not .IsExported) }}
       {{- if not .Required }}
-  var prop{{ .GoName }} {{ if .IsArray }}[]{{ pascalize .Items.GoType }}{{ else }}{{ pascalize .GoType }}{{ end }}
+  var prop{{ .GoName }} {{ if .IsArray }}[]{{ .Items.GoType }}{{ else }}{{ .GoType }}{{ end }}
   if string(data.{{ .GoName }}) != "null" {
-    {{ camelize .Name }}, err := Unmarshal{{ if .IsArray }}{{ pascalize .Items.GoType }}Slice{{ else }}{{ pascalize .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
+    {{ camelize .Name }}, err := {{ if .IsArray }}{{ if .Items.PkgAlias }}{{ .Items.PkgAlias }}.{{ else if containsPkgStr .Items.GoType }}{{ (split "." .Items.GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .Items.GoType }}Slice{{ else }}{{ if .PkgAlias }}{{ .PkgAlias }}.{{ else if containsPkgStr .GoType }}{{ (split "." .GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
     if err != nil && !stderrors.Is(err, io.EOF) {
       return err
     }
     prop{{ .GoName }} = {{ camelize .Name }}
   }
       {{- else }}
-  prop{{ .GoName }}, err := Unmarshal{{ if .IsArray }}{{ pascalize .Items.GoType }}Slice{{ else }}{{ pascalize .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
+  prop{{ .GoName }}, err := {{ if .IsArray }}{{ if .Items.PkgAlias }}{{ .Items.PkgAlias }}.{{ else if containsPkgStr .Items.GoType }}{{ (split "." .Items.GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .Items.GoType }}Slice{{ else }}{{ if .PkgAlias }}{{ .PkgAlias }}.{{ else if containsPkgStr .GoType }}{{ (split "." .GoType)._0 }}.{{ end }}Unmarshal{{ dropPackage .GoType }}{{ end }}(bytes.NewBuffer(data.{{ .GoName }}), runtime.JSONConsumer())
   if err != nil && !stderrors.Is(err, io.EOF) {
     return err
   }
@@ -77,7 +77,7 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
           {{- else }}
   if base.{{ $val.GoName }} != result.{{ $val.GoName }}() {
     /* Not the type we're looking for. */
-    return errors.New(422, "invalid {{$val.Name}} value: %q", base.{{ $val.GoName }})
+    return errors.New(422, "invalid {{ escapeDoubleQuoted $val.Name }} value: %q", base.{{ $val.GoName }})
   }
           {{- end }}
         {{- end }}
@@ -102,7 +102,7 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
           {{- else }}
   if base.{{ $val.GoName }} != result.{{ $val.GoName }}() {
     /* Not the type we're looking for. */
-    return errors.New(422, "invalid {{$val.Name}} value: %q", base.{{ $val.GoName }})
+    return errors.New(422, "invalid {{ escapeDoubleQuoted $val.Name }} value: %q", base.{{ $val.GoName }})
   }
           {{- end }}
         {{- end }}
@@ -112,7 +112,7 @@ func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(raw []byte) error {
     {{- end }}
   {{- end }}
   {{ range .Properties }}
-  // {{ .Name }}
+  // {{ escapeDoubleQuoted .Name }}
   result.{{ if .IsBaseType }}{{ camelize .Name }}Field{{ else }}{{ .GoName }}{{ end }} = {{ if .IsBaseType }}prop{{ .GoName }}{{ else }}data.{{ .GoName}}{{ end }}
   {{ end }}
   *{{ .ReceiverName }} = result

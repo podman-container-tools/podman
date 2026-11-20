@@ -22,7 +22,7 @@
         }
         m.{{ .GoName }} = {{- if .IsNullable }}&{{- end }}{{ flagValueVar .Name }}
     {{- else }}
-        // warning: primitive {{.Name}} {{.GoType }} is not supported by go-swagger cli yet
+        // warning: primitive {{ escapeDoubleQuoted .Name }} {{.GoType }} is not supported by go-swagger cli yet
     {{- end }}
 {{ end }}
 
@@ -50,6 +50,6 @@
         }
         m.{{ .GoName }} = {{- if .IsNullable }}&{{- end }}{{ flagValueVar .Name }}
     {{- else }}
-        // warning: array {{.Name}} {{.GoType }} is not supported by go-swagger cli yet
+        // warning: array {{ escapeDoubleQuoted .Name }} {{.GoType }} is not supported by go-swagger cli yet
     {{- end }}
 {{ end }}

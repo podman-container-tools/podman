@@ -694,6 +694,11 @@ func setSingleImpl(node, data any, decodedToken string, nameProvider NameProvide
 		return node, nil
 
 	case reflect.Map:
+		if rValue.IsNil() {
+			// a pointer to a nil map: assigning to it would panic
+			return node, fmt.Errorf("cannot set field %q on nil value: %w", decodedToken, ErrPointer)
+		}
+
 		kv, err := mapKeyValue(rValue.Type(), decodedToken)
 		if err != nil {
 			return node, err

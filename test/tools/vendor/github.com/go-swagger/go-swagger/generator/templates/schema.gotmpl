@@ -29,7 +29,7 @@
         }
       {{- end }}
     {{- end }}
-    {{- if .Default }}{{/* TODO(fred) - issue #2189 */}}
+    {{- if and .Default (not (and .IsComplexObject .StrictAdditionalProperties (not (or .IsSubType .IsTuple .HasBaseType .IsAdditionalProperties .AllOf)))) }}{{/* defaults are hydrated by noAdditionalPropertiesSerializer when it is used, see issue #2189 */}}
       func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(b []byte) error {
         type {{ .GoName }}Alias {{ .GoName }}
         var t {{ .GoName }}Alias

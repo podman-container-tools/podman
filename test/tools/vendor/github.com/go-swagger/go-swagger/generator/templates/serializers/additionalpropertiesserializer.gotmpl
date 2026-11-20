@@ -78,6 +78,11 @@ func ({{.ReceiverName}} {{ .GoName }}) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals this object while disallowing additional properties from JSON
 func ({{.ReceiverName}} *{{ .GoName }}) UnmarshalJSON(data []byte) error {
   var props {{ template "withoutAdditionalBody" . }}
+  {{- if .Default }}
+  if err := json.Unmarshal([]byte({{printf "%q" (json .Default)}}), &props); err != nil {
+    return err
+  }
+  {{- end }}
 
   dec := json.NewDecoder(bytes.NewReader(data))
   dec.DisallowUnknownFields()

@@ -1261,6 +1261,7 @@ func (sg *schemaGenContext) buildArray() error {
 	elProp.GenSchema.Suffix = "Items"
 
 	elProp.GenSchema.IsNullable = tpe.IsNullable && !tpe.HasDiscriminator
+	elProp.GenSchema.IsNullableSet = tpe.IsNullableSet
 	if elProp.GenSchema.IsNullable {
 		sg.GenSchema.GoType = "[]*" + elProp.GenSchema.GoType
 	} else {
@@ -1272,6 +1273,11 @@ func (sg *schemaGenContext) buildArray() error {
 	schemaCopy := elProp.GenSchema
 
 	schemaCopy.Required = false
+	if tpe.IsBaseType && strings.HasSuffix(sg.GenSchema.ValueExpression, asMethod) && schemaCopy.ValueExpression == sg.ValueExpr+"["+sg.IndexVar+"]" {
+		// Polymorphic arrays expose their backing field through a getter. Keep
+		// the getter when validating an individual element as well.
+		schemaCopy.ValueExpression = sg.GenSchema.ValueExpression + "[" + sg.IndexVar + "]"
+	}
 
 	// validations of items
 	// include format validation, excluding binary and base64 format validation
@@ -1505,6 +1511,7 @@ func (sg *schemaGenContext) shortCircuitNamedRef() (bool, error) {
 		tpe.Pkg = sg.TypeResolver.definitionPkg
 
 		tpe.IsNullable = tpx.IsNullable // TODO
+		tpe.IsNullableSet = tpx.IsNullableSet
 		tpe.IsInterface = tpx.IsInterface
 		tpe.IsStream = tpx.IsStream
 		tpe.IsEmbedded = tpx.IsEmbedded

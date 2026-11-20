@@ -83,7 +83,7 @@ type Config struct {
 	{{- range .Consumes }}
 	{{- if .Implementation }}
 
-	// {{ pascalize .Name }}Consumer is a {{ .Name }} consumer that will replace the default if not nil.
+	// {{ pascalize .Name }}Consumer is a {{ escapeDoubleQuoted .Name }} consumer that will replace the default if not nil.
 	{{ pascalize .Name }}Consumer runtime.Consumer
 	{{- end }}
 	{{- end }}

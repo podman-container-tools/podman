@@ -19,9 +19,9 @@
 {{- define "annotations" }}{{/* annotations to generate spec from source */}}
   {{- if not .IsBaseType }}
 //
-// swagger:model {{ .Name }}
+// swagger:model {{ escapeDoubleQuoted .Name }}
   {{- else }}
 //
-// swagger:discriminator {{ .Name }} {{ .DiscriminatorField }}
+// swagger:discriminator {{ escapeDoubleQuoted .Name }} {{ escapeDoubleQuoted .DiscriminatorField }}
   {{- end }}
 {{- end }}

@@ -120,14 +120,14 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}) Error() string {
   {{- if .Schema }}{{ if (not .Schema.IsStream) }}
   payload, _ := json.Marshal(o.Payload)
   {{- end }}{{- end }}
-	return fmt.Sprintf("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}][%d]{{ if .Name }} {{ .Name }}{{ else }} unknown error{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }} %s{{ end }}{{ end }}", {{ if eq .Code -1 }}{{ .ReceiverName }}._statusCode{{ else }}{{ .Code }}{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }}, payload{{ end }}{{ end }})
+	return fmt.Sprintf("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}][%d]{{ if .Name }} {{ escapeDoubleQuoted .Name }}{{ else }} unknown error{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }} %s{{ end }}{{ end }}", {{ if eq .Code -1 }}{{ .ReceiverName }}._statusCode{{ else }}{{ .Code }}{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }}, payload{{ end }}{{ end }})
 }
 
 func ({{ .ReceiverName }} *{{ pascalize .Name }}) String() string {
   {{- if .Schema }}{{ if (not .Schema.IsStream) }}
   payload, _ := json.Marshal(o.Payload)
   {{- end }}{{- end }}
-	return fmt.Sprintf("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}][%d]{{ if .Name }} {{ .Name }}{{ else }} unknown response{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }} %s{{ end }}{{ end }}", {{ if eq .Code -1 }}{{ .ReceiverName }}._statusCode{{ else }}{{ .Code }}{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }}, payload{{ end }}{{ end }})
+	return fmt.Sprintf("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}][%d]{{ if .Name }} {{ escapeDoubleQuoted .Name }}{{ else }} unknown response{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }} %s{{ end }}{{ end }}", {{ if eq .Code -1 }}{{ .ReceiverName }}._statusCode{{ else }}{{ .Code }}{{ end }}{{ if .Schema }}{{ if not .Schema.IsStream }}, payload{{ end }}{{ end }})
 }
 
 {{ if .Schema }}
@@ -139,7 +139,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}) GetPayload() {{ if and (not .S
 func ({{ .ReceiverName }} *{{ pascalize .Name }}) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
   {{- range .Headers }}
 
-  // hydrates response header {{.Name}}
+  // hydrates response header {{ escapeDoubleQuoted .Name }}
   hdr{{ pascalize .Name }} := response.GetHeader({{ printf "%q" .Name }})
 
   if hdr{{ pascalize .Name }} != "" {
@@ -151,7 +151,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}) readResponse(response runtime.
   {{ .ReceiverName }}.{{ .ID }} = val{{ camelize .Name }}
     {{- else if .Child }}
 
-  // binding header items for {{ .Name }}
+  // binding header items for {{ escapeDoubleQuoted .Name }}
   val{{ pascalize .Name }}, err := {{ .ReceiverName }}.bindHeader{{ .ID }}(hdr{{ pascalize .Name }}, formats)
   if err != nil {
     return err
@@ -206,7 +206,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}) readResponse(response runtime.
   {{- range .Headers }}
     {{- if .Child }}
 
-// bindHeader{{ pascalize $.Name }} binds the response header {{ .Name }}
+// bindHeader{{ pascalize $.Name }} binds the response header {{ escapeDoubleQuoted .Name }}
 func ({{ .ReceiverName }} *{{ pascalize $.Name }}) bindHeader{{ .ID }}(hdr string, formats strfmt.Registry) ({{ .GoType }}, error) {
   {{ varname .Child.ValueExpression }}V := hdr
 
@@ -281,7 +281,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Reader) ReadResponse(response ru
     {{- if $.Responses}}
     default:
     {{- end }}
-      return nil, runtime.NewAPIError("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}]{{ if .Name }} {{ .Name }}{{ end }}", response, response.Code())
+      return nil, runtime.NewAPIError("[{{ upper .Method }} {{ escapeDoubleQuoted .Path }}]{{ if .Name }} {{ escapeDoubleQuoted .Name }}{{ end }}", response, response.Code())
   {{- end }}
   {{- if .Responses}}
   }
@@ -298,7 +298,7 @@ func ({{ .ReceiverName }} *{{ pascalize .Name }}Reader) ReadResponse(response ru
 {{ range .ExtraSchemas }}
 {{ template "docstring" (dict "Ctx" . "Lead" (printf "%s " .GoName)) }}
 //
-// swagger:model {{ .Name }}
+// swagger:model {{ escapeDoubleQuoted .Name }}
   {{- template "schema" . }}
 {{- end }}
 

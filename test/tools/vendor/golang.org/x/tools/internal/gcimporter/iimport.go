@@ -44,9 +44,10 @@ const (
 	iexportVersionGo1_18         = 2
 	iexportVersionGenerics       = 2
 	iexportVersionGenericMethods = 3
-	iexportVersion               = iexportVersionGenericMethods
+	iexportVersionRationalFloats = 4 // allow float constants to be represented as multiprecision rationals
+	iexportVersion               = iexportVersionRationalFloats
 
-	iexportVersionCurrent = 3
+	iexportVersionCurrent = 4
 )
 
 type ident struct {
@@ -57,6 +58,18 @@ type ident struct {
 const predeclReserved = 32
 
 type itag uint64
+
+// Tags for the encoding of float constant values
+// (iexportVersionRationalFloats and later); see (*exportWriter).float.
+const (
+	floatTagInt   = iota // integer-valued big.Rat: mpint (untyped sizing)
+	floatTagRat          // other big.Rat: numerator and denominator, each a bigInt
+	floatTagFloat        // big.Float: mpfloat
+
+	// untypedMaxBytes is the maximum magnitude size of an mpint
+	// encoded with untyped sizing; see [intSize].
+	untypedMaxBytes = 64
+)
 
 const (
 	// Types
@@ -158,9 +171,11 @@ func iimportCommon(fset *token.FileSet, getPackages GetPackagesFunc, data []byte
 
 	version = int64(r.uint64())
 	switch version {
-	case iexportVersionGenericMethods, iexportVersionGo1_18, iexportVersionPosCol, iexportVersionGo1_11:
+	case iexportVersionRationalFloats, iexportVersionGenericMethods, iexportVersionGo1_18, iexportVersionPosCol, iexportVersionGo1_11:
+		// known version
 	default:
-		if version > iexportVersionGenericMethods {
+		// unknown version
+		if version > iexportVersionRationalFloats {
 			errorf("unstable iexport format version %d, just rebuild compiler and std library", version)
 		} else {
 			errorf("unknown iexport format version %d", version)
@@ -584,7 +599,7 @@ func (r *importReader) obj(pkg *types.Package, name string) {
 				if r.p.version >= iexportVersionGenericMethods && r.bool() {
 					tpars = r.tparamList()
 				}
-				recv := r.param(pkg)
+				recv := r.param(pkg, types.RecvVar)
 
 				// If the receiver has any targs, set those as the
 				// rparams of the method (since those are the
@@ -661,7 +676,10 @@ func (r *importReader) value() (typ types.Type, val constant.Value) {
 	typ = r.typ()
 	if r.p.version >= iexportVersionGo1_18 {
 		// TODO: add support for using the kind.
-		_ = constant.Kind(r.int64())
+		if constant.Kind(r.int64()) == constant.Unknown {
+			// The exporter writes no value for unknown constants (go.dev/issue/60605).
+			return typ, constant.MakeUnknown()
+		}
 	}
 
 	switch b := typ.Underlying().(*types.Basic); b.Info() & types.IsConstType {
@@ -677,11 +695,11 @@ func (r *importReader) value() (typ types.Type, val constant.Value) {
 		val = constant.Make(&x)
 
 	case types.IsFloat:
-		val = r.mpfloat(b)
+		val = r.float(b)
 
 	case types.IsComplex:
-		re := r.mpfloat(b)
-		im := r.mpfloat(b)
+		re := r.float(b)
+		im := r.float(b)
 		val = constant.BinaryOp(re, token.ADD, constant.MakeImag(im))
 
 	default:
@@ -698,7 +716,7 @@ func (r *importReader) value() (typ types.Type, val constant.Value) {
 
 func intSize(b *types.Basic) (signed bool, maxBytes uint) {
 	if (b.Info() & types.IsUntyped) != 0 {
-		return true, 64
+		return true, untypedMaxBytes
 	}
 
 	switch b.Kind() {
@@ -771,6 +789,41 @@ func (r *importReader) mpfloat(typ *types.Basic) constant.Value {
 		f.SetMantExp(&f, int(r.int64()))
 	}
 	return constant.Make(&f)
+}
+
+// float decodes a float constant encoded by (*exportWriter).float.
+func (r *importReader) float(typ *types.Basic) constant.Value {
+	if r.p.version < iexportVersionRationalFloats {
+		// 512-bit binary f.p. (legacy)
+		return r.mpfloat(typ)
+	}
+	switch tag := r.uint64(); tag {
+	case floatTagInt:
+		// exact integer
+		var n big.Int
+		r.mpint(&n, types.Typ[types.UntypedFloat])
+		return constant.ToFloat(constant.Make(&n))
+	case floatTagRat:
+		// exact rational
+		num := r.bigInt()
+		denom := r.bigInt()
+		return constant.Make(new(big.Rat).SetFrac(num, denom))
+	case floatTagFloat:
+		// 512-bit binary f.p.
+		return r.mpfloat(typ)
+	default:
+		errorf("unknown float tag %d", tag)
+		panic("unreachable")
+	}
+}
+
+// bigInt decodes an integer encoded by (*exportWriter).bigInt.
+func (r *importReader) bigInt() *big.Int {
+	v := new(big.Int).SetBytes([]byte(r.string())) // (big endian)
+	if r.bool() {
+		v.Neg(v)
+	}
+	return v
 }
 
 func (r *importReader) ident() string {
@@ -936,6 +989,7 @@ func (r *importReader) doType(base *types.Named) (res types.Type) {
 			var recv *types.Var
 			if base != nil {
 				recv = types.NewVar(token.NoPos, methodPkg, "", base)
+				recv.SetKind(types.RecvVar)
 			}
 			msig := r.signature(methodPkg, recv, nil, nil)
 
@@ -1022,8 +1076,8 @@ func (r *importReader) objectPathObject() types.Object {
 }
 
 func (r *importReader) signature(paramPkg *types.Package, recv *types.Var, rparams []*types.TypeParam, tparams []*types.TypeParam) *types.Signature {
-	params := r.paramList(paramPkg)
-	results := r.paramList(paramPkg)
+	params := r.paramList(paramPkg, types.ParamVar)
+	results := r.paramList(paramPkg, types.ResultVar)
 	variadic := params.Len() > 0 && r.bool()
 	return types.NewSignatureType(recv, rparams, tparams, params, results, variadic)
 }
@@ -1042,19 +1096,21 @@ func (r *importReader) tparamList() []*types.TypeParam {
 	return xs
 }
 
-func (r *importReader) paramList(pkg *types.Package) *types.Tuple {
+func (r *importReader) paramList(pkg *types.Package, kind types.VarKind) *types.Tuple {
 	xs := make([]*types.Var, r.uint64())
 	for i := range xs {
-		xs[i] = r.param(pkg)
+		xs[i] = r.param(pkg, kind)
 	}
 	return types.NewTuple(xs...)
 }
 
-func (r *importReader) param(pkg *types.Package) *types.Var {
+func (r *importReader) param(pkg *types.Package, kind types.VarKind) *types.Var {
 	pos := r.pos()
 	name := r.ident()
 	typ := r.typ()
-	return types.NewParam(pos, pkg, name, typ)
+	param := types.NewParam(pos, pkg, name, typ)
+	param.SetKind(kind) // ∈ {Recv,Param,Result}Var
+	return param
 }
 
 func (r *importReader) bool() bool {

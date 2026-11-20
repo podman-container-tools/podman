@@ -177,7 +177,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 			}
 		}
 		{{- else }}
-			// Non schema case: warning {{.Name}} is not supported
+			// Non schema case: warning {{ escapeDoubleQuoted .Name }} is not supported
 		{{- end }}
 	{{- end }}
 {{- end }}
@@ -199,7 +199,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 		}
 
 	{{- else }}
-			// Non schema case: warning {{.Name}} is not supported
+			// Non schema case: warning {{ escapeDoubleQuoted .Name }} is not supported
 
 	{{- end }}
 {{- end }}
@@ -224,7 +224,7 @@ func parseOperation{{pascalize .Package}}{{ pascalize .Name }}Result({{- if .Suc
 
 		{{- end }}
 	{{- else }}
-		// warning: non schema response {{.Name}} is not supported by go-swagger cli yet.
+		// warning: non schema response {{ escapeDoubleQuoted .Name }} is not supported by go-swagger cli yet.
 
 	{{- end }}
 {{- end }}

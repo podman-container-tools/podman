@@ -73,8 +73,7 @@ func (g *specAnalyzer) validateAndFlattenSpec() (*loads.Document, error) {
 				g.Spec, specDoc.Version(),
 			)
 
-			var cerr *swaggererrors.CompositeError
-			if errors.As(validationErrors, &cerr) {
+			if cerr, ok := errors.AsType[*swaggererrors.CompositeError](validationErrors); ok {
 				for _, desc := range cerr.Errors {
 					fmt.Fprintf(&b, "- %s\n", desc)
 				}
