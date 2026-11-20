@@ -1,5 +1,5 @@
-## assert-last-key-contains Service ExecStart " --uid 1234 "
-## assert-last-key-contains Service ExecStart " --gid 5678 "
+## assert-last-key-contains Service ExecStartPre " --uid 1234 "
+## assert-last-key-contains Service ExecStartPre " --gid 5678 "
 
 [Volume]
 UID=1234
