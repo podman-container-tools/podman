@@ -2077,4 +2077,54 @@ EXPOSE 2004-2005/tcp`, CITEST_IMAGE)
 			Expect(probe.InitialDelaySeconds).To(Equal(int32(2)))
 		}
 	})
+
+	It("device cgroup rules round-trip through kube generate and play", func() {
+		SkipIfRootless("device cgroup rules require root access")
+		ctrName := "test-device-cgroup"
+		// Create container with device cgroup rules
+		podmanTest.PodmanExitCleanly("run", "-d", "--name", ctrName,
+			"--cap-add", "mknod",
+			"--device-cgroup-rule", "c 42:* rwm",
+			"--device-cgroup-rule", "b 8:* rw",
+			CITEST_IMAGE, "top")
+
+		// Generate kube YAML
+		outputFile := filepath.Join(podmanTest.TempDir, "ctr.yaml")
+		podmanTest.PodmanExitCleanly("kube", "generate", ctrName, "-f", outputFile)
+
+		// Verify the annotation is present in generated YAML. Parse the YAML
+		// instead of matching raw text, since the serializer may wrap long
+		// annotation values across physical lines.
+		b, err := os.ReadFile(outputFile)
+		Expect(err).ShouldNot(HaveOccurred())
+		pod := new(v1.Pod)
+		err = yaml.Unmarshal(b, pod)
+		Expect(err).ShouldNot(HaveOccurred())
+		annotationKey := define.DeviceCgroupRuleAnnotation + "/" + ctrName
+		annotationValue, ok := pod.ObjectMeta.Annotations[annotationKey]
+		Expect(ok).To(BeTrue(), "expected annotation %q in generated YAML", annotationKey)
+		Expect(annotationValue).To(Equal("c 42:* rwm,b 8:* rw"))
+
+		// Remove original container
+		podmanTest.PodmanExitCleanly("rm", "-t", "0", "-f", ctrName)
+
+		// Play the generated YAML
+		podmanTest.PodmanExitCleanly("kube", "play", outputFile)
+
+		// Verify the recreated container has the device cgroup rules.
+		// Inspect the generated app container ("<pod>-<ctr>") as JSON and
+		// compare the decoded HostConfig.DeviceCgroupRules field.
+		inspectData := podmanTest.InspectContainer(ctrName + "-pod-" + ctrName)
+		Expect(inspectData).To(HaveLen(1))
+		Expect(inspectData[0].HostConfig).ToNot(BeNil())
+		Expect(inspectData[0].HostConfig.DeviceCgroupRules).To(Equal([]string{"c 42:* rwm", "b 8:* rw"}))
+
+		// Verify the rules work by creating devices in the app container
+		appCtr := ctrName + "-pod-" + ctrName
+		podmanTest.PodmanExitCleanly("exec", appCtr, "mknod", "newDev1", "c", "42", "1")
+		podmanTest.PodmanExitCleanly("exec", appCtr, "mknod", "newDev2", "b", "8", "1")
+
+		// Cleanup
+		podmanTest.PodmanExitCleanly("kube", "down", outputFile)
+	})
 })

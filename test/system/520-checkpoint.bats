@@ -465,7 +465,6 @@ function setup() {
 @test "podman checkpoint/restore - publish with default_host_ips" {
     skip_if_remote "CONTAINERS_CONF_OVERRIDE redirect does not work on remote"
 
-    local port=$(random_free_port)
     local archive=$PODMAN_TMPDIR/checkpoint.tar.gz
     containersconf=$PODMAN_TMPDIR/containers.conf
     cat >$containersconf <<EOF
@@ -480,6 +479,7 @@ EOF
     is "$output" "$cid" "podman container checkpoint"
     run_podman rm -t 0 -f $cid
 
+    local port=$(random_free_port)
     CONTAINERS_CONF_OVERRIDE=$containersconf run_podman container restore --import "$archive" --publish $port:80
     local newcid="$output"
 

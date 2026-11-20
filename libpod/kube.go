@@ -807,6 +807,15 @@ func simplePodWithV1Containers(ctx context.Context, ctrs []*Container, getServic
 			if len(ulimitArr) > 0 {
 				kubeAnnotations[define.UlimitAnnotation] = strings.Join(ulimitArr, ",")
 			}
+
+			// Convert device cgroup rules from spec annotations to annotation format.
+			// The rules live on this container's own OCI spec under the base
+			// annotation key; the generated YAML uses the container-suffixed
+			// key so each container in a pod keeps its own rules.
+			ctrDeviceCgroupRuleAnnotation := define.DeviceCgroupRuleAnnotation + "/" + removeUnderscores(ctr.Name())
+			if deviceCgroupRules, ok := ctr.config.Spec.Annotations[define.DeviceCgroupRuleAnnotation]; ok {
+				kubeAnnotations[ctrDeviceCgroupRuleAnnotation] = deviceCgroupRules
+			}
 		}
 
 		if !ctr.HostNetwork() {

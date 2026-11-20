@@ -80,14 +80,14 @@ func TestWinPath(t *testing.T) {
 }
 
 func TestParseLinuxResourcesDeviceAccess(t *testing.T) {
-	d, err := parseLinuxResourcesDeviceAccess("a *:* rwm")
+	d, err := ParseLinuxResourcesDeviceAccess("a *:* rwm")
 	assert.NoError(t, err, "err is nil")
 	assert.True(t, d.Allow, "allow is true")
 	assert.Equal(t, d.Type, "a", "type is 'a'")
 	assert.Nil(t, d.Minor, "minor is nil")
 	assert.Nil(t, d.Major, "major is nil")
 
-	d, err = parseLinuxResourcesDeviceAccess("b 3:* rwm")
+	d, err = ParseLinuxResourcesDeviceAccess("b 3:* rwm")
 	assert.NoError(t, err, "err is nil")
 	assert.True(t, d.Allow, "allow is true")
 	assert.Equal(t, d.Type, "b", "type is 'b'")
@@ -95,7 +95,7 @@ func TestParseLinuxResourcesDeviceAccess(t *testing.T) {
 	assert.NotNil(t, d.Major, "major is not nil")
 	assert.Equal(t, *d.Major, int64(3), "major is 3")
 
-	d, err = parseLinuxResourcesDeviceAccess("a *:3 rwm")
+	d, err = ParseLinuxResourcesDeviceAccess("a *:3 rwm")
 	assert.NoError(t, err, "err is nil")
 	assert.True(t, d.Allow, "allow is true")
 	assert.Equal(t, d.Type, "a", "type is 'a'")
@@ -103,7 +103,7 @@ func TestParseLinuxResourcesDeviceAccess(t *testing.T) {
 	assert.NotNil(t, d.Minor, "minor is not nil")
 	assert.Equal(t, *d.Minor, int64(3), "minor is 3")
 
-	d, err = parseLinuxResourcesDeviceAccess("c 1:2 rwm")
+	d, err = ParseLinuxResourcesDeviceAccess("c 1:2 rwm")
 	assert.NoError(t, err, "err is nil")
 	assert.True(t, d.Allow, "allow is true")
 	assert.Equal(t, d.Type, "c", "type is 'c'")
@@ -112,49 +112,49 @@ func TestParseLinuxResourcesDeviceAccess(t *testing.T) {
 	assert.NotNil(t, d.Minor, "minor is not nil")
 	assert.Equal(t, *d.Minor, int64(2), "minor is 2")
 
-	_, err = parseLinuxResourcesDeviceAccess("q *:* rwm")
+	_, err = ParseLinuxResourcesDeviceAccess("q *:* rwm")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a a:* rwm")
+	_, err = ParseLinuxResourcesDeviceAccess("a a:* rwm")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a *:a rwm")
+	_, err = ParseLinuxResourcesDeviceAccess("a *:a rwm")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a *:* abc")
+	_, err = ParseLinuxResourcesDeviceAccess("a *:* abc")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("* *:* *")
+	_, err = ParseLinuxResourcesDeviceAccess("* *:* *")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("* *:a2 *")
+	_, err = ParseLinuxResourcesDeviceAccess("* *:a2 *")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("*")
+	_, err = ParseLinuxResourcesDeviceAccess("*")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("*:*")
+	_, err = ParseLinuxResourcesDeviceAccess("*:*")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a *:*")
+	_, err = ParseLinuxResourcesDeviceAccess("a *:*")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a *:*")
+	_, err = ParseLinuxResourcesDeviceAccess("a *:*")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a 12a:* r")
+	_, err = ParseLinuxResourcesDeviceAccess("a 12a:* r")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a a12:* r")
+	_, err = ParseLinuxResourcesDeviceAccess("a a12:* r")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a 0x1:* r")
+	_, err = ParseLinuxResourcesDeviceAccess("a 0x1:* r")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a -2:* r")
+	_, err = ParseLinuxResourcesDeviceAccess("a -2:* r")
 	assert.NotNil(t, err, "err is not nil")
 
-	_, err = parseLinuxResourcesDeviceAccess("a *:-3 r")
+	_, err = ParseLinuxResourcesDeviceAccess("a *:-3 r")
 	assert.NotNil(t, err, "err is not nil")
 }
 

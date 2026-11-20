@@ -534,6 +534,9 @@ type InspectContainerHostConfig struct {
 	// ShmSize is the size of the container's SHM device.
 
 	ShmSize int64 `json:"ShmSize"`
+	// DeviceCgroupRules are device cgroup rules that allow containers
+	// to use additional types of devices.
+	DeviceCgroupRules []string `json:"DeviceCgroupRules,omitempty"`
 	// Runtime is provided purely for Docker compatibility.
 	// It is set unconditionally to "oci" as Podman does not presently
 	// support non-OCI runtimes.
