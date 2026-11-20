@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"strings"
 
+	"go.podman.io/common/pkg/config"
 	"go.podman.io/podman/v6/pkg/machine/hyperv/vsock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -54,9 +55,13 @@ var _ = Describe("podman system hyperv-prep", func() {
 		Expect(session.OutputToString()).To(ContainSubstring("Fileserver"))
 
 		// Check that running hyperv-prep worked:
-		//  - The registry entries for vsock have been created (for 2 mounts)
+		//  - The registry entries for vsock have been created (for the default
+		//    machine mounts: home dir, drive root and containers config dir)
 		//  - The user is a member of the Hyper-V Administrators group
-		Expect(vsock.CheckIfHVSockRegistryEntriesExist(2)).To(BeTrue(),
+		cfg, err := config.Default()
+		Expect(err).ToNot(HaveOccurred())
+		expectedVSockNum := len(cfg.Machine.Volumes.Values)
+		Expect(vsock.CheckIfHVSockRegistryEntriesExist(expectedVSockNum)).To(BeTrue(),
 			"vsock registry entries don't exist after running hyperv-prep")
 		Expect(isCurrentUserHyperVAdmin()).To(BeTrue(),
 			"user isn't a member of the Hyper-V Administrators group after running hyperv-prep")
