@@ -3,11 +3,65 @@ package proxyenv
 import (
 	"bytes"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.podman.io/common/pkg/config"
 )
+
+const wantReloadScript = `systemctl daemon-reload
+
+# The user manager may not be running yet (e.g. user@.service still
+# starting). That's fine: it will read the new user.conf.d when it
+# starts, so a failure here must not stop the machine start.
+systemctl --user -M core@ daemon-reload || true
+`
+
+// wantSetupScriptTemplate is the expected script when proxy variables are
+// set, PROXIES is replaced with the expected list of quoted proxy variables.
+const wantSetupScriptTemplate = `#!/bin/bash
+
+SYSTEMD_SYSTEM_CONF=/etc/systemd/system.conf.d/default-env.conf
+SYSTEMD_USER_CONF=/etc/systemd/user.conf.d/default-env.conf
+ENVD_CONF=/etc/environment.d/default-env.conf
+PROFILE_CONF=/etc/profile.d/default-env.sh
+
+mkdir -p /etc/profile.d /etc/environment.d /etc/systemd/system.conf.d/ /etc/systemd/user.conf.d/
+rm -f $SYSTEMD_SYSTEM_CONF $SYSTEMD_USER_CONF $ENVD_CONF $PROFILE_CONF
+
+echo "[Manager]" >> $SYSTEMD_SYSTEM_CONF
+echo "[Manager]" >> $SYSTEMD_USER_CONF
+for proxy in PROXIES; do
+	systemd_proxy="${proxy//%/%%}"
+	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_SYSTEM_CONF
+	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_USER_CONF
+	printf "%s\n" "$proxy"  >> $ENVD_CONF
+	printf "export %s\n" "$proxy" >> $PROFILE_CONF
+done
+
+` + wantReloadScript
+
+// wantCleanupScript is the expected script when no proxy variable is set.
+const wantCleanupScript = `#!/bin/bash
+
+removed=false
+for conf in /etc/systemd/system.conf.d/default-env.conf \
+	/etc/systemd/user.conf.d/default-env.conf \
+	/etc/environment.d/default-env.conf \
+	/etc/profile.d/default-env.sh; do
+	if [ -e "$conf" ]; then
+		rm -f "$conf"
+		removed=true
+	fi
+done
+
+if [ "$removed" = false ]; then
+	exit 0
+fi
+
+` + wantReloadScript
 
 func Test_getProxyScript(t *testing.T) {
 	type env struct {
@@ -21,8 +75,18 @@ func Test_getProxyScript(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		// wantProxies is empty when the cleanup script is expected.
+		wantProxies string
+		// Environment variable names are case-insensitive on Windows: setting
+		// http_proxy also makes HTTP_PROXY visible, so both are forwarded.
+		wantProxiesWindows string
 	}{
+		{
+			name: "no vars set",
+			args: args{
+				isWSL: false,
+			},
+		},
 		{
 			name: "all vars set",
 			args: args{
@@ -42,28 +106,8 @@ func Test_getProxyScript(t *testing.T) {
 					},
 				},
 			},
-			want: `#!/bin/bash
-
-SYSTEMD_SYSTEM_CONF=/etc/systemd/system.conf.d/default-env.conf
-SYSTEMD_USER_CONF=/etc/systemd/user.conf.d/default-env.conf
-ENVD_CONF=/etc/environment.d/default-env.conf
-PROFILE_CONF=/etc/profile.d/default-env.sh
-
-mkdir -p /etc/profile.d /etc/environment.d /etc/systemd/system.conf.d/ /etc/systemd/user.conf.d/
-rm -f $SYSTEMD_SYSTEM_CONF $SYSTEMD_USER_CONF $ENVD_CONF $PROFILE_CONF
-
-echo "[Manager]" >> $SYSTEMD_SYSTEM_CONF
-echo "[Manager]" >> $SYSTEMD_USER_CONF
-for proxy in "http_proxy=proxy1" "https_proxy=sproxy1" "no_proxy=no1,no2"; do
-	systemd_proxy="${proxy//%/%%}"
-	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_SYSTEM_CONF
-	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_USER_CONF
-	printf "%s\n" "$proxy"  >> $ENVD_CONF
-	printf "export %s\n" "$proxy" >> $PROFILE_CONF
-done
-
-systemctl daemon-reload
-`,
+			wantProxies:        `"http_proxy=proxy1" "https_proxy=sproxy1" "no_proxy=no1,no2"`,
+			wantProxiesWindows: `"http_proxy=proxy1" "https_proxy=sproxy1" "no_proxy=no1,no2" "HTTP_PROXY=proxy1" "HTTPS_PROXY=sproxy1" "NO_PROXY=no1,no2"`,
 		},
 		{
 			name: "percent sign in proxy value is escaped for systemd",
@@ -76,28 +120,8 @@ systemctl daemon-reload
 					},
 				},
 			},
-			want: `#!/bin/bash
-
-SYSTEMD_SYSTEM_CONF=/etc/systemd/system.conf.d/default-env.conf
-SYSTEMD_USER_CONF=/etc/systemd/user.conf.d/default-env.conf
-ENVD_CONF=/etc/environment.d/default-env.conf
-PROFILE_CONF=/etc/profile.d/default-env.sh
-
-mkdir -p /etc/profile.d /etc/environment.d /etc/systemd/system.conf.d/ /etc/systemd/user.conf.d/
-rm -f $SYSTEMD_SYSTEM_CONF $SYSTEMD_USER_CONF $ENVD_CONF $PROFILE_CONF
-
-echo "[Manager]" >> $SYSTEMD_SYSTEM_CONF
-echo "[Manager]" >> $SYSTEMD_USER_CONF
-for proxy in "http_proxy=http://user%40example.com@proxy:3128"; do
-	systemd_proxy="${proxy//%/%%}"
-	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_SYSTEM_CONF
-	printf "DefaultEnvironment=\"%s\"\n" "$systemd_proxy"  >> $SYSTEMD_USER_CONF
-	printf "%s\n" "$proxy"  >> $ENVD_CONF
-	printf "export %s\n" "$proxy" >> $PROFILE_CONF
-done
-
-systemctl daemon-reload
-`,
+			wantProxies:        `"http_proxy=http://user%40example.com@proxy:3128"`,
+			wantProxiesWindows: `"http_proxy=http://user%40example.com@proxy:3128" "HTTP_PROXY=http://user%40example.com@proxy:3128"`,
 		},
 	}
 
@@ -112,12 +136,19 @@ systemctl daemon-reload
 			for _, e := range tt.args.envs {
 				t.Setenv(e.name, e.value)
 			}
-			got := getProxyScript(tt.args.isWSL)
+			wantProxies := tt.wantProxies
+			if runtime.GOOS == "windows" {
+				wantProxies = tt.wantProxiesWindows
+			}
+			want := wantCleanupScript
+			if wantProxies != "" {
+				want = strings.Replace(wantSetupScriptTemplate, "PROXIES", wantProxies, 1)
+			}
+			got := getProxyScript(tt.args.isWSL, "core")
 			buf := new(bytes.Buffer)
 			_, err := buf.ReadFrom(got)
 			assert.NoError(t, err)
-			str := buf.String()
-			assert.Equal(t, tt.want, str)
+			assert.Equal(t, want, buf.String())
 		})
 	}
 }
