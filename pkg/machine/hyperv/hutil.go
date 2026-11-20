@@ -69,7 +69,48 @@ func lookupOrResolveSID(username string) (*syswindows.SID, error) {
 	return getCurrentUserSID()
 }
 
+// CurrentUserName returns the DOMAIN\user name of the process token's user.
+// Unlike user.Current(), it does not need the user's profile, which may not
+// exist yet when Podman runs under a never-logged-on account (for example an
+// Azure VM Run Command with run_as_user).
+func CurrentUserName() (string, error) {
+	sid, err := getCurrentUserSIDFromToken()
+	if err != nil {
+		return "", err
+	}
+	account, domain, _, err := sid.LookupAccount("")
+	if err != nil {
+		return sid.String(), nil
+	}
+	if domain == "" {
+		return account, nil
+	}
+	return domain + `\` + account, nil
+}
+
+// AddCurrentUserToHyperVAdminGroup adds the process token's user to the local
+// Hyper-V Administrators group and returns that user's name. It does not
+// depend on user.Current().
+func AddCurrentUserToHyperVAdminGroup() (string, error) {
+	name, err := CurrentUserName()
+	if err != nil {
+		return "", err
+	}
+	return name, AddUserToHyperVAdminGroup("")
+}
+
+// RemoveCurrentUserFromHyperVAdminGroup removes the process token's user from
+// the local Hyper-V Administrators group and returns that user's name.
+func RemoveCurrentUserFromHyperVAdminGroup() (string, error) {
+	name, err := CurrentUserName()
+	if err != nil {
+		return "", err
+	}
+	return name, RemoveUserFromHyperVAdminGroup("")
+}
+
 // AddUserToHyperVAdminGroup adds the specified user to the local Hyper-V Administrators group.
+// An empty username means the user of the current process token.
 // The Win32 syscall logic used here is based on Microsoft's hcsshim implementation:
 // https://github.com/microsoft/hcsshim/blob/20ecf50b2ef0c8884448be87d4b6b58b8d62ce94/internal/winapi/user.go#L170
 func AddUserToHyperVAdminGroup(username string) error {
