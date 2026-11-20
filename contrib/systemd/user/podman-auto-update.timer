@@ -1,1 +1,10 @@
-../system/podman-auto-update.timer
+[Unit]
+Description=Podman auto-update timer
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target
