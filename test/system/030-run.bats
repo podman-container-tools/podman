@@ -499,6 +499,73 @@ json-file | f
 }
 
 # bats test_tags=ci:parallel
+@test "podman run --log-driver syslog" {
+    run_podman info --format '{{.Host.Conmon.Path}}'
+    conmon_path="$output"
+    conmon_version="$($conmon_path --version | awk 'NR==1 { print $3 }')"
+    conmon_major="${conmon_version%%.*}"
+    if [[ $conmon_major -lt 3 ]]; then
+        run_podman 125 create --log-driver syslog --log-opt syslog-address=tcp://127.0.0.1:514 $IMAGE
+        is "$output" ".*requires conmon version 3 or newer.*" "syslog on conmon v2"
+        return
+    fi
+
+    cname=c_$(safename)
+    run_podman run --name $cname --log-driver syslog \
+        --log-opt syslog-facility=local0 \
+        --log-opt tag=harbor \
+        $IMAGE echo syslog-ok
+    is "$output" "syslog-ok" "stdout is still attached"
+
+    run_podman inspect --format '{{.HostConfig.LogConfig.Type}}' $cname
+    is "$output" "syslog" "inspect log driver"
+    run_podman inspect --format '{{index .HostConfig.LogConfig.Config "syslog-facility"}}' $cname
+    is "$output" "local0" "inspect syslog-facility"
+    run_podman inspect --format '{{.HostConfig.LogConfig.Tag}}' $cname
+    is "$output" "harbor" "inspect syslog tag"
+    run_podman inspect --format '{{.HostConfig.LogConfig.Path}}' $cname
+    is "$output" "" "syslog has no log file"
+
+    run_podman 125 logs $cname
+    is "$output" ".*using the 'syslog' log driver, cannot read logs.*" "podman logs is forward-only"
+
+    run_podman rm $cname
+}
+
+# bats test_tags=ci:parallel
+@test "podman syslog reports conmon configuration errors" {
+    run_podman info --format '{{.Host.Conmon.Path}}'
+    conmon_path="$output"
+    conmon_version="$($conmon_path --version | awk 'NR==1 { print $3 }')"
+    conmon_major="${conmon_version%%.*}"
+    if [[ $conmon_major -lt 3 ]]; then
+        skip "conmon $conmon_version does not provide the syslog log driver"
+    fi
+
+    # A bad value for a known option, and an unknown option forwarded as given.
+    # run_podman fails on its own timeout if startup deadlocks in cleanup.
+    # 126 is define.ExitCode for a conmon failure (cannot invoke). Podman
+    # uses 125 only when the run command does not set a report exit code.
+    local tests='
+syslog-facility=not-a-facility
+syslog-future-option=example
+'
+    local n=0
+    while read opt; do
+        n=$((n + 1))
+        cname=c_$(safename)_$n
+        run_podman 126 run --name $cname --log-driver syslog --log-opt "$opt" $IMAGE true
+        # Podman's wrapper. Conmon's own sentences are not a stable interface.
+        is "$output" ".*conmon failed.*" "conmon startup failure is reported: $opt"
+        if ! is_remote; then
+            # conmon writes its diagnostic to the caller's stderr.
+            is "$output" ".*conmon:.*" "conmon diagnostic reaches the user: $opt"
+        fi
+        run_podman '?' rm -t 0 -f $cname
+    done < <(parse_table "$tests")
+}
+
+# bats test_tags=ci:parallel
 @test "podman run --log-driver journald" {
     skip_if_remote "We cannot read journalctl over remote."
 

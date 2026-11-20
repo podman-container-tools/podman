@@ -381,6 +381,9 @@ type ContainerMiscConfig struct {
 	LogSize int64 `json:"logSize"`
 	// LogDriver driver for logs
 	LogDriver string `json:"logDriver"`
+	// LogDriverOptions holds options specific to LogDriver, such as
+	// syslog-address and syslog-facility.
+	LogDriverOptions map[string]string `json:"logDriverOptions,omitempty"`
 	// LogRotate indicates whether log files should be rotated instead of
 	// truncated when the maximum size is reached.
 	LogRotate bool `json:"logRotate,omitempty"`
