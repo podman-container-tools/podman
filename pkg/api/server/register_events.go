@@ -15,9 +15,17 @@ func (s *APIServer) registerEventsHandlers(r *mux.Router) error {
 	// tags:
 	//   - system (compat)
 	// summary: Get events
-	// description: Returns events filtered on query parameters
+	// description: |
+	//   Returns events filtered on query parameters.
+	//
+	//   The stream format can be picked with the Accept header: application/jsonl, application/x-ndjson
+	//   and application/json-seq (RFC 7464) are supported. Without one of these in the Accept header the
+	//   response is application/jsonl since API v1.52, and application/json before that.
 	// produces:
 	// - application/json
+	// - application/x-ndjson
+	// - application/json-seq
+	// - application/jsonl
 	// parameters:
 	// - name: since
 	//   type: string

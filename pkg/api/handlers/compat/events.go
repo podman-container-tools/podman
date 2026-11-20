@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	dockerTypes "github.com/moby/moby/api/types"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/podman/v6/libpod"
 	"go.podman.io/podman/v6/libpod/events"
@@ -16,6 +17,32 @@ import (
 	"go.podman.io/podman/v6/pkg/domain/entities"
 	"go.podman.io/podman/v6/pkg/util"
 )
+
+// jsonSeqRecordSeparator starts every record of an application/json-seq stream (RFC 7464).
+const jsonSeqRecordSeparator = 0x1E
+
+// eventsStreamTypes are the media types a Docker client can ask for on GET /events.
+var eventsStreamTypes = []string{
+	dockerTypes.MediaTypeJSONLines,
+	dockerTypes.MediaTypeNDJSON,
+	dockerTypes.MediaTypeJSONSequence,
+}
+
+// eventsContentType picks the media type of the events stream like Docker does:
+// the API version picks the default (application/json before v1.52,
+// application/jsonl from v1.52 on), and an Accept header only overrides it when
+// it explicitly asks for one of eventsStreamTypes. Libpod requests always get
+// application/json.
+func eventsContentType(r *http.Request) string {
+	if utils.IsLibpodRequest(r) {
+		return dockerTypes.MediaTypeJSON
+	}
+	fallback := dockerTypes.MediaTypeJSONLines
+	if _, err := apiutil.SupportedVersion(r, "<1.52.0"); err == nil {
+		fallback = dockerTypes.MediaTypeJSON
+	}
+	return apiutil.NegotiateMediaType(r, eventsStreamTypes, fallback)
+}
 
 // GetEvents endpoint serves both the docker-compatible one and the new libpod one
 func GetEvents(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +97,8 @@ func GetEvents(w http.ResponseWriter, r *http.Request) {
 		flush = flusher.Flush
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	contentType := eventsContentType(r)
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 	flush()
 
@@ -114,6 +142,12 @@ func GetEvents(w http.ResponseWriter, r *http.Request) {
 				e.From = ""   //nolint:staticcheck // deprecated field, cleared for API >= 1.52
 			}
 
+			if contentType == dockerTypes.MediaTypeJSONSequence {
+				if _, err := w.Write([]byte{jsonSeqRecordSeparator}); err != nil {
+					logrus.Errorf("Unable to write record separator: %q", err)
+					return
+				}
+			}
 			if err := coder.Encode(e); err != nil {
 				logrus.Errorf("Unable to write json: %q", err)
 			}
