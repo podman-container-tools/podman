@@ -19,7 +19,7 @@ tar --owner=1042 --group=1043 --format=posix -C $TMPD -cvf ${HELLO_TAR} hello.tx
 # Start a container, and wait for it. (I know we don't actually do anything
 # if we time out. If we do, subsequent tests will fail. I just want to avoid
 # a race between container-start and tests-start)
-podman run -d --name "${CTR}" "${IMAGE}" top
+podman run -d --network=none --name "${CTR}" "${IMAGE}" top
 timeout=10
 while [[ $timeout -gt 0 ]]; do
     if podman container exists "${CTR}"; then
@@ -50,6 +50,19 @@ t POST containers/${CTR}/exec $TMPD/exec.json 201 .Id~[0-9a-f]\\{64\\}
 eid=$(jq -r '.Id' <<<"$output")
 # The 017 is the byte length
 t POST exec/$eid/start 200 $'\001\017'$HELLO_S
+
+# Regression for https://github.com/podman-container-tools/podman/issues/29944.
+# GNU tar's default record padding hides the pgzip drain-after-EOF panic.
+head -c 1500 /dev/urandom | base64 > "$TMPD/gzip-drain.txt"
+tar -b 1 -C "$TMPD" -cf "$TMPD/short-gzip.tar" gzip-drain.txt
+gzip -k "$TMPD/short-gzip.tar"
+# Keep a .tar suffix for the API harness's application/x-tar content type.
+GZIP_TAR="$TMPD/short-gzip-compressed.tar"
+mv "$TMPD/short-gzip.tar.gz" "$GZIP_TAR"
+t PUT "containers/$CTR/archive?path=%2Ftmp%2F" "$GZIP_TAR" --chunked 200 ''
+podman exec "$CTR" stat -c '%s' /tmp/gzip-drain.txt
+is "$(tail -n 1 "$WORKDIR/output.log")" "$(stat -c '%s' "$TMPD/gzip-drain.txt")" \
+    "short gzip tar: extracted size"
 
 # Now fetch hello.txt back as a tarfile
 t HEAD "containers/${CTR}/archive?path=%2Ftmp%2Fhello.txt" 200
