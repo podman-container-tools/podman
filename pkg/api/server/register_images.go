@@ -425,11 +425,19 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	//    type: string
 	//    required: true
 	//    description: the name or ID of the container
+	//  - in: query
+	//    name: platform
+	//    type: string
+	//    description: |
+	//      JSON-encoded OCI platform object to select a specific platform from a manifest list.
+	//      For example, {"os":"linux","architecture":"amd64"}. Added in API v1.49.
 	// produces:
 	// - application/json
 	// responses:
 	//   200:
 	//     $ref: "#/responses/imageInspect"
+	//   400:
+	//     $ref: "#/responses/badParamError"
 	//   404:
 	//     $ref: "#/responses/imageNotFound"
 	//   500:

@@ -134,6 +134,47 @@ t POST "images/create?fromImage=quay.io/libpod/testimage:20221018&platform=linux
 t GET  "images/testimage:20221018/json" 200 \
   .Architecture=arm64
 
+# image inspect platform, added in API v1.49
+platform_arm64='%7B%22os%22%3A%22linux%22%2C%22architecture%22%3A%22arm64%22%7D'
+platform_amd64='%7B%22os%22%3A%22linux%22%2C%22architecture%22%3A%22amd64%22%7D'
+t GET "/v1.49/images/testimage:20221018/json?platform=$platform_arm64" 200 \
+  .Architecture=arm64
+t GET "/v1.49/images/testimage:20221018/json?platform=$platform_amd64" 404
+t GET "/images/testimage:20221018/json?platform=$platform_amd64" 404
+t GET "/v1.49/images/testimage:20221018/json?platform=%7B%22os%22%3A%22linux%22%2C%22architecture%22%3A%22arm64%22%2C%22variant%22%3A%22v8%22%7D" 200 \
+  .Architecture=arm64
+# older API versions ignore it
+t GET "/v1.48/images/testimage:20221018/json?platform=$platform_amd64" 200 \
+  .Architecture=arm64
+t GET "/v1.49/images/testimage:20221018/json?platform=%7B%22os%22%3A%22linux%22%7D" 400 \
+  .cause="both OS and Architecture must be provided"
+t GET "/v1.49/images/testimage:20221018/json?platform=bogus" 400 \
+  .cause="invalid character 'b' looking for beginning of value"
+
+# lookup by ID must check the platform too
+t GET "images/testimage:20221018/json" 200
+arm64_iid=$(jq -r '.Id' <<<"$output")
+arm64_iid=${arm64_iid#sha256:}
+t GET "/v1.49/images/$arm64_iid/json?platform=$platform_arm64" 200 \
+  .Architecture=arm64
+t GET "/v1.49/images/$arm64_iid/json?platform=$platform_amd64" 404
+t GET "/v1.49/images/${arm64_iid:0:12}/json?platform=$platform_amd64" 404
+
+# platform picks the right instance of a local manifest list
+img_amd64=$(printf 'FROM scratch\nLABEL platformtest=amd64\n' | $PODMAN_BIN --root $WORKDIR/server_root build -q --platform linux/amd64 -)
+img_arm64=$(printf 'FROM scratch\nLABEL platformtest=arm64\n' | $PODMAN_BIN --root $WORKDIR/server_root build -q --platform linux/arm64 -)
+podman manifest create platformlist
+podman manifest add platformlist containers-storage:$img_amd64
+podman manifest add platformlist containers-storage:$img_arm64
+t GET "/v1.49/images/platformlist/json?platform=$platform_amd64" 200 \
+  .Architecture=amd64 \
+  .Id=sha256:$img_amd64
+t GET "/v1.49/images/platformlist/json?platform=$platform_arm64" 200 \
+  .Architecture=arm64 \
+  .Id=sha256:$img_arm64
+podman manifest rm platformlist
+podman rmi $img_amd64 $img_arm64
+
 # Make sure that new images are pulled
 old_iid=$(podman image inspect --format "{{.ID}}" docker.io/library/alpine:latest)
 podman rmi -f docker.io/library/alpine:latest
