@@ -4,6 +4,7 @@ package compat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
 	"go.podman.io/common/libimage"
+	lplatform "go.podman.io/common/libimage/platform"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/filters"
 	"go.podman.io/image/v5/manifest"
@@ -333,13 +335,56 @@ func GetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newImage, err := utils.GetImage(r, possiblyNormalizedName)
+	query := struct {
+		Platform string `schema:"platform"`
+	}{}
+	if err := utils.GetDecoder(r).Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	var lookupOptions *libimage.LookupImageOptions
+	_, versionErr := utils.SupportedVersion(r, ">=1.49.0")
+	// platform was added in API v1.49
+	if query.Platform != "" && (versionErr == nil || errors.Is(versionErr, apiutil.ErrVersionNotGiven)) {
+		var platform imageSpec.Platform
+		if err := json.Unmarshal([]byte(query.Platform), &platform); err != nil {
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse platform: %w", err))
+			return
+		}
+		if platform.OS == "" || platform.Architecture == "" {
+			utils.Error(w, http.StatusBadRequest, errors.New("both OS and Architecture must be provided"))
+			return
+		}
+		lookupOptions = &libimage.LookupImageOptions{
+			OS:           platform.OS,
+			Architecture: platform.Architecture,
+			Variant:      platform.Variant,
+		}
+	}
+
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	newImage, _, err := runtime.LibimageRuntime().LookupImage(possiblyNormalizedName, lookupOptions)
 	if err != nil {
 		// Here we need to fiddle with the error message because docker-py is looking for "No
 		// such image" to determine on how to raise the correct exception.
 		errMsg := strings.ReplaceAll(err.Error(), "image not known", "No such image")
 		utils.Error(w, http.StatusNotFound, fmt.Errorf("failed to find image %s: %s", name, errMsg))
 		return
+	}
+	if lookupOptions != nil {
+		// libimage skips the platform check when the image is looked up by ID
+		data, err := newImage.Inspect(r.Context(), nil)
+		if err != nil {
+			utils.InternalServerError(w, err)
+			return
+		}
+		wantOS, wantArch, _ := lplatform.Normalize(lookupOptions.OS, lookupOptions.Architecture, lookupOptions.Variant)
+		imageOS, imageArch, _ := lplatform.Normalize(data.Os, data.Architecture, "")
+		if imageOS != "" && imageArch != "" && (wantOS != imageOS || wantArch != imageArch) {
+			utils.Error(w, http.StatusNotFound, fmt.Errorf("image with reference %s was found but its platform (%s/%s) does not match the specified platform (%s/%s)", name, imageOS, imageArch, wantOS, wantArch))
+			return
+		}
 	}
 	inspect, err := imageDataToImageInspect(r.Context(), newImage, r)
 	if err != nil {
