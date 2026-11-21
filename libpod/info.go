@@ -108,6 +108,8 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 		return nil, fmt.Errorf("getting free locks: %w", err)
 	}
 
+	netInfo := r.network.NetworkInfo()
+
 	info := define.HostInfo{
 		Arch:                  runtime.GOARCH,
 		BuildahVersion:        buildah.Version,
@@ -125,7 +127,8 @@ func (r *Runtime) hostInfo() (*define.HostInfo, error) {
 		MemAvailable:          mi.MemAvailable,
 		MemTotal:              mi.MemTotal,
 		NetworkBackend:        r.config.Network.NetworkBackend,
-		NetworkBackendInfo:    r.network.NetworkInfo(),
+		NetworkBackendInfo:    netInfo,
+		NetworkFirewallDriver: netavarkFirewallDriver(r.config, netInfo),
 		OS:                    runtime.GOOS,
 		RootlessNetworkCmd:    r.config.Network.DefaultRootlessNetworkCmd,
 		RootlessPortForwarder: r.config.Network.RootlessPortForwarder,
