@@ -4,6 +4,7 @@
 #
 
 load helpers
+load helpers.network
 load helpers.systemd
 
 function setup() {
@@ -245,6 +246,50 @@ EOF
     # Test quadlet install should fail
     run_podman 125 quadlet install $multi_quadlet_file
     assert "$output" =~ "missing required.*FileName" "error should mention missing FileName"
+}
+
+@test "quadlet verb - install multi-quadlet file from URL" {
+    local install_dir=$(get_quadlet_install_dir)
+
+    local container_name="testcontainer_$(random_string)"
+    local volume_name="testvolume_$(random_string)"
+
+    echo READY > $PODMAN_TMPDIR/ready
+    local multi_quadlet_file=$PODMAN_TMPDIR/url_$(random_string).quadlets
+    cat > $multi_quadlet_file <<EOF
+# FileName=$container_name
+[Container]
+Image=$IMAGE
+---
+# FileName=$volume_name
+[Volume]
+Label=app=url
+EOF
+    local served_name=$(basename $multi_quadlet_file)
+
+    HOST_PORT=$(random_free_port)
+    SERVER=http://127.0.0.1:$HOST_PORT
+
+    serverctr="quadletserver-$(safename)"
+    run_podman run -d --name $serverctr -p "$HOST_PORT:80" \
+               -v $multi_quadlet_file:/var/www/$served_name:Z \
+               -v $PODMAN_TMPDIR/ready:/var/www/ready:Z \
+               -w /var/www \
+               $IMAGE /bin/busybox-extras httpd -f -p 80
+
+    wait_for_port 127.0.0.1 $HOST_PORT
+    wait_for_command_output "curl -s -S $SERVER/ready" "READY"
+
+    run_podman quadlet install $SERVER/$served_name
+    assert "$output" =~ "${container_name}.container" "install output should contain ${container_name}.container"
+    assert "$output" =~ "${volume_name}.volume" "install output should contain ${volume_name}.volume"
+    assert "${#lines[@]}" -eq 2 "install output should contain exactly two lines"
+
+    [[ -f "$install_dir/${container_name}.container" ]] || die "${container_name}.container should exist on disk"
+    [[ -f "$install_dir/${volume_name}.volume" ]] || die "${volume_name}.volume should exist on disk"
+    [[ ! -e "$install_dir/$served_name" ]] || die "$served_name should not be installed"
+
+    run_podman rm -f -t0 $serverctr
 }
 
 @test "quadlet verb - install directory with mixed individual and .quadlets files" {
