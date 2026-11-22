@@ -220,6 +220,7 @@ func extractFirstWord(in string, separators string, flags SplitFlags) (string, s
 	var s strings.Builder
 	var quote byte     // 0 or ' or "
 	backslash := false // whether we've just seen a backslash
+	haveWord := false
 
 	// The string handling in this function is a bit weird, using
 	// 0 bytes to mark end-of-string. This is because it is a direct
@@ -264,6 +265,7 @@ loop1:
 			// We found a non-blank character, so we will always
 			// want to return a string (even if it is empty),
 			// allocate it here.
+			haveWord = true
 			break loop1
 		}
 	}
@@ -392,7 +394,7 @@ finishForceTerminate:
 	p = end
 
 finish:
-	if s.Len() == 0 {
+	if !haveWord {
 		return "", "", false, nil
 	}
 
@@ -498,7 +500,7 @@ func escapeWords(words []string) string {
 		if i != 0 {
 			escaped.WriteString(" ")
 		}
-		if wordNeedEscape(word) {
+		if word == "" || wordNeedEscape(word) {
 			appendEscapeWord(&escaped, word)
 		} else {
 			escaped.WriteString(word)
