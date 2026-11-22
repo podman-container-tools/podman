@@ -194,7 +194,7 @@ Note: **N/A** means that the option cannot be supported in a single-node Podman 
 | activeDeadlineSeconds   | no                               |
 | selector                | no (automatically set by k8s)    |
 | template                | ✅                               |
-| backoffLimit            | no                               |
+| backoffLimit | ✅ (OnFailure only; per-container, not pod-wide; unset = unlimited; no delay) |
 | completionMode          | no                               |
 | completions             | no (set to 1 with kube generate) |
 | manualSelector          | no                               |

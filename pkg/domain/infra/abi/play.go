@@ -392,7 +392,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 
-			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer)
+			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -676,7 +676,7 @@ func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML 
 	podSpec = daemonSetYAML.Spec.Template
 
 	podName := fmt.Sprintf("%s-pod", daemonSetName)
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, daemonSetYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, daemonSetYAML.Annotations, configMaps, serviceContainer, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -700,7 +700,7 @@ func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAM
 
 	podSpec = deploymentYAML.Spec.Template
 
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, deploymentYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, deploymentYAML.Annotations, configMaps, serviceContainer, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -723,8 +723,18 @@ func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, opt
 	}
 	podSpec = jobYAML.Spec.Template
 
+	var restartRetries *uint
+	if limit := jobYAML.Spec.BackoffLimit; limit != nil && *limit >= 0 && podSpec.Spec.RestartPolicy == v1.RestartPolicyOnFailure {
+		if *limit == 0 {
+			podSpec.Spec.RestartPolicy = v1.RestartPolicyNever
+		} else {
+			retries := uint(*limit)
+			restartRetries = &retries
+		}
+	}
+
 	podName := fmt.Sprintf("%s-pod", jobName)
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, jobYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, jobYAML.Annotations, configMaps, serviceContainer, restartRetries)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -734,7 +744,7 @@ func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, opt
 	return &report, proxies, nil
 }
 
-func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podYAML *v1.PodTemplateSpec, options entities.PlayKubeOptions, ipIndex *int, annotations map[string]string, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podYAML *v1.PodTemplateSpec, options entities.PlayKubeOptions, ipIndex *int, annotations map[string]string, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, restartRetries *uint) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	cfg, err := ic.Libpod.GetConfigNoCopy()
 	if err != nil {
 		return nil, nil, err
@@ -978,6 +988,9 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 	default: // Default to Always
 		podSpec.PodSpecGen.RestartPolicy = define.RestartPolicyAlways
 	}
+	if podSpec.PodSpecGen.RestartPolicy == define.RestartPolicyOnFailure {
+		podSpec.PodSpecGen.RestartRetries = restartRetries
+	}
 
 	if podOpt.Infra {
 		infraImage := cfg.Engine.InfraImage
@@ -1201,6 +1214,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 			PodName:                podName,
 			PodSecurityContext:     podYAML.Spec.SecurityContext,
 			RestartPolicy:          podSpec.PodSpecGen.RestartPolicy, // pass the restart policy to the container (https://github.com/containers/podman/issues/20903)
+			RestartRetries:         podSpec.PodSpecGen.RestartRetries,
 			ReadOnly:               readOnly,
 			SeccompAnnotationPaths: seccompAnnotationPaths,
 			SeccompProfileRoot:     options.SeccompProfileRoot,
