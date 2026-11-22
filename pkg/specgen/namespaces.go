@@ -509,7 +509,6 @@ func SetupUserNS(idmappings *storageTypes.IDMappingOptions, userns Namespace, g 
 		idmappings = mappings
 		g.SetProcessUID(uint32(uid))
 		g.SetProcessGID(uint32(gid))
-		g.AddProcessAdditionalGid(uint32(gid))
 		user = fmt.Sprintf("%d:%d", uid, gid)
 		if err := privateUserNamespace(idmappings, g); err != nil {
 			return user, err
@@ -522,7 +521,6 @@ func SetupUserNS(idmappings *storageTypes.IDMappingOptions, userns Namespace, g 
 		idmappings = mappings
 		g.SetProcessUID(uint32(uid))
 		g.SetProcessGID(uint32(gid))
-		g.AddProcessAdditionalGid(uint32(gid))
 		user = fmt.Sprintf("%d:%d", uid, gid)
 		if err := privateUserNamespace(idmappings, g); err != nil {
 			return user, err
