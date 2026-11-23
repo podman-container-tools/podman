@@ -56,7 +56,7 @@ body:
     id: podman_info
     attributes:
       label: podman info output
-      description: Please copy and paste podman info output.
+      description: Please copy and paste `podman info` command output from the environment where the bug happens.
       value: If you are unable to run podman info for any reason, please provide the podman version, operating system and its version and the architecture you are running.
       render: yaml
     validations:
