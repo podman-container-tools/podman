@@ -303,16 +303,16 @@ type roLayerStore interface {
 	// internal/driver.SplitDirFDStreamDriver.
 	layerFilesWithoutMounting(id string) (internalDriver.LayerFiles, error)
 
-	// tarSplitWithoutMounting opens the tar-split metadata of a layer and
-	// a getter for the content of its files, which together reproduce its
-	// original uncompressed blob.  It never mounts the layer, so a read
-	// lock is enough.  The caller is responsible for closing both.
+	// tarSplitWithoutMounting opens the tar-split metadata of a layer,
+	// which together with the content of its files reproduces its original
+	// uncompressed blob.  It never mounts the layer, so a read lock is
+	// enough.  The caller is responsible for closing the result.
 	//
 	// The caller streams the layer to a consumer that references file
 	// content where it is stored, with reflinks where it can, so it has no
 	// use for a mount anyway: content read through one could only be
-	// copied.
-	tarSplitWithoutMounting(id string) (io.ReadCloser, drivers.FileGetCloser, error)
+	// copied.  The content comes from layerFilesWithoutMounting instead.
+	tarSplitWithoutMounting(id string) (io.ReadCloser, error)
 
 	// Size produces a cached value for the uncompressed size of the layer,
 	// if one is known, or -1 if it is not known.  If the layer can not be
@@ -2365,25 +2365,6 @@ func (r *layerStore) newFileGetter(id string) (drivers.FileGetCloser, error) {
 	}, nil
 }
 
-// fileGetterWithoutMounting is newFileGetter restricted to what the driver
-// can serve directly, so that it never falls back to mounting the layer.
-//
-// Requires startReading or startWriting.
-func (r *layerStore) fileGetterWithoutMounting(id string) (drivers.FileGetCloser, error) {
-	getter, ok := r.driver.(drivers.DiffGetterDriver)
-	if !ok {
-		return nil, fmt.Errorf("driver %s cannot read a layer without mounting it: %w", r.driver.String(), drivers.ErrNotSupported)
-	}
-	fgc, err := getter.DiffGetter(id)
-	if err != nil {
-		return nil, err
-	}
-	if fgc == nil {
-		return nil, fmt.Errorf("driver %s has no file getter for layer %s: %w", r.driver.String(), id, drivers.ErrNotSupported)
-	}
-	return fgc, nil
-}
-
 // writeCompressedData copies data from source to compressor, which is on top of pwriter.
 func writeCompressedData(compressor io.WriteCloser, source io.ReadCloser) error {
 	defer compressor.Close()
@@ -2558,40 +2539,34 @@ func (r *layerStore) Diff(from, to string, options *DiffOptions) (io.ReadCloser,
 //
 // Diff needs the primary layer store locked for writing because some of the
 // paths it can take mount the layer; see drivers/overlay.Driver.getMergedDir.
-// This takes none of them: it only uses the tar-split metadata, and the file
-// getter comes from the driver rather than from a mount.  Those conditions
-// are checked rather than assumed, so a read lock is enough.
+// This takes none of them: it only uses the tar-split metadata.  A read lock
+// is therefore enough.
 //
 // Requires startReading or startWriting.
-func (r *layerStore) tarSplitWithoutMounting(id string) (io.ReadCloser, drivers.FileGetCloser, error) {
+func (r *layerStore) tarSplitWithoutMounting(id string) (io.ReadCloser, error) {
 	layer, ok := r.lookup(id)
 	if !ok {
-		return nil, nil, ErrLayerUnknown
+		return nil, ErrLayerUnknown
 	}
 	tsfile, err := os.Open(r.tspath(layer.ID))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// Regenerating the archive would need a mount, and would not
 			// reproduce the original blob byte for byte anyway.
-			return nil, nil, fmt.Errorf("layer %s has no tar-split metadata: %w", layer.ID, drivers.ErrNotSupported)
+			return nil, fmt.Errorf("layer %s has no tar-split metadata: %w", layer.ID, drivers.ErrNotSupported)
 		}
-		return nil, nil, err
+		return nil, err
 	}
 	decompressor, err := pgzip.NewReader(tsfile)
 	if err != nil {
 		if closeErr := tsfile.Close(); closeErr != nil {
 			logrus.Debugf("closing tar-split metadata of layer %s: %v", layer.ID, closeErr)
 		}
-		return nil, nil, err
+		return nil, err
 	}
-	tarSplit := ioutils.NewReadCloserWrapper(decompressor, func() error {
+	return ioutils.NewReadCloserWrapper(decompressor, func() error {
 		return errors.Join(decompressor.Close(), tsfile.Close())
-	})
-	fgetter, err := r.fileGetterWithoutMounting(layer.ID)
-	if err != nil {
-		return nil, nil, errors.Join(err, tarSplit.Close())
-	}
-	return tarSplit, fgetter, nil
+	}), nil
 }
 
 // layerFilesWithoutMounting implements roLayerStore.

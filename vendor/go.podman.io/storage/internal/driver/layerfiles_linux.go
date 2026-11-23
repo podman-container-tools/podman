@@ -5,10 +5,12 @@ package driver
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"go.podman.io/storage/internal/createpath"
 	"golang.org/x/sys/unix"
 )
 
@@ -44,27 +46,40 @@ func (f *layerFiles) Close() error {
 	return err
 }
 
+// storedPath returns the path of the file holding the content of the tar
+// entry called name, relative to the diff directory, or false if there is
+// none.
+func (f *layerFiles) storedPath(name string) (string, bool) {
+	if f.flatNames != nil {
+		flat, ok := f.flatNames[filepath.Clean(name)]
+		return flat, ok
+	}
+	openPath := strings.TrimPrefix(createpath.CleanAbsPath(name), "/")
+	return openPath, openPath != ""
+}
+
+// Open implements LayerFiles.
+func (f *layerFiles) Open(name string) (io.ReadCloser, error) {
+	openPath, ok := f.storedPath(name)
+	if !ok {
+		return nil, fmt.Errorf("%q: %w", name, os.ErrNotExist)
+	}
+	fd, err := unix.Openat2(int(f.diffDir.Fd()), openPath, &unix.OpenHow{
+		Flags:   unix.O_CLOEXEC | unix.O_RDONLY,
+		Resolve: unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_BENEATH,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("opening %q: %w", name, err)
+	}
+	return os.NewFile(uintptr(fd), openPath), nil
+}
+
 // Lookup implements LayerFiles.  The diff directory is the only directory
 // handed to the consumer, so the index is always 0.
 func (f *layerFiles) Lookup(name string, size int64, onlyWorldReadable bool) (int, string, bool, error) {
-	var openPath string
-	if f.flatNames != nil {
-		flat, ok := f.flatNames[filepath.Clean(name)]
-		if !ok {
-			return 0, "", false, nil
-		}
-		openPath = flat
-	} else {
-		// Resolve name as if the diff directory were the root, as
-		// RESOLVE_IN_ROOT would: tar entry names can be absolute, or go
-		// above the root, in an image converted from another format.  The
-		// consumer resolves the name it is given beneath the directory,
-		// so it has to be relative and without "..", and symlinks are
-		// refused below, so resolving it lexically gives the same result.
-		openPath = strings.TrimPrefix(filepath.Clean("/"+name), "/")
-		if openPath == "" {
-			return 0, "", false, nil
-		}
+	openPath, ok := f.storedPath(name)
+	if !ok {
+		return 0, "", false, nil
 	}
 
 	fd, err := unix.Openat2(int(f.diffDir.Fd()), openPath, &unix.OpenHow{
@@ -72,9 +87,7 @@ func (f *layerFiles) Lookup(name string, size int64, onlyWorldReadable bool) (in
 		Resolve: unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_BENEATH,
 	})
 	if err != nil {
-		// EXDEV: a flat name that does not stay beneath the diff
-		// directory.
-		if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) {
+		if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ELOOP) {
 			return 0, "", false, nil
 		}
 		return 0, "", false, fmt.Errorf("opening %q: %w", name, err)
@@ -105,7 +118,7 @@ func (f *layerFiles) Lookup(name string, size int64, onlyWorldReadable bool) (in
 					Resolve: unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_BENEATH,
 				})
 				if err != nil {
-					if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ELOOP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTDIR) {
+					if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
 						return 0, "", false, nil
 					}
 					return 0, "", false, fmt.Errorf("opening parent %q of %q: %w", parent, name, err)

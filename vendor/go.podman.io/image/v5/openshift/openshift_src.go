@@ -28,7 +28,7 @@ type openshiftImageSource struct {
 
 	client *openshiftClient
 	// Values specific to this image
-	sys *types.SystemContext
+	newImageSourceOptions private.NewImageSourceOptions
 	// State
 	docker               types.ImageSource // The docker/distribution API endpoint, or nil if not resolved yet
 	imageStreamImageName string            // Resolved image identifier, or "" if not known yet
@@ -36,8 +36,8 @@ type openshiftImageSource struct {
 
 // newImageSource creates a new ImageSource for the specified reference.
 // The caller must call .Close() on the returned ImageSource.
-func newImageSource(sys *types.SystemContext, ref openshiftReference) (private.ImageSource, error) {
-	client, err := newOpenshiftClient(sys, ref)
+func newImageSource(ref openshiftReference, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	client, err := newOpenshiftClient(options.Sys, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func newImageSource(sys *types.SystemContext, ref openshiftReference) (private.I
 	s := &openshiftImageSource{
 		NoGetBlobAtInitialize: stubs.NoGetBlobAt(ref),
 
-		client: client,
-		sys:    sys,
+		client:                client,
+		newImageSourceOptions: options,
 	}
 	s.Compat = impl.AddCompat(s)
 	return s, nil
@@ -163,11 +163,16 @@ func (s *openshiftImageSource) ensureImageIsResolved(ctx context.Context) error 
 		return err
 	}
 	logrus.Debugf("Resolved reference %#v", dockerRefString)
-	dockerRef, err := docker.ParseReference("//" + dockerRefString)
+	dockerRef_, err := docker.ParseReference("//" + dockerRefString)
 	if err != nil {
 		return err
 	}
-	d, err := dockerRef.NewImageSource(ctx, s.sys)
+	dockerRef, ok := dockerRef_.(private.ImageReference)
+	if !ok {
+		return errors.New("internal error: docker does not implement private.ImageReference")
+	}
+
+	d, err := dockerRef.NewImageSourceWithOptions(ctx, s.newImageSourceOptions)
 	if err != nil {
 		return err
 	}

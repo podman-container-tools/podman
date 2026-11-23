@@ -12,7 +12,9 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 )
@@ -28,7 +30,10 @@ type Image struct {
 // a client to the registry hosting the given image.
 // The caller must call .Close() on the returned Image.
 func newImage(ctx context.Context, sys *types.SystemContext, ref dockerReference) (types.ImageCloser, error) {
-	s, err := newImageSource(ctx, sys, ref)
+	s, err := newImageSource(ctx, ref, private.NewImageSourceOptions{
+		Sys:     sys,
+		Digests: digests.CanonicalDefault(),
+	})
 	if err != nil {
 		return nil, err
 	}

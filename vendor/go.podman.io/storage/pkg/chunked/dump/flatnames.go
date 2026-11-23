@@ -59,8 +59,6 @@ func LayerFlatFileNames(bigData func(key string) (io.ReadCloser, error)) (map[st
 		if err != nil {
 			return nil, err
 		}
-		// As pkg/chunked does for the map it builds when applying a layer
-		// in the flat layout.
 		names[filepath.Clean(entry.Name)] = p
 	}
 	return names, nil

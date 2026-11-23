@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/internal/blobinfocache"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
 	"go.podman.io/image/v5/types"
@@ -46,6 +47,7 @@ func (c *Compat) PutBlob(ctx context.Context, stream io.Reader, inputInfo types.
 	res, err := c.dest.PutBlobWithOptions(ctx, stream, inputInfo, private.PutBlobOptions{
 		Cache:    blobinfocache.FromBlobInfoCache(cache),
 		IsConfig: isConfig,
+		Digests:  digests.CanonicalDefault(),
 	})
 	if err != nil {
 		return types.BlobInfo{}, err

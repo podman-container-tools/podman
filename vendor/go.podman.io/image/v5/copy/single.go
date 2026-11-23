@@ -19,6 +19,7 @@ import (
 	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/imagesource"
 	"go.podman.io/image/v5/internal/pkg/platform"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/set"
@@ -377,7 +378,10 @@ func (ic *imageCopier) noPendingManifestUpdates() bool {
 // compareImageDestinationManifestEqual compares the source and destination image manifests (reading the manifest from the
 // (possibly remote) destination). If they are equal, it returns a full copySingleImageResult, nil otherwise.
 func (ic *imageCopier) compareImageDestinationManifestEqual(ctx context.Context, targetInstance *digest.Digest) (*copySingleImageResult, error) {
-	destImageSource, err := ic.c.dest.Reference().NewImageSource(ctx, ic.c.options.DestinationCtx)
+	destImageSource, err := imagesource.NewImageSource(ctx, ic.c.dest.Reference(), private.NewImageSourceOptions{
+		Sys:     ic.c.options.DestinationCtx,
+		Digests: ic.c.options.digestOptions,
+	})
 	if err != nil {
 		logrus.Debugf("Unable to create destination image %s source: %v", transports.ImageName(ic.c.dest.Reference()), err)
 		return nil, nil

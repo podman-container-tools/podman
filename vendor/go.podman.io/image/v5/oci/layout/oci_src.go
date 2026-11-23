@@ -56,10 +56,10 @@ type ociImageSource struct {
 }
 
 // newImageSource returns an ImageSource for reading from an existing directory.
-func newImageSource(sys *types.SystemContext, ref ociReference) (private.ImageSource, error) {
+func newImageSource(ref ociReference, options private.NewImageSourceOptions) (private.ImageSource, error) {
 	tr := tlsclientconfig.NewTransport()
-	if sys != nil && sys.BaseTLSConfig != nil {
-		tr.TLSClientConfig = sys.BaseTLSConfig.Clone()
+	if options.Sys != nil && options.Sys.BaseTLSConfig != nil {
+		tr.TLSClientConfig = options.Sys.BaseTLSConfig.Clone()
 	} else {
 		tr.TLSClientConfig = &tls.Config{
 			// As of 2025-08, tlsconfig.ClientDefault() differs from Go 1.23 defaults only in CipherSuites;
@@ -71,11 +71,11 @@ func newImageSource(sys *types.SystemContext, ref ociReference) (private.ImageSo
 		}
 	}
 
-	if sys != nil && sys.OCICertPath != "" {
-		if err := tlsclientconfig.SetupCertificates(sys.OCICertPath, tr.TLSClientConfig); err != nil {
+	if options.Sys != nil && options.Sys.OCICertPath != "" {
+		if err := tlsclientconfig.SetupCertificates(options.Sys.OCICertPath, tr.TLSClientConfig); err != nil {
 			return nil, err
 		}
-		tr.TLSClientConfig.InsecureSkipVerify = sys.OCIInsecureSkipTLSVerify
+		tr.TLSClientConfig.InsecureSkipVerify = options.Sys.OCIInsecureSkipTLSVerify
 	}
 	client := &http.Client{}
 	client.Transport = tr
@@ -94,11 +94,11 @@ func newImageSource(sys *types.SystemContext, ref ociReference) (private.ImageSo
 	} else {
 		s.fs = os.DirFS(ref.dir)
 	}
-	if sys != nil && sys.OCISharedBlobDirPath != "" {
+	if options.Sys != nil && options.Sys.OCISharedBlobDirPath != "" {
 		// TODO(jonboulle): check dir existence?
-		s.blobFS = os.DirFS(sys.OCISharedBlobDirPath)
+		s.blobFS = os.DirFS(options.Sys.OCISharedBlobDirPath)
 		s.useSharedBlobDir = true
-		s.blobFSLocalPath = sys.OCISharedBlobDirPath
+		s.blobFSLocalPath = options.Sys.OCISharedBlobDirPath
 	} else {
 		s.blobFS = s.fs
 		if ref.reader == nil {

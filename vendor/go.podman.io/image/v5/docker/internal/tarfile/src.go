@@ -14,9 +14,11 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/imagesource/stubs"
 	"go.podman.io/image/v5/internal/iolimits"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/pkg/compression"
 	"go.podman.io/image/v5/types"
@@ -33,8 +35,9 @@ type Source struct {
 	archive      *Reader
 	closeArchive bool // .Close() the archive when the source is closed.
 	// If ref is nil and sourceIndex is -1, indicates the only image in the archive.
-	ref         reference.NamedTagged // May be nil
-	sourceIndex int                   // May be -1
+	ref           reference.NamedTagged // May be nil
+	sourceIndex   int                   // May be -1
+	digestOptions digests.Options
 	// The following data is only available after ensureCachedDataIsPresent() succeeds
 	tarManifest       *ManifestItem // nil if not available yet.
 	configBytes       []byte
@@ -55,17 +58,18 @@ type layerInfo struct {
 // NewSource returns a tarfile.Source for an image in the specified archive matching ref
 // and sourceIndex (or the only image if they are (nil, -1)).
 // The archive will be closed if closeArchive
-func NewSource(archive *Reader, closeArchive bool, transportName string, ref reference.NamedTagged, sourceIndex int) *Source {
+func NewSource(archive *Reader, closeArchive bool, transportName string, ref reference.NamedTagged, sourceIndex int, options private.NewImageSourceOptions) *Source {
 	s := &Source{
 		PropertyMethodsInitialize: impl.PropertyMethods(impl.Properties{
 			HasThreadSafeGetBlob: true,
 		}),
 		NoGetBlobAtInitialize: stubs.NoGetBlobAtRaw(transportName),
 
-		archive:      archive,
-		closeArchive: closeArchive,
-		ref:          ref,
-		sourceIndex:  sourceIndex,
+		archive:       archive,
+		closeArchive:  closeArchive,
+		ref:           ref,
+		sourceIndex:   sourceIndex,
+		digestOptions: options.Digests, // We use options.Digests for configDigest, but not for layers; see a more detailed comment in prepareLayerData.
 	}
 	s.Compat = impl.AddCompat(s)
 	return s
@@ -105,11 +109,15 @@ func (s *Source) ensureCachedDataIsPresentPrivate() error {
 	if err != nil {
 		return err
 	}
+	digestAlgorithm, err := s.digestOptions.Choose(digests.Situation{})
+	if err != nil {
+		return err
+	}
 
 	// Success; commit.
 	s.tarManifest = tarManifest
 	s.configBytes = configBytes
-	s.configDigest = digest.FromBytes(configBytes)
+	s.configDigest = digestAlgorithm.FromBytes(configBytes)
 	s.orderedDiffIDList = parsedConfig.RootFS.DiffIDs
 	s.knownLayers = knownLayers
 	return nil
@@ -130,6 +138,21 @@ func (s *Source) TarManifest() []ManifestItem {
 
 func (s *Source) prepareLayerData(tarManifest *ManifestItem, parsedConfig *manifest.Schema2Image) (map[digest.Digest]*layerInfo, error) {
 	// Collect layer data available in manifest and config.
+
+	// We use the DiffID values from parsedConfig as layer identifiers in the manifest we generate,
+	// regardless of s.digestOptions.
+	//
+	// We _could_ use s.digestOptions, by consuming only the paths in tarManifest.Layers, ignoring parsedConfig.RootFS.DiffIDs,
+	// but we would have to compute digests of all layers, an extra CPU cost (and possibly extra I/O cost because, later in this function,
+	// we don’t read the full layer contents for uncompressed layers).
+	//
+	// That would, potentially _introduce_ new risk of digest collisions (if the layers collided under our chosen digest algorithm);
+	// meanwhile, _assuming_ that the image producer identified layers by the DiffID values written into the produced parsedConfig,
+	// the process would _still_ be exposed to risk of digest collisions in the producer-chosen algorithm.
+	//
+	// Us spending the CPU time to digest all layers would only make a difference if the producer could produce an image
+	// where layers collide under the producers’ parsedConfig.RootFS.DiffIDs algorithm, _but_ they are otherwise correctly
+	// differentiated by the producer, and use different tarManifest.Layers paths.
 	if len(tarManifest.Layers) != len(parsedConfig.RootFS.DiffIDs) {
 		return nil, fmt.Errorf("Inconsistent layer count: %d in manifest, %d in config", len(tarManifest.Layers), len(parsedConfig.RootFS.DiffIDs))
 	}
@@ -272,7 +295,7 @@ func (s *Source) GetBlob(ctx context.Context, info types.BlobInfo, cache types.B
 		return nil, 0, err
 	}
 
-	if info.Digest == s.configDigest { // FIXME? Implement a more general algorithm matching instead of assuming sha256.
+	if info.Digest == s.configDigest {
 		return io.NopCloser(bytes.NewReader(s.configBytes)), int64(len(s.configBytes)), nil
 	}
 

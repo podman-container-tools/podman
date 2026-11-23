@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/imagesource"
 	"go.podman.io/image/v5/types"
 )
 
@@ -24,7 +25,7 @@ import (
 // NOTE: If any kind of signature verification should happen, build an UnparsedImage from the value returned by NewImageSource,
 // verify that UnparsedImage, and convert it into a real Image via image.FromUnparsedImage instead of calling this function.
 func FromSource(ctx context.Context, sys *types.SystemContext, src types.ImageSource) (types.ImageCloser, error) {
-	return image.FromSource(ctx, sys, src)
+	return image.FromSource(ctx, sys, imagesource.FromPublic(src))
 }
 
 // FromUnparsedImage returns a types.Image implementation for unparsed.

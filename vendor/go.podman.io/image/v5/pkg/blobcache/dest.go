@@ -11,6 +11,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagedestination"
 	"go.podman.io/image/v5/internal/imagedestination/impl"
 	"go.podman.io/image/v5/internal/private"
@@ -162,6 +163,10 @@ func (d *blobCacheDestination) NoteOriginalOCIConfig(ociConfig *imgspecv1.Image,
 // to any other readers for download using the supplied digest.
 // If stream.Read() at any time, ESPECIALLY at end of input, returns an error, PutBlobWithOptions MUST 1) fail, and 2) delete any data stored so far.
 func (d *blobCacheDestination) PutBlobWithOptions(ctx context.Context, stream io.Reader, inputInfo types.BlobInfo, options private.PutBlobOptions) (private.UploadedBlob, error) {
+	if _, err := options.Digests.Choose(digests.Situation{Preexisting: digest.Canonical.FromBytes(nil), CannotChangeAlgorithmReason: "transport does not implement PutBlobWithOptions.Digests yet"}); err != nil {
+		return private.UploadedBlob{}, err
+	}
+
 	var tempfile *os.File
 	var err error
 	var alternateDigest digest.Digest
@@ -264,6 +269,10 @@ func (d *blobCacheDestination) TryReusingBlobWithOptions(ctx context.Context, in
 		return present, reusedInfo, err
 	}
 
+	digestOptions, err := digests.CanonicalDefault().WithDefault(digest.Canonical) // FIXME: This is bad and redundant, but we ultimately want the choice to be provided by the caller; and this way it shows up on audit searches for digest.Canonical.
+	if err != nil {
+		return false, private.ReusedBlob{}, err
+	}
 	blobPath, _, isConfig, err := d.reference.findBlob(info)
 	if err != nil {
 		return false, private.ReusedBlob{}, err
@@ -275,6 +284,7 @@ func (d *blobCacheDestination) TryReusingBlobWithOptions(ctx context.Context, in
 			uploadedInfo, err := d.destination.PutBlobWithOptions(ctx, f, info, private.PutBlobOptions{
 				Cache:      options.Cache,
 				IsConfig:   isConfig,
+				Digests:    digestOptions,
 				EmptyLayer: options.EmptyLayer,
 				LayerIndex: options.LayerIndex,
 			})

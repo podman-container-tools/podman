@@ -2,9 +2,11 @@ package imagedestination
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagedestination/stubs"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
@@ -53,6 +55,24 @@ func (w *wrapped) PutBlobWithOptions(ctx context.Context, stream io.Reader, inpu
 	if err != nil {
 		return private.UploadedBlob{}, err
 	}
+	// Check that the returned digest is compatible with options.Digests. If it isn’t, there’s nothing we can do, but at least the callers of PutBlobWithOptions
+	// won’t need to double-check.
+	//
+	// We could also check for options.Digests.MustUseSet() != "" && != digests.Canonical,
+	// but that would also reject transports which can handle it fine (at least when given an acceptable digest in inputInfo.Digest).
+	if _, err := options.Digests.Choose(digests.Situation{
+		Preexisting:                 res.Digest,
+		CannotChangeAlgorithmReason: "external transport API does not allow choosing a digest algorithm",
+	}); err != nil {
+		return private.UploadedBlob{}, err
+	}
+	if options.CannotChangeDigestReason != "" && res.Digest.Algorithm() != inputInfo.Digest.Algorithm() {
+		// The transport did not see options.Digests, so it had no reason to use a different digest algorithm
+		// (and previously c/image/copy contained a strict digest equality check, so existing external transports
+		// must have been preserving the input digest, if any, in all situations).
+		return private.UploadedBlob{}, fmt.Errorf("internal error writing blob, blob with digest %s saved with digest %s", inputInfo.Digest, res.Digest)
+	}
+
 	return private.UploadedBlob{
 		Digest: res.Digest,
 		Size:   res.Size,

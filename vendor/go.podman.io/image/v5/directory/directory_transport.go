@@ -11,6 +11,8 @@ import (
 	"go.podman.io/image/v5/directory/explicitfilepath"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/imagereference/impl"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/transports"
 	"go.podman.io/image/v5/types"
 )
@@ -143,10 +145,16 @@ func (ref dirReference) NewImage(ctx context.Context, sys *types.SystemContext) 
 	return image.FromReference(ctx, sys, ref)
 }
 
+// NewImageSourceWithOptions returns a private.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (ref dirReference) NewImageSourceWithOptions(ctx context.Context, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	return newImageSource(ref)
+}
+
 // NewImageSource returns a types.ImageSource for this reference.
 // The caller must call .Close() on the returned ImageSource.
 func (ref dirReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
-	return newImageSource(ref)
+	return impl.NewImageSource(ref, ctx, sys)
 }
 
 // NewImageDestination returns a types.ImageDestination for this reference.

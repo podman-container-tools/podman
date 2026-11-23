@@ -10,6 +10,8 @@ import (
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/imagereference/impl"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/types"
 )
 
@@ -66,6 +68,18 @@ func (r *tarballReference) PolicyConfigurationNamespaces() []string {
 // WARNING: This may not do the right thing for a manifest list, see image.FromSource for details.
 func (r *tarballReference) NewImage(ctx context.Context, sys *types.SystemContext) (types.ImageCloser, error) {
 	return image.FromReference(ctx, sys, r)
+}
+
+// NewImageSourceWithOptions returns a private.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (r *tarballReference) NewImageSourceWithOptions(ctx context.Context, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	return r.newImageSource(options)
+}
+
+// NewImageSource returns a types.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
+	return impl.NewImageSource(r, ctx, sys)
 }
 
 func (r *tarballReference) DeleteImage(ctx context.Context, sys *types.SystemContext) error {

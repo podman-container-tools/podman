@@ -68,13 +68,17 @@ func untar() {
 
 	// FreeBSD doesn't have proc/self, but we can handle it here
 	if root == procPathForFd(rootFileDescriptor) {
-		// Take ownership to ensure it's closed; no need to leak
-		// this afterwards.
-		rootFd := os.NewFile(rootFileDescriptor, "tar-root")
-		defer rootFd.Close()
-		if err := unix.Fchdir(int(rootFd.Fd())); err != nil {
-			fatal(err)
-		}
+		func() { // A scope for defer
+			// Take ownership and close the fd before chroot: on FreeBSD,
+			// chroot(2) fails with EPERM when the process holds an open
+			// directory fd and its root is not the system root, as in a
+			// jail (kern.chroot_allow_open_directories=1).
+			rootFd := os.NewFile(rootFileDescriptor, "tar-root")
+			defer rootFd.Close()
+			if err := unix.Fchdir(int(rootFd.Fd())); err != nil {
+				fatal(err)
+			}
+		}()
 		root = "."
 	} else if root == "" {
 		root = dst

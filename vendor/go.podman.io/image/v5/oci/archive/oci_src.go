@@ -11,7 +11,6 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
-	"go.podman.io/image/v5/internal/imagesource"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
@@ -54,13 +53,13 @@ type ociArchiveImageSource struct {
 
 // newImageSource returns an ImageSource for reading from an existing directory.
 // newImageSource untars the file and saves it in a temp directory
-func newImageSource(ctx context.Context, sys *types.SystemContext, ref ociArchiveReference) (private.ImageSource, error) {
-	unpackedArchive, err := unpackArchive(sys, ref)
+func newImageSource(ctx context.Context, ref ociArchiveReference, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	unpackedArchive, err := unpackArchive(options.Sys, ref)
 	if err != nil {
 		return nil, fmt.Errorf("creating temp directory: %w", err)
 	}
 
-	unpackedSrc, err := unpackedArchive.ociRefExtracted.NewImageSource(ctx, sys)
+	unpackedSrc, err := unpackedArchive.ociRefExtracted.NewImageSourceWithOptions(ctx, options)
 	if err != nil {
 		if _, ok := errors.AsType[ocilayout.ImageNotFoundError](err); ok {
 			err = ImageNotFoundError{ref: ref}
@@ -72,7 +71,7 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref ociArchiv
 	}
 	s := &ociArchiveImageSource{
 		ref:             ref,
-		unpackedSrc:     imagesource.FromPublic(unpackedSrc),
+		unpackedSrc:     unpackedSrc,
 		unpackedArchive: unpackedArchive,
 	}
 	s.Compat = impl.AddCompat(s)
@@ -183,7 +182,7 @@ func (s *ociArchiveImageSource) LayerInfosForCopy(ctx context.Context, instanceD
 type unpackedArchive struct {
 	tempDirectory   string // May contain escaping symlinks, so it SHOULD NOT be used for direct filesystem accesses. Use root instead.
 	root            *os.Root
-	ociRefExtracted types.ImageReference
+	ociRefExtracted private.ImageReference
 }
 
 // Close deletes the temporary directory and releases other state.
@@ -234,9 +233,13 @@ func unpackArchive(sys *types.SystemContext, ref ociArchiveReference) (*unpacked
 	}()
 
 	reader := ocilayout.NewReaderWithRoot(root)
-	ociRef, err := reader.NewReference(tempDir, ref.image)
+	ociRef_, err := reader.NewReference(tempDir, ref.image)
 	if err != nil {
 		return nil, fmt.Errorf("creating oci reference: %w", err)
+	}
+	ociRef, ok := ociRef_.(private.ImageReference)
+	if !ok {
+		return nil, errors.New("internal error: oci/layout does not implement private.ImageReference")
 	}
 
 	// TODO: This can take quite some time, and should ideally be cancellable using a context.Context.

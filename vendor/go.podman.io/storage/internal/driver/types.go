@@ -41,6 +41,12 @@ type LayerFiles interface {
 	// everyone - in which case the content has to be sent inline.
 	Lookup(name string, size int64, onlyWorldReadable bool) (index int, filename string, ok bool, err error)
 
+	// Open returns the content of the tar entry called name, for content
+	// that cannot be referenced and has to be copied into the stream.  It
+	// is read with the privileges of the caller, which is why it works for
+	// files the consumer could not open itself.
+	Open(name string) (io.ReadCloser, error)
+
 	// Close releases the directory file descriptors.
 	Close() error
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagedestination/impl"
 	"go.podman.io/image/v5/internal/imagedestination/stubs"
 	"go.podman.io/image/v5/internal/iolimits"
@@ -84,6 +85,10 @@ func (d *Destination) AddRepoTags(tags []reference.NamedTagged) {
 // to any other readers for download using the supplied digest.
 // If stream.Read() at any time, ESPECIALLY at end of input, returns an error, PutBlobWithOptions MUST 1) fail, and 2) delete any data stored so far.
 func (d *Destination) PutBlobWithOptions(ctx context.Context, stream io.Reader, inputInfo types.BlobInfo, options private.PutBlobOptions) (private.UploadedBlob, error) {
+	if _, err := options.Digests.Choose(digests.Situation{Preexisting: digest.Canonical.FromBytes(nil), CannotChangeAlgorithmReason: "transport does not implement PutBlobWithOptions.Digests yet"}); err != nil {
+		return private.UploadedBlob{}, err
+	}
+
 	// Ouch, we need to stream the blob into a temporary file just to determine the size.
 	// When the layer is decompressed, we also have to generate the digest on uncompressed data.
 	if inputInfo.Size == -1 || inputInfo.Digest == "" {

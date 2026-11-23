@@ -15,8 +15,10 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	imgspecs "github.com/opencontainers/image-spec/specs-go"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/imagesource/stubs"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/pkg/compression"
 	compressionTypes "go.podman.io/image/v5/pkg/compression/types"
 	"go.podman.io/image/v5/types"
@@ -41,7 +43,7 @@ type tarballBlob struct {
 	size     int64
 }
 
-func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
+func (r *tarballReference) newImageSource(options private.NewImageSourceOptions) (private.ImageSource, error) {
 	// Pick up the layer comment from the configuration's history list, if one is set.
 	comment := "imported from tarball"
 	if len(r.config.History) > 0 && r.config.History[0].Comment != "" {
@@ -49,6 +51,11 @@ func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.System
 	}
 
 	// Gather up the digests, sizes, and history information for all of the files.
+	digestAlgorithm, err := options.Digests.Choose(digests.Situation{})
+	if err != nil {
+		return nil, err
+	}
+
 	blobs := map[digest.Digest]tarballBlob{}
 	diffIDs := []digest.Digest{}
 	created := time.Time{}
@@ -84,7 +91,7 @@ func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.System
 		}
 
 		// Set up to digest the file as it is.
-		blobIDdigester := digest.Canonical.Digester()
+		blobIDdigester := digestAlgorithm.Digester()
 		reader = io.TeeReader(reader, blobIDdigester.Hash())
 
 		var layerType string
@@ -102,7 +109,7 @@ func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.System
 				}
 				defer uncompressed.Close()
 				// It is compressed, so the diffID is the digest of the uncompressed version
-				diffIDdigester = digest.Canonical.Digester()
+				diffIDdigester = digestAlgorithm.Digester()
 				reader = io.TeeReader(uncompressed, diffIDdigester.Hash())
 				switch format.Name() {
 				case compressionTypes.GzipAlgorithmName:
@@ -171,7 +178,7 @@ func (r *tarballReference) NewImageSource(ctx context.Context, sys *types.System
 	if err != nil {
 		return nil, fmt.Errorf("error generating configuration blob for %q: %w", strings.Join(r.filenames, separator), err)
 	}
-	configID := digest.Canonical.FromBytes(configBytes)
+	configID := digestAlgorithm.FromBytes(configBytes)
 	blobs[configID] = tarballBlob{
 		contents: configBytes,
 		size:     int64(len(configBytes)),

@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/blobinfocache"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagedestination/impl"
 	"go.podman.io/image/v5/internal/imagedestination/stubs"
 	"go.podman.io/image/v5/internal/iolimits"
@@ -136,6 +137,10 @@ func (c *sizeCounter) Write(p []byte) (n int, err error) {
 // to any other readers for download using the supplied digest.
 // If stream.Read() at any time, ESPECIALLY at end of input, returns an error, PutBlobWithOptions MUST 1) fail, and 2) delete any data stored so far.
 func (d *dockerImageDestination) PutBlobWithOptions(ctx context.Context, stream io.Reader, inputInfo types.BlobInfo, options private.PutBlobOptions) (private.UploadedBlob, error) {
+	if _, err := options.Digests.Choose(digests.Situation{Preexisting: digest.Canonical.FromBytes(nil), CannotChangeAlgorithmReason: "transport does not implement PutBlobWithOptions.Digests yet"}); err != nil {
+		return private.UploadedBlob{}, err
+	}
+
 	// If requested, precompute the blob digest to prevent uploading layers that already exist on the registry.
 	// This functionality is particularly useful when BlobInfoCache has not been populated with compressed digests,
 	// the source blob is uncompressed, and the destination blob is being compressed "on the fly".
@@ -705,6 +710,11 @@ func (d *dockerImageDestination) putSignaturesToSigstoreAttachments(ctx context.
 		return errors.New("writing sigstore attachments is disabled by configuration")
 	}
 
+	digestOptions, err := digests.CanonicalDefault().WithDefault(digest.Canonical) // FIXME: This is bad and redundant, but we ultimately want the choice to be provided by the caller; and this way it shows up on audit searches for digest.Canonical.
+	if err != nil {
+		return err
+	}
+
 	ociManifest, err := d.c.getSigstoreAttachmentManifest(ctx, d.ref, manifestDigest)
 	if err != nil {
 		return err
@@ -758,6 +768,7 @@ func (d *dockerImageDestination) putSignaturesToSigstoreAttachments(ctx context.
 		sigDesc, err := d.putBlobBytesAsOCI(ctx, payloadBlob, mimeType, private.PutBlobOptions{
 			Cache:      none.NoCache,
 			IsConfig:   false,
+			Digests:    digestOptions,
 			EmptyLayer: false,
 			LayerIndex: nil,
 		})
@@ -779,6 +790,7 @@ func (d *dockerImageDestination) putSignaturesToSigstoreAttachments(ctx context.
 	configDesc, err := d.putBlobBytesAsOCI(ctx, configBlob, imgspecv1.MediaTypeImageConfig, private.PutBlobOptions{
 		Cache:      none.NoCache,
 		IsConfig:   true,
+		Digests:    digestOptions,
 		EmptyLayer: false,
 		LayerIndex: nil,
 	})

@@ -13,6 +13,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/internal/image"
+	refImpl "go.podman.io/image/v5/internal/imagereference/impl"
 	"go.podman.io/image/v5/internal/imagesource"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/manifest"
@@ -38,15 +39,25 @@ type blobCacheSource struct {
 	cacheErrors int64
 }
 
-func (b *BlobCache) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
-	src, err := b.reference.NewImageSource(ctx, sys)
+// NewImageSourceWithOptions returns a private.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (b *BlobCache) NewImageSourceWithOptions(ctx context.Context, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	src, err := imagesource.NewImageSource(ctx, b.reference, options)
 	if err != nil {
 		return nil, fmt.Errorf("error creating new image source %q: %w", transports.ImageName(b.reference), err)
 	}
 	logrus.Debugf("starting to read from image %q using blob cache in %q (compression=%v)", transports.ImageName(b.reference), b.directory, b.compress)
-	s := &blobCacheSource{reference: b, source: imagesource.FromPublic(src), sys: *sys}
+	var sys types.SystemContext
+	if options.Sys != nil {
+		sys = *options.Sys
+	}
+	s := &blobCacheSource{reference: b, source: src, sys: sys}
 	s.Compat = impl.AddCompat(s)
 	return s, nil
+}
+
+func (b *BlobCache) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
+	return refImpl.NewImageSource(b, ctx, sys)
 }
 
 func (s *blobCacheSource) Reference() types.ImageReference {

@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/vbatts/tar-split/tar/storage"
+	"go.podman.io/storage/internal/driver"
 )
 
 // copyBufferSize is the buffer used when content has to be copied into the
@@ -15,7 +16,7 @@ const copyBufferSize = 1 << 20
 
 // convert writes the layer described by the tar-split metadata to w in the
 // splitdirfdstream format, referencing the content of regular files through
-// files wherever it can, and copying it from getter where it cannot.  With
+// files wherever it can, and copying it from files where it cannot.  With
 // onlyWorldReadable, only files anyone may read are referenced.
 //
 // What the consumer reassembles has to hash to the layer's diff ID, so the
@@ -85,7 +86,7 @@ func convert(w io.Writer, layer Layer, onlyWorldReadable bool) error {
 		if buf == nil {
 			buf = make([]byte, copyBufferSize)
 		}
-		if err := copyInline(writer, layer, name, entry.Size, buf); err != nil {
+		if err := copyInline(writer, files, name, entry.Size, buf); err != nil {
 			return err
 		}
 	}
@@ -97,8 +98,8 @@ func convert(w io.Writer, layer Layer, onlyWorldReadable bool) error {
 
 // copyInline writes the content of the entry called name, which is size
 // bytes long, as an InlineData chunk.
-func copyInline(writer *splitDirFDStreamWriter, getter storage.FileGetter, name string, size int64, buf []byte) error {
-	content, err := getter.Get(name)
+func copyInline(writer *splitDirFDStreamWriter, files driver.LayerFiles, name string, size int64, buf []byte) error {
+	content, err := files.Open(name)
 	if err != nil {
 		return fmt.Errorf("opening %q: %w", name, err)
 	}
