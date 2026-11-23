@@ -28,6 +28,13 @@ jobs:
           ["macos"]='O[Ss]/?Arch:\s*darwin'
           ["remote"]='serviceIsRemote:\strue'
           ["machine"]='variant:\spodman-machine-os'
+
+          # Issue Templates set them by default but when users (or AI rather) use the
+          # github API to create the issue the labels are not added even when they are
+          # smart enough to follow the template text. So match the titles and add them
+          # to avoid manual work for it.
+          ["kind/bug"]='Issue Description'
+          ["kind/feature"]='Feature request description'
         )
         for label in "${!labels[@]}"; do
           if grep -Eq "${labels[$label]}" <<<"$BODY"; then

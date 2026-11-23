@@ -22,6 +22,7 @@ body:
   - type: textarea
     id: description
     attributes:
+      # When updating the label text also update the matcher in issue-labeler.yml
       label: Issue Description
       description: Please explain your issue
       value: "Describe your issue"

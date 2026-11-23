@@ -9,6 +9,7 @@ body:
   - type: textarea
     id: feature_description
     attributes:
+      # When updating the label text also update the matcher in issue-labeler.yml
       label: Feature request description
       description: Please explain your feature request and if it is related to a problem
       value: "A clear and concise description of what the feature request is about."
