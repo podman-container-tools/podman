@@ -10,13 +10,31 @@ jobs:
   triage:
     if: github.repository == 'podman-container-tools/podman'
     permissions:
-      contents: read  # for github/issue-labeler to get repo contents
-      issues: write  # for github/issue-labeler to create or remove labels
+      issues: write  # to add labels
     runs-on: ubuntu-latest
+    env:
+      NUMBER: ${{ github.event.issue.number }}
+      BODY: ${{ github.event.issue.body }}
+      GH_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
     steps:
-    - uses: github/issue-labeler@ccca1e16fcb66762200e616fc29b57b940c1cb67 # v3.5
-      with:
-        repo-token: "${{ secrets.GITHUB_TOKEN }}"
-        configuration-path: .github/issue-labeler.yml
-        not-before: 2022-01-27T00:00:00Z
-        enable-versioned-regex: 0
+    - name: add labels
+      run: |
+        add_labels=()
+        declare -A labels=(
+          # info prints OsArch: ...
+          # version prints OS/Arch: ...
+          ["windows"]='O[Ss]/?Arch:\s*windows'
+          ["macos"]='O[Ss]/?Arch:\s*darwin'
+          ["remote"]='serviceIsRemote:\strue'
+          ["machine"]='variant:\spodman-machine-os'
+        )
+        for label in "${!labels[@]}"; do
+          if grep -Eq "${labels[$label]}" <<<"$BODY"; then
+            add_labels+=("$label")
+          fi
+        done
+        if [[ "${#add_labels[@]}" -gt 0 ]]; then
+          echo "Adding labels '${add_labels[*]}' to issue #$NUMBER"
+          gh issue edit "$NUMBER" --add-label "$(IFS=,; printf '%s' "${add_labels[*]}")"
+        fi
