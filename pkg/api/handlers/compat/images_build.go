@@ -703,8 +703,9 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 
 	// Create system context
 	systemContext := &types.SystemContext{
-		AuthFilePath:     authfile,
-		DockerAuthConfig: creds,
+		AuthFilePath:         authfile,
+		DockerAuthConfig:     creds,
+		BigFilesTemporaryDir: parse.GetTempDir(),
 	}
 	if err := utils.PossiblyEnforceDockerHub(r, systemContext); err != nil {
 		return nil, cleanup, utils.GetInternalServerError(fmt.Errorf("checking to enforce DockerHub: %w", err))
