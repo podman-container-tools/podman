@@ -65,6 +65,30 @@ EOF
 
 t POST "libpod/local/build?localcontextdir=${TMPD}&dockerfile=${TMPD}/AdditionalContext&additionalbuildcontexts=additional=localpath:${TMPD}/additional_context&t=additionalcontext" - 200
 
+# Send secrets without uploading or modifying the shared context.
+mkdir "${TMPD}/secret-context"
+echo "local-build-secret" > "${TMPD}/secret"
+chmod 600 "${TMPD}/secret"
+tar -C "${TMPD}" -cf "${TMPD}/secrets.tar" secret
+cat > "${TMPD}/secret-context/Containerfile" << EOF
+FROM $IMAGE
+COPY . /copied
+RUN --mount=type=secret,id=tok test "\$(cat /run/secrets/tok)" = local-build-secret
+RUN test ! -e /copied/secret
+LABEL secretbody=tested
+EOF
+
+secrets_query='secrets=%5B%22id%3Dtok%2Csrc%3Dsecret%22%5D'
+fixture_files=$(find "${TMPD}" -print | sort)
+t POST "libpod/local/build?localcontextdir=${TMPD}/secret-context&${secrets_query}&t=localsecret" "${TMPD}/secrets.tar" 200
+t GET images/localsecret/json 200 .Config.Labels.secretbody="tested"
+is "$(find "${TMPD}" -print | sort)" "$fixture_files" "successful secret build leaves the context and parent unchanged"
+
+echo 'RUN false' >> "${TMPD}/secret-context/Containerfile"
+t POST "libpod/local/build?localcontextdir=${TMPD}/secret-context&${secrets_query}&t=localsecretfailed" "${TMPD}/secrets.tar" 200 \
+  '.errorDetail.message|select(.)~.*exit status 1.*'
+is "$(find "${TMPD}" -print | sort)" "$fixture_files" "failed secret build leaves the context and parent unchanged"
+
 echo "not a directory" > ${TMPD}/notadir
 t POST "libpod/local/build?localcontextdir=${TMPD}/notadir&t=filenotdir" - 400
 
