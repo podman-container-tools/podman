@@ -17,6 +17,7 @@ Maintainers and Reviewers on other Podman Container Tools projects are found in 
 | Danish Prakash | [danishprakash](https://github.com/danishprakash)        | Maintainer    | [SUSE](https://github.com/suse)              |
 | Jan Rodák      | [Honny1](https://github.com/Honny1)                      | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
 | Tom Sweeney    | [TomSweeneyRedHat](https://github.com/TomSweeneyRedHat/) | Maintainer    | [Red Hat](https://github.com/RedHatOfficial) |
+| Šimon Brauner  | [simonbrauner](https://github.com/simonbrauner)          | Reviewer      | [Red Hat](https://github.com/RedHatOfficial) |
 | Jake Correnti  | [jakecorrenti](https://github.com/jakecorrenti)          | Reviewer      | [Red Hat](https://github.com/RedHatOfficial) |
 | Jan Kaluza     | [jankaluza](https://github.com/jankaluza)                | Reviewer      | [Red Hat](https://github.com/RedHatOfficial) |
 | Luca Stocchi   | [lstocchi](https://github.com/lstocchi)                  | Reviewer      | [Red Hat](https://github.com/RedHatOfficial) |
