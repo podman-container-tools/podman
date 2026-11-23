@@ -361,3 +361,62 @@ function _podman_system_service {
   is "$output" ".* remote error: tls: certificate required"
   systemctl stop $SERVICE_NAME
 }
+
+@test "podman system service: compat secret create size limits" {
+    unset REMOTESYSTEM_TRANSPORT
+
+    skip_if_remote "podman system service unavailable over remote"
+    URL=unix://$PODMAN_TMPDIR/myunix.sock
+
+    _podman_system_service $URL --time=0
+    wait_for_file $PODMAN_TMPDIR/myunix.sock
+
+    secretname=s-$(random_string)
+    datamsg="secret data must be larger than 0 and less than 512000 bytes"
+    bodymsg="request body is larger than 4194304 bytes"
+    curlopts=(-s -w '%{http_code}'
+        --unix-socket $PODMAN_TMPDIR/myunix.sock
+        -H 'Content-Type: application/json')
+
+    # Bytes of secret data | error message. Base64 makes 4 MiB of data
+    # larger than the 4 MiB body limit.
+    tests="
+0       | $datamsg
+512000  | $datamsg
+4194304 | $bodymsg
+"
+    while read size expected_msg; do
+        printf '{"Name":"%s","Data":"%s"}' $secretname \
+            "$(head -c $size /dev/zero | base64 -w0)" > $PODMAN_TMPDIR/secret.json
+        run curl "${curlopts[@]}" -o $PODMAN_TMPDIR/out.json --data-binary @$PODMAN_TMPDIR/secret.json \
+            http://d/v1.41/secrets/create
+        is "$output" "400" "HTTP status, $size bytes of data"
+        is "$(jq -r .message $PODMAN_TMPDIR/out.json)" "$expected_msg" \
+            "error message, $size bytes of data"
+        rm -f $PODMAN_TMPDIR/out.json
+    done < <(parse_table "$tests")
+
+    # "A" is valid base64 (zero bytes), so the data needs no encoding.
+    code=$({
+        printf '{"Name":"%s","Data":"' $secretname
+        head -c $((4 * 1024 * 1024 + 1024)) /dev/zero | tr '\0' A
+        printf '"}'
+    } | curl "${curlopts[@]}" -o $PODMAN_TMPDIR/out.json -X POST -T - http://d/v1.41/secrets/create)
+    is "$code" "400" "HTTP status, 4 MiB + 1 KiB of request body with unknown length"
+    is "$(jq -r .message $PODMAN_TMPDIR/out.json)" "$bodymsg" \
+        "error message, 4 MiB + 1 KiB body with unknown length"
+    rm -f $PODMAN_TMPDIR/out.json
+
+    run_podman 125 secret inspect $secretname
+
+    # One byte under the data limit works.
+    printf '{"Name":"%s","Data":"%s"}' $secretname \
+        "$(head -c 511999 /dev/zero | base64 -w0)" > $PODMAN_TMPDIR/secret.json
+    run curl "${curlopts[@]}" -o $PODMAN_TMPDIR/out.json --data-binary @$PODMAN_TMPDIR/secret.json \
+        http://d/v1.41/secrets/create
+    is "$output" "201" "HTTP status, 511999 bytes of data"
+    rm -f $PODMAN_TMPDIR/out.json
+
+    run_podman secret rm $secretname
+    systemctl stop $SERVICE_NAME
+}
