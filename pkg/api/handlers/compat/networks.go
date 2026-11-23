@@ -204,9 +204,14 @@ func convertLibpodNetworktoDockerNetwork(runtime *libpod.Runtime, statuses []abi
 		if err != nil {
 			return nil, err
 		}
-		gateway, ok := netip.AddrFromSlice(sub.Gateway)
-		if !ok {
-			return nil, fmt.Errorf("invalid gateway IP %v", sub.Gateway)
+		// A subnet may have no gateway, e.g. an internal network without DNS.
+		var gateway netip.Addr
+		if len(sub.Gateway) > 0 {
+			var ok bool
+			gateway, ok = netip.AddrFromSlice(sub.Gateway)
+			if !ok {
+				return nil, fmt.Errorf("invalid gateway IP %v", sub.Gateway)
+			}
 		}
 		ipamConfig := dockerNetwork.IPAMConfig{
 			Subnet:  subnet,
