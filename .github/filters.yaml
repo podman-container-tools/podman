@@ -37,6 +37,7 @@ sys:
 
 machine:
   - 'cmd/podman/machine/**'
+  - 'cmd/podman/system/hyperv_prep*'
   - 'pkg/machine/**'
   - '**/*machine*.go'
 

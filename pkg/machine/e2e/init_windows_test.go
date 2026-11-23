@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega/gexec"
 	"go.podman.io/podman/v6/pkg/machine/define"
 	"go.podman.io/podman/v6/pkg/machine/hyperv/vsock"
+	"go.podman.io/podman/v6/pkg/machine/windows"
 )
 
 var _ = Describe("podman machine init - windows only", func() {
@@ -43,7 +44,7 @@ var _ = Describe("podman machine init - windows only", func() {
 		Expect(err).ToNot(HaveOccurred())
 		defer listener.Close()
 	})
-	It("init should not should not overwrite existing HyperV vms", func() {
+	It("init should not overwrite existing HyperV vms", func() {
 		skipIfNotVmtype(define.HyperVVirt, "HyperV test only")
 		name := randomString()
 		vhdxPath := filepath.Join(testDir, fmt.Sprintf("%s.vhdx", name))
@@ -216,4 +217,79 @@ var _ = Describe("podman machine init - windows only", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(fileServerVsocks).To(BeEmpty())
 	})
+
+	// We want to verify that an unprivileged user can initialize a Hyper-V based machine when
+	// an administrator has prepared the host with `podman system hyperv-prep`.
+	// But this scenario cannot be run in CI (the tests are always executed as an administrator).
+	// What we check instead is that `podman machine init` doesn't create additional registry entries
+	// when `hyperv-prep` has been used.
+	It("when hyperv-prep is used, init should not create new hvsock entries and rm should not remove them", func() {
+		skipIfNotVmtype(define.HyperVVirt, "HyperV test only")
+		if !windows.HasAdminRights() {
+			Skip("test requires an elevated (admin) terminal")
+		}
+
+		Expect(loadHVSockEntries()).To(BeEmpty())
+
+		// Registry entries created by hyperv-prep survive machine removal. Remove
+		// them or later tests that expect an empty registry would break.
+		DeferCleanup(func() {
+			bm := basicMachine{}
+			session, err := mb.setCmd(bm.withPodmanCommand([]string{
+				"system", "hyperv-prep", "--reset", "--registry-only", "--force",
+			})).run()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(session).To(Exit(0))
+			Expect(loadHVSockEntries()).To(BeEmpty())
+		})
+
+		// Run `podman system hyperv-prep --registry-only`
+		bm := basicMachine{}
+		session, err := mb.setCmd(bm.withPodmanCommand([]string{"system", "hyperv-prep", "--registry-only"})).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(session).To(Exit(0))
+
+		// Retrieve the registry entries created by hyperv-prep
+		preparedEntries, err := loadHVSockEntries()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(preparedEntries).ToNot(BeEmpty())
+		for key, entry := range preparedEntries {
+			Expect(entry.KeepAfterMachineRemove).To(BeTrue(), "entry %s should persist after machine removal", key)
+		}
+
+		// Run `podman machine init`
+		name := randomString()
+		i := new(initMachine)
+		session, err = mb.setName(name).setCmd(i.withImage(mb.imagePath)).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(session).To(Exit(0))
+
+		// The registry entries before and after machine init should match
+		Expect(loadHVSockEntries()).To(Equal(preparedEntries))
+
+		// Run `podman machine rm`
+		rm := rmMachine{}
+		session, err = mb.setName(name).setCmd(rm.withForce()).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(session).To(Exit(0))
+
+		// The registry entries before and after machine rm should match
+		Expect(loadHVSockEntries()).To(Equal(preparedEntries))
+	})
 })
+
+// loadHVSockEntries returns the Podman HVSock registry entries of all purposes
+// indexed by registry key name.
+func loadHVSockEntries() (map[string]vsock.HVSockRegistryEntry, error) {
+	allEntries := make(map[string]vsock.HVSockRegistryEntry)
+	for _, purpose := range []vsock.HVSockPurpose{vsock.Network, vsock.Events, vsock.Fileserver} {
+		entries, err := vsock.LoadAllHVSockRegistryEntriesByPurpose(purpose)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			allEntries[entry.KeyName] = *entry
+		}
+	}
+	return allEntries, nil
+}
