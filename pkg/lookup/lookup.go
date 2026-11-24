@@ -77,21 +77,22 @@ func GetUserGroupInfo(containerMount protectedroot.PathRoot, containerUser strin
 // or the given group data is nil, the id will be returned as-is  provided it is in the legal range.
 func GetContainerGroups(groups []string, containerMount protectedroot.PathRoot, override *Overrides) ([]uint32, error) {
 	var (
-		groupDest string
-		err       error
+		group *os.File
+		err   error
 	)
 
-	groupPath := etcgroup
 	if override != nil && override.ContainerEtcGroupPath != "" {
-		groupPath = override.ContainerEtcGroupPath
+		group, err = os.Open(override.ContainerEtcGroupPath)
+	} else {
+		group, err = containerMount.OpenRacy(etcgroup)
 	}
-
-	if groupDest, err = containerMount.Join(groupPath); err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		logrus.Debug(err)
 		return nil, err
 	}
+	defer group.Close()
 
-	gids, err := user.GetAdditionalGroupsPath(groups, groupDest)
+	gids, err := user.GetAdditionalGroups(groups, group)
 	if err != nil {
 		return nil, err
 	}
@@ -114,16 +115,17 @@ func GetUser(containerMount protectedroot.PathRoot, userIDorName string) (*user.
 	if err != nil {
 		inputIsName = true
 	}
-	passwdDest, err := containerMount.Join(etcpasswd)
-	if err != nil {
-		return nil, err
+	var users []user.User
+	passwdFile, err := containerMount.OpenRacy(etcpasswd)
+	if err == nil {
+		users, err = user.ParsePasswdFilter(passwdFile, func(u user.User) bool {
+			if inputIsName {
+				return u.Name == userIDorName
+			}
+			return u.Uid == uid
+		})
+		passwdFile.Close()
 	}
-	users, err := user.ParsePasswdFileFilter(passwdDest, func(u user.User) bool {
-		if inputIsName {
-			return u.Name == userIDorName
-		}
-		return u.Uid == uid
-	})
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}

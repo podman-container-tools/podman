@@ -3070,13 +3070,15 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 		switch {
 		case ro && needsWrite:
 			logrus.Debugf("Making /etc/passwd for container %s", c.ID())
-			originPasswdFile, err := c.state.Mountpoint.Join("/etc/passwd")
-			if err != nil {
-				return "", "", fmt.Errorf("creating path to container %s /etc/passwd: %w", c.ID(), err)
-			}
-			orig, err := os.ReadFile(originPasswdFile)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return "", "", err
+			var orig []byte
+			if originPasswdFile, err := c.state.Mountpoint.OpenRacy("/etc/passwd"); err == nil {
+				orig, err = io.ReadAll(originPasswdFile)
+				originPasswdFile.Close()
+				if err != nil {
+					return "", "", fmt.Errorf("reading container %s /etc/passwd: %w", c.ID(), err)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return "", "", fmt.Errorf("container %s: %w", c.ID(), err)
 			}
 			passwdFile, err := c.writeStringToStaticDir("passwd", string(orig)+passwdEntry)
 			if err != nil {
@@ -3088,12 +3090,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 			passwdPath = passwdFile
 		case !ro && needsWrite:
 			logrus.Debugf("Modifying container %s /etc/passwd", c.ID())
-			containerPasswd, err := c.state.Mountpoint.Join("/etc/passwd")
-			if err != nil {
-				return "", "", fmt.Errorf("looking up location of container %s /etc/passwd: %w", c.ID(), err)
-			}
-
-			f, err := os.OpenFile(containerPasswd, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			f, err := c.state.Mountpoint.OpenFileRacy("/etc/passwd", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 			if err != nil {
 				return "", "", fmt.Errorf("container %s: %w", c.ID(), err)
 			}
@@ -3116,13 +3113,15 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 		switch {
 		case ro && needsWrite:
 			logrus.Debugf("Making /etc/group for container %s", c.ID())
-			originGroupFile, err := c.state.Mountpoint.Join("/etc/group")
-			if err != nil {
-				return "", "", fmt.Errorf("creating path to container %s /etc/group: %w", c.ID(), err)
-			}
-			orig, err := os.ReadFile(originGroupFile)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return "", "", err
+			var orig []byte
+			if originGroupFile, err := c.state.Mountpoint.OpenRacy("/etc/group"); err == nil {
+				orig, err = io.ReadAll(originGroupFile)
+				originGroupFile.Close()
+				if err != nil {
+					return "", "", fmt.Errorf("reading container %s /etc/group: %w", c.ID(), err)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return "", "", fmt.Errorf("container %s: %w", c.ID(), err)
 			}
 			groupFile, err := c.writeStringToStaticDir("group", string(orig)+groupEntry)
 			if err != nil {
@@ -3134,12 +3133,7 @@ func (c *Container) generatePasswdAndGroup() (string, string, error) {
 			groupPath = groupFile
 		case !ro && needsWrite:
 			logrus.Debugf("Modifying container %s /etc/group", c.ID())
-			containerGroup, err := c.state.Mountpoint.Join("/etc/group")
-			if err != nil {
-				return "", "", fmt.Errorf("looking up location of container %s /etc/group: %w", c.ID(), err)
-			}
-
-			f, err := os.OpenFile(containerGroup, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			f, err := c.state.Mountpoint.OpenFileRacy("/etc/group", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 			if err != nil {
 				return "", "", fmt.Errorf("container %s: %w", c.ID(), err)
 			}
