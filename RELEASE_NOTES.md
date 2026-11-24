@@ -1,5 +1,11 @@
 # Release Notes
 
+## 5.8.11
+### Bugfixes
+- Fixed a bug where read-only containers using secrets could fail to start ([#30301](https://github.com/podman-container-tools/podman/issues/30301)).
+- Fixed a bug where `podman exec` could fail to set oom_score_adj as rootless user ([#30245](https://github.com/podman-container-tools/podman/issues/30245)).
+- Fixed a bug where the `podman machine start` command could create a VM that cannot be connected to on Windows if the host was shut down or restarted when the VM was running ([#29971](https://github.com/podman-container-tools/podman/issues/29971)).
+
 ## 5.8.10
 ### Security
 - Addresses CVE-2026-121885, untrusted image labels could be used to trick podman auto-update into restarting incorrect systemd units [GHSA-55rm-rwr7-q2wr](https://github.com/podman-container-tools/podman/security/advisories/GHSA-55rm-rwr7-q2wr).
