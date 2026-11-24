@@ -207,6 +207,17 @@ t GET networks/iprange-net 200 \
 # clean up
 t DELETE networks/iprange-net 204
 
+# compat inspect and list must not fail on a network without a gateway
+podman network create --internal --disable-dns nogw-net
+t GET libpod/networks/nogw-net/json 200 \
+  .subnets[0].gateway=null
+t GET networks/nogw-net 200 \
+  .Name=nogw-net \
+  .Internal=true \
+  .IPAM.Config[0].Subnet~[0-9]
+t GET networks 200
+t DELETE networks/nogw-net 204
+
 #
 # test networks with containers
 #

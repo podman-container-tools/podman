@@ -401,7 +401,6 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 
 	dockerImageInspect := dockerImage.InspectResponse{
 		Architecture: info.Architecture,
-		Author:       info.Author,
 		Comment:      info.Comment,
 		Config:       &config,
 		Created:      created,
@@ -419,6 +418,7 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 
 	imageInspect := handlers.ImageInspect{
 		InspectResponse: dockerImageInspect,
+		Author:          info.Author,
 		DockerVersion:   info.Version,
 		Parent:          info.Parent,
 	}
