@@ -175,9 +175,7 @@ var _ = Describe("Podman images", func() {
 
 		// Adding one more image. There Should be no errors in the response.
 		// And the count should be three now.
-		// Use a fully qualified name. With short-name-mode=enforcing (Fedora
-		// rawhide registries.conf), an unqualified name fails without a TTY.
-		bt.Pull("quay.io/libpod/testimage:20221018")
+		bt.Pull(testImageName)
 		imageSummary, err = images.List(bt.conn, nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(imageSummary)).To(BeNumerically(">=", 2))
