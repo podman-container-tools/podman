@@ -3,8 +3,12 @@
 package compat
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gorilla/mux"
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/config"
@@ -140,6 +144,84 @@ func TestExtractInlineSeccompProfile(t *testing.T) {
 			profile, rest := extractInlineSeccompProfile(test.opts)
 			assert.Equal(t, test.expectedProfile, profile)
 			assert.Equal(t, test.expectedRest, rest)
+		})
+	}
+}
+
+func TestHandlePortBindingsBC(t *testing.T) {
+	const warn152 = "Following container port(s) have an empty list of port-bindings: 53/udp, 8080/tcp. Such bindings will be discarded in a future version."
+
+	tests := []struct {
+		name         string
+		version      string // empty means no version in the URL
+		portBindings network.PortMap
+		wantWarning  string
+		want         network.PortMap
+	}{
+		{
+			name:         "nil map",
+			version:      "1.52",
+			portBindings: nil,
+			want:         nil,
+		},
+		{
+			name:    "no empty bindings",
+			version: "1.52",
+			portBindings: network.PortMap{
+				network.MustParsePort("80/tcp"): {{HostPort: "8000"}},
+			},
+			want: network.PortMap{
+				network.MustParsePort("80/tcp"): {{HostPort: "8000"}},
+			},
+		},
+		{
+			name:    "empty and nil bindings are backfilled with a warning",
+			version: "1.52",
+			portBindings: network.PortMap{
+				network.MustParsePort("8080/tcp"): {},
+				network.MustParsePort("53/udp"):   nil,
+				network.MustParsePort("80/tcp"):   {{HostPort: "8000"}},
+			},
+			wantWarning: warn152,
+			want: network.PortMap{
+				network.MustParsePort("8080/tcp"): {{}},
+				network.MustParsePort("53/udp"):   {{}},
+				network.MustParsePort("80/tcp"):   {{HostPort: "8000"}},
+			},
+		},
+		{
+			name:    "no version is treated as latest",
+			version: "",
+			portBindings: network.PortMap{
+				network.MustParsePort("8080/tcp"): {},
+				network.MustParsePort("53/udp"):   nil,
+			},
+			wantWarning: warn152,
+			want: network.PortMap{
+				network.MustParsePort("8080/tcp"): {{}},
+				network.MustParsePort("53/udp"):   {{}},
+			},
+		},
+		{
+			name:    "older API is backfilled without a warning",
+			version: "1.51",
+			portBindings: network.PortMap{
+				network.MustParsePort("8080/tcp"): {},
+			},
+			want: network.PortMap{
+				network.MustParsePort("8080/tcp"): {{}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/containers/create", nil)
+			if test.version != "" {
+				r = mux.SetURLVars(r, map[string]string{"version": test.version})
+			}
+			assert.Equal(t, test.wantWarning, handlePortBindingsBC(r, test.portBindings))
+			assert.Equal(t, test.want, test.portBindings)
 		})
 	}
 }

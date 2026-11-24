@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
 	"go.podman.io/buildah/pkg/parse"
 	"go.podman.io/common/libimage"
 	"go.podman.io/common/libnetwork/types"
@@ -55,6 +56,28 @@ func volumeDriverWarning(r *http.Request, driver string, mounts []mount.Mount) s
 		return "WARNING: the container-wide volume-driver configuration is ignored for volumes specified via 'mount'. Use '--mount type=volume,volume-driver=...' instead"
 	}
 	return ""
+}
+
+// handlePortBindingsBC mirrors moby's handlePortBindingsBC, empty port binding
+// lists are backfilled with an unspecified HostIP/HostPort. For API >= 1.52.0
+// a deprecation warning listing the affected ports is returned
+func handlePortBindingsBC(r *http.Request, portBindings network.PortMap) string {
+	var emptyPBs []string
+	for port, bindings := range portBindings {
+		if len(bindings) > 0 {
+			continue
+		}
+		emptyPBs = append(emptyPBs, port.String())
+		portBindings[port] = []network.PortBinding{{}}
+	}
+	if len(emptyPBs) == 0 {
+		return ""
+	}
+	if _, err := utils.SupportedVersion(r, ">=1.52.0"); err != nil && !errors.Is(err, apiutil.ErrVersionNotGiven) {
+		return ""
+	}
+	sort.Strings(emptyPBs)
+	return fmt.Sprintf("Following container port(s) have an empty list of port-bindings: %s. Such bindings will be discarded in a future version.", strings.Join(emptyPBs, ", "))
 }
 
 func CreateContainer(w http.ResponseWriter, r *http.Request) {
@@ -123,6 +146,8 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	var inlineSeccompProfile string
 	inlineSeccompProfile, body.HostConfig.SecurityOpt = extractInlineSeccompProfile(body.HostConfig.SecurityOpt)
 
+	portBindingsWarning := handlePortBindingsBC(r, body.HostConfig.PortBindings)
+
 	// Take body structure and convert to cliopts
 	cliOpts, args, err := cliOpts(body, rtc)
 	if err != nil {
@@ -184,6 +209,9 @@ func CreateContainer(w http.ResponseWriter, r *http.Request) {
 	warnings := []string{}
 	if warn := volumeDriverWarning(r, body.HostConfig.VolumeDriver, body.HostConfig.Mounts); warn != "" {
 		warnings = append(warnings, warn)
+	}
+	if portBindingsWarning != "" {
+		warnings = append(warnings, portBindingsWarning)
 	}
 	createResponse := entities.ContainerCreateResponse{
 		ID:       report.Id,
