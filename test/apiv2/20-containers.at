@@ -270,6 +270,10 @@ t GET libpod/images/newrepo:v2/json 200 \
   .Author=eric \
   .Comment=bar \
   .Config.Cmd[-1]="/bin/foo"
+# compat image inspect must report the author too
+t GET images/newrepo:v2/json 200 \
+  .Author=eric \
+  .Comment=bar
 t DELETE images/localhost/newrepo:v2?force=true 200
 
 # Create a container for testing the container initializing later
