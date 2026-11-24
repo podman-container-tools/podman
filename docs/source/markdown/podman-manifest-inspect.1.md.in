@@ -18,6 +18,21 @@ A formatted JSON representation of the manifest list or image index.
 
 @@option authfile
 
+#### **--format**, **-f**=*format*
+
+Change the default output format.  This can be of a supported type like 'json'
+or a Go template.
+Valid placeholders for the Go template are listed below:
+
+| **Placeholder**  | **Description**                                         |
+| ---------------- | ------------------------------------------------------- |
+| .Annotations ... | map[] of annotations on the manifest list               |
+| .ArtifactType    | Artifact type of the manifest list, if set              |
+| .Manifests       | List of manifest descriptors (use with range)           |
+| .MediaType       | Media type of the manifest list or image index          |
+| .SchemaVersion   | Schema version of the manifest list                     |
+| .Subject ...     | Subject descriptor of the manifest list, if set         |
+
 @@option tls-verify
 
 ## EXAMPLES
@@ -25,6 +40,18 @@ A formatted JSON representation of the manifest list or image index.
 Inspect the manifest of mylist:v1.11.
 ```
 $ podman manifest inspect mylist:v1.11
+```
+
+Inspect the manifest using a custom Go template to display the media type.
+```
+$ podman manifest inspect --format "{{.MediaType}}" mylist:v1.11
+application/vnd.oci.image.index.v1+json
+```
+
+Inspect the manifest using a Go template to list target platforms and digests.
+```
+$ podman manifest inspect --format '{{range .Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}} {{.Digest}}{{"\n"}}{{end}}' mylist:v1.11
+linux/amd64 sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b
 ```
 
 ## SEE ALSO

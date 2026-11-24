@@ -122,11 +122,14 @@ function check_subcommand() {
     secretname="s-$(safename)"
     # Artifact strict typing requires fully qualified name
     artifactname="foo.io/myrepo/$(safename)"
+    manifestlistname="localhost/m-$(safename)"
     # Setup: some commands need a container, pod, secret, ...
     run_podman run -d --name $ctrname $IMAGE top
     run_podman pod create $podname
     run_podman secret create $secretname /etc/hosts
     run_podman artifact add $artifactname /etc/hosts
+    run_podman manifest create $manifestlistname
+    run_podman manifest add $manifestlistname $IMAGE
 
     # For 'search' and 'image search': if local cache registry is available,
     # use it. This bypasses quay, and thus prevents flakes.
@@ -162,6 +165,7 @@ system events     | --stream=false --events-backend=file
 container stats   | --no-stream
 pod stats         | --no-stream
 stats             | --no-stream
+manifest inspect  | $manifestlistname
 "
 
 
@@ -193,6 +197,7 @@ machine inspect   | $machinename
     run_podman secret rm $secretname
     run_podman '?' machine rm -f $machinename
     run_podman artifact rm $artifactname
+    run_podman manifest rm $manifestlistname
 
     # Make sure there are no leftover commands in our table - this would
     # indicate a typo in the table, or a flaw in our logic such that

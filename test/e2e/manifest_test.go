@@ -22,6 +22,7 @@ import (
 	podmanRegistry "go.podman.io/podman/v6/hack/podman-registry-go"
 	. "go.podman.io/podman/v6/test/utils"
 	"go.podman.io/storage/pkg/archive"
+	"go.podman.io/storage/pkg/stringid"
 )
 
 // validateManifestHasAllArchs checks that the specified manifest has all
@@ -134,6 +135,38 @@ var _ = Describe("Podman manifest", func() {
 		} else {
 			Expect(stderr).Should(ContainSubstring("The manifest type application/vnd.docker.distribution.manifest.v2+json is not a manifest list but a single image."))
 		}
+	})
+
+	It("inspect --format", func() {
+		listName := "localhost/manifest-format-" + stringid.GenerateRandomID()
+		podmanTest.PodmanExitCleanly("manifest", "create", listName)
+		defer func() {
+			podmanTest.Podman([]string{"manifest", "rm", listName}).WaitWithDefaultTimeout()
+		}()
+		podmanTest.PodmanExitCleanly("manifest", "add", listName, ALPINE)
+
+		defaultOut := podmanTest.PodmanExitCleanly("manifest", "inspect", listName).OutputToString()
+		session := podmanTest.PodmanExitCleanly("manifest", "inspect", "--format", "json", listName)
+		Expect(session.OutputToString()).To(Equal(defaultOut))
+
+		var list define.ManifestListData
+		err := json.Unmarshal(session.Out.Contents(), &list)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(list.Manifests).To(HaveLen(1))
+
+		// Go template for top-level fields
+		session = podmanTest.PodmanExitCleanly("manifest", "inspect", "-f", "{{.SchemaVersion}} {{.MediaType}}", listName)
+		Expect(session.OutputToString()).To(Equal(fmt.Sprintf("%d %s", list.SchemaVersion, list.MediaType)))
+
+		// Go template ranging over .Manifests
+		session = podmanTest.PodmanExitCleanly("manifest", "inspect", "--format", "{{range .Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}} {{.Digest}}\n{{end}}", listName)
+		m := list.Manifests[0]
+		Expect(session.OutputToString()).To(Equal(fmt.Sprintf("%s/%s %s", m.Platform.OS, m.Platform.Architecture, m.Digest)))
+		Expect(m.Platform.OS).To(Equal("linux"))
+
+		session = podmanTest.Podman([]string{"manifest", "inspect", "--format", "{{.NoSuchField}}", listName})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(125, `can't evaluate field NoSuchField`))
 	})
 
 	It("add w/ inspect", func() {
