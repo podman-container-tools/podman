@@ -78,7 +78,6 @@ func stopFlags(cmd *cobra.Command) {
 	_ = flags.MarkHidden(serviceFlagName)
 
 	if registry.IsRemote() {
-		_ = flags.MarkHidden("cidfile")
 		_ = flags.MarkHidden("ignore")
 	}
 

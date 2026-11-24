@@ -70,10 +70,6 @@ func restartFlags(cmd *cobra.Command) {
 	flags.IntVarP(&restartTimeout, timeFlagName, "t", int(containerConfig.Engine.StopTimeout), "Seconds to wait for stop before killing the container")
 	_ = cmd.RegisterFlagCompletionFunc(timeFlagName, completion.AutocompleteNone)
 
-	if registry.IsRemote() {
-		_ = flags.MarkHidden("cidfile")
-	}
-
 	flags.SetNormalizeFunc(utils.AliasFlags)
 }
 
