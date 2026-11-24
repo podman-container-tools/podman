@@ -11,6 +11,8 @@ import (
 // fields and unsupported kinds.
 type KubeValidateMode string
 
+const KubeFileSeparator = "\n===\n"
+
 const (
 	// KubeValidateIgnore silently skips unrecognized fields and kinds.
 	KubeValidateIgnore KubeValidateMode = "ignore"
@@ -124,6 +126,8 @@ type PlayKubeOptions struct {
 	Validate KubeValidateMode
 	// MultiplePods allows creating of multiple Pods
 	MultiplePods bool
+	// ConfigFiles contains the paths of the Kubernetes YAML files.
+	ConfigFiles []string
 	// Platform specifies the platform for selecting the image.
 	Platform string
 }

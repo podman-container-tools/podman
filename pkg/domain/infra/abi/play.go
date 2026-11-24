@@ -44,6 +44,7 @@ import (
 	"go.podman.io/podman/v6/pkg/specgenutil"
 	"go.podman.io/podman/v6/pkg/systemd/notifyproxy"
 	"go.podman.io/podman/v6/pkg/util"
+	"go.podman.io/podman/v6/version"
 	"go.podman.io/storage"
 	"go.podman.io/storage/pkg/chrootarchive"
 	"go.podman.io/storage/pkg/fileutils"
@@ -235,6 +236,12 @@ func k8sName(content []byte, suffix string) string {
 	return hash[0:12] + "-" + suffix
 }
 
+type kubeDocument struct {
+	content    []byte
+	sourceFile string
+	configHash string
+}
+
 func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options entities.PlayKubeOptions) (_ *entities.PlayKubeReport, finalErr error) {
 	if options.ServiceContainer && options.Start == types.OptionalBoolFalse { // Sanity check to be future proof
 		return nil, fmt.Errorf("running a service container requires starting the pod(s)")
@@ -273,13 +280,43 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 	}
 
 	// split yaml document
-	documentList, err := splitMultiDocYAML(content)
-	if err != nil {
-		return nil, err
+	var documentList []kubeDocument
+
+	if len(options.ConfigFiles) > 0 {
+		fileContents := bytes.Split(content, []byte(entities.KubeFileSeparator))
+
+		for i, fileContent := range fileContents {
+			sourceFile := options.ConfigFiles[i]
+			configHash := digest.FromBytes(fileContent).Encoded()
+
+			documents, err := splitMultiDocYAML(fileContent)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, document := range documents {
+				documentList = append(documentList, kubeDocument{
+					content:    document,
+					sourceFile: sourceFile,
+					configHash: configHash,
+				})
+			}
+		}
+	} else {
+		documents, err := splitMultiDocYAML(content)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, document := range documents {
+			documentList = append(documentList, kubeDocument{
+				content: document,
+			})
+		}
 	}
 
 	// sort kube kinds
-	documentList, err = sortKubeKinds(documentList)
+	documentList, err = sortKubeDocuments(documentList)
 	if err != nil {
 		return nil, fmt.Errorf("unable to sort kube kinds: %w", err)
 	}
@@ -333,7 +370,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 	// create pod on each document if it is a pod or deployment
 	// any other kube kind will be skipped
 	for _, document := range documentList {
-		kind, err := getKubeKind(document)
+		kind, err := getKubeKind(document.content)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read kube YAML: %w", err)
 		}
@@ -366,7 +403,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 			var podYAML v1.Pod
 			var podTemplateSpec v1.PodTemplateSpec
 
-			warnings, err := unmarshalKubeObject("Pod", options.Validate, document, &podYAML)
+			warnings, err := unmarshalKubeObject("Pod", options.Validate, document.content, &podYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -392,7 +429,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 				return nil, err
 			}
 
-			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer)
+			r, proxies, err := ic.playKubePod(ctx, podTemplateSpec.ObjectMeta.Name, &podTemplateSpec, options, &ipIndex, podYAML.Annotations, configMaps, serviceContainer, document.configHash, document.sourceFile)
 			if err != nil {
 				return nil, err
 			}
@@ -405,13 +442,13 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "DaemonSet":
 			var daemonSetYAML v1apps.DaemonSet
 
-			warnings, err := unmarshalKubeObject("DaemonSet", options.Validate, document, &daemonSetYAML)
+			warnings, err := unmarshalKubeObject("DaemonSet", options.Validate, document.content, &daemonSetYAML)
 			if err != nil {
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
-			r, proxies, err := ic.playKubeDaemonSet(ctx, &daemonSetYAML, options, &ipIndex, configMaps, serviceContainer)
+			r, proxies, err := ic.playKubeDaemonSet(ctx, &daemonSetYAML, options, &ipIndex, configMaps, serviceContainer, document)
 			if err != nil {
 				return nil, err
 			}
@@ -424,7 +461,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "Deployment":
 			var deploymentYAML v1apps.Deployment
 
-			warnings, err := unmarshalKubeObject("Deployment", options.Validate, document, &deploymentYAML)
+			warnings, err := unmarshalKubeObject("Deployment", options.Validate, document.content, &deploymentYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -446,7 +483,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 						replicaOpts.PublishPorts = options.PublishPorts[i : i+1]
 					}
 					podName := fmt.Sprintf("%s-pod-%d", deploymentYAML.ObjectMeta.Name, i)
-					r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, replicaOpts, &ipIndex, configMaps, serviceContainer, podName)
+					r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, replicaOpts, &ipIndex, configMaps, serviceContainer, podName, document)
 					if err != nil {
 						return nil, err
 					}
@@ -461,7 +498,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 					logrus.Warnf("Limiting replica count to 1, use `--multiple-pods` to enable more than one replica")
 				}
 				podName := fmt.Sprintf("%s-pod", deploymentYAML.ObjectMeta.Name)
-				r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer, podName)
+				r, proxies, err := ic.playKubeDeployment(ctx, &deploymentYAML, options, &ipIndex, configMaps, serviceContainer, podName, document)
 				if err != nil {
 					return nil, err
 				}
@@ -475,13 +512,13 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "Job":
 			var jobYAML v1.Job
 
-			warnings, err := unmarshalKubeObject("Job", options.Validate, document, &jobYAML)
+			warnings, err := unmarshalKubeObject("Job", options.Validate, document.content, &jobYAML)
 			if err != nil {
 				return nil, err
 			}
 			report.ValidationWarnings = append(report.ValidationWarnings, warnings...)
 
-			r, proxies, err := ic.playKubeJob(ctx, &jobYAML, options, &ipIndex, configMaps, serviceContainer)
+			r, proxies, err := ic.playKubeJob(ctx, &jobYAML, options, &ipIndex, configMaps, serviceContainer, document)
 			if err != nil {
 				return nil, err
 			}
@@ -494,7 +531,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "PersistentVolumeClaim":
 			var pvcYAML v1.PersistentVolumeClaim
 
-			warnings, err := unmarshalKubeObject("PersistentVolumeClaim", options.Validate, document, &pvcYAML)
+			warnings, err := unmarshalKubeObject("PersistentVolumeClaim", options.Validate, document.content, &pvcYAML)
 			if err != nil {
 				return nil, err
 			}
@@ -529,7 +566,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "ConfigMap":
 			var configMap v1.ConfigMap
 
-			warnings, err := unmarshalKubeObject("ConfigMap", options.Validate, document, &configMap)
+			warnings, err := unmarshalKubeObject("ConfigMap", options.Validate, document.content, &configMap)
 			if err != nil {
 				return nil, err
 			}
@@ -538,7 +575,7 @@ func (ic *ContainerEngine) PlayKube(ctx context.Context, body io.Reader, options
 		case "Secret":
 			var secret v1.Secret
 
-			warnings, err := unmarshalKubeObject("Secret", options.Validate, document, &secret)
+			warnings, err := unmarshalKubeObject("Secret", options.Validate, document.content, &secret)
 			if err != nil {
 				return nil, err
 			}
@@ -662,7 +699,7 @@ func decodeKubeObject(kind string, document []byte, obj any) error {
 	return nil
 }
 
-func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML *v1apps.DaemonSet, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML *v1apps.DaemonSet, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, document kubeDocument) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	var (
 		daemonSetName string
 		podSpec       v1.PodTemplateSpec
@@ -676,7 +713,7 @@ func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML 
 	podSpec = daemonSetYAML.Spec.Template
 
 	podName := fmt.Sprintf("%s-pod", daemonSetName)
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, daemonSetYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, daemonSetYAML.Annotations, configMaps, serviceContainer, document.configHash, document.sourceFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -686,7 +723,7 @@ func (ic *ContainerEngine) playKubeDaemonSet(ctx context.Context, daemonSetYAML 
 	return &report, proxies, nil
 }
 
-func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAML *v1apps.Deployment, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, podName string) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAML *v1apps.Deployment, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, podName string, document kubeDocument) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	var (
 		deploymentName string
 		podSpec        v1.PodTemplateSpec
@@ -700,7 +737,7 @@ func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAM
 
 	podSpec = deploymentYAML.Spec.Template
 
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, deploymentYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, deploymentYAML.Annotations, configMaps, serviceContainer, document.configHash, document.sourceFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -710,7 +747,7 @@ func (ic *ContainerEngine) playKubeDeployment(ctx context.Context, deploymentYAM
 	return &report, proxies, nil
 }
 
-func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, options entities.PlayKubeOptions, ipIndex *int, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, document kubeDocument) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	var (
 		jobName string
 		podSpec v1.PodTemplateSpec
@@ -724,7 +761,7 @@ func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, opt
 	podSpec = jobYAML.Spec.Template
 
 	podName := fmt.Sprintf("%s-pod", jobName)
-	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, jobYAML.Annotations, configMaps, serviceContainer)
+	podReport, proxies, err := ic.playKubePod(ctx, podName, &podSpec, options, ipIndex, jobYAML.Annotations, configMaps, serviceContainer, document.configHash, document.sourceFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encountered while bringing up pod %s: %w", podName, err)
 	}
@@ -734,7 +771,7 @@ func (ic *ContainerEngine) playKubeJob(ctx context.Context, jobYAML *v1.Job, opt
 	return &report, proxies, nil
 }
 
-func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podYAML *v1.PodTemplateSpec, options entities.PlayKubeOptions, ipIndex *int, annotations map[string]string, configMaps []v1.ConfigMap, serviceContainer *libpod.Container) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
+func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podYAML *v1.PodTemplateSpec, options entities.PlayKubeOptions, ipIndex *int, annotations map[string]string, configMaps []v1.ConfigMap, serviceContainer *libpod.Container, configHash string, sourceFile string) (*entities.PlayKubeReport, []*notifyproxy.NotifyProxy, error) {
 	cfg, err := ic.Libpod.GetConfigNoCopy()
 	if err != nil {
 		return nil, nil, err
@@ -771,10 +808,39 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		Net:        &entities.NetOptions{NoHosts: options.NoHosts, NoHostname: options.NoHostname},
 		ExitPolicy: string(config.PodExitPolicyStop),
 	}
+
+	workingDir := options.ContextDir
+	if workingDir == "" {
+		workingDir, err = os.Getwd()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	workingDir, err = filepath.Abs(workingDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	autoLabels := map[string]string{
+		"io.podman.kube.play":              "true",
+		"io.podman.kube.play.config_hash":  configHash,
+		"io.podman.kube.play.config_files": sourceFile,
+		"io.podman.kube.play.working_dir":  workingDir,
+		"io.podman.kube.play.version":      version.Version.String(),
+	}
+
 	podOpt, err = kube.ToPodOpt(ctx, podName, podOpt, options.PublishAllPorts, podYAML)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	podLabels := maps.Clone(podOpt.Labels)
+	if podLabels == nil {
+		podLabels = make(map[string]string)
+	}
+	maps.Copy(podLabels, autoLabels)
+	podOpt.Labels = podLabels
 
 	// add kube default network if no network is explicitly added
 	if podOpt.Net.Network.NSMode != "host" && len(options.Networks) == 0 {
@@ -1802,6 +1868,26 @@ func sortKubeKinds(documentList [][]byte) ([][]byte, error) {
 	return sortedDocumentList, nil
 }
 
+func sortKubeDocuments(documents []kubeDocument) ([]kubeDocument, error) {
+	sorted := make([]kubeDocument, 0, len(documents))
+
+	for _, document := range documents {
+		kind, err := getKubeKind(document.content)
+		if err != nil {
+			return nil, err
+		}
+
+		switch kind {
+		case "Pod", "Deployment", "DaemonSet", "Job":
+			sorted = append(sorted, document)
+		default:
+			sorted = append([]kubeDocument{document}, sorted...)
+		}
+	}
+
+	return sorted, nil
+}
+
 func imageNamePrefix(imageName string) string {
 	prefix := imageName
 	s := strings.Split(prefix, ":")
@@ -1879,9 +1965,14 @@ func (ic *ContainerEngine) PlayKubeDown(ctx context.Context, body io.Reader, opt
 	}
 
 	// split yaml document
-	documentList, err := splitMultiDocYAML(content)
-	if err != nil {
-		return nil, err
+	fileContents := bytes.Split(content, []byte(entities.KubeFileSeparator))
+	var documentList [][]byte
+	for _, fileContent := range fileContents {
+		documents, err := splitMultiDocYAML(fileContent)
+		if err != nil {
+			return nil, err
+		}
+		documentList = append(documentList, documents...)
 	}
 
 	// sort kube kinds
