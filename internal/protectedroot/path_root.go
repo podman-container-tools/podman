@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
 )
@@ -102,6 +103,14 @@ func (pr *PathRoot) UnmarshalJSON(data []byte) error {
 
 	*pr = newPathRoot
 	return nil
+}
+
+func (pr PathRoot) OpenFileRacy(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return pr.openFileRacy(name, flag, perm)
+}
+
+func (pr PathRoot) OpenRacy(name string) (*os.File, error) {
+	return pr.openRacy(name)
 }
 
 // Utilities for incremental migration: calls suffixed with
