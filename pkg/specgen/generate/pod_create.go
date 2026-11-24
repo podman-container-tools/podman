@@ -367,6 +367,10 @@ func PodConfigToSpec(rt *libpod.Runtime, spec *specgen.PodSpecGenerator, infraOp
 		}
 
 		spec.Name = name
+	} else {
+		// Source pod has no infra (--infra=false / --share=none).
+		// Preserve that so clone does not nil-deref InfraContainerSpec.
+		spec.NoInfra = true
 	}
 
 	// need to reset hostname, name etc of both pod and infra

@@ -170,4 +170,16 @@ var _ = Describe("Podman pod clone", func() {
 		podJSON := podInspect.InspectPodToJSON()
 		Expect(podJSON.InfraConfig).To(HaveField("UtsNS", ns))
 	})
+
+	It("podman pod clone without infra", func() {
+		podmanTest.PodmanExitCleanly("pod", "create", "--infra=false", "--name", "noinfra")
+		podmanTest.PodmanExitCleanly("run", "--pod", "noinfra", "-dt", ALPINE)
+
+		podmanTest.PodmanExitCleanly("pod", "clone", "--name", "noinfra-clone", "noinfra")
+
+		podInspect := podmanTest.PodmanExitCleanly("pod", "inspect", "noinfra-clone")
+		data := podInspect.InspectPodToJSON()
+		Expect(data.InfraConfig).To(BeNil())
+		Expect(data.NumContainers).To(Equal(uint(1)))
+	})
 })
