@@ -47,6 +47,12 @@ actions:
   fix-spec-file: "bash contrib/packit-tmt/packit-copr-rpm.sh"
   pre-sync: "bash contrib/packit-tmt/packit-rpm-git-commit.sh"
 
+_:
+  - &tests
+    job: tests
+    trigger: pull_request
+    packages: [podman-fedora]
+
 jobs:
   - job: copr_build
     trigger: pull_request
@@ -100,9 +106,7 @@ jobs:
     enable_net: true
 
   # Tests on Fedora
-  - job: tests
-    trigger: pull_request
-    packages: [podman-fedora]
+  - <<: *tests
     skip_missing_branched_composes: true
     notifications: *packit_generic_failure_notification
     targets:
@@ -115,10 +119,8 @@ jobs:
           - type: repository-file
             id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
 
-  - job: tests
+  - <<: *tests
     identifier: cockpit-revdeps
-    trigger: pull_request
-    packages: [podman-fedora]
     skip_missing_branched_composes: true
     notifications:
       failure_comment:
@@ -138,10 +140,8 @@ jobs:
             context:
               revdeps: "yes"
 
-  - job: tests
+  - <<: *tests
     identifier: tmt-revdeps
-    trigger: pull_request
-    packages: [podman-fedora]
     notifications:
       failure_comment:
         message: "tmt tests failed for commit {commit_sha}. @psss, @thrix please check."
