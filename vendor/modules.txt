@@ -537,7 +537,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/opencontainers/cgroups v0.1.1
+# github.com/opencontainers/cgroups v0.1.2
 ## explicit; go 1.25.0
 github.com/opencontainers/cgroups
 github.com/opencontainers/cgroups/devices/config
