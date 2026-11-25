@@ -1302,8 +1302,8 @@ EOF
 
     CONTAINERS_CONF_OVERRIDE=$containersconf run_podman run -d --name $cname -p $myport:8080 $IMAGE sleep inf
 
-    run -0 ss -Hlpn sport = $myport
-    assert "$output" =~ "tcp[[:blank:]]LISTEN.*\*:$myport" "tcp port should be in LISTEN state"
+    run -0 ss -Htlpn sport = $myport
+    assert "$output" =~ "^LISTEN[[:blank:]]+.*\*:$myport" "tcp port should be in LISTEN state"
 
     run_podman rm -f -t0 $cname
 }
