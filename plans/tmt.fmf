@@ -13,12 +13,5 @@ discover:
     adjust-tests:
       - check: avc
 
-prepare:
-    - name: update-deps
-      when: initiator == packit
-      how: shell
-      script: bash $TMT_TREE/contrib/packit-tmt/update-deps.sh
-      order: 20
-
 execute:
     how: tmt

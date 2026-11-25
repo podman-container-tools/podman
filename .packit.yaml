@@ -52,6 +52,11 @@ _:
     job: tests
     trigger: pull_request
     packages: [podman-fedora]
+  - # TODO: Remove this when it is made the default
+    &multihost-pipeline-settings
+    settings:
+      pipeline:
+        type: tmt-multihost
 
 jobs:
   - job: copr_build
@@ -114,8 +119,10 @@ jobs:
       - fedora-all-aarch64
     tmt_plan: "/plans/system/*"
     tf_extra_params:
+      <<: *multihost-pipeline-settings
       environments:
         - artifacts:
+          # TODO: These will not be needed after https://github.com/teemtee/tmt/pull/5362
           - type: repository-file
             id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
 
@@ -130,8 +137,10 @@ jobs:
       - fedora-development
     tmt_plan: "/plans/cockpit-podman"
     tf_extra_params:
+      <<: *multihost-pipeline-settings
       environments:
         - artifacts:
+          # TODO: These will not be needed after https://github.com/teemtee/tmt/pull/5362
           - type: repository-file
             id: https://copr.fedorainfracloud.org/coprs/g/cockpit/main-builds/repo/fedora-$releasever/group_cockpit-main-builds-fedora-$releasever.repo
           - type: repository-file
@@ -149,8 +158,10 @@ jobs:
       - fedora-latest
     tmt_plan: "/plans/tmt"
     tf_extra_params:
+      <<: *multihost-pipeline-settings
       environments:
         - artifacts:
+          # TODO: These will not be needed after https://github.com/teemtee/tmt/pull/5362
           - type: repository-file
             id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
           tmt:

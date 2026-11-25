@@ -15,12 +15,6 @@ discover:
 execute:
     how: tmt
 
-prepare:
-    when: initiator == packit
-    how: shell
-    script: bash $TMT_TREE/contrib/packit-tmt/update-deps.sh
-    order: 20
-
 # not relevant for testing podman
 environment:
     TEST_AUDIT_NO_SELINUX: 1
