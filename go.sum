@@ -437,8 +437,8 @@ go.opentelemetry.io/otel/trace v1.47.0 h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrF
 go.opentelemetry.io/otel/trace v1.47.0/go.mod h1:jNaSLa2PZEYFG6fRjJABAu+bw4FS08uDmPg28lTghu0=
 go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14 h1:6w3KywZK2v9o8mpAahMrFYRW6Yf1g3t759t8iY4Fe5c=
 go.podman.io/buildah v1.46.1-0.20261105161110-1e24bfdd3f14/go.mod h1:384Vz6sUdxv8+2Et6a5XXD+EQFmWyWZyuMdUy382RDY=
-go.podman.io/common v0.70.1-0.20261105174844-179286b8f253 h1:CpkLIFxdgIcCRB7Qz4d+DAByIPMKjT3ln5X8ye5m7QQ=
-go.podman.io/common v0.70.1-0.20261105174844-179286b8f253/go.mod h1:u1xIhqYMmPy7Rb0zL7uJBqEX+ruvkHyD9MDZY1pufFQ=
+go.podman.io/common v0.70.1-0.20261116084638-6da6e80dc141 h1:iHmFgQd87Nx0sP7NFEvbdbXDBt96MUZdvwg/jfSSZuU=
+go.podman.io/common v0.70.1-0.20261116084638-6da6e80dc141/go.mod h1:hcyFbWfvgmznePI5JlLeZBl/Ea3u8gH1oqNUZ9H75Ls=
 go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
 go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
