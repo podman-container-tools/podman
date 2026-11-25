@@ -379,7 +379,10 @@ func checkCanCreate(checks permissionChecks, mounts int) error {
 		return nil
 	}
 	if !checks.vsockEntriesExist(mounts) {
-		return ErrHypervRegistryInitRequiresElevation
+		// Say how many entries are needed: hyperv-prep may have been run
+		// with fewer --mounts than this machine has volumes.
+		return fmt.Errorf("%w (this machine has %d volume(s) and needs a Fileserver vsock registry entry for each; an administrator can create them with \"podman system hyperv-prep --mounts %d\")",
+			ErrHypervRegistryInitRequiresElevation, mounts, mounts)
 	}
 	return checks.isHyperVAdminMember()
 }

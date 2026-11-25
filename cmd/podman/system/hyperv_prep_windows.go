@@ -20,10 +20,7 @@ import (
 	"go.podman.io/podman/v6/pkg/machine/windows"
 )
 
-const (
-	mountsFlag    = "mounts"
-	defaultMounts = 2
-)
+const mountsFlag = "mounts"
 
 var (
 	hypervPrepDescription = `Command for Windows administrators who need to configure an host for running Hyper-V-based Podman machines.
@@ -60,7 +57,7 @@ func init() {
 	flags.BoolVar(&showStatus, "status", false, "Show vsock registry entries and Hyper-V group membership status")
 	flags.BoolVar(&resetEntries, "reset", false, "Remove all Podman vsock registry entries and optionally remove user from Hyper-V Administrators group")
 	flags.BoolVarP(&force, "force", "f", false, "Don't ask for confirmation during reset. Valid only when used with --reset.")
-	flags.IntVar(&mounts, mountsFlag, defaultMounts, "Number of vsock entries to create for mount purpose")
+	flags.IntVar(&mounts, mountsFlag, defaultMounts(), "Number of vsock entries to create for mount purpose, one per machine volume. Defaults to the number of default machine volumes in containers.conf")
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "reset", mountsFlag)
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "force")
 	_ = hypervPrepCommand.RegisterFlagCompletionFunc(mountsFlag, completion.AutocompleteNone)
@@ -93,6 +90,16 @@ func hypervPrep(_ *cobra.Command, _ []string) error {
 	return doPreparationForGroupMembership()
 }
 
+// defaultMounts returns how many Fileserver vsock entries a machine created
+// with the default volumes needs: one per volume. "podman machine init" takes
+// its default volumes from containers.conf (home directory, its drive and the
+// user config directory mounted at /etc/containers), so a hardcoded count gets
+// out of date whenever those defaults change, and "machine init" then fails
+// for non-admin users with ErrHypervRegistryInitRequiresElevation.
+func defaultMounts() int {
+	return len(registry.PodmanConfig().ContainersConfDefaultsRO.Machine.Volumes.Get())
+}
+
 func doPreparationForRegistries() error {
 	// Every VSock has a purpose (Network, Events or Fileserver) and the
 	// VSocks with purpose Fileserver need as many as the machine mounts.
@@ -103,8 +110,16 @@ func doPreparationForRegistries() error {
 	}
 
 	var created []string
-	for purpose, entries := range entriesPerPurpose {
-		for range entries {
+	for purpose, required := range entriesPerPurpose {
+		// Machines reuse existing entries (see createShares and
+		// CheckIfHVSockRegistryEntriesExist), so only create the ones that
+		// are missing. This makes hyperv-prep safe to re-run, for example
+		// with a larger --mounts after adding machine volumes.
+		existing, err := vsock.LoadAllHVSockRegistryEntriesByPurpose(purpose)
+		if err != nil {
+			return fmt.Errorf("failed to load existing %s registry entries: %w", purpose.String(), err)
+		}
+		for range max(required-len(existing), 0) {
 			if entry, err := vsock.NewHVSockRegistryEntry(purpose, true); err != nil {
 				if errors.Is(err, vsock.ErrVSockRegistryEntryExists) {
 					logrus.Infof("Registry entry for %s already exists, skipping", purpose)

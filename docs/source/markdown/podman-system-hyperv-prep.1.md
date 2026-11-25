@@ -23,7 +23,7 @@ The **--status** option can be used without administrator privileges.
 
 #### **--mounts**=*number*
 
-Number of VSock entries for mounting purposes. Every mounted host folder of a running machine needs a dedicated VSock. There should be enough VSock to satisfy the needs of running Podman machines on the host. The default is **2**.
+Number of VSock entries for mounting purposes. Every mounted host folder of a running machine needs a dedicated VSock. There should be enough VSock to satisfy the needs of running Podman machines on the host. The default is the number of default machine volumes in *containers.conf* (`[machine] volumes`), which is the number of mounts **podman machine init** uses when no **--volume** is given. Running the command again only creates the entries that are missing, so it can be re-run with a larger number.
 
 #### **--force**, **-f**
 
