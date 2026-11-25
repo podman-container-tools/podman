@@ -1,3 +1,7 @@
+- Changelog for v1.46.1 (2026-11-10)
+  * [release-1.46] Bump c/storage to v1.65.1, c/image to v5.42.1
+  * vendor: update golang.org/x/sys to v0.50.0
+
 - Changelog for v1.46.0 (2026-10-20)
   * Bump Buildah to v1.46.0
   * add add/copy --required-path

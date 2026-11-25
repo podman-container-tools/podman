@@ -131,9 +131,9 @@ func extendedGlob(pattern string) (matches []string, err error) {
 	return matches, nil
 }
 
-// IsArchivePath returns true if the specified path can be read like a (possibly
+// isArchivePath returns true if the specified path can be read like a (possibly
 // compressed) tarball.
-func IsArchivePath(path string) bool {
+func isArchivePath(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false
@@ -763,9 +763,9 @@ func cleanerReldirectory(candidate string) string {
 //
 // When a relative symlink is encountered, its target components are
 // prepended to the remaining work list, mirroring the algorithm used by
-// resolvePath and os.Root.  Steps outside the root are rejected with
-// filepath.IsLocal on the next relative path; readlink must still reject
-// paths that leave the root when used as osRoot.Readlink.
+// resolvePath and os.Root.  Escape detection relies on readlink rejecting
+// paths that leave the root (e.g. readlink("..") must fail); without that
+// guarantee, this function does not confine.
 func pathHasAbsoluteSymlink(name string, readlink func(string) (string, error)) bool {
 	workingRel := ""
 	components := strings.Split(filepath.Clean(name), string(os.PathSeparator))
@@ -779,12 +779,13 @@ func pathHasAbsoluteSymlink(name string, readlink func(string) (string, error)) 
 		}
 
 		nextRel := filepath.Join(workingRel, comp)
-		if !filepath.IsLocal(nextRel) {
-			return false
-		}
 		target, err := readlink(nextRel)
 		if err != nil {
 			// Not a symlink (or does not exist): advance.
+			// When readlink is osRoot.Readlink, this also covers
+			// the case where ".." escapes the root. Readlink
+			// rejects the path, we advance with a broken workingRel,
+			// and all subsequent readlink calls fail too.
 			workingRel = nextRel
 			continue
 		}
@@ -799,7 +800,10 @@ func pathHasAbsoluteSymlink(name string, readlink func(string) (string, error)) 
 		}
 
 		// Relative symlink: prepend target components to the work
-		// list and continue from the current position.
+		// list and continue from the current position.  Any ".."
+		// components are handled naturally by filepath.Join at the
+		// top of the loop, and readlink will reject paths that
+		// escape the root.
 		components = append(strings.Split(target, string(os.PathSeparator)), components...)
 	}
 	return false
@@ -834,10 +838,9 @@ func lstatPathComponents(osRoot *os.Root, name string) error {
 // osRoot rejects symlinks with absolute targets (e.g. /var/run -> /run),
 // even when those symlinks are valid inside a container.  When the raw path
 // is rejected and the rejection is caused by an absolute symlink, this
-// function resolves symlinks with chroot-like semantics and requires the
-// result to stay under targetDirectory (filepath.IsLocal on relPath).
-// Relative escapes (e.g. escape -> ..) are kept rejected, matching Docker
-// behavior (moby/go-archive#93).
+// function resolves symlinks with chroot-like semantics and re-checks the
+// resolved path through osRoot.  Relative escapes (e.g. escape -> ..) are
+// kept rejected, matching Docker behavior (moby/go-archive#93).
 func checkArchivePathEscape(osRoot *os.Root, root, directory, targetDirectory, cleanerHdrName string) error {
 	// Fast path: os.Root walks the raw entry path component by component.
 	// Example: "var/run/foo" where var/run is a plain directory -- OK.
@@ -870,10 +873,15 @@ func checkArchivePathEscape(osRoot *os.Root, root, directory, targetDirectory, c
 	if !filepath.IsLocal(relPath) {
 		return err
 	}
-	// filepath.IsLocal(relPath) is enough here. resolvePath used
-	// evaluateFinalComponent false, so the final path component may still be
-	// a symlink; we only needed to verify the resolved path stays in-tree.
-	return nil
+
+	// Re-check the resolved (symlink-free) path through os.Root.
+	// Example: "run/foo" -- no symlinks left, os.Root is happy.
+	// If os.Root still rejects it, it is a genuine escape.
+	resolvedErr := lstatPathComponents(osRoot, relPath)
+	if resolvedErr == nil || errors.Is(resolvedErr, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // convertToRelSubdirectory returns the path of directory, bound and relative to
@@ -1584,7 +1592,7 @@ func copierHandlerStat(ctx context.Context, req request, pmExcludes *fileutils.P
 				}
 				// replace IsArchive/IsDir/IsRegular with info about the target
 				if info.Mode().IsRegular() && req.StatOptions.CheckForArchives {
-					result.IsArchive = IsArchivePath(resolvedTarget)
+					result.IsArchive = isArchivePath(resolvedTarget)
 					checkForArchive = false
 				}
 				result.IsDir = info.IsDir()
@@ -1594,7 +1602,7 @@ func copierHandlerStat(ctx context.Context, req request, pmExcludes *fileutils.P
 				// we were asked to check on this, and it
 				// wasn't a symlink, in which case we'd have
 				// already checked what the link points to
-				result.IsArchive = IsArchivePath(globbed)
+				result.IsArchive = isArchivePath(globbed)
 			}
 		}
 		if len(s.Globbed) == 0 {
@@ -2144,7 +2152,7 @@ func copierHandlerGetOne(ctx context.Context, srcfi os.FileInfo, symlinkTarget, 
 		// file and spool out its contents in-line.  (if we just
 		// inlined the whole file, we'd also be inlining the EOF marker
 		// it contains)
-		if options.ExpandArchives && IsArchivePath(contentPath) {
+		if options.ExpandArchives && isArchivePath(contentPath) {
 			content, err := os.Open(contentPath)
 			if err != nil {
 				return fmt.Errorf("opening file for reading archive contents: %w", err)

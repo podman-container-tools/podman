@@ -54,13 +54,13 @@ func ForURL(ctx context.Context, dir, prefix, url string, options *URLOptions) (
 		return "", "", fmt.Errorf("creating temporary directory for %q: %w", url, err)
 	}
 	succeeded := false
-	defer func(tmpContextDir string) {
+	defer func() {
 		if !succeeded {
-			if err2 := os.RemoveAll(tmpContextDir); err2 != nil {
-				logrus.Errorf("error removing temporary directory %q: %v", tmpContextDir, err2)
+			if err2 := os.RemoveAll(tempDir); err2 != nil {
+				logrus.Errorf("error removing temporary directory %q: %v", tempDir, err2)
 			}
 		}
-	}(tempDir)
+	}()
 
 	downloadDir := filepath.Join(tempDir, "download")
 	if err = os.MkdirAll(downloadDir, 0o700); err != nil {
@@ -213,7 +213,7 @@ func downloadToDirectory(ctx context.Context, options *URLOptions, url, dir stri
 		if err != nil {
 			return err
 		}
-		resp1, err := httpClient.Do(req1)
+		resp1, err := http.DefaultClient.Do(req1)
 		if err != nil {
 			return err
 		}
