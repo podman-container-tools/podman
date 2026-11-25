@@ -243,10 +243,13 @@ type ImageListOptions struct {
 }
 
 type ImagePruneOptions struct {
-	All        bool     `json:"all" schema:"all"`
-	External   bool     `json:"external" schema:"external"`
-	BuildCache bool     `json:"buildcache" schema:"buildcache"`
-	Filter     []string `json:"filter" schema:"filter"`
+	All           bool     `json:"all" schema:"all"`
+	External      bool     `json:"external" schema:"external"`
+	BuildCache    bool     `json:"buildcache" schema:"buildcache"`
+	Filter        []string `json:"filter" schema:"filter"`
+	ReservedSpace int64    `json:"reservedspace" schema:"reservedspace"`
+	MaxUsedSpace  int64    `json:"maxusedspace" schema:"maxusedspace"`
+	MinFreeSpace  int64    `json:"minfreespace" schema:"minfreespace"`
 }
 
 type (

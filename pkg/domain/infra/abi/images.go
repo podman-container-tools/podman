@@ -57,12 +57,19 @@ func (ir *ImageEngine) Exists(_ context.Context, nameOrID string) (*entities.Boo
 }
 
 func (ir *ImageEngine) Prune(ctx context.Context, opts entities.ImagePruneOptions) ([]*reports.PruneReport, error) {
+	if opts.BuildCache && (opts.ReservedSpace != 0 || opts.MaxUsedSpace != 0 || opts.MinFreeSpace != 0) {
+		return nil, errors.New("pruning the build cache cannot be combined with space limits")
+	}
+
 	pruneOptions := &libimage.RemoveImagesOptions{
 		RemoveContainerFunc:     ir.Libpod.RemoveContainersForImageCallback(ctx, true),
 		IsExternalContainerFunc: ir.Libpod.IsExternalContainerCallback(ctx),
 		ExternalContainers:      opts.External,
 		Filters:                 append(opts.Filter, "readonly=false"),
 		WithSize:                true,
+		ReservedSpace:           opts.ReservedSpace,
+		MaxUsedSpace:            opts.MaxUsedSpace,
+		MinFreeSpace:            opts.MinFreeSpace,
 	}
 
 	if !opts.All {

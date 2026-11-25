@@ -801,6 +801,62 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	r.Handle(VersionedPath("/build"), s.StreamBufferedAPIHandler(compat.BuildImage)).Methods(http.MethodPost)
 	// Added non version path to URI to support docker non versioned paths
 	r.Handle("/build", s.StreamBufferedAPIHandler(compat.BuildImage)).Methods(http.MethodPost)
+	// swagger:operation POST /build/prune compat BuildPrune
+	// ---
+	// tags:
+	//  - images (compat)
+	// summary: Delete builder cache
+	// description: |
+	//   Remove dangling images left behind by builds.  Tagged images are never removed.
+	// parameters:
+	//  - in: query
+	//    name: all
+	//    type: boolean
+	//    default: false
+	//    description: |
+	//      Also remove persistent build cache created by `--mount=type=cache`.
+	//      Ignored when any space limit is set, since that cache cannot be sized.
+	//  - in: query
+	//    name: reserved-space
+	//    type: integer
+	//    description: Amount of disk space in bytes to keep for build cache (API v1.48 and later)
+	//  - in: query
+	//    name: keep-storage
+	//    type: integer
+	//    description: |
+	//      Amount of disk space in bytes to keep for build cache.
+	//      Deprecated in API v1.48, use `reserved-space`; only read when `reserved-space` is not set.
+	//  - in: query
+	//    name: max-used-space
+	//    type: integer
+	//    description: Maximum amount of disk space in bytes the build cache may use (API v1.48 and later)
+	//  - in: query
+	//    name: min-free-space
+	//    type: integer
+	//    description: Target amount of free disk space in bytes after pruning (API v1.48 and later)
+	//  - in: query
+	//    name: filters
+	//    type: string
+	//    description: |
+	//      JSON encoded value of filters (a `map[string][]string`) to process on the build cache.
+	//      Available filters:
+	//        - `until=<timestamp or duration>` Prune images created before this time.  Unlike Docker, this compares against creation time, not last use.
+	//        - `unused-for=<timestamp or duration>` Deprecated synonym for `until`.
+	//        - `id=<id prefix>`
+	//        - `label=<key>`, `label=<key>=<value>`, `label!=<key>` or `label!=<key>=<value>`
+	//      Other filters are rejected.
+	// produces:
+	// - application/json
+	// responses:
+	//   200:
+	//     $ref: "#/responses/buildPruneResponse"
+	//   400:
+	//     $ref: "#/responses/badParamError"
+	//   500:
+	//     $ref: "#/responses/internalError"
+	r.Handle(VersionedPath("/build/prune"), s.APIHandler(compat.PruneBuildCache)).Methods(http.MethodPost)
+	// Added non version path to URI to support docker non versioned paths
+	r.Handle("/build/prune", s.APIHandler(compat.PruneBuildCache)).Methods(http.MethodPost)
 	/*
 		libpod endpoints
 	*/

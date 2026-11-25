@@ -357,6 +357,7 @@ sub operation_name {
     # names (Push for .../registry/..., Create for POST on {name}) simply do not
     # follow the usual pattern. List the acceptable names explicitly.
     my %exception = (
+        'POST /build/prune'                                    => ['BuildPrune'],
         'POST /libpod/manifests/{name}/push'                   => ['ManifestPushV3Libpod'],
         'POST /libpod/manifests/{name}/registry/{destination}' => ['ManifestPushLibpod'],
         'POST /libpod/manifests/{name}'                        => ['ManifestCreateLibpod'],
