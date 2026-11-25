@@ -33,9 +33,8 @@ type ImageInspect struct {
 	// https://docs.docker.com/reference/api/engine/version-history/#v144-api-changes
 	ContainerConfig *dockerContainer.Config `json:"ContainerConfig,omitempty"`
 	VirtualSize     int64                   `json:"VirtualSize,omitempty"`
-	Parent          string                  `json:"Parent"`
-	DockerVersion   string                  `json:"DockerVersion"`
-	Author          string                  `json:"Author"`
+	Parent          string                  `json:"Parent,omitempty"`
+	DockerVersion   string                  `json:"DockerVersion,omitempty"`
 }
 
 type ContainerConfig struct {

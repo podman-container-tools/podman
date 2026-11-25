@@ -122,6 +122,35 @@ t GET /v1.43/images/localhost/nocreated:latest/json 200 .Created="0001-01-01T00:
 podman rmi -f localhost/nocreated:latest
 rm -rf $NOCREATED
 
+# Test that empty Parent, DockerVersion, and Author are kept for API < v1.52
+# and omitted for API >= v1.52 (and unversioned requests).
+t GET /v1.51/images/$iid/json 200 \
+  'has("Parent")=true' \
+  'has("DockerVersion")=true' \
+  'has("Author")=true' \
+  .Parent="" \
+  .DockerVersion="" \
+  .Author=""
+
+t GET /v1.52/images/$iid/json 200 \
+  'has("Parent")=false' \
+  'has("DockerVersion")=false' \
+  'has("Author")=false'
+
+t GET /images/$iid/json 200 \
+  'has("Parent")=false' \
+  'has("DockerVersion")=false' \
+  'has("Author")=false'
+
+# Non-empty Author is still returned for API >= v1.52.
+podman create --name withauthor_ctr $IMAGE true
+podman commit --author bob withauthor_ctr localhost/withauthor:latest
+podman rm -f withauthor_ctr
+t GET /v1.52/images/localhost/withauthor:latest/json 200 \
+  .Author=bob \
+  'has("DockerVersion")=false'
+podman rmi -f localhost/withauthor:latest
+
 t POST "images/create?fromImage=alpine" 200 .error~null .status~".*Download complete.*"
 t POST "libpod/images/pull?reference=alpine&compatMode=true" 200 .error~null .status~".*Download complete.*"
 

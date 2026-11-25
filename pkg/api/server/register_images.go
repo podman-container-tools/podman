@@ -418,7 +418,9 @@ func (s *APIServer) registerImagesHandlers(r *mux.Router) error {
 	// tags:
 	//  - images (compat)
 	// summary: Inspect an image
-	// description: Return low-level information about an image.
+	// description: |
+	//   Return low-level information about an image. API v1.52 and newer and
+	//   unversioned requests omit Parent, DockerVersion, and Author when empty.
 	// parameters:
 	//  - in: path
 	//    name: name
