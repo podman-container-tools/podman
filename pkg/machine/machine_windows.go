@@ -224,6 +224,7 @@ func launchWinProxy(opts WinProxyOpts) (bool, string, error) {
 	args = append(args, hostURL.String(), dest, opts.IdentityPath)
 
 	cmd := exec.Command(command, args...)
+	cmd.Dir = stateDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS,
 	}
