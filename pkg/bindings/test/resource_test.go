@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"syscall"
 
@@ -69,7 +68,22 @@ var _ = Describe("Verify Podman resources", func() {
 		// Record open fd from /proc
 		finished, err := readProc()
 		Expect(err).ShouldNot(HaveOccurred())
-		if !reflect.DeepEqual(finished, start) {
+
+		// CloseIdleConnections drops idle keep-alive connections, including the
+		// connection opened before the first snapshot. A closed fd is not
+		// a leak. A descriptor that is still open afterwards and was not
+		// open before is.
+		before := make(map[string]struct{}, len(start))
+		for _, fd := range start {
+			before[fd] = struct{}{}
+		}
+		var leaked []string
+		for _, fd := range finished {
+			if _, ok := before[fd]; !ok {
+				leaked = append(leaked, fd)
+			}
+		}
+		if len(leaked) > 0 {
 			fmt.Fprintf(GinkgoWriter, "Open FDs:\nlsof Before:\n%s\n", buffer)
 
 			// Record details on open file descriptors after using API
@@ -77,7 +91,7 @@ var _ = Describe("Verify Podman resources", func() {
 			fmt.Fprintf(GinkgoWriter, "lsof After:\n%s\n", buffer)
 
 			// We know test has failed. Easier to let ginkgo format output.
-			Expect(finished).Should(Equal(start))
+			Expect(leaked).Should(BeEmpty())
 		}
 	})
 })
@@ -107,8 +121,9 @@ func readProc() ([]string, error) {
 				if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
+				// An fd can close between readdir and readlink.
 				if n == "" {
-					n = d.Type().String()
+					return nil
 				}
 				name += n
 			}

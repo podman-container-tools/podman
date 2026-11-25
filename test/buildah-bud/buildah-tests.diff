@@ -8,14 +8,14 @@ Signed-off-by: Paul Holzinger <pholzing@redhat.com>
 Signed-off-by: Danish Prakash <contact@danishpraka.sh>
 Signed-off-by: Lokesh Mandvekar <lsm5@redhat.com>
 ---
- tests/helpers.bash | 166 +++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 162 insertions(+), 4 deletions(-)
+ tests/helpers.bash | 169 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 165 insertions(+), 4 deletions(-)
 
 diff --git a/tests/helpers.bash b/tests/helpers.bash
 index 7a64d8345..4cd544324 100644
 --- a/tests/helpers.bash
 +++ b/tests/helpers.bash
-@@ -89,6 +89,42 @@ EOF
+@@ -89,6 +89,45 @@ EOF
      BUILDAH_REGISTRY_OPTS="${regconfopt} ${regconfdir} --short-name-alias-conf ${TEST_SCRATCH_DIR}/cache/shortnames.conf"
      COPY_REGISTRY_OPTS="${BUILDAH_REGISTRY_OPTS}"
      PODMAN_REGISTRY_OPTS="${regconfopt}"
@@ -37,6 +37,9 @@ index 7a64d8345..4cd544324 100644
 +        if is_rootless; then
 +            sockdir=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 +            mkdir -p ${sockdir}/podman
++        else
++            # Do not assume the package or tmpfiles created this.
++            mkdir -p /run/podman
 +        fi
 +        PODMAN_SOCK_FILE=$sockdir/podman/podman-${BATS_SUITE_TEST_NUMBER}.sock
 +        PODMAN_REMOTE_OPTS="--url unix://${PODMAN_SOCK_FILE}"
@@ -58,7 +61,7 @@ index 7a64d8345..4cd544324 100644
  }
  
  function starthttpd() { # directoryspecs [working-directory-or-"" [certfile, keyfile]]
-@@ -154,6 +190,22 @@ function teardown_tests() {
+@@ -154,6 +193,22 @@ function teardown_tests() {
      stop_git_daemon
      stop_registry
  
@@ -81,7 +84,7 @@ index 7a64d8345..4cd544324 100644
      # Workaround for #1991 - buildah + overlayfs leaks mount points.
      # Many tests leave behind /var/tmp/.../root/overlay and sub-mounts;
      # let's find those and clean them up, otherwise 'rm -rf' fails.
-@@ -275,7 +327,12 @@ function copy() {
+@@ -275,7 +330,12 @@ function copy() {
  }
  
  function podman() {
@@ -95,7 +98,7 @@ index 7a64d8345..4cd544324 100644
  }
  
  # There are various scenarios where we would like to execute `tests` as rootless user, however certain commands like `buildah mount`
-@@ -382,15 +439,93 @@ function run_buildah() {
+@@ -382,15 +442,93 @@ function run_buildah() {
          --retry)         retry=3;        shift;;  # retry network flakes
      esac
  
@@ -192,7 +195,7 @@ index 7a64d8345..4cd544324 100644
          # without "quotes", multiple lines are glommed together into one
          if [ -n "$output" ]; then
              echo "$output"
-@@ -417,6 +552,9 @@ function run_buildah() {
+@@ -417,6 +555,9 @@ function run_buildah() {
              false
          fi
  
@@ -202,7 +205,7 @@ index 7a64d8345..4cd544324 100644
          if [ -n "$expected_rc" ]; then
              if [ "$status" -eq "$expected_rc" ]; then
                  return
-@@ -794,6 +932,26 @@ function skip_unless_arch() {
+@@ -794,6 +935,26 @@ function skip_unless_arch() {
    skip "test requires one of these architectures: $* (current: $goarch)"
  }
  

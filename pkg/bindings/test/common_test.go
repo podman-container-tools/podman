@@ -28,6 +28,8 @@ type testImage struct {
 const (
 	devPodmanBinaryLocation     string = "../../../bin/podman"
 	defaultPodmanBinaryLocation string = "/usr/bin/podman"
+	// Fully qualified so short-name-mode=enforcing does not prompt without a TTY.
+	testImageName = "quay.io/libpod/testimage:20241011"
 )
 
 func getPodmanBinary() string {
