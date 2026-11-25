@@ -160,11 +160,7 @@ jobs:
     tf_extra_params:
       <<: *multihost-pipeline-settings
       environments:
-        - artifacts:
-          # TODO: These will not be needed after https://github.com/teemtee/tmt/pull/5362
-          - type: repository-file
-            id: https://copr.fedorainfracloud.org/coprs/rhcontainerbot/podman-next/repo/fedora-$releasever/rhcontainerbot-podman-next-fedora-$releasever.repo
-          tmt:
+        - tmt:
             context:
               revdeps: "yes"
 

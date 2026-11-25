@@ -10,3 +10,11 @@ plan:
     name: /podman
     path: /plans/friends
     ref: main
+    adjust-plans:
+      # TODO: These will not be needed after https://github.com/teemtee/tmt/pull/5362
+      - prepare+:
+          - how: artifact
+            order: 40
+            provide: copr.repository:rhcontainerbot/podman-next
+            # Higher priority value than the default 50 from the testing-farm artifacts
+            default-repository-priority: 75
