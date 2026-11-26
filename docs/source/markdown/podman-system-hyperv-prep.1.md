@@ -23,17 +23,23 @@ The **--status** option can be used without administrator privileges.
 
 #### **--mounts**=*number*
 
-Number of VSock entries for mounting purposes. Every mounted host folder of a running machine needs a dedicated VSock. There should be enough VSock to satisfy the needs of running Podman machines on the host. The default is **2**.
+Number of VSock entries for mounting purposes. Every mounted host folder of a running machine needs a dedicated VSock. There should be enough VSock to satisfy the needs of running Podman machines on the host. The default is the number of volumes mounted by default in a machine (the `volumes` option in the `[machine]` table of **containers.conf(5)**), which is **3** with the default configuration.
 
 #### **--force**, **-f**
 
 Skip confirmation prompts during reset. Only valid with **--reset**.
 
+#### **--registry-only**
+
+Only create the VSock registry entries or, with **--reset**, only remove them.
+The current user's Hyper-V Administrators group membership is left unchanged.
+Not valid with **--status**.
+
 #### **--reset**
 
 Remove all Podman VSock registry entries and remove the current user from the
 Hyper-V Administrators group. Prompts for confirmation before each action unless
-**--force** is specified.
+**--force** is specified. Use **--registry-only** to keep the group membership.
 
 #### **--status**
 
@@ -46,6 +52,11 @@ Create the required registry entries and add the current user to the Hyper-V
 Administrators group:
 ```powershell
 PS> podman system hyperv-prep
+```
+
+Create the required registry entries without changing group membership:
+```powershell
+PS> podman system hyperv-prep --registry-only
 ```
 
 Show existing registry entries and group membership status:
@@ -62,6 +73,11 @@ PS> podman system hyperv-prep --reset
 Reset without confirmation prompts:
 ```powershell
 PS> podman system hyperv-prep --reset --force
+```
+
+Remove the registry entries without changing group membership:
+```powershell
+PS> podman system hyperv-prep --reset --registry-only --force
 ```
 
 ## SEE ALSO

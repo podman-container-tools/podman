@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	mountsFlag    = "mounts"
-	defaultMounts = 2
+	mountsFlag       = "mounts"
+	registryOnlyFlag = "registry-only"
 )
 
 var (
@@ -43,11 +43,13 @@ var (
 		RunE:              hypervPrep,
 		ValidArgsFunction: completion.AutocompleteNone,
 		Example: `podman system hyperv-prep
+podman system hyperv-prep --registry-only
 podman system hyperv-prep --status
 podman system hyperv-prep --reset --force`,
 	}
 	showStatus   bool
 	resetEntries bool
+	registryOnly bool
 	mounts       int
 )
 
@@ -59,10 +61,13 @@ func init() {
 	flags := hypervPrepCommand.Flags()
 	flags.BoolVar(&showStatus, "status", false, "Show vsock registry entries and Hyper-V group membership status")
 	flags.BoolVar(&resetEntries, "reset", false, "Remove all Podman vsock registry entries and optionally remove user from Hyper-V Administrators group")
+	flags.BoolVar(&registryOnly, registryOnlyFlag, false, "Only create or remove the vsock registry entries, leaving the Hyper-V Administrators group unchanged")
 	flags.BoolVarP(&force, "force", "f", false, "Don't ask for confirmation during reset. Valid only when used with --reset.")
+	defaultMounts := len(registry.PodmanConfig().ContainersConfDefaultsRO.Machine.Volumes.Get())
 	flags.IntVar(&mounts, mountsFlag, defaultMounts, "Number of vsock entries to create for mount purpose")
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "reset", mountsFlag)
 	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", "force")
+	hypervPrepCommand.MarkFlagsMutuallyExclusive("status", registryOnlyFlag)
 	_ = hypervPrepCommand.RegisterFlagCompletionFunc(mountsFlag, completion.AutocompleteNone)
 }
 
@@ -84,11 +89,17 @@ func hypervPrep(_ *cobra.Command, _ []string) error {
 		if err := doResetForRegistries(); err != nil {
 			return err
 		}
+		if registryOnly {
+			return nil
+		}
 		return doResetForGroupMembership()
 	}
 
 	if err := doPreparationForRegistries(); err != nil {
 		return err
+	}
+	if registryOnly {
+		return nil
 	}
 	return doPreparationForGroupMembership()
 }
