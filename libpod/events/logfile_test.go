@@ -226,3 +226,20 @@ func TestReadLogFileUntilInPast(t *testing.T) {
 		}
 	}
 }
+
+func TestReadLastLine(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("x", 100*1024)
+	for _, tc := range []struct{ content, want string }{
+		{"", ""},
+		{"a\n", "a"},
+		{"a\nb\n", "b"},
+		{"a\nb", ""}, // partial write
+		{long + "\n", long},
+		{"a\n" + long + "\n", long},
+	} {
+		path := filepath.Join(t.TempDir(), "events.log")
+		require.NoError(t, os.WriteFile(path, []byte(tc.content), 0o600))
+		require.Equal(t, tc.want, readLastLine(path), "content of length %d", len(tc.content))
+	}
+}

@@ -4,6 +4,7 @@ package events
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -74,6 +75,35 @@ func (e EventLogFile) writeString(s string) error {
 func writeToFile(s string, f *os.File) error {
 	_, err := f.WriteString(s + "\n")
 	return err
+}
+
+// readLastLine returns the last line of the file
+// Return "" if it cannot be determined.
+func readLastLine(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	// Lines can be long, events contain all container labels.
+	for n := min(fi.Size(), 64*1024); ; n = min(2*n, fi.Size()) {
+		buf := make([]byte, n)
+		if _, err := f.ReadAt(buf, fi.Size()-n); err != nil {
+			return ""
+		}
+		data, ok := bytes.CutSuffix(buf, []byte("\n"))
+		if !ok {
+			return ""
+		}
+		i := bytes.LastIndexByte(data, '\n')
+		if i >= 0 || n == fi.Size() {
+			return string(data[i+1:])
+		}
+	}
 }
 
 func (e EventLogFile) getTail(options ReadOptions, untilInPast bool) (*tail.Tail, error) {
@@ -153,6 +183,11 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 	// Get the time *before* starting to read.  Comparing the timestamps
 	// with events avoids returning events more than once after a log-file
 	// rotation.
+	//
+	// When starting at the end of the file, also remember its last line, so
+	// that the lines appended after it can be found in the copy of a
+	// rotation.
+	var lastLine string
 	readTime, err := func() (time.Time, error) {
 		// We need to lock events file
 		lock, err := lockfile.GetLockFile(e.options.LogFilePath + ".lock")
@@ -161,6 +196,9 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 		}
 		lock.Lock()
 		defer lock.Unlock()
+		if options.Stream && !options.FromStart && !untilInPast {
+			lastLine = readLastLine(e.options.LogFilePath)
+		}
 		return time.Now(), nil
 	}()
 	if err != nil {
@@ -172,6 +210,23 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 		var line *tail.Line
 		var ok bool
 		var skipRotate bool
+		// The tail reopens a rotated file without reading the rest of
+		// the previous one, so the copied lines may contain events
+		// appended after our last read.  They follow the last line we
+		// read (or the one we started after) in the copy.  Event lines
+		// contain nanosecond timestamps, so an earlier line with the
+		// same bytes, which would end skipping too early, is not
+		// expected.
+		var readLine string
+		send := func(r ReadResult) bool {
+			select {
+			case options.EventChannel <- r:
+				return true
+			case <-ctx.Done():
+				t.Kill(errors.New("hangup by client"))
+				return false
+			}
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -186,10 +241,15 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 				// fallthrough
 			}
 
+			prevLine := lastLine
+			lastLine = line.Text
+
 			event, err := newEventFromJSONString(line.Text)
 			if err != nil {
 				err := fmt.Errorf("event type is not valid in %s", e.options.LogFilePath)
-				options.EventChannel <- ReadResult{Error: err}
+				if !send(ReadResult{Error: err}) {
+					return
+				}
 				continue
 			}
 			switch event.Type {
@@ -198,7 +258,9 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 			case System:
 				begin, end, err := e.readRotateEvent(event)
 				if err != nil {
-					options.EventChannel <- ReadResult{Error: err}
+					if !send(ReadResult{Error: err}) {
+						return
+					}
 					continue
 				}
 				if begin && event.Time.After(readTime) {
@@ -207,6 +269,7 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 					// subsequent event until the end of the
 					// rotation.
 					skipRotate = true
+					readLine = prevLine
 					logrus.Debugf("Skipping already read events after log-file rotation: %v", event)
 				} else if end {
 					// This rotate event
@@ -214,14 +277,20 @@ func (e EventLogFile) Read(ctx context.Context, options ReadOptions) error {
 				}
 			default:
 				err := fmt.Errorf("event type %s is not valid in %s", event.Type.String(), e.options.LogFilePath)
-				options.EventChannel <- ReadResult{Error: err}
+				if !send(ReadResult{Error: err}) {
+					return
+				}
 				continue
 			}
 			if skipRotate {
+				if readLine != "" && line.Text == readLine {
+					// The following lines have not been read.
+					skipRotate = false
+				}
 				continue
 			}
-			if applyFilters(event, filterMap) {
-				options.EventChannel <- ReadResult{Event: event}
+			if applyFilters(event, filterMap) && !send(ReadResult{Event: event}) {
+				return
 			}
 		}
 	}()
