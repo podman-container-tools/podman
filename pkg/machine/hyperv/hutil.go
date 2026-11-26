@@ -78,14 +78,14 @@ func CurrentUserName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	account, domain, _, err := sid.LookupAccount("")
-	if err != nil {
-		return sid.String(), nil
+	account, domain, _, lookupErr := sid.LookupAccount("")
+	if lookupErr == nil {
+		if domain == "" {
+			return account, nil
+		}
+		return domain + `\` + account, nil
 	}
-	if domain == "" {
-		return account, nil
-	}
-	return domain + `\` + account, nil
+	return sid.String(), nil
 }
 
 // AddCurrentUserToHyperVAdminGroup adds the process token's user to the local
@@ -203,10 +203,7 @@ func getHyperVAdminGroupNamePtr() (*uint16, error) {
 // GetUserProfileDirectory) and can fail with ERROR_INVALID_FUNCTION in
 // restricted execution contexts such as Azure VM Run Commands.
 func getCurrentUserSIDFromToken() (*syswindows.SID, error) {
-	token, err := syswindows.OpenCurrentProcessToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to open current process token: %w", err)
-	}
+	token := syswindows.GetCurrentProcessToken()
 	defer token.Close()
 
 	tokenUser, err := token.GetTokenUser()

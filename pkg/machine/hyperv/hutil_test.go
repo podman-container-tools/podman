@@ -3,6 +3,8 @@
 package hyperv
 
 import (
+	"errors"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,11 +77,9 @@ func TestVerifyHyperVPermissionsReturnsKnownErrors(t *testing.T) {
 		ErrHypervUserNotInAdminGroup,
 		ErrHypervUserSessionNotUpdated,
 	}
-	for _, known := range knownErrors {
-		if err == known {
-			t.Logf("VerifyHyperVPermissions returned expected error: %v", err)
-			return
-		}
+	if slices.ContainsFunc(knownErrors, func(known error) bool { return errors.Is(err, known) }) {
+		t.Logf("VerifyHyperVPermissions returned expected error: %v", err)
+		return
 	}
 	t.Errorf("VerifyHyperVPermissions returned unexpected error: %v", err)
 }
