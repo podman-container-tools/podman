@@ -219,15 +219,15 @@ func TestGetIntermediateMountpointUserUpdatesTimestamp(t *testing.T) {
 	c := &Container{}
 	path, err := c.getIntermediateMountpointUser()
 	assert.NoError(t, err)
-	assert.DirExists(t, path)
+	assert.DirExists(t, path.PathWithoutProtection())
 
 	old := time.Now().Add(-time.Hour)
-	assert.NoError(t, os.Chtimes(path, old, old))
+	assert.NoError(t, os.Chtimes(path.PathWithoutProtection(), old, old))
 
 	secondPath, err := c.getIntermediateMountpointUser()
 	assert.NoError(t, err)
 	assert.Equal(t, path, secondPath)
-	info, err := os.Stat(path)
+	info, err := os.Stat(path.PathWithoutProtection())
 	assert.NoError(t, err)
 	assert.True(t, info.ModTime().After(old))
 }
@@ -242,7 +242,7 @@ func TestGetIntermediateMountpointUserRetriesAfterFailure(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	path, err := c.getIntermediateMountpointUser()
 	assert.NoError(t, err)
-	assert.DirExists(t, path)
+	assert.DirExists(t, path.PathWithoutProtection())
 }
 
 func TestCheckGVisorCheckpointOptions(t *testing.T) {

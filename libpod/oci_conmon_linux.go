@@ -63,7 +63,7 @@ func (r *ConmonOCIRuntime) createRootlessContainer(ctr *Container, restoreOption
 
 			// bind mount the containers' mount path to the path where the OCI runtime expects it to be
 			// if the container is already mounted at the expected path, do not cover the mountpoint.
-			if rootPath != "" && filepath.Clean(ctr.state.Mountpoint) != filepath.Clean(rootPath) {
+			if filepath.Clean(ctr.state.Mountpoint.PathWithoutProtection()) != filepath.Clean(rootPath.PathWithoutProtection()) {
 				mounts, err := getMounts()
 				if err != nil {
 					return 0, err
@@ -75,7 +75,7 @@ func (r *ConmonOCIRuntime) createRootlessContainer(ctr *Container, restoreOption
 				}
 				isShared := false
 				var parentMount string
-				for dir := filepath.Dir(rootPath); ; dir = filepath.Dir(dir) {
+				for dir := filepath.Dir(rootPath.PathWithoutProtection()); ; dir = filepath.Dir(dir) {
 					if m, found := byMountpoint[dir]; found {
 						parentMount = dir
 						for o := range strings.SplitSeq(m.Optional, ",") {
@@ -96,7 +96,7 @@ func (r *ConmonOCIRuntime) createRootlessContainer(ctr *Container, restoreOption
 				if err := unix.Mount("", parentMount, "", unix.MS_SLAVE, ""); err != nil {
 					return 0, fmt.Errorf("failed to make %s slave: %w", parentMount, err)
 				}
-				if err := unix.Mount(ctr.state.Mountpoint, rootPath, "", unix.MS_BIND, ""); err != nil {
+				if err := unix.Mount(ctr.state.Mountpoint.PathWithoutProtection(), rootPath.PathWithoutProtection(), "", unix.MS_BIND, ""); err != nil {
 					return 0, fmt.Errorf("failed to bind mount %s to %s: %w", ctr.state.Mountpoint, rootPath, err)
 				}
 				if isShared {
