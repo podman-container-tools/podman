@@ -1,0 +1,7 @@
+## assert-podman-args "--network" "container:systemd-template_frontend"
+## assert-has-key "Unit" "Requires" "template@frontend.service"
+## assert-has-key "Unit" "After" "template@frontend.service"
+
+[Container]
+Image=localhost/imagename
+Network=template@frontend.container

@@ -1,0 +1,3 @@
+[Volume]
+VolumeName=shared-%i
+ServiceName=shared-volume@cache
