@@ -5,8 +5,11 @@ package apiutil
 import (
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/blang/semver/v4"
@@ -75,4 +78,31 @@ func SupportedVersionWithDefaults(r *http.Request) (semver.Version, error) {
 	return SupportedVersion(r,
 		fmt.Sprintf(">=%s <=%s", version.APIVersion[tree][version.MinimalAPI].String(),
 			version.APIVersion[tree][version.CurrentAPI].String()))
+}
+
+// NegotiateMediaType picks the media type from offered that best matches the
+// Accept header of the request, honoring q-values. When several types share the
+// highest q-value, the one listed first in the Accept header wins. If there is no
+// Accept header, or none of its entries match an offered type, fallback is
+// returned. Wildcards are not expanded, so "*/*" also resolves to fallback.
+func NegotiateMediaType(r *http.Request, offered []string, fallback string) string {
+	best, bestQ := fallback, 0.0
+	for _, header := range r.Header.Values("Accept") {
+		for entry := range strings.SplitSeq(header, ",") {
+			mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(entry))
+			if err != nil {
+				continue
+			}
+			q := 1.0
+			if v, ok := params["q"]; ok {
+				if q, err = strconv.ParseFloat(v, 64); err != nil {
+					continue
+				}
+			}
+			if q > bestQ && slices.Contains(offered, mediaType) {
+				best, bestQ = mediaType, q
+			}
+		}
+	}
+	return best
 }

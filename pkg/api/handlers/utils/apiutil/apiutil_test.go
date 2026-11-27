@@ -140,3 +140,44 @@ func TestEqualVersion(t *testing.T) {
 			rr.Body.String(), expected)
 	}
 }
+
+func TestNegotiateMediaType(t *testing.T) {
+	offered := []string{"application/json", "application/x-ndjson", "application/json-seq", "application/jsonl"}
+	tests := []struct {
+		name    string
+		accept  []string
+		offered []string
+		want    string
+	}{
+		{name: "no header", want: "application/json"},
+		{name: "wildcard", accept: []string{"*/*"}, want: "application/json"},
+		{name: "unsupported", accept: []string{"text/plain"}, want: "application/json"},
+		{name: "single", accept: []string{"application/json-seq"}, want: "application/json-seq"},
+		{name: "case and params", accept: []string{"Application/X-NDJSON; charset=utf-8"}, want: "application/x-ndjson"},
+		{name: "highest q wins", accept: []string{"application/x-ndjson;q=0.5, application/json-seq;q=0.9"}, want: "application/json-seq"},
+		{name: "first wins on tie", accept: []string{"application/jsonl, application/x-ndjson"}, want: "application/jsonl"},
+		{name: "q=0 is never picked", accept: []string{"application/x-ndjson;q=0"}, want: "application/json"},
+		{name: "bad q is skipped", accept: []string{"application/jsonl;q=abc, application/x-ndjson;q=0.1"}, want: "application/x-ndjson"},
+		{
+			name:   "multiple header lines",
+			accept: []string{"application/jsonl", "application/x-ndjson;q=0.9", "application/json-seq;q=0.5"},
+			want:   "application/jsonl",
+		},
+		{name: "not offered", accept: []string{"application/jsonl"}, offered: offered[:3], want: "application/json"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1.53/events", nil)
+			for _, a := range tt.accept {
+				req.Header.Add("Accept", a)
+			}
+			o := tt.offered
+			if o == nil {
+				o = offered
+			}
+			if got := NegotiateMediaType(req, o, "application/json"); got != tt.want {
+				t.Errorf("NegotiateMediaType(%q) = %q, want %q", tt.accept, got, tt.want)
+			}
+		})
+	}
+}

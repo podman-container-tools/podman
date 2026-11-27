@@ -39,6 +39,26 @@ t GET "/v1.52/events?stream=false&since=$START" 200 \
 t GET "/v1.52/events?stream=false&since=$START&type=remove" 200 \
   'select(has("status"))|.status='
 
+# compat api returns the stream format the Accept header asks for
+for accept in application/x-ndjson application/json-seq application/jsonl; do
+    ctype=$(curl -s -o $WORKDIR/events.out -w '%{content_type}' -H "Accept: $accept" \
+                 "http://$HOST:$PORT/v1.53/events?stream=false&since=$START")
+    is "$ctype" "$accept" "Content-Type of /v1.53/events with Accept: $accept"
+    if [[ $accept == application/json-seq ]]; then
+        is "$(od -An -tx1 -N1 $WORKDIR/events.out | tr -d ' ')" "1e" \
+           "json-seq record starts with RS"
+    fi
+done
+
+# without an explicit stream type the API version picks the default
+for v in 1.51:application/json 1.52:application/jsonl; do
+    url="http://$HOST:$PORT/v${v%%:*}/events?stream=false&since=$START"
+    ctype=$(curl -s -o /dev/null -w '%{content_type}' "$url")
+    is "$ctype" "${v#*:}" "Content-Type of /v${v%%:*}/events without Accept"
+    ctype=$(curl -s -o /dev/null -w '%{content_type}' -H 'Accept: */*' "$url")
+    is "$ctype" "${v#*:}" "Content-Type of /v${v%%:*}/events with Accept: */*"
+done
+
 APIV2_TEST_EXPECT_TIMEOUT=1 t GET "events?stream=true" 999
 like "$(<$WORKDIR/curl.headers.out)" ".*HTTP.* 200 OK.*" \
      "Received headers from /events"
