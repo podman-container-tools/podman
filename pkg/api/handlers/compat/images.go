@@ -346,7 +346,28 @@ func GetImage(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to convert ImageData to ImageInspect '%s': %w", name, err))
 		return
 	}
-	utils.WriteResponse(w, http.StatusOK, inspect)
+	utils.WriteResponse(w, http.StatusOK, formatImageInspectResponse(r, inspect))
+}
+
+// legacyImageInspect wraps handlers.ImageInspect for Docker API < v1.52 so
+// Parent, DockerVersion, and Author are always serialized even when empty.
+type legacyImageInspect struct {
+	*handlers.ImageInspect
+	Parent        string `json:"Parent"`
+	DockerVersion string `json:"DockerVersion"`
+	Author        string `json:"Author"`
+}
+
+func formatImageInspectResponse(r *http.Request, inspect *handlers.ImageInspect) any {
+	if _, err := apiutil.SupportedVersion(r, "<1.52.0"); err == nil {
+		return legacyImageInspect{
+			ImageInspect:  inspect,
+			Parent:        inspect.Parent,
+			DockerVersion: inspect.DockerVersion,
+			Author:        inspect.Author,
+		}
+	}
+	return inspect
 }
 
 func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Request) (*handlers.ImageInspect, error) {
@@ -401,6 +422,7 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 
 	dockerImageInspect := dockerImage.InspectResponse{
 		Architecture: info.Architecture,
+		Author:       info.Author,
 		Comment:      info.Comment,
 		Config:       &config,
 		Created:      created,
@@ -418,7 +440,6 @@ func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Req
 
 	imageInspect := handlers.ImageInspect{
 		InspectResponse: dockerImageInspect,
-		Author:          info.Author,
 		DockerVersion:   info.Version,
 		Parent:          info.Parent,
 	}
