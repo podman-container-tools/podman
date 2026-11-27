@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -578,8 +579,10 @@ func createBuildOptions(query *BuildQuery, buildCtx *BuildContext, queryValues u
 		makeLabels := make(map[string]string)
 		err := json.Unmarshal([]byte(query.Labels), &makeLabels)
 		if err == nil {
-			for k, v := range makeLabels {
-				labels = append(labels, k+"="+v)
+			// Keep the labels in a deterministic order (to produce stable image IDs)
+			// See podman-container-tools/podman#30264
+			for _, k := range slices.Sorted(maps.Keys(makeLabels)) {
+				labels = append(labels, k+"="+makeLabels[k])
 			}
 		} else {
 			if err := json.Unmarshal([]byte(query.Labels), &labels); err != nil {
