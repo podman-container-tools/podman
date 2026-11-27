@@ -184,6 +184,10 @@ const (
 	// MemoryNodesAnnotation is used to restrict memory allocations to specific memory nodes on NUMA systems
 	MemoryNodesAnnotation = "io.podman.annotations.memory-nodes"
 
+	// DeviceCgroupRuleAnnotation is used by kube play when playing a kube yaml to specify device cgroup rules
+	// of the container
+	DeviceCgroupRuleAnnotation = "io.podman.annotations.device-cgroup-rule"
+
 	// TotalAnnotationSizeLimitB is the max length of annotations allowed by Kubernetes.
 	TotalAnnotationSizeLimitB int = 256 * (1 << 10) // 256 kB
 )

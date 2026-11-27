@@ -61,6 +61,8 @@ Note: Use the **io.podman.annotations.cpuset/$ctrname** annotation to restrict a
 
 Note: Use the **io.podman.annotations.memory-nodes/$ctrname** annotation to restrict a container's memory allocations to a specific set of memory nodes on NUMA systems. This is equivalent to the `--cpuset-mems=nodes` option in podman-run(1).
 
+Note: Use the **io.podman.annotations.device-cgroup-rule/$ctrname** annotation to specify device cgroup rules for a container. This is equivalent to the `--device-cgroup-rule` option in podman-run(1). The annotation value is a comma-separated list of rules in the format `type major:minor access`, where `type` is `a` (all), `b` (block), or `c` (character), `major:minor` are device numbers (or `*` for wildcard), and `access` is a combination of `r` (read), `w` (write), and `m` (mknod). For example, `c 9:* rwm,b 8:* rw`. The annotation applies only to the named container.
+
 `Kubernetes PersistentVolumeClaims`
 
 A Kubernetes PersistentVolumeClaim represents a Podman named volume. Only the PersistentVolumeClaim name is required by Podman to create a volume. Kubernetes annotations can be used to make use of the available options for Podman volumes.
