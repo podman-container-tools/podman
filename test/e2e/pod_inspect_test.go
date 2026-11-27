@@ -96,6 +96,24 @@ var _ = Describe("Podman pod inspect", func() {
 		Expect(inspectOut.OutputToString()).To(ContainSubstring(macAddr))
 	})
 
+	It("podman pod inspect output devices", func() {
+		SkipIfRootless("Devices are bind-mounted in rootless mode and are not populated in pod inspect Devices")
+
+		podName := "testPod"
+		create := podmanTest.Podman([]string{"pod", "create", "--device", "/dev/null:/dev/bar", "--name", podName})
+		create.WaitWithDefaultTimeout()
+		Expect(create).Should(ExitCleanly())
+
+		inspectOut := podmanTest.Podman([]string{"pod", "inspect", podName})
+		inspectOut.WaitWithDefaultTimeout()
+		Expect(inspectOut).Should(ExitCleanly())
+
+		inspectJSON := inspectOut.InspectPodToJSON()
+		Expect(inspectJSON.Devices).To(HaveLen(1))
+		Expect(inspectJSON.Devices[0].PathOnHost).To(Equal("/dev/null"))
+		Expect(inspectJSON.Devices[0].PathInContainer).To(Equal("/dev/bar"))
+	})
+
 	It("podman inspect two pods", func() {
 		_, ec, podid1 := podmanTest.CreatePod(nil)
 		Expect(ec).To(Equal(0))
