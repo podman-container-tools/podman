@@ -1467,3 +1467,68 @@ EOF
     assert "$output" =~ "127.0.0.1 $HOST_PORT" "HostIP should be 127.0.0.1 from config"
     CONTAINERS_CONF_OVERRIDE=$containersconf run_podman kube down $TESTYAML
 }
+
+# bats test_tags=ci:parallel
+@test "podman kube play - Job backoffLimit" {
+    local jobname=job$(safename)
+    local yaml=$PODMAN_TMPDIR/job.yaml
+
+    for limit in 0 2; do
+        cat >$yaml <<JOBEOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $jobname$limit
+spec:
+  backoffLimit: $limit
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: main
+        image: $IMAGE
+        command: ["false"]
+JOBEOF
+        run_podman kube play $yaml
+        wait_for_restart_count $jobname$limit-pod-main $limit "backoffLimit $limit"
+        run_podman wait $jobname$limit-pod-main
+        assert "$output" == "1" "exit code of the failing container"
+        run_podman inspect --format '{{.State.Status}} {{.RestartCount}}' $jobname$limit-pod-main
+        assert "$output" == "exited $limit" "backoffLimit $limit: state and restart count"
+        run_podman kube down $yaml
+    done
+}
+
+# bats test_tags=ci:parallel
+@test "podman kube play - Job backoffLimit with two containers" {
+    local jobname=job$(safename)
+    local yaml=$PODMAN_TMPDIR/job.yaml
+
+    cat >$yaml <<JOBEOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $jobname
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: first
+        image: $IMAGE
+        command: ["false"]
+      - name: second
+        image: $IMAGE
+        command: ["false"]
+JOBEOF
+    run_podman kube play $yaml
+    for c in first second; do
+        wait_for_restart_count $jobname-pod-$c 2 "backoffLimit 2, container $c"
+        run_podman wait $jobname-pod-$c
+        assert "$output" == "1" "exit code of container $c"
+        run_podman inspect --format '{{.State.Status}} {{.RestartCount}}' $jobname-pod-$c
+        assert "$output" == "exited 2" "container $c: state and restart count"
+    done
+    run_podman kube down $yaml
+}

@@ -177,6 +177,8 @@ type CtrSpecGenOptions struct {
 	ReadOnly itypes.OptionalBool
 	// RestartPolicy defines the restart policy of the container
 	RestartPolicy string
+	// RestartRetries is the number of restarts allowed under the on-failure policy
+	RestartRetries *uint
 	// NetNSIsHost tells the container to use the host netns
 	NetNSIsHost bool
 	// UserNSIsHost tells the container to use the host userns
@@ -640,6 +642,7 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 	s.VolumesFrom = opts.VolumesFrom
 
 	s.RestartPolicy = opts.RestartPolicy
+	s.RestartRetries = opts.RestartRetries
 
 	if opts.NetNSIsHost {
 		s.NetNS.NSMode = specgen.Host
