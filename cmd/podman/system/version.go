@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -49,6 +50,11 @@ func version(cmd *cobra.Command, _ []string) error {
 }
 
 func PrintVersion(cmd *cobra.Command, versions *entities.SystemVersionReport) error {
+	logrus.Debugf("Logrus debug")
+	logrus.Error("Logrus error")
+	slog.Debug("Slog debug")
+	slog.Error("Slog error")
+
 	var err error
 
 	if report.IsJSON(versionFormat) {

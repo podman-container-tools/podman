@@ -87,7 +87,7 @@ func newServer(runtime *libpod.Runtime, listener net.Listener, opts entities.Ser
 				return context.WithValue(ctx, types.ConnKey, c)
 			},
 			ConnState:   tracker.ConnState,
-			ErrorLog:    log.New(logrus.StandardLogger().Out, "", 0),
+			ErrorLog:    log.New(log.Writer(), "", 0),
 			Handler:     router,
 			IdleTimeout: opts.Timeout * 2,
 			Protocols:   serverProtocols,

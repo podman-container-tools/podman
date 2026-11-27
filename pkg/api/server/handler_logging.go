@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -27,7 +28,7 @@ var apiLogger = &logrus.Logger{
 		TimestampFormat:        time.RFC3339,
 	},
 	Level: logrus.TraceLevel,
-	Out:   logrus.StandardLogger().Out,
+	Out:   log.Writer(),
 }
 
 func (l responseWriter) Write(b []byte) (int, error) {
