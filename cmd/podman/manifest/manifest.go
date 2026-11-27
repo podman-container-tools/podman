@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	manifestDescription = "Creates, modifies, and pushes manifest lists and image indexes."
+	manifestDescription = "Creates, modifies, lists, and pushes manifest lists and image indexes."
 	manifestCmd         = &cobra.Command{
 		Use:   "manifest",
 		Short: "Manipulate manifest lists and image indexes",
@@ -15,6 +15,7 @@ var (
 		RunE:  validate.SubCommandExists,
 		Example: `podman manifest add mylist:v1.11 image:v1.11-amd64
 podman manifest create localhost/list
+podman manifest list
 podman manifest inspect localhost/list
 podman manifest annotate --annotation left=right mylist:v1.11 sha256:15352d97781ffdf357bf3459c037be3efac4133dc9070c2dce7eca7c05c3e736
 podman manifest push mylist:v1.11 docker://quay.io/myuser/image:v1.11

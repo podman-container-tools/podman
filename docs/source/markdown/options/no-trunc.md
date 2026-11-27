@@ -1,5 +1,5 @@
 ####> This option file is used in:
-####>   podman artifact ls, images
+####>   podman artifact ls, images, manifest list
 ####> If file is edited, make sure the changes
 ####> are applicable to all of those.
 #### **--no-trunc**

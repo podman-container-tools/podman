@@ -34,6 +34,7 @@ podman-manifest-add.1.md
 podman-manifest-annotate.1.md
 podman-manifest-create.1.md
 podman-manifest-inspect.1.md
+podman-manifest-list.1.md
 podman-manifest-push.1.md
 podman-mount.1.md
 podman-network-create.1.md
