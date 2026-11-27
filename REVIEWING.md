@@ -99,6 +99,12 @@ CLI changes should be documented in the Manpages.
 Please validate that PRs making such changes include appropriate documentation.
 Many repositories in the Podman project will enforce this via CI check, but you should still review the contents of the documentation to make sure they are appropriate and complete.
 
+## Inactive and take-over pull requests
+
+After about 30 days of inactivity waiting on the author (`stale-pr`), Maintainers may take a PR over, mark it `takeover-welcome` for the community, or close it (ask the author first and wait one week).
+Contributors should only take over PRs labeled `takeover-welcome`.
+The full process, including git commands, is in the [Podman Container Tools contributing guide](https://github.com/podman-container-tools/community/blob/main/CONTRIBUTING.md#taking-over-or-closing-inactive-pull-requests).
+
 ## Things to Avoid
 
 ### Bikeshedding and excessively critical reviews
