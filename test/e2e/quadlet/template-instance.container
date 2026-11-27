@@ -1,0 +1,23 @@
+## assert-podman-args -v logs:/logs
+## assert-podman-args-key-val "--mount" "," "type=volume,source=worker-config,destination=/config"
+## assert-podman-args -v shared-cache:/cache
+## assert-podman-args --network systemd-template-dependency-frontend
+## assert-has-key "Unit" "Requires" "data-volume@logs.service"
+## assert-has-key "Unit" "After" "data-volume@logs.service"
+## assert-has-key "Unit" "Requires" "data-volume@worker-config.service"
+## assert-has-key "Unit" "After" "data-volume@worker-config.service"
+## assert-has-key "Unit" "Requires" "shared-volume@cache.service"
+## assert-has-key "Unit" "After" "shared-volume@cache.service"
+## assert-has-key "Unit" "Requires" "template-dependency-network@frontend.service"
+## assert-has-key "Unit" "Wants" "data-volume@audit.service"
+
+[Unit]
+Wants=data@audit.volume
+
+[Container]
+Image=localhost/imagename
+ServiceName=worker
+Volume=data@logs.volume:/logs
+Mount=type=volume,source=data@%N-config.volume,destination=/config
+Volume=data@%N-cache.volume:/cache
+Network=template-dependency@frontend.network

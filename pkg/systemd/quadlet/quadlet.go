@@ -204,6 +204,7 @@ const (
 var UnsupportedServiceKeys = [...]string{"User", "Group", "DynamicUser"}
 
 type UnitInfo struct {
+	containerTemplateName string
 	// The name of the generated systemd service unit
 	ServiceName string
 	// The name of the podman resource created by the service
@@ -224,8 +225,10 @@ type GroupInfo struct {
 }
 
 var (
-	URL            = regexp.Delayed(`^((https?)|(git)://)|(github\.com/).+$`)
-	validPortRange = regexp.Delayed(`\d+(-\d+)?(/udp|/tcp)?$`)
+	URL                  = regexp.Delayed(`^((https?)|(git)://)|(github\.com/).+$`)
+	templateResourceName = regexp.Delayed(`^([^%]|%[%ipN])*$`)
+	explicitInstance     = regexp.Delayed(`^[a-zA-Z0-9:_.@\\-]+$`)
+	validPortRange       = regexp.Delayed(`\d+(-\d+)?(/udp|/tcp)?$`)
 
 	unitDependencyKeys = []string{
 		"After",
@@ -1005,6 +1008,15 @@ func getResourceName(unit *parser.UnitFile, group, key string) string {
 		}
 	}
 	return resourceName
+}
+
+// SetContainerResourceName records the name available for exact references and
+// the original expression used when instantiating a container template.
+func (u *UnitInfo) SetContainerResourceName(container *parser.UnitFile) {
+	u.ResourceName = GetContainerResourceName(container)
+	if IsTemplateUnitFileName(container.Filename) {
+		u.containerTemplateName = getContainerName(container)
+	}
 }
 
 // Get the resolved container name that contains no '%'.
@@ -1888,8 +1900,11 @@ func addNetworks(quadletUnitFile *parser.UnitFile, groupName string, serviceUnit
 			isContainerUnit := strings.HasSuffix(quadletNetworkName, ".container")
 
 			if isNetworkUnit || isContainerUnit {
-				unitInfo, ok := unitsInfoMap[quadletNetworkName]
-				if !ok {
+				unitInfo, err := lookupUnitRef(quadletNetworkName, serviceUnitFile.Filename, unitsInfoMap, true)
+				if err != nil {
+					return err
+				}
+				if unitInfo == nil {
 					return fmt.Errorf("requested Quadlet unit %s was not found", quadletNetworkName)
 				}
 
@@ -1985,6 +2000,60 @@ func handleLogOpt(unitFile *parser.UnitFile, groupName string, podman *PodmanCmd
 	}
 }
 
+// lookupUnitRef preserves existing file references and falls back to a template
+// only when the caller names a specific instance.
+func lookupUnitRef(source, consumer string, units map[string]*UnitInfo, needResource bool) (*UnitInfo, error) {
+	if info := units[source]; info != nil {
+		return info, nil
+	}
+	ext := filepath.Ext(source)
+	prefix, instance, ok := strings.Cut(strings.TrimSuffix(source, ext), "@")
+	if !ok || prefix == "" || instance == "" {
+		return nil, nil
+	}
+	if strings.Contains(instance, "%N") && !IsTemplateUnitFileName(consumer) {
+		instance = strings.ReplaceAll(instance, "%N", strings.TrimSuffix(consumer, ".service"))
+		if info := units[prefix+"@"+instance+ext]; info != nil {
+			if needResource && strings.Contains(info.ResourceName, "%") {
+				return resolvedUnitInfo(info.ServiceName, info.ResourceName, source)
+			}
+			return info, nil
+		}
+	}
+	template := units[prefix+"@"+ext]
+	if template == nil {
+		return nil, nil
+	}
+	if !explicitInstance.MatchString(instance) {
+		return nil, fmt.Errorf("cannot resolve instance %q for %s", instance, source)
+	}
+	if !strings.HasSuffix(template.ServiceName, "@") {
+		return nil, fmt.Errorf("cannot instantiate %s: service name %q is not a template", source, template.ServiceName)
+	}
+	service := template.ServiceName + instance
+	if len(service+".service") > 255 {
+		return nil, fmt.Errorf("service name for %s is too long", source)
+	}
+	if !needResource {
+		return &UnitInfo{ServiceName: service}, nil
+	}
+	name := template.ResourceName
+	if template.containerTemplateName != "" {
+		name = template.containerTemplateName
+	}
+	return resolvedUnitInfo(service, name, source)
+}
+
+// Resolve resource-name specifiers in the service that creates the resource.
+func resolvedUnitInfo(service, name, source string) (*UnitInfo, error) {
+	if !templateResourceName.MatchString(name) {
+		return nil, fmt.Errorf("cannot resolve resource name %q for %s", name, source)
+	}
+	prefix, instance, _ := strings.Cut(service, "@")
+	name = strings.NewReplacer("%%", "%%", "%i", instance, "%p", prefix, "%N", service).Replace(name)
+	return &UnitInfo{ServiceName: service, ResourceName: name}, nil
+}
+
 func handleStorageSource(quadletUnitFile, serviceUnitFile *parser.UnitFile, source string, unitsInfoMap map[string]*UnitInfo, checkImage bool) (string, error) {
 	if source == "" {
 		return "", errors.New("source cannot be empty")
@@ -2002,8 +2071,11 @@ func handleStorageSource(quadletUnitFile, serviceUnitFile *parser.UnitFile, sour
 			return "", err
 		}
 	} else if strings.HasSuffix(source, ".volume") || (checkImage && strings.HasSuffix(source, ".image")) || strings.HasSuffix(source, ".artifact") {
-		sourceUnitInfo, ok := unitsInfoMap[source]
-		if !ok {
+		sourceUnitInfo, err := lookupUnitRef(source, serviceUnitFile.Filename, unitsInfoMap, true)
+		if err != nil {
+			return "", err
+		}
+		if sourceUnitInfo == nil {
 			return "", fmt.Errorf("requested Quadlet source %s was not found", source)
 		}
 
@@ -2179,8 +2251,11 @@ func handleImageSource(quadletImageName string, serviceUnitFile *parser.UnitFile
 	for _, suffix := range []string{".build", ".image"} {
 		if strings.HasSuffix(quadletImageName, suffix) {
 			// since there is no default name conversion, the actual image name must exist in the names map
-			unitInfo, ok := unitsInfoMap[quadletImageName]
-			if !ok {
+			unitInfo, err := lookupUnitRef(quadletImageName, serviceUnitFile.Filename, unitsInfoMap, true)
+			if err != nil {
+				return "", err
+			}
+			if unitInfo == nil {
 				return "", fmt.Errorf("requested Quadlet image %s was not found", quadletImageName)
 			}
 
@@ -2280,16 +2355,20 @@ func createBasePodmanCommand(unitFile *parser.UnitFile, groupName string) *Podma
 func handlePod(quadletUnitFile, serviceUnitFile *parser.UnitFile, groupName string, unitsInfoMap map[string]*UnitInfo, podman *PodmanCmdline) error {
 	pod, ok := quadletUnitFile.Lookup(groupName, KeyPod)
 	if ok && len(pod) > 0 {
-		// XXX: only %N is handled.
-		// it is difficult to properly implement specifiers handling without consulting systemd.
-		pod = strings.ReplaceAll(pod, "%N", GetContainerServiceName(quadletUnitFile))
+		// Preserve exact Pod=%N.pod references, including matching templates.
+		if exact := strings.ReplaceAll(pod, "%N", GetContainerServiceName(quadletUnitFile)); unitsInfoMap[exact] != nil {
+			pod = exact
+		}
 
 		if !strings.HasSuffix(pod, ".pod") {
 			return fmt.Errorf("pod %s is not Quadlet based", pod)
 		}
 
-		podInfo, ok := unitsInfoMap[pod]
-		if !ok {
+		podInfo, err := lookupUnitRef(pod, serviceUnitFile.Filename, unitsInfoMap, true)
+		if err != nil {
+			return err
+		}
+		if podInfo == nil {
 			return fmt.Errorf("quadlet pod unit %s does not exist", pod)
 		}
 
@@ -2303,7 +2382,11 @@ func handlePod(quadletUnitFile, serviceUnitFile *parser.UnitFile, groupName stri
 		// This creates corresponding Wants=/Before= statements in the pod service.
 		// Do not add this for template units as dependency cannot be created for them.
 		if !IsTemplateUnitFileName(quadletUnitFile.Filename) && quadletUnitFile.LookupBooleanWithDefault(groupName, KeyStartWithPod, true) {
-			podInfo.ContainersToStart = append(podInfo.ContainersToStart, serviceUnitFile.Filename)
+			if podInfo == unitsInfoMap[pod] {
+				podInfo.ContainersToStart = append(podInfo.ContainersToStart, serviceUnitFile.Filename)
+			} else {
+				serviceUnitFile.Add(InstallGroup, "WantedBy", podServiceName)
+			}
 		}
 	}
 	return nil
@@ -2408,8 +2491,11 @@ func translateUnitDependencies(serviceUnitFile *parser.UnitFile, unitsInfoMap ma
 
 			ext := filepath.Ext(dep)
 			if _, ok := SupportedExtensions[ext]; ok {
-				unitInfo, ok := unitsInfoMap[dep]
-				if !ok {
+				unitInfo, err := lookupUnitRef(dep, serviceUnitFile.Filename, unitsInfoMap, false)
+				if err != nil {
+					return err
+				}
+				if unitInfo == nil {
 					// For template units not in unitsInfoMap (e.g., rootful templates
 					// referenced by rootless units), generate the instance name from the template
 					// following systemd's behavior, then check if that instance exists.

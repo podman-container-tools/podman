@@ -458,33 +458,29 @@ func warnIfUnsupportedServiceKeys(unit *parser.UnitFile) {
 func generateUnitsInfoMap(units []*parser.UnitFile) map[string]*quadlet.UnitInfo {
 	unitsInfoMap := make(map[string]*quadlet.UnitInfo)
 	for _, unit := range units {
-		var serviceName string
-		var containers []string
-		var resourceName string
-		var err error
-
-		serviceName, err = quadlet.GetUnitServiceName(unit)
+		serviceName, err := quadlet.GetUnitServiceName(unit)
 		if err != nil {
 			Logf("Error obtaining service name: %v", err)
 		}
 
+		info := &quadlet.UnitInfo{ServiceName: serviceName}
 		switch {
 		case strings.HasSuffix(unit.Filename, ".container"):
 			// Prefill resourceNames for .container files. This solves network reusing.
-			resourceName = quadlet.GetContainerResourceName(unit)
+			info.SetContainerResourceName(unit)
 		case strings.HasSuffix(unit.Filename, ".build"):
 			// Prefill resourceNames for .build files. This is significantly less complex than
 			// pre-computing all resourceNames for all Quadlet types (which is rather complex for a few
 			// types), but still breaks the dependency cycle between .volume and .build ([Volume] can
 			// have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
-			resourceName = quadlet.GetBuiltImageName(unit)
+			info.ResourceName = quadlet.GetBuiltImageName(unit)
 		case strings.HasSuffix(unit.Filename, ".artifact"):
-			serviceName = quadlet.GetArtifactServiceName(unit)
+			info.ServiceName = quadlet.GetArtifactServiceName(unit)
 		case strings.HasSuffix(unit.Filename, ".pod"):
-			containers = make([]string, 0)
+			info.ContainersToStart = make([]string, 0)
 			// Prefill resourceNames for .pod files.
 			// This is requires for referencing the pod from .container files
-			resourceName = quadlet.GetPodResourceName(unit)
+			info.ResourceName = quadlet.GetPodResourceName(unit)
 		case strings.HasSuffix(unit.Filename, ".volume"), strings.HasSuffix(unit.Filename, ".kube"), strings.HasSuffix(unit.Filename, ".network"), strings.HasSuffix(unit.Filename, ".image"):
 			// Do nothing for these case.
 		default:
@@ -492,11 +488,7 @@ func generateUnitsInfoMap(units []*parser.UnitFile) map[string]*quadlet.UnitInfo
 			continue
 		}
 
-		unitsInfoMap[unit.Filename] = &quadlet.UnitInfo{
-			ServiceName:       serviceName,
-			ContainersToStart: containers,
-			ResourceName:      resourceName,
-		}
+		unitsInfoMap[unit.Filename] = info
 	}
 
 	return unitsInfoMap

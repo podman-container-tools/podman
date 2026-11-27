@@ -1386,6 +1386,12 @@ BOGUS=foo
 				"template-dependency@.network",
 			},
 		),
+		Entry(
+			"Container - Explicit template instance dependencies",
+			"template-instance.container",
+			[]string{"data@.volume", "data@worker-cache.volume", "template-dependency@.network"},
+		),
+		Entry("Container - Reuse a container template instance's network", "network.template-instance.container", []string{"template@.container"}),
 
 		Entry("Volume - Quadlet image (.build)", "build.quadlet.volume", []string{"basic.build"}),
 		Entry("Volume - Quadlet image (.image)", "image.quadlet.volume", []string{"basic.image"}),
@@ -1445,6 +1451,7 @@ BOGUS=foo
 		Entry("Pod - Quadlet Volume", "volume.pod", []string{"basic.volume"}),
 		Entry("Pod - Quadlet Network overriding service name", "network.servicename.quadlet.pod", []string{"service-name.network"}),
 		Entry("Pod - Quadlet Volume overriding service name", "volume.servicename.pod", []string{"service-name.volume"}),
+		Entry("Pod - Start a container with a specific pod instance", "group@.pod", []string{"pod-instance.container"}),
 		Entry(
 			"Pod - Do not autostart a container with pod",
 			"startwithpod.pod",

@@ -1,0 +1,7 @@
+## assert-symlink app-pod@blue.service.wants/pod-instance.service ../pod-instance.service
+## assert-key-not-contains "Unit" "Wants" "pod-instance.service"
+## assert-key-not-contains "Unit" "Before" "pod-instance.service"
+
+[Pod]
+ServiceName=app-pod@
+PodName=group-%i

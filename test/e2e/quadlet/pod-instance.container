@@ -1,0 +1,3 @@
+[Container]
+Image=localhost/imagename
+Pod=group@blue.pod
