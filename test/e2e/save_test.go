@@ -254,13 +254,19 @@ func multiImageSave(podmanTest *PodmanTestIntegration, images []string) {
 	session = podmanTest.Podman([]string{"load", "-q", "-i", outfile})
 	session.WaitWithDefaultTimeout()
 	Expect(session).Should(ExitCleanly())
-	// Grep for each image in the `podman load` output.
-	for _, image := range images {
-		Expect(session.OutputToString()).To(ContainSubstring(image))
+	// "podman load" reports image names for tagged images and the image ID for
+	// untagged images.  Do not assume an image ID equals a config digest, and
+	// do not assume IDs survive save/load; verify the identifiers that load
+	// itself reports.
+	loadedImages := make([]string, 0, len(images))
+	for _, line := range session.OutputToStringArray() {
+		Expect(line).To(HavePrefix("Loaded image: "))
+		loadedImages = append(loadedImages, strings.TrimPrefix(line, "Loaded image: "))
 	}
+	Expect(loadedImages).To(HaveLen(len(images)))
 
-	// Make sure that each image has really been loaded.
-	for _, image := range images {
+	// Make sure that each loaded image really exists.
+	for _, image := range loadedImages {
 		session = podmanTest.Podman([]string{"image", "exists", image})
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitCleanly())
