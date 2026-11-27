@@ -65,6 +65,34 @@ class ImageTestCase(APITestCase):
         r = requests.delete(self.compat_uri("images/alpine?force=true"))
         self.assertEqual(r.status_code, 409, r.text)
 
+    def test_delete_platform(self):
+        manifest_name = f"localhost/platform-remove-{id(self)}:latest"
+        self.podman.run("manifest", "create", manifest_name, check=True)
+        self.podman.run(
+            "manifest",
+            "add",
+            "--os",
+            "linux",
+            "--arch",
+            "arm64",
+            manifest_name,
+            "containers-storage:quay.io/libpod/alpine:latest",
+            check=True,
+        )
+        manifest_output = self.podman.run("manifest", "inspect", manifest_name, check=True).stdout
+        manifest = json.loads(manifest_output)
+        platform_digest = manifest["manifests"][0]["digest"]
+
+        r = requests.delete(
+            self.compat_uri(f"images/{manifest_name}"),
+            params={
+                "force": "true",
+                "platforms": json.dumps([{"os": "linux", "architecture": "arm64"}]),
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn({"Deleted": platform_digest}, r.json())
+
     def test_pull(self):
         def check_response_keys(r, keys_expected):
             text = r.text
