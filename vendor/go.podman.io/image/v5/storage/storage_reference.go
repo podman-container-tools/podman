@@ -126,8 +126,8 @@ func (s *storageReference) resolveImage(sys *types.SystemContext) (*storage.Imag
 			// that the canonical reference can be implicitly resolved to the image.
 			//
 			// Typically there should be at most one such image, because the same
-			// manifest digest implies the same config, and we choose the storage ID
-			// based on the config (deduplicating images), except:
+			// manifest digest implies the same config, and we deduplicate images
+			// by their contents (their MatchingDigest), except:
 			// - the user can explicitly specify an ID when creating the image.
 			//   In this case we don't have a preference among the alternatives.
 			// - when pulling an image from a multi-platform manifest list, we also

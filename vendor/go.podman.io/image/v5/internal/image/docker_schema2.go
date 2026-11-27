@@ -125,6 +125,15 @@ func (m *manifestSchema2) LayerInfos() []types.BlobInfo {
 	return manifestLayerInfosToBlobInfos(m.m.LayerInfos())
 }
 
+// MatchingDigest returns a digest which uniquely identifies the image by its contents,
+// irrespective of which reference was used to locate it.
+func (m *manifestSchema2) MatchingDigest([]digest.Digest) (digest.Digest, error) {
+	if err := m.m.ConfigDescriptor.Digest.Validate(); err != nil {
+		return "", err
+	}
+	return m.m.ConfigDescriptor.Digest, nil
+}
+
 // EmbeddedDockerReferenceConflicts whether a Docker reference embedded in the manifest, if any, conflicts with destination ref.
 // It returns false if the manifest does not embed a Docker reference.
 // (This embedding unfortunately happens for Docker schema1, please do not add support for this in any new formats.)

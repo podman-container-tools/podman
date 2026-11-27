@@ -31,14 +31,24 @@ get_iid_and_name() {
     archive=$PODMAN_TMPDIR/myimage-$(random_string 8).tar
 }
 
-# Simple verification of image ID and name
-verify_iid_and_name() {
+# Read an image's layer list into $iid_layers.  Image IDs are no longer
+# derived from image content, so layers are used to verify that a restored
+# image has the same content.
+get_image_layers() {
+    run_podman image inspect --format '{{.RootFS.Layers}}' "$1"
+    iid_layers="$output"
+}
+
+# Simple verification of restored image name and content.
+# Sets $new_iid for callers that need to remove the restored image.
+verify_loaded_image() {
     run_podman images -a --format '{{.ID}} {{.Repository}}:{{.Tag}}'
     read new_iid new_img_name < <(echo "$output")
 
     # Verify
-    is "$new_iid"      "$iid" "Image ID of loaded image == original"
-    is "$new_img_name" "$1"   "Name & tag of restored image"
+    is "$new_img_name" "$1" "Name & tag of restored image"
+    run_podman image inspect --format '{{.RootFS.Layers}}' "$new_iid"
+    is "$output" "$iid_layers" "Layers of loaded image == original"
 }
 
 @test "podman load invalid file" {
@@ -211,44 +221,47 @@ verify_iid_and_name() {
 @test "podman load - by image ID" {
     # FIXME: how to build a simple archive instead?
     get_iid_and_name
+    get_image_layers $iid
 
     # Save image by ID, and remove it.
     run_podman save $iid -o $archive
     run_podman rmi $iid
 
-    # Load using -i; IID should be preserved, but name is not.
+    # Load using -i; the image content must be preserved, but neither the
+    # ID (random) nor the name is.
     run_podman load -i $archive
-    verify_iid_and_name "<none>:<none>"
+    verify_loaded_image "<none>:<none>"
 
     # Same as above, using stdin
-    run_podman rmi $iid
+    run_podman rmi $new_iid
     run_podman load < $archive
-    verify_iid_and_name "<none>:<none>"
+    verify_loaded_image "<none>:<none>"
 
     # Same as above, using stdin but with `podman image load`
-    run_podman rmi $iid
+    run_podman rmi $new_iid
     run_podman image load < $archive
-    verify_iid_and_name "<none>:<none>"
+    verify_loaded_image "<none>:<none>"
 }
 
 @test "podman load - by image name" {
     get_iid_and_name
+    get_image_layers $iid
     run_podman save $img_name -o $archive
     run_podman rmi $iid
 
     # Load using -i; this time the image should be tagged.
     run_podman load -i $archive
-    verify_iid_and_name $img_name
-    run_podman rmi $iid
+    verify_loaded_image $img_name
+    run_podman rmi $new_iid
 
     # Also make sure that `image load` behaves the same.
     run_podman image load -i $archive
-    verify_iid_and_name $img_name
-    run_podman rmi $iid
+    verify_loaded_image $img_name
+    run_podman rmi $new_iid
 
     # Same as above, using stdin
     run_podman load < $archive
-    verify_iid_and_name $img_name
+    verify_loaded_image $img_name
 }
 
 @test "podman load - from URL" {
@@ -256,8 +269,11 @@ verify_iid_and_name() {
     img1=${PODMAN_NONLOCAL_IMAGE_FQN}
     _prefetch $img1
 
-    run_podman images -a --format '{{.ID}} {{.Repository}}:{{.Tag}}' $img1
+    # Image IDs are no longer derived from image content and are not preserved
+    # across save/load, so compare the name and the layers instead.
+    run_podman images -a --format '{{.Repository}}:{{.Tag}}' $img1
     images_output="$output"
+    get_image_layers $img1
 
     archive=$PODMAN_TMPDIR/myimage-$(safename).tar
     run_podman save $img1 -o $archive
@@ -275,8 +291,10 @@ verify_iid_and_name() {
 
     run_podman load -i $SERVER/image.tar
 
-    run_podman images -a --format '{{.ID}} {{.Repository}}:{{.Tag}}' $img1
+    run_podman images -a --format '{{.Repository}}:{{.Tag}}' $img1
     assert "$output" == "$images_output"
+    run_podman image inspect --format '{{.RootFS.Layers}}' $img1
+    assert "$output" == "$iid_layers" "Layers of loaded image == original"
 
     run_podman rm -f -t0 $cname
 }
