@@ -26,6 +26,7 @@ type QuadletInstallReport struct {
 type QuadletListOptions struct {
 	// Filters contains filters that will limit what Quadlets are displayed
 	Filters []string
+	Quiet   bool
 }
 
 const (
