@@ -227,7 +227,13 @@ func (w WSLStubber) StartVM(mc *vmconfigs.MachineConfig) (func() error, func() e
 
 	// The bootstrap script waits for systemd to be up and running but most importantly
 	// starts a keep-alive process (sleep infinity) to avoid WSL auto-idling.
-	err := wslInvoke(dist, "/root/bootstrap")
+	stateDir, err := machine.GetWinProxyStateDir(mc.Name, vmtype)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := wslCmd(dist, "--cd", "/", "/root/bootstrap")
+	cmd.Dir = stateDir
+	err = runCmdPassThrough(cmd)
 	if err != nil {
 		return nil, nil, fmt.Errorf("the WSL bootstrap script failed: %w", err)
 	}
