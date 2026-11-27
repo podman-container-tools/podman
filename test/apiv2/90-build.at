@@ -21,6 +21,12 @@ t POST "/build?dockerfile=containerfile&t=labeltest" $CONTAINERFILE_TAR 200 \
 
 t GET images/labeltest/json 200 \
   .Config.Labels.created_by="test/system/build-testimage"
+
+# compat build must write labels in a stable order
+labels=$(jq -nr '{h:"8",g:"7",f:"6",e:"5",d:"4",c:"3",b:"2",a:"1"} | @uri')
+t POST "/build?dockerfile=containerfile&t=labelorder&labels=$labels" $CONTAINERFILE_TAR 200
+t GET images/labelorder/history 200 \
+  '.[0].CreatedBy~.*LABEL "a"="1" "b"="2" "c"="3" "d"="4" "e"="5" "f"="6" "g"="7" "h"="8"$'
 cleanBuildTest
 
 # --- /libpod/local/build tests
