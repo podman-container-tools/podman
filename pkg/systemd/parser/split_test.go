@@ -97,7 +97,7 @@ func TestEscapeWords(t *testing.T) {
 		want  string
 	}{
 		{"empty list", nil, ""},
-		{"single empty word", []string{""}, ""},
+		{"single empty word is quoted", []string{""}, `""`},
 		{"no escaping needed", []string{"foo"}, "foo"},
 		{"words are joined by a space", []string{"foo", "bar"}, "foo bar"},
 		{"a space forces quoting and is hex-escaped", []string{"foo bar"}, `"foo\x20bar"`},
@@ -140,6 +140,32 @@ func TestEscapeString(t *testing.T) {
 			var b strings.Builder
 			escapeString(&b, test.in, test.isPath)
 			assert.Equal(t, test.want, b.String())
+		})
+	}
+}
+
+func TestSplitStringEmptyWords(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"empty double quotes in the middle", `/bin/foo "" bar`, []string{"/bin/foo", "", "bar"}},
+		{"empty single quotes in the middle", `/bin/foo '' bar`, []string{"/bin/foo", "", "bar"}},
+		{"empty quotes at the end", `/bin/foo ""`, []string{"/bin/foo", ""}},
+		{"only empty quotes", `""`, []string{""}},
+		{"blank input has no words", "   ", []string{}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			words, err := splitString(test.in, WhitespaceSeparators, SplitRelax|SplitUnquote|SplitCUnescape)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, words)
 		})
 	}
 }

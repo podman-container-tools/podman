@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const memcachedService = `# It's not recommended to modify this file in-place, because it will be
@@ -408,4 +409,34 @@ func FuzzParser(f *testing.F) {
 		unitFile.Filename = "bar"
 		_ = unitFile.Parse(string(orig))
 	})
+}
+
+func TestEmptyQuotedWords(t *testing.T) {
+	f := NewUnitFile()
+	err := f.Parse("[Container]\n" +
+		"Exec=/bin/app --name \"\" --verbose\n" +
+		"PodmanArgs=--label \"\" --quiet\n" +
+		"AddCapability=\"\" NET_ADMIN\n" +
+		"Environment=\"\" FOO=bar\n")
+	require.NoError(t, err)
+
+	args, ok, err := f.LookupLastArgs("Container", "Exec")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, []string{"/bin/app", "--name", "", "--verbose"}, args)
+
+	assert.Equal(t, []string{"--label", "", "--quiet"}, f.LookupAllArgs("Container", "PodmanArgs"))
+	assert.Equal(t, []string{"NET_ADMIN"}, f.LookupAllStrv("Container", "AddCapability"))
+
+	env, err := f.LookupAllKeyVal("Container", "Environment")
+	require.NoError(t, err)
+	assert.Len(t, env, 1)
+	assert.Equal(t, "bar", *env["FOO"])
+
+	// The empty argument must survive being written back out to ExecStart.
+	out := NewUnitFile()
+	out.AddCmdline("Service", "ExecStart", args)
+	execStart, ok := out.Lookup("Service", "ExecStart")
+	assert.True(t, ok)
+	assert.Equal(t, `/bin/app --name "" --verbose`, execStart)
 }

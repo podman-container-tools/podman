@@ -809,7 +809,12 @@ func (f *UnitFile) LookupAllStrv(groupName string, key string) []string {
 	res := make([]string, 0)
 	values := f.LookupAll(groupName, key)
 	for _, value := range values {
-		res, _ = splitStringAppend(res, value, WhitespaceSeparators, SplitRetainEscape|SplitUnquote)
+		words, _ := splitString(value, WhitespaceSeparators, SplitRetainEscape|SplitUnquote)
+		for _, word := range words {
+			if word != "" {
+				res = append(res, word)
+			}
+		}
 	}
 	return res
 }
@@ -859,6 +864,9 @@ func (f *UnitFile) LookupAllKeyVal(groupName string, key string) (map[string]*st
 			continue
 		}
 		for _, assign := range assigns {
+			if assign == "" {
+				continue
+			}
 			key, value, found := strings.Cut(assign, "=")
 			if found {
 				res[key] = &value
