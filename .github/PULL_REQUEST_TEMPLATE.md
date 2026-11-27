@@ -14,7 +14,7 @@ and ensure you follow them before signing off your commits.
 - [ ] Referenced issues using `Fixes: #00000` in commit message (if applicable)
 - [ ] [Tests](https://github.com/podman-container-tools/podman/tree/main/test#readme) have been added/updated (or no tests are needed)
 - [ ] [Documentation](https://github.com/podman-container-tools/podman/blob/main/docs/README.md) has been updated (or no documentation changes are needed)
-- [ ] All commits pass `make validatepr` (format/lint checks)
+- [ ] All commits pass `make validatepr` or `.\winmake.ps1 validatepr` (format/lint checks)
 - [ ] [Release note](https://github.com/kubernetes/community/blob/master/contributors/guide/release-notes.md) entered in the section below (or `None` if no user-facing changes)
 
 #### Does this PR introduce a user-facing change?

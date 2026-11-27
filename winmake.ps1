@@ -260,8 +260,14 @@ function Validate {
     # That makes the pre-commit hook "check-executables-have-shebangs" fail.
     # Setting the environment variable "SKIP=check-executables-have-shebangs"
     # allow to skip that pre-commit hook.
+    # In rootful mode the container runs as root while the bind-mounted source is
+    # owned by uid 1000, causing git "dubious ownership" failures. Pass the
+    # safe.directory override via GIT_CONFIG env vars so both git and go build work.
     $podmanEnvVariable = '-e SKIP=check-executables-have-shebangs'
-    $podmanRunArgs = "--rm -v $podmanSrcVolumeMount --security-opt label=disable -t -w /go/src/github.com/containers/podman $podmanEnvVariable"
+    $podmanEnvVariable += ' -e GIT_CONFIG_COUNT=1'
+    $podmanEnvVariable += ' -e GIT_CONFIG_KEY_0=safe.directory'
+    $podmanEnvVariable += ' -e GIT_CONFIG_VALUE_0=/go/src/github.com/containers/podman'
+    $podmanRunArgs = "--rm -v $podmanSrcVolumeMount --security-opt label=disable -t --network=host -w /go/src/github.com/containers/podman $podmanEnvVariable"
     $validateImage = 'quay.io/libpod/validatepr:latest'
     $validateCommand = 'make .validatepr'
 
