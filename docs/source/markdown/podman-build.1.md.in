@@ -490,6 +490,9 @@ Use --stdin to be able to interact from the terminal during the build.
 
 @@option tag
 
+Use `oci-archive:path` as the tag to write the resulting image to an OCI
+archive. Base images and build cache can still use local container storage.
+
 @@option target
 
 @@option timestamp
@@ -552,6 +555,11 @@ $ podman build -f Containerfile.in $HOME
 Build image with the specified tag with Containerfile and content from current directory:
 ```
 $ podman build -t imageName .
+```
+
+Build an image and write it to an OCI archive.
+```
+$ podman build -t oci-archive:image.oci.tar .
 ```
 
 Build image ignoring registry verification for any images pulled via the Containerfile:
