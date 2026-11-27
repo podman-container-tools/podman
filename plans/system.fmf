@@ -14,10 +14,6 @@ prepare:
         dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm --eval '%{?rhel}').noarch.rpm
         dnf -y config-manager --set-enabled epel
       order: 10
-    - when: initiator == packit
-      how: shell
-      script: bash $TMT_TREE/contrib/packit-tmt/update-deps.sh
-      order: 20
 
 adjust+:
     - enabled: false
