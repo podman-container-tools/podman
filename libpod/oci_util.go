@@ -84,7 +84,6 @@ func getOCIRuntimeErrorMultiline(name string, errs []ociError) error {
 // Bind ports to keep them closed on the host
 func bindPorts(ports []types.PortMapping, forceListen bool) ([]*os.File, error) {
 	var files []*os.File
-	sctpWarning := true
 	for _, port := range ports {
 		isV6 := false
 		if port.HostIP != "" {
@@ -93,7 +92,7 @@ func bindPorts(ports []types.PortMapping, forceListen bool) ([]*os.File, error) 
 		protocols := strings.SplitSeq(port.Protocol, ",")
 		for protocol := range protocols {
 			for i := uint16(0); i < port.Range; i++ {
-				f, err := bindPort(protocol, port.HostIP, port.HostPort+i, isV6, &sctpWarning, forceListen)
+				f, err := bindPort(protocol, port.HostIP, port.HostPort+i, isV6, forceListen)
 				if err != nil {
 					// close all open ports in case of early error so we do not
 					// rely on the garbage collector to close them
@@ -113,12 +112,16 @@ func bindPorts(ports []types.PortMapping, forceListen bool) ([]*os.File, error) 
 
 // bindPort reserves a port on the host using socket+bind, listen() only when listen is set to true
 // Dual-stack bind by default unless hostIP is specified.
-func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool, forceListen bool) (*os.File, error) {
+func bindPort(protocol, hostIP string, port uint16, isV6 bool, forceListen bool) (*os.File, error) {
 	switch protocol {
-	case "tcp", "udp":
+	case "tcp", "udp", "sctp":
 		sockType := unix.SOCK_STREAM
-		if protocol == "udp" {
+		sockProto := 0
+		switch protocol {
+		case "udp":
 			sockType = unix.SOCK_DGRAM
+		case "sctp":
+			sockProto = unix.IPPROTO_SCTP
 		}
 
 		domain, sa, err := buildSockAddr(hostIP, port, isV6)
@@ -126,11 +129,11 @@ func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool
 			return nil, err
 		}
 
-		fd, err := unix.Socket(domain, sockType|unix.SOCK_CLOEXEC, 0)
+		fd, err := unix.Socket(domain, sockType|unix.SOCK_CLOEXEC, sockProto)
 		if err != nil {
 			// If hostIP == "" and IPv6 is not supported, fall back to IPv4
 			if hostIP == "" && errors.Is(err, unix.EAFNOSUPPORT) {
-				return bindPortV4Fallback(protocol, sockType, port)
+				return bindPortV4Fallback(protocol, sockType, sockProto, port)
 			}
 			return nil, fmt.Errorf("cannot create socket for %s port %d: %w", protocol, port, err)
 		}
@@ -153,13 +156,6 @@ func bindPort(protocol, hostIP string, port uint16, isV6 bool, sctpWarning *bool
 		}
 
 		return os.NewFile(uintptr(fd), fmt.Sprintf("reservation-%s-%d", protocol, port)), nil
-
-	case "sctp":
-		if *sctpWarning {
-			logrus.Info("Port reservation for SCTP is not supported")
-			*sctpWarning = false
-		}
-		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown protocol %s", protocol)
 	}
@@ -198,8 +194,8 @@ func setupSocketOpts(fd, domain int, hostIP string) error {
 	return nil
 }
 
-func bindPortV4Fallback(protocol string, sockType int, port uint16) (*os.File, error) {
-	fd, err := unix.Socket(unix.AF_INET, sockType|unix.SOCK_CLOEXEC, 0)
+func bindPortV4Fallback(protocol string, sockType int, sockProto int, port uint16) (*os.File, error) {
+	fd, err := unix.Socket(unix.AF_INET, sockType|unix.SOCK_CLOEXEC, sockProto)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create socket for %s port %d: %w", protocol, port, err)
 	}

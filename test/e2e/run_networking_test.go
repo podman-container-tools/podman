@@ -11,17 +11,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 	"go.podman.io/common/pkg/netns"
 	. "go.podman.io/podman/v6/test/utils"
 	"go.podman.io/storage/pkg/stringid"
+	"golang.org/x/sys/unix"
 )
 
 var _ = Describe("Podman run networking", func() {
@@ -571,19 +572,26 @@ EXPOSE 2004-2005/tcp`, ALPINE)
 
 	It("podman run forward sctp protocol", func() {
 		SkipIfRootless("sctp protocol only works as root")
-		session := podmanTest.Podman([]string{"--log-level=info", "run", "--name=test", "-p", "80/sctp", "-p", "81/sctp", ALPINE})
-		session.WaitWithDefaultTimeout()
-		Expect(session).Should(Exit(0))
-		// we can only check logrus on local podman
-		if !IsRemote() {
-			// check that the info message for sctp protocol is only displayed once
-			Expect(strings.Count(session.ErrorToString(), "Port reservation for SCTP is not supported")).To(Equal(1), "`Port reservation for SCTP is not supported` is not displayed exactly one time in the logrus logs")
+		if os.Getenv("PODMAN_CI") == "" {
+			// Only skip when not running in podman CI env, if we have no sctp module there we should error as we loose coverage otherwise.
+			sock, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, unix.IPPROTO_SCTP)
+			if err != nil {
+				Skip(fmt.Sprintf("failed to create sctp socket, cannot test sctp: %s", err))
+			}
+			_ = unix.Close(sock)
 		}
-		results := podmanTest.Podman([]string{"inspect", "test"})
-		results.WaitWithDefaultTimeout()
-		Expect(results).Should(ExitCleanly())
+		port := GetPort()
+		publish := strconv.Itoa(port) + ":80/sctp"
+		podmanTest.PodmanExitCleanly("run", "--name=test", "-p", publish, "-p", "81/sctp", "-d", ALPINE, "sleep", "100")
+
+		results := podmanTest.PodmanExitCleanly("inspect", "test")
 		Expect(results.OutputToString()).To(ContainSubstring(`"80/sctp":`))
 		Expect(results.OutputToString()).To(ContainSubstring(`"81/sctp":`))
+
+		// Now try to run another container on the same port it should fail with address already in use
+		session := podmanTest.Podman([]string{"run", "-p", publish, ALPINE})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitWithError(126, fmt.Sprintf("cannot bind sctp port :%d: address already in use", port)))
 	})
 
 	It("podman run hostname test", func() {

@@ -141,6 +141,9 @@ done
 # devices limits
 sudo modprobe null_blk nr_devices=1 || :
 
+# Load sctp for "podman run forward sctp protocol" test
+sudo modprobe sctp
+
 # Ensure our CI uses the cache registry
 export CI_USE_REGISTRY_CACHE=1
 
