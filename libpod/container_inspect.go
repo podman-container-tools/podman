@@ -509,6 +509,12 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 			logConfig.Config["max-file"] = strconv.FormatUint(uint64(c.config.LogMaxFiles), 10)
 		}
 	}
+	for key, value := range c.config.LogDriverOptions {
+		if logConfig.Config == nil {
+			logConfig.Config = make(map[string]string)
+		}
+		logConfig.Config[key] = value
+	}
 
 	hostConfig.LogConfig = logConfig
 

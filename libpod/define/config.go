@@ -85,6 +85,10 @@ const PassthroughLogging = "passthrough"
 // PassthroughTTYLogging is the string conmon expects when specifying to use the passthrough driver even on a tty.
 const PassthroughTTYLogging = "passthrough-tty"
 
+// SyslogLogging is the syslog log driver. It is implemented by conmon v3
+// (--log-driver syslog) and is rejected when the configured conmon is older.
+const SyslogLogging = "syslog"
+
 // DefaultRlimitValue is the value set by default for nofile and nproc
 const RLimitDefaultValue = uint64(1048576)
 
