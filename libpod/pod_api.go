@@ -649,7 +649,6 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 	// container.
 	var infraConfig *define.InspectPodInfraConfig
 	var inspectMounts []define.InspectMount
-	// TODO: Populate
 	var devices []define.InspectDevice
 	var infraSecurity []string
 	if p.state.InfraContainerID != "" {
@@ -670,9 +669,15 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		infraConfig.UtsNS = p.NamespaceMode(specs.UTSNamespace)
 		namedVolumes, mounts := infra.SortUserVolumes(infra.config.Spec)
 		inspectMounts, err = infra.GetMounts(namedVolumes, infra.config.ImageVolumes, mounts)
-		infraSecurity = infra.GetSecurityOptions()
 		if err != nil {
 			return nil, err
+		}
+		infraSecurity = infra.GetSecurityOptions()
+		if infra.config.Spec != nil {
+			devices, err = infra.GetDevices(infra.Privileged(), *infra.config.Spec, nil)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if len(infra.config.ContainerNetworkConfig.DNSServer) > 0 {
