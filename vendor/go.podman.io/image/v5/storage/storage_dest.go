@@ -20,6 +20,7 @@ import (
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/image"
 	"go.podman.io/image/v5/internal/imagedestination/impl"
 	"go.podman.io/image/v5/internal/imagedestination/stubs"
@@ -231,6 +232,10 @@ func (s *storageImageDestination) NoteOriginalOCIConfig(ociConfig *imgspecv1.Ima
 // to any other readers for download using the supplied digest.
 // If stream.Read() at any time, ESPECIALLY at end of input, returns an error, PutBlob MUST 1) fail, and 2) delete any data stored so far.
 func (s *storageImageDestination) PutBlobWithOptions(ctx context.Context, stream io.Reader, blobinfo types.BlobInfo, options private.PutBlobOptions) (private.UploadedBlob, error) {
+	if _, err := options.Digests.Choose(digests.Situation{Preexisting: digest.Canonical.FromBytes(nil), CannotChangeAlgorithmReason: "transport does not implement PutBlobWithOptions.Digests yet"}); err != nil {
+		return private.UploadedBlob{}, err
+	}
+
 	info, err := s.putBlobToPendingFile(stream, blobinfo, &options)
 	if err != nil {
 		return info, err

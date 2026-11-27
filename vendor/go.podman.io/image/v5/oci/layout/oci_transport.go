@@ -10,7 +10,9 @@ import (
 	"go.podman.io/image/v5/directory/explicitfilepath"
 	"go.podman.io/image/v5/docker/reference"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/imagereference/impl"
 	"go.podman.io/image/v5/internal/manifest"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/oci/internal"
 	"go.podman.io/image/v5/transports"
 	"go.podman.io/image/v5/types"
@@ -84,7 +86,7 @@ func ParseReference(reference string) (types.ImageReference, error) {
 // If sourceIndex==-1, the index will not be valid to point out the source image, only image will be used.
 // We do not expose an API supplying the resolvedDir; we could, but recomputing it
 // is generally cheap enough that we prefer being confident about the properties of resolvedDir.
-func newReference(dir, image string, sourceIndex int, reader *Reader) (types.ImageReference, error) {
+func newReference(dir, image string, sourceIndex int, reader *Reader) (private.ImageReference, error) {
 	resolved, err := explicitfilepath.ResolvePathToFullyExplicit(dir)
 	if err != nil {
 		return nil, err
@@ -234,10 +236,16 @@ func (ref ociReference) getManifestDescriptor(index *imgspecv1.Index) (imgspecv1
 	}
 }
 
+// NewImageSourceWithOptions returns a private.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (ref ociReference) NewImageSourceWithOptions(ctx context.Context, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	return newImageSource(ref, options)
+}
+
 // NewImageSource returns a types.ImageSource for this reference.
 // The caller must call .Close() on the returned ImageSource.
 func (ref ociReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
-	return newImageSource(sys, ref)
+	return impl.NewImageSource(ref, ctx, sys)
 }
 
 // NewImageDestination returns a types.ImageDestination for this reference.

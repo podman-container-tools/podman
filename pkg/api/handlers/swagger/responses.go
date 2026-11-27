@@ -546,3 +546,10 @@ type autoupdateResponse struct {
 	// in:body
 	Body handlers.LibpodAutoUpdateReports
 }
+
+// Build cache prune
+// swagger:response
+type buildPruneResponse struct {
+	// in:body
+	Body handlers.BuildCachePruneReport
+}

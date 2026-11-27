@@ -733,8 +733,8 @@ go.etcd.io/bbolt/internal/freelist
 ## explicit; go 1.24.0
 go.opentelemetry.io/auto/sdk
 go.opentelemetry.io/auto/sdk/internal/telemetry
-# go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0
-## explicit; go 1.25.0
+# go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
+## explicit; go 1.26.0
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/request
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/internal/semconv
@@ -811,7 +811,7 @@ go.podman.io/buildah/pkg/tmpdir
 go.podman.io/buildah/pkg/util
 go.podman.io/buildah/pkg/volumes
 go.podman.io/buildah/util
-# go.podman.io/common v0.70.1-0.20261116084638-6da6e80dc141
+# go.podman.io/common v0.70.1-0.20261123110506-9727b8eaf42d
 ## explicit; go 1.26.0
 go.podman.io/common/internal
 go.podman.io/common/libimage
@@ -878,7 +878,7 @@ go.podman.io/common/pkg/umask
 go.podman.io/common/pkg/util
 go.podman.io/common/pkg/version
 go.podman.io/common/version
-# go.podman.io/image/v5 v5.42.2-0.20261116084638-6da6e80dc141
+# go.podman.io/image/v5 v5.42.2-0.20261123110506-9727b8eaf42d
 ## explicit; go 1.26.0
 go.podman.io/image/v5/copy
 go.podman.io/image/v5/directory
@@ -896,6 +896,7 @@ go.podman.io/image/v5/internal/image
 go.podman.io/image/v5/internal/imagedestination
 go.podman.io/image/v5/internal/imagedestination/impl
 go.podman.io/image/v5/internal/imagedestination/stubs
+go.podman.io/image/v5/internal/imagereference/impl
 go.podman.io/image/v5/internal/imagesource
 go.podman.io/image/v5/internal/imagesource/impl
 go.podman.io/image/v5/internal/imagesource/stubs
@@ -955,7 +956,7 @@ go.podman.io/image/v5/transports
 go.podman.io/image/v5/transports/alltransports
 go.podman.io/image/v5/types
 go.podman.io/image/v5/version
-# go.podman.io/storage v1.65.2-0.20261116084638-6da6e80dc141
+# go.podman.io/storage v1.65.2-0.20261123110506-9727b8eaf42d
 ## explicit; go 1.26.0
 go.podman.io/storage
 go.podman.io/storage/drivers
@@ -1054,7 +1055,7 @@ golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
 golang.org/x/crypto/twofish
 golang.org/x/crypto/xts
-# golang.org/x/mod v0.42.0
+# golang.org/x/mod v0.43.0
 ## explicit; go 1.26.0
 golang.org/x/mod/semver
 # golang.org/x/net v0.63.0
@@ -1133,12 +1134,12 @@ golang.org/x/tools/internal/pkgbits
 golang.org/x/tools/internal/stdlib
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/internal/versions
-# google.golang.org/genproto/googleapis/api v0.0.0-20260825221802-da73d73af1c5
-## explicit; go 1.25.0
+# google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc
+## explicit; go 1.26.0
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20260825221802-da73d73af1c5
-## explicit; go 1.25.0
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc
+## explicit; go 1.26.0
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.85.0
 ## explicit; go 1.26.0

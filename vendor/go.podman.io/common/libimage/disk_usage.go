@@ -3,8 +3,13 @@
 package libimage
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -29,6 +34,129 @@ type ImageDiskUsage struct {
 	UniqueSize int64
 	// Sum of shared an unique size.
 	Size int64
+}
+
+// hasSpaceLimits returns true if any of the space limits is set.
+func (o *RemoveImagesOptions) hasSpaceLimits() bool {
+	return o.ReservedSpace != 0 || o.MaxUsedSpace != 0 || o.MinFreeSpace != 0
+}
+
+// calculateKeepBytes returns how many bytes of the prunable images to keep, given
+// their total size and the free space on the graph root's file system.
+func calculateKeepBytes(totalSize, free int64, o *RemoveImagesOptions) int64 {
+	// Try to keep as much as allowed
+	keep := o.MaxUsedSpace
+
+	// if we need to free up space, decrease it
+	if excess := o.MinFreeSpace - free; excess > 0 {
+		if keep == 0 {
+			keep = totalSize - excess
+		} else {
+			keep = min(keep, totalSize-excess)
+		}
+	} else if o.MinFreeSpace != 0 && keep == 0 {
+		// Only MinFreeSpace is set and it is already satisfied, so
+		// there is nothing to remove
+		keep = totalSize
+	}
+
+	return max(keep, o.ReservedSpace)
+}
+
+// trimToSpaceLimits narrows the prune candidates down to the oldest ones whose removal
+// brings their combined size down to the limits in o.  Only the space that removing
+// the candidates would free counts toward the limits.  Since containers/storage does
+// not record when an image was last used, candidates are ordered by creation time.
+// Unless NoPrune is set, removing a candidate may also remove it dangling parents, so
+// more space than needed can be freed.
+func (r *Runtime) trimToSpaceLimits(candidates []*Image, o *RemoveImagesOptions) ([]*Image, error) {
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	images, layers, err := r.getImagesAndLayers()
+	if err != nil {
+		return nil, err
+	}
+
+	layerMap := make(map[string]*storage.Layer, len(layers))
+	for i := range layers {
+		layer := &layers[i]
+		if layer.UncompressedSize == -1 {
+			size, err := r.store.DiffSize("", layer.ID)
+			if err != nil {
+				return nil, err
+			}
+			layer.UncompressedSize = size
+		}
+		layerMap[layer.ID] = layer
+	}
+
+	// Count how many images use each layer.
+	layerCount := make(map[string]int)
+	for _, img := range images {
+		walkImageLayers(img, layerMap, func(layer *storage.Layer) {
+			layerCount[layer.ID]++
+		})
+	}
+
+	// The prunable size is what removing every candidate would free: layers
+	// that no other image uses, plus each candidate's big data.
+	scratch := maps.Clone(layerCount)
+	var totalSize int64
+	for _, img := range candidates {
+		walkImageLayers(img, layerMap, func(layer *storage.Layer) {
+			if scratch[layer.ID] > 0 {
+				scratch[layer.ID]--
+				if scratch[layer.ID] == 0 {
+					totalSize += layer.UncompressedSize
+				}
+			}
+		})
+		for _, size := range img.storageImage.BigDataSizes {
+			totalSize += size
+		}
+	}
+
+	var free int64
+	if o.MinFreeSpace != 0 {
+		free, err = diskFree(r.store.GraphRoot())
+		if err != nil {
+			return nil, fmt.Errorf("determining free space of %q: %w", r.store.GraphRoot(), err)
+		}
+	}
+
+	keep := calculateKeepBytes(totalSize, free, o)
+	if totalSize <= keep {
+		return nil, nil
+	}
+
+	slices.SortFunc(candidates, func(a, b *Image) int {
+		return cmp.Or(a.Created().Compare(b.Created()), strings.Compare(a.ID(), b.ID()))
+	})
+
+	// Space is counted as freed when an image is selected. If removing it later
+	// fails (it is in use), less space is freed than planned.
+	var selected []*Image
+	for _, img := range candidates {
+		if totalSize <= keep {
+			break
+		}
+		// Removing an image only frees the layers no other image uses
+		walkImageLayers(img, layerMap, func(layer *storage.Layer) {
+			if layerCount[layer.ID] > 0 {
+				layerCount[layer.ID]--
+				if layerCount[layer.ID] == 0 {
+					totalSize -= layer.UncompressedSize
+				}
+			}
+		})
+		for _, size := range img.storageImage.BigDataSizes {
+			totalSize -= size
+		}
+		selected = append(selected, img)
+	}
+	return selected, nil
 }
 
 // DiskUsage calculates the disk usage for each image in the local containers

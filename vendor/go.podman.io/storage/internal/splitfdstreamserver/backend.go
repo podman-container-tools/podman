@@ -39,16 +39,11 @@ type Layer interface {
 	Files() driver.LayerFiles
 
 	// TarSplit returns the tar-split metadata recorded for the layer,
-	// uncompressed.  Together with the content of the files it names, it
-	// reproduces the blob the layer was created from, so that what the
-	// consumer reassembles hashes to the expected diff ID.  It can only be
-	// read once.
+	// uncompressed.  Together with the content of the files it names, which
+	// Files provides, it reproduces the blob the layer was created from, so
+	// that what the consumer reassembles hashes to the expected diff ID.  It
+	// can only be read once.
 	TarSplit() io.Reader
-
-	// Get returns the content of the tar entry called name, for content
-	// that has to be copied into the stream.  It implements
-	// github.com/vbatts/tar-split/tar/storage.FileGetter.
-	Get(name string) (io.ReadCloser, error)
 
 	// Close releases the layer.
 	Close() error

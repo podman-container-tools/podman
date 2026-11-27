@@ -277,11 +277,13 @@ func Image(ctx context.Context, policyContext *signature.PolicyContext, destRef,
 	dest := imagedestination.FromPublic(publicDest)
 	defer safeClose("dest", dest)
 
-	publicRawSource, err := srcRef.NewImageSource(ctx, options.SourceCtx)
+	rawSource, err := imagesource.NewImageSource(ctx, srcRef, private.NewImageSourceOptions{
+		Sys:     options.SourceCtx,
+		Digests: options.digestOptions,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initializing source %s: %w", transports.ImageName(srcRef), err)
 	}
-	rawSource := imagesource.FromPublic(publicRawSource)
 	defer safeClose("src", rawSource)
 
 	// If reportWriter is not a TTY (e.g., when piping to a file), do not

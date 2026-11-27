@@ -21,6 +21,7 @@ import (
 	"go.podman.io/image/v5/internal/image"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/imagesource/stubs"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
 	"go.podman.io/image/v5/internal/tmpdir"
 	"go.podman.io/image/v5/manifest"
@@ -62,9 +63,9 @@ type getBlobMutexProtected struct {
 const expectedLayerDiffIDFlag = "expected-layer-diffid"
 
 // newImageSource sets up an image for reading.
-func newImageSource(sys *types.SystemContext, imageRef storageReference) (*storageImageSource, error) {
+func newImageSource(imageRef storageReference, options private.NewImageSourceOptions) (*storageImageSource, error) {
 	// First, locate the image.
-	img, err := imageRef.resolveImage(sys)
+	img, err := imageRef.resolveImage(options.Sys)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,7 @@ func newImageSource(sys *types.SystemContext, imageRef storageReference) (*stora
 		NoGetBlobAtInitialize: stubs.NoGetBlobAt(imageRef),
 
 		imageRef:      imageRef,
-		systemContext: sys,
+		systemContext: options.Sys,
 		image:         img,
 		metadata: storageImageMetadata{
 			SignatureSizes:  []int{},

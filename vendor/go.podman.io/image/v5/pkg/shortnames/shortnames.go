@@ -270,6 +270,7 @@ func Resolve(ctx *types.SystemContext, name string) (*Resolved, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cannot normalize input: %q: %w", name, err)
 		}
+		resolved.userInput = reference.TrimNamed(shortRef)
 		resolved.addCandidate(named)
 		resolved.rationale = rationaleEnforcedDockerHub
 		resolved.originDescription = "enforced by caller"

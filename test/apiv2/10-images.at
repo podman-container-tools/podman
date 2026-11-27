@@ -273,6 +273,69 @@ t GET libpod/images/json?filters='{"label":["xyz"]}' 200 length=0
 # Must not error out: #20469
 t POST images/prune?filters='{"dangling":["false"]}' 200
 
+# compat POST /build/prune (Docker API v1.48)
+
+# Nothing to prune: CachesDeleted must be [], not null.  Also checks the
+# unversioned route, which the harness otherwise rewrites to /v1.44/.
+t POST /v1.48/build/prune 200 \
+  '.CachesDeleted|type=array' \
+  '.CachesDeleted|length=0' \
+  .SpaceReclaimed=0
+t POST /build/prune 200 '.CachesDeleted|type=array'
+
+# Bad parameters
+t POST /v1.48/build/prune?reserved-space=-1 400 '.cause=space limits must not be negative'
+t POST /v1.48/build/prune?max-used-space=-1 400
+t POST /v1.48/build/prune?min-free-space=-1 400
+t POST /v1.47/build/prune?keep-storage=-1 400
+t POST /v1.48/build/prune?reserved-space=abc 400
+
+# Filters: only until/unused-for/id/label/label! are accepted
+t POST /v1.48/build/prune?filters='{"type":["regular"]}' 400 \
+  '.cause~.*unsupported build cache prune filter'
+t POST /v1.48/build/prune?filters='{"until":["1h"],"unused-for":["1h"]}' 400
+t POST /v1.48/build/prune?filters='{"id":["a","b"]}' 400
+t POST /v1.48/build/prune?filters='{"label":["a!=b"]}' 400
+
+# Make one dangling image, labeled, plus a tagged image that must survive
+podman image build -t buildprune:test --label buildprune=yes -<<EOF
+from alpine
+RUN >buildprune1
+EOF
+podman image build -t buildprune:test -<<EOF
+from alpine
+RUN >buildprune2
+EOF
+t GET images/json?filters='{"dangling":["true"]}' 200 length=1
+
+# Regression: dangling=false must be rejected, not widen the prune to tagged images
+t POST /v1.48/build/prune?filters='{"dangling":["false"]}' 400
+t GET images/json?filters='{"reference":["buildprune"]}' 200 length=1
+
+# Space limits that keep everything
+t POST /v1.48/build/prune?reserved-space=1125899906842624 200 '.CachesDeleted|length=0'
+t POST /v1.47/build/prune?keep-storage=1125899906842624 200 '.CachesDeleted|length=0'
+# keep-storage is still read on v1.48 when reserved-space isn't set
+t POST /v1.48/build/prune?keep-storage=1125899906842624 200 '.CachesDeleted|length=0'
+# reserved-space wins over keep-storage
+t POST "/v1.48/build/prune?reserved-space=1125899906842624&keep-storage=1" 200 \
+  '.CachesDeleted|length=0'
+t POST /v1.48/build/prune?min-free-space=1 200 '.CachesDeleted|length=0'
+
+# Filters that don't match keep the image
+t POST /v1.48/build/prune?filters='{"until":["1h"]}' 200 '.CachesDeleted|length=0'
+t POST /v1.48/build/prune?filters='{"label!":["buildprune"]}' 200 '.CachesDeleted|length=0'
+t GET images/json?filters='{"dangling":["true"]}' 200 length=1
+
+# max-used-space is ignored before v1.48, so this prunes
+t POST /v1.47/build/prune?max-used-space=1125899906842624 200 \
+  '.CachesDeleted|length~[1-9]' \
+  '.SpaceReclaimed!=0'
+t GET images/json?filters='{"dangling":["true"]}' 200 length=0
+t GET images/json?filters='{"reference":["buildprune"]}' 200 length=1
+
+podman rmi -f buildprune:test
+
 # to be used in prune until filter tests
 podman image build -t test1:latest -<<EOF
 from alpine

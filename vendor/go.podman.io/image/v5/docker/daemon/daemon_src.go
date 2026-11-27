@@ -23,8 +23,8 @@ type daemonImageSource struct {
 // (We could, perhaps, expect an exact sequence, assume that the first plaintext file
 // is the config, and that the following len(RootFS) files are the layers, but that feels
 // way too brittle.)
-func newImageSource(ctx context.Context, sys *types.SystemContext, ref daemonReference) (private.ImageSource, error) {
-	c, err := newDockerClient(sys)
+func newImageSource(ctx context.Context, ref daemonReference, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	c, err := newDockerClient(options.Sys)
 	if err != nil {
 		return nil, fmt.Errorf("initializing docker engine client: %w", err)
 	}
@@ -38,11 +38,11 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref daemonRef
 	}
 	defer inputStream.Close()
 
-	archive, err := tarfile.NewReaderFromStream(sys, inputStream)
+	archive, err := tarfile.NewReaderFromStream(options.Sys, inputStream)
 	if err != nil {
 		return nil, err
 	}
-	src := tarfile.NewSource(archive, true, ref.Transport().Name(), nil, -1)
+	src := tarfile.NewSource(archive, true, ref.Transport().Name(), nil, -1, options)
 	return &daemonImageSource{
 		ref:    ref,
 		Source: src,

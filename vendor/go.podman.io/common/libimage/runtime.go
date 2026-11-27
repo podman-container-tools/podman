@@ -701,6 +701,18 @@ type RemoveImagesOptions struct {
 	WithSize bool
 	// NoPrune will not remove dangling images
 	NoPrune bool
+	// ReservedSpace, if non-zero, is the minimum amount of space (in bytes) used
+	// by the images matching the filters to leave in place when pruning. Only
+	// applies when no names are passed to RemoveImages.
+	ReservedSpace int64
+	// MaxUsedSpace, if non-zero, is the maximum amount of space (in bytes) the
+	// images matching the filters may use once pruning is done. Only applies when
+	// no names are passed to RemoveImages.
+	MaxUsedSpace int64
+	// MinFreeSpace, if non-zero, is the amount of free space (in bytes) to aim for
+	// on the file system holding the graph root. Only applies when no names are
+	// passed to RemoveImages.
+	MinFreeSpace int64
 }
 
 // RemoveImages removes images specified by names.  If no names are specified,
@@ -716,6 +728,14 @@ type RemoveImagesOptions struct {
 func (r *Runtime) RemoveImages(ctx context.Context, names []string, options *RemoveImagesOptions) (reports []*RemoveImageReport, rmErrors []error) {
 	if options == nil {
 		options = &RemoveImagesOptions{}
+	}
+
+	if options.ReservedSpace < 0 || options.MaxUsedSpace < 0 || options.MinFreeSpace < 0 {
+		return nil, []error{errors.New("libimage error: space limits must not be negative")}
+	}
+
+	if len(names) > 0 && options.hasSpaceLimits() {
+		return nil, []error{errors.New("libimage error: space limits cannot be used when removing images by name")}
 	}
 
 	if options.ExternalContainers && options.IsExternalContainerFunc == nil {
@@ -778,14 +798,21 @@ func (r *Runtime) RemoveImages(ctx context.Context, names []string, options *Rem
 		}
 
 	default:
-		options := &ListImagesOptions{
+		listOptions := &ListImagesOptions{
 			IsExternalContainerFunc: options.IsExternalContainerFunc,
 			Filters:                 options.Filters,
 		}
-		filteredImages, err := r.ListImages(ctx, options)
+		filteredImages, err := r.ListImages(ctx, listOptions)
 		if err != nil {
 			appendError(err)
 			return nil, rmErrors
+		}
+		if options.hasSpaceLimits() {
+			filteredImages, err = r.trimToSpaceLimits(filteredImages, options)
+			if err != nil {
+				appendError(err)
+				return nil, rmErrors
+			}
 		}
 		for _, img := range filteredImages {
 			toDelete = append(toDelete, img.ID())

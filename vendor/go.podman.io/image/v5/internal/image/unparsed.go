@@ -6,7 +6,6 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/image/v5/docker/reference"
-	"go.podman.io/image/v5/internal/imagesource"
 	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/internal/signature"
 	"go.podman.io/image/v5/manifest"
@@ -35,10 +34,10 @@ type UnparsedImage struct {
 //
 // The UnparsedImage must not be used after the underlying ImageSource is Close()d.
 //
-// This is publicly visible as c/image/image.UnparsedInstance.
-func UnparsedInstance(src types.ImageSource, instanceDigest *digest.Digest) *UnparsedImage {
+// A public-interface variant of this is publicly visible as c/image/image.UnparsedInstance.
+func UnparsedInstance(src private.ImageSource, instanceDigest *digest.Digest) *UnparsedImage {
 	return &UnparsedImage{
-		src:            imagesource.FromPublic(src),
+		src:            src,
 		instanceDigest: instanceDigest,
 	}
 }

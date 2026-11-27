@@ -14,6 +14,7 @@ import (
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/sylabs/sif/v2/pkg/sif"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/imagesource/impl"
 	"go.podman.io/image/v5/internal/imagesource/stubs"
 	"go.podman.io/image/v5/internal/private"
@@ -39,7 +40,7 @@ type sifImageSource struct {
 }
 
 // getBlobInfo returns the digest,  and size of the provided file.
-func getBlobInfo(path string) (digest.Digest, int64, error) {
+func getBlobInfo(path string, digestAlgorithm digest.Algorithm) (digest.Digest, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", -1, fmt.Errorf("opening %q for reading: %w", path, err)
@@ -50,7 +51,7 @@ func getBlobInfo(path string) (digest.Digest, int64, error) {
 	// it here again, stream the tar file to a pipe and
 	// compute the digest while writing it to disk.
 	logrus.Debugf("Computing a digest of the SIF conversion output...")
-	digester := digest.Canonical.Digester()
+	digester := digestAlgorithm.Digester()
 	// TODO: This can take quite some time, and should ideally be cancellable using ctx.Done().
 	size, err := io.Copy(digester.Hash(), f)
 	if err != nil {
@@ -64,7 +65,12 @@ func getBlobInfo(path string) (digest.Digest, int64, error) {
 
 // newImageSource returns an ImageSource for reading from an existing directory.
 // newImageSource extracts SIF objects and saves them in a temp directory.
-func newImageSource(ctx context.Context, sys *types.SystemContext, ref sifReference) (private.ImageSource, error) {
+func newImageSource(ctx context.Context, ref sifReference, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	digestAlgorithm, err := options.Digests.Choose(digests.Situation{})
+	if err != nil {
+		return nil, err
+	}
+
 	sifImg, err := sif.LoadContainerFromPath(ref.file, sif.OptLoadWithFlag(os.O_RDONLY))
 	if err != nil {
 		return nil, fmt.Errorf("loading SIF file: %w", err)
@@ -73,7 +79,7 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref sifRefere
 		_ = sifImg.UnloadContainer()
 	}()
 
-	workDir, err := tmpdir.MkDirBigFileTemp(sys, "sif")
+	workDir, err := tmpdir.MkDirBigFileTemp(options.Sys, "sif")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp directory: %w", err)
 	}
@@ -89,7 +95,7 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref sifRefere
 		return nil, fmt.Errorf("converting rootfs from SquashFS to Tarball: %w", err)
 	}
 
-	layerDigest, layerSize, err := getBlobInfo(layerPath)
+	layerDigest, layerSize, err := getBlobInfo(layerPath, digestAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("gathering blob information: %w", err)
 	}
@@ -125,7 +131,7 @@ func newImageSource(ctx context.Context, sys *types.SystemContext, ref sifRefere
 	if err != nil {
 		return nil, fmt.Errorf("generating configuration blob for %q: %w", ref.resolvedFile, err)
 	}
-	configDigest := digest.Canonical.FromBytes(configBytes)
+	configDigest := digestAlgorithm.FromBytes(configBytes)
 
 	manifest := imgspecv1.Manifest{
 		Versioned: imgspecs.Versioned{SchemaVersion: 2},

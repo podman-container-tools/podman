@@ -6,7 +6,9 @@ import (
 	"context"
 
 	digest "github.com/opencontainers/go-digest"
+	"go.podman.io/image/v5/internal/digests"
 	"go.podman.io/image/v5/internal/image"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/types"
 	"go.podman.io/storage"
 )
@@ -52,7 +54,10 @@ func (s *storageImageCloser) Size() (int64, error) {
 
 // newImage creates an image that also knows its size
 func newImage(ctx context.Context, sys *types.SystemContext, s storageReference) (types.ImageCloser, error) {
-	src, err := newImageSource(sys, s)
+	src, err := newImageSource(s, private.NewImageSourceOptions{
+		Sys:     sys,
+		Digests: digests.CanonicalDefault(),
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,8 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/internal/imagereference/impl"
+	"go.podman.io/image/v5/internal/private"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/transports"
 	"go.podman.io/image/v5/types"
@@ -286,8 +288,14 @@ func (s storageReference) DeleteImage(ctx context.Context, sys *types.SystemCont
 	return err
 }
 
+// NewImageSourceWithOptions returns a private.ImageSource for this reference.
+// The caller must call .Close() on the returned ImageSource.
+func (s storageReference) NewImageSourceWithOptions(ctx context.Context, options private.NewImageSourceOptions) (private.ImageSource, error) {
+	return newImageSource(s, options)
+}
+
 func (s storageReference) NewImageSource(ctx context.Context, sys *types.SystemContext) (types.ImageSource, error) {
-	return newImageSource(sys, s)
+	return impl.NewImageSource(s, ctx, sys)
 }
 
 func (s storageReference) NewImageDestination(ctx context.Context, sys *types.SystemContext) (types.ImageDestination, error) {
