@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -626,11 +627,23 @@ func (ic *ContainerEngine) QuadletRemove(ctx context.Context, quadlets []string,
 				quadlets = append(quadlets, unit.Name)
 			}
 		}
-		// Add all application if recursive is true
-		if options.Recursive {
-			for application := range applications {
+		// Always consider applications so that --all also tries to remove
+		// them. Removing an application (and the Quadlets it owns) requires
+		// --recursive; without it we record an error for the application
+		// instead of silently leaving it in place. This makes --all report
+		// exactly which Quadlets could not be removed rather than quietly
+		// skipping applications.
+		for application, appQuadlets := range applications {
+			if options.Recursive {
 				quadlets = append(quadlets, application)
+				continue
 			}
+			names := make([]string, 0, len(appQuadlets))
+			for _, u := range appQuadlets {
+				names = append(names, u.Name)
+			}
+			sort.Strings(names)
+			report.Errors[application] = fmt.Errorf("refusing to remove application %q: recursive option is not set (Quadlets not removed: %s)", application, strings.Join(names, ", "))
 		}
 	}
 

@@ -802,3 +802,73 @@ EOF
     # Cleanup: Remove the installed quadlet
     run_podman quadlet rm long.container
 }
+
+@test "quadlet verb - rm --all reports errors for applications without --recursive" {
+    # A standalone quadlet (not part of any application)
+    local standalone_file=$PODMAN_TMPDIR/rm-all-app-standalone.container
+    cat > $standalone_file <<EOF
+[Container]
+Image=$IMAGE
+Exec=sh -c "echo STARTED STANDALONE; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+
+    # An application made of two quadlets
+    local app_name="rm-all-app-$(safe_name)"
+    local app_dir="$PODMAN_TMPDIR/$app_name"
+    mkdir -p $app_dir
+    cat > $app_dir/one.container <<EOF
+[Container]
+Image=$IMAGE
+Exec=sh -c "echo STARTED ONE; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+    cat > $app_dir/two.container <<EOF
+[Container]
+Image=$IMAGE
+Exec=sh -c "echo STARTED TWO; trap 'exit' SIGTERM; while :; do sleep 0.1; done"
+EOF
+
+    # Install the standalone quadlet and the application
+    run_podman quadlet install $standalone_file
+    assert $status -eq 0 "quadlet install of standalone should succeed"
+
+    run_podman quadlet install --application=$app_name $app_dir
+    assert $status -eq 0 "quadlet install of application should succeed"
+
+    # Verify everything is installed
+    run_podman quadlet list
+    assert "$output" =~ "rm-all-app-standalone.container" "list should contain the standalone quadlet"
+    assert "$output" =~ "one.container" "list should contain the application's one.container"
+    assert "$output" =~ "two.container" "list should contain the application's two.container"
+
+    # rm --all without --recursive must remove the standalone quadlet, but must
+    # fail (and report the error) for the application instead of silently
+    # skipping it.
+    run_podman 125 quadlet rm --all
+    assert "$output" =~ "$app_name" "rm --all should mention the application it could not remove"
+    assert "$output" =~ "recursive option is not set" "rm --all should explain the application requires --recursive"
+    assert "$output" =~ "some quadlets could not be removed" "rm --all should indicate not everything was removed"
+
+    # The standalone quadlet should be gone, the application's quadlets should remain
+    run_podman quadlet list
+    assert "$output" !~ "rm-all-app-standalone.container" "standalone quadlet should have been removed by --all"
+    assert "$output" =~ "one.container" "application quadlet one.container should still exist"
+    assert "$output" =~ "two.container" "application quadlet two.container should still exist"
+
+    # The application directory should still be on disk
+    local install_dir=$(get_quadlet_install_dir)
+    if ! test -d "$install_dir/$app_name"; then
+        die "application directory should still exist after failed --all removal"
+    fi
+
+    # Now remove everything, including applications
+    run_podman quadlet rm --all --recursive
+    assert $status -eq 0 "quadlet rm --all --recursive should succeed"
+
+    run_podman quadlet list
+    assert "$output" !~ "one.container" "application quadlet one.container should be removed"
+    assert "$output" !~ "two.container" "application quadlet two.container should be removed"
+
+    if test -d "$install_dir/$app_name"; then
+        die "application directory should not exist after --all --recursive removal"
+    fi
+}

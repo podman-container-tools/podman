@@ -34,6 +34,7 @@ Do not error for Quadlets that do not exist.
 #### **--recursive**
 
 Required when removing applications (default false).
+When **--all** is specified without **--recursive**, Podman will remove all Quadlets not in an application, and report errors for any Quadlets that are part of an application.
 
 @@option reload-systemd
 
@@ -46,6 +47,10 @@ $ podman quadlet rm --recursive myapp
 web.container
 data.container
 data.volume
+$ podman quadlet rm --all
+myquadlet.container
+Error: refusing to remove application "myapp": recursive option is not set (Quadlets not removed: data.container, web.container)
+some quadlets could not be removed
 ```
 
 ## SEE ALSO
