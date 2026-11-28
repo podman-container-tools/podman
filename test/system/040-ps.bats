@@ -215,6 +215,48 @@ load helpers
     is "${#lines[@]}" "1" "storage container has been removed"
 }
 
+@test "podman container prune --external honors filters and preserves mounted containers" {
+    run buildah from --name prune-mounted "$IMAGE"
+    assert "$status" -eq 0 "create mounted external container"
+    run_podman ps -aq --external --no-trunc --filter name=prune-mounted
+    mounted_cid="$output"
+    assert "$mounted_cid" != "" "find mounted external container ID"
+
+    run buildah from --name prune-unmounted "$IMAGE"
+    assert "$status" -eq 0 "create unmounted external container"
+    run_podman ps -aq --external --no-trunc --filter name=prune-unmounted
+    unmounted_cid="$output"
+    assert "$unmounted_cid" != "" "find unmounted external container ID"
+
+    local unshare=
+    if is_rootless; then
+        unshare="buildah unshare"
+    fi
+    run $unshare buildah mount "$mounted_cid"
+    assert "$status" -eq 0 "mount active external container"
+
+    run_podman container prune --external --force --filter until=24h
+    assert "$status" -eq 0 "recent external containers do not match until=24h"
+    run_podman ps -aq --external --filter id="$mounted_cid"
+    is "$output" "$mounted_cid" "recent mounted external container remains"
+    run_podman ps -aq --external --filter id="$unmounted_cid"
+    is "$output" "$unmounted_cid" "recent unmounted external container remains"
+
+    run_podman 125 container prune --external --force --filter until=2100-01-01T00:00:00Z
+    assert "$output" =~ "mounted" "mounted external container is not forcibly removed"
+    run_podman ps -aq --external --filter id="$mounted_cid"
+    is "$output" "$mounted_cid" "mounted external container remains after prune"
+    run_podman ps -aq --external --filter id="$unmounted_cid"
+    is "$output" "" "unmounted external container was pruned"
+
+    run $unshare buildah unmount "$mounted_cid"
+    assert "$status" -eq 0 "unmount external container"
+    run_podman container prune --external --force --filter until=2100-01-01T00:00:00Z
+    assert "$status" -eq 0 "prune unmounted external container"
+    run_podman ps -aq --external --filter id="$mounted_cid"
+    is "$output" "" "external container was pruned after unmount"
+}
+
 @test "podman ps --format label" {
     rand_value=$(random_string 10)
 

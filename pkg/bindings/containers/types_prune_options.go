@@ -31,3 +31,18 @@ func (o *PruneOptions) GetFilters() map[string][]string {
 	}
 	return o.Filters
 }
+
+// WithExternal set field External to given value
+func (o *PruneOptions) WithExternal(value bool) *PruneOptions {
+	o.External = &value
+	return o
+}
+
+// GetExternal returns value of field External
+func (o *PruneOptions) GetExternal() bool {
+	if o.External == nil {
+		var z bool
+		return z
+	}
+	return *o.External
+}
