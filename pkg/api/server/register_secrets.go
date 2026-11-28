@@ -197,6 +197,8 @@ func (s *APIServer) registerSecretHandlers(r *mux.Router) error {
 	// responses:
 	//   '201':
 	//     $ref: "#/responses/SecretCreateResponse"
+	//   '400':
+	//     "$ref": "#/responses/badParamError"
 	//   '409':
 	//     "$ref": "#/responses/SecretInUse"
 	//   '500':

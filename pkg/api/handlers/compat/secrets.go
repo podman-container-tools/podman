@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -121,6 +122,13 @@ type secretCreateParams struct {
 	Opts entities.SecretCreateOptions
 }
 
+// maxSecretCreateBody limits the body of a compat secret-create request to
+// 4 MiB, like Docker: dockerd reads the body without a limit, but the swarm
+// manager rejects a create request larger than 4 MiB (swarmkit gRPC message limit: GRPCMaxMsgSize).
+const maxSecretCreateBody = 4 << 20
+
+var errSecretCreateBodyTooBig = fmt.Errorf("request body is larger than %d bytes", maxSecretCreateBody)
+
 // parseSecretCreateRequest reads and validates the body of a compat secret-create request.
 // The returned error is a client error (bad request).
 func parseSecretCreateRequest(r *http.Request) (*secretCreateParams, error) {
@@ -129,9 +137,21 @@ func parseSecretCreateRequest(r *http.Request) (*secretCreateParams, error) {
 		Labels map[string]string `schema:"labels"`
 	}{}
 
-	if err := utils.ReadJSONFromBody(r, &createParams); err != nil {
+	if r.ContentLength > maxSecretCreateBody {
+		return nil, errSecretCreateBodyTooBig
+	}
+	body := io.LimitReader(r.Body, maxSecretCreateBody+1)
+	if r.Body != nil {
+		r.Body = io.NopCloser(body)
+	}
+	err := utils.ReadJSONFromBody(r, &createParams)
+	if body.(*io.LimitedReader).N == 0 {
+		return nil, errSecretCreateBodyTooBig
+	}
+	if err != nil {
 		return nil, err
 	}
+
 	if createParams.SecretCreateRequest == nil {
 		return nil, errors.New("missing secret name and data")
 	}
@@ -163,11 +183,15 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 	ic := abi.ContainerEngine{Libpod: runtime}
 	report, err := ic.SecretCreate(r.Context(), createParams.Name, bytes.NewReader(createParams.Data), createParams.Opts)
 	if err != nil {
-		if strings.Contains(err.Error(), "secret name in use") {
+		switch {
+		case strings.Contains(err.Error(), "secret name in use"):
 			utils.Error(w, http.StatusConflict, err)
-			return
+		case strings.Contains(err.Error(), "secret data must be larger than 0"):
+			utils.Error(w, http.StatusBadRequest, err)
+		default:
+			utils.InternalServerError(w, err)
 		}
-		utils.InternalServerError(w, err)
+
 		return
 	}
 	utils.WriteResponse(w, http.StatusCreated, report)

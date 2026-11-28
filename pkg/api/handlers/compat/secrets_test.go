@@ -104,3 +104,56 @@ func TestParseSecretCreateRequestInvalidBody(t *testing.T) {
 		})
 	}
 }
+
+// secretCreateBody returns the JSON of a secret-create request that is exactly size bytes long.
+func secretCreateBody(t *testing.T, size int) []byte {
+	t.Helper()
+	secret := entities.SecretCreateRequest{Name: "mysecret", Labels: map[string]string{"pad": ""}}
+	empty, err := json.Marshal(secret)
+	require.NoError(t, err)
+	// Base64 data comes in blocks of 4 characters. The label will take the remainder
+	free := size - len(empty)
+	secret.Data = strings.Repeat("A", free/4*4)
+	secret.Labels["pad"] = strings.Repeat("x", free%4)
+	data, err := json.Marshal(secret)
+	require.NoError(t, err)
+	require.Len(t, data, size)
+	return data
+}
+
+// TestParseSecretCreateRequestLargeBody checks that a body over the limit is
+// rejected without being read past the limit, and that a body at the limit is accepted.
+func TestParseSecretCreateRequestLargeBody(t *testing.T) {
+	tests := []struct {
+		name          string
+		size          int
+		contentLength bool
+		maxRead       int64
+		wantErr       string
+	}{
+		{name: "over the limit, unknown length", size: 2 * maxSecretCreateBody, maxRead: maxSecretCreateBody + 1, wantErr: "request body is larger than 4194304 bytes"},
+		{name: "over the limit, Content-Length set", size: 2 * maxSecretCreateBody, contentLength: true, maxRead: 0, wantErr: "request body is larger than 4194304 bytes"},
+		{name: "one byte over the limit", size: maxSecretCreateBody + 1, maxRead: maxSecretCreateBody + 1, wantErr: "request body is larger than 4194304 bytes"},
+		{name: "at the limit, unknown length", size: maxSecretCreateBody, maxRead: maxSecretCreateBody},
+		{name: "at the limit, Content-Length set", size: maxSecretCreateBody, contentLength: true, maxRead: maxSecretCreateBody},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := bytes.NewReader(secretCreateBody(t, tt.size))
+			req := httptest.NewRequest(http.MethodPost, "/secrets/create", body)
+			// httptest.NewRequest sets ContentLength from a *bytes.Reader.
+			if !tt.contentLength {
+				req.ContentLength = -1
+			}
+
+			got, err := parseSecretCreateRequest(req)
+			assert.LessOrEqual(t, int64(tt.size-body.Len()), tt.maxRead, "bytes read")
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
