@@ -181,6 +181,8 @@ type PodNetworkConfig struct {
 // PodStorageConfig contains all of the storage related options for the pod and its infra container.
 type PodStorageConfig struct {
 	// Mounts are mounts that will be added to the pod.
+	// These follow the OCI runtime specification (with fields destination, source, type, options).
+	// Note: Use "destination" (not "target") to specify the mount path inside the pod.
 	// These will supersede Image Volumes and VolumesFrom volumes where
 	// there are conflicts.
 	// Optional.
