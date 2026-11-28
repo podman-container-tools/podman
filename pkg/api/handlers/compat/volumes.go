@@ -47,6 +47,7 @@ func ListVolumes(w http.ResponseWriter, r *http.Request) {
 		filterFunc, err := filters.GenerateVolumeFilters(filter, filterValues, runtime)
 		if err != nil {
 			utils.InternalServerError(w, err)
+			return
 		}
 		volumeFilters = append(volumeFilters, filterFunc)
 	}
