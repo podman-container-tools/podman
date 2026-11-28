@@ -1832,6 +1832,15 @@ func (c *Container) mountStorage(ctx context.Context) (_ string, deferredErr err
 		if err != nil {
 			return "", fmt.Errorf("rootfs-overlay: creating overlay failed %q: %w", c.config.Rootfs, err)
 		}
+		// On error c.state.Mounted stays false, so cleanupStorage() skips
+		// this overlay: unmount it here or it outlives the container.
+		defer func() {
+			if deferredErr != nil {
+				if err := overlay.Unmount(contentDir); err != nil {
+					logrus.Errorf("Unmounting rootfs overlay for container %s after mount error: %v", c.ID(), err)
+				}
+			}
+		}()
 
 		// Seems fuse-overlayfs is not present
 		// fallback to native overlay
