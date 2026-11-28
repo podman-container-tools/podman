@@ -10,7 +10,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/checkpoint-restore/checkpointctl v1.7.0
 	github.com/checkpoint-restore/go-criu/v8 v8.5.0
-	github.com/containers/gvisor-tap-vsock v0.9.0
+	github.com/containers/gvisor-tap-vsock v0.9.1
 	github.com/containers/libhvee v0.11.0
 	github.com/containers/ocicrypt v1.3.2
 	github.com/containers/psgo v1.10.0
@@ -183,7 +183,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
-	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/oauth2 v0.38.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect

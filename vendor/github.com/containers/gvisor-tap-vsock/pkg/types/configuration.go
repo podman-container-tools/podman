@@ -37,6 +37,9 @@ type Configuration struct {
 	// List of search domains that will be added in all DHCP replies
 	DNSSearchDomains []string `yaml:"dnsSearchDomains,omitempty"`
 
+	// BootFileName which will be added to all DHCP replies
+	BootFileName string `yaml:"bootFileName,omitempty"`
+
 	// Port forwarding between the machine running the gateway and the virtual network.
 	Forwards map[string]string `yaml:"forwards,omitempty"`
 
