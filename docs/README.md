@@ -1,9 +1,15 @@
 # Podman Documentation
 
 The online man pages and other documents regarding Podman can be found at
-[Read The Docs](https://podman.readthedocs.io).  The man pages
+[Read The Docs](https://podman.readthedocs.io) / [docs.podman.io](https://docs.podman.io).  The man pages
 can be found under the [Commands](https://podman.readthedocs.io/en/latest/Commands.html)
 link on that page.
+
+### Documentation Versions
+
+- **`stable`** ([docs.podman.io/en/stable](https://docs.podman.io/en/stable/)): Reflects the latest officially released stable version of Podman, matching standard installed packages.
+- **`latest`** ([docs.podman.io/en/latest](https://docs.podman.io/en/latest/)): Generated directly from the `main` development branch. It contains in-development features, new CLI flags, and unreleased changes that may not yet be present in your installed version.
+- **Specific Release Versions** (e.g. `https://docs.podman.io/en/v5.4.0/`): Available for viewing documentation pinned to a specific release tag.
 
 # Build the Docs
 
