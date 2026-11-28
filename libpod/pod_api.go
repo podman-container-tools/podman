@@ -272,7 +272,7 @@ func (p *Pod) stopIfOnlyInfraRemains(ctx context.Context, ignoreID string) error
 // If map is not nil, an error was encountered when working on one or more
 // containers. The container ID is mapped to the error encountered. The error is
 // set to ErrPodPartialFail.
-// If both error and the map are nil, all containers were paused without error
+// If both error and the map are nil, all containers were cleaned up without error
 func (p *Pod) Cleanup(ctx context.Context) (map[string]error, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -281,38 +281,11 @@ func (p *Pod) Cleanup(ctx context.Context) (map[string]error, error) {
 		return nil, define.ErrPodRemoved
 	}
 
-	allCtrs, err := p.runtime.state.PodContainers(p)
+	ctrErrs, err := p.runCtrOp(ctx, func(c *Container) error {
+		return c.Cleanup(ctx, false)
+	}, "clean up", "cleaning up", "")
 	if err != nil {
-		return nil, err
-	}
-
-	ctrErrChan := make(map[string]<-chan error)
-
-	// Enqueue a function for each container with the parallel executor.
-	for _, ctr := range allCtrs {
-		c := ctr
-		logrus.Debugf("Adding parallel job to clean up container %s", c.ID())
-		retChan := parallel.Enqueue(ctx, func() error {
-			return c.Cleanup(ctx, false)
-		})
-
-		ctrErrChan[c.ID()] = retChan
-	}
-
-	ctrErrors := make(map[string]error)
-
-	// Get returned error for every container we worked on
-	for id, channel := range ctrErrChan {
-		if err := <-channel; err != nil {
-			if errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped) {
-				continue
-			}
-			ctrErrors[id] = err
-		}
-	}
-
-	if len(ctrErrors) > 0 {
-		return ctrErrors, fmt.Errorf("cleaning up some containers: %w", define.ErrPodPartialFail)
+		return ctrErrs, err
 	}
 
 	if err := p.maybeStopServiceContainer(); err != nil {
@@ -342,40 +315,7 @@ func (p *Pod) Pause(ctx context.Context) (map[string]error, error) {
 		return nil, define.ErrPodRemoved
 	}
 
-	allCtrs, err := p.runtime.state.PodContainers(p)
-	if err != nil {
-		return nil, err
-	}
-
-	ctrErrChan := make(map[string]<-chan error)
-
-	// Enqueue a function for each container with the parallel executor.
-	for _, ctr := range allCtrs {
-		c := ctr
-		logrus.Debugf("Adding parallel job to pause container %s", c.ID())
-		retChan := parallel.Enqueue(ctx, c.Pause)
-
-		ctrErrChan[c.ID()] = retChan
-	}
-
-	p.newPodEvent(events.Pause)
-
-	ctrErrors := make(map[string]error)
-
-	// Get returned error for every container we worked on
-	for id, channel := range ctrErrChan {
-		if err := <-channel; err != nil {
-			if errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped) {
-				continue
-			}
-			ctrErrors[id] = err
-		}
-	}
-
-	if len(ctrErrors) > 0 {
-		return ctrErrors, fmt.Errorf("pausing some containers: %w", define.ErrPodPartialFail)
-	}
-	return nil, nil
+	return p.runCtrOp(ctx, (*Container).Pause, "pause", "pausing", events.Pause)
 }
 
 // Unpause unpauses all containers within a pod that are running.
@@ -398,40 +338,7 @@ func (p *Pod) Unpause(ctx context.Context) (map[string]error, error) {
 		return nil, define.ErrPodRemoved
 	}
 
-	allCtrs, err := p.runtime.state.PodContainers(p)
-	if err != nil {
-		return nil, err
-	}
-
-	ctrErrChan := make(map[string]<-chan error)
-
-	// Enqueue a function for each container with the parallel executor.
-	for _, ctr := range allCtrs {
-		c := ctr
-		logrus.Debugf("Adding parallel job to unpause container %s", c.ID())
-		retChan := parallel.Enqueue(ctx, c.Unpause)
-
-		ctrErrChan[c.ID()] = retChan
-	}
-
-	p.newPodEvent(events.Unpause)
-
-	ctrErrors := make(map[string]error)
-
-	// Get returned error for every container we worked on
-	for id, channel := range ctrErrChan {
-		if err := <-channel; err != nil {
-			if errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped) {
-				continue
-			}
-			ctrErrors[id] = err
-		}
-	}
-
-	if len(ctrErrors) > 0 {
-		return ctrErrors, fmt.Errorf("unpausing some containers: %w", define.ErrPodPartialFail)
-	}
-	return nil, nil
+	return p.runCtrOp(ctx, (*Container).Unpause, "unpause", "unpausing", events.Unpause)
 }
 
 // Restart restarts all containers within a pod that are not paused or in an error state.
@@ -511,6 +418,26 @@ func (p *Pod) Kill(ctx context.Context, signal uint) (map[string]error, error) {
 		return nil, define.ErrPodRemoved
 	}
 
+	ctrErrs, err := p.runCtrOp(ctx, func(c *Container) error {
+		return c.Kill(signal)
+	}, "kill", "killing", events.Kill)
+	if err != nil {
+		return ctrErrs, err
+	}
+
+	if err := p.maybeStopServiceContainer(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// runCtrOp runs fn on every container in the pod using the parallel executor.
+// The caller must hold p.lock.
+// debugVerb and errVerb fill the verb in the debug log and partial-failure
+// messages. If event is not empty, it is emitted after all jobs are enqueued
+// and before their results are collected.
+func (p *Pod) runCtrOp(ctx context.Context, fn func(*Container) error, debugVerb, errVerb string, event events.Status) (map[string]error, error) {
 	allCtrs, err := p.runtime.state.PodContainers(p)
 	if err != nil {
 		return nil, err
@@ -521,15 +448,17 @@ func (p *Pod) Kill(ctx context.Context, signal uint) (map[string]error, error) {
 	// Enqueue a function for each container with the parallel executor.
 	for _, ctr := range allCtrs {
 		c := ctr
-		logrus.Debugf("Adding parallel job to kill container %s", c.ID())
+		logrus.Debugf("Adding parallel job to %s container %s", debugVerb, c.ID())
 		retChan := parallel.Enqueue(ctx, func() error {
-			return c.Kill(signal)
+			return fn(c)
 		})
 
 		ctrErrChan[c.ID()] = retChan
 	}
 
-	p.newPodEvent(events.Kill)
+	if event != "" {
+		p.newPodEvent(event)
+	}
 
 	ctrErrors := make(map[string]error)
 
@@ -544,13 +473,8 @@ func (p *Pod) Kill(ctx context.Context, signal uint) (map[string]error, error) {
 	}
 
 	if len(ctrErrors) > 0 {
-		return ctrErrors, fmt.Errorf("killing some containers: %w", define.ErrPodPartialFail)
+		return ctrErrors, fmt.Errorf("%s some containers: %w", errVerb, define.ErrPodPartialFail)
 	}
-
-	if err := p.maybeStopServiceContainer(); err != nil {
-		return nil, err
-	}
-
 	return nil, nil
 }
 
