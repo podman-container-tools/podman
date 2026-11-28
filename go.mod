@@ -10,6 +10,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/checkpoint-restore/checkpointctl v1.7.0
 	github.com/checkpoint-restore/go-criu/v8 v8.5.0
+	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/containers/gvisor-tap-vsock v0.9.0
 	github.com/containers/libhvee v0.11.0
 	github.com/containers/ocicrypt v1.3.2
@@ -99,7 +100,6 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.2.0 // indirect
-	github.com/containerd/platforms v1.0.0-rc.5 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.19.1 // indirect
 	github.com/containerd/typeurl/v2 v2.3.0 // indirect
 	github.com/containernetworking/plugins v1.9.1 // indirect

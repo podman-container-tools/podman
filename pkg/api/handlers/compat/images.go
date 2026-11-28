@@ -4,6 +4,7 @@ package compat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/platforms"
 	dockerSpec "github.com/moby/docker-image-spec/specs-go/v1"
 	dockerContainer "github.com/moby/moby/api/types/container"
 	dockerImage "github.com/moby/moby/api/types/image"
@@ -20,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.podman.io/buildah"
 	"go.podman.io/common/libimage"
+	lplatform "go.podman.io/common/libimage/platform"
 	"go.podman.io/common/pkg/config"
 	"go.podman.io/common/pkg/filters"
 	"go.podman.io/image/v5/manifest"
@@ -333,7 +336,42 @@ func GetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newImage, err := utils.GetImage(r, possiblyNormalizedName)
+	query := struct {
+		Platform string `schema:"platform"`
+	}{}
+	if err := utils.GetDecoder(r).Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse parameters for %s: %w", r.URL.String(), err))
+		return
+	}
+
+	var lookupOptions *libimage.LookupImageOptions
+	var wantPlatform imageSpec.Platform
+	_, versionErr := utils.SupportedVersion(r, ">=1.49.0")
+	// platform was added in API v1.49
+	if query.Platform != "" && (versionErr == nil || errors.Is(versionErr, apiutil.ErrVersionNotGiven)) {
+		var platform imageSpec.Platform
+		if err := json.Unmarshal([]byte(query.Platform), &platform); err != nil {
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse platform: %w", err))
+			return
+		}
+		if platform.OS == "" || platform.Architecture == "" {
+			utils.Error(w, http.StatusBadRequest, errors.New("both OS and Architecture must be provided"))
+			return
+		}
+		wantPlatform, err = platforms.Parse(lplatform.ToString(platform.OS, platform.Architecture, platform.Variant))
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, fmt.Errorf("failed to parse platform: %w", err))
+			return
+		}
+		lookupOptions = &libimage.LookupImageOptions{
+			OS:           platform.OS,
+			Architecture: platform.Architecture,
+			Variant:      platform.Variant,
+		}
+	}
+
+	runtime := r.Context().Value(api.RuntimeKey).(*libpod.Runtime)
+	newImage, resolvedName, err := runtime.LibimageRuntime().LookupImage(possiblyNormalizedName, lookupOptions)
 	if err != nil {
 		// Here we need to fiddle with the error message because docker-py is looking for "No
 		// such image" to determine on how to raise the correct exception.
@@ -341,12 +379,41 @@ func GetImage(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusNotFound, fmt.Errorf("failed to find image %s: %s", name, errMsg))
 		return
 	}
+	// libimage skips the platform check when the image is looked up by ID
+	if lookupOptions != nil && strings.HasPrefix(newImage.ID(), strings.TrimPrefix(resolvedName, "sha256:")) {
+		gotPlatform, err := imagePlatform(r.Context(), runtime, newImage)
+		if err != nil {
+			utils.InternalServerError(w, err)
+			return
+		}
+		if !platforms.NewMatcher(wantPlatform).Match(gotPlatform) {
+			utils.Error(w, http.StatusNotFound, fmt.Errorf("image with reference %s was found but its platform (%s) does not match the specified platform (%s)", name, platforms.Format(gotPlatform), platforms.Format(wantPlatform)))
+			return
+		}
+	}
 	inspect, err := imageDataToImageInspect(r.Context(), newImage, r)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed to convert ImageData to ImageInspect '%s': %w", name, err))
 		return
 	}
 	utils.WriteResponse(w, http.StatusOK, inspect)
+}
+
+func imagePlatform(ctx context.Context, runtime *libpod.Runtime, img *libimage.Image) (imageSpec.Platform, error) {
+	ref, err := img.StorageReference()
+	if err != nil {
+		return imageSpec.Platform{}, err
+	}
+	src, err := ref.NewImage(ctx, runtime.SystemContext())
+	if err != nil {
+		return imageSpec.Platform{}, err
+	}
+	defer src.Close()
+	info, err := src.Inspect(ctx)
+	if err != nil {
+		return imageSpec.Platform{}, err
+	}
+	return platforms.Parse(lplatform.ToString(info.Os, info.Architecture, info.Variant))
 }
 
 func imageDataToImageInspect(ctx context.Context, l *libimage.Image, r *http.Request) (*handlers.ImageInspect, error) {
