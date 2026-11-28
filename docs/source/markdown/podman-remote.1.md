@@ -146,6 +146,7 @@ the exit codes follow the `chroot` standard, see below:
 | [podman-build(1)](podman-build.1.md)             | Build a container image using a Dockerfile.                                 |
 | [podman-commit(1)](podman-commit.1.md)           | Create new image based on the changed container.                            |
 | [podman-container(1)](podman-container.1.md)     | Manage containers.                                                          |
+| [podman-container-clone(1)](podman-container-clone.1.md) | Create a copy of an existing container.                              |
 | [podman-cp(1)](podman-cp.1.md)                   | Copy files/folders between a container and the local filesystem.            |
 | [podman-create(1)](podman-create.1.md)           | Create a new container.                                                     |
 | [podman-diff(1)](podman-diff.1.md)               | Inspect changes on a container or image's filesystem.                       |
