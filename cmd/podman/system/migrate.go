@@ -46,6 +46,8 @@ func init() {
 	_ = migrateCommand.RegisterFlagCompletionFunc(newRuntimeFlagName, completion.AutocompleteNone)
 
 	flags.BoolVar(&migrateOptions.MigrateDB, "migrate-db", false, "Migrate database from BoltDB to SQLite")
+	// TODO (7.0): remove the migrate-db flag, superseded by automatic migration on reboot (#30210).
+	_ = flags.MarkHidden("migrate-db")
 }
 
 func migrate(cmd *cobra.Command, _ []string) error {

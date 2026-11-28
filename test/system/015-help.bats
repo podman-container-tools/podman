@@ -213,4 +213,16 @@ function check_help() {
 
 }
 
+# bats test_tags=ci:parallel
+@test "podman help - system migrate hides --migrate-db" {
+    skip_if_remote "system migrate not supported via remote"
+
+    # The flag is hidden from help, but it must still be accepted for compatibility
+    run_podman system migrate --help
+    assert "$output" !~ "migrate-db" \
+           "system migrate --help does not list --migrate-db"
+
+    run_podman system migrate --migrate-db --help
+}
+
 # vim: filetype=sh
