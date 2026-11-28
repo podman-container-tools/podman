@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/podman/v6/libpod/define"
 	"go.podman.io/podman/v6/libpod/events"
 )
 
@@ -48,4 +50,16 @@ func TestWaitForNextExitEventStreamClosed(t *testing.T) {
 			assert.Equal(t, int32(-1), code)
 		})
 	}
+}
+
+// WaitForConditionWithInterval used to panic when it was called without any
+// condition.  Callers cannot recover from that, so it has to report the
+// invalid argument as a regular error instead.
+func TestWaitForConditionWithIntervalNoConditions(t *testing.T) {
+	c := &Container{valid: true}
+
+	code, err := c.WaitForConditionWithInterval(context.Background(), nil, time.Second)
+	assert.Equal(t, int32(-1), code)
+	assert.ErrorIs(t, err, define.ErrInvalidArg)
+	assert.ErrorContains(t, err, "at least one condition should be passed")
 }
