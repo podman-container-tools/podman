@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -208,6 +209,44 @@ var _ = Describe("run cp commands", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exec).To(Exit(0))
 		Expect(exec.outputToString()).To(Equal("755 1000 0"))
+
+		By("copy from container to stdout")
+		exec, err = mb.setCmd(bm.withPodmanCommand([]string{"exec", containerID, "sh", "-c", "mkdir /tmp/stdout-dir && printf stdout-content > /tmp/stdout-dir/stdout.txt"})).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exec).To(Exit(0))
+
+		// Copy a single file to stdout
+		cpStdout, err := mb.setCmd(bm.withPodmanCommand([]string{"cp", containerID + ":/tmp/stdout-dir/stdout.txt", "-"})).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cpStdout).To(Exit(0))
+
+		tr := tar.NewReader(bytes.NewReader(cpStdout.Out.Contents()))
+		hdr, err := tr.Next()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hdr.Name).To(Equal("stdout.txt"))
+		content, err := io.ReadAll(tr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(content)).To(Equal("stdout-content"))
+		_, err = tr.Next()
+		Expect(err).To(MatchError(io.EOF))
+
+		// Copy a directory with a file in it to stdout
+		cpStdout, err = mb.setCmd(bm.withPodmanCommand([]string{"cp", containerID + ":/tmp/stdout-dir", "-"})).run()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cpStdout).To(Exit(0))
+
+		tr = tar.NewReader(bytes.NewReader(cpStdout.Out.Contents()))
+		hdr, err = tr.Next()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hdr.Name).To(Equal("stdout-dir/"))
+		hdr, err = tr.Next()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hdr.Name).To(Equal("stdout-dir/stdout.txt"))
+		content, err = io.ReadAll(tr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(content)).To(Equal("stdout-content"))
+		_, err = tr.Next()
+		Expect(err).To(MatchError(io.EOF))
 
 		By("copy from container to container")
 		// Copy the file from the first container to the second container (with renaming)
