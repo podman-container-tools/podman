@@ -63,6 +63,7 @@ func (ir *ImageEngine) Prune(ctx context.Context, opts entities.ImagePruneOption
 		ExternalContainers:      opts.External,
 		Filters:                 append(opts.Filter, "readonly=false"),
 		WithSize:                true,
+		DryRun:                  opts.DryRun,
 	}
 
 	if !opts.All {
@@ -85,6 +86,10 @@ func (ir *ImageEngine) Prune(ctx context.Context, opts entities.ImagePruneOption
 		pruneOptions.Filters = append(pruneOptions.Filters, "containers=false")
 	}
 
+	if opts.DryRun {
+		pruneOptions.Ignore = true	
+	}
+
 	pruneReports := make([]*reports.PruneReport, 0)
 
 	// Now prune all images until we converge.
@@ -104,7 +109,7 @@ func (ir *ImageEngine) Prune(ctx context.Context, opts entities.ImagePruneOption
 		}
 
 		numRemovedImages := len(removedImages)
-		if numRemovedImages+numPreviouslyRemovedImages == 0 {
+		if numRemovedImages+numPreviouslyRemovedImages == 0 || pruneOptions.DryRun {
 			break
 		}
 		numPreviouslyRemovedImages = numRemovedImages
