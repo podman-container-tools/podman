@@ -2857,9 +2857,17 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		}
 	}
 
+	var previousResources *spec.LinuxResources
+	var blockIOUpdated bool
 	if updateOptions.Resources != nil {
 		if c.config.Spec.Linux == nil {
 			c.config.Spec.Linux = new(spec.Linux)
+		}
+		if c.config.Spec.Linux.Resources == nil {
+			c.config.Spec.Linux.Resources = new(spec.LinuxResources)
+		}
+		if oldConfig.Spec.Linux != nil {
+			previousResources = oldConfig.Spec.Linux.Resources
 		}
 
 		resourcesToUpdate, err := json.Marshal(updateOptions.Resources)
@@ -2868,6 +2876,13 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 		}
 		if err := json.Unmarshal(resourcesToUpdate, c.config.Spec.Linux.Resources); err != nil {
 			return err
+		}
+		// A nil BlockIO was omitted from the JSON merge, so there are no lists to clear.
+		if blockIO := updateOptions.Resources.BlockIO; blockIO != nil {
+			mergeBlockIOUpdate(c.config.Spec.Linux.Resources.BlockIO, blockIO)
+			blockIOUpdated = blockIO.WeightDevice != nil ||
+				blockIO.ThrottleReadBpsDevice != nil || blockIO.ThrottleWriteBpsDevice != nil ||
+				blockIO.ThrottleReadIOPSDevice != nil || blockIO.ThrottleWriteIOPSDevice != nil
 		}
 		// Lifting a pids limit the container does not have changes nothing.
 		var oldPids *spec.LinuxPids
@@ -2942,10 +2957,24 @@ func (c *Container) update(updateOptions *entities.ContainerUpdateOptions) error
 			logrus.Errorf("Unable to update container %s OCI spec - `podman inspect` may not be accurate until container is restarted: %v", c.ID(), err)
 		}
 
-		if err := c.ociRuntime.UpdateContainer(c, updateOptions.Resources); err != nil {
+		liveResources := updateOptions.Resources
+		var resetBFQWeight bool
+		if blockIOUpdated {
+			if cgroupPath, err := c.cGroupPath(); err == nil {
+				_, err = os.Stat(filepath.Join("/sys/fs/cgroup", cgroupPath, "io.bfq.weight"))
+				resetBFQWeight = err == nil
+			}
+			liveResources = blockIORuntimeUpdate(previousResources, liveResources, resetBFQWeight)
+		}
+		if err := c.ociRuntime.UpdateContainer(c, liveResources); err != nil {
 			// The runtime rejected the update, so do not keep it in the
 			// config either, or the next start fails the same way.
 			rollbackConfig()
+			if blockIOUpdated {
+				if rerr := c.ociRuntime.UpdateContainer(c, blockIORuntimeUpdate(updateOptions.Resources, previousResources, resetBFQWeight)); rerr != nil {
+					logrus.Errorf("Reverting container %s cgroup resources after failed update: %v", c.ID(), rerr)
+				}
+			}
 			if rerr := c.saveSpec(oldOnDiskSpec); rerr != nil {
 				logrus.Errorf("Reverting container %s OCI spec after failed update: %v", c.ID(), rerr)
 			}

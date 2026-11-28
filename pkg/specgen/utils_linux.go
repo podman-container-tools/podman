@@ -9,8 +9,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// statBlkDev returns path's major and minor, or an error, if path is not a block device.
-func statBlkDev(path string) (int64, int64, error) {
+// BlockDeviceNumbers returns the major and minor numbers of a block device.
+func BlockDeviceNumbers(path string) (int64, int64, error) {
 	var stat unix.Stat_t
 
 	if err := unix.Stat(path, &stat); err != nil {
@@ -25,7 +25,7 @@ func statBlkDev(path string) (int64, int64, error) {
 
 // fillThrottleDev fills in dev.Major and dev.Minor fields based on path to a block device.
 func fillThrottleDev(path string, dev *spec.LinuxThrottleDevice) error {
-	major, minor, err := statBlkDev(path)
+	major, minor, err := BlockDeviceNumbers(path)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func WeightDevices(specgen *SpecGenerator) error {
 	}
 
 	for k, v := range specgen.WeightDevice {
-		major, minor, err := statBlkDev(k)
+		major, minor, err := BlockDeviceNumbers(k)
 		if err != nil {
 			return fmt.Errorf("bad --blkio-weight-device: %w", err)
 		}
