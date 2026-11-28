@@ -741,10 +741,6 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 		s.Sysctl = sysmap
 	}
 
-	if c.CIDFile != "" {
-		s.Annotations[define.InspectAnnotationCIDFile] = c.CIDFile
-	}
-
 	for _, opt := range c.SecurityOpt {
 		key, val, hasVal := CutSecurityOpt(opt)
 		if !hasVal &&
