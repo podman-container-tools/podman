@@ -1,0 +1,66 @@
+# Validate markdown preprocessing and Docusaurus CLI docs export on documentation PRs.
+
+name: Docusaurus CLI docs
+
+on:
+  pull_request:
+    paths:
+      - "docs/source/markdown/**"
+      - "hack/markdown-preprocess"
+      - "hack/markdown-preprocess.t"
+      - "hack/man-page-checker"
+      - "hack/docusaurus-markdown-export"
+      - ".github/workflows/docusaurus-cli-docs.yml"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Preprocess man-page templates
+        run: python3 hack/markdown-preprocess
+
+      - name: Test markdown preprocess implementation
+        run: hack/markdown-preprocess.t
+
+      - name: Check processed man pages
+        run: hack/man-page-checker
+
+      - name: Smoke-test Docusaurus docs export
+        env:
+          PODMAN_DOCS_REVISION: ${{ github.sha }}
+        run: |
+          out_dir="$(mktemp -d)"
+          trap 'rm -rf "$out_dir"' EXIT
+          python3 hack/docusaurus-markdown-export \
+            --strict \
+            --markdown-dir docs/source/markdown \
+            --output-dir "$out_dir" \
+            --revision "${PODMAN_DOCS_REVISION}"
+          python3 - "$out_dir" <<'EOF'
+          import json
+          import pathlib
+          import sys
+
+          out_dir = pathlib.Path(sys.argv[1])
+          manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+          md_files = list((out_dir / "commands").glob("*.md"))
+          assert manifest["totalCount"] > 0, "Expected non-zero exported docs"
+          assert len(md_files) == manifest["totalCount"], (
+              f"File count mismatch: {len(md_files)} != {manifest['totalCount']}"
+          )
+          assert manifest["commands"], "Expected non-empty command tree"
+          EOF

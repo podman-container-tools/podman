@@ -1,0 +1,573 @@
+#!/usr/bin/env python3
+#
+# docusaurus-markdown-export
+#
+# Turns already-preprocessed man-page markdown (after hack/markdown-preprocess)
+# into Docusaurus-ready .md files plus a CLI command-tree manifest.
+#
+"""Export Podman man-page markdown as Docusaurus CLI docs."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+ALLOWED_HTML_TAGS = frozenset(
+    {
+        "a",
+        "sup",
+        "sub",
+        "br",
+        "hr",
+        "kbd",
+        "code",
+        "pre",
+        "em",
+        "strong",
+        "b",
+        "i",
+        "u",
+        "s",
+        "span",
+        "div",
+        "p",
+        "ul",
+        "ol",
+        "li",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "details",
+        "summary",
+    }
+)
+
+MAN_FILE_RE = re.compile(r"^(?P<slug>.+)\.(?P<section>1|5|7)\.md$")
+HEADER_RE = re.compile(r"^%\s+(\S+)\s+(\d+)", re.MULTILINE)
+NAME_RE = re.compile(
+    r"(?:##\s*NAME|(?:\r?\n|^)NAME\r?\n[=-]+)\s*\r?\n+([^\r\n]+)",
+    re.IGNORECASE,
+)
+NAME_SPLIT_RE = re.compile(r"\s+-\s+")
+SETEXT_RE = re.compile(r"^([A-Z0-9_ -]+)\r?\n([=-]{3,})\s*$", re.MULTILINE)
+TABLE_BEFORE_RE = re.compile(r"(^[^|\r\n][^\r\n]*)\r?\n(\|[^\r\n]+\|)", re.MULTILINE)
+TABLE_AFTER_RE = re.compile(r"(\|[^\r\n]+\|)\r?\n([^|\r\n])", re.MULTILINE)
+MAN_LINK_RE = re.compile(
+    r"\[([^\]]+)\]\(((?!https?://)[^)]*?)(podman(?:sh|-[a-zA-Z0-9_.-]+)?)\.(1|5|7)(?:\.md|\.md\.in)?(?:#([a-zA-Z0-9_-]+))?\)"
+)
+CMD_LINK_RE = re.compile(
+    r"\[([^\]]+)\]\(((?!https?://)[^)]*?)(podman-[a-zA-Z0-9_.-]+)\.(1|5|7)(?:\.md|\.md\.in)?(?:#([a-zA-Z0-9_-]+))?\)"
+)
+COMMANDS_SECTION_RE = re.compile(
+    r"^##\s+COMMANDS\s*\r?\n([\s\S]*?)(?=^##\s+|\Z)", re.MULTILINE | re.IGNORECASE
+)
+CONTAINERS_CONF_RE = re.compile(
+    r"\[([^\]]+)\]\(((?!https?://)[^)]*?)containers\.conf\.5(?:\.md|\.md\.in)?\)"
+)
+ANGLE_RE = re.compile(r"\\?<(/?[a-zA-Z][^>\n]*)\\?>")
+FENCE_RE = re.compile(r"^\s*```")
+INDENT_RE = re.compile(r"^(?:\t|    )")
+INLINE_CODE_RE = re.compile(r"(`+[^`]*`+)")
+LABEL_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+LABEL_STYLE_RE = re.compile(r"\*\*([^*]+)\*\*|`([^`]+)`")
+LABEL_SECTION_RE = re.compile(r"\s*\([^)]*\)\s*$")
+SAFE_SLUG_RE = re.compile(r"[^a-z0-9._-]")
+UNEXPANDED_DIRECTIVE_RE = re.compile(r"^@@(?:option|include)\s+", re.MULTILINE)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--markdown-dir",
+        default=None,
+        help="Preprocessed man-page directory (default: docs/source/markdown next to this script, or CWD)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory to write commands/*.md and manifest.json",
+    )
+    parser.add_argument(
+        "--revision",
+        default=os.environ.get("PODMAN_DOCS_REVISION", ""),
+        help="Git revision recorded in the manifest",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if any *.md.in template is missing its preprocessed .md file or has unexpanded directives",
+    )
+    return parser.parse_args()
+
+
+def default_markdown_dir(script_path: Path) -> Path:
+    hack_parent = script_path.resolve().parent
+    candidate = hack_parent.parent / "docs" / "source" / "markdown"
+    if candidate.is_dir():
+        return candidate
+    return Path.cwd()
+
+
+def slug_from_filename(filename: str) -> tuple[str, str] | None:
+    match = MAN_FILE_RE.match(filename)
+    if not match:
+        return None
+    return match.group("slug"), match.group("section")
+
+
+def extract_description(content: str, slug: str) -> str:
+    match = NAME_RE.search(content)
+    if not match:
+        return f"Podman CLI reference documentation for {slug}"
+    raw = match.group(1).replace("\\-", "-").strip()
+    parts = NAME_SPLIT_RE.split(raw, maxsplit=1)
+    if len(parts) > 1:
+        return parts[1].strip()
+    return raw
+
+
+def strip_name_heading(content: str) -> str:
+    return NAME_RE.sub("", content, count=1)
+
+
+def convert_setext(content: str) -> str:
+    return SETEXT_RE.sub(lambda m: f"\n## {m.group(1).strip()}\n\n", content)
+
+
+def fix_table_spacing(content: str) -> str:
+    content = TABLE_BEFORE_RE.sub(r"\1\n\n\2", content)
+    content = TABLE_AFTER_RE.sub(r"\1\n\n\2", content)
+    return content
+
+
+def rewrite_links(content: str, known_slugs: set[str]) -> str:
+    def man_sub(match: re.Match[str]) -> str:
+        text, _path, target, _sec, anchor = match.groups()
+        resolved = target
+        if (
+            resolved not in known_slugs
+            and resolved == "podman-image-pull"
+            and "podman-pull" in known_slugs
+        ):
+            resolved = "podman-pull"
+        anchor_part = f"#{anchor}" if anchor else ""
+        return f"[{text}](/docs/commands/{resolved}{anchor_part})"
+
+    content = MAN_LINK_RE.sub(man_sub, content)
+    content = CONTAINERS_CONF_RE.sub(
+        r"[\1](https://github.com/containers/container-libs/blob/main/common/docs/containers.conf.5.md)",
+        content,
+    )
+    return content
+
+
+def sanitize_for_mdx(markdown: str) -> str:
+    lines = markdown.splitlines()
+    in_fence = False
+    out: list[str] = []
+
+    def replace_angle(match: re.Match[str]) -> str:
+        full = match.group(0)
+        inner = match.group(1)
+        tag_name = inner.lstrip("/").split()[0].split("/")[0].lower()
+        if not full.startswith("\\") and tag_name in ALLOWED_HTML_TAGS and "|" not in inner:
+            return full
+        cleaned = inner.rstrip("\\")
+        return f"`<{cleaned}>`"
+
+    for line in lines:
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence or INDENT_RE.match(line):
+            out.append(line)
+            continue
+        pieces = INLINE_CODE_RE.split(line)
+        rebuilt = [
+            part if part.startswith("`") else ANGLE_RE.sub(replace_angle, part)
+            for part in pieces
+        ]
+        out.append("".join(rebuilt))
+    return "\n".join(out)
+
+
+def yaml_quote(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def build_frontmatter(item: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            "---",
+            f"id: {yaml_quote(item['slug'])}",
+            f"title: {yaml_quote(item['title'])}",
+            f"description: {yaml_quote(item['description'])}",
+            f"slug: {yaml_quote('/commands/' + item['slug'])}",
+            'displayed_sidebar: "docsSidebar"',
+            "custom_edit_url: null",
+            "---",
+            "",
+        ]
+    )
+
+
+def command_label(slug: str, parent_slug: str = "") -> str:
+    lower_slug = slug.lower()
+    if lower_slug == "podman":
+        return "Podman"
+    if parent_slug and lower_slug.startswith(parent_slug.lower() + "-"):
+        return slug[len(parent_slug) + 1 :].replace("-", " ")
+    if lower_slug.startswith("podman-"):
+        return slug[7:].replace("-", " ")
+    return slug.replace("-", " ")
+
+
+TOP_LEVEL_COMMAND_CATEGORIES = (
+    "podman",
+    "podmansh",
+    "podman-artifact",
+    "podman-container",
+    "podman-farm",
+    "podman-generate",
+    "podman-healthcheck",
+    "podman-image",
+    "podman-kube",
+    "podman-machine",
+    "podman-machine-os",
+    "podman-manifest",
+    "podman-network",
+    "podman-pod",
+    "podman-quadlet",
+    "podman-secret",
+    "podman-system",
+    "podman-volume",
+)
+
+LOGICAL_PARENT_SUBCOMMANDS: dict[str, list[tuple[str, str]]] = {
+    "podman-container": [
+        ("podman-attach", "attach"),
+        ("podman-commit", "commit"),
+        ("podman-cp", "cp"),
+        ("podman-create", "create"),
+        ("podman-exec", "exec"),
+        ("podman-export", "export"),
+        ("podman-init", "init"),
+        ("podman-kill", "kill"),
+        ("podman-logs", "logs"),
+        ("podman-mount", "mount"),
+        ("podman-pause", "pause"),
+        ("podman-port", "port"),
+        ("podman-ps", "ps"),
+        ("podman-rename", "rename"),
+        ("podman-restart", "restart"),
+        ("podman-rm", "rm"),
+        ("podman-run", "run"),
+        ("podman-start", "start"),
+        ("podman-stats", "stats"),
+        ("podman-stop", "stop"),
+        ("podman-top", "top"),
+        ("podman-unmount", "unmount"),
+        ("podman-unpause", "unpause"),
+        ("podman-update", "update"),
+        ("podman-wait", "wait"),
+    ],
+    "podman-generate": [
+        ("podman-kube-generate", "kube"),
+    ],
+    "podman-image": [
+        ("podman-build", "build"),
+        ("podman-history", "history"),
+        ("podman-images", "images"),
+        ("podman-import", "import"),
+        ("podman-load", "load"),
+        ("podman-login", "login"),
+        ("podman-logout", "logout"),
+        ("podman-pull", "pull"),
+        ("podman-push", "push"),
+        ("podman-rmi", "rmi"),
+        ("podman-save", "save"),
+        ("podman-search", "search"),
+        ("podman-tag", "tag"),
+        ("podman-untag", "untag"),
+    ],
+    "podman-kube": [
+        ("podman-compose", "compose"),
+    ],
+    "podman-system": [
+        ("podman-auto-update", "auto update"),
+        ("podman-completion", "completion"),
+        ("podman-diff", "diff"),
+        ("podman-events", "events"),
+        ("podman-info", "info"),
+        ("podman-inspect", "inspect"),
+        ("podman-remote", "remote"),
+        ("podman-rootless", "rootless"),
+        ("podman-troubleshooting", "troubleshooting"),
+        ("podman-unshare", "unshare"),
+        ("podman-version", "version"),
+    ],
+}
+
+
+def extract_command_rows(content: str, known_slugs: set[str]) -> list[dict[str, str]]:
+    """Read child names and target pages from a man page's ## COMMANDS table."""
+    section = COMMANDS_SECTION_RE.search(content)
+    if not section:
+        return []
+
+    children: list[dict[str, str]] = []
+    for line in section.group(1).splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        target_match = CMD_LINK_RE.search(" | ".join(cells))
+        if not target_match:
+            continue
+        target = target_match.group(3).replace("\\-", "-")
+        if target not in known_slugs:
+            continue
+
+        label_match = LABEL_LINK_RE.match(cells[0])
+        label = label_match.group(1) if label_match else cells[0]
+        label = LABEL_STYLE_RE.sub(lambda m: m.group(1) or m.group(2), label)
+        label = LABEL_SECTION_RE.sub("", label).replace("\\-", "-").strip()
+        if label.lower().startswith("podman-"):
+            label = label[7:]
+        label = label.replace("-", " ")
+        if label:
+            children.append({"slug": target, "label": label})
+    return children
+
+
+def build_command_tree(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the 2nd-level command tree with automatic categorization for new files."""
+    by_slug: dict[str, dict[str, Any]] = {item["slug"].lower(): item for item in items}
+
+    top_level_set: set[str] = set(TOP_LEVEL_COMMAND_CATEGORIES)
+    prefix_parents: set[str] = set()
+    for slug in by_slug:
+        if slug.startswith("podman-"):
+            parts = slug.split("-")
+            if len(parts) >= 3:
+                prefix_parents.add(f"{parts[0]}-{parts[1]}")
+    top_level_set.update(slug for slug in prefix_parents if slug in by_slug)
+
+    children_by_parent: dict[str, list[tuple[dict[str, Any], str]]] = {}
+    children_seen: dict[str, set[str]] = {}
+    claimed_slugs: set[str] = set()
+
+    def add_child(parent_slug: str, child_item: dict[str, Any], custom_label: str = "") -> None:
+        entries = children_by_parent.setdefault(parent_slug, [])
+        seen = children_seen.setdefault(parent_slug, set())
+        child_key = child_item["slug"].lower()
+        if child_key not in seen:
+            label = custom_label or command_label(child_item["slug"], parent_slug)
+            entries.append((child_item, label))
+            seen.add(child_key)
+        claimed_slugs.add(child_key)
+
+    # 1. Match by prefix (`podman-<parent>-<subcommand>`) and file patterns (`*.unit`, section 7)
+    for item in items:
+        slug = item["slug"].lower()
+        if slug in top_level_set:
+            continue
+
+        if slug.startswith("podman-machine-os-") and "podman-machine-os" in by_slug:
+            add_child("podman-machine-os", item)
+            continue
+
+        if (slug.endswith(".unit") or slug.startswith("podman-quadlet-")) and "podman-quadlet" in by_slug:
+            if slug == "podman-quadlet-basic-usage":
+                label = "basic usage"
+            elif slug.endswith(".unit"):
+                label = command_label(item["slug"])
+            else:
+                label = command_label(item["slug"], "podman-quadlet")
+            add_child("podman-quadlet", item, label)
+            continue
+
+        if slug.startswith("podman-"):
+            parts = slug.split("-")
+            if len(parts) >= 3:
+                candidate_parent = f"{parts[0]}-{parts[1]}"
+                if candidate_parent != slug and candidate_parent in top_level_set and candidate_parent in by_slug:
+                    add_child(candidate_parent, item)
+                    continue
+
+        if str(item.get("section")) == "7" and "podman-system" in by_slug:
+            add_child("podman-system", item, command_label(item["slug"]))
+
+    # 2. Merge logical subcommands from official COMMANDS tables
+    for parent_slug, extras in LOGICAL_PARENT_SUBCOMMANDS.items():
+        if parent_slug not in by_slug:
+            continue
+        for child_slug, child_label in extras:
+            target = by_slug.get(child_slug.lower())
+            if target:
+                add_child(parent_slug, target, child_label)
+
+    # 3. Also inspect parsed `## COMMANDS` tables on non-root parent pages so any newly added
+    #    subcommand row in a Podman PR is automatically attached to its parent category.
+    for parent_slug in list(top_level_set):
+        if parent_slug in ("podman", "podmansh", "podman-remote"):
+            continue
+        parent_item = by_slug.get(parent_slug)
+        if not parent_item:
+            continue
+        for row in parent_item.get("command_children", []):
+            child_slug = row["slug"].lower()
+            if child_slug in top_level_set or child_slug in claimed_slugs:
+                continue
+            target = by_slug.get(child_slug)
+            if target:
+                add_child(parent_slug, target, row["label"])
+
+    # 4. Any brand-new standalone command not claimed by any parent is promoted to top level
+    for item in items:
+        slug = item["slug"].lower()
+        if slug not in top_level_set and slug not in claimed_slugs:
+            top_level_set.add(slug)
+
+    top_level_slugs = [slug for slug in top_level_set if slug in by_slug]
+    top_level_slugs.sort(key=lambda s: (0 if s == "podman" else 1 if s == "podmansh" else 2, s))
+
+    result: list[dict[str, Any]] = []
+    for slug in top_level_slugs:
+        parent = by_slug[slug]
+        raw_children = sorted(children_by_parent.get(slug, []), key=lambda pair: pair[1])
+        subcommands = [
+            {
+                "slug": child["slug"],
+                "title": child["title"],
+                "label": label,
+                "section": child["section"],
+                "description": child["description"],
+                "filename": child["filename"],
+                "subcommands": [],
+            }
+            for child, label in raw_children
+        ]
+        result.append(
+            {
+                "slug": parent["slug"],
+                "title": parent["title"],
+                "label": command_label(parent["slug"]),
+                "section": parent["section"],
+                "description": parent["description"],
+                "filename": parent["filename"],
+                "subcommands": subcommands,
+            }
+        )
+    return result
+
+
+def load_man_pages(markdown_dir: Path, strict: bool = False) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for path in sorted(markdown_dir.iterdir()):
+        if not path.is_file():
+            continue
+        parsed = slug_from_filename(path.name)
+        if not parsed:
+            continue
+        slug, section = parsed
+        raw = path.read_text(encoding="utf-8")
+        if strict and UNEXPANDED_DIRECTIVE_RE.search(raw):
+            raise SystemExit(
+                f"Unexpanded @@option/@@include directive found in {path.name}; "
+                "run hack/markdown-preprocess first."
+            )
+        title = slug
+        header = HEADER_RE.search(raw)
+        if header:
+            title = header.group(1).replace("\\-", "-")
+            section = header.group(2)
+            raw = HEADER_RE.sub("", raw, count=1)
+        description = extract_description(raw, slug)
+        body = strip_name_heading(raw)
+        items.append(
+            {
+                "slug": slug,
+                "title": title,
+                "section": section,
+                "description": description,
+                "filename": path.name,
+                "command_children": [],
+                "body": body,
+            }
+        )
+    known_slugs = {item["slug"] for item in items}
+    for item in items:
+        item["command_children"] = extract_command_rows(item["body"], known_slugs)
+    return items
+
+
+def export_docs(markdown_dir: Path, output_dir: Path, revision: str, strict: bool = False) -> int:
+    items = load_man_pages(markdown_dir, strict=strict)
+    if not items:
+        raise SystemExit(f"No man-page markdown found in {markdown_dir}")
+
+    known_slugs = {item["slug"] for item in items}
+    commands_dir = output_dir / "commands"
+    commands_dir.mkdir(parents=True, exist_ok=True)
+
+    for item in items:
+        body = convert_setext(item["body"])
+        body = fix_table_spacing(body)
+        body = rewrite_links(body, known_slugs)
+        body = sanitize_for_mdx(body)
+        page = build_frontmatter(item) + body.strip() + "\n"
+        safe_slug = SAFE_SLUG_RE.sub("-", item["slug"].lower())
+        (commands_dir / f"{safe_slug}.md").write_text(page, encoding="utf-8", newline="\n")
+
+    meta_items = [{k: v for k, v in item.items() if k != "body"} for item in items]
+    manifest = {
+        "revision": revision or "unknown",
+        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "commands": build_command_tree(meta_items),
+        "totalCount": len(items),
+    }
+    (output_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
+    print(f"Wrote {len(items)} Docusaurus markdown files and manifest to {output_dir}")
+    return len(items)
+
+
+def main() -> None:
+    args = parse_args()
+    script_path = Path(__file__)
+    markdown_dir = Path(args.markdown_dir) if args.markdown_dir else default_markdown_dir(script_path)
+    if not markdown_dir.is_dir():
+        raise SystemExit(f"Markdown directory does not exist: {markdown_dir}")
+
+    missing_md = sorted(
+        p.name for p in markdown_dir.glob("*.md.in") if not p.with_suffix("").is_file()
+    )
+    if missing_md:
+        msg = (
+            f"{len(missing_md)} .md.in template(s) are missing preprocessed .md output "
+            f"(e.g. {missing_md[0]}); run hack/markdown-preprocess first."
+        )
+        if args.strict:
+            raise SystemExit(f"error: {msg}")
+        print(f"warning: {msg}", file=sys.stderr)
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    export_docs(markdown_dir, output_dir, args.revision, strict=args.strict)
+
+
+if __name__ == "__main__":
+    main()
